@@ -13,6 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { Icon } from "@/components/ui/icon";
+import { LocalListTools, useLocalList } from "@/components/shared/local-list-tools";
 import {
   getPromotions,
   deletePromotion,
@@ -227,6 +228,15 @@ export default function PromotionSettingsPage() {
     }
   }
 
+  const promotionList = useLocalList(promotions, {
+    searchText: p => `${p.name} ${p.description ?? ""}`,
+    filters: [
+      { key: "channel", label: "Kênh", options: [{ value: "retail", label: "Retail" }, { value: "fnb", label: "F&B" }], matches: (p, value) => p.channel === value || p.channel === "both" },
+      { key: "status", label: "Trạng thái", options: ["Đang hoạt động", "Sắp diễn ra", "Hết hạn", "Đã tắt"].map(label => ({ value: label, label })), matches: (p, value) => getStatusMeta(p).label === value },
+      { key: "beneficiary", label: "Đối tượng", options: [{ value: "internal", label: "Nhân viên nội bộ" }, { value: "customer", label: "Khách hàng" }], matches: (p, value) => value === "internal" ? ["employee", "employee_group"].includes(p.beneficiaryKind ?? "all") : !["employee", "employee_group"].includes(p.beneficiaryKind ?? "all") },
+    ],
+    sorts: [{ key: "name", label: "Tên chương trình", value: p => p.name }, { key: "start", label: "Ngày bắt đầu", value: p => p.startDate }, { key: "end", label: "Ngày kết thúc", value: p => p.endDate }, { key: "priority", label: "Ưu tiên", value: p => p.priority }],
+  });
   return (
     <>
       <div className="space-y-4">
@@ -250,6 +260,7 @@ export default function PromotionSettingsPage() {
             </div>
           </CardHeader>
           <CardContent>
+            {enablePromotions && <div className="mb-4"><LocalListTools list={promotionList} placeholder="Tìm tên hoặc mô tả chương trình..." /></div>}
             {!enablePromotions ? (
               <p className="text-sm text-muted-foreground">
                 Khuyến mãi đã được tắt. Bật lại để quản lý chương trình.
@@ -278,7 +289,8 @@ export default function PromotionSettingsPage() {
               />
             ) : (
               <div className="space-y-4">
-                {promotions.map((promo) => {
+                {promotionList.count === 0 && <p className="py-8 text-center text-sm text-muted-foreground">Không có chương trình phù hợp. Thử đổi tìm kiếm hoặc xóa lọc.</p>}
+                {promotionList.rows.map((promo) => {
                   const status = getStatusMeta(promo);
                   return (
                     <div

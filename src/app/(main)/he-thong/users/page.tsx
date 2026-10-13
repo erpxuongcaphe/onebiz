@@ -46,6 +46,7 @@ import { SystemRoleDialog } from "@/components/shared/dialogs/system-role-dialog
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Icon } from "@/components/ui/icon";
+import { LocalListTools, useLocalList } from "@/components/shared/local-list-tools";
 
 interface UserRow {
   id: string;
@@ -356,6 +357,17 @@ function UsersPage() {
     return `${names.slice(0, 2).join(", ")} +${names.length - 2}`;
   };
 
+  const userList = useLocalList(users, {
+    searchText: u => `${u.fullName} ${u.email} ${u.phone ?? ""} ${u.roleName ?? u.role}`,
+    filters: [
+      { key: "branch", label: "Chi nhánh", options: branches.map(b => ({ value: b.id, label: b.name })), matches: (u, value) => u.role === "owner" || u.branchIds.includes(value) },
+      { key: "role", label: "Vai trò", options: [{ value: "unassigned", label: "Chưa gán vai trò" }, ...roles.map(r => ({ value: r.id, label: r.name }))], matches: (u, value) => value === "unassigned" ? !u.roleId : u.roleId === value },
+      { key: "status", label: "Trạng thái", options: [{ value: "active", label: "Hoạt động" }, { value: "inactive", label: "Vô hiệu" }], matches: (u, value) => value === "active" ? u.isActive : !u.isActive },
+      { key: "pin", label: "PIN", options: [{ value: "ready", label: "PIN đã tạo" }, { value: "missing", label: "PIN chưa tạo" }, { value: "reset", label: "PIN cần tạo lại" }], matches: (u, value) => { const p = pinStatuses?.[u.id]; return Boolean(p && (value === "reset" ? p.resetRequired : value === "ready" ? p.hasPin && !p.resetRequired : !p.hasPin && !p.resetRequired)); } },
+    ],
+    sorts: [{ key: "name", label: "Họ tên", value: u => u.fullName }, { key: "email", label: "Email", value: u => u.email }, { key: "role", label: "Vai trò", value: u => u.roleName ?? u.role }, { key: "created", label: "Ngày tạo", value: u => u.createdAt }],
+  });
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -418,6 +430,7 @@ function UsersPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
+          <div className="mb-4"><LocalListTools list={userList} placeholder="Tìm họ tên, email, số điện thoại..." /></div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -431,7 +444,7 @@ function UsersPage() {
                 </tr>
               </thead>
               <tbody>
-                {users.map((user) => (
+                {userList.rows.map((user) => (
                   <tr key={user.id} className="border-b last:border-0">
                     <td className="py-3 font-medium">{user.fullName}</td>
                     <td className="py-3 text-muted-foreground">{user.email || "—"}</td>
@@ -542,6 +555,7 @@ function UsersPage() {
                     </td>
                   </tr>
                 ))}
+                {userList.count === 0 && <tr><td colSpan={6} className="py-8 text-center text-muted-foreground">Không có nhân viên phù hợp. Thử đổi tìm kiếm hoặc xóa lọc.</td></tr>}
               </tbody>
             </table>
           </div>

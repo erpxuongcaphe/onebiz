@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
 import { getPriceTiers } from "@/lib/services";
 import type { PriceTier } from "@/lib/types";
+import { LocalListTools, useLocalList } from "@/components/shared/local-list-tools";
 
 const SCOPE_LABELS: Record<string, string> = {
   retail: "POS Retail",
@@ -53,6 +54,14 @@ export default function PriceBookSettingsPage() {
     };
   }, []);
 
+  const tierList = useLocalList(tiers, {
+    searchText: t => `${t.name} ${t.code} ${t.description ?? ""}`,
+    filters: [
+      { key: "scope", label: "Kênh", options: Object.entries(SCOPE_LABELS).map(([value, label]) => ({ value, label })), matches: (t, value) => t.scope === value || (value !== "both" && t.scope === "both") },
+      { key: "status", label: "Trạng thái", options: [{ value: "active", label: "Đang áp dụng" }, { value: "inactive", label: "Tạm ngưng" }], matches: (t, value) => value === "active" ? t.isActive : !t.isActive },
+    ],
+    sorts: [{ key: "name", label: "Tên bảng giá", value: t => t.name }, { key: "code", label: "Mã bảng giá", value: t => t.code }, { key: "priority", label: "Ưu tiên", value: t => t.priority }],
+  });
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-4">
@@ -84,6 +93,7 @@ export default function PriceBookSettingsPage() {
           <CardTitle>Bảng giá hiện có ({tiers.length})</CardTitle>
         </CardHeader>
         <CardContent>
+          <div className="mb-4"><LocalListTools list={tierList} placeholder="Tìm tên, mã hoặc mô tả bảng giá..." /></div>
           {loading ? (
             <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
               <Icon
@@ -114,7 +124,8 @@ export default function PriceBookSettingsPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {tiers.map((tier) => (
+              {tierList.count === 0 && <p className="py-8 text-center text-sm text-muted-foreground">Không có bảng giá phù hợp. Thử đổi tìm kiếm hoặc xóa lọc.</p>}
+              {tierList.rows.map((tier) => (
                 <div
                   key={tier.id}
                   className="flex items-center justify-between rounded-lg border p-4"

@@ -25,7 +25,7 @@ import { useAuth } from "./auth-context";
  * re-fire. Mỗi service chạy 2 lần ⇒ 14 invoices/dashboard mount.
  */
 export function useBranchFilter() {
-  const { activeBranchId, currentBranch, branches, switchBranch, tenant } = useAuth();
+  const { activeBranchId, currentBranch, branches, switchBranch, tenant, isLoading } = useAuth();
   const branchLabel = activeBranchId
     ? currentBranch?.name ??
       branches.find((branch) => branch.id === activeBranchId)?.name ??
@@ -40,6 +40,6 @@ export function useBranchFilter() {
     branchLabel,
     switchBranch,
     /** AuthContext đã load xong (tenant set). Guard cho data fetch effects. */
-    isReady: !!tenant,
+    isReady: !!tenant && !isLoading,
   };
 }

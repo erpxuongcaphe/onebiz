@@ -51,6 +51,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Icon } from "@/components/ui/icon";
 import { SummaryCard } from "@/components/shared/summary-card";
+import { LocalListTools, useLocalList } from "@/components/shared/local-list-tools";
 import { useAuth, useToast } from "@/lib/contexts";
 import { PermissionPage } from "@/components/shared/permission-page";
 import {
@@ -370,6 +371,15 @@ function BranchSettingsPageInner() {
     }
   };
 
+  const branchList = useLocalList(branches, {
+    searchText: b => `${b.name} ${b.code ?? ""} ${b.address ?? ""} ${b.phone ?? ""}`,
+    filters: [
+      { key: "type", label: "Loại", options: Object.entries(BRANCH_TYPE_LABELS).map(([value, label]) => ({ value, label })), matches: (b, value) => b.branchType === value },
+      { key: "status", label: "Trạng thái", options: [{ value: "active", label: "Hoạt động" }, { value: "inactive", label: "Ngừng hoạt động" }], matches: (b, value) => value === "active" ? b.isActive : !b.isActive },
+    ],
+    sorts: [{ key: "name", label: "Tên chi nhánh", value: b => b.name }, { key: "code", label: "Mã chi nhánh", value: b => b.code ?? "" }, { key: "type", label: "Loại", value: b => BRANCH_TYPE_LABELS[b.branchType] }],
+  });
+
   // Thống kê
   const activeCount = branches.filter((b) => b.isActive).length;
   const storeCount = branches.filter((b) => b.branchType === "store").length;
@@ -422,6 +432,7 @@ function BranchSettingsPageInner() {
       </div>
 
       {/* Table */}
+      <LocalListTools list={branchList} placeholder="Tìm tên, mã, địa chỉ, số điện thoại..." />
       <div className="rounded-lg border bg-card">
         <Table>
           <TableHeader>
@@ -442,14 +453,14 @@ function BranchSettingsPageInner() {
                 </TableCell>
               </TableRow>
             )}
-            {!loading && branches.length === 0 && (
+            {!loading && branchList.count === 0 && (
               <TableRow>
                 <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                  Chưa có chi nhánh nào. Bấm &quot;Thêm chi nhánh&quot; để bắt đầu.
+                  {branches.length === 0 ? "Chưa có chi nhánh nào." : "Không có chi nhánh phù hợp. Thử đổi tìm kiếm hoặc xóa lọc."}
                 </TableCell>
               </TableRow>
             )}
-            {branches.map((branch) => (
+            {branchList.rows.map((branch) => (
               <TableRow key={branch.id}>
                 <TableCell className="font-medium">
                   <div className="flex items-center gap-2">
