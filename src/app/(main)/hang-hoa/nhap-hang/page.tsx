@@ -374,7 +374,7 @@ function PurchaseOrderDetail({
                     </div>
                   </div>
                   <div className="rounded-lg bg-muted/40 px-3 py-2">
-                    <div className="text-xs text-muted-foreground">Cần trả NCC</div>
+                    <div className="text-xs text-muted-foreground">Còn phải trả</div>
                     <div className="font-semibold tabular-nums text-primary">
                       {formatCurrency(order.amountOwed)}
                     </div>
@@ -423,11 +423,11 @@ function PurchaseOrderDetail({
                 items={items as unknown as Record<string, unknown>[]}
                 summary={order.status === "cancelled" ? [
                   { label: "Giá trị phiếu gốc", value: formatCurrency(totalOrdered) },
-                  { label: "Cần trả NCC", value: formatCurrency(order.amountOwed), className: "font-bold text-base" },
+                  { label: "Còn phải trả", value: formatCurrency(order.amountOwed), className: "font-bold text-base" },
                 ] : [
                   { label: "Tổng tiền hàng", value: formatCurrency(totalOrdered) },
                   { label: "Đã nhập", value: formatCurrency(totalReceivedValue) },
-                  { label: "Cần trả NCC", value: formatCurrency(order.amountOwed), className: "font-bold text-base" },
+                  { label: "Còn phải trả", value: formatCurrency(order.amountOwed), className: "font-bold text-base" },
                 ]}
               />
             </>
@@ -599,10 +599,31 @@ export default function NhapHangPage() {
       size: 220,
     },
     {
-      accessorKey: "amountOwed",
-      header: "Cần trả NCC",
+      accessorKey: "total",
+      header: "Tổng cần trả NCC",
+      size: 160,
       cell: ({ row }) => (
-        <span className="text-right block">
+        <span className="block text-right tabular-nums" title="Tổng tiền của phiếu nhập sau chiết khấu, thuế và chi phí">
+          {formatCurrency(row.original.total ?? 0)}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "paid",
+      header: "Đã trả NCC",
+      size: 150,
+      cell: ({ row }) => (
+        <span className="block text-right tabular-nums">
+          {formatCurrency(row.original.paid ?? 0)}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "amountOwed",
+      header: "Còn phải trả",
+      size: 150,
+      cell: ({ row }) => (
+        <span className="text-right block tabular-nums">
           {formatCurrency(row.original.amountOwed)}
         </span>
       ),
@@ -701,7 +722,9 @@ export default function NhapHangPage() {
         { header: "Thời gian", key: "date", width: 18, format: (v: string) => formatDate(v) },
         { header: "Mã NCC", key: "supplierCode", width: 12 },
         { header: "Nhà cung cấp", key: "supplierName", width: 25 },
-        { header: "Cần trả NCC", key: "amountOwed", width: 15, format: (v: number) => v },
+        { header: "Tổng cần trả NCC", key: "total", width: 18, format: (v: number) => v },
+        { header: "Đã trả NCC", key: "paid", width: 18, format: (v: number) => v },
+        { header: "Còn phải trả", key: "amountOwed", width: 15, format: (v: number) => v },
         {
           header: "Trạng thái",
           key: "status",
@@ -741,10 +764,10 @@ export default function NhapHangPage() {
         { label: "Ngày", key: "date", width: 14, format: "text" },
         { label: "Nhà cung cấp", key: "supplierName", width: 28 },
         { label: "Trạng thái", key: "status", width: 14 },
-        { label: "Tổng tiền", key: "total", width: 16, format: "currency" },
+        { label: "Tổng cần trả NCC", key: "total", width: 18, format: "currency" },
         { label: "Thuế", key: "tax", width: 14, format: "currency" },
-        { label: "Đã trả", key: "paid", width: 14, format: "currency" },
-        { label: "Còn nợ", key: "amountOwed", width: 14, format: "currency" },
+        { label: "Đã trả NCC", key: "paid", width: 16, format: "currency" },
+        { label: "Còn phải trả", key: "amountOwed", width: 16, format: "currency" },
         { label: "Người lập", key: "createdByName", width: 18 },
       ],
       rows: detailRows,
@@ -1031,6 +1054,7 @@ export default function NhapHangPage() {
   // View-over-current-result: không query thêm để tránh roundtrip.
   // `total` là tổng server-side, `data` là rows trang hiện tại.
   const kpiTotalAmount = data.reduce((sum, d) => sum + (d.total ?? 0), 0);
+  const kpiTotalPaid = data.reduce((sum, d) => sum + (d.paid ?? 0), 0);
   const kpiTotalOwed = data.reduce((sum, d) => sum + (d.amountOwed ?? 0), 0);
   const kpiPartial = data.filter((d) => d.status === "partial").length;
   const kpiCompleted = data.filter((d) => d.status === "completed").length;
@@ -1134,13 +1158,23 @@ export default function NhapHangPage() {
                     DH: {order.orderCode}
                   </div>
                 )}
-                <div className="flex items-center justify-between pt-1 border-t mt-1">
-                  <span className="text-xs text-muted-foreground">
-                    Cần trả
-                  </span>
-                  <span className="text-xs font-semibold">
-                    {formatCurrency(order.amountOwed)}
-                  </span>
+                <div className="space-y-1 pt-1 border-t mt-1 tabular-nums">
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className="text-muted-foreground">Tổng cần trả</span>
+                    <span>{formatCurrency(order.total ?? 0)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className="text-muted-foreground">Đã trả</span>
+                    <span>{formatCurrency(order.paid ?? 0)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      Còn phải trả
+                    </span>
+                    <span className="text-xs font-semibold">
+                      {formatCurrency(order.amountOwed)}
+                    </span>
+                  </div>
                 </div>
               </div>
             )}
@@ -1195,8 +1229,10 @@ export default function NhapHangPage() {
                 },
                 { header: "Mã NCC", key: "supplierCode", width: 12 },
                 { header: "Nhà cung cấp", key: "supplierName", width: 25 },
+                { header: "Tổng cần trả NCC", key: "total", width: 18, format: (v: number) => v },
+                { header: "Đã trả NCC", key: "paid", width: 18, format: (v: number) => v },
                 {
-                  header: "Cần trả NCC",
+                  header: "Còn phải trả",
                   key: "amountOwed",
                   width: 15,
                   format: (v: number) => v,
@@ -1278,6 +1314,8 @@ export default function NhapHangPage() {
           },
         ]}
         summaryRow={{
+          total: formatCurrency(kpiTotalAmount),
+          paid: formatCurrency(kpiTotalPaid),
           amountOwed: formatCurrency(totalAmountOwed),
         }}
         expandedRow={expandedRow}
