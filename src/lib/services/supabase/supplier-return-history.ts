@@ -8,12 +8,15 @@ export interface SupplierReturnHistoryRow {
 export async function getSupplierReturnHistory(supplierId: string, branchId?: string | null): Promise<SupplierReturnHistoryRow[]> {
   const client = getClient();
   const tenantId = await getCurrentTenantId();
-  const rows = await readHistoryPages(async (offset,size) => {
+  type RawReturn = {id:string;code:string;created_at:string;total:number|string;status:string};
+  const rows = await readHistoryPages<RawReturn>(async (offset,size) => {
     let query = client.from("supplier_returns").select("id, code, created_at, total, status")
       .eq("tenant_id",tenantId).eq("supplier_id",supplierId)
       .order("created_at",{ascending:false}).order("id",{ascending:false});
     if (branchId) query=query.eq("branch_id",branchId);
-    return await query.range(offset,offset+size-1);
+    const result = await query.range(offset,offset+size-1);
+    // This existing table is absent from the generated client schema.
+    return {data:result.data as unknown as RawReturn[] | null,error:result.error};
   });
   return rows.map(row=>({id:row.id,code:row.code,date:row.created_at,totalAmount:Number(row.total),status:row.status,supplierReturn:true}));
 }
