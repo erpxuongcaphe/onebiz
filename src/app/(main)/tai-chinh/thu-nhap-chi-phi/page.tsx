@@ -12,6 +12,7 @@ import {ReportTableFrame} from '@/components/shared/report';
 import {financeReportRangeError} from '@/lib/reports/finance-report-input';
 import {cashPaymentMethodLabel} from '@/lib/utils/cash-book-labels';
 import {ManagementFinanceDialog} from '@/components/shared/dialogs/management-finance-dialog';
+import {FinanceImportDialog} from '@/components/shared/dialogs/finance-import-dialog';
 import {Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter} from '@/components/ui/dialog';
 import {cashDateTimeInput, formatCashBookDate, formatCashTime} from '@/lib/cash-time';
 import {formatCurrency} from '@/lib/format';
@@ -33,6 +34,7 @@ export default function ManagementFinancePage() {
   const [error, setError] = useState('');
   const [exporting, setExporting] = useState(false);
   const [open, setOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [settling, setSettling] = useState<FinanceEvent>();
   const [expanded, setExpanded] = useState<string>();
   const [revision, setRevision] = useState(0);
@@ -145,6 +147,7 @@ export default function ManagementFinancePage() {
     <PageHeader title="Thu nhập và chi phí"/>
     <div className="flex flex-wrap gap-2">
       {canCreate && <Button onClick={() => {setSettling(undefined); setOpen(true);}} disabled={!categories.length}><Icon name="add"/>Ghi nhận mới</Button>}
+      {canCreate && <Button variant="outline" disabled={!activeBranchId || !categories.length} onClick={()=>setImportOpen(true)}><Icon name="upload"/>Nhập tài chính</Button>}
       {canCreate && <Button variant="outline" onClick={() => {setCategoryOpen(true); setParentId(''); setCategoryCode(''); setCategoryName(''); setCashFlowActivity('unclassified'); setActionError('');}}><Icon name="category"/>Thêm khoản mục</Button>}
       {canExport && <Button variant="outline" disabled={loading || categoryLoading || exporting || !data || !!error || !!rangeError} onClick={download}><Icon name="download"/>{exporting ? 'Đang xuất…' : 'Xuất Excel'}</Button>}
       <Button variant="outline" onClick={() => setRevision(r => r + 1)} disabled={loading}><Icon name="refresh"/>Tải lại</Button>
@@ -187,6 +190,7 @@ export default function ManagementFinancePage() {
       <Button variant="outline" size="icon" aria-label="Trang sau" title="Trang sau" disabled={loading || !data || (page + 1) * 50 >= data.total} onClick={() => setPage(p => p + 1)}><Icon name="chevron_right"/></Button>
     </div></div></>}
     <ManagementFinanceDialog open={open} onOpenChange={setOpen} categories={categories} event={settling} onSuccess={() => setRevision(r => r + 1)}/>
+    <FinanceImportDialog open={importOpen} onOpenChange={setImportOpen} categories={categories} onFinished={()=>setRevision(r=>r+1)}/>
     <Dialog open={categoryOpen} onOpenChange={value => {if (!actionSaving) setCategoryOpen(value);}}><DialogContent><DialogHeader><DialogTitle>Thêm khoản mục chi tiết</DialogTitle></DialogHeader>
       <label className="grid gap-1 text-sm">Nhóm khoản mục<SearchableSelect value={parentId} onValueChange={setParentId} options={categories.filter(c => c.is_group).map(c => ({value: c.id, label: c.name, meta: c.code}))} placeholder="Chọn nhóm"/></label>
       <label className="grid gap-1 text-sm">Mã khoản mục<Input value={categoryCode} maxLength={32} onChange={e => setCategoryCode(e.target.value.toUpperCase())}/></label>
