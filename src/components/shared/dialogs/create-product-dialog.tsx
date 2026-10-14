@@ -3627,7 +3627,9 @@ export function CreateProductDialog({
             <TabsContent value="bom" className="space-y-4 mt-0">
               <div className="rounded-md border border-primary/20 bg-primary/5 p-3 text-xs">
                 <Icon name="info" size={14} className="inline-block mr-1 text-primary align-text-bottom" />
-                {hasFnbSizeVariants
+                {isFnbStockItem
+                  ? "Công thức cho một mẻ bán thành phẩm. Hoàn thành sản xuất sẽ trừ nguyên liệu thực dùng và nhập lượng BTP thực cân. Khi thanh toán món bán, hệ thống trừ BTP theo BOM của món, không trừ lại nguyên liệu của mẻ."
+                  : hasFnbSizeVariants
                   ? "Mỗi size có BOM riêng. Chỉnh cùng một ma trận để so sánh và tránh ghi nhầm công thức giữa các size."
                   : channel === "fnb"
                     ? "Chọn các SKU Retail và định lượng dùng cho một phần bán. POS sẽ trừ đúng các mã này tại chi nhánh bán món."
@@ -3841,28 +3843,28 @@ export function CreateProductDialog({
                     value={bomBranchId ?? "__all__"}
                     onValueChange={(v) => setBomBranchId(v === "__all__" ? null : v)}
                     items={[
-                      { value: "__all__", label: "Dùng chung cho mọi chi nhánh bán món này" },
+                      { value: "__all__", label: isFnbStockItem ? "Dùng chung cho mọi chi nhánh sản xuất BTP này" : "Dùng chung cho mọi chi nhánh bán món này" },
                       ...branches.map((b) => ({ value: b.id, label: `Ghi đè riêng: ${b.name}` })),
                     ]}
                   >
                     <SelectTrigger className="w-full">
                       <SelectValue>
                         {(v) => {
-                          if (!v || v === "__all__") return "Dùng chung cho mọi chi nhánh bán món này";
+                          if (!v || v === "__all__") return isFnbStockItem ? "Dùng chung cho mọi chi nhánh sản xuất BTP này" : "Dùng chung cho mọi chi nhánh bán món này";
                           const m = branches.find((b) => b.id === v);
                           return m ? `Ghi đè riêng: ${m.name}` : v;
                         }}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__all__">Dùng chung cho mọi chi nhánh bán món này</SelectItem>
+                      <SelectItem value="__all__">{isFnbStockItem ? "Dùng chung cho mọi chi nhánh sản xuất BTP này" : "Dùng chung cho mọi chi nhánh bán món này"}</SelectItem>
                       {branches.map((b) => (
                         <SelectItem key={b.id} value={b.id}>Ghi đè riêng: {b.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    Muốn bán món ở nhiều quán: chọn phạm vi dùng chung ở đây, rồi chọn nhiều quán tại tab Tùy chọn FnB. Chỉ ghi đè khi quán đó có công thức khác.
+                    {isFnbStockItem ? "Dùng chung nếu các quán làm cùng công thức. Chỉ ghi đè riêng khi một chi nhánh có định mức hoặc sản lượng chuẩn khác." : "Muốn bán món ở nhiều quán: chọn phạm vi dùng chung ở đây, rồi chọn nhiều quán tại tab Tùy chọn FnB. Chỉ ghi đè khi quán đó có công thức khác."}
                   </p>
                 </div>
                 <div className="space-y-1.5">
