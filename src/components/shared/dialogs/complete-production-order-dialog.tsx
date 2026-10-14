@@ -65,6 +65,7 @@ export function CompleteProductionOrderDialog({
   const [checkError, setCheckError] = useState(false);
   const [checkAttempt, setCheckAttempt] = useState(0);
   const [detailError, setDetailError] = useState(false);
+  const [emptyMaterials, setEmptyMaterials] = useState(false);
 
   // Auto-sell state
   const [autoSell, setAutoSell] = useState(false);
@@ -113,12 +114,13 @@ export function CompleteProductionOrderDialog({
     setChecking(Boolean(open && order?.materials?.length));
     setCheckError(false);
     setDetailError(false);
+    setEmptyMaterials(false);
     setMaterialChecks([]);
     if (!open || !order) return;
     setChecking(true);
     async function loadChecks() {
       let detail = order!;
-      if (!detail.materials) {
+      if (!detail.materials?.length) {
         try {
           detail = await getProductionOrderById(detail.id);
         } catch {
@@ -127,6 +129,10 @@ export function CompleteProductionOrderDialog({
         }
       }
       if (!active) return;
+      if (!detail.materials?.length) {
+        setEmptyMaterials(true);
+        return;
+      }
       try {
         const checks = await checkMaterialsAvailability(detail.branchId, (detail.materials ?? []).map((m) => ({
           productId: m.productId, productName: m.productName,
@@ -146,7 +152,7 @@ export function CompleteProductionOrderDialog({
 
   async function handleComplete() {
     if (!order) return;
-    if (checking || detailError || unitsLoading) return;
+    if (checking || detailError || emptyMaterials || unitsLoading) return;
     if (!completedQty || !Number.isFinite(Number(completedQty)) || Number(completedQty) <= 0 || completedStockQty == null || completedStockQty <= 0) {
       toast({ title: "Số lượng phải > 0", variant: "warning" });
       return;
@@ -307,7 +313,7 @@ export function CompleteProductionOrderDialog({
           </div>
 
           {/* Material availability check */}
-          {(checking || checkError || detailError || materialChecks.length > 0) && (
+          {(checking || checkError || detailError || emptyMaterials || materialChecks.length > 0) && (
             <div className="rounded-lg border border-border overflow-hidden bg-surface-container-lowest" aria-busy={checking}>
               <div className="px-3 py-2 bg-surface-container-low text-xs font-semibold flex items-center justify-between">
                 <span className="flex items-center gap-2">
@@ -316,7 +322,7 @@ export function CompleteProductionOrderDialog({
                 </span>
                 {checking ? (
                   <Icon name="progress_activity" size={14} className="animate-spin" />
-                ) : checkError || detailError ? null : hasShortage ? (
+                ) : checkError || detailError || emptyMaterials ? null : hasShortage ? (
                   <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-status-warning/10 text-status-warning">
                     <span className="size-1.5 rounded-full bg-status-warning" />
                     Thiếu NVL
@@ -328,9 +334,9 @@ export function CompleteProductionOrderDialog({
                   </span>
                 )}
               </div>
-              {checking ? <p role="status" className="px-3 py-3 text-sm text-muted-foreground">Đang kiểm tra nguyên liệu...</p> : checkError || detailError ? (
+              {checking ? <p role="status" className="px-3 py-3 text-sm text-muted-foreground">Đang kiểm tra nguyên liệu...</p> : checkError || detailError || emptyMaterials ? (
                 <div role="alert" className="px-3 py-3 space-y-2">
-                  <p className="text-sm text-status-warning">{detailError ? "Chưa tải được nguyên liệu của lệnh. Thử lại trước khi hoàn tất." : "Chưa kiểm tra được tồn nguyên liệu. Hệ thống sẽ kiểm tra lại khi hoàn tất."}</p>
+                  <p className="text-sm text-status-warning">{emptyMaterials ? "Lệnh chưa có nguyên liệu được lưu. Kiểm tra công thức và lệnh sản xuất trước khi hoàn tất; kho chưa thay đổi." : detailError ? "Chưa tải được nguyên liệu của lệnh. Thử lại trước khi hoàn tất." : "Chưa kiểm tra được tồn nguyên liệu. Hệ thống sẽ kiểm tra lại khi hoàn tất."}</p>
                   <Button type="button" variant="outline" onClick={() => setCheckAttempt((n) => n + 1)}>Thử lại</Button>
                 </div>
               ) : <div className="overflow-x-auto"><table className="w-full text-xs">
@@ -408,7 +414,7 @@ export function CompleteProductionOrderDialog({
           <Button variant="outline" disabled={saving} onClick={() => onOpenChange(false)}>
             Hủy
           </Button>
-          <Button onClick={handleComplete} disabled={saving || checking || detailError || unitsLoading || completedStockQty == null || completedStockQty <= 0}>
+          <Button onClick={handleComplete} disabled={saving || checking || detailError || emptyMaterials || unitsLoading || completedStockQty == null || completedStockQty <= 0}>
             {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
             Hoàn thành
           </Button>

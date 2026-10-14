@@ -296,6 +296,8 @@ export async function completeProductionAtomic(
     }
     if (/UOM_CONVERSION_CHANGED/.test(message)) throw new Error("Hệ số quy đổi vừa thay đổi. Kiểm tra lại lệnh sản xuất trước khi hoàn thành; kho chưa thay đổi.");
     if (/UOM_MATERIAL_INPUTS_INVALID/.test(message)) throw new Error("Đơn vị hoặc số nguyên liệu thực dùng không khớp lệnh sản xuất. Kiểm tra lại lệnh; chưa ghi nhận trừ kho.");
+    if (/FNB_PRODUCTION_MATERIALS_REQUIRED/.test(message)) throw new Error("Lệnh BTP chưa có nguyên liệu được lưu. Kiểm tra công thức và lệnh trước khi hoàn tất; kho chưa thay đổi.");
+    if (/FNB_PRODUCTION_MATERIALS_INVALID/.test(message)) throw new Error("Nguyên liệu của lệnh BTP thiếu hoặc sai định lượng. Kiểm tra lại lệnh; chưa trừ nguyên liệu hoặc nhập BTP.");
     throw error;
   }
   return data as string; // lot_id

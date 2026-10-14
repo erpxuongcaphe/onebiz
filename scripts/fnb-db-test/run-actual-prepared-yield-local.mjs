@@ -16,6 +16,7 @@ try {
   await db.exec('create role anon;create role authenticated;');
   await db.exec(expand('supabase/tests/00417_fnb_real_production_chain.integration.sql'));
   await db.exec(fs.readFileSync('supabase/migrations/00511_fnb_actual_prepared_yield.sql','utf8'));
+  await db.exec(fs.readFileSync('supabase/migrations/00525_prepared_production_material_snapshot_guard.sql','utf8'));
   const branch='20000000-0000-0000-0000-000000000002',tenant='10000000-0000-0000-0000-000000000001',raw='30000000-0000-0000-0000-000000000001',prepared='30000000-0000-0000-0000-000000000002',actor='40000000-0000-0000-0000-000000000001';
   const qty=async id=>Number((await db.query(`select quantity from branch_stock where product_id='${id}'`)).rows[0].quantity);
   for (const actual of [580,620]) {
@@ -35,6 +36,18 @@ try {
   const before=await qty(raw);
   for(const value of ['0','-1',"'NaN'::numeric"]) await assert.rejects(()=>db.query(`select complete_production_atomic('${invalid}',${value},null,current_date,null)`));
   assert.equal(await qty(raw),before,'invalid yields make no stock changes');
+  const outputBefore=await qty(prepared);
+  await assert.rejects(()=>db.query(`select complete_production_atomic('${invalid}',600,'EMPTY',current_date,null)`),/FNB_PRODUCTION_MATERIALS_REQUIRED/);
+  assert.equal(await qty(prepared),outputBefore,'missing ingredient snapshot never credits prepared stock');
+  assert.equal(await qty(raw),before,'missing ingredient snapshot never consumes raw stock');
+  await db.exec(`insert into production_order_materials(id,production_order_id,product_id,planned_qty,unit,unit_cost) values(gen_random_uuid(),'${invalid}','${raw}',0,'Tui',12500);`);
+  for (const quantity of ['0','-1',"'NaN'::numeric"]) {
+    await db.exec(`update production_order_materials set planned_qty=${quantity} where production_order_id='${invalid}'`);
+    await assert.rejects(()=>db.query(`select complete_production_atomic('${invalid}',600,'INVALID',current_date,null)`),/FNB_PRODUCTION_MATERIALS_INVALID/);
+    assert.equal(await qty(prepared),outputBefore,'invalid ingredients never credit stock');
+    assert.equal(await qty(raw),before,'invalid ingredients never consume stock');
+  }
+  console.log('PASS: empty/invalid prepared ingredient snapshots rejected without stock changes');
   console.log('PASS: under/over standard yield, independent raw consumption and cost, replay prevention, invalid yield rollback. Legacy full-chain assertions passed.');
 } catch(error) { console.error(error.message); process.exitCode=1; }
 finally {await db.close();fs.rmSync(dir,{recursive:true,force:true});}
