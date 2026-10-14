@@ -730,7 +730,7 @@ export function BOMEditorDialog({
                   <thead className="bg-muted/30">
                     <tr>
                       <th className="text-left p-2 font-medium">Thành phần</th>
-                      <th className="text-right p-2 font-medium w-24">{output?.isFnbStockItem ? "Lượng / mẻ" : "Số lượng"}</th>
+                      <th className="text-right p-2 font-medium w-40">{output?.isFnbStockItem ? "Lượng / mẻ" : "Số lượng"}</th>
                       <th className="text-left p-2 font-medium w-20">ĐVT</th>
                       {output?.isFnbStockItem && <th scope="col" className="bg-muted/20 text-right p-2 font-medium w-32">Cho 1 {yieldUnit} BTP<span className="block text-[11px] font-normal">Tự tính</span></th>}
                       <th className="text-right p-2 font-medium w-20">Hao hụt %</th>
@@ -806,7 +806,7 @@ export function BOMEditorDialog({
                               onChange={(e) =>
                                 updateItem(idx, { quantity: e.target.value })
                               }
-                              className="h-8 text-right"
+                              className="h-8 min-w-32 text-right tabular-nums"
                             />
                           </td>
                           <td className="p-2">

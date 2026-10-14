@@ -396,13 +396,13 @@ export function CreateInternalSaleDialog({
 
         {/* Items table */}
         {items.length > 0 && (
-          <div className="border rounded-lg overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="border rounded-lg overflow-x-auto">
+            <table className="w-full min-w-[800px] text-sm">
               <thead className="bg-muted/50">
                 <tr>
                   <th className="text-left p-2">Sản phẩm</th>
                   <th className="text-center p-2 w-24">ĐVT</th>
-                  <th className="text-right p-2 w-20">SL</th>
+                  <th className="text-right p-2 w-40">SL</th>
                   <th className="text-right p-2 w-32">Đơn giá</th>
                   <th className="text-right p-2 w-16">VAT%</th>
                   <th className="text-right p-2 w-28">Thành tiền</th>
@@ -429,7 +429,7 @@ export function CreateInternalSaleDialog({
                         value={item.quantity}
                         decimals={4}
                         min={0}
-                        className="h-8 w-20 text-right"
+                        className="h-8 min-w-32 text-right tabular-nums"
                         onChange={(value) => updateItem(item.productId, "quantity", value ?? 0)}
                       />
                     </td>

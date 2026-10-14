@@ -286,7 +286,7 @@ export function CreateDisposalDialog({
             </div>
 
             <div className="overflow-hidden rounded-lg border bg-white shadow-none">
-              <div className="hidden grid-cols-[minmax(300px,1fr)_90px_110px_120px_140px_150px_44px] gap-2 border-b bg-muted/50 px-3 py-2 text-xs font-semibold uppercase text-muted-foreground md:grid">
+              <div className="hidden grid-cols-[minmax(300px,1fr)_90px_110px_216px_140px_150px_44px] gap-2 border-b bg-muted/50 px-3 py-2 text-xs font-semibold uppercase text-muted-foreground xl:grid">
                 <span>Sản phẩm</span>
                 <span className="flex justify-center">ĐVT</span>
                 <span className="flex justify-end">Tồn kho</span>
@@ -312,7 +312,7 @@ export function CreateDisposalDialog({
                   {[...items].reverse().map((item) => (
                     <div
                       key={item.product_id}
-                      className="grid gap-2 px-3 py-2.5 md:grid-cols-[minmax(300px,1fr)_90px_110px_120px_140px_150px_44px] md:items-center"
+                      className="grid gap-2 px-3 py-2.5 xl:grid-cols-[minmax(300px,1fr)_90px_110px_216px_140px_150px_44px] xl:items-center"
                     >
                       <div className="min-w-0">
                         <div className="truncate text-sm font-semibold">{item.product_name}</div>

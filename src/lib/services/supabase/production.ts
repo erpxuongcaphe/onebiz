@@ -234,6 +234,31 @@ export async function cancelProductionOrder(
   };
 }
 
+export async function correctProductionOrderQuantities(input: {
+  orderId: string; expectedUpdatedAt: string; requestId: string; outputQuantity: number;
+  materials: { productId: string; quantity: number; unit: string; expectedFactor?: number }[];
+  reason: string; cancel?: boolean;
+}) {
+  const { data, error } = await (supabase.rpc as any)("correct_production_order_quantities", {
+    p_order_id: input.orderId, p_expected_updated_at: input.expectedUpdatedAt,
+    p_request_id: input.requestId, p_output_quantity: input.outputQuantity,
+    p_materials: input.materials, p_reason: input.reason.trim(), p_cancel: input.cancel ?? false,
+  });
+  if (error) {
+    const messages: Record<string,string> = {
+      PRODUCTION_CORRECTION_OUTPUT_USED: "Thành phẩm đã được dùng hoặc xuất khỏi kho. Cần đối soát các chứng từ liên quan trước khi sửa/hủy mẻ; tồn kho chưa thay đổi.",
+      PRODUCTION_CORRECTION_STALE: "Lệnh vừa được người khác cập nhật. Đóng rồi mở lại để lấy số mới.",
+      PRODUCTION_CORRECTION_LEGACY_ISSUE: "Lệnh cũ đã xuất nguyên liệu trước khi hoàn thành. Dùng Hủy lệnh để hoàn nguyên trước khi tạo lại.",
+      PRODUCTION_CORRECTION_STOCK_REQUIRED: "Không đủ tồn cho lượng nguyên liệu bổ sung. Chưa lưu điều chỉnh.",
+      PRODUCTION_CORRECTION_COST_REQUIRED: "Tồn và giá vốn cần đối soát trước khi điều chỉnh. Chưa thay đổi kho.",
+      PRODUCTION_CORRECTION_PERMISSION_REQUIRED: "Tài khoản chưa được cấp quyền sửa/hủy lệnh sản xuất này.",
+      UOM_CONVERSION_CHANGED: "Quy đổi đơn vị vừa thay đổi. Mở lại lệnh trước khi lưu.",
+    };
+    throw new Error(messages[error.message] ?? error.message);
+  }
+  return data;
+}
+
 export async function completeProductionOrder(
   productionOrderId: string,
   completedQty: number,

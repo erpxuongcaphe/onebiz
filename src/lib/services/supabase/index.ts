@@ -369,6 +369,7 @@ export {
   getProductionOrders, getProductionOrderListWorkspace, getProductionOrdersForExport, getProductionOrderById, createProductionOrder, completeProductionOrder, consumeProductionMaterials,
   completeProductionAtomic,
   cancelProductionOrder,
+  correctProductionOrderQuantities,
   updateProductionStatus, canTransitionProductionStatus,
   checkMaterialsAvailability,
   getProductLots, getAllProductLots, getExpiringLots,
