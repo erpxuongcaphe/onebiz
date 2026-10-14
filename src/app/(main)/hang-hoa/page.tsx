@@ -64,7 +64,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
+import { formatCurrency, formatDate, formatNumber, formatUnitPrice } from "@/lib/format";
 import { summarizePhysicalStock } from "@/lib/physical-stock-summary";
 import { exportToExcel } from "@/lib/utils/export";
 import { exportToExcelFromSchema } from "@/lib/excel";
@@ -120,7 +120,7 @@ function PreparedCost({ product, cost, loading }: {
     <span className="block text-right" title={cost.source === "batch"
       ? "Giá vốn bình quân từ các mẻ đã chốt tại quán này"
       : "Dự toán BOM theo giá bán Retail hiện hành; không phải giá vốn tồn thực tế"}>
-      {formatCurrency(cost.value)}
+      {formatUnitPrice(cost.value)}
       <span className="block text-xs font-normal text-muted-foreground">
         {cost.source === "batch" ? "Bình quân quán" : "Dự toán BOM"}
       </span>
@@ -230,7 +230,7 @@ function ProductDetail({
                           label: product.isFnbStockItem && preparedCost?.source === "recipe"
                             ? "Dự toán BOM" : "Giá vốn",
                           value: product.isFnbStockItem
-                            ? preparedCost ? formatCurrency(preparedCost.value)
+                            ? preparedCost ? formatUnitPrice(preparedCost.value)
                               : preparedCostLoading ? "Đang tính..." : "Chưa có dự toán"
                             : formatCurrency(product.costPrice),
                         }]
@@ -2231,7 +2231,7 @@ export default function HangHoaPage() {
           ]}
           summaryRow={{
             stock: totalStock || "—",
-            ordered: formatCurrency(totalOrdered),
+            ordered: formatNumber(totalOrdered),
           }}
           expandedRow={expandedRow}
           onExpandedRowChange={setExpandedRow}

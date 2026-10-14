@@ -6,7 +6,7 @@ import { formatCurrency,formatDate,formatStockQuantity } from "@/lib/format";
 import { listOpeningBatches,openingPurposeLabels,type OpeningBatch } from "@/lib/services/supabase/opening-stock";
 import { exportToExcelFromSchema } from "@/lib/excel";
 import { initialStockExcelSchema } from "@/lib/excel/schemas";
-const unitCostFormat=new Intl.NumberFormat("en-US",{maximumFractionDigits:6});
+const unitCostFormat=new Intl.NumberFormat("en-US",{maximumFractionDigits:4});
 
 export function OpeningStockHistoryDialog({open,onOpenChange,branchId,batchId}: {open:boolean;onOpenChange:(open:boolean)=>void;branchId?:string;batchId?:string}) {
   const [rows,setRows]=useState<OpeningBatch[]>([]);

@@ -5,9 +5,9 @@
  * - Number locale: **en-US** (`1,234,567.89`) — phẩy ngàn, chấm thập phân.
  *   Trước đây dùng vi-VN (`1.234.567,89`) → confusing với input mask + Excel
  *   export. Toàn web giờ đồng bộ en-US display.
- * - Decimals: hiển thị TỐI ĐA 2 chữ số thập phân, trim trailing zeros khi
+ * - Quantities: hiển thị TỐI ĐA 4 chữ số thập phân, trim trailing zeros khi
  *   là số nguyên (vd `5` thay vì `5.00`). Khi caller cần force 2 decimals
- *   cho consistency (vd cân/kg) → dùng `formatDecimal(n, 2, true)`.
+ *   cho consistency → dùng `formatDecimal(n, 2)`.
  * - Date display: deterministic `DD/MM/YYYY` and `DD/MM/YYYY HH:mm`.
  *   Timezone stays fixed to `Asia/Ho_Chi_Minh` so server/client rendering
  *   cannot drift by environment timezone.
@@ -23,15 +23,12 @@ const NUMBER_LOCALE = "en-US";
 /**
  * Format số nguyên/thập phân với separator en-US.
  * - Trim trailing zeros: `1234.50` → `"1,234.5"`, `1234` → `"1,234"`.
- * - Max 2 decimals: `1234.567` → `"1,234.57"` (round).
+ * - Max 4 decimals: `1234.56789` → `"1,234.5679"` (display only).
  *
  * @param n — số cần format. NaN/Infinity → "0".
  */
 export function formatNumber(n: number | null | undefined): string {
-  if (n == null || !Number.isFinite(n)) return "0";
-  return new Intl.NumberFormat(NUMBER_LOCALE, {
-    maximumFractionDigits: 2,
-  }).format(n);
+  return formatStockQuantity(n);
 }
 
 /**
@@ -40,9 +37,15 @@ export function formatNumber(n: number | null | undefined): string {
  */
 export function formatStockQuantity(n: number | null | undefined): string {
   if (n == null || !Number.isFinite(n)) return "0";
+  if (n !== 0 && Math.abs(n) < 0.0001) return n > 0 ? "<0.0001" : ">-0.0001";
   return new Intl.NumberFormat(NUMBER_LOCALE, {
     maximumFractionDigits: 4,
-  }).format(n);
+  }).format(n === 0 ? 0 : n);
+}
+
+/** Small-unit prices share four-decimal display, separate from document totals. */
+export function formatUnitPrice(n: number | null | undefined): string {
+  return formatStockQuantity(n);
 }
 
 /**
@@ -70,7 +73,8 @@ export function formatDecimal(
  * khấu/thuế có thể lẻ).
  */
 export function formatCurrency(amount: number | null | undefined): string {
-  return formatNumber(amount);
+  if (amount == null || !Number.isFinite(amount)) return "0";
+  return new Intl.NumberFormat(NUMBER_LOCALE, { maximumFractionDigits: 2 }).format(amount);
 }
 
 // ============================================================
@@ -169,14 +173,14 @@ export function formatChartCurrency(value: number): string {
     const v = value / 1_000;
     return `${v % 1 === 0 ? v.toFixed(0) : v.toFixed(1)}K`;
   }
-  return formatNumber(value);
+  return formatCurrency(value);
 }
 
 /**
  * Format VND for chart tooltips with full detail, e.g. "45,250,000đ"
  */
 export function formatChartTooltipCurrency(value: number): string {
-  return formatNumber(value) + "đ";
+  return formatCurrency(value) + "đ";
 }
 
 // ============================================================

@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { formatCurrency, formatStockQuantity } from "@/lib/format";
 import { commitOpeningStock, previewOpeningStock, openingPurposeLabels, type OpeningPurpose, type OpeningPreviewRow } from "@/lib/services/supabase/opening-stock";
-const unitCostFormat=new Intl.NumberFormat("en-US",{maximumFractionDigits:6});
+const unitCostFormat=new Intl.NumberFormat("en-US",{maximumFractionDigits:4});
 const purposeHelp:Record<OpeningPurpose,string>={migration:"Chuyển số dư đã chốt từ phần mềm đang dùng sang Onebiz.",new_branch:"Khởi tạo hàng thực có cho chi nhánh mới.",start_tracking:"Bắt đầu theo dõi kho cho hàng đang có; không thay lịch sử đã phát sinh.",opening_cost:"Bổ sung giá vốn ban đầu, giữ nguyên lượng đang có."};
 
 function localNow() {

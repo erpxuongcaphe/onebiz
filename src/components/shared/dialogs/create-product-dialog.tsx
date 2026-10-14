@@ -75,7 +75,7 @@ import {
 import type { ProductVariant } from "@/lib/types";
 import { useAuth } from "@/lib/contexts/auth-context";
 import type { Product, BOMItem, UOMConversion } from "@/lib/types";
-import { formatNumber, formatCurrency } from "@/lib/format";
+import { formatNumber, formatCurrency, formatStockQuantity } from "@/lib/format";
 import { isSelectableFnbBomComponent } from "@/lib/fnb-bom-components";
 import {
   buildUomConversion,
@@ -182,9 +182,7 @@ function getBomComponentUnitPrice(product: Product, productChannel: string) {
 }
 
 function formatRecipeQuantity(value: number): string {
-  return new Intl.NumberFormat("vi-VN", {
-    maximumFractionDigits: 4,
-  }).format(value);
+  return formatStockQuantity(value);
 }
 
 function FnbSupplyCatalogNote({
@@ -4150,7 +4148,7 @@ export function CreateProductDialog({
                         </tr>
                         {isFnbStockItem && Number(bomYieldQty) > 0 && <tr>
                           <td colSpan={(channel === "fnb" ? 4 : 3) + 1} className="px-3 py-2 text-right text-xs text-muted-foreground">Dự toán / 1 {stockUnit.trim() || initialData?.unit || "G"} BTP:</td>
-                          <td className="px-3 py-2 text-right text-xs tabular-nums">{fnbBomCostPending || hasMissingPreparedComponentCost ? "—" : formatCurrency(inlineFnbBomCost / Number(bomYieldQty))}</td><td />
+                          <td className="px-3 py-2 text-right text-xs tabular-nums">{fnbBomCostPending || hasMissingPreparedComponentCost ? "—" : formatStockQuantity(inlineFnbBomCost / Number(bomYieldQty))}</td><td />
                         </tr>}
                       </tfoot>}
                     </table>

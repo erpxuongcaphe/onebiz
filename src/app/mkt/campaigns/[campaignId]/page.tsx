@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { formatCurrency } from "@/lib/format";
 import { MktLink } from "@/components/mkt/mkt-routing";
 import { notFound } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
@@ -84,7 +85,7 @@ function fmtDate(d: string | null): string | null {
   );
 }
 function fmtBudget(n: number): string {
-  return new Intl.NumberFormat("vi-VN").format(n) + " đ";
+  return formatCurrency(n) + " đ";
 }
 
 export default async function CampaignDetailPage({

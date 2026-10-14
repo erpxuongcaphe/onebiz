@@ -41,7 +41,7 @@ import {
   type ModifierGroup,
   type ModifierOption,
 } from "@/lib/services/supabase/modifier-groups";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatStockQuantity, formatUnitPrice } from "@/lib/format";
 import {
   getDirectConvertibleUnits,
   getDirectConversionFactor,
@@ -82,9 +82,7 @@ interface MaterialLine {
 }
 
 function formatRecipeQuantity(value: number): string {
-  return new Intl.NumberFormat("en-US", {
-    maximumFractionDigits: 4,
-  }).format(value);
+  return formatStockQuantity(value);
 }
 
 export function BOMEditorDialog({
@@ -760,7 +758,7 @@ export function BOMEditorDialog({
                           <td className="p-2">
                             <div className="font-medium">{it.materialName}</div>
                             <div className="text-xs text-muted-foreground">
-                              {it.materialCode}{canViewCost && <> · {unitCost == null ? "Chưa có giá tại quán" : formatCurrency(unitCost)}/{it.stockUnit}</>}
+                              {it.materialCode}{canViewCost && <> · {unitCost == null ? "Chưa có giá tại quán" : formatUnitPrice(unitCost)}/{it.stockUnit}</>}
                             </div>
                             {isConverted && stockQuantity != null && (
                               <div className="mt-1 text-xs text-primary">
@@ -871,7 +869,7 @@ export function BOMEditorDialog({
                           {isFnbRecipe ? "Dự toán" : "Giá vốn"} / {yieldUnit}:
                         </td>
                         <td className="p-2 text-right text-xs">
-                          {hasPendingPreparedCost ? "Sau mẻ đầu" : formatCurrency(previewTotal / Number(yieldQty))}
+                          {hasPendingPreparedCost ? "Sau mẻ đầu" : formatStockQuantity(previewTotal / Number(yieldQty))}
                         </td>
                         <td />
                       </tr>

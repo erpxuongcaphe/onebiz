@@ -71,9 +71,9 @@ function describeCogsBasis(basis?: CogsCostBasis): string {
     const missing =
       (basis?.missingSalesCostLines ?? 0) +
       (basis?.missingReturnCostLines ?? 0);
-    return `Chưa thể chốt giá vốn vì ${missing.toLocaleString("vi-VN")} dòng chưa có snapshot tại thời điểm bán/trả. Hệ thống không lấy giá hiện tại để ước tính.`;
+    return `Chưa thể chốt giá vốn vì ${formatNumber(missing)} dòng chưa có snapshot tại thời điểm bán/trả. Hệ thống không lấy giá hiện tại để ước tính.`;
   }
-  return `Giá vốn dùng snapshot tại thời điểm bán/trả cho đủ ${basis.snapshotLines.toLocaleString("vi-VN")} dòng.`;
+  return `Giá vốn dùng snapshot tại thời điểm bán/trả cho đủ ${formatNumber(basis.snapshotLines)} dòng.`;
 }
 
 function buildSalesReturnReconciliationSheet(

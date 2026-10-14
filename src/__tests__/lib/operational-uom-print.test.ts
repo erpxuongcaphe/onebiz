@@ -9,7 +9,7 @@ beforeEach(()=>{state.read.mockClear();state.result={data:[],error:null};});
 it('uses historical entered units for stock document printing',async()=>{
  state.result.data=[{snapshots:[{productName:'Thạch',inputQuantity:550,inputUnit:'G',stockQuantity:.5,stockUnit:'Mẻ'}]}];
  const printed=await withOperationalPrintUnits(base,'production_order');
- expect(printed.headerFields?.[0].value).toBe('Thạch: 550 G → 0,5 Mẻ');
+ expect(printed.headerFields?.[0].value).toBe('Thạch: 550 G → 0.5 Mẻ');
  expect(base.headerFields).toHaveLength(0);
 });
 it('does not query or delay POS and kitchen printing',async()=>{

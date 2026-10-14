@@ -4,6 +4,7 @@ import {
   formatDate,
   formatDateInputValue,
   formatNumber,
+  formatCurrency,
   formatStockQuantity,
   formatShortDate,
   parseDateInput,
@@ -20,6 +21,16 @@ describe("format conventions", () => {
     expect(formatStockQuantity(0.0042)).toBe("0.0042");
     expect(formatStockQuantity(0.02)).toBe("0.02");
     expect(formatStockQuantity(22.9)).toBe("22.9");
+    expect(formatNumber(1566.07125)).toBe("1,566.0713");
+    expect(formatNumber(100 / 750)).toBe("0.1333");
+    expect(formatNumber(100)).toBe("100");
+    expect(formatCurrency(1566.07125)).toBe("1,566.07");
+  });
+
+  it("never presents a tiny nonzero derived quantity as zero", () => {
+    expect(formatStockQuantity(0.00002)).toBe("<0.0001");
+    expect(formatStockQuantity(-0.00002)).toBe(">-0.0001");
+    expect(formatStockQuantity(-0)).toBe("0");
   });
 
   it("parses strict en-US number input only", () => {
