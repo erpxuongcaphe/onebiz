@@ -622,7 +622,7 @@ export function CreateProductDialog({
   const recipeCatalog = useRecipeMaterialCatalog(
     open && scope === "sku" && (
       (hasBom && (innerTab === "bom" || (usesFnbRecipeCosts && innerTab === "pricing"))) ||
-      (channel === "fnb" && ["pricing", "bom", "variants"].includes(innerTab) && variantItems.length > 0)
+      (channel === "fnb" && (innerTab === "pricing" || innerTab === "bom" || innerTab === "variants") && variantItems.length > 0)
     ),
     setMaterialOptions,
   );
@@ -4778,7 +4778,7 @@ export function CreateProductDialog({
                 />
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                {channel !== "fnb" && <div className="inline-flex rounded-md border p-0.5 text-xs">
+                {channel !== "fnb" && <div className="inline-flex max-w-full flex-wrap rounded-md border p-0.5 text-xs">
                   {(
                     [
                       { v: "all", l: "Tất cả" },

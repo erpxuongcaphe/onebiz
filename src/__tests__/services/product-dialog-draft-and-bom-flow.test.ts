@@ -84,7 +84,8 @@ describe("product dialog draft and inline BOM flow", () => {
     expect(dialog).toContain("POS sẽ trừ đúng các mã này tại chi nhánh bán món");
     expect(dialog).toContain('channel === "fnb" ? "Xoá thành phần Retail" : "Xoá NVL"');
     expect(dialog).toContain('channel === "fnb" ? "thành phần Retail" : "NVL"');
-    expect(dialog).toContain('channel === "fnb" ? "thành phần vào công thức" : "NVL vào công thức"');
+    expect(dialog).toContain('channel === "fnb" || isFnbStockItem ? "thành phần vào công thức" : "NVL vào công thức"');
+    expect(dialog).toContain('{ v: "prepared", l: "Bán thành phẩm" }');
   });
 
   it("keeps the F&B recipe setup explicit about the exact Retail SKU and outlet supply review", () => {
