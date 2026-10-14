@@ -31,6 +31,31 @@ try {
     await assert.rejects(()=>db.query(`select complete_production_atomic('${id}',${actual},'YIELD-${actual}',current_date,null)`));
     assert.equal(await qty(raw),beforeRaw-.5,'retry completed batch cannot deduct twice');
   }
+  // A second prepared batch consumes the first BTP's physical stock directly.
+  const mix='30000000-0000-0000-0000-000000000009',nested=crypto.randomUUID();
+  const rawBeforeNested=await qty(raw),preparedBeforeNested=await qty(prepared);
+  const inputCost=Number((await db.query(`select unit_cost from fnb_branch_product_cost_balances where branch_id='${branch}' and product_id='${prepared}'`)).rows[0].unit_cost);
+  const rawCost=Number((await db.query(`select unit_cost from fnb_branch_product_cost_balances where branch_id='${branch}' and product_id='${raw}'`)).rows[0].unit_cost);
+  await db.exec(`insert into products(id,tenant_id,is_fnb_stock_item,stock,cost_price) values('${mix}','${tenant}',true,0,0);
+    insert into production_orders(id,tenant_id,branch_id,product_id,code,created_by,status,planned_qty) values('${nested}','${tenant}','${branch}','${mix}','SX-NESTED','${actor}','planned',100);
+    insert into production_order_materials(id,production_order_id,product_id,planned_qty,unit,unit_cost) values
+      (gen_random_uuid(),'${nested}','${prepared}',50,'G',0),
+      (gen_random_uuid(),'${nested}','${raw}',.01,'Tui',0);`);
+  await db.query(`select complete_production_atomic('${nested}',100,'NESTED',current_date,null)`);
+  assert.equal(await qty(prepared),preparedBeforeNested-50,'nested batch consumes only measured prepared input');
+  assert.ok(Math.abs(await qty(raw)-(rawBeforeNested-.01))<1e-8,'nested BTP never explodes and deducts its raw recipe again');
+  assert.equal(await qty(mix),100,'nested batch credits measured output');
+  const nestedCost=Number((await db.query(`select cogs_amount from production_orders where id='${nested}'`)).rows[0].cogs_amount);
+  const expectedCost=Math.round((50*inputCost+.01*rawCost)*100)/100;
+  assert.equal(nestedCost,expectedCost,'nested batch uses branch WAC with the existing two-decimal batch cost convention');
+  for(const product of [raw,prepared,mix]) {
+    const costed=Number((await db.query(`select costed_quantity from fnb_branch_product_cost_balances where branch_id='${branch}' and product_id='${product}'`)).rows[0].costed_quantity);
+    assert.ok(Math.abs(costed-await qty(product))<.0001,'physical and cost quantities agree after nested production');
+  }
+  await assert.rejects(()=>db.query(`select complete_production_atomic('${nested}',100,'NESTED',current_date,null)`));
+  assert.equal(await qty(prepared),preparedBeforeNested-50,'nested replay cannot deduct prepared input twice');
+  assert.equal(await qty(mix),100,'nested replay cannot credit output twice');
+  console.log('PASS: BTP-to-BTP production, direct input stock, branch WAC, measured output and replay prevention');
   const invalid=crypto.randomUUID();
   await db.exec(`insert into production_orders(id,tenant_id,branch_id,product_id,code,created_by,status,planned_qty) values('${invalid}','${tenant}','${branch}','${prepared}','SX-invalid','${actor}','planned',600);`);
   const before=await qty(raw);
