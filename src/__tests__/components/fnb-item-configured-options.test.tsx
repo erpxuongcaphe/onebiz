@@ -6,6 +6,29 @@ afterEach(cleanup);
 const product = { id: 'cup', name: 'Ly Mang Về', sell_price: 0, allow_free_sale: true };
 const variants = [{ id: 'm', label: 'Size M', sell_price: 0, is_default: true }, { id: 'l', label: 'Size L', sell_price: 0 }];
 describe('F&B configured preparation options', () => {
+  it.each([true, false])('keeps configured group order after selection and collapse (size: %s)', (withSize) => {
+    const groups = ['Mức đá', 'Đá/Nóng', 'Mức đường'].map((name, index) => ({
+      id: `group-${index}`, tenantId: 'tenant', name, rule: 'single_required' as const,
+      channel: 'fnb' as const, sortOrder: [2, 0, 1][index], minSelect: 0,
+      maxSelect: null, isActive: true, createdAt: '', updatedAt: '',
+    }));
+    const optionsByGroup = new Map(groups.map((g, index) => [g.id, [{
+      id: `option-${index}`, groupId: g.id, label: `Lựa chọn ${index}`, priceDelta: 0,
+      scaleFactor: 1, linkedProductId: null, isDefault: false, sortOrder: 0, isActive: true,
+    }]]));
+    render(<FnbItemDialog open onOpenChange={vi.fn()} product={product}
+      variants={withSize ? variants : []} dynamicModifiers={{ groups, optionsByGroup }} onConfirm={vi.fn()} />);
+    const expected = [...(withSize ? ['Kích cỡ'] : []), 'Đá/Nóng', 'Mức đường', 'Mức đá'];
+    const groupNames = () => screen.getAllByRole('group').map(g => g.getAttribute('aria-label'));
+    expect(groupNames()).toEqual(expected);
+    fireEvent.click(screen.getByRole('button', { name: 'Lựa chọn 1' }));
+    fireEvent.click(screen.getByRole('button', { name: /Đá\/Nóng.*Đang chọn/ }));
+    expect(groupNames()).toEqual(expected);
+    expect(screen.getByRole('group', { name: 'Đá/Nóng' })).toBe(screen.getAllByRole('group')[withSize ? 1 : 0]);
+    fireEvent.click(screen.getByRole('button', { name: /Đá\/Nóng.*Đang chọn/ }));
+    expect(screen.getByRole('button', { name: 'Lựa chọn 1' })).toHaveAttribute('aria-pressed', 'true');
+    expect(groupNames()).toEqual(expected);
+  });
   it('empty configuration shows cup variants without invented sugar or ice options', () => {
     const onConfirm = vi.fn();
     render(<FnbItemDialog open onOpenChange={vi.fn()} product={product} variants={variants}
