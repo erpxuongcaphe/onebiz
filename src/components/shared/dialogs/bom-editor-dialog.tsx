@@ -560,9 +560,9 @@ export function BOMEditorDialog({
         <DialogHeader>
           <DialogTitle>{bomId ? "Sửa công thức sản xuất (BOM)" : "Tạo công thức sản xuất (BOM)"}</DialogTitle>
           <DialogDescription>
-            Định nghĩa thành phần trừ kho khi bán/sản xuất 1 đơn vị SKU — thành
-            phần có thể là NVL hoặc SKU Retail (vd quán F&amp;B pha chế từ sữa lon
-            Retail). Giá vốn được tính tự động.
+            {output?.isFnbStockItem
+              ? "Khai nguyên liệu cho một mẻ và lượng BTP dự kiến thu được. Hoàn thành sản xuất trừ nguyên liệu thực dùng, nhập BTP thực cân; thanh toán món bán mới trừ BTP theo công thức món."
+              : "Định nghĩa thành phần trừ kho khi bán/sản xuất SKU — thành phần có thể là NVL hoặc SKU Retail. Định lượng bên dưới tương ứng với sản lượng công thức đã nhập."}
           </DialogDescription>
         </DialogHeader>
 
@@ -730,7 +730,7 @@ export function BOMEditorDialog({
                   <thead className="bg-muted/30">
                     <tr>
                       <th className="text-left p-2 font-medium">Thành phần</th>
-                      <th className="text-right p-2 font-medium w-24">Số lượng</th>
+                      <th className="text-right p-2 font-medium w-24">{output?.isFnbStockItem ? "Lượng / mẻ" : "Số lượng"}</th>
                       <th className="text-left p-2 font-medium w-20">ĐVT</th>
                       <th className="text-right p-2 font-medium w-20">Hao hụt %</th>
                       {canViewCost && <th className="text-right p-2 font-medium w-32">Thành tiền</th>}
@@ -761,7 +761,7 @@ export function BOMEditorDialog({
                             </div>
                             {isConverted && stockQuantity != null && (
                               <div className="mt-1 text-xs text-primary">
-                                Pha chế {formatRecipeQuantity(qty)} {it.unit} · Trừ tồn {formatRecipeQuantity(stockQuantity)} {it.stockUnit} / 1 {yieldUnit}
+                                Pha chế {formatRecipeQuantity(qty)} {it.unit} · Trừ tồn {formatRecipeQuantity(stockQuantity)} {it.stockUnit} / {output?.isFnbStockItem ? "mẻ" : `${yieldQty} ${yieldUnit}`}
                               </div>
                             )}
                             {selectableModifierGroups.length > 0 && (
