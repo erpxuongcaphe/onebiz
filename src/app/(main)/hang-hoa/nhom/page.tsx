@@ -40,7 +40,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { formatDate, formatCurrency } from "@/lib/format";
+import { formatDate, formatCurrency, formatNumber } from "@/lib/format";
 import {
   getCategoriesWithCounts,
   getCategoriesWithChannelBreakdown,
@@ -200,7 +200,7 @@ function CategoryProductsPanel({
                       : ""
                 }`}
               >
-                {formatCurrency(p.stock)}
+                {formatNumber(p.stock)}
               </span>
               <span className="text-xs text-muted-foreground">
                 {p.unit ?? "—"}

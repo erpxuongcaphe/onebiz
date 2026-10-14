@@ -15,7 +15,7 @@ import {
 } from "recharts";
 import { KpiCard, ChartCard } from "../_components";
 import { useBranchFilter, useAuth, useToast } from "@/lib/contexts";
-import { formatCurrency, formatChartCurrency, formatChartTooltipCurrency } from "@/lib/format";
+import { formatCurrency, formatNumber, formatChartCurrency, formatChartTooltipCurrency } from "@/lib/format";
 import { formatCashBookDate, formatCashTime } from "@/lib/cash-time";
 import { getCashFlowDetailed } from "@/lib/services/supabase/analytics";
 import type { CashFlowDetailedRow } from "@/lib/services/supabase/analytics";
@@ -540,7 +540,7 @@ export default function LuongTienPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-base font-semibold">Chứng từ thu chi</h2>
-              <p className="text-xs text-muted-foreground">Phiếu hoàn thành theo ngày chứng từ · {ledgerTotal.toLocaleString("vi-VN")} phiếu</p>
+              <p className="text-xs text-muted-foreground">Phiếu hoàn thành theo ngày chứng từ · {formatNumber(ledgerTotal)} phiếu</p>
             </div>
             <label className="flex items-center gap-2 text-sm">
               <span>Loại phiếu</span>
@@ -568,7 +568,7 @@ export default function LuongTienPage() {
             <select aria-label="Chiều sắp xếp thu chi" className="h-10 rounded border bg-background px-3 text-sm" value={ledgerFilter.direction} onChange={event => updateLedgerFilter({ direction: event.target.value as "asc" | "desc" })}><option value="desc">Giảm dần</option><option value="asc">Tăng dần</option></select>
           </div>
           {ledgerFilter.min !== "" && ledgerFilter.max !== "" && Number(ledgerFilter.min) > Number(ledgerFilter.max) && <p role="alert" className="text-sm text-destructive">Số tiền từ phải nhỏ hơn hoặc bằng số tiền đến.</p>}
-          <p className="text-sm tabular-nums">Kết quả lọc: {ledgerTotal.toLocaleString("vi-VN")} phiếu · Thu: {formatCurrency(filteredLedgerRows.filter(row => row.type === "receipt").reduce((sum, row) => sum + row.amount, 0))} · Chi: {formatCurrency(filteredLedgerRows.filter(row => row.type === "payment").reduce((sum, row) => sum + row.amount, 0))}</p>
+          <p className="text-sm tabular-nums">Kết quả lọc: {formatNumber(ledgerTotal)} phiếu · Thu: {formatCurrency(filteredLedgerRows.filter(row => row.type === "receipt").reduce((sum, row) => sum + row.amount, 0))} · Chi: {formatCurrency(filteredLedgerRows.filter(row => row.type === "payment").reduce((sum, row) => sum + row.amount, 0))}</p>
           <ReportTableFrame tablePreferenceKey="report.cash-flow.transactions">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">

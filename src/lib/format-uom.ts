@@ -13,6 +13,7 @@
  */
 
 import type { UOMConversion } from "@/lib/types";
+import { formatStockQuantity } from "@/lib/format";
 
 /** Units that can be converted directly to the product stock unit. */
 export function getDirectConvertibleUnits(
@@ -177,12 +178,10 @@ export function formatStockConversion(
   if (qty < conversion.factor) return null;
   const quotient = Math.floor(qty / conversion.factor);
   const remainder = qty - quotient * conversion.factor;
-  if (remainder === 0) return `${quotient} ${conversion.fromUnit}`;
-  // Format số lẻ — round 2 decimals nếu qty là số thập phân (vd 0.5 kg)
-  const remainderStr = Number.isInteger(remainder)
-    ? String(remainder)
-    : remainder.toFixed(2).replace(/\.?0+$/, "");
-  return `${quotient} ${conversion.fromUnit} ${remainderStr} lẻ`;
+  if (remainder === 0) return `${formatStockQuantity(quotient)} ${conversion.fromUnit}`;
+  // Display remainder at shared 4-decimal precision; keep original arithmetic.
+  const remainderStr = formatStockQuantity(remainder);
+  return `${formatStockQuantity(quotient)} ${conversion.fromUnit} ${remainderStr} lẻ`;
 }
 
 /**
@@ -208,8 +207,6 @@ export function getConversionText(
     );
   if (!reverse || !Number.isFinite(qty) || qty <= 0) return null;
   const converted = qty * reverse.factor;
-  const convertedText = Number.isInteger(converted)
-    ? String(converted)
-    : converted.toFixed(2).replace(/\.?0+$/, "");
+  const convertedText = formatStockQuantity(converted);
   return `${convertedText} ${reverse.toUnit}`;
 }

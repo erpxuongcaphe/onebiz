@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { Input } from "./input";
-import { formatNumber, formatDecimal, parseNumberInput, roundDecimals } from "@/lib/format";
+import { formatDecimal, parseNumberInput, roundDecimals } from "@/lib/format";
 
 interface NumericInputProps
   extends Omit<
@@ -74,15 +74,8 @@ export function NumericInput({
     (n: number | null | undefined): string => {
       if (n === null || n === undefined || !Number.isFinite(n)) return "";
       if (forceDecimals) return formatDecimal(n, decimals);
-      // Trim trailing zeros (formatNumber) nhưng cap max `decimals`.
-      // formatNumber max 2 decimals — nếu caller muốn khác, dùng formatDecimal.
-      if (decimals !== 2) {
-        // Manual format cho decimals khác 2 — formatNumber default cap 2.
-        return new Intl.NumberFormat("en-US", {
-          maximumFractionDigits: decimals,
-        }).format(n);
-      }
-      return formatNumber(n);
+      // Editable numbers must keep their declared precision, without display-only inequalities.
+      return new Intl.NumberFormat("en-US", { maximumFractionDigits: decimals }).format(n);
     },
     [decimals, forceDecimals],
   );

@@ -164,7 +164,7 @@ export function CreatePurchaseReturnDialog({
     setPOItems(
       poItems.map((item) =>
         item.id === id
-          ? { ...item, returnQty: Math.min(Math.max(0.01, qty), item.received) }
+          ? { ...item, returnQty: Math.min(Math.max(0.0001, qty), item.received) }
           : item,
       ),
     );
@@ -370,10 +370,10 @@ export function CreatePurchaseReturnDialog({
                       </div>
                       <NumericInput
                         value={item.returnQty}
-                        onChange={(value) => updateReturnQty(item.id, value ?? 0.01)}
-                        min={0.01}
+                        onChange={(value) => updateReturnQty(item.id, value ?? 0.0001)}
+                        min={0.0001}
                         max={item.quantity}
-                        decimals={2}
+                        decimals={4}
                         disabled={!item.selected}
                         className="h-8 text-right"
                         aria-label={`Số lượng trả ${item.product_name}`}

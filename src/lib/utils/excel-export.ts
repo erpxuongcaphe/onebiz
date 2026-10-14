@@ -12,7 +12,8 @@
  *
  * Convention:
  * - Filename: `bao-cao-{kind}-{view|full}-{from}_{to}.xlsx`
- * - VND format: `#,##0` (chấm phân cách nghìn, không decimal)
+ * - Numeric convention: comma grouping, decimal point; quantities show up to 4 decimals.
+ * - VND format: `#,##0` (no displayed decimals)
  * - Percentage format: `0.0%`
  * - Title row: bold 16pt, primary color background, white text
  * - Section header: bold 12pt, light blue background
@@ -388,7 +389,7 @@ function formatCell(value: unknown, col: ExcelColumn): XLSXTypes.CellObject {
 
   if (format === "number") {
     const n = typeof value === "number" ? value : Number(value);
-    const digits = Math.min(10, Math.max(0, Math.trunc(col.decimalPlaces ?? 2)));
+    const digits = Math.min(4, Math.max(0, Math.trunc(col.decimalPlaces ?? 4)));
     return {
       v: Number.isFinite(n) ? n : 0,
       t: "n",

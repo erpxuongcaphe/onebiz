@@ -1,4 +1,5 @@
 import Decimal from "decimal.js-light";
+import { formatStockQuantity } from "@/lib/format";
 import type { UOMConversion } from "@/lib/types";
 
 export const STOCK_QUANTITY_SCALE = 4;
@@ -41,7 +42,7 @@ export function stockToInput(quantity: string | number, stockUnit: string, input
 }
 
 export function formatOperationalQuantity(value: number): string {
-  return new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 4 }).format(value);
+  return formatStockQuantity(value);
 }
 
 export function switchInputQuantity(quantity: string | number, stockUnit: string, fromUnit: string, toUnit: string, conversions: UOMConversion[]): number | null {

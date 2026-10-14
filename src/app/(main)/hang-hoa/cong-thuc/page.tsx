@@ -62,7 +62,7 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import type { BranchDetail } from "@/lib/services/supabase";
-import { formatDate, formatCurrency, formatNumber } from "@/lib/format";
+import { formatDate, formatCurrency, formatNumber, formatUnitPrice } from "@/lib/format";
 import type { BOM, BOMCostBreakdown } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 
@@ -202,7 +202,7 @@ function BOMDetail({
                     {
                       label: isFnbBom ? "Giá vốn / đơn vị tại quán" : "Giá vốn / đơn vị",
                       value: cost && bom.yieldQty > 0
-                        ? formatCurrency(cost.totalCost / bom.yieldQty)
+                        ? formatUnitPrice(cost.totalCost / bom.yieldQty)
                         : "—",
                     },
                     {
@@ -269,7 +269,7 @@ function BOMDetail({
                                 {formatNumber(item.wastePercent)}%
                               </td>
                               <td className="p-2 text-right tabular-nums">
-                                {costItem ? formatCurrency(costItem.costPrice) : "—"}
+                                {costItem ? formatUnitPrice(costItem.costPrice) : "—"}
                               </td>
                               <td className="p-2 text-right tabular-nums font-medium">
                                 {costItem ? formatCurrency(costItem.lineCost) : "—"}

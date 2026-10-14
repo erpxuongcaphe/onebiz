@@ -575,7 +575,7 @@ export default function BanHangPage() {
         title: "Đã xuất báo cáo bán hàng",
         description:
           "Đã xuất đầy đủ " +
-          invoiceRows.length.toLocaleString("vi-VN") +
+          formatNumber(invoiceRows.length) +
           " hóa đơn.",
         variant: "success",
       });

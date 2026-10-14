@@ -427,6 +427,7 @@ export function CreateInternalSaleDialog({
                     <td className="p-2">
                       <NumericInput
                         value={item.quantity}
+                        decimals={4}
                         min={0}
                         className="h-8 w-20 text-right"
                         onChange={(value) => updateItem(item.productId, "quantity", value ?? 0)}

@@ -219,7 +219,7 @@ export function CreateReturnDialog({
               // BATCH 3R: clamp theo SL CÒN LẠI (quantity - returnedQty), không
               // phải SL mua gốc → chống trả vượt khi đã trả 1 phần ở phiếu trước.
               returnQty: Math.min(
-                Math.max(0.01, qty),
+                Math.max(0.0001, qty),
                 Math.max(0, item.quantity - item.returnedQty),
               ),
             }
@@ -532,11 +532,11 @@ export function CreateReturnDialog({
                       </div>
                       <NumericInput
                         value={item.returnQty}
-                        onChange={(value) => updateReturnQty(item.id, value ?? 0.01)}
-                        min={0.01}
+                        onChange={(value) => updateReturnQty(item.id, value ?? 0.0001)}
+                        min={0.0001}
                         // BATCH 3R: max = SL còn lại (quantity - returnedQty), chống trả vượt.
                         max={Math.max(0, item.quantity - item.returnedQty)}
-                        decimals={2}
+                        decimals={4}
                         // Đã trả hết → không cho chọn lại.
                         disabled={!item.selected || item.quantity - item.returnedQty <= 0}
                         className="h-8 text-right"

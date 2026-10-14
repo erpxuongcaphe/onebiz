@@ -15,7 +15,7 @@ import { Icon } from "@/components/ui/icon";
 import { mktGet, mktPost } from "@/lib/mkt/client";
 import { AcceptanceBadge, TaskStatusBadge } from "@/components/mkt/badges";
 import { useMktRefresh } from "@/lib/mkt/use-mkt-refresh";
-import { formatVnd } from "@/lib/mkt/format";
+import { formatVnd, formatNumber } from "@/lib/mkt/format";
 import type {
   MktActivityEntry,
   MktMember,
@@ -963,7 +963,7 @@ export function PlanReviewButton({
                       <div key={k.id} className="flex items-center justify-between gap-2 rounded-md bg-background px-2 py-1 text-sm">
                         <span className="min-w-0 truncate">{k.name}</span>
                         <span className="shrink-0 font-semibold">
-                          {new Intl.NumberFormat("vi-VN").format(k.targetValue)}
+                          {formatNumber(k.targetValue)}
                           {k.unit ? ` ${k.unit}` : ""}
                         </span>
                       </div>

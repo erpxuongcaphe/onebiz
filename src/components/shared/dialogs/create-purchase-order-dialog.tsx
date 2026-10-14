@@ -912,9 +912,9 @@ export function CreatePurchaseOrderDialog({
                       </div>
                       <NumericInput
                         value={item.quantity}
-                        onChange={(value) => updateItem(item.id, "quantity", Math.max(0.01, value ?? 0.01))}
-                        min={0.01}
-                        decimals={2}
+                        onChange={(value) => updateItem(item.id, "quantity", Math.max(0.0001, value ?? 0.0001))}
+                        min={0.0001}
+                        decimals={4}
                         className="h-8 text-right"
                         aria-label={`Số lượng ${item.productName}`}
                       />

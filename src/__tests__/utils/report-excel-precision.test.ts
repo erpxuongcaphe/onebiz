@@ -16,6 +16,15 @@ vi.mock('file-saver', () => ({ saveAs }));
 import { exportReportToExcel } from '@/lib/utils/excel-export';
 
 describe('Report workbook numeric precision', () => {
+  it('defaults quantities to four visible decimals while preserving full numeric values', async () => {
+    write.mockClear();
+    await exportReportToExcel({ kind: 'xuat-nhap-ton', mode: 'view', range: { from: '2026-10-01', to: '2026-10-06' }, sheets: [{
+      name: 'Precision', columns: [{ label: 'Quantity', key: 'qty', format: 'number' }],
+      rows: [{ qty: 0.0042345678 }],
+    }] });
+    const workbook = write.mock.calls[0][0] as { Sheets: Record<string, Record<string, { v: unknown; t: string; z?: string }>> };
+    expect(workbook.Sheets.Precision.A2).toMatchObject({ v: 0.0042345678, t: 'n', z: '#,##0.####' });
+  });
   it('filters only header and data, not title or total rows', async () => {
     write.mockClear();
     saveAs.mockClear();
