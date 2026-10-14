@@ -1,6 +1,7 @@
 "use client";
 
 import { PreparedRecipeYield } from "@/components/shared/prepared-recipe-yield";
+import { PreparedRecipePerUnit } from "@/components/shared/prepared-recipe-per-unit";
 
 import { usePermissions } from "@/lib/permissions/use-permission";
 
@@ -561,7 +562,7 @@ export function BOMEditorDialog({
           <DialogTitle>{bomId ? "Sửa công thức sản xuất (BOM)" : "Tạo công thức sản xuất (BOM)"}</DialogTitle>
           <DialogDescription>
             {output?.isFnbStockItem
-              ? "Khai nguyên liệu cho một mẻ và lượng BTP dự kiến thu được. Hoàn thành sản xuất trừ nguyên liệu thực dùng, nhập BTP thực cân; thanh toán món bán mới trừ BTP theo công thức món."
+              ? "Nhập theo mẻ · định lượng cho 1 đơn vị BTP tự tính."
               : "Định nghĩa thành phần trừ kho khi bán/sản xuất SKU — thành phần có thể là NVL hoặc SKU Retail. Định lượng bên dưới tương ứng với sản lượng công thức đã nhập."}
           </DialogDescription>
         </DialogHeader>
@@ -658,9 +659,7 @@ export function BOMEditorDialog({
             </p>
           </div>
 
-          {output?.isFnbStockItem ? (
-            <PreparedRecipeYield value={yieldQty} unit={yieldUnit} onChange={setYieldQty} error={errors.yieldQty} />
-          ) : (
+          {!output?.isFnbStockItem && (
             <>
           {/* Batch / Yield */}
           <div className="grid grid-cols-3 gap-4">
@@ -709,6 +708,8 @@ export function BOMEditorDialog({
               </Button>
             </div>
 
+            {output?.isFnbStockItem && items.length === 0 && <PreparedRecipeYield value={yieldQty} unit={yieldUnit} onChange={setYieldQty} error={errors.yieldQty} />}
+
             {items.length === 0 && (
               <div className="text-sm text-muted-foreground text-center py-6 border-2 border-dashed rounded-lg">
                 Chưa có thành phần — nhấn &quot;Thêm thành phần&quot; để bắt đầu
@@ -722,16 +723,18 @@ export function BOMEditorDialog({
             {errors.items && <p className="text-xs text-destructive">{errors.items}</p>}
 
             {items.length > 0 && (
-              <div className="border rounded-lg overflow-hidden">
-                <div className="border-b bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+              <div className="border rounded-lg overflow-x-auto">
+                {output?.isFnbStockItem && <PreparedRecipeYield value={yieldQty} unit={yieldUnit} onChange={setYieldQty} error={errors.yieldQty} />}
+                {!output?.isFnbStockItem && <div className="border-b bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
                   Nhập theo đơn vị pha chế. Hệ thống tự quy đổi sang đơn vị tồn của SKU retail khi tính giá vốn, trừ kho và hoàn kho.
-                </div>
-                <table className="w-full text-sm">
+                </div>}
+                <table className={`w-full text-sm ${output?.isFnbStockItem ? "min-w-[680px]" : ""}`}>
                   <thead className="bg-muted/30">
                     <tr>
                       <th className="text-left p-2 font-medium">Thành phần</th>
                       <th className="text-right p-2 font-medium w-24">{output?.isFnbStockItem ? "Lượng / mẻ" : "Số lượng"}</th>
                       <th className="text-left p-2 font-medium w-20">ĐVT</th>
+                      {output?.isFnbStockItem && <th scope="col" className="bg-muted/20 text-right p-2 font-medium w-32">Cho 1 {yieldUnit} BTP<span className="block text-[11px] font-normal">Tự tính</span></th>}
                       <th className="text-right p-2 font-medium w-20">Hao hụt %</th>
                       {canViewCost && <th className="text-right p-2 font-medium w-32">Thành tiền</th>}
                       <th className="w-10" />
@@ -761,7 +764,7 @@ export function BOMEditorDialog({
                             </div>
                             {isConverted && stockQuantity != null && (
                               <div className="mt-1 text-xs text-primary">
-                                Pha chế {formatRecipeQuantity(qty)} {it.unit} · Trừ tồn {formatRecipeQuantity(stockQuantity)} {it.stockUnit} / {output?.isFnbStockItem ? "mẻ" : `${yieldQty} ${yieldUnit}`}
+                                {output?.isFnbStockItem ? `Kho: ${formatRecipeQuantity(stockQuantity)} ${it.stockUnit} / mẻ` : `Pha chế ${formatRecipeQuantity(qty)} ${it.unit} · Trừ tồn ${formatRecipeQuantity(stockQuantity)} ${it.stockUnit} / ${yieldQty} ${yieldUnit}`}
                               </div>
                             )}
                             {selectableModifierGroups.length > 0 && (
@@ -801,6 +804,7 @@ export function BOMEditorDialog({
                             <Input
                               type="number"
                               value={it.quantity}
+                              aria-label={`Lượng ${it.materialName}${output?.isFnbStockItem ? " cho một mẻ" : ""}`}
                               onChange={(e) =>
                                 updateItem(idx, { quantity: e.target.value })
                               }
@@ -824,6 +828,7 @@ export function BOMEditorDialog({
                               </SelectContent>
                             </Select>
                           </td>
+                          {output?.isFnbStockItem && <td className="bg-muted/20 p-2 text-sm"><PreparedRecipePerUnit quantity={qty * (1 + waste / 100)} yieldQty={Number(yieldQty)} unit={it.unit} /></td>}
                           <td className="p-2">
                             <Input
                               type="number"
@@ -852,7 +857,7 @@ export function BOMEditorDialog({
                   </tbody>
                   {canViewCost && <tfoot className="bg-muted/30 border-t">
                     <tr>
-                      <td colSpan={4} className="p-2 text-right font-medium">
+                      <td colSpan={output?.isFnbStockItem ? 5 : 4} className="p-2 text-right font-medium">
                         {isFnbRecipe ? "Dự toán / mẻ:" : "Tổng giá vốn / batch:"}
                       </td>
                       <td className="p-2 text-right font-semibold text-primary">
@@ -862,7 +867,7 @@ export function BOMEditorDialog({
                     </tr>
                     {Number(yieldQty) > 0 && (
                       <tr>
-                        <td colSpan={4} className="p-2 text-right text-xs text-muted-foreground">
+                        <td colSpan={output?.isFnbStockItem ? 5 : 4} className="p-2 text-right text-xs text-muted-foreground">
                           {isFnbRecipe ? "Dự toán" : "Giá vốn"} / {yieldUnit}:
                         </td>
                         <td className="p-2 text-right text-xs">

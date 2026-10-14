@@ -1,6 +1,7 @@
 "use client";
 
 import { PreparedRecipeYield } from "@/components/shared/prepared-recipe-yield";
+import { PreparedRecipePerUnit } from "@/components/shared/prepared-recipe-per-unit";
 
 import { usePermissions } from "@/lib/permissions/use-permission";
 
@@ -3625,16 +3626,14 @@ export function CreateProductDialog({
           {/* ─────────── Tab 3: Công thức BOM (chỉ SKU có BOM) ─────────── */}
           {scope === "sku" && hasBom && (
             <TabsContent value="bom" className="space-y-4 mt-0">
-              <div className="rounded-md border border-primary/20 bg-primary/5 p-3 text-xs">
+              {!isFnbStockItem && <div className="rounded-md border border-primary/20 bg-primary/5 p-3 text-xs">
                 <Icon name="info" size={14} className="inline-block mr-1 text-primary align-text-bottom" />
-                {isFnbStockItem
-                  ? "Công thức cho một mẻ bán thành phẩm. Hoàn thành sản xuất sẽ trừ nguyên liệu thực dùng và nhập lượng BTP thực cân. Khi thanh toán món bán, hệ thống trừ BTP theo BOM của món, không trừ lại nguyên liệu của mẻ."
-                  : hasFnbSizeVariants
+                {hasFnbSizeVariants
                   ? "Mỗi size có BOM riêng. Chỉnh cùng một ma trận để so sánh và tránh ghi nhầm công thức giữa các size."
                   : channel === "fnb"
                     ? "Chọn các SKU Retail và định lượng dùng cho một phần bán. POS sẽ trừ đúng các mã này tại chi nhánh bán món."
                     : "Định nghĩa NVL cần để tạo 1 đơn vị SKU. Khi bán SKU, hệ thống tự trừ NVL theo công thức này."}
-              </div>
+              </div>}
 
               {!fnbVariantContextPending && variantDataWarning && (
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-status-warning/35 bg-status-warning/10 px-3 py-2 text-xs text-foreground">
@@ -3757,7 +3756,9 @@ export function CreateProductDialog({
                 </div>
               ) : (
                 <>
-              <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-1.5">
+              <details open={!isFnbStockItem || !!bomCodeInput} className="rounded-lg border border-border p-3 space-y-2">
+              <summary className="cursor-pointer text-sm font-medium">Thông tin công thức · {bomBranchId ? branches.find(b => b.id === bomBranchId)?.name ?? "Chi nhánh riêng" : "Dùng chung"} · {visibleBomCode}</summary>
+              <div className="space-y-1.5">
                 <p className="text-sm font-medium">Mã BOM</p>
                 <p className="font-mono text-sm font-semibold text-primary">
                   {visibleBomCode}
@@ -3877,6 +3878,7 @@ export function CreateProductDialog({
                 </div>
               </div>
 
+              </details>
               {channel === "fnb" && (
                 <div className="rounded-lg border border-status-info/30 bg-status-info/5 px-3 py-2.5 text-sm">
                   <div className="flex items-start gap-2">
@@ -3894,15 +3896,6 @@ export function CreateProductDialog({
                     </div>
                   </div>
                 </div>
-              )}
-
-              {isFnbStockItem && !bomCodeInput.trim() && (
-                <>
-                  <PreparedRecipeYield value={bomYieldQty} unit={stockUnit.trim() || initialData?.unit || ""} onChange={setBomYieldQty} error={errors.bomYieldQty} />
-                  {canViewCost && Number(bomYieldQty) > 0 && !fnbBomCostPending && !hasMissingPreparedComponentCost && (
-                    <p className="text-sm text-muted-foreground">Dự toán nguyên liệu cho một mẻ: {formatCurrency(inlineFnbBomCost)}đ · tương đương {formatCurrency(inlineFnbBomCost / Number(bomYieldQty))}đ / {stockUnit.trim() || initialData?.unit}. Giá vốn thực tế ghi theo nguyên liệu đã dùng và sản lượng thực cân khi sản xuất.</p>
-                  )}
-                </>
               )}
 
               {/* Items table */}
@@ -3932,6 +3925,9 @@ export function CreateProductDialog({
                   </Button>
                 </div>
 
+                {isFnbStockItem && !bomCodeInput.trim() && bomItems.length === 0 && (
+                  <PreparedRecipeYield value={bomYieldQty} unit={stockUnit.trim() || initialData?.unit || ""} onChange={setBomYieldQty} error={errors.bomYieldQty} />
+                )}
                 {bomItems.length === 0 ? (
                   <div className="rounded-lg border-2 border-dashed border-border p-6 text-center text-sm text-muted-foreground">
                     {channel === "fnb" ? (
@@ -3941,8 +3937,9 @@ export function CreateProductDialog({
                     )}
                   </div>
                 ) : (
-                  <div className="rounded-lg border border-border overflow-hidden">
-                    <table className="w-full text-sm">
+                  <div className="rounded-lg border border-border overflow-x-auto">
+                    {isFnbStockItem && !bomCodeInput.trim() && <PreparedRecipeYield value={bomYieldQty} unit={stockUnit.trim() || initialData?.unit || ""} onChange={setBomYieldQty} error={errors.bomYieldQty} />}
+                    <table className={`w-full text-sm ${isFnbStockItem ? "min-w-[640px]" : ""}`}>
                       <thead className="bg-surface-container-low text-xs text-muted-foreground">
                         <tr>
                           <th className="text-left px-3 py-2 font-semibold">
@@ -3950,6 +3947,7 @@ export function CreateProductDialog({
                           </th>
                           <th className="text-right px-3 py-2 font-semibold w-28">{isFnbStockItem ? "Lượng / mẻ" : "Số lượng"}</th>
                           <th className="text-left px-3 py-2 font-semibold w-20">ĐVT</th>
+                          {isFnbStockItem && <th scope="col" className="bg-muted/20 text-right px-3 py-2 font-semibold w-32">Cho 1 {stockUnit.trim() || initialData?.unit || "G"} BTP<span className="block text-[11px] font-normal">Tự tính</span></th>}
                           {/* Nhóm chọn một dùng định lượng chính xác theo option. */}
                           {channel === "fnb" && (
                             <th
@@ -3996,7 +3994,7 @@ export function CreateProductDialog({
                               <td className="px-3 py-2">
                                 <div className="font-medium">{it.materialName}</div>
                                 <div className="text-xs text-muted-foreground">{it.materialCode}</div>
-                                {usesFnbRecipeCosts && componentProduct && (
+                                {usesFnbRecipeCosts && componentProduct && !isFnbStockItem && (
                                   <div className="mt-1 text-xs text-muted-foreground">
                                     {componentProduct.isFnbStockItem
                                       ? "Bán thành phẩm · Bình quân tại quán"
@@ -4038,7 +4036,7 @@ export function CreateProductDialog({
                                 )}
                                 {isConverted && stockQuantity != null && (
                                   <div className="mt-1 text-xs text-primary">
-                                    Pha chế {formatRecipeQuantity(it.quantity)} {it.unit} · Trừ tồn {formatRecipeQuantity(stockQuantity)} {it.stockUnit}
+                                    {isFnbStockItem ? `Kho: ${formatRecipeQuantity(stockQuantity)} ${it.stockUnit} / mẻ` : `Pha chế ${formatRecipeQuantity(it.quantity)} ${it.unit} · Trừ tồn ${formatRecipeQuantity(stockQuantity)} ${it.stockUnit}`}
                                   </div>
                                 )}
                               </td>
@@ -4046,6 +4044,7 @@ export function CreateProductDialog({
                                 <Input
                                   type="number"
                                   value={it.quantity}
+                                  aria-label={`Lượng ${it.materialName}${isFnbStockItem ? " cho một mẻ" : ""}`}
                                   step="0.0001"
                                   min="0"
                                   className="h-9 text-right text-sm"
@@ -4084,6 +4083,7 @@ export function CreateProductDialog({
                                 </Select>
                               </td>
                               {/* Nhóm lựa chọn FnB gắn với dòng NVL này. */}
+                              {isFnbStockItem && <td className="bg-muted/20 px-3 py-2 text-sm"><PreparedRecipePerUnit quantity={it.quantity} yieldQty={Number(bomYieldQty)} unit={it.unit} /></td>}
                               {channel === "fnb" && (
                                 <td className="px-3 py-2">
                                   <select
@@ -4132,7 +4132,7 @@ export function CreateProductDialog({
                       {canViewCost && <tfoot className="bg-surface-container-low/50 border-t-2 border-border">
                         <tr>
                           <td
-                            colSpan={channel === "fnb" ? 4 : 3}
+                            colSpan={(channel === "fnb" ? 4 : 3) + (isFnbStockItem ? 1 : 0)}
                             className="px-3 py-2 text-right font-semibold text-sm"
                           >
                             {isFnbStockItem ? "Tổng dự toán / mẻ:" : channel === "fnb"
@@ -4148,6 +4148,10 @@ export function CreateProductDialog({
                           </td>
                           <td></td>
                         </tr>
+                        {isFnbStockItem && Number(bomYieldQty) > 0 && <tr>
+                          <td colSpan={(channel === "fnb" ? 4 : 3) + 1} className="px-3 py-2 text-right text-xs text-muted-foreground">Dự toán / 1 {stockUnit.trim() || initialData?.unit || "G"} BTP:</td>
+                          <td className="px-3 py-2 text-right text-xs tabular-nums">{fnbBomCostPending || hasMissingPreparedComponentCost ? "—" : formatCurrency(inlineFnbBomCost / Number(bomYieldQty))}</td><td />
+                        </tr>}
                       </tfoot>}
                     </table>
                   </div>
