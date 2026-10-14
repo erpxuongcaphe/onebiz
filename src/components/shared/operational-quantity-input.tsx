@@ -44,15 +44,15 @@ export function OperationalQuantityInput({ quantity, unit, conversions = [], onC
     lastWrite.current = stock ?? NaN;
     onChange(stock ?? NaN,{ quantity: Number(value), unit: nextUnit, expectedFactor: operationalFactor(unit,nextUnit,conversions)?.toDecimalPlaces(12).toNumber() });
   }
-  return <div className="min-w-0 space-y-1">
-    <div className="flex items-center gap-1">
-      <Input className="min-w-0 text-right" type="number" min="0" step="any" aria-label={label} aria-invalid={invalid || undefined} disabled={disabled} value={draft} onChange={e => update(e.target.value)} />
-      {choices.length > 1 ? <select className="h-10 max-w-28 rounded-md border bg-background px-1 text-sm" aria-label={`Đơn vị ${label}`} disabled={disabled} value={currentUnit} onChange={e => {
+  return <div className="w-full min-w-[13.5rem] space-y-1">
+    <div className="grid grid-cols-[minmax(8rem,1fr)_5rem] items-center gap-2">
+      <Input className="min-w-32 text-right tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" type="number" inputMode="decimal" min="0" step="any" aria-label={label} aria-invalid={invalid || undefined} disabled={disabled} value={draft} onChange={e => update(e.target.value)} />
+      {choices.length > 1 ? <select className="h-10 w-full rounded-md border bg-background px-2 text-sm" aria-label={`Đơn vị ${label}`} disabled={disabled} value={currentUnit} onChange={e => {
         const next = switchInputQuantity(draft,unit,currentUnit,e.target.value,conversions);
         setEntryUnit(e.target.value);
         try {if(preferenceKey)localStorage.setItem(preferenceKey,e.target.value);} catch { /* optional preference */ }
         update(next == null ? '' : String(next),e.target.value);
-      }}>{choices.map(choice => <option key={choice} value={choice}>{choice}</option>)}</select> : <span className="text-xs text-muted-foreground">{unit}</span>}
+      }}>{choices.map(choice => <option key={choice} value={choice}>{choice}</option>)}</select> : <span className="break-words text-left text-xs text-muted-foreground">{unit}</span>}
     </div>
     {currentUnit !== unit && <p className="text-right text-xs text-muted-foreground">Ghi kho {normalized == null ? '—' : formatOperationalQuantity(normalized)} {unit}</p>}
   </div>;

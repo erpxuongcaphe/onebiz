@@ -3924,7 +3924,7 @@ export function CreateProductDialog({
                           <th className="text-left px-3 py-2 font-semibold">
                             {channel === "fnb" || isFnbStockItem ? "Thành phần" : "NVL"}
                           </th>
-                          <th className="text-right px-3 py-2 font-semibold w-28">{isFnbStockItem ? "Lượng / mẻ" : "Số lượng"}</th>
+                          <th className="text-right px-3 py-2 font-semibold w-40">{isFnbStockItem ? "Lượng / mẻ" : "Số lượng"}</th>
                           <th className="text-left px-3 py-2 font-semibold w-20">ĐVT</th>
                           {isFnbStockItem && <th scope="col" className="bg-muted/20 text-right px-3 py-2 font-semibold w-32">Cho 1 {stockUnit.trim() || initialData?.unit || "G"} BTP<span className="block text-[11px] font-normal">Tự tính</span></th>}
                           {/* Nhóm chọn một dùng định lượng chính xác theo option. */}
@@ -4026,7 +4026,7 @@ export function CreateProductDialog({
                                   aria-label={`Lượng ${it.materialName}${isFnbStockItem ? " cho một mẻ" : ""}`}
                                   step="0.0001"
                                   min="0"
-                                  className="h-9 text-right text-sm"
+                                  className="h-9 min-w-32 text-right text-sm tabular-nums"
                                   onChange={(e) => {
                                     const v = Number(e.target.value);
                                     setBomItems((prev) =>

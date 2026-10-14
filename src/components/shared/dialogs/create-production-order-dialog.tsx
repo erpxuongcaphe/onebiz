@@ -449,7 +449,7 @@ export function CreateProductionOrderDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!submittingRef.current) onOpenChange(next); }}>
-      <DialogContent className="md:max-w-2xl lg:max-w-3xl max-h-[90dvh] flex flex-col overflow-hidden">
+      <DialogContent className="md:max-w-3xl lg:max-w-4xl max-h-[90dvh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>Sản xuất &amp; nhập kho</DialogTitle>
           <DialogDescription>
@@ -714,26 +714,31 @@ export function CreateProductionOrderDialog({
 
               {materials.length > 0 && (
                 <div className="min-w-0 w-full overflow-x-auto rounded-lg border">
-                  <table className="w-full min-w-[560px] text-sm">
-                    <thead className="bg-muted/30">
+                  <table className="block w-full text-sm sm:table sm:min-w-[800px]">
+                    <thead className="hidden bg-muted/30 sm:table-header-group">
                       <tr>
                         <th className="text-left p-2 font-medium">NVL</th>
-                        <th className="text-right p-2 font-medium w-28">Cần</th>
-                        <th className="text-right p-2 font-medium w-28">Tồn kho</th>
+                        <th className="text-right p-2 font-medium w-60">{selectedBranchMode === "outlet" ? "Thực dùng" : "Cần"}</th>
+                        <th className="text-right p-2 font-medium w-44">Tồn kho</th>
                         <th className="text-center p-2 font-medium w-24">Trạng thái</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="block sm:table-row-group">
                       {materials.map((m) => (
-                        <tr key={m.productId} className="border-t">
-                          <td className="p-2">
+                        <tr key={m.productId} className="grid gap-3 border-t p-3 sm:table-row sm:p-0">
+                          <td className="block sm:table-cell sm:p-2">
                             <div className="font-medium">{m.productName}</div>
                             <div className="text-xs text-muted-foreground">{m.productCode}</div>
                           </td>
-                          <td className="p-2 text-right">
-                            {selectedBranchMode === "outlet" ? <OperationalQuantityInput productId={m.productId} quantity={Number(materialActuals[m.productId] ?? m.needed)} unit={m.unit} conversions={conversionMap.get(m.productId)} max={m.available} label={`Thực dùng ${m.productName}`} onChange={(value,input) => {setMaterialActuals(previous => ({...previous,[m.productId]:String(value)}));setMaterialEntries(previous=>({...previous,[m.productId]:input}));}} /> : <StockWithConversion quantity={m.needed} unit={m.unit} conversions={conversionMap.get(m.productId)} />}
+                          <td className="block text-right sm:table-cell sm:p-2">
+                            <span className="mb-1 block text-left text-xs text-muted-foreground sm:hidden">{selectedBranchMode === "outlet" ? "Thực dùng" : "Cần"}</span>
+                            {selectedBranchMode === "outlet" ? <>
+                              <OperationalQuantityInput productId={m.productId} quantity={Number(materialActuals[m.productId] ?? m.needed)} unit={m.unit} conversions={conversionMap.get(m.productId)} max={m.available} label={`Thực dùng ${m.productName}`} onChange={(value,input) => {setMaterialActuals(previous => ({...previous,[m.productId]:String(value)}));setMaterialEntries(previous=>({...previous,[m.productId]:input}));}} />
+                              {Math.abs(m.needed-m.perBatch*Number(batchCount))>0.0001 && <p className="mt-1 text-xs text-status-warning">Khác công thức: <StockWithConversion quantity={m.perBatch*Number(batchCount)} unit={m.unit} conversions={conversionMap.get(m.productId)} /></p>}
+                            </> : <StockWithConversion quantity={m.needed} unit={m.unit} conversions={conversionMap.get(m.productId)} />}
                           </td>
-                          <td className="p-2 text-right">
+                          <td className="block text-right sm:table-cell sm:p-2">
+                            <span className="mr-2 text-xs text-muted-foreground sm:hidden">Tồn kho</span>
                             <span
                               className={
                                 m.shortage ? "text-destructive font-medium" : "text-foreground"
@@ -742,7 +747,7 @@ export function CreateProductionOrderDialog({
                               <StockWithConversion quantity={m.available} unit={m.unit} conversions={conversionMap.get(m.productId)} />
                             </span>{" "}
                           </td>
-                          <td className="p-2 text-center">
+                          <td className="block text-right sm:table-cell sm:p-2 sm:text-center">
                             {m.shortage || m.costMismatch ? (
                               <span className="inline-flex items-center gap-1 text-destructive text-xs">
                                 <Icon name="warning" size={14} />

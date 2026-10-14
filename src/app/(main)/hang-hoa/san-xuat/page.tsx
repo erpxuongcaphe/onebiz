@@ -54,6 +54,7 @@ import {
 } from "@/lib/services";
 import type { ProductionOrder, ProductionOrderStatus } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
+import { CorrectProductionOrderDialog } from "@/components/shared/dialogs/correct-production-order-dialog";
 import { UnitSnapshotHistory } from "@/components/shared/unit-snapshot-history";
 import { useProductUom } from "@/lib/hooks/use-product-uom";
 import { StockWithConversion } from "@/components/shared/stock-with-conversion";
@@ -88,10 +89,12 @@ function ProductionOrderDetail({
   orderId,
   onClose,
   onDelete,
+  onEdit,
 }: {
   orderId: string;
   onClose: () => void;
   onDelete?: () => void;
+  onEdit?: () => void;
 }) {
   const [order, setOrder] = useState<ProductionOrder | null>(null);
   const [loading, setLoading] = useState(true);
@@ -127,6 +130,7 @@ function ProductionOrderDetail({
       open
       onClose={onClose}
       onDelete={onDelete}
+      onEdit={onEdit}
       deleteLabel="Hủy"
     >
       <UnitSnapshotHistory referenceType="production" referenceId={orderId} />
@@ -271,6 +275,7 @@ export default function SanXuatPage() {
   const [completeOpen, setCompleteOpen] = useState(false);
   const [completingOrder, setCompletingOrder] = useState<ProductionOrder | null>(null);
   const [cancellingItem, setCancellingItem] = useState<ProductionOrder | null>(null);
+  const [correctingItem, setCorrectingItem] = useState<{order:ProductionOrder;cancel:boolean}|null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [filterOpen, setFilterOpen] = useState(false);
@@ -667,9 +672,10 @@ export default function SanXuatPage() {
               <ProductionOrderDetail
                 orderId={item.id}
                 onClose={onClose}
+                onEdit={item.status !== "cancelled" && txPerms.canEdit && (item.status !== "completed" || hasAny(["production.complete_order"])) ? ()=>setCorrectingItem({order:item,cancel:false}):undefined}
                 onDelete={
-                  item.status !== "completed" && item.status !== "cancelled"
-                    ? () => setCancellingItem(item)
+                  item.status !== "cancelled" && txPerms.canCancel
+                    ? () => item.status === "completed" ? setCorrectingItem({order:item,cancel:true}) : setCancellingItem(item)
                     : undefined
                 }
               />
@@ -680,6 +686,7 @@ export default function SanXuatPage() {
                 row,
                 kind: "production",
                 permissions: txPerms,
+                onEdit: row.status !== "cancelled" && (row.status !== "completed" || hasAny(["production.complete_order"])) ? () => setCorrectingItem({order:row,cancel:false}) : undefined,
                 onPrint: () =>
                   printDocumentWithTemplate({
                     channel: "backoffice",
@@ -704,7 +711,7 @@ export default function SanXuatPage() {
                   }),
                 // Workflow: "Hoàn thành" specific cho production
                 workflowActions:
-                  row.status !== "completed" && row.status !== "cancelled"
+                  row.status !== "completed" && row.status !== "cancelled" && hasAny(["production.complete_order"])
                     ? [
                         {
                           label: "Hoàn thành",
@@ -717,8 +724,8 @@ export default function SanXuatPage() {
                       ]
                     : [],
                 onAuditLog: () => setAuditDialogTarget(row),
-                onCancel: canTransitionProductionStatus(row.status, "cancelled")
-                  ? () => setCancellingItem(row)
+                onCancel: row.status !== "cancelled"
+                  ? () => row.status === "completed" ? setCorrectingItem({order:row,cancel:true}) : setCancellingItem(row)
                   : undefined,
               })
             }
@@ -755,6 +762,7 @@ export default function SanXuatPage() {
         onOpenChange={setCreateOpen}
         onSuccess={fetchData}
       />
+      {correctingItem && <CorrectProductionOrderDialog key={`${correctingItem.order.id}-${correctingItem.cancel}`} order={correctingItem.order} cancel={correctingItem.cancel} onClose={()=>setCorrectingItem(null)} onSuccess={()=>void fetchData()} />}
 
       <CompleteProductionOrderDialog
         open={completeOpen}

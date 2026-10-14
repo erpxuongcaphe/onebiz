@@ -1433,7 +1433,7 @@ function CreateTransferDialog({
                     <th className="text-center px-3 py-2 text-xs font-medium w-20">
                       Tồn
                     </th>
-                    <th className="text-center px-3 py-2 text-xs font-medium w-28">
+                    <th className="text-center px-3 py-2 text-xs font-medium w-60">
                       Số lượng
                     </th>
                     <th className="w-10"></th>
