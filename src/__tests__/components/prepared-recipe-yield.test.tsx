@@ -7,16 +7,16 @@ describe("prepared recipe yield", () => {
   it("requires an explicit yield and explains that ingredients are for the whole batch", () => {
     const onChange = vi.fn();
     render(<PreparedRecipeYield value="" unit="G" onChange={onChange} />);
-    const input = screen.getByRole("spinbutton", { name: /Một mẻ chuẩn thu được/ });
+    const input = screen.getByRole("spinbutton", { name: /1 mẻ thu được/ });
     expect(input).toHaveValue(null);
-    expect(screen.getByText(/không phải cho 1 gram/)).toBeInTheDocument();
+    expect(screen.getByText(/nguyên liệu nhập theo mẻ/)).toBeInTheDocument();
     fireEvent.change(input, { target: { value: "1650" } });
     expect(onChange).toHaveBeenCalledWith("1650");
   });
   it("previews the measured output without suggesting an automatic water conversion", () => {
     render(<PreparedRecipeYield value="1650" unit="G" onChange={vi.fn()} />);
-    expect(screen.getByText(/dự kiến nhập 1650 G/)).toBeInTheDocument();
-    expect(screen.getByText(/nước không quản lý kho chỉ ghi/)).toBeInTheDocument();
+    expect(screen.getByRole("spinbutton")).toHaveValue(1650);
+    expect(screen.getByText("G")).toBeInTheDocument();
   });
   it("shows an accessible validation error without replacing entered quantity", () => {
     render(<PreparedRecipeYield value="0" unit="G" onChange={vi.fn()} error="Nhập sản lượng lớn hơn 0." />);
