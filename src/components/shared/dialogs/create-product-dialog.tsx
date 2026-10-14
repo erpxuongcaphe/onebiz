@@ -5005,7 +5005,7 @@ export function CreateProductDialog({
                                       return next;
                                     })
                                   }
-                                  className={`w-full text-left px-3 py-2 flex items-center gap-3 transition-colors ${
+                                  className={`w-full text-left px-3 py-2 grid grid-cols-[16px_minmax(0,1fr)] items-start gap-x-3 gap-y-1 sm:flex sm:items-center sm:gap-3 transition-colors ${
                                     isSelected
                                       ? "bg-primary/5"
                                       : "hover:bg-muted/40"
@@ -5014,7 +5014,7 @@ export function CreateProductDialog({
                                   <span
                                     aria-hidden
                                     data-selected={isSelected ? "true" : "false"}
-                                    className={`grid size-4 shrink-0 place-items-center rounded-[4px] border ${
+                                    className={`row-span-3 sm:row-auto grid size-4 shrink-0 place-items-center rounded-[4px] border ${
                                       isSelected
                                         ? "border-primary bg-primary text-primary-foreground"
                                         : "border-input"
@@ -5022,11 +5022,11 @@ export function CreateProductDialog({
                                   >
                                     {isSelected && <Icon name="check" size={14} />}
                                   </span>
-                                  <span className="font-mono text-xs text-muted-foreground min-w-[80px]">
+                                  <span className="col-start-2 font-mono text-xs text-muted-foreground sm:min-w-[80px]">
                                     {p.code}
                                   </span>
-                                  <span className="flex-1 min-w-0">
-                                    <span className="block truncate font-medium text-sm">
+                                  <span className="col-start-2 sm:flex-1 min-w-0">
+                                    <span className="block break-words sm:truncate font-medium text-sm">
                                       {p.name}
                                     </span>
                                     <span className="text-xs text-muted-foreground">
@@ -5071,7 +5071,7 @@ export function CreateProductDialog({
                                   {(p.isFnbStockItem
                                     ? fnbPreparedCostByProductId[p.id]?.unitCost ?? 0
                                     : getBomComponentUnitPrice(p, usesFnbRecipeCosts ? "fnb" : channel)) > 0 ? (
-                                    <span className="text-right text-xs text-muted-foreground tabular-nums whitespace-nowrap">
+                                    <span className="col-start-2 text-left sm:text-right text-xs text-muted-foreground tabular-nums">
                                       <span className="block">
                                         {formatUnitPrice(
                                           p.isFnbStockItem
@@ -5086,7 +5086,7 @@ export function CreateProductDialog({
                                       )}
                                     </span>
                                   ) : usesFnbRecipeCosts && p.isFnbStockItem ? (
-                                    <span className="text-xs text-destructive whitespace-nowrap">
+                                    <span className="col-start-2 text-xs text-status-warning">
                                       Chưa có giá vốn BTP
                                     </span>
                                   ) : null}
