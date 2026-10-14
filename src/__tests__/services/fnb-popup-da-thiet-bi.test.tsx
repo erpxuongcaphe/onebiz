@@ -358,21 +358,17 @@ describe("PR-B · khoá các ràng buộc bố cục", () => {
   );
   const lop = cacClassName(nguon);
 
-  it("bề ngang riêng cho từng thiết bị, không phải bản desktop thu nhỏ", () => {
+  it("bề ngang cố định, không nở khi số nhóm thay đổi", () => {
     expect(nguon).toContain("sm:max-w-[36rem]");
-    expect(nguon).toContain("data-[complex=true]:sm:max-w-[48rem]");
-    expect(nguon).toContain("data-[complex=true]:lg:max-w-[56rem]");
+    expect(nguon).toContain("max-w-[95vw]");
+    expect(nguon).not.toContain("data-[complex=true]");
   });
 
-  it("thân xếp theo NỘI DUNG, không chia đều mỗi nhóm một cột", () => {
-    // CEO bác bản trước vì mọi nhóm bị nhét vào cùng một lưới cột bằng nhau.
-    // Nay thân là CỘT DỌC, và khu lựa chọn ngắn là hàng ngang tự xuống dòng
-    // với mỗi ô RỘNG THEO NỘI DUNG (`flex-auto` = khởi điểm bằng nội dung).
+  it("các nhóm giữ một cột dọc, chỉ lựa chọn trong nhóm được xuống dòng", () => {
     expect(nguon).toContain("flex-1 overflow-y-auto overflow-x-hidden py-1 flex flex-col gap-2");
-    expect(nguon).toContain("flex flex-wrap items-start gap-x-6 gap-y-3.5");
-    expect(nguon).toContain("sm:flex-auto");
-    // Đo trên bản xem trước: lưới chia đều ép "Mức đường" (5 lựa chọn) xuống
-    // 2 dòng trong khi ô thứ ba bỏ trống. KHÔNG được quay lại kiểu đó.
+    expect(nguon).toContain('className="flex flex-col gap-2.5"');
+    expect(nguon).not.toContain("sm:flex-auto");
+    expect(nguon).not.toContain("sm:w-auto");
     expect(nguon).not.toContain("sm:grid-cols-2 xl:grid-cols-3");
   });
 
@@ -419,13 +415,14 @@ describe("PR-B · khoá các ràng buộc bố cục", () => {
     expect(viTriNhom).toBeGreaterThan(viTriSize);
   });
 
-  it("giữ thứ tự liên kết và cho nhóm chọn-nhiều chiếm trọn hàng", () => {
+  it("mọi nhóm và topping chiếm trọn hàng theo thứ tự liên kết", () => {
     expect(nguon).toContain("nhomDaSapXep.map(veNhom)");
-    expect(nguon).toContain('g.rule === "multi" && "basis-full"');
+    expect(nguon).toContain('const O_NHOM = "min-w-0 w-full');
     expect(nguon).not.toContain("const uuTien");
     expect(nguon).not.toContain("nhomNgan");
     expect(nguon).not.toContain("nhomDai");
-    expect(nguon).toContain("grid gap-2 xl:grid-cols-2");
+    expect(nguon).toContain("grid grid-cols-1 gap-2");
+    expect(nguon).not.toContain("xl:grid-cols-2");
   });
 
   it("KHÔNG cắt chữ bằng '…' ở tiền, và chữ phụ không dưới 12px (CEO 08/08)", () => {
