@@ -20,11 +20,14 @@ const readinessAudit = readFileSync(
 );
 
 describe("product dialog draft and inline BOM flow", () => {
-  it("creates prepared recipes in their stock unit without rewriting existing yields", () => {
-    expect(dialog.match(/\.\.\.\(isFnbStockItem \? \{ yieldQty: 1, yieldUnit: finalUnit \} : \{\}\)/g)).toHaveLength(2);
+  it("loads, edits and saves explicit prepared yield instead of assuming one gram", () => {
+    expect(dialog.match(/yieldQty: Number\(bomYieldQty\), yieldUnit: finalUnit/g)).toHaveLength(3);
+    expect(dialog).toContain("setBomYieldQty(String(bom.yieldQty))");
+    expect(dialog).toContain("if (draft.bomYieldQty !== undefined)");
+    expect(dialog).toContain("Number(bomYieldQty) <= 0");
     const existingUpdate = dialog.slice(dialog.indexOf("await updateBOM(bomExistingId"), dialog.indexOf("savedBomId = bomExistingId"));
-    expect(existingUpdate).not.toContain("yieldQty");
-    expect(existingUpdate).not.toContain("yieldUnit");
+    expect(existingUpdate).toContain("yieldQty: Number(bomYieldQty)");
+    expect(dialog).toContain("inlineFnbBomCost / (isFnbStockItem ? Number(bomYieldQty) : 1)");
   });
   it("keeps FnB choices in one product draft until the final Save", () => {
     expect(dialog).toContain("const initializedDialogKeyRef = useRef<string | null>(null)");

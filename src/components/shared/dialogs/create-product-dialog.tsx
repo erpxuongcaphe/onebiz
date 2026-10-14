@@ -1,5 +1,7 @@
 "use client";
 
+import { PreparedRecipeYield } from "@/components/shared/prepared-recipe-yield";
+
 import { usePermissions } from "@/lib/permissions/use-permission";
 
 import { useState, useEffect, useMemo, useRef } from "react";
@@ -354,6 +356,7 @@ export function CreateProductDialog({
   // Tab "Công thức (BOM)" chỉ hiện khi scope=sku && hasBom=true.
   const [bomBranchId, setBomBranchId] = useState<string | null>(null); // null = global
   const [bomName, setBomName] = useState("");
+  const [bomYieldQty, setBomYieldQty] = useState("");
   const [bomNote, setBomNote] = useState("");
   const [bomItems, setBomItems] = useState<InlineBomItem[]>([]);
   // The compact product form must preserve and edit the same measured FnB
@@ -759,6 +762,7 @@ export function CreateProductDialog({
       setBomExistingId(null);
       setBomExistingCode(null);
       setBomName("");
+      setBomYieldQty("");
       setBomNote("");
       setBomBranchId(null);
       setBomModifierGroups([]);
@@ -812,6 +816,7 @@ export function CreateProductDialog({
       setBomExistingId(null);
       setBomExistingCode(null);
       setBomName("");
+      setBomYieldQty("");
       setBomNote("");
       setBomBranchId(null);
       setBomModifierGroups([]);
@@ -872,6 +877,7 @@ export function CreateProductDialog({
         setBomExistingId(bom.id);
         setBomExistingCode(bom.code ?? null);
         setBomName(bom.name);
+        setBomYieldQty(String(bom.yieldQty));
         setBomNote(bom.note ?? "");
         setBomBranchId(bom.branchId ?? null);
         // Items đã có trong bom.items (getBOMById return) nhưng getBOMsByProduct
@@ -1001,6 +1007,7 @@ export function CreateProductDialog({
       hasBom,
       bomBranchId,
       bomName,
+      bomYieldQty,
       bomNote,
       bomItems,
       bomCodeInput,
@@ -1055,6 +1062,7 @@ export function CreateProductDialog({
       setHasBom(draft.hasBom);
       setBomBranchId(draft.bomBranchId);
       setBomName(draft.bomName);
+      if (draft.bomYieldQty !== undefined) setBomYieldQty(draft.bomYieldQty);
       setBomNote(draft.bomNote);
       setBomItems(draft.bomItems);
       setBomCodeInput(draft.bomCodeInput);
@@ -2030,11 +2038,17 @@ export function CreateProductDialog({
         e.channel = "SKU bắt buộc có Kênh bán (FnB hoặc Retail)";
       }
     }
+    if (isFnbStockItem && hasBom && bomItems.length > 0 && !bomCodeInput.trim() &&
+      (!bomYieldQty.trim() || !Number.isFinite(Number(bomYieldQty)) || Number(bomYieldQty) <= 0)) {
+      e.bomYieldQty = "Nhập lượng bán thành phẩm thu được từ một mẻ, lớn hơn 0.";
+    }
     setErrors(e);
     // Auto-switch tab về tab có lỗi đầu tiên — UX: user không phải đoán
     // tab nào đang lỗi khi bấm Lưu.
     if (e.name || e.category || e.channel) {
       setInnerTab("info");
+    } else if (e.bomYieldQty) {
+      setInnerTab("bom");
     } else if (e.sellPrice) {
       setInnerTab("pricing");
     }
@@ -2272,7 +2286,7 @@ export function CreateProductDialog({
           : defaultVariant
             ? perSizeCostByKey[defaultVariant.key] ?? defaultVariant.costPrice
             : usesFnbRecipeCosts && hasBom && bomItems.length > 0
-              ? inlineFnbBomCost
+              ? inlineFnbBomCost / (isFnbStockItem ? Number(bomYieldQty) : 1)
               : Number(costPrice) || 0;
 
       const commonPayload = {
@@ -2432,6 +2446,7 @@ export function CreateProductDialog({
                       branches,
                     ),
                   branchId: bomBranchId,
+                  ...(isFnbStockItem ? { yieldQty: Number(bomYieldQty), yieldUnit: finalUnit } : {}),
                   name: bomName || `Công thức cho ${name}`,
                   note: bomNote || undefined,
                   items,
@@ -2440,7 +2455,7 @@ export function CreateProductDialog({
               } else {
                 const createdBom = await createBOM({
                   productId: initialData.id,
-                  ...(isFnbStockItem ? { yieldQty: 1, yieldUnit: finalUnit } : {}),
+                  ...(isFnbStockItem ? { yieldQty: Number(bomYieldQty), yieldUnit: finalUnit } : {}),
                   branchId: bomBranchId,
                   code: getAutomaticBomCode(
                     initialData.code ?? "SKU",
@@ -2676,7 +2691,7 @@ export function CreateProductDialog({
         try {
           const createdBom = await createBOM({
             productId: created.id,
-            ...(isFnbStockItem ? { yieldQty: 1, yieldUnit: finalUnit } : {}),
+            ...(isFnbStockItem ? { yieldQty: Number(bomYieldQty), yieldUnit: finalUnit } : {}),
             branchId: bomBranchId,
             code: getAutomaticBomCode(code, bomBranchId, branches),
             name: bomName || `Công thức cho ${name}`,
@@ -3877,6 +3892,15 @@ export function CreateProductDialog({
                 </div>
               )}
 
+              {isFnbStockItem && !bomCodeInput.trim() && (
+                <>
+                  <PreparedRecipeYield value={bomYieldQty} unit={stockUnit.trim() || initialData?.unit || ""} onChange={setBomYieldQty} error={errors.bomYieldQty} />
+                  {canViewCost && Number(bomYieldQty) > 0 && !fnbBomCostPending && !hasMissingPreparedComponentCost && (
+                    <p className="text-sm text-muted-foreground">Dự toán nguyên liệu cho một mẻ: {formatCurrency(inlineFnbBomCost)}đ · tương đương {formatCurrency(inlineFnbBomCost / Number(bomYieldQty))}đ / {stockUnit.trim() || initialData?.unit}. Giá vốn thực tế ghi theo nguyên liệu đã dùng và sản lượng thực cân khi sản xuất.</p>
+                  )}
+                </>
+              )}
+
               {/* Items table */}
               <div className="space-y-2">
                 {channel === "fnb" && (
@@ -3932,7 +3956,7 @@ export function CreateProductDialog({
                             </th>
                           )}
                           <th className="text-right px-3 py-2 font-semibold w-28">
-                            {usesFnbRecipeCosts ? "Giá dự toán/SP" : "Cost/SP"}
+                            {isFnbStockItem ? "Dự toán / mẻ" : usesFnbRecipeCosts ? "Giá dự toán/SP" : "Cost/SP"}
                           </th>
                           <th className="w-10"></th>
                         </tr>
@@ -4107,7 +4131,7 @@ export function CreateProductDialog({
                             colSpan={channel === "fnb" ? 4 : 3}
                             className="px-3 py-2 text-right font-semibold text-sm"
                           >
-                            {channel === "fnb"
+                            {isFnbStockItem ? "Tổng dự toán / mẻ:" : channel === "fnb"
                               ? "Tổng giá vốn F&B:"
                               : "Tổng giá vốn (theo BOM):"}
                           </td>

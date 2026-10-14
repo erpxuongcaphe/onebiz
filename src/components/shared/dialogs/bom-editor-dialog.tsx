@@ -1,5 +1,7 @@
 "use client";
 
+import { PreparedRecipeYield } from "@/components/shared/prepared-recipe-yield";
+
 import { usePermissions } from "@/lib/permissions/use-permission";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
@@ -284,6 +286,7 @@ export function BOMEditorDialog({
     const selectedSkuForYield = skuOptions.find((sku) => sku.id === productId);
     if (selectedSkuForYield?.unit) {
       setYieldUnit(selectedSkuForYield.unit);
+      if (selectedSkuForYield.isFnbStockItem) setYieldQty("");
     }
   }, [open, bomId, productId, skuOptions]);
 
@@ -396,6 +399,7 @@ export function BOMEditorDialog({
     if (inactiveTarget) {
       e.items = `${inactiveTarget.materialName} đang gắn với một nhóm lựa chọn chưa áp dụng cho SKU này. Hãy gắn nhóm đó ở Thông tin sản phẩm trước khi lưu công thức.`;
     }
+    if (!Number.isFinite(Number(yieldQty)) || Number(yieldQty) <= 0) e.yieldQty = "Nhập sản lượng lớn hơn 0.";
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -654,6 +658,10 @@ export function BOMEditorDialog({
             </p>
           </div>
 
+          {output?.isFnbStockItem ? (
+            <PreparedRecipeYield value={yieldQty} unit={yieldUnit} onChange={setYieldQty} error={errors.yieldQty} />
+          ) : (
+            <>
           {/* Batch / Yield */}
           <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
@@ -681,6 +689,10 @@ export function BOMEditorDialog({
               />
             </div>
           </div>
+
+            {errors.yieldQty && <p role="alert" className="text-sm text-destructive">{errors.yieldQty}</p>}
+            </>
+          )}
 
           {/* Materials Table */}
           <div className="space-y-2">
