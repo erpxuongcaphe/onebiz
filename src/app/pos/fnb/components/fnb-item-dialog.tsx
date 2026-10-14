@@ -140,18 +140,10 @@ const CHIP = "min-h-9 pointer-coarse:min-h-11 px-3.5 py-1.5 rounded-full border 
   "text-[13px] font-medium transition-colors";
 
 /**
- * 07/08 — Ô của MỘT nhóm ngắn trong khu lựa chọn chính.
- *
- * Vì sao KHÔNG dùng lưới chia đều: đo trên bản xem trước thấy "Mức đường"
- * (5 lựa chọn) bị ép trong ô 318px nên "100%" rớt xuống dòng hai, trong khi
- * ô thứ ba bên phải bỏ trống. Chia đều 3 cột chỉ là bản khác của đúng lỗi
- * "chỗ thừa chỗ chật".
- *
- * `flex-auto` = bề rộng khởi điểm bằng ĐÚNG nội dung, rồi mới chia phần dư.
- * Nhóm 5 lựa chọn tự rộng hơn nhóm 4 lựa chọn; hết chỗ thì tự xuống dòng.
- * Điện thoại (dưới sm) thì mỗi nhóm một dòng.
+ * Mỗi nhóm giữ một hàng riêng theo thứ tự đã cấu hình trên mọi màn hình.
+ * Chỉ lựa chọn bên trong nhóm xuống dòng; trạng thái lỗi không đổi padding.
  */
-const O_NHOM = "min-w-0 w-full sm:w-auto sm:flex-auto sm:min-w-[15rem] space-y-1.5";
+const O_NHOM = "min-w-0 w-full space-y-1.5 rounded-lg border border-border/60 p-3";
 const NUT_TRON = "size-9 pointer-coarse:size-11 shrink-0 rounded-full border border-border " +
   "flex items-center justify-center text-muted-foreground " +
   "hover:bg-surface-container-high hover:text-foreground transition-colors";
@@ -697,9 +689,8 @@ export function FnbItemDialog({
         aria-label={g.name}
         className={cn(
           O_NHOM,
-          g.rule === "multi" && "basis-full",
           conThieu &&
-            "rounded-lg border border-status-error/40 bg-status-error/5 p-2.5",
+            "border-status-error/40 bg-status-error/5",
         )}
       >
         <NhanNhomTuyChon
@@ -764,11 +755,8 @@ export function FnbItemDialog({
           dialog cao 1.103px trên màn 574px, không cuộn được, nút "Thêm vào
           đơn" nằm ở y=791 NGOÀI màn — thu ngân không bấm được.
           (cn dùng tailwind-merge nên `flex` thay `grid` của nền đúng cách.) */}
-      {/* 06/08 PR-B — bề ngang theo thiết bị, KHÔNG phải bản desktop thu nhỏ:
-          điện thoại 95vw · tablet dọc 42rem · tablet ngang 56rem · desktop
-          Đợt UX 1: nhóm đơn giản 36rem, nhóm phức tạp mở tới 56rem. Trần
-          `max-w-[calc(100%-2rem)]` của nền vẫn giữ ở cỡ nhỏ. */}
-      <DialogContent className="max-w-[95vw] sm:max-w-[36rem] data-[complex=true]:sm:max-w-[48rem] data-[complex=true]:lg:max-w-[56rem] max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col [@media(max-height:720px)]:max-h-[calc(100dvh-0.5rem)] [@media(max-height:720px)]:gap-3 [@media(max-height:720px)]:p-4" data-complex={effectiveModifierGroups.length > 3 || (toppings?.length ?? 0) > 0}>
+      {/* Bề ngang cố định; nội dung cuộn riêng, đầu và nút xác nhận luôn hiện. */}
+      <DialogContent className="max-w-[95vw] sm:max-w-[36rem] max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col [@media(max-height:720px)]:max-h-[calc(100dvh-0.5rem)] [@media(max-height:720px)]:gap-3 [@media(max-height:720px)]:p-4">
         {/* 07/08 (CEO chốt): ĐẦU POPUP GỘP — tên món · giá gốc · SỐ LƯỢNG ·
             tổng tạm tính, tất cả trong một khu gọn. Trước đây "Số lượng" là
             một khối riêng chiếm nguyên một cột rồi bỏ trống bên dưới, còn
@@ -820,13 +808,7 @@ export function FnbItemDialog({
           </div>
         </DialogHeader>
 
-        {/* 07/08 (CEO chốt) — THÂN CUỘN xếp theo NỘI DUNG, không chia đều cột.
-            Trước đây mọi nhóm bị nhét vào lưới 3 cột bằng nhau: nhóm 2 lựa
-            chọn và nhóm 5 dòng dài chiếm ô như nhau → chỗ thừa chỗ chật.
-            Nay: khu lựa chọn NGẮN (Size/Đường/Đá) xếp lưới gọn ở trên, khu
-            DÀI (Topping) chiếm TOÀN chiều ngang ở dưới.
-            Đổi bố cục hoàn toàn bằng CSS → xoay máy không remount, lựa chọn
-            còn nguyên. */}
+        {/* Giữ thứ tự dọc khi chọn, thu gọn hoặc đổi kích thước màn hình. */}
         <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-1 flex flex-col gap-2 [@media(max-height:720px)]:gap-3 [@media(max-height:720px)]:py-1">
           {/* 06/08 — tải tuỳ chọn HỎNG: nói thật, không im lặng coi như món
               "không có tuỳ chọn". Nút xác nhận bị khoá cho tới khi tải lại
@@ -881,16 +863,12 @@ export function FnbItemDialog({
               )}
             </div>
           )}
-          {/* ══ KHU LỰA CHỌN CHÍNH — Size đầu tiên, rồi Đường/Đá ══
-              Xếp hàng ngang tự xuống dòng, MỖI Ô RỘNG THEO NỘI DUNG (xem
-              O_NHOM). Size luôn ở ô đầu, nhìn thấy ngay khi mở popup, KHÔNG
-              phải cuộn. (Nhóm tuỳ chọn ngắn render tiếp ngay dưới, xem khối
-              `nhomNgan`.) */}
-          <div className="flex flex-wrap items-start gap-x-6 gap-y-3.5 [@media(max-height:720px)]:gap-y-2.5">
+          {/* Size đầu tiên nếu có, sau đó các nhóm theo thứ tự đã cấu hình. */}
+          <div className="flex flex-col gap-2.5">
             {/* Size / Quy cách — POS-FIX-C3 giữ skeleton khi đang tải variants
                 để không ai tưởng món không có size rồi thêm với giá gốc. */}
             {variantsLoading && (!variants || variants.length === 0) ? (
-              <section className={O_NHOM}>
+              <section role="group" aria-label="Kích cỡ" className={O_NHOM}>
                 <Label className="text-sm font-medium">Kích cỡ</Label>
                 <div className="flex flex-wrap gap-2">
                   {[1, 2, 3].map((i) => (
@@ -899,7 +877,7 @@ export function FnbItemDialog({
                 </div>
               </section>
             ) : variants && variants.length > 0 ? (
-              <section className={O_NHOM}>
+              <section role="group" aria-label="Kích cỡ" className={O_NHOM}>
                 <Label className="text-sm font-medium">Kích cỡ</Label>
                 <div className="flex flex-wrap gap-2">
                   {variants.map((v) => {
@@ -939,19 +917,15 @@ export function FnbItemDialog({
               </section>
             ) : null}
 
-            {/* Mọi nhóm theo đúng thứ tự liên kết. Nhóm chọn nhiều
-                tự chiếm trọn hàng nhưng không bị ép xuống cuối. */}
+            {/* Không tách nhóm chọn nhiều ra khỏi thứ tự của quản lý. */}
             {hasDynamicModifiers && nhomDaSapXep.map(veNhom)}
           </div>
 
-          {/* ══ TOPPING — nhóm DÀI, chiếm TOÀN chiều ngang ══
-              Mỗi dòng: tên + giá bên trái, bộ tăng/giảm bên phải.
-              Từ 1280px chia 2 cột (ở 1024px mỗi cột chỉ ~400px, tên topping
-              thật dài 30+ ký tự sẽ xuống 3 dòng → rối hơn 1 cột). */}
+          {/* Topping giữ một cột trên mọi thiết bị. */}
           {toppings && toppings.length > 0 && (
-            <section className="min-w-0 space-y-1.5">
+            <section role="group" aria-label="Topping" className={O_NHOM}>
               <Label className="text-sm font-medium">Topping</Label>
-              <div className="grid gap-2 xl:grid-cols-2 xl:gap-x-4">
+              <div className="grid grid-cols-1 gap-2">
                 {toppings.map((t) => {
                   const qty = toppingQtys.get(t.id) ?? 0;
                   const active = qty > 0;
