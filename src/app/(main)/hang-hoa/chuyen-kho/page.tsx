@@ -1463,7 +1463,7 @@ function CreateTransferDialog({
                         <td
                           className={`text-center text-xs ${overStock ? "text-status-error font-medium" : "text-muted-foreground"}`}
                         >
-                          <StockWithConversion quantity={item.stock} unit={item.unit ?? ""} conversions={units.map.get(item.productId)} />
+                          <StockWithConversion variant="cell" quantity={item.stock} unit={item.unit ?? ""} conversions={units.map.get(item.productId)} />
                         </td>
                         <td className="text-center px-2">
                           <OperationalQuantityInput productId={item.productId} disabled={creating} quantity={item.quantity} unit={item.unit ?? ""} conversions={units.map.get(item.productId)} max={item.stock} label={`Số lượng chuyển ${item.productName}`} onChange={(value, input) => updateQuantity(item.id,value,input)} />

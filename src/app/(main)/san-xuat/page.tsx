@@ -435,7 +435,7 @@ export default function ProductionDashboardPage() {
                     <div className="text-xs text-muted-foreground">{r.productCode} · {r.unit}</div>
                   </td>
                   <td className="hidden sm:table-cell p-2 text-muted-foreground">{r.branchName}</td>
-                  <td className="p-2 text-right font-medium"><StockWithConversion quantity={r.quantity} unit={r.unit} conversions={units.map.get(r.productId)} /></td>
+                  <td className="p-2 text-right font-medium"><StockWithConversion variant="cell" quantity={r.quantity} unit={r.unit} conversions={units.map.get(r.productId)} /></td>
                   <td className="hidden sm:table-cell p-2 text-right text-muted-foreground">{formatNumber(r.minStock)}</td>
                   <td className="hidden md:table-cell p-2 text-right">{formatCurrency(r.stockValue)}</td>
                   <td className="p-2 text-center">

@@ -95,12 +95,12 @@ export default function InternalReceivingPage() {
             const conversions = uom.map.get(i.productId) ?? []; const units = operationalUnits(i.unit,conversions);
             return <tr key={i.id} className="border-b last:border-0">
               <td className="py-3 pr-2"><p className="font-medium">{i.name}</p><p className="text-xs text-muted-foreground">{i.code} · {i.unit}</p></td>
-              <td className="px-2 text-right tabular-nums"><StockWithConversion quantity={i.dispatched} unit={i.unit} conversions={conversions} /></td>
+              <td className="px-2 text-right tabular-nums"><StockWithConversion variant="cell" quantity={i.dispatched} unit={i.unit} conversions={conversions} /></td>
               <td className="px-2"><div className="flex justify-end gap-1">
                 <Input className="w-24 text-right" type="number" min={0} step="any" inputMode="decimal" aria-label={`Thực nhận ${i.name}`} value={quantities[i.id] ?? ''} onChange={e => update(i.id,e.target.value)} aria-invalid={entered == null || !validReceiptQuantity(String(entered),i.dispatched-other)} />
                 {units.length > 1 ? <select className="max-w-28 rounded-md border bg-background p-1 text-sm" aria-label={`Đơn vị thực nhận ${i.name}`} value={inputUnits[i.id] ?? i.unit} onChange={e => changeUnit(i,e.target.value)}>{units.map(unit => <option key={unit} value={unit}>{unit}</option>)}</select> : <span className="self-center text-xs">{i.unit}</span>}
               </div>{inputUnits[i.id] && inputUnits[i.id] !== i.unit && <p className="mt-1 text-right text-xs text-muted-foreground">Ghi kho {entered == null ? '—' : formatOperationalQuantity(entered)} {i.unit}</p>}</td>
-              <td className={`pl-2 text-right tabular-nums ${remaining < 0 ? 'text-status-error' : remaining > 0 ? 'text-status-warning' : 'text-status-success'}`}>{Number.isFinite(remaining) ? <StockWithConversion quantity={remaining} unit={i.unit} conversions={conversions} /> : '—'}</td>
+              <td className={`pl-2 text-right tabular-nums ${remaining < 0 ? 'text-status-error' : remaining > 0 ? 'text-status-warning' : 'text-status-success'}`}>{Number.isFinite(remaining) ? <StockWithConversion variant="cell" quantity={remaining} unit={i.unit} conversions={conversions} /> : '—'}</td>
             </tr>;
           })}</tbody></table></div>
           <label className="mt-4 block text-sm">{editing ? 'Lý do sửa (bắt buộc)' : 'Ghi chú nếu giao thiếu, sai hoặc hỏng'}<Input className="mt-1" maxLength={500} value={note} onChange={e => { request.current = undefined; setNote(e.target.value); }} placeholder="Ví dụ: kho giao thiếu 2 túi, chờ giao bổ sung" /></label>

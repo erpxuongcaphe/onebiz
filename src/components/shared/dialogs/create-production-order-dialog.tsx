@@ -735,7 +735,7 @@ export function CreateProductionOrderDialog({
                             {selectedBranchMode === "outlet" ? <>
                               <OperationalQuantityInput productId={m.productId} quantity={Number(materialActuals[m.productId] ?? m.needed)} unit={m.unit} conversions={conversionMap.get(m.productId)} max={m.available} label={`Thực dùng ${m.productName}`} onChange={(value,input) => {setMaterialActuals(previous => ({...previous,[m.productId]:String(value)}));setMaterialEntries(previous=>({...previous,[m.productId]:input}));}} />
                               {Math.abs(m.needed-m.perBatch*Number(batchCount))>0.0001 && <p className="mt-1 text-xs text-status-warning">Khác công thức: <StockWithConversion quantity={m.perBatch*Number(batchCount)} unit={m.unit} conversions={conversionMap.get(m.productId)} /></p>}
-                            </> : <StockWithConversion quantity={m.needed} unit={m.unit} conversions={conversionMap.get(m.productId)} />}
+                            </> : <StockWithConversion variant="cell" quantity={m.needed} unit={m.unit} conversions={conversionMap.get(m.productId)} />}
                           </td>
                           <td className="block text-right sm:table-cell sm:p-2">
                             <span className="mr-2 text-xs text-muted-foreground sm:hidden">Tồn kho</span>
@@ -744,7 +744,7 @@ export function CreateProductionOrderDialog({
                                 m.shortage ? "text-destructive font-medium" : "text-foreground"
                               }
                             >
-                              <StockWithConversion quantity={m.available} unit={m.unit} conversions={conversionMap.get(m.productId)} />
+                              <StockWithConversion variant="cell" quantity={m.available} unit={m.unit} conversions={conversionMap.get(m.productId)} />
                             </span>{" "}
                           </td>
                           <td className="block text-right sm:table-cell sm:p-2 sm:text-center">

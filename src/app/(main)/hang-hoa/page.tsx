@@ -1519,7 +1519,7 @@ export default function HangHoaPage() {
               quantity={stock}
               unit={row.original.unit ?? ""}
               conversions={conversionsMap.get(row.original.id) ?? null}
-              variant="inline"
+              variant="cell"
             />
           </span>
         );
@@ -1697,7 +1697,7 @@ export default function HangHoaPage() {
               quantity={stock}
               unit={row.original.unit ?? ""}
               conversions={conversionsMap.get(row.original.id) ?? null}
-              variant="inline"
+              variant="cell"
             />
           </span>
         );

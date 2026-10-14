@@ -465,7 +465,7 @@ export default function XuatNhapTonPage() {
       label: "Tồn đầu kỳ",
       key: "openingQty",
       align: "right",
-      cell: (r) => <StockWithConversion quantity={r.openingQty} unit={r.unit} conversions={uom.map.get(r.productId)} hideUnit />,
+      cell: (r) => <StockWithConversion variant="cell" quantity={r.openingQty} unit={r.unit} conversions={uom.map.get(r.productId)} hideUnit />,
       subtotalCell: formatQuantityTotal(quantityTotals.openingQty),
     },
     {
@@ -507,7 +507,7 @@ export default function XuatNhapTonPage() {
       label: "Tồn cuối kỳ",
       key: "closingQty",
       align: "right",
-      cell: (r) => <StockWithConversion quantity={r.closingQty} unit={r.unit} conversions={uom.map.get(r.productId)} hideUnit />,
+      cell: (r) => <StockWithConversion variant="cell" quantity={r.closingQty} unit={r.unit} conversions={uom.map.get(r.productId)} hideUnit />,
       subtotalCell: formatQuantityTotal(quantityTotals.closingQty),
     },
     {
@@ -552,7 +552,7 @@ export default function XuatNhapTonPage() {
       label: "Tồn đầu kỳ",
       key: "openingQty",
       align: "right",
-      cell: (r) => <StockWithConversion quantity={r.openingQty} unit={r.unit} conversions={uom.map.get(r.productId)} hideUnit />,
+      cell: (r) => <StockWithConversion variant="cell" quantity={r.openingQty} unit={r.unit} conversions={uom.map.get(r.productId)} hideUnit />,
     },
     {
       label: "Giá trị đầu kỳ",
@@ -581,7 +581,7 @@ export default function XuatNhapTonPage() {
       label: "Tồn cuối kỳ",
       key: "closingQty",
       align: "right",
-      cell: (r) => <StockWithConversion quantity={r.closingQty} unit={r.unit} conversions={uom.map.get(r.productId)} hideUnit />,
+      cell: (r) => <StockWithConversion variant="cell" quantity={r.closingQty} unit={r.unit} conversions={uom.map.get(r.productId)} hideUnit />,
     },
     {
       label: "Giá trị cuối kỳ",
