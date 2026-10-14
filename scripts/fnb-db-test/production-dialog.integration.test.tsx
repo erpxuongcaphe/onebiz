@@ -30,6 +30,7 @@ const prepared = "30000000-0000-0000-0000-000000000002";
 const actor = "40000000-0000-0000-0000-000000000001";
 const successId = "70000000-0000-0000-0000-000000000003";
 const retryId = "70000000-0000-0000-0000-000000000004";
+const emptyId = "70000000-0000-0000-0000-000000000005";
 const asyncExec = promisify(execFile);
 const args = ["-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1"];
 
@@ -73,14 +74,15 @@ beforeAll(() => {
   assertDisposable();
   sql(`insert into production_orders(id, tenant_id, branch_id, product_id, code, created_by, status, planned_qty)
     values ('${successId}','${tenant}','${branch}','${prepared}','SX-UI-OK','${actor}','planned',10),
-    ('${retryId}','${tenant}','${branch}','${prepared}','SX-UI-RETRY','${actor}','planned',10);
+    ('${retryId}','${tenant}','${branch}','${prepared}','SX-UI-RETRY','${actor}','planned',10),
+    ('${emptyId}','${tenant}','${branch}','${prepared}','SX-UI-EMPTY','${actor}','planned',10);
     insert into production_order_materials(id,production_order_id,product_id,planned_qty,unit,unit_cost)
     values ('71000000-0000-0000-0000-000000000003','${successId}','${raw}',0.5,'Tui',12500),
     ('71000000-0000-0000-0000-000000000004','${retryId}','${raw}',0.5,'Tui',12500);`);
   bridge.detail.mockImplementation(async (id: string) => {
-    expect([successId, retryId]).toContain(id);
-    const materials = JSON.parse(sql(`select jsonb_agg(jsonb_build_object('productId',product_id,
-      'productName','Nguyen lieu UAT','plannedQty',planned_qty,'unit',unit))
+    expect([successId, retryId, emptyId]).toContain(id);
+    const materials = JSON.parse(sql(`select coalesce(jsonb_agg(jsonb_build_object('productId',product_id,
+      'productName','Nguyen lieu UAT','plannedQty',planned_qty,'unit',unit)), '[]'::jsonb)
       from production_order_materials where production_order_id=${literal(id)}`));
     return { ...order(id), materials };
   });
@@ -112,6 +114,15 @@ beforeAll(() => {
 afterEach(() => { cleanup(); bridge.toast.mockClear(); bridge.rpc.mockClear(); });
 
 describe("completion dialog connected to the actual production RPC", () => {
+  it("rejects missing ingredients in PostgreSQL and prevents the UI from submitting that order", async () => {
+    const before = snapshot();
+    expect(() => sql(`begin; set local request.jwt.claim.sub='${actor}'; select complete_production_atomic('${emptyId}',10,'EMPTY-SNAPSHOT',current_date,null); rollback;`)).toThrow(/FNB_PRODUCTION_MATERIALS_REQUIRED/);
+    expect(snapshot()).toBe(before);
+    render(<CompleteProductionOrderDialog open order={order(emptyId)} onOpenChange={vi.fn()} />);
+    await screen.findByText(/Lệnh chưa có nguyên liệu được lưu/);
+    expect(screen.getByRole("button", { name: "Hoàn thành" })).toBeDisabled();
+    expect(bridge.rpc).not.toHaveBeenCalled();
+  });
   it("posts raw stock, prepared lot and branch cost exactly once from a UI click", async () => {
     const beforeRaw = stock(raw), beforePrepared = stock(prepared);
     const close = vi.fn(), success = vi.fn();

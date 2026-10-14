@@ -105,8 +105,24 @@ describe("production completion UX", () => {
   it("clears the previous check when the new order has no materials", async () => {
     const view = render(<CompleteProductionOrderDialog open order={order("A")} onOpenChange={vi.fn()} />);
     await screen.findByText("Đủ NVL");
+    mocks.detail.mockResolvedValue(order("B", false));
     view.rerender(<CompleteProductionOrderDialog open order={order("B", false)} onOpenChange={vi.fn()} />);
     expect(screen.queryByText("Đủ NVL")).toBeNull();
+    await screen.findByText(/Lệnh chưa có nguyên liệu được lưu/);
+    expect(screen.getByRole("button", { name: "Hoàn thành" })).toBeDisabled();
+    expect(mocks.complete).not.toHaveBeenCalled();
+  });
+  it("reloads an empty summary and recovers when the persisted ingredient snapshot becomes available", async () => {
+    mocks.detail.mockResolvedValueOnce(order("A", false)).mockResolvedValueOnce(order("A"));
+    render(<CompleteProductionOrderDialog open order={order("A", false)} onOpenChange={vi.fn()} />);
+    await screen.findByText(/Lệnh chưa có nguyên liệu được lưu/);
+    expect(mocks.check).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Hoàn thành" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Thử lại" }));
+    await screen.findByText("Đủ NVL");
+    expect(mocks.detail).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole("button", { name: "Hoàn thành" })).toBeEnabled();
+    expect(mocks.complete).not.toHaveBeenCalled();
   });
   it("locks editing and dismissal while completion is pending", async () => {
     const pending = deferred<void>();
