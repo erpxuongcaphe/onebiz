@@ -116,7 +116,7 @@ afterEach(() => { cleanup(); bridge.toast.mockClear(); bridge.rpc.mockClear(); }
 describe("completion dialog connected to the actual production RPC", () => {
   it("rejects missing ingredients in PostgreSQL and prevents the UI from submitting that order", async () => {
     const before = snapshot();
-    expect(() => sql(`select complete_production_atomic('${emptyId}',10,'EMPTY-SNAPSHOT',current_date,null)`)).toThrow(/FNB_PRODUCTION_MATERIALS_REQUIRED/);
+    expect(() => sql(`begin; set local request.jwt.claim.sub='${actor}'; select complete_production_atomic('${emptyId}',10,'EMPTY-SNAPSHOT',current_date,null); rollback;`)).toThrow(/FNB_PRODUCTION_MATERIALS_REQUIRED/);
     expect(snapshot()).toBe(before);
     render(<CompleteProductionOrderDialog open order={order(emptyId)} onOpenChange={vi.fn()} />);
     await screen.findByText(/Lệnh chưa có nguyên liệu được lưu/);
