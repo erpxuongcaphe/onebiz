@@ -3944,7 +3944,7 @@ export function CreateProductDialog({
                           <th className="text-left px-3 py-2 font-semibold">
                             {channel === "fnb" ? "Thành phần" : "NVL"}
                           </th>
-                          <th className="text-right px-3 py-2 font-semibold w-28">Số lượng</th>
+                          <th className="text-right px-3 py-2 font-semibold w-28">{isFnbStockItem ? "Lượng / mẻ" : "Số lượng"}</th>
                           <th className="text-left px-3 py-2 font-semibold w-20">ĐVT</th>
                           {/* Nhóm chọn một dùng định lượng chính xác theo option. */}
                           {channel === "fnb" && (
@@ -4256,7 +4256,7 @@ export function CreateProductDialog({
               )}
 
               <div className="space-y-1.5">
-                <label className="text-sm font-medium">Ghi chú công thức</label>
+                <label className="text-sm font-medium">{isFnbStockItem ? "Hướng dẫn làm mẻ (nước, nhiệt độ, thời gian…)" : "Ghi chú công thức"}</label>
                 <textarea
                   className="flex min-h-[50px] w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                   value={bomNote}
