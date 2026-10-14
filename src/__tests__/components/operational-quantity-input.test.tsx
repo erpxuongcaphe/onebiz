@@ -25,7 +25,7 @@ it("retains the original weight in the entry while showing the ledger quantity",
  fireEvent.change(screen.getByRole('spinbutton'),{target:{value:'1'}});
  expect(screen.getByRole('spinbutton')).toHaveValue(1);
  expect(screen.getByRole('status')).toHaveTextContent('0.0009');
- expect(screen.getByText('Ghi kho 0,0009 Mẻ')).toBeTruthy();
+ expect(screen.getByText('Ghi kho 0.0009 Mẻ')).toBeTruthy();
  fireEvent.change(screen.getByRole('spinbutton'),{target:{value:''}});
  expect(screen.getByRole('spinbutton')).toHaveAttribute('aria-invalid','true');
  expect(screen.getByRole('status')).toHaveTextContent('NaN');
