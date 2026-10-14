@@ -65,6 +65,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
+import { summarizePhysicalStock } from "@/lib/physical-stock-summary";
 import { exportToExcel } from "@/lib/utils/export";
 import { exportToExcelFromSchema } from "@/lib/excel";
 import type { ProductImportRow } from "@/lib/excel/schemas";
@@ -1209,7 +1210,9 @@ export default function HangHoaPage() {
     });
   };
 
-  const totalStock = data.reduce((sum, p) => sum + p.stock, 0);
+  const totalStock = summarizePhysicalStock(data, branchStockView)
+    .map(({ unit, quantity }) => `${formatNumber(quantity)} ${unit}`)
+    .join(" · ");
   const totalOrdered = data.reduce((sum, p) => sum + p.ordered, 0);
 
   /**
@@ -1474,7 +1477,7 @@ export default function HangHoaPage() {
           );
         }
         // Phương án B: SKU có BOM ở chế độ CN → "≈ khả dụng" từ tồn nguyên liệu.
-        if (branchStockView && row.original.hasBom) {
+        if (branchStockView && row.original.hasBom && !row.original.isFnbStockItem) {
           const avail = bomAvailability.get(row.original.id);
           if (avail) {
             return (
@@ -1650,7 +1653,7 @@ export default function HangHoaPage() {
       size: 150,
       cell: ({ row }) => {
         // Phương án B: SKU có BOM ở chế độ CN → "≈ khả dụng" từ tồn nguyên liệu.
-        if (branchStockView && row.original.hasBom) {
+        if (branchStockView && row.original.hasBom && !row.original.isFnbStockItem) {
           const avail = bomAvailability.get(row.original.id);
           if (avail) {
             return (
@@ -2227,7 +2230,7 @@ export default function HangHoaPage() {
               : []),
           ]}
           summaryRow={{
-            stock: formatCurrency(totalStock),
+            stock: totalStock || "—",
             ordered: formatCurrency(totalOrdered),
           }}
           expandedRow={expandedRow}
