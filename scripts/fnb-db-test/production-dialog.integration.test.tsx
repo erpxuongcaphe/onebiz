@@ -81,8 +81,8 @@ beforeAll(() => {
     ('71000000-0000-0000-0000-000000000004','${retryId}','${raw}',0.5,'Tui',12500);`);
   bridge.detail.mockImplementation(async (id: string) => {
     expect([successId, retryId, emptyId]).toContain(id);
-    const materials = JSON.parse(sql(`select jsonb_agg(jsonb_build_object('productId',product_id,
-      'productName','Nguyen lieu UAT','plannedQty',planned_qty,'unit',unit))
+    const materials = JSON.parse(sql(`select coalesce(jsonb_agg(jsonb_build_object('productId',product_id,
+      'productName','Nguyen lieu UAT','plannedQty',planned_qty,'unit',unit)), '[]'::jsonb)
       from production_order_materials where production_order_id=${literal(id)}`));
     return { ...order(id), materials };
   });
