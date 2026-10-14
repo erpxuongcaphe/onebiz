@@ -122,7 +122,7 @@ export function StockWithConversion(props: Props) {
   }
 
   if (variant === "cell") {
-    return <span className={cn("inline-flex max-w-full min-w-0 flex-col items-end gap-0.5 whitespace-normal text-right align-middle leading-snug tabular-nums",className)}>
+    return <span className={cn("inline-flex max-w-full min-w-0 flex-col items-end gap-0.5 whitespace-normal text-right align-middle leading-snug tabular-nums",convText && "min-w-32",className)}>
       <span className="whitespace-nowrap font-semibold">
         {formatOperationalQuantity(quantity)}
         {!props.hideUnit && <>{" "}<span className="font-normal text-muted-foreground">{unit}</span></>}
