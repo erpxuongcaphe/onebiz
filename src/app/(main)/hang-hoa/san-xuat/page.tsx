@@ -226,10 +226,10 @@ function ProductionOrderDetail({
                               </div>
                             </td>
                             <td className="p-2 text-right">
-                              <StockWithConversion quantity={m.plannedQty} unit={m.unit} conversions={units.map.get(m.productId)} />
+                              <StockWithConversion variant="cell" quantity={m.plannedQty} unit={m.unit} conversions={units.map.get(m.productId)} />
                             </td>
                             <td className="p-2 text-right">
-                              <StockWithConversion quantity={m.actualQty || 0} unit={m.unit} conversions={units.map.get(m.productId)} />
+                              <StockWithConversion variant="cell" quantity={m.actualQty || 0} unit={m.unit} conversions={units.map.get(m.productId)} />
                             </td>
                             <td className="p-2 text-right tabular-nums">
                               {m.unitCost != null ? formatCurrency(m.unitCost) : "—"}
@@ -489,12 +489,13 @@ export default function SanXuatPage() {
     {
       id: "qty",
       header: "Số lượng",
-      size: 130,
+      size: 170,
+      meta: { align: "right" },
       cell: ({ row }) => (
-        <span>
-          <StockWithConversion quantity={row.original.completedQty} unit={units.units.get(row.original.productId) ?? ''} conversions={units.map.get(row.original.productId)} />
-          <span className="text-muted-foreground"> / dự kiến {formatOperationalQuantity(row.original.plannedQty)} {units.units.get(row.original.productId)}</span>
-        </span>
+        <div className="space-y-0.5 text-right">
+          <StockWithConversion variant="cell" quantity={row.original.completedQty} unit={units.units.get(row.original.productId) ?? ''} conversions={units.map.get(row.original.productId)} />
+          <div className="text-xs text-muted-foreground">Dự kiến {formatOperationalQuantity(row.original.plannedQty)} {units.units.get(row.original.productId)}</div>
+        </div>
       ),
     },
     {

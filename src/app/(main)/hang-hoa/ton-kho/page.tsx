@@ -370,7 +370,7 @@ function StockRowDetail({
                                 quantity={b.quantity}
                                 unit={row.unit ?? ""}
                                 conversions={conversions}
-                                variant="inline"
+                                variant="cell"
                               />
                             </td>
                             <td className="p-2 text-right tabular-nums text-muted-foreground">
@@ -381,7 +381,7 @@ function StockRowDetail({
                                 quantity={b.available}
                                 unit={row.unit ?? ""}
                                 conversions={conversions}
-                                variant="inline"
+                                variant="cell"
                               />
                             </td>
                             <td className="p-2 text-right text-xs text-muted-foreground">
@@ -396,7 +396,7 @@ function StockRowDetail({
                               quantity={totalQty}
                               unit={row.unit ?? ""}
                               conversions={conversions}
-                              variant="inline"
+                              variant="cell"
                             />
                           </td>
                           <td className="p-2 text-right tabular-nums">
@@ -407,7 +407,7 @@ function StockRowDetail({
                               quantity={totalQty - totalReserved}
                               unit={row.unit ?? ""}
                               conversions={conversions}
-                              variant="inline"
+                              variant="cell"
                             />
                           </td>
                           <td />
@@ -989,7 +989,7 @@ export default function TonKhoPage() {
               quantity={r.quantity}
               unit={r.unit ?? ""}
               conversions={conversionsMap.get(r.productId) ?? null}
-              variant="inline"
+              variant="cell"
               hideUnit
             />
           </span>
@@ -1015,7 +1015,7 @@ export default function TonKhoPage() {
           quantity={row.original.available}
           unit={row.original.unit ?? ""}
           conversions={conversionsMap.get(row.original.productId) ?? null}
-          variant="inline"
+          variant="cell"
           hideUnit
         />
       ),

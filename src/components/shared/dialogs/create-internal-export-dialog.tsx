@@ -324,7 +324,7 @@ export function CreateInternalExportDialog({
                         </span>
                       </div>
                       <div className="text-right text-sm tabular-nums text-muted-foreground">
-                        <StockWithConversion quantity={item.stock} unit={item.unit} conversions={units.map.get(item.product_id)} />
+                        <StockWithConversion variant="cell" quantity={item.stock} unit={item.unit} conversions={units.map.get(item.product_id)} />
                       </div>
                       <OperationalQuantityInput productId={item.product_id} disabled={saving} quantity={item.quantity} unit={item.unit} conversions={units.map.get(item.product_id)} max={item.stock} label={`Số lượng ${item.product_name}`} onChange={(value, entry) => updateQuantity(item.product_id,value,entry)} />
                       <div className="text-right text-sm tabular-nums">

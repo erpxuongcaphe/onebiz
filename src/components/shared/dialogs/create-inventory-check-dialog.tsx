@@ -564,7 +564,7 @@ export function CreateInventoryCheckDialog({
                         <div className="flex items-baseline justify-between gap-2 md:block md:text-right">
                           <span className="text-xs font-medium uppercase text-muted-foreground md:hidden">Tồn kho</span>
                           <div className="text-right">
-                            <StockWithConversion quantity={item.systemStock} unit={item.unit} conversions={item.conversions} />
+                            <StockWithConversion variant="cell" quantity={item.systemStock} unit={item.unit} conversions={item.conversions} />
                           </div>
                         </div>
 

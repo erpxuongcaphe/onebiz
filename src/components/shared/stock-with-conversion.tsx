@@ -4,8 +4,8 @@
  * StockWithConversion — hiển thị tồn kho kèm quy đổi đơn vị (UOM).
  * CEO 19/05/2026 — Smart Hybrid pattern.
  *
- * 3 variant:
- *   - `inline` (mặc định) — 1 dòng compact "24 hộp · 2 thùng" cho list row
+ *   - `inline` (mặc định) — compact "24 hộp · 2 thùng" cho đoạn văn
+ *   - `cell` — số chính và quy đổi trên hai dòng, cùng căn phải trong bảng
  *   - `block` — 2 dòng đầy đủ với hệ số cho detail panel
  *   - `movement` — "+24 hộp (2 thùng)" cho stock movement / phiếu nhập-xuất
  *
@@ -19,6 +19,7 @@
 import type { UOMConversion } from "@/lib/types";
 import { getConversionText, pickBestConversion } from "@/lib/format-uom";
 import { formatNumber } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { formatOperationalQuantity, operationalUnits, preferredWeighingUnit, stockToInput } from "@/lib/operational-uom";
 
 interface BaseProps {
@@ -33,13 +34,17 @@ interface BaseProps {
   /**
    * CEO 28/05/2026: ẩn đơn vị chính (chỉ hiện số + quy đổi). Dùng khi đơn vị
    * đã có ở cột ĐVT riêng (vd trang Tồn kho) → tránh lặp + tách bạch số/đơn vị.
-   * Chỉ áp dụng cho variant "inline".
+   * Áp dụng cho variant "inline" và "cell".
    */
   hideUnit?: boolean;
 }
 
 interface InlineProps extends BaseProps {
   variant?: "inline";
+}
+
+interface CellProps extends BaseProps {
+  variant: "cell";
 }
 
 interface BlockProps extends BaseProps {
@@ -54,7 +59,7 @@ interface MovementProps extends BaseProps {
   isInflow?: boolean;
 }
 
-type Props = InlineProps | BlockProps | MovementProps;
+type Props = InlineProps | CellProps | BlockProps | MovementProps;
 
 export function StockWithConversion(props: Props) {
   const { quantity, unit, conversions, className } = props;
@@ -101,13 +106,14 @@ export function StockWithConversion(props: Props) {
     const signClass = isInflow ? "text-emerald-600" : "text-red-600";
     return (
       <span
-        className={`font-semibold whitespace-nowrap tabular-nums ${className ?? ""}`}
+        className={cn("inline-flex max-w-full flex-wrap items-baseline gap-x-1 whitespace-normal font-semibold tabular-nums",className)}
       >
-        <span className={signClass}>{sign}</span>
-        {formatOperationalQuantity(quantity)}{" "}
-        <span className="font-normal text-muted-foreground">{unit}</span>
+        <span className="whitespace-nowrap"><span className={signClass}>{sign}</span>
+          {formatOperationalQuantity(quantity)}{" "}
+          <span className="font-normal text-muted-foreground">{unit}</span>
+        </span>
         {convText && (
-          <span className="text-muted-foreground font-normal text-xs ml-1">
+          <span className="max-w-full break-words text-muted-foreground font-normal text-xs">
             ({convText})
           </span>
         )}
@@ -115,24 +121,35 @@ export function StockWithConversion(props: Props) {
     );
   }
 
+  if (variant === "cell") {
+    return <span className={cn("inline-flex max-w-full min-w-0 flex-col items-end gap-0.5 whitespace-normal text-right align-middle leading-snug tabular-nums",className)}>
+      <span className="whitespace-nowrap font-semibold">
+        {formatOperationalQuantity(quantity)}
+        {!props.hideUnit && <>{" "}<span className="font-normal text-muted-foreground">{unit}</span></>}
+      </span>
+      {convText && <span className="max-w-full break-words text-xs font-normal text-muted-foreground">{convText}</span>}
+    </span>;
+  }
+
   // inline (default)
-  // CEO 28/05/2026: format số (phân ngàn + max 2 thập phân, bỏ đuôi float
-  // "0.4000001") + đơn vị mute màu để tách bạch với số lượng.
+  // Số lượng dùng quy ước chung max 4 thập phân; số và đơn vị không tách nhau.
   // hideUnit=true → bỏ đơn vị chính (đã có ở cột ĐVT riêng).
   const hideUnit = (props as InlineProps).hideUnit ?? false;
   return (
     <span
-      className={`whitespace-nowrap font-semibold tabular-nums ${className ?? ""}`}
+      className={cn("inline-flex max-w-full flex-wrap items-baseline gap-x-1 whitespace-normal font-semibold tabular-nums",className)}
     >
-      {formatOperationalQuantity(quantity)}
-      {!hideUnit && (
-        <>
-          {" "}
-          <span className="font-normal text-muted-foreground">{unit}</span>
-        </>
-      )}
+      <span className="whitespace-nowrap">
+        {formatOperationalQuantity(quantity)}
+        {!hideUnit && (
+          <>
+            {" "}
+            <span className="font-normal text-muted-foreground">{unit}</span>
+          </>
+        )}
+      </span>
       {convText && (
-        <span className="text-muted-foreground font-normal">
+        <span className="max-w-full break-words text-muted-foreground font-normal">
           {" · "}
           {convText}
         </span>
