@@ -873,6 +873,7 @@ export function CreateProductDialog({
     if (loadedBomKeyRef.current === initialData.id) return;
     loadedBomKeyRef.current = initialData.id;
     let cancelled = false;
+    let bomLoadSettled = false;
     (async () => {
       try {
         // Lấy BOM active đầu tiên cho SP này (ưu tiên global, fallback per-branch)
@@ -937,11 +938,17 @@ export function CreateProductDialog({
       } catch {
         // fail silent — user vẫn có thể tạo BOM mới
       } finally {
+        bomLoadSettled = true;
         if (!cancelled) setBomDraftSourceReady(true);
       }
     })();
     return () => {
       cancelled = true;
+      // Hydration can change channel/readiness while the request is pending.
+      // A cancelled request is not a loaded recipe: allow its replacement.
+      if (!bomLoadSettled && loadedBomKeyRef.current === initialData.id) {
+        loadedBomKeyRef.current = null;
+      }
     };
   }, [
     open,

@@ -20,6 +20,11 @@ const readinessAudit = readFileSync(
 );
 
 describe("product dialog draft and inline BOM flow", () => {
+  it("retries a BOM read cancelled by product hydration instead of retaining an empty recipe", () => {
+    expect(dialog).toContain("let bomLoadSettled = false;");
+    expect(dialog).toContain("if (!bomLoadSettled && loadedBomKeyRef.current === initialData.id)");
+    expect(dialog).toContain("loadedBomKeyRef.current = null;");
+  });
   it("loads, edits and saves explicit prepared yield instead of assuming one gram", () => {
     expect(dialog.match(/yieldQty: Number\(bomYieldQty\), yieldUnit: finalUnit/g)).toHaveLength(3);
     expect(dialog).toContain("setBomYieldQty(String(bom.yieldQty))");
