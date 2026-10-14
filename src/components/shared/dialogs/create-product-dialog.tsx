@@ -3959,9 +3959,9 @@ export function CreateProductDialog({
                               Theo lựa chọn FnB
                             </th>
                           )}
-                          <th className="text-right px-3 py-2 font-semibold w-28">
+                          {canViewCost && <th className="text-right px-3 py-2 font-semibold w-28">
                             {isFnbStockItem ? "Dự toán / mẻ" : usesFnbRecipeCosts ? "Giá dự toán/SP" : "Cost/SP"}
-                          </th>
+                          </th>}
                           <th className="w-10"></th>
                         </tr>
                       </thead>
@@ -4108,13 +4108,13 @@ export function CreateProductDialog({
                                   </select>
                                 </td>
                               )}
-                              <td className="px-3 py-2 text-right text-sm tabular-nums">
+                              {canViewCost && <td className="px-3 py-2 text-right text-sm tabular-nums">
                                 {fnbBomCostPending
                                   ? <span className="text-muted-foreground">Đang tính...</span>
                                   : componentProduct?.isFnbStockItem && !(componentUnitCost > 0)
                                   ? <span className="text-status-warning">Chưa có giá vốn thực tế</span>
                                   : formatCurrency(lineCost)}
-                              </td>
+                              </td>}
                               <td className="px-3 py-2">
                                 <button
                                   type="button"
@@ -4129,7 +4129,7 @@ export function CreateProductDialog({
                           );
                         })}
                       </tbody>
-                      <tfoot className="bg-surface-container-low/50 border-t-2 border-border">
+                      {canViewCost && <tfoot className="bg-surface-container-low/50 border-t-2 border-border">
                         <tr>
                           <td
                             colSpan={channel === "fnb" ? 4 : 3}
@@ -4148,7 +4148,7 @@ export function CreateProductDialog({
                           </td>
                           <td></td>
                         </tr>
-                      </tfoot>
+                      </tfoot>}
                     </table>
                   </div>
                 )}
