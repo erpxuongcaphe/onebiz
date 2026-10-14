@@ -1016,6 +1016,7 @@ export function CreateProductDialog({
       bomExistingCode,
       bomExactQuantityByKey,
       channel,
+      isFnbStockItem,
       barcode,
       brand,
       supplierId,
@@ -1072,6 +1073,7 @@ export function CreateProductDialog({
       setBomExactQuantityByKey(draft.bomExactQuantityByKey);
       setBomExactQuantitiesReady(true);
       setChannel(draft.channel);
+      if (draft.isFnbStockItem !== undefined) setIsFnbStockItem(draft.isFnbStockItem);
       setBarcode(draft.barcode);
       setBrand(draft.brand);
       setSupplierId(draft.supplierId);
