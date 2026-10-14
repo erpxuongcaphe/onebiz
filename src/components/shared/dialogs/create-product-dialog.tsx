@@ -4036,7 +4036,7 @@ export function CreateProductDialog({
                                 )}
                                 {isConverted && stockQuantity != null && (
                                   <div className="mt-1 text-xs text-primary">
-                                    {isFnbStockItem ? `Kho: ${formatRecipeQuantity(stockQuantity)} ${it.stockUnit} / mẻ` : `Pha chế ${formatRecipeQuantity(it.quantity)} ${it.unit} · Trừ tồn ${formatRecipeQuantity(stockQuantity)} ${it.stockUnit}`}
+                                    {isFnbStockItem ? <>Kho: {formatRecipeQuantity(stockQuantity)} {it.stockUnit} / mẻ</> : <>Pha chế {formatRecipeQuantity(it.quantity)} {it.unit} · Trừ tồn {formatRecipeQuantity(stockQuantity)} {it.stockUnit}</>}
                                   </div>
                                 )}
                               </td>
