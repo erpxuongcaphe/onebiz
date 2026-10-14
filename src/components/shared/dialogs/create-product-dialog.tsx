@@ -3880,7 +3880,7 @@ export function CreateProductDialog({
                 )}
                 <div className="flex items-center justify-between">
                   <label className="text-sm font-medium">
-                    {channel === "fnb" ? "Thành phần công thức" : "Nguyên vật liệu"}{" "}
+                    {channel === "fnb" || isFnbStockItem ? "Thành phần công thức" : "Nguyên vật liệu"}{" "}
                     <span className="text-destructive">*</span>
                   </label>
                   <Button
@@ -3915,7 +3915,7 @@ export function CreateProductDialog({
                       <thead className="bg-surface-container-low text-xs text-muted-foreground">
                         <tr>
                           <th className="text-left px-3 py-2 font-semibold">
-                            {channel === "fnb" ? "Thành phần" : "NVL"}
+                            {channel === "fnb" || isFnbStockItem ? "Thành phần" : "NVL"}
                           </th>
                           <th className="text-right px-3 py-2 font-semibold w-28">{isFnbStockItem ? "Lượng / mẻ" : "Số lượng"}</th>
                           <th className="text-left px-3 py-2 font-semibold w-20">ĐVT</th>
@@ -4114,7 +4114,7 @@ export function CreateProductDialog({
                           <td className="px-3 py-2 text-right font-bold text-primary">
                             {fnbBomCostPending
                               ? <span className="text-muted-foreground">Đang tính...</span>
-                              : channel === "fnb" && hasMissingPreparedComponentCost
+                              : usesFnbRecipeCosts && hasMissingPreparedComponentCost
                               ? <span className="text-status-warning">Chờ giá vốn mẻ đầu; vẫn lưu được BOM</span>
                               : formatCurrency(inlineFnbBomCost)}
                           </td>
@@ -4791,6 +4791,7 @@ export function CreateProductDialog({
                       key={o.v}
                       type="button"
                       onClick={() => setBomPickerTypeFilter(o.v)}
+                      aria-pressed={bomPickerTypeFilter === o.v}
                       className={`px-2.5 py-1 rounded transition-colors ${
                         bomPickerTypeFilter === o.v
                           ? "bg-primary text-primary-foreground"
