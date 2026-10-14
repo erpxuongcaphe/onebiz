@@ -4,6 +4,7 @@ import { PreparedRecipeYield } from "@/components/shared/prepared-recipe-yield";
 import { PreparedRecipePerUnit } from "@/components/shared/prepared-recipe-per-unit";
 
 import { usePermissions } from "@/lib/permissions/use-permission";
+import { useRecipeMaterialCatalog } from "@/lib/hooks/use-recipe-material-catalog";
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { ModifierOrderPicker } from "@/components/shared/modifier-order-picker";
@@ -37,7 +38,6 @@ import {
   getProductCategoriesAsync,
   getSuppliers,
   getAllUnits,
-  getProducts,
 } from "@/lib/services";
 import {
   nextGroupCode,
@@ -75,7 +75,7 @@ import {
 import type { ProductVariant } from "@/lib/types";
 import { useAuth } from "@/lib/contexts/auth-context";
 import type { Product, BOMItem, UOMConversion } from "@/lib/types";
-import { formatNumber, formatCurrency, formatStockQuantity } from "@/lib/format";
+import { formatNumber, formatCurrency, formatStockQuantity, formatUnitPrice } from "@/lib/format";
 import { isSelectableFnbBomComponent } from "@/lib/fnb-bom-components";
 import {
   buildUomConversion,
@@ -392,7 +392,7 @@ export function CreateProductDialog({
   );
   const [bomPickerSearch, setBomPickerSearch] = useState("");
   const [bomPickerTypeFilter, setBomPickerTypeFilter] = useState<
-    "all" | "nvl" | "sku"
+    "all" | "nvl" | "sku" | "prepared"
   >("all");
   const [bomPickerCategoryId, setBomPickerCategoryId] = useState<string>("");
   // Day 19/05/2026 (CEO Phase A.2): nested dialog tạo NVL ngay từ picker
@@ -619,6 +619,13 @@ export function CreateProductDialog({
   // appears as a sellable F&B menu item. Its recipe still consumes Retail SKUs
   // at their internal-sale price, exactly like an F&B recipe.
   const usesFnbRecipeCosts = channel === "fnb" || isFnbStockItem;
+  const recipeCatalog = useRecipeMaterialCatalog(
+    open && scope === "sku" && (
+      (hasBom && (innerTab === "bom" || (usesFnbRecipeCosts && innerTab === "pricing"))) ||
+      (channel === "fnb" && ["pricing", "bom", "variants"].includes(innerTab) && variantItems.length > 0)
+    ),
+    setMaterialOptions,
+  );
   const fnbBomCostPending = usesFnbRecipeCosts && hasBom &&
     (!bomDraftSourceReady || (bomItems.length > 0 &&
       (materialOptions.length === 0 || fnbPreparedCostLoading ||
@@ -1812,42 +1819,6 @@ export function CreateProductDialog({
     return () => controller.abort();
   }, [channel, fnbTargetBranchKey, hasBom, innerTab, open]);
 
-  // CEO 01/06/2026 — Bước 1 (perf): LAZY load material options (1000 SP, ~100KB)
-  // chỉ khi user bật hasBom + bấm tab "bom" (Công thức). Trước đây fetch eager
-  // mỗi lần mở dialog → dialog freeze. Giờ chỉ tab BOM mới fetch.
-  useEffect(() => {
-    // Giá, BOM và Quy cách dùng chung một nguồn công thức theo size. Tab Giá
-    // cũng cần danh mục NVL để tính đúng giá vốn Retail của từng BOM.
-    const needForBom = hasBom && (innerTab === "bom" ||
-      (usesFnbRecipeCosts && innerTab === "pricing"));
-    const needForRecipe =
-      channel === "fnb" &&
-      (innerTab === "pricing" || innerTab === "bom" || innerTab === "variants") &&
-      variantItems.length > 0;
-    if (!open || scope !== "sku" || (!needForBom && !needForRecipe)) return;
-    if (materialOptions.length > 0) return; // dedup — đã load
-    let cancelled = false;
-    getProducts({ page: 0, pageSize: 1000, filters: {} })
-      .then((res) => {
-        if (cancelled) return;
-        setMaterialOptions(res.data);
-      })
-      .catch(() => {
-        /* fail silent */
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    open,
-    scope,
-    hasBom,
-    innerTab,
-    materialOptions.length,
-    channel,
-    usesFnbRecipeCosts,
-    variantItems.length,
-  ]);
 
   // Retail SKU ingredients use the Retail supply price. Only prepared F&B
   // stock has no Retail price, so it gets its unit cost from the current
@@ -3916,10 +3887,13 @@ export function CreateProductDialog({
                     size="sm"
                     variant="outline"
                     type="button"
-                    onClick={() => setBomPickerOpen(true)}
+                    onClick={() => {
+                      void recipeCatalog.refresh();
+                      setBomPickerOpen(true);
+                    }}
                   >
                     <Icon name="add" size={14} className="mr-1" />
-                    {channel === "fnb" ? "Thêm thành phần" : "Thêm NVL"}
+                    {channel === "fnb" || isFnbStockItem ? "Thêm thành phần" : "Thêm NVL"}
                   </Button>
                 </div>
 
@@ -3928,8 +3902,8 @@ export function CreateProductDialog({
                 )}
                 {bomItems.length === 0 ? (
                   <div className="rounded-lg border-2 border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                    {channel === "fnb" ? (
-                      <>Chưa có thành phần. Chọn SKU Retail hoặc bán thành phẩm đang có tồn tại quán.</>
+                    {channel === "fnb" || isFnbStockItem ? (
+                      <>Chưa có thành phần. Thêm hàng đầu vào hoặc bán thành phẩm.</>
                     ) : (
                       <>Chưa có NVL nào. Click <b>&quot;Thêm NVL&quot;</b> để bắt đầu.</>
                     )}
@@ -4777,11 +4751,12 @@ export function CreateProductDialog({
               <DialogTitle>
                 {channel === "fnb"
                   ? "Thêm thành phần Retail vào công thức F&B"
-                  : "Thêm NVL vào công thức sản xuất (BOM)"}
+                  : isFnbStockItem ? "Thêm thành phần vào mẻ" : "Thêm NVL vào công thức sản xuất (BOM)"}
               </DialogTitle>
               <DialogDescription>
                 {channel === "fnb"
                   ? "Chọn SKU Retail đang quản lý tồn tại chi nhánh. Khi bán món, POS sẽ trừ đúng các mã này theo công thức."
+                  : isFnbStockItem ? "Chọn hàng đầu vào hoặc BTP đã làm. Khi chốt mẻ, trừ tồn đúng thành phần đã chọn."
                   : "Chọn nguyên vật liệu hoặc SKU khác làm thành phần (vd: cà phê rang 1kg làm NVL cho ly bạc xỉu)."}
               </DialogDescription>
             </DialogHeader>
@@ -4809,6 +4784,7 @@ export function CreateProductDialog({
                       { v: "all", l: "Tất cả" },
                       { v: "nvl", l: "Chỉ NVL" },
                       { v: "sku", l: "Chỉ SKU" },
+                      { v: "prepared", l: "Bán thành phẩm" },
                     ] as const
                   ).map((o) => (
                     <button
@@ -4884,7 +4860,9 @@ export function CreateProductDialog({
                 .filter((p) =>
                   bomPickerTypeFilter === "all"
                     ? true
-                    : p.productType === bomPickerTypeFilter,
+                    : bomPickerTypeFilter === "prepared"
+                      ? p.inventoryRole === "fnb_stock_item"
+                      : p.productType === bomPickerTypeFilter,
                 )
                 .filter((p) =>
                   bomPickerCategoryId
@@ -4903,6 +4881,13 @@ export function CreateProductDialog({
               // Empty state thực sự: hệ thống chưa có SP nào để chọn
               // (đã trừ những SP đã add). Show CTA tạo NVL ngay.
               const isReallyEmpty = available.length === 0;
+
+              if (recipeCatalog.loading || recipeCatalog.error) {
+                return <div className="py-6 text-center text-sm" role="status">
+                  {recipeCatalog.loading ? "Đang cập nhật thành phần…" : recipeCatalog.error}
+                  {recipeCatalog.error && <Button variant="outline" size="sm" className="ml-2" onClick={() => void recipeCatalog.refresh()}>Thử lại</Button>}
+                </div>;
+              }
 
               if (isReallyEmpty) {
                 return (
@@ -5080,7 +5065,7 @@ export function CreateProductDialog({
                                     : getBomComponentUnitPrice(p, usesFnbRecipeCosts ? "fnb" : channel)) > 0 ? (
                                     <span className="text-right text-xs text-muted-foreground tabular-nums whitespace-nowrap">
                                       <span className="block">
-                                        {formatCurrency(
+                                        {formatUnitPrice(
                                           p.isFnbStockItem
                                             ? fnbPreparedCostByProductId[p.id]?.unitCost ?? 0
                                             : getBomComponentUnitPrice(p, usesFnbRecipeCosts ? "fnb" : channel),
@@ -5114,7 +5099,7 @@ export function CreateProductDialog({
                 Huỷ
               </Button>
               <Button
-                disabled={bomPickerSelected.size === 0}
+                disabled={bomPickerSelected.size === 0 || recipeCatalog.loading || !!recipeCatalog.error}
                 onClick={async () => {
                   // Thêm tất cả NVL đã tick vào BOM
                   const toAdd = Array.from(bomPickerSelected)
@@ -5146,7 +5131,7 @@ export function CreateProductDialog({
               >
                 <Icon name="add" size={14} className="mr-1" />
                 Thêm {bomPickerSelected.size > 0 ? bomPickerSelected.size : ""}{" "}
-                {channel === "fnb" ? "thành phần vào công thức" : "NVL vào công thức"}
+                {channel === "fnb" || isFnbStockItem ? "thành phần vào công thức" : "NVL vào công thức"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -5160,14 +5145,7 @@ export function CreateProductDialog({
           onOpenChange={setNestedNvlOpen}
           onSuccess={() => {
             // Re-fetch material options + mở lại picker
-            getProducts({ page: 0, pageSize: 1000, filters: {} })
-              .then((res) => {
-                setMaterialOptions(res.data);
-                setBomPickerOpen(true);
-              })
-              .catch(() => {
-                /* fail silent */
-              });
+            void recipeCatalog.refresh().then(() => setBomPickerOpen(true));
           }}
         />
         </div>
