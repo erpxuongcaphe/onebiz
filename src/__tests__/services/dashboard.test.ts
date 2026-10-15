@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 
+const { overrides } = vi.hoisted(() => ({ overrides: {} as Record<string, unknown[]> }));
+
 // Mock Supabase chain for dashboard queries
 
 function createQueryChain(data: unknown[] | null, count?: number) {
@@ -17,6 +19,7 @@ function createQueryChain(data: unknown[] | null, count?: number) {
 vi.mock("@/lib/services/supabase/base", () => ({
   getClient: () => ({
     from: vi.fn((table: string) => {
+      if (overrides[table]) return createQueryChain(overrides[table]);
       if (table === "invoices") {
         return createQueryChain([
           { total: 1000000, discount_amount: 0, status: "completed" },
@@ -56,6 +59,34 @@ describe("getDashboardKpis", () => {
     expect(kpis.todayCollected).toBe(1200000);
     // Verify it's NOT using 40% estimate (which would be 600000)
     expect(kpis.todayProfit).not.toBe(Math.round(1500000 * 0.4));
+  });
+
+  it("keeps discounted invoice value separate from actual collections and refunds", async () => {
+    overrides.invoices = [
+      { total: 450000, discount_amount: 50000, status: "completed" },
+      { total: 100000, discount_amount: 0, status: "draft" },
+    ];
+    overrides.cash_transactions = [
+      { type: "receipt", amount: 300000, payment_method: "cash", reference_type: "invoice" },
+      { type: "receipt", amount: 100000, payment_method: "transfer", reference_type: "invoice" },
+      { type: "payment", amount: 20000, payment_method: "cash", reference_type: "sales_return" },
+      { type: "receipt", amount: 999999, reference_type: "invoice", status: "cancelled" },
+      { type: "receipt", amount: 777777, reference_type: "other" },
+    ];
+    try {
+      const kpis = await getDashboardKpis("branch-1");
+      expect(kpis.todayRevenue).toBe(450000);
+      expect(kpis.todayDiscounts).toBe(50000);
+      expect(kpis.todayCollected).toBe(380000);
+      expect(kpis.todayCash).toBe(280000);
+      expect(kpis.todayTransfer).toBe(100000);
+      expect(kpis.todayRefunds).toBe(20000);
+      expect(kpis.todayCash + kpis.todayTransfer + kpis.todayCard).toBe(kpis.todayCollected);
+      expect(kpis.todayOrders).toBe(1);
+    } finally {
+      delete overrides.invoices;
+      delete overrides.cash_transactions;
+    }
   });
 
   it("returns order count from completed invoices", async () => {
