@@ -450,7 +450,7 @@ export function QualityEditorDialog({
   if (editor.kind === "issue_detail")
     return (
       <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-        <DialogContent className={s.dialog}>
+        <DialogContent className={`${s.dialog} translate-x-0 translate-y-0`}>
           <div className={s.dialogHeader}>
             <DialogTitle>{titles.issue_detail}</DialogTitle>
             <p className={s.muted}>{workspace.branches.find((b) => b.id === branch)?.name} · {period}</p>
@@ -471,7 +471,7 @@ export function QualityEditorDialog({
         if (!open && !busy) onClose();
       }}
     >
-      <DialogContent className={s.dialog} showCloseButton={!busy}>
+      <DialogContent className={`${s.dialog} translate-x-0 translate-y-0`} showCloseButton={!busy}>
         <div className={s.dialogHeader}>
           <DialogTitle>{titles[editor.kind]}</DialogTitle>
           <p className={s.muted}>

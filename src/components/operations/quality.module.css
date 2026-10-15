@@ -279,6 +279,7 @@
   margin-bottom: 10px;
 }
 .dialog {
+  transform: translate(-50%, -50%) !important;
   box-sizing: border-box;
   min-height: 0;
   overflow: hidden;
