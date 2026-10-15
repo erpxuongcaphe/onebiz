@@ -27,7 +27,7 @@ try {
  insert into bom_items(bom_id,material_id,quantity,unit,waste_percent,modifier_scale_target,sort_order) values
  ('${id(4)}','${id(10)}',10,'G',0,'${id(5)}',1),('${id(4)}','${id(11)}',20,'G',0,null,2),('${id(4)}','${id(12)}',30,'G',0,null,3);
  insert into branch_stock select '${id(1)}','${id(2)}',id,null,1000 from products;`);
- const migration=fs.readFileSync('supabase/migrations/00540_fnb_authoritative_modifier_scale.sql','utf8');
+ const migration=fs.readFileSync('supabase/migrations/00541_fnb_authoritative_modifier_scale.sql','utf8');
  const start=migration.indexOf('CREATE OR REPLACE FUNCTION');
  const end=migration.indexOf('$function$',migration.indexOf('$function$',start)+10)+10;
  await db.exec(migration.slice(start,end)+';');

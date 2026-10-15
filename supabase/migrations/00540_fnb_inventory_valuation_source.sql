@@ -1,6 +1,6 @@
 -- One valuation ledger for tracked F&B branches. Read-only; no stock/cost/document updates.
 begin;
-create function public._inventory_value_timeline_00539(p_from timestamptz,p_to timestamptz,p_branch uuid,p_tenant uuid)
+create function public._inventory_value_timeline_00540(p_from timestamptz,p_to timestamptz,p_branch uuid,p_tenant uuid)
 returns table(product_id uuid,branch_id uuid,created_at timestamptz,direction text,reference_type text,quantity numeric,amount numeric)
 language sql stable security definer set search_path='' as $$
  select e.product_id,e.branch_id,e.created_at,e.direction,e.source_reference_type,e.quantity,e.total_cost
@@ -23,7 +23,7 @@ language sql stable security definer set search_path='' as $$
  and public._can_read_branch_inventory_00476(auth.uid(),s.tenant_id,s.branch_id)
  and not public._fnb_branch_cost_tracking_enabled_00390(s.tenant_id,s.branch_id)
 $$;
-revoke all on function public._inventory_value_timeline_00539(timestamptz,timestamptz,uuid,uuid) from public,anon,authenticated;
+revoke all on function public._inventory_value_timeline_00540(timestamptz,timestamptz,uuid,uuid) from public,anon,authenticated;
 
 create or replace function public.get_xnt_report_v2(
   p_date_from timestamptz,
@@ -81,7 +81,7 @@ begin
  count(*) filter(where v.amount is null) mc,
  count(*) filter(where v.amount is null and v.created_at>=p_date_from and v.direction='in') im,
  count(*) filter(where v.amount is null and v.created_at>=p_date_from and v.direction='out') om
- from public._inventory_value_timeline_00539('-infinity',p_date_to,p_branch_id,tenant) v group by v.product_id
+ from public._inventory_value_timeline_00540('-infinity',p_date_to,p_branch_id,tenant) v group by v.product_id
  ), resolved as (
  select q.*,coalesce(v.oq,0) oq,coalesce(v.cq,0) cq,coalesce(v.ov,0) ov,coalesce(v.iv,0) iv,coalesce(v.xv,0) xv,
  coalesce(v.vc,0) vc,coalesce(v.mc,0) mc,coalesce(v.im,0) im,coalesce(v.om,0) om,
@@ -127,7 +127,7 @@ begin
  when v.reference_type in ('production_order','production_complete','production_reconcile','production_consume') then 'outProduction'
  when v.reference_type in ('internal_export','internal_sale','input_invoice') then 'outInternal'
  else 'outOther' end end bucket
- from public._inventory_value_timeline_00539(p_date_from,p_date_to,p_branch_id,tenant) v
+ from public._inventory_value_timeline_00540(p_date_from,p_date_to,p_branch_id,tenant) v
  join public.products p on p.id=v.product_id and p.tenant_id=tenant where p.inventory_role<>'fnb_menu_item'
  ), grouped as (select product_id,bucket,sum(case when reference_type in ('production_correction','opening') then 0 else quantity end) quantity,
  case when count(*) filter(where amount is null)>0 then null else sum(amount) end amount,
@@ -137,7 +137,7 @@ end $$;
 revoke all on function public.get_xnt_movement_values(timestamptz,timestamptz,uuid) from public,anon;
 grant execute on function public.get_xnt_movement_values(timestamptz,timestamptz,uuid) to authenticated;
 
-create function public.get_branch_stock_values_00539(p_product_ids uuid[],p_branch_ids uuid[] default null)
+create function public.get_branch_stock_values_00540(p_product_ids uuid[],p_branch_ids uuid[] default null)
 returns table(branch_id uuid,product_id uuid,quantity numeric,unit_cost numeric,stock_value numeric,valuation_complete boolean)
 language sql stable security definer set search_path='' as $$
  with scoped as (select s.branch_id,s.product_id,sum(s.quantity) qty,p.cost_price,
@@ -158,7 +158,7 @@ language sql stable security definer set search_path='' as $$
  else qty*cost_price end value from scoped)
  select branch_id,product_id,qty,case when qty>0 then value/qty when value=0 then 0 else null end,value,value is not null from valued
 $$;
-revoke all on function public.get_branch_stock_values_00539(uuid[],uuid[]) from public,anon;
-grant execute on function public.get_branch_stock_values_00539(uuid[],uuid[]) to authenticated;
+revoke all on function public.get_branch_stock_values_00540(uuid[],uuid[]) from public,anon;
+grant execute on function public.get_branch_stock_values_00540(uuid[],uuid[]) to authenticated;
 commit;
 notify pgrst,'reload schema';

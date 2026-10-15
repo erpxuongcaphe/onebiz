@@ -3,8 +3,8 @@
 begin;
 do $$declare definition text;begin
  select pg_get_functiondef(p.oid) into strict definition from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='consume_bom_for_sale';
- if position('authoritative_modifier_scale_00540' in definition)=0 and md5(replace(definition,E'\r',''))<>'50b000e743aaf58a26bea3b7a0b1045b' then
- raise exception '00540: consume function changed since verification';end if;
+ if position('authoritative_modifier_scale_00541' in definition)=0 and md5(replace(definition,E'\r',''))<>'50b000e743aaf58a26bea3b7a0b1045b' then
+ raise exception '00541: consume function changed since verification';end if;
 end $$;
 CREATE OR REPLACE FUNCTION public.consume_bom_for_sale(p_tenant_id uuid, p_branch_id uuid, p_sku_id uuid, p_qty numeric, p_invoice_id uuid, p_created_by uuid, p_invoice_code text DEFAULT NULL::text, p_modifier_selections jsonb DEFAULT NULL::jsonb, p_skip_bom_consume boolean DEFAULT false, p_variant_id uuid DEFAULT NULL::uuid)
  RETURNS jsonb
@@ -118,7 +118,7 @@ begin
           for v_sel in select * from jsonb_array_elements(p_modifier_selections) loop
             if (v_sel->>'groupId')::uuid = v_item.modifier_scale_target then
               for v_opt in select * from jsonb_array_elements(v_sel->'options') loop
-                -- authoritative_modifier_scale_00540: database option is authoritative, not the cart factor.
+                -- authoritative_modifier_scale_00541: database option is authoritative, not the cart factor.
  select least(v_modifier_scale, mo.scale_factor) into v_modifier_scale
  from public.modifier_options mo join public.modifier_groups grp on grp.id=mo.group_id
  where mo.id::text=v_opt->>'optionId' and mo.group_id=v_item.modifier_scale_target

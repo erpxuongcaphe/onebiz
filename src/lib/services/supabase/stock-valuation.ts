@@ -17,7 +17,7 @@ export async function getStockValuations(productIds: string[], branchIds?: strin
     for (let page = 0; ; page += 1000) {
       // RPC migration precedes generated database types.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (getClient() as any).rpc("get_branch_stock_values_00539", {
+      const { data, error } = await (getClient() as any).rpc("get_branch_stock_values_00540", {
         p_product_ids: ids.slice(offset, offset + 200), p_branch_ids: branchIds ?? null,
       }).order("branch_id").order("product_id").range(page, page + 999);
       if (error) handleError(error, "getStockValuations");
