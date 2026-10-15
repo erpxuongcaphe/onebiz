@@ -85,6 +85,7 @@ import {
 // CEO 01/06/2026 — Sprint 2.2e: dynamic modifier groups cho POS FnB
 import {
   getEffectiveModifierGroupsForProduct,
+  filterFnbRecipeSweetnessGroups,
   listModifierOptions,
   type ModifierOption,
 } from "@/lib/services/supabase/modifier-groups";
@@ -1209,10 +1210,12 @@ function FnbPosPageInner() {
       // popup and sent line snapshots are never silently reordered.
       if (cached && !navigator.onLine) return cached;
       try {
-        const groups = await getEffectiveModifierGroupsForProduct(
+        const configuredGroups = await getEffectiveModifierGroupsForProduct(
           productId,
           categoryId,
         );
+        if (!branchId) throw new Error("Chưa chọn chi nhánh");
+        const groups = await filterFnbRecipeSweetnessGroups(productId, branchId, configuredGroups);
         const optionsByGroup = new Map<string, ModifierOption[]>();
         await Promise.all(
           groups.map(async (g) => {
@@ -1234,7 +1237,7 @@ function FnbPosPageInner() {
         } satisfies DynamicModifierData;
       }
     },
-    [modifierCacheRef, readModifierCache],
+    [modifierCacheRef, readModifierCache, branchId],
   );
 
   useEffect(() => { variantCacheRef.clear(); }, [tenantId, variantCacheRef]);

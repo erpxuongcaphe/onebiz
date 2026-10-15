@@ -69,4 +69,15 @@ describe('F&B configured preparation options', () => {
       expect.objectContaining({ groupId: 'sugar' }),
     ]));
   });
+  it('quick preparation notes are text only, without inventory modifier selections', () => {
+    const onConfirm = vi.fn();
+    render(<FnbItemDialog open onOpenChange={vi.fn()} product={product} variants={variants}
+      dynamicModifiers={{groups: [], optionsByGroup: new Map()}} onConfirm={onConfirm} />);
+    fireEvent.click(screen.getByRole('button', {name: 'Không đường'}));
+    fireEvent.click(screen.getByRole('button', {name: 'Ít béo'}));
+    expect(screen.getByRole('textbox', {name: 'Ghi chú pha chế'})).toHaveValue('Không đường; Ít béo');
+    fireEvent.click(screen.getByRole('button', {name: /Thêm vào đơn/}));
+    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({note: 'Không đường; Ít béo'}));
+    expect(onConfirm.mock.calls[0][0].modifierSelections ?? []).toEqual([]);
+  });
 });

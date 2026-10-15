@@ -532,7 +532,7 @@ export default function ModifierFnbPage() {
                                 {o.priceDelta > 0 && (
                                   <span className="text-xs text-status-success">+{formatCurrency(o.priceDelta)}</span>
                                 )}
-                                {o.scaleFactor !== null && (
+                                {o.scaleFactor !== null && !/^mức (đường|ngọt)/iu.test(g.name.trim()) && (
                                   <span className="text-xs text-status-info">hệ số cũ × {o.scaleFactor}</span>
                                 )}
                                 {o.linkedProductName && (
@@ -816,10 +816,11 @@ function OptionDialog({
   const [isDefault, setIsDefault] = useState(editing?.isDefault ?? false);
   const [sortOrder, setSortOrder] = useState(editing?.sortOrder ?? 0);
   const [saving, setSaving] = useState(false);
-  const previewScale = scaleFactor.trim() ? Number(scaleFactor) : null;
+  const isSweetness = /^mức (đường|ngọt)/iu.test(group?.name.trim() ?? "");
+  const previewScale = !isSweetness && scaleFactor.trim() ? Number(scaleFactor) : null;
   const stockConfigError = getModifierStockConfigError({
     scaleFactor: Number.isFinite(previewScale) ? previewScale : null,
-    linkedProductId: linkedCode.trim() ? "configured-product" : null,
+    linkedProductId: !isSweetness && linkedCode.trim() ? "configured-product" : null,
   });
   const groupSelectsOne = group?.rule === "single" || group?.rule === "single_required";
 
@@ -831,8 +832,8 @@ function OptionDialog({
     setSaving(true);
     try {
       // Resolve linkedProductId theo đúng tenant hiện tại.
-      let linkedProductId: string | null | undefined = undefined;
-      if (linkedCode.trim()) {
+      let linkedProductId: string | null | undefined = isSweetness ? null : undefined;
+      if (!isSweetness && linkedCode.trim()) {
         const { getClient, getCurrentTenantId } = await import("@/lib/services/supabase/base");
         const supabase = getClient();
         const tenantId = await getCurrentTenantId();
@@ -856,7 +857,7 @@ function OptionDialog({
         linkedProductId = null; // user cleared
       }
 
-      const parsedScale = scaleFactor.trim() ? parseFloat(scaleFactor) : null;
+      const parsedScale = !isSweetness && scaleFactor.trim() ? parseFloat(scaleFactor) : null;
       const input = {
         label,
         priceDelta,
@@ -900,7 +901,7 @@ function OptionDialog({
         <DialogHeader>
           <DialogTitle>{editing ? "Sửa lựa chọn" : "Thêm lựa chọn"}</DialogTitle>
           <DialogDescription>
-            Với đồ uống có định lượng riêng, nhập số gram/ml tại công thức BOM. Hệ số bên dưới chỉ giữ cho mô hình cũ hoặc món chưa chuyển đổi; không dùng đồng thời hệ số và trừ thẳng một mã hàng.
+            Độ ngọt chỉ thay đổi trừ kho khi đã nhập định lượng từng mức trong BOM. Các yêu cầu ít đường, pha đắng, ít béo dùng Ghi chú pha chế trên POS.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 py-2">
@@ -928,20 +929,22 @@ function OptionDialog({
               />
             </div>
             <div>
-              <Label>Hệ số dự phòng cũ (×)</Label>
+              <Label>{isSweetness ? "Định lượng độ ngọt" : "Hệ số dự phòng cũ (×)"}</Label>
               <Input
                 type="number"
                 step="0.01"
-                value={scaleFactor}
+                disabled={isSweetness}
+                value={isSweetness ? "" : scaleFactor}
                 onChange={(e) => setScaleFactor(e.target.value)}
-                placeholder="VD: 0.7"
+                placeholder={isSweetness ? "Nhập tại BOM của món" : "VD: 0.7"}
               />
             </div>
           </div>
           <div>
             <Label>Mã hàng trừ trực tiếp</Label>
             <Input
-              value={linkedCode}
+              disabled={isSweetness}
+              value={isSweetness ? "" : linkedCode}
               onChange={(e) => setLinkedCode(e.target.value)}
               placeholder="VD: NVL-TPV-001"
             />

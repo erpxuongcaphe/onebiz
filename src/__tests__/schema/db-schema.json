@@ -595,6 +595,7 @@
    "correction_of",
    "created_at",
    "id",
+   "kind",
    "note",
    "observations",
    "result",
@@ -830,6 +831,7 @@
    "critical",
    "effective_from",
    "family_id",
+   "group_title",
    "id",
    "score_type",
    "standard_id",
@@ -1342,6 +1344,18 @@
    "reviewer_id",
    "tenant_id"
   ],
+  "ops_q_references": [
+   "branch_id",
+   "created_at",
+   "created_by",
+   "id",
+   "issue_id",
+   "label",
+   "note",
+   "source_id",
+   "source_type",
+   "tenant_id"
+  ],
   "mkt_audit_sandboxes": [
    "created_at",
    "created_by",
@@ -1708,6 +1722,16 @@
    "total_cod",
    "total_partner_fee"
   ],
+  "ops_q_groups": [
+   "active",
+   "branch_id",
+   "created_at",
+   "created_by",
+   "id",
+   "tenant_id",
+   "title",
+   "version"
+  ],
   "branches": [
    "address",
    "branch_type",
@@ -2021,6 +2045,16 @@
    "to_branch_id",
    "total",
    "updated_at"
+  ],
+  "ops_q_periods": [
+   "branch_id",
+   "created_at",
+   "created_by",
+   "ends_on",
+   "id",
+   "starts_on",
+   "tenant_id",
+   "title"
   ],
   "pos_exception_events": [
    "amount",
@@ -3350,6 +3384,7 @@
   "get_finance_dashboard_report",
   "get_financial_analysis_details_report",
   "get_financial_analysis_details_report_v2",
+  "get_fnb_exact_sweetness_groups_00544",
   "get_fnb_menu_order_revision",
   "get_fnb_production_stock_health_00476",
   "get_fnb_serve_time_report",
@@ -3525,6 +3560,7 @@
   "ops_evidence_reserve",
   "ops_evidence_visible",
   "ops_execute",
+  "ops_execute_before_complete",
   "ops_execute_core",
   "ops_execute_pre_proposals",
   "ops_execute_pre_quality",
@@ -3546,12 +3582,20 @@
   "ops_q_business",
   "ops_q_can",
   "ops_q_new_issue",
+  "ops_q_period_bounds",
+  "ops_q_period_end",
+  "ops_q_period_valid",
   "ops_q_reconcile",
+  "ops_q_reference_rows",
   "ops_q_rule_errors",
+  "ops_q_rule_errors_legacy",
   "ops_q_score",
+  "ops_q_score_legacy",
   "ops_quality_execute",
+  "ops_quality_execute_before_complete",
   "ops_quality_execute_core",
   "ops_quality_read",
+  "ops_quality_read_before_complete",
   "ops_quality_read_core",
   "ops_reward_snapshot",
   "ops_reward_values",
@@ -3689,7 +3733,7 @@
   "void_disposal_export_atomic",
   "void_internal_export_atomic"
  ],
- "soBang": 226,
- "soCot": 2674,
- "soRpc": 560
+ "soBang": 229,
+ "soCot": 2702,
+ "soRpc": 570
 }

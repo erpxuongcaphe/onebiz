@@ -731,7 +731,7 @@ export function BOMEditorDialog({
                 <table className={`w-full text-sm ${output?.isFnbStockItem ? "min-w-[680px]" : ""}`}>
                   <thead className="bg-muted/30">
                     <tr>
-                      <th className="text-left p-2 font-medium">Thành phần{unlinkedSweetness.length > 0 && <span className="block text-xs font-normal text-amber-700">Mức đường chưa gắn nguyên liệu; giữ định lượng gốc.</span>}</th>
+                      <th className="text-left p-2 font-medium">Thành phần{unlinkedSweetness.length > 0 && <span className="block text-xs font-normal text-amber-700">Chưa có định lượng theo mức; dùng BOM gốc.</span>}</th>
                       <th className="text-right p-2 font-medium w-40">{output?.isFnbStockItem ? "Lượng / mẻ" : "Số lượng"}</th>
                       <th className="text-left p-2 font-medium w-20">ĐVT</th>
                       {output?.isFnbStockItem && <th scope="col" className="bg-muted/20 text-right p-2 font-medium w-32">Cho 1 {yieldUnit} BTP<span className="block text-[11px] font-normal">Tự tính</span></th>}
@@ -894,7 +894,7 @@ export function BOMEditorDialog({
                 <div>
                   <h3 className="text-sm font-medium">Định lượng riêng theo lựa chọn FnB</h3>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Dùng số thực tế của từng món, không suy từ phần trăm chung. Nhập theo đơn vị pha chế của BOM; hệ thống tự quy đổi về đơn vị tồn khi trừ kho. Bật mục này thì cần nhập đủ mọi lựa chọn; nhập 0 khi lựa chọn đó không dùng nguyên liệu.
+                    Chỉ định lượng do anh/chị nhập mới thay đổi lượng trừ theo độ ngọt; không tự nhân phần trăm. Nhập theo đơn vị pha chế của BOM; hệ thống tự quy đổi về đơn vị tồn khi trừ kho. Bật mục này thì cần nhập đủ mọi lựa chọn; nhập 0 khi lựa chọn đó không dùng nguyên liệu.
                   </p>
                 </div>
                 <label className="flex shrink-0 items-center gap-2 text-sm">

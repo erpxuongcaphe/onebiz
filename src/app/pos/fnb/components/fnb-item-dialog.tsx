@@ -705,7 +705,7 @@ export function FnbItemDialog({
         />
         {g.name.toLocaleLowerCase("vi").startsWith("mức đường") && !dangThuGon && (
           <p className="text-xs font-normal text-muted-foreground">
-            Theo định lượng đường/nước đường trong BOM; giữ nguyên sữa đặc, mật ong.
+            Định lượng đã cấu hình trong công thức. Yêu cầu pha chế khác ghi ở bên dưới.
           </p>
         )}
         {/* Ẩn bằng CSS, KHÔNG gỡ khỏi cây React — thu gọn rồi bung lại vẫn
@@ -982,9 +982,22 @@ export function FnbItemDialog({
               làm khó gõ. */}
           <section className="min-w-0 space-y-1.5">
             <Label className="text-sm font-medium flex items-center gap-2">
-              <Icon name="sticky_note_2" size={16} /> Ghi chú thêm
+              <Icon name="sticky_note_2" size={16} /> Ghi chú pha chế
             </Label>
-            <Textarea value={note} onChange={(e) => setNote(e.target.value)}
+            <div className="flex flex-wrap gap-2" aria-label="Ghi chú pha chế nhanh">
+              {["Ít đường", "Không đường", "Nhiều đường", "Ít ngọt", "Pha đắng", "Ít béo"].map(text => (
+                <button key={text} type="button" className={CHIP}
+                  aria-pressed={note.split(";").some(part => part.trim() === text)}
+                  onClick={() => setNote(current => {
+                    const parts = current.split(";").map(part => part.trim()).filter(Boolean);
+                    return (parts.includes(text) ? parts.filter(part => part !== text) : [...parts, text]).join("; ");
+                  })}>
+                  {text}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">Chỉ gửi ghi chú cho bếp, không thay đổi định lượng trừ kho.</p>
+            <Textarea aria-label="Ghi chú pha chế" value={note} onChange={(e) => setNote(e.target.value)}
               placeholder="VD: ít ngọt, đá riêng, pha ấm..." rows={2}
               className="resize-none text-sm" />
           </section>
