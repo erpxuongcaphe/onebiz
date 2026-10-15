@@ -78,7 +78,9 @@ end; $$;
 reset role;
 
 create function public.test_concurrent_walk_in() returns uuid language plpgsql as $$ begin
-  perform set_config('test.actor','00000000-0000-0000-0000-000000000001',true);
+  perform set_config('test.actor','00000000-0000-0000-0000-000000000002',true);
   perform set_config('test.allow','true',true);
   return (get_or_create_walk_in_customer()->>'id')::uuid;
 end; $$;
+-- Disposable fixture only: exercise simultaneous first-time creation in CI.
+delete from customers where tenant_id='10000000-0000-0000-0000-000000000002' and is_walk_in;
