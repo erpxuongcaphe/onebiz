@@ -92,6 +92,7 @@ import {
 } from "@/lib/services";
 import { getFnbPreparedBomEstimates } from "@/lib/services/supabase/bom";
 import { getFnbBranchComponentCosts } from "@/lib/services/supabase/fnb-branch-cost";
+import { getFnbMenuEstimates, isFnbMenuRecipe, sortByMenuEstimate, type FnbMenuEstimate } from "@/lib/services/supabase/fnb-menu-estimates";
 import { getPosStockSnapshot } from "@/lib/services/supabase/pos-stock";
 import { StockWithConversion } from "@/components/shared/stock-with-conversion";
 import { useToast, useBranchFilter } from "@/lib/contexts";
@@ -109,11 +110,16 @@ import { findLatestFormDraft } from "@/lib/hooks/use-durable-form-draft";
 type ProductScope = "nvl" | "sku";
 type PreparedCostDisplay = { value: number; source: "batch" | "recipe" };
 
-function PreparedCost({ product, cost, loading }: {
+function PreparedCost({ product, cost, loading, estimate }: {
   product: Product;
   cost?: PreparedCostDisplay;
   loading: boolean;
+  estimate?: FnbMenuEstimate;
 }) {
+  if (isFnbMenuRecipe(product)) return <span className="block text-right" title="Dự toán công thức hiện tại, không phải giá vốn hóa đơn đã bán">
+    {loading ? "Đang tính..." : estimate?.value != null ? formatCurrency(estimate.value) : estimate?.reason ?? "Chưa có dự toán"}
+    <span className="block text-xs font-normal text-muted-foreground">Dự toán BOM{estimate?.variantName ? ` · ${estimate.variantName}` : ""}</span>
+  </span>;
   if (!product.isFnbStockItem) return <>{formatCurrency(product.costPrice)}</>;
   if (!cost) return <span className="text-muted-foreground">{loading ? "Đang tính..." : "Chưa có dự toán"}</span>;
   return (
@@ -167,6 +173,7 @@ function ProductDetail({
   canViewCost,
   preparedCost,
   preparedCostLoading,
+  menuEstimate,
   stockCardBranchId,
   stockCardBranchName,
   onConfigureBom,
@@ -179,6 +186,7 @@ function ProductDetail({
   canViewCost: boolean;
   preparedCost?: PreparedCostDisplay;
   preparedCostLoading: boolean;
+  menuEstimate?: FnbMenuEstimate;
   stockCardBranchId?: string;
   stockCardBranchName?: string;
   onConfigureBom?: () => void;
@@ -227,9 +235,11 @@ function ProductDetail({
                     // Sprint A.2: ẩn "Giá vốn" khỏi user thiếu products.view_cost
                     ...(canViewCost
                       ? [{
-                          label: product.isFnbStockItem && preparedCost?.source === "recipe"
+                          label: isFnbMenuRecipe(product) || product.isFnbStockItem && preparedCost?.source === "recipe"
                             ? "Dự toán BOM" : "Giá vốn",
-                          value: product.isFnbStockItem
+                          value: isFnbMenuRecipe(product)
+                            ? menuEstimate?.value != null ? formatCurrency(menuEstimate.value) : menuEstimate?.reason ?? "Đang tính..."
+                            : product.isFnbStockItem
                             ? preparedCost ? formatUnitPrice(preparedCost.value)
                               : preparedCostLoading ? "Đang tính..." : "Chưa có dự toán"
                             : formatCurrency(product.costPrice),
@@ -412,6 +422,8 @@ export default function HangHoaPage() {
   >(new Map());
   const [preparedCosts, setPreparedCosts] = useState<Map<string, PreparedCostDisplay>>(new Map());
   const [preparedCostsLoading, setPreparedCostsLoading] = useState(false);
+  const [menuEstimates, setMenuEstimates] = useState<Map<string, FnbMenuEstimate>>(new Map());
+  const [menuEstimatesLoading, setMenuEstimatesLoading] = useState(false);
   const listRequestId = useRef(0);
   const [stats, setStats] = useState<{
     totalCount: number;
@@ -664,6 +676,8 @@ export default function HangHoaPage() {
       setData([]);
       setPreparedCosts(new Map());
       setPreparedCostsLoading(false);
+      setMenuEstimates(new Map());
+      setMenuEstimatesLoading(false);
       setTotal(0);
       setOtherBranchCount(0);
       setLoading(false);
@@ -671,21 +685,37 @@ export default function HangHoaPage() {
     }
     if (!background) setLoading(true);
     const listFilters = buildListFilters();
-    const result = await getProducts({
+    const query = {
       page,
       pageSize,
       sortBy: PRODUCT_SORT_FIELDS[sorting[0]?.id] ?? "created_at",
-      sortOrder: sorting[0] ? (sorting[0].desc ? "desc" : "asc") : "desc",
+      sortOrder: (sorting[0] ? (sorting[0].desc ? "desc" : "asc") : "desc") as "asc" | "desc",
       search: debouncedSearch,
       searchField,
       // Branch-scope: mặc định theo CN đang chọn; "Toàn chuỗi" → undefined.
       branchId: duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId,
       filters: listFilters,
-    });
+    };
+    const result = await getProducts(query);
+    let sortedEstimates: Map<string, FnbMenuEstimate> | undefined;
+    if (canViewCost && isFnbOutletView && scope === "sku" && sorting[0]?.id === "costPrice") {
+      const allRows: Product[] = [];
+      for (let offset = 0; ; offset += 1) {
+        const all = await getProducts({ ...query, page: offset, pageSize: 500, sortBy: "code", sortOrder: "asc" });
+        allRows.push(...all.data);
+        if (!all.data.length || allRows.length >= all.total) break;
+      }
+      sortedEstimates = await getFnbMenuEstimates(allRows, query.branchId).catch(() => new Map(allRows.filter(isFnbMenuRecipe)
+        .map((product) => [product.id, { value: null, reason: "Không tải được giá BOM" }])));
+      result.data = sortByMenuEstimate(allRows, sortedEstimates, sorting[0].desc).slice(page * pageSize, (page + 1) * pageSize);
+      result.total = allRows.length;
+    }
     if (requestId !== listRequestId.current) return;
     setData(result.data);
     setTotal(result.total);
     setPreparedCosts(new Map());
+    setMenuEstimates(sortedEstimates ?? new Map());
+    setMenuEstimatesLoading(canViewCost && !sortedEstimates && result.data.some(isFnbMenuRecipe));
     const preparedIds = result.data.filter((product) => canViewCost && product.isFnbStockItem)
       .map((product) => product.id);
     setPreparedCostsLoading(preparedIds.length > 0);
@@ -719,6 +749,18 @@ export default function HangHoaPage() {
     const productIds = Array.from(new Set(result.data.map((p) => p.id)));
 
     await Promise.all([
+      (async () => {
+        if (!canViewCost || sortedEstimates) return;
+        try {
+          const estimates = await getFnbMenuEstimates(result.data, query.branchId);
+          if (requestId === listRequestId.current) setMenuEstimates(estimates);
+        } catch (error) {
+          console.warn("Không tải được dự toán món F&B:", error);
+          if (requestId === listRequestId.current) setMenuEstimates(new Map(result.data.filter(isFnbMenuRecipe).map((product) => [product.id, { value: null, reason: "Không tải được giá BOM" }])));
+        } finally {
+          if (requestId === listRequestId.current) setMenuEstimatesLoading(false);
+        }
+      })(),
       (async () => {
         if (!preparedIds.length) return;
         try {
@@ -1283,14 +1325,26 @@ export default function HangHoaPage() {
       }
 
       if (type === "report") {
+        const estimates = canViewCost ? await getFnbMenuEstimates(rows, duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId) : new Map<string, FnbMenuEstimate>();
+        const reportRows = (sorting[0]?.id === "costPrice" && isFnbOutletView && scope === "sku"
+          ? sortByMenuEstimate(rows, estimates, sorting[0].desc) : rows).map((product) => ({
+            ...product,
+            costPrice: canViewCost ? isFnbMenuRecipe(product) ? estimates.get(product.id)?.value ?? null : product.costPrice : null,
+            costSource: isFnbMenuRecipe(product) ? `Dự toán BOM${estimates.get(product.id)?.variantName ? ` · ${estimates.get(product.id)?.variantName}` : ""}` : "Giá vốn lưu sẵn",
+            costStatus: estimates.get(product.id)?.reason ?? "",
+          }));
         await exportToExcel(
-          rows,
+          reportRows,
           [
             { header: "Mã hàng", key: "code", width: 16 },
             { header: "Tên hàng", key: "name", width: 34 },
             { header: "Nhóm", key: "categoryName", width: 22 },
             { header: "ĐVT", key: "unit", width: 10 },
-            { header: "Giá vốn", key: "costPrice", width: 14 },
+            ...(canViewCost ? [
+              { header: "Giá vốn / dự toán BOM", key: "costPrice" as const, width: 22 },
+              { header: "Nguồn giá", key: "costSource" as const, width: 26 },
+              { header: "Trạng thái giá", key: "costStatus" as const, width: 28 },
+            ] : []),
             { header: "Giá bán", key: "sellPrice", width: 14 },
             { header: "Tồn kho", key: "stock", width: 12 },
             { header: "Giá trị tồn", key: "stockValue", width: 16 },
@@ -1450,9 +1504,9 @@ export default function HangHoaPage() {
       ? [
           {
             accessorKey: "costPrice",
-            header: "Giá vốn",
+              header: isFnbOutletView && scope === "sku" ? "Dự toán BOM" : "Giá vốn",
             cell: ({ row }: { row: { original: Product } }) => (
-              <span className="text-right block"><PreparedCost product={row.original} cost={preparedCosts.get(row.original.id)} loading={preparedCostsLoading} /></span>
+                <span className="text-right block"><PreparedCost product={row.original} cost={preparedCosts.get(row.original.id)} estimate={menuEstimates.get(row.original.id)} loading={isFnbMenuRecipe(row.original) ? menuEstimatesLoading : preparedCostsLoading} /></span>
             ),
           } as ColumnDef<Product, unknown>,
         ]
@@ -1640,9 +1694,9 @@ export default function HangHoaPage() {
       ? [
           {
             accessorKey: "costPrice",
-            header: "Giá vốn",
+              header: isFnbOutletView && scope === "sku" ? "Dự toán BOM" : "Giá vốn",
             cell: ({ row }: { row: { original: Product } }) => (
-              <span className="text-right block"><PreparedCost product={row.original} cost={preparedCosts.get(row.original.id)} loading={preparedCostsLoading} /></span>
+                <span className="text-right block"><PreparedCost product={row.original} cost={preparedCosts.get(row.original.id)} estimate={menuEstimates.get(row.original.id)} loading={isFnbMenuRecipe(row.original) ? menuEstimatesLoading : preparedCostsLoading} /></span>
             ),
           } as ColumnDef<Product, unknown>,
         ]
@@ -2252,6 +2306,7 @@ export default function HangHoaPage() {
               canViewCost={canViewCost}
               preparedCost={preparedCosts.get(product.id)}
               preparedCostLoading={preparedCostsLoading}
+              menuEstimate={menuEstimates.get(product.id)}
               stockCardBranchId={branchStockView ? activeBranchId : undefined}
               stockCardBranchName={branchStockView ? currentBranch?.name : undefined}
               onConfigureBom={() => {
