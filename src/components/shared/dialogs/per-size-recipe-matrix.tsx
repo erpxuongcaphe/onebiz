@@ -94,6 +94,7 @@ interface Props {
   loading?: boolean;
   costPending?: boolean;
   costUnavailable?: boolean;
+  showCost?: boolean;
 }
 
 function SupplyCatalogBadge({
@@ -290,6 +291,7 @@ export function PerSizeRecipeMatrix({
   loading,
   costPending,
   costUnavailable,
+  showCost = true,
 }: Props) {
   const fnbGroups = useMemo(
     () => groups.filter((g) => g.channel === "fnb" || g.channel === "all"),
@@ -626,7 +628,7 @@ export function PerSizeRecipeMatrix({
               </tr>
             )}
           </tbody>
-          {rows.some((r) => r.materialId) && (
+          {showCost && rows.some((r) => r.materialId) && (
             <tfoot>
               <tr className="border-t-2 border-border bg-surface-container-low/60 text-xs">
                 <td

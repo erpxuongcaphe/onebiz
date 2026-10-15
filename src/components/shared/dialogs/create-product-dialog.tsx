@@ -1861,6 +1861,7 @@ export function CreateProductDialog({
     };
   }, [
     activeBranchId,
+    canViewCost,
     usesFnbRecipeCosts,
     materialOptions,
     open,
@@ -3713,6 +3714,7 @@ export function CreateProductDialog({
                           materials={fnbCostMaterials}
                           costPending={fnbPreparedCostLoading || perSizeCostDataPending}
                           costUnavailable={hasMissingPreparedComponentCost}
+                          showCost={canViewCost}
                           selectableMaterials={selectableFnbComponentOptions}
                           groups={perSizeModifierGroups}
                           optionsByGroup={variantModifierOptionsByGroup}
