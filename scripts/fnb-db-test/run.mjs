@@ -30,7 +30,7 @@ const definitions = sources.map(([file, name]) => {
   return tail.slice(0, end + delimiter[1].length + 1);
 });
 const sql = [readFileSync(new URL('./schema.sql', import.meta.url), 'utf8'),
-  'create function _allow_negative_sale_00473(uuid,uuid) returns boolean language sql as $ select false $;', ...definitions,
+  'create function _allow_negative_sale_00473(uuid,uuid) returns boolean language sql as $$ select false $$;', ...definitions,
   readFileSync(new URL('./cases.sql', import.meta.url), 'utf8')].join('\n');
 const result = spawnSync('psql', ['-X', '-v', 'ON_ERROR_STOP=1', '-h', '127.0.0.1', '-p', '55432',
   '-U', 'fnb_test', '-d', 'onebiz_fnb_test'], {
