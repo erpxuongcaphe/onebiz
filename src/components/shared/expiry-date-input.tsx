@@ -15,9 +15,9 @@ export function ExpiryDateInput({ value, onValueChange, className, id, ...props 
   const { day, time } = expiryInputParts(value);
   const label = props["aria-label"] ?? "Hạn sử dụng";
   return <div className={cn("grid min-w-0 gap-1", className)}>
-    <div className="grid min-w-0 grid-cols-[minmax(7.5rem,1fr)_5.75rem] gap-1.5">
-      <Input {...props} id={id} aria-label={label} type="date" value={day} onChange={event => onValueChange(expiryInputValue(event.target.value, time))} />
-      <Input aria-label={`${label} — giờ`} type="time" step={60} value={time} disabled={props.disabled || !day} readOnly={props.readOnly} onChange={event => onValueChange(expiryInputValue(day, event.target.value))} title="HH:mm · Giờ Việt Nam · Để trống nếu chỉ có ngày HSD" />
+    <div className="flex min-w-0 flex-wrap gap-1.5">
+      <Input {...props} className="min-w-32 flex-1 basis-32" id={id} aria-label={label} type="date" value={day} onChange={event => onValueChange(expiryInputValue(event.target.value, time))} />
+      <Input className="w-32 shrink-0" aria-label={`${label} — giờ`} type="time" step={60} value={time} disabled={props.disabled || !day} readOnly={props.readOnly} onChange={event => onValueChange(expiryInputValue(day, event.target.value))} title="HH:mm · Giờ Việt Nam · Để trống nếu chỉ có ngày HSD" />
     </div>
     <p className="text-[11px] leading-snug text-muted-foreground">DD/MM/YYYY · HH:mm (giờ VN, tùy chọn)</p>
   </div>;
