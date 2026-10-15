@@ -8,7 +8,6 @@ import {
   formatCurrency,
   formatNumber,
   formatStockQuantity,
-  formatChartCurrency,
   formatShortDate,
 } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -50,8 +49,6 @@ import type {
   RecentActivity,
 } from "@/lib/services/supabase/dashboard";
 import type { FinancialAlert } from "@/lib/services/supabase/reports";
-import { getInventoryTurnover } from "@/lib/services/supabase/reports";
-import type { InventoryTurnoverResult } from "@/lib/services/supabase/reports";
 import { useFnbOpenOrders } from "@/lib/hooks/use-fnb-open-orders";
 import { useLiveDataRefresh } from "@/lib/hooks/use-live-data-refresh";
 import { fnbOpenOrderLabel } from "@/lib/fnb-open-orders";
@@ -110,9 +107,8 @@ export default function TongQuanPage() {
   const [lowStock, setLowStock] = useState<LowStockProduct[]>([]);
   const [activities, setActivities] = useState<RecentActivity[]>([]);
   const [financialAlerts, setFinancialAlerts] = useState<FinancialAlert[]>([]);
-  const [turnover, setTurnover] = useState<InventoryTurnoverResult | null>(null);
 
-  // Phase 1 — KPI + turnover (critical path, hiển thị đầu tiên ~300-500ms)
+  // Phase 1 — daily operational KPIs; analytical inventory reports load on their own page.
   const dashboardScopeRef = useRef(activeBranchId);
   dashboardScopeRef.current = activeBranchId;
   const phase1Request = useRef(0);
@@ -121,14 +117,10 @@ export default function TongQuanPage() {
     const request = ++phase1Request.current;
     setKpiLoading(true);
     try {
-      const [kpiRes, turnoverRes] = await Promise.all([
-        getDashboardKpis(activeBranchId),
-        getInventoryTurnover(activeBranchId).catch(() => null as InventoryTurnoverResult | null),
-      ]);
+      const kpiRes = await getDashboardKpis(activeBranchId);
       if (request !== phase1Request.current || dashboardScopeRef.current !== activeBranchId) return;
       setKpis(kpiRes);
       setDashboardUpdatedAt(new Date());
-      setTurnover(turnoverRes);
     } catch {
       // Silently fail — show empty state
     } finally {
@@ -203,18 +195,18 @@ export default function TongQuanPage() {
           isCollection: true,
         },
         {
-          label: "Đơn hàng",
+          label: "Doanh thu hôm nay",
+          value: kpis.todayRevenue,
+          icon: "receipt_long",
+          ...calcChange(kpis.todayRevenue, kpis.yesterdayRevenue),
+          changeLabel: "vs hôm qua",
+          isCurrency: true,
+        },
+        {
+          label: "Đơn hoàn tất",
           value: kpis.todayOrders,
           icon: "shopping_cart",
           ...calcDiff(kpis.todayOrders, kpis.yesterdayOrders),
-          changeLabel: "vs hôm qua",
-          isCurrency: false,
-        },
-        {
-          label: "Khách mới · toàn hệ thống",
-          value: kpis.newCustomers,
-          icon: "group",
-          ...calcDiff(kpis.newCustomers, kpis.yesterdayNewCustomers),
           changeLabel: "vs hôm qua",
           isCurrency: false,
         },
@@ -250,9 +242,10 @@ export default function TongQuanPage() {
         <h1 className="text-xl md:text-2xl font-bold text-foreground leading-tight">
           {greeting}, {firstName}
         </h1>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
           <Icon name="schedule" size={14} className="text-muted-foreground" />
           <span className="min-h-5 capitalize">{formattedDate}</span>
+          <span className="font-medium">· {selectedBranch?.name ?? "Các chi nhánh được phép xem"}</span>
           <span className={dashboardLive ? "text-status-success" : "text-muted-foreground"}>{dashboardLive ? "· Trực tiếp" : "· Tự cập nhật 30 giây"}</span>
           {dashboardUpdatedAt && <span className="text-xs text-muted-foreground">· Cập nhật {dashboardUpdatedAt.toLocaleTimeString("vi-VN")}</span>}
         </div>
@@ -260,18 +253,11 @@ export default function TongQuanPage() {
 
       {canViewFnbOrders && <details open={openChecksExpanded} onToggle={(event) => setOpenChecksExpanded(event.currentTarget.open)} id="fnb-open-checks" className="rounded-md border bg-card p-3"><summary className="cursor-pointer text-sm font-semibold text-primary">Đơn F&B chờ thanh toán · {openOrders.orders.length}</summary><p className="mt-2 text-xs text-muted-foreground">{openOrders.error ? `Chưa cập nhật được: ${openOrders.error}` : openOrders.connected ? "Trực tiếp theo phạm vi chi nhánh đang chọn" : "Tự cập nhật mỗi 30 giây"}</p><div className="mt-2 max-h-80 overflow-y-auto divide-y">{openOrders.orders.map((order) => <div key={order.id} className="flex items-center justify-between gap-2 py-2 text-sm"><div><span className="font-semibold">{fnbOpenOrderLabel(order)}</span><span className="ml-2 text-xs text-muted-foreground">{order.orderNumber} · {order.itemCount} món</span></div><span className="font-semibold text-primary">{formatCurrency(order.provisionalTotal)}</span></div>)}</div><Link href="/pos/fnb" className="inline-flex min-h-11 items-center text-sm font-semibold text-primary">Mở POS để xem / thêm món</Link></details>}
 
-      {/* KPI Cards + Inventory Turnover — Stitch spec: rounded-xl, padding rộng,
-          icon bg-primary-fixed text-primary, uppercase label widest tracking,
-          headline font + bold number.
-          Day 8 16/05/2026: mobile = 1 cột (360px chật cho 2 cột); sm+ = 2 cột; lg+ = 5 cột
-          Responsive Sprint A7 (CEO 25/05/2026): laptop 13" 1280px viewport
-          với sidebar 224px lấn → main 1056px / 5 col = 211px/card (quá chật).
-          Thêm xl: breakpoint (1280+) cho 5 col, lg: (1024-1279) chỉ 3 col
-          (4 KPI + 1 turnover = 5 cards thành 2 hàng 3+2). */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
-        {/* Skeleton khi kpis chưa load để UI không nhảy — 4 card + 1 turnover bên dưới. */}
+      {/* Daily operational indicators, scoped by the selected branch. */}
+      <div className={cn("grid grid-cols-1 sm:grid-cols-2 gap-3", canViewFnbOrders ? "lg:grid-cols-3 2xl:grid-cols-5" : "xl:grid-cols-4")}>
+        {/* Preserve the same card count while loading. */}
         {kpiLoading && !kpis &&
-          Array.from({ length: 4 }).map((_, i) => (
+          Array.from({ length: canViewFnbOrders ? 5 : 4 }).map((_, i) => (
             <Card
               key={`skel-${i}`}
               size="sm"
@@ -303,7 +289,7 @@ export default function TongQuanPage() {
                   <Icon name={kpi.icon} size={17} className="text-primary" />
                 </div>
               </div>
-              <p className="font-heading text-xl sm:text-2xl font-extrabold text-foreground leading-tight truncate">
+              <p className="font-heading text-xl sm:text-2xl font-extrabold text-foreground leading-tight tabular-nums break-words">
                 {kpi.isCurrency ? formatCurrency(kpi.value) : formatNumber(kpi.value)}
               </p>
               <div className="mt-2 flex items-center gap-1.5">
@@ -320,63 +306,43 @@ export default function TongQuanPage() {
                 </span>
                 <span className="text-xs text-muted-foreground">{kpi.changeLabel}</span>
               </div>
+              {kpi.label === "Doanh thu hôm nay" && <p className="mt-2 text-xs text-muted-foreground">Hóa đơn hoàn tất hôm nay, sau giảm giá; gồm phí giao nếu có. Chưa trừ phiếu trả hàng, có thể còn công nợ.</p>}
+              {kpi.label === "Doanh thu hôm nay" && kpis && (
+                <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                  <p>Giảm giá bill {formatCurrency(kpis.todayDiscounts)}</p>
+                  {kpis.todayDeliveryFee > 0 && <p>Phí giao {formatCurrency(kpis.todayDeliveryFee)}</p>}
+                </div>
+              )}
+              {kpi.label === "Đơn hoàn tất" && <p className="mt-2 text-xs text-muted-foreground">Hóa đơn hoàn tất trong ngày; không gồm đơn đang mở hoặc đã hủy.</p>}
               {kpi.label === "Chênh lệch thu − chi" && <p className="mt-2 text-xs text-muted-foreground">Theo ngày ghi sổ, gồm các phiếu thu/chi còn hiệu lực. Chưa phải lợi nhuận sau giá vốn.</p>}
               {"isCollection" in kpi && kpi.isCollection && kpis && (
                 <div className="mt-2 space-y-1.5 border-t border-border/60 pt-2">
+                  <p className="text-xs text-muted-foreground">Tiền bán hàng đã thu − hoàn khách, theo ngày ghi sổ. Không trừ giảm giá lần nữa.</p>
                   <div className="grid grid-cols-2 gap-1 text-xs leading-tight">
                     <div className="rounded-md bg-surface-container px-1.5 py-1">
                       <span className="block text-muted-foreground">Tiền mặt</span>
                       <span className="font-semibold text-foreground">
-                        {formatChartCurrency(kpis.todayCash)}
+                        {formatCurrency(kpis.todayCash)}
                       </span>
                     </div>
                     <div className="rounded-md bg-surface-container px-1.5 py-1">
                       <span className="block text-muted-foreground">Chuyển khoản</span>
                       <span className="font-semibold text-foreground">
-                        {formatChartCurrency(kpis.todayTransfer)}
+                        {formatCurrency(kpis.todayTransfer)}
                       </span>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                    <span>Thẻ {formatChartCurrency(kpis.todayCard)}</span>
-                    <span>Giảm trừ {formatChartCurrency(kpis.todayDiscounts)}</span>
+                  <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                    <span>Thẻ {formatCurrency(kpis.todayCard)}</span>
+                    <span>Hoàn khách {formatCurrency(kpis.todayRefunds)}</span>
                   </div>
-                  {/* Tách phí giao hàng khỏi doanh thu hàng hóa (chỉ hiện khi có ship). */}
-                  {kpis.todayDeliveryFee > 0 && (
-                    <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                      <span>Hàng hóa {formatChartCurrency(kpis.todayGoodsRevenue)}</span>
-                      <span>Phí giao {formatChartCurrency(kpis.todayDeliveryFee)}</span>
-                    </div>
-                  )}
                 </div>
               )}
             </CardContent>
           </Card>
-          {kpi.label === "Thực thu" && canViewFnbOrders && <Card size="sm" className="border border-status-warning/30 bg-status-warning/5"><CardContent className="p-4"><p className="text-xs font-semibold uppercase text-status-warning">F&B · Chưa thanh toán</p><p className="mt-2 text-xl font-extrabold text-foreground">{openOrders.loading ? "—" : formatCurrency(openOrders.orders.reduce((sum, order) => sum + order.provisionalTotal, 0))}</p><p className="mt-1 text-sm text-muted-foreground">{openOrders.orders.length} đơn · {new Set(openOrders.orders.filter((order) => order.tableId).map((order) => order.tableId)).size} bàn</p><p className="mt-2 text-xs text-muted-foreground">Giá trị tạm tính, gồm đơn từ trước còn mở. Chưa cộng vào thực thu.</p>{openOrders.error && <p role="alert" className="mt-1 text-xs text-status-warning">Chưa cập nhật được; số liệu có thể đã thay đổi.</p>}<a onClick={() => setOpenChecksExpanded(true)} href="#fnb-open-checks" className="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-primary">Xem các đơn chờ thu →</a></CardContent></Card>}
+          {kpi.label === "Doanh thu hôm nay" && canViewFnbOrders && <Card size="sm" className="border border-status-warning/30 bg-status-warning/5"><CardContent className="p-4"><p className="text-xs font-semibold uppercase text-status-warning">F&B · Chưa thanh toán</p><p className="mt-2 text-xl font-extrabold text-foreground">{openOrders.loading ? "—" : formatCurrency(openOrders.orders.reduce((sum, order) => sum + order.provisionalTotal, 0))}</p><p className="mt-1 text-sm text-muted-foreground">{openOrders.orders.length} đơn · {new Set(openOrders.orders.filter((order) => order.tableId).map((order) => order.tableId)).size} bàn</p><p className="mt-2 text-xs text-muted-foreground">Giá trị tạm tính, gồm đơn từ trước còn mở. Chưa cộng vào thực thu.</p>{openOrders.error && <p role="alert" className="mt-1 text-xs text-status-warning">Chưa cập nhật được; số liệu có thể đã thay đổi.</p>}<a onClick={() => setOpenChecksExpanded(true)} href="#fnb-open-checks" className="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-primary">Xem các đơn chờ thu →</a></CardContent></Card>}
           </div>
         ))}
-
-        {/* Inventory Turnover — inline as 5th card */}
-        <Card size="sm" className="col-span-2 lg:col-span-1 rounded-lg border-0 ambient-shadow bg-surface-container-lowest">
-          <CardContent className="p-4">
-            <div className="flex items-start justify-between mb-2">
-              <span className="text-xs font-semibold uppercase text-muted-foreground">
-                Vòng quay kho
-              </span>
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-fixed">
-                <Icon name="autorenew" size={17} className="text-primary" />
-              </div>
-            </div>
-            <p className="font-heading text-2xl font-extrabold text-foreground leading-tight">
-              {turnover ? `${turnover.turnoverRatio.toFixed(1)}x` : "—"}
-            </p>
-            <p className="mt-1.5 text-xs text-muted-foreground">
-              {turnover
-                ? `COGS ${formatChartCurrency(turnover.totalCogsPeriod)}`
-                : "Chưa có dữ liệu"}
-            </p>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Charts row — lazy loaded để giảm initial bundle (~150KB recharts). */}
