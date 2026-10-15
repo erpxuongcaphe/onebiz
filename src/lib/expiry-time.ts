@@ -1,5 +1,4 @@
-import { cashBookDate, cashDateTimeInput, cashInputToIso } from "@/lib/cash-time";
-import { formatDate } from "@/lib/format";
+import { cashBookDate, cashDateTimeInput, cashInputToIso, formatCashBookDate } from "@/lib/cash-time";
 
 export function expiryInputParts(value?: string | null): { day: string; time: string } {
   if (!value) return { day: "", time: "" };
@@ -24,7 +23,7 @@ export function expiryToIso(value?: string | null): string | undefined {
 export function formatExpiryDate(value?: string | null): string {
   if (!value) return "—";
   const { day, time } = expiryInputParts(value);
-  return day ? `${formatDate(day)}${time ? ` ${time}` : ""}` : "—";
+  return day ? `${formatCashBookDate(day)}${time ? ` ${time}` : ""}` : "—";
 }
 
 export function expiryMoment(value?: string | null): number | null {

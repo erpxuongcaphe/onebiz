@@ -25,7 +25,8 @@ it("keeps date-only expiry until an hour is entered, and clearing the day clears
 it("uses Vietnam time, preserves legacy dates and distinguishes expired hours within the same day", () => {
   expect(expiryToIso("2026-10-15T17:30")).toBe("2026-10-15T10:30:00.000Z");
   expect(expiryToIso("2026-10-15")).toBe("2026-10-15");
-  expect(formatExpiryDate("2026-10-15T10:30:00Z")).toContain("17:30");
+  expect(formatExpiryDate("2026-10-15T10:30:00Z")).toBe("15/10/2026 17:30");
+  expect(formatExpiryDate("2026-10-15")).toBe("15/10/2026");
   const now = Date.parse("2026-10-15T11:00:00Z");
   expect(isExpiryPast("2026-10-15T17:30", now)).toBe(true);
   expect(isExpiryPast("2026-10-15", now)).toBe(false);
