@@ -140,6 +140,7 @@ export default function LoSanXuatPage() {
         {header:"Chi nhánh",key:"branchName",width:24},{header:"SL ban đầu",key:"initialQty",width:14},
         {header:"SL hiện tại",key:"currentQty",width:14},{header:"ĐVT kho",key:"stockUnit",width:14},
         {header:"SL quy đổi hiện tại",key:"convertedCurrentQty",width:22},{header:"ĐVT quy đổi",key:"convertedUnit",width:16},
+        {header:"Ngày sản xuất",key:"manufacturedDate",width:22,format:(v:string)=>formatExpiryDate(v)},
         {header:"Ngày nhận",key:"receivedDate",width:16,format:(v:string)=>formatDate(v)},
         {header:"Hạn sử dụng",key:"expiryDate",width:22,format:(v:string)=>v?formatExpiryDate(v):""},
         {header:"Trạng thái",key:"status",width:16,format:(v:string)=>statusMap[v]?.label??v},
@@ -161,6 +162,7 @@ export default function LoSanXuatPage() {
     {accessorKey:"branchName",header:"Chi nhánh",size:160,cell:({row})=><span className="text-xs text-muted-foreground">{row.original.branchName||"—"}</span>},
     {accessorKey:"initialQty",header:"SL ban đầu",size:150,cell:({row})=><StockWithConversion variant="cell" quantity={row.original.initialQty} unit={units.units.get(row.original.productId) ?? ''} conversions={units.map.get(row.original.productId)} />},
     {accessorKey:"currentQty",header:"SL hiện tại",size:150,cell:({row})=><StockWithConversion variant="cell" quantity={row.original.currentQty} unit={units.units.get(row.original.productId) ?? ''} conversions={units.map.get(row.original.productId)} />},
+    {accessorKey:"manufacturedDate",header:"Ngày sản xuất",size:160,cell:({row})=><span className="text-xs tabular-nums">{formatExpiryDate(row.original.manufacturedDate)}</span>},
     {accessorKey:"expiryDate",header:"Hạn sử dụng",size:145,cell:({row})=>row.original.expiryDate?<span className={isExpiryPast(row.original.expiryDate)?"font-medium text-status-error":(row.original.daysUntilExpiry??999)<=30?"text-status-warning":"text-muted-foreground"}>{formatExpiryDate(row.original.expiryDate)}</span>:<span className="text-muted-foreground">—</span>},
     {accessorKey:"status",header:"Trạng thái",size:120,cell:({row})=>{const s=statusMap[row.original.status]??statusMap.active;return <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${toneClass[s.tone]}`}><span className={`size-1.5 rounded-full ${dotClass[s.tone]}`}/>{s.label}</span>;}},
   ];

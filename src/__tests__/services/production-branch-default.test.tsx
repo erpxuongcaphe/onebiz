@@ -101,6 +101,10 @@ describe("production branch selection", () => {
     mocks.activeBranchId = "xtb";
     render(<CreateProductionOrderDialog open onOpenChange={vi.fn()} />);
     await waitFor(() => expect(screen.getByRole("combobox")).toHaveValue("xtb"));
+    for (const label of ["Bắt đầu sản xuất", "Dự kiến hoàn thành", "Ngày sản xuất", "Hạn sử dụng"]) {
+      expect(screen.getByLabelText(label)).toHaveAttribute("type", "date");
+      expect(screen.getByLabelText(`${label} — giờ`)).toHaveAttribute("type", "time");
+    }
   });
 
   it("requires an explicit branch if the current scope has no branch", async () => {
