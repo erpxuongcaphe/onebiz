@@ -19,7 +19,7 @@ export interface FnbBranchComponentCost {
   physicalQuantity: number;
 }
 
-export function getPreparedRecipeUnitCost(cost: FnbBranchComponentCost | undefined): number | null {
+export function getPreparedRecipeUnitCost(cost: Pick<FnbBranchComponentCost, "unitCost" | "costedQuantity" | "physicalQuantity"> | undefined): number | null {
   if (!cost || !Number.isFinite(cost.unitCost) || cost.unitCost < 0 ||
     !Number.isFinite(cost.costedQuantity) || !Number.isFinite(cost.physicalQuantity) ||
     Math.abs(cost.costedQuantity - cost.physicalQuantity) > 0.0001 ||
