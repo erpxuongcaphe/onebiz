@@ -1,6 +1,7 @@
 "use client";
 
 import { PartyCashHistory } from "@/components/shared/party-cash-history";
+import { standardizeWalkInCustomerCode } from "@/lib/services/supabase/customers";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRevalidateOnFocus } from "@/lib/hooks/use-revalidate-on-focus";
@@ -167,6 +168,8 @@ export default function KhachHangPage() {
   // Dialog
   const [createOpen, setCreateOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [standardizingCustomer, setStandardizingCustomer] = useState<Customer | null>(null);
+  const [standardizing, setStandardizing] = useState(false);
   const [changingCodeCustomer, setChangingCodeCustomer] =
     useState<Customer | null>(null);
   const [importOpen, setImportOpen] = useState(false);
@@ -842,7 +845,7 @@ export default function KhachHangPage() {
                 setCreateOpen(true);
               },
             },
-            ...(canEditCustomer && !row.isInternal && row.code !== "KL-VL"
+            ...(canEditCustomer && !row.isInternal && !row.isWalkIn && row.code !== "KL-VL"
               ? [
                   {
                     label: "Đổi mã khách hàng",
@@ -850,6 +853,10 @@ export default function KhachHangPage() {
                     onClick: () => setChangingCodeCustomer(row),
                   },
                 ]
+              : []),
+            ...(canEditCustomer && !row.isInternal && row.code === "KL-VL"
+              ? [{label: "Chuẩn hóa mã khách lẻ", icon: <Icon name="badge" size={16} />,
+                  onClick: () => setStandardizingCustomer(row)}]
               : []),
             // Phase 3a: luôn hiện row action "Xoá". Permission check chuyển
             // sang ConfirmDialog onConfirm — không có quyền sẽ mở OTP dialog.
@@ -1019,6 +1026,27 @@ export default function KhachHangPage() {
         }}
         onSuccess={fetchData}
         initialData={editingCustomer ?? undefined}
+      />
+
+      <ConfirmDialog
+        open={!!standardizingCustomer}
+        onOpenChange={(open) => { if (!open && !standardizing) setStandardizingCustomer(null); }}
+        title="Chuẩn hóa mã khách lẻ"
+        description={`Cấp mã KHA-KLE tiếp theo cho ${standardizingCustomer?.code ?? ""}. Giữ nguyên hồ sơ, hóa đơn và công nợ. Sau khi đổi, tải lại các máy POS đang mở.`}
+        confirmLabel="Cấp mã tự động"
+        loading={standardizing}
+        onConfirm={async () => {
+          if (!standardizingCustomer || standardizing) return;
+          setStandardizing(true);
+          try {
+            const result=await standardizeWalkInCustomerCode(standardizingCustomer.id);
+            toast({title:"Đã chuẩn hóa mã khách lẻ",description:`${result.oldCode} → ${result.newCode}. Tải lại các máy POS đang mở.`,variant:"success"});
+            setStandardizingCustomer(null);
+            await fetchData();
+          } catch (error) {
+            toast({title:"Chưa đổi được mã",description:error instanceof Error ? error.message : "Vui lòng thử lại",variant:"error"});
+          } finally {setStandardizing(false);}
+        }}
       />
 
       <ChangeCustomerCodeDialog

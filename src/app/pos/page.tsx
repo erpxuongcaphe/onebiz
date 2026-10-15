@@ -4352,12 +4352,12 @@ function PosPageInner() {
               className="w-full"
               disabled={
                 !state.customer ||
-                state.customer.code === "KL-VL"
+                (state.customer.isWalkIn || state.customer.code === "KL-VL")
               }
               title={
                 !state.customer
                   ? "Cần chọn khách hàng cụ thể để ghi credit"
-                  : state.customer.code === "KL-VL"
+                  : state.customer.isWalkIn || state.customer.code === "KL-VL"
                     ? "Không ghi credit cho khách lẻ"
                     : "Ghi credit vào tài khoản khách, lần sau cấn trừ"
               }
