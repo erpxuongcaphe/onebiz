@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { ExpiryDateInput } from "@/components/shared/expiry-date-input";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -106,6 +107,7 @@ interface ExistingPurchaseOrderItemRecord {
   unit_price: number;
   vat_rate: number | null;
   expiry_date?: string | null;
+  expiry_at?: string | null;
   lot_number?: string | null;
   products: ProductCodeRelation;
 }
@@ -172,7 +174,7 @@ function getItemsDiscount(items: LineItem[]) {
  */
 function ExpiryBadge({ dateStr }: { dateStr?: string | null }) {
   if (!dateStr) return null;
-  const expiry = new Date(dateStr + "T00:00:00");
+  const expiry = new Date(dateStr.length === 10 ? dateStr + "T00:00:00+07:00" : dateStr);
   if (isNaN(expiry.getTime())) return null;
 
   const today = new Date();
@@ -314,7 +316,7 @@ export function CreatePurchaseOrderDialog({
             vatRate: Number(d.vat_rate ?? 0),
             discount: discPerUnit > 0 ? discPerUnit : undefined,
             discountType: discPerUnit > 0 ? "amount" : undefined,
-            expiryDate: d.expiry_date ?? undefined,
+            expiryDate: d.expiry_at ?? d.expiry_date ?? undefined,
             lotNumber: d.lot_number ?? undefined,
           };
         }));
@@ -550,7 +552,10 @@ export function CreatePurchaseOrderDialog({
     return Object.keys(newErrors).length === 0;
   }
 
+  const dateFieldsRef = useRef<HTMLFieldSetElement>(null);
   async function handleSave(mode: "draft" | "receive") {
+    const invalidDate = dateFieldsRef.current?.querySelector<HTMLInputElement>('input[type="date"]:invalid,input[type="time"]:invalid');
+    if (invalidDate) { invalidDate.reportValidity(); return; }
     if (!validate()) return;
     const targetBranchId = editingPO ? editingPO.branchId : branchId;
     if (!targetBranchId) {
@@ -738,7 +743,7 @@ export function CreatePurchaseOrderDialog({
                 </div>
               </div>
             )}
-            <fieldset disabled={isOrderedLocked} className="flex min-w-0 flex-col gap-3 disabled:opacity-60">
+            <fieldset ref={dateFieldsRef} disabled={isOrderedLocked} className="flex min-w-0 flex-col gap-3 disabled:opacity-60">
             <div className="grid gap-3 xl:grid-cols-2">
               <section className="rounded-lg border bg-white p-3 shadow-none">
                 <div className="mb-2 flex items-center justify-between gap-2">
@@ -1014,13 +1019,12 @@ export function CreatePurchaseOrderDialog({
                       )}
                     </div>
                     {/* Day 18/05/2026 (CEO): row con HSD + Số lô (NCC ghi trên bao bì) */}
-                    <div className="flex items-center gap-2 pl-1 text-xs">
+                    <div className="flex flex-wrap items-start gap-2 pl-1 text-xs">
                       <label className="text-muted-foreground shrink-0">HSD:</label>
-                      <input
-                        type="date"
+                      <ExpiryDateInput
                         value={item.expiryDate || ""}
-                        onChange={(e) => updateItem(item.id, "expiryDate", e.target.value)}
-                        className="h-7 w-36 rounded-md border border-input bg-background px-2 text-xs"
+                        onValueChange={nextValue => updateItem(item.id, "expiryDate", nextValue)}
+                        className="w-60 max-w-full"
                         aria-label={`HSD ${item.productName}`}
                       />
                       {/* Day 18/05/2026 (CEO): badge ngày còn lại sau ô HSD */}

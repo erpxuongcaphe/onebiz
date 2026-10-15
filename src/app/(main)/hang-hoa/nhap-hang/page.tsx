@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
@@ -9,6 +9,8 @@ import { DataTable, StarCell } from "@/components/shared/data-table";
 import { AllBranchesBanner } from "@/components/shared/all-branches-banner";
 import { ListMetric } from "@/components/shared/list-metric";
 import { FilterChips, type ListFilterChip } from "@/components/shared/filter-chips";
+import { getPurchaseOrderBoard } from "@/lib/services/supabase/purchase-orders";
+import { ListStrip } from "@/components/shared/list-strip";
 import { KanbanBoard, type KanbanColumn } from "@/components/shared/kanban-board";
 import { PipelineStatusBadge } from "@/components/shared/pipeline";
 import {
@@ -47,7 +49,6 @@ import {
   getPurchaseOrderStatuses,
   getPurchaseOrderStatusMeta,
   updatePurchaseOrderStatus,
-  canTransitionPurchaseStatus,
   getPurchaseOrderItems,
   getPaymentHistory,
   closePurchaseOrderShort,
@@ -472,7 +473,7 @@ function PurchaseOrderDetail({
 /* ------------------------------------------------------------------ */
 export default function NhapHangPage() {
   const { toast } = useToast();
-  const { activeBranchId, currentBranch } = useBranchFilter();
+  const { activeBranchId, currentBranch, branches } = useBranchFilter();
   const { hasAny, isLoading: permissionsLoading } = usePermissions();
   const router = useRouter();
   const { printWithPicker, printerDialog } = usePrintWithPicker();
@@ -504,6 +505,9 @@ export default function NhapHangPage() {
     status?: "draft" | "ordered" | "partial" | "completed" | "cancelled";
   } | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [boardOrderId, setBoardOrderId] = useState<string | null>(null);
+  const [boardSort, setBoardSort] = useState("oldest");
+  const fetchRequest = useRef(0);
   const [payingItem, setPayingItem] = useState<PurchaseOrder | null>(null);
   const [partialReceiveOrder, setPartialReceiveOrder] = useState<PurchaseOrder | null>(null);
   // Day 2 16/05: Đóng đơn còn thiếu — partial/ordered → completed kèm reason
@@ -644,6 +648,7 @@ export default function NhapHangPage() {
 
   /* ---- Fetch data ---- */
   const fetchData = useCallback(async () => {
+    const request = ++fetchRequest.current;
     if (permissionsLoading) return;
     if (!activeBranchId && !duocXemToanChuoi) {
       setData([]);
@@ -653,6 +658,7 @@ export default function NhapHangPage() {
       return;
     }
     setLoading(true);
+    setBoardOrderId(null);
     // Không có try/finally thì truy vấn lỗi là cờ loading không bao giờ tắt →
     // trang treo mãi ở vòng xoay, người dùng không biết vì sao.
     try {
@@ -668,14 +674,10 @@ export default function NhapHangPage() {
       ...(effectiveDateTo && { dateTo: effectiveDateTo }),
     };
     const branchScope = duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId;
-    const result = await getPurchaseOrders({
-      page,
-      pageSize,
-      search,
-      searchField,
-      branchId: branchScope,
-      filters: commonFilters,
-    });
+    const query = { search, searchField, branchId: branchScope, filters: commonFilters };
+    const boardRows = viewMode === "kanban" ? await getPurchaseOrderBoard(query) : null;
+    const result = boardRows ? { data: boardRows, total: boardRows.length } : await getPurchaseOrders({ page, pageSize, ...query });
+    if (request !== fetchRequest.current) return;
     setData(result.data);
     setTotal(result.total);
     // Bảng trống vì lọc chi nhánh? Đếm phiếu ở chi nhánh khác để gợi ý (cùng bộ
@@ -689,20 +691,23 @@ export default function NhapHangPage() {
         branchId: undefined,
         filters: commonFilters,
       });
+      if (request !== fetchRequest.current) return;
       setOtherBranchCount(all.total);
     } else {
       setOtherBranchCount(0);
     }
     } catch (e) {
+      if (request !== fetchRequest.current) return;
+      setData([]); setTotal(0);
       toast({
         variant: "error",
         title: "Không tải được danh sách phiếu nhập",
         description: e instanceof Error ? e.message : "Lỗi không xác định",
       });
     } finally {
-      setLoading(false);
+      if (request === fetchRequest.current) setLoading(false);
     }
-  }, [page, pageSize, search, searchField, selectedStatuses, creatorFilter, importerFilter, costReturnFilter, activeBranchId, datePreset, dateFrom, dateTo, viewAllBranches, toast, duocXemToanChuoi, permissionsLoading]);
+  }, [viewMode, page, pageSize, search, searchField, selectedStatuses, creatorFilter, importerFilter, costReturnFilter, activeBranchId, datePreset, dateFrom, dateTo, viewAllBranches, toast, duocXemToanChuoi, permissionsLoading]);
 
   useEffect(() => {
     fetchData();
@@ -906,7 +911,7 @@ export default function NhapHangPage() {
       onEdit={
         // Phase 1.5 (CEO 01/06/2026): cho sửa cả status='ordered' nhưng dialog
         // chỉ enable paid + note (không đụng tồn). Items thay đổi → Huỷ phiếu.
-        order.status === "draft" || order.status === "ordered"
+        txPerms.canEdit && (order.status === "draft" || order.status === "ordered")
           ? () => {
               setEditingPO({
                 id: order.id,
@@ -924,7 +929,7 @@ export default function NhapHangPage() {
           : undefined
       }
       onDelete={
-        order.status !== "cancelled"
+        txPerms.canCancel && order.status !== "cancelled"
           ? () => handleCancelPO(order)
           : undefined
       }
@@ -937,38 +942,23 @@ export default function NhapHangPage() {
     "ordered",
     "partial",
     "completed",
+    "cancelled",
   ];
 
-  const kanbanColumns: KanbanColumn<PurchaseOrder>[] = KANBAN_STATUSES.map(
+  const boardRows = [...data].sort((a, b) => {
+    const dateDiff = new Date(a.date).getTime() - new Date(b.date).getTime();
+    return (boardSort === "debt" ? b.amountOwed - a.amountOwed : boardSort === "newest" ? -dateDiff : dateDiff) || a.id.localeCompare(b.id);
+  });
+  const boardOrder = data.find(order => order.id === boardOrderId);
+  const kanbanColumns: KanbanColumn<PurchaseOrder>[] = KANBAN_STATUSES.filter(status => status !== "cancelled" || data.some(order => order.status === status)).map(
     (status) => ({
       id: status,
       label: STATUS_META[status].label,
       color: STATUS_META[status].color,
-      items: data.filter((o) => o.status === status),
+      items: boardRows.filter((o) => o.status === status),
+      summary: <span>Còn trả {formatCurrency(boardRows.filter(o => o.status === status).reduce((sum, order) => sum + order.amountOwed, 0))}</span>,
     })
   );
-
-  const handleCardMove = async (
-    itemId: string,
-    _from: string,
-    to: string
-  ) => {
-    try {
-      await updatePurchaseOrderStatus(itemId, to as PurchaseOrderStatus);
-      toast({
-        title: "Đã chuyển trạng thái",
-        description: STATUS_META[to as PurchaseOrderStatus].label,
-        variant: "success",
-      });
-      fetchData();
-    } catch (err) {
-      toast({
-        title: "Không thể chuyển trạng thái",
-        description: err instanceof Error ? err.message : "Vui lòng thử lại",
-        variant: "error",
-      });
-    }
-  };
 
   const handleAdvanceStatus = async (
     order: PurchaseOrder,
@@ -1109,7 +1099,7 @@ export default function NhapHangPage() {
         actions={[
           { label: "Nhận nội bộ", icon: <Icon name="move_to_inbox" size={16} />, variant: "outline", onClick: () => router.push("/hang-hoa/nhap-hang/noi-bo") },
           {
-            label: viewMode === "list" ? "Xem Kanban" : "Xem danh sách",
+            label: viewMode === "list" ? "Bảng tiến độ" : "Xem danh sách",
             icon:
               viewMode === "list" ? (
                 <Icon name="view_kanban" size={16} />
@@ -1136,12 +1126,21 @@ export default function NhapHangPage() {
       )}
 
       {viewMode === "kanban" ? (
-        <div className="p-4">
-          <KanbanBoard
+        <div className="space-y-3 p-3 md:p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div><h2 className="font-semibold">Tiến độ nhập hàng</h2><p className="text-xs text-muted-foreground">Toàn bộ phiếu theo bộ lọc. Chọn thẻ để xem chi tiết và ghi số lượng thực nhận.</p></div>
+            <div className="flex flex-wrap gap-2">
+              <select aria-label="Sắp xếp phiếu trên bảng" className="h-9 rounded-md border bg-background px-2 text-sm" value={boardSort} onChange={event => setBoardSort(event.target.value)}><option value="oldest">Cũ nhất trước</option><option value="newest">Mới nhất trước</option><option value="debt">Còn phải trả nhiều nhất</option></select>
+              <Button variant="outline" size="sm" onClick={() => setFilterOpen(true)}><Icon name="filter_alt" size={15} />Bộ lọc · {datePresetLabel}</Button>
+            </div>
+          </div>
+          <FilterChips filters={filterChips} onClearAll={clearListFilters} />
+          <ListStrip metrics={<><ListMetric label="Phiếu theo bộ lọc" value={formatNumber(total)} /><ListMetric label="Chờ nhận / nhận thiếu" value={formatNumber(data.filter(order => ["ordered", "partial"].includes(order.status)).length)} /><ListMetric label="Còn phải trả NCC" value={formatCurrency(kpiTotalOwed)} hint="Toàn bộ phiếu theo bộ lọc" /></>} />
+          {loading ? <p role="status" className="py-8 text-center text-sm text-muted-foreground">Đang tải bảng tiến độ…</p> : boardOrder ? renderDetail(boardOrder, () => setBoardOrderId(null)) : <KanbanBoard
+            className="h-[calc(100dvh-22rem)]"
             columns={kanbanColumns}
             getItemId={(o) => o.id}
-            onCardMove={handleCardMove}
-            canDrop={(_id, from, to) => canTransitionPurchaseStatus(from, to)}
+            onCardClick={order => setBoardOrderId(order.id)}
             emptyMessage="Không có phiếu"
             renderCard={(order) => (
               <div className="space-y-1">
@@ -1153,9 +1152,10 @@ export default function NhapHangPage() {
                     {formatDate(order.date)}
                   </span>
                 </div>
-                <div className="text-sm font-medium truncate">
+                <div className="text-sm font-medium break-words">
                   {order.supplierName}
                 </div>
+                <p className="text-xs text-muted-foreground">{branches.find(branch => branch.id === order.branchId)?.name ?? "Chi nhánh của phiếu"} · {formatUser(order.createdByName, order.createdBy)}</p>
                 {order.orderCode && (
                   <div className="text-xs text-muted-foreground truncate">
                     DH: {order.orderCode}
@@ -1181,7 +1181,7 @@ export default function NhapHangPage() {
                 </div>
               </div>
             )}
-          />
+          />}
         </div>
       ) : (
       <DataTable

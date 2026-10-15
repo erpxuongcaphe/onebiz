@@ -1,4 +1,6 @@
 "use client";
+
+import { Input } from "@/components/ui/input";
 import { requestPageLeave } from "@/lib/hooks/use-unsaved-work";
 
 import Link from "next/link";
@@ -1569,7 +1571,7 @@ function EditorForm({
             <>
               <h3>{editor.standard!.title}</h3>
               <Field label="Deadline (giờ Việt Nam)">
-                <input name="dueAt" type="datetime-local" required />
+                <Input name="dueAt" type="datetime-local" required />
               </Field>
             </>
           )}
@@ -1680,7 +1682,7 @@ function EditorForm({
                   />
                 </Field>
                 <Field label="Ngày áp dụng">
-                  <input
+                  <Input
                     type="date"
                     name="effectiveFrom"
                     min={today()}
@@ -2052,7 +2054,7 @@ function EditorForm({
                     <textarea name="waitingNote" required />
                   </Field>
                   <Field label="Hẹn kiểm tra lại (Việt Nam)">
-                    <input type="datetime-local" name="followUpAt" required />
+                    <Input type="datetime-local" name="followUpAt" required />
                   </Field>
                 </>
               )}
@@ -2174,7 +2176,7 @@ function EditorForm({
                 />
               </Field>
               <Field label="Ngày áp dụng">
-                <input
+                <Input
                   type="date"
                   name="effectiveFrom"
                   min={today()}
@@ -2533,7 +2535,7 @@ function TodoFields({
           </select>
         </Field>
         <Field label="Deadline (Việt Nam)">
-          <input
+          <Input
             name="dueAt"
             type="datetime-local"
             defaultValue={deadline}
@@ -2692,7 +2694,7 @@ function RunResults({
                 )}
                 {(editor.kind === "result" || correction) && (
                   <Field label="Thời điểm quan sát (Việt Nam)">
-                    <input
+                    <Input
                       type="datetime-local"
                       name={`measuredAt:${c.id}:${i}`}
                       required

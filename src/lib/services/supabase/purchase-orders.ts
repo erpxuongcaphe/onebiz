@@ -1,3 +1,4 @@
+import { expiryInputParts, expiryInputValue } from "@/lib/expiry-time";
 import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
 /**
  * Supabase service: Purchase Orders (Đặt hàng / Nhập hàng)
@@ -181,7 +182,7 @@ export async function savePurchaseOrderAtomic(
       unit_price: Number(item.unitPrice),
       discount: Number(item.discount ?? 0),
       vat_rate: Number(item.vatRate ?? 0),
-      expiry_date: item.expiryDate ?? null,
+      expiry_date: item.expiryDate ? expiryInputValue(expiryInputParts(item.expiryDate).day, expiryInputParts(item.expiryDate).time) : null,
       lot_number: item.lotNumber ?? null,
     })),
   };
@@ -309,7 +310,7 @@ export async function getPurchaseOrders(
     if (params.sortBy !== "created_at") query = query.order("created_at", { ascending: false });
     query = query.order("id", { ascending: false });
   } else {
-    query = query.order("created_at", { ascending: false });
+    query = query.order("created_at", { ascending: false }).order("id", { ascending: false });
   }
   query = query.range(from, to);
 
@@ -318,6 +319,14 @@ export async function getPurchaseOrders(
 
   const orders: PurchaseOrder[] = (data ?? []).map(mapPurchaseOrder);
   return { data: orders, total: count ?? 0 };
+}
+
+/** Load the complete filtered board; fail rather than silently show a partial board. */
+export async function getPurchaseOrderBoard(params: Omit<QueryParams, "page" | "pageSize">): Promise<PurchaseOrder[]> {
+  return readHistoryPages(async (offset, size) => {
+    const result = await getPurchaseOrders({ ...params, page: offset / size, pageSize: size });
+    return { data: result.data, count: result.total, error: null };
+  });
 }
 
 export function getPurchaseOrderStatuses() {
@@ -385,7 +394,7 @@ export async function getPurchaseOrderItems(
   const { data, error } = await (supabase as any)
     .from("purchase_order_items")
     .select(
-      "id, product_id, product_name, quantity, received_quantity, unit_price, discount, vat_rate, unit, transaction_quantity, transaction_unit, transaction_unit_price, conversion_factor, expiry_date, lot_number, products:products_scoped(code)",
+      "id, product_id, product_name, quantity, received_quantity, unit_price, discount, vat_rate, unit, transaction_quantity, transaction_unit, transaction_unit_price, conversion_factor, expiry_date, expiry_at, lot_number, products:products_scoped(code)",
     )
     .eq("purchase_order_id", orderId)
     .order("id", { ascending: true });
@@ -407,6 +416,7 @@ export async function getPurchaseOrderItems(
     transaction_unit_price: number | string | null;
     conversion_factor: number | string | null;
     expiry_date: string | null;
+    expiry_at?: string | null;
     lot_number: string | null;
     products: { code: string } | null;
   }>).map((row) => {
@@ -429,7 +439,7 @@ export async function getPurchaseOrderItems(
       unitPrice: price,
       conversionFactor: factor,
       lineTotal: qty * price,
-      expiryDate: row.expiry_date,
+      expiryDate: row.expiry_at ?? row.expiry_date,
       lotNumber: row.lot_number,
       discount: Number(row.discount ?? 0),
       vatRate: Number(row.vat_rate ?? 0),
@@ -828,7 +838,7 @@ export async function duplicatePurchaseOrder(
       unitPrice: Number(item.transaction_unit_price ?? item.unit_price ?? 0),
       discount: Number(item.discount ?? 0),
       vatRate: Number(item.vat_rate ?? 0),
-      expiryDate: item.expiry_date ? String(item.expiry_date) : null,
+      expiryDate: item.expiry_at ? String(item.expiry_at) : item.expiry_date ? String(item.expiry_date) : null,
       lotNumber: item.lot_number ? String(item.lot_number) : null,
     })),
   });

@@ -1,4 +1,5 @@
 "use client";
+import { formatExpiryDate } from "@/lib/expiry-time";
 
 /**
  * Báo cáo Lot Traceability + Hàng cận date — REP-3 (CEO 06/05/2026).
@@ -258,7 +259,7 @@ export default function LotTraceabilityPage() {
             quantity: l.quantity,
             remainingQty: l.remainingQty,
             receivedDate: formatShortDate(l.receivedDate),
-            expiryDate: l.expiryDate ? formatShortDate(l.expiryDate) : "—",
+            expiryDate: l.expiryDate ? formatExpiryDate(l.expiryDate) : "—",
             daysToExpiry: l.daysToExpiry ?? "",
             sourceType: SOURCE_LABEL[l.sourceType] ?? l.sourceType,
             status: STATUS_LABEL[l.status] ?? l.status,
@@ -296,7 +297,7 @@ export default function LotTraceabilityPage() {
       label: "Hạn sử dụng",
       key: "expiryDate",
       align: "center",
-      cell: (r) => (r.expiryDate ? formatShortDate(r.expiryDate) : "—"),
+      cell: (r) => (r.expiryDate ? formatExpiryDate(r.expiryDate) : "—"),
     },
     {
       label: "Còn lại đến hạn",

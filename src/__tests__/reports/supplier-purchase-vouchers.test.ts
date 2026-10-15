@@ -26,6 +26,7 @@ describe("supplier purchase voucher report query", () => {
     await getPurchaseOrders({ page: 0, pageSize: 50 });
     expect(calls.filter(([name]) => name === "order")).toEqual([
       ["order", ["created_at", { ascending: false }]],
+      ["order", ["id", { ascending: false }]],
     ]);
   });
 

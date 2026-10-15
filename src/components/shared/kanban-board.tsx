@@ -22,6 +22,7 @@ export interface KanbanColumn<T> {
   items: T[];
   /** Hiển thị badge mềm bên phải nếu cột không cho phép thả vào */
   readOnly?: boolean;
+  summary?: ReactNode;
 }
 
 export interface KanbanBoardProps<T> {
@@ -79,6 +80,7 @@ export function KanbanBoard<T>({
     e: React.DragEvent<HTMLDivElement>,
     columnId: string
   ) => {
+    if (!onCardMove || columns.find(col => col.id === columnId)?.readOnly || columns.find(col => col.id === draggingFromCol)?.readOnly) return;
     if (!draggingId || !draggingFromCol) return;
     if (draggingFromCol === columnId) return;
     if (canDrop && !canDrop(draggingId, draggingFromCol, columnId)) return;
@@ -101,6 +103,7 @@ export function KanbanBoard<T>({
     setDraggingId(null);
     setDraggingFromCol(null);
     setHoverCol(null);
+    if (!onCardMove || columns.find(col => col.id === columnId)?.readOnly || columns.find(col => col.id === from)?.readOnly) return;
     if (!itemId || !from || from === columnId) return;
     if (canDrop && !canDrop(itemId, from, columnId)) return;
     await onCardMove?.(itemId, from, columnId);
@@ -109,7 +112,7 @@ export function KanbanBoard<T>({
   return (
     <div
       className={cn(
-        "flex gap-3 overflow-x-auto pb-2 min-h-[400px]",
+        "flex min-w-0 gap-3 overflow-x-auto pb-2 min-h-[360px]",
         className
       )}
     >
@@ -117,6 +120,7 @@ export function KanbanBoard<T>({
         const isHover = hoverCol === col.id;
         const isSource = draggingFromCol === col.id;
         const canAccept =
+          onCardMove && !col.readOnly &&
           draggingId &&
           draggingFromCol &&
           draggingFromCol !== col.id &&
@@ -129,7 +133,7 @@ export function KanbanBoard<T>({
             onDragLeave={() => handleDragLeave(col.id)}
             onDrop={(e) => handleDrop(e, col.id)}
             className={cn(
-              "w-72 shrink-0 rounded-lg border bg-muted/20 flex flex-col transition-colors",
+              "w-72 max-w-[85vw] min-h-0 shrink-0 rounded-lg border bg-muted/20 flex flex-col transition-colors",
               isHover && canAccept && "border-primary bg-primary/5",
               isSource && "opacity-60",
               col.readOnly && "border-dashed"
@@ -158,8 +162,10 @@ export function KanbanBoard<T>({
               </span>
             </div>
 
+            {col.summary && <div className="border-b px-3 py-2 text-xs text-muted-foreground tabular-nums">{col.summary}</div>}
+
             {/* Cards */}
-            <div className="flex-1 p-2 space-y-2 overflow-y-auto">
+            <div className="min-h-0 flex-1 p-2 space-y-2 overflow-y-auto">
               {col.items.length === 0 ? (
                 <div className="text-center text-xs text-muted-foreground py-6">
                   {emptyMessage}
@@ -171,13 +177,17 @@ export function KanbanBoard<T>({
                   return (
                     <div
                       key={id}
-                      draggable
+                      draggable={!!onCardMove && !col.readOnly}
+                      role={onCardClick ? "button" : undefined}
+                      tabIndex={onCardClick ? 0 : undefined}
+                      onKeyDown={(event) => { if (event.target === event.currentTarget && onCardClick && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onCardClick(item); } }}
                       onDragStart={(e) => handleDragStart(e, id, col.id)}
                       onDragEnd={handleDragEnd}
                       onClick={() => onCardClick?.(item)}
                       className={cn(
-                        "rounded-lg border bg-background p-3 text-sm shadow-none cursor-grab active:cursor-grabbing hover:shadow-md hover:border-primary/40 transition-all",
+                        "rounded-lg border bg-background p-3 text-sm shadow-none hover:shadow-md hover:border-primary/40 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
                         isDragging && "opacity-40",
+                        onCardMove && !col.readOnly && "cursor-grab active:cursor-grabbing",
                         onCardClick && "cursor-pointer"
                       )}
                     >

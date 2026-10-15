@@ -1,3 +1,5 @@
+"use client"
+
 import * as React from "react"
 import { Input as InputPrimitive } from "@base-ui/react/input"
 
@@ -26,6 +28,18 @@ const variantClass: Record<InputVariant, string> = {
 }
 
 function Input({ className, type, variant = "default", ...props }: InputProps) {
+  const classes = cn(
+    "w-full min-w-0 text-sm pointer-coarse:min-h-[44px] transition-colors outline-none " +
+      "file:inline-flex file:h-6 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground " +
+      "placeholder:text-muted-foreground " +
+      "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 " +
+      "aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20",
+    variantClass[variant],
+    className,
+  )
+  if (type === "date" || type === "datetime-local" || type === "time") {
+    return <NativeDateInput {...props} type={type} className={classes} data-slot="input" data-variant={variant} />
+  }
   return (
     <InputPrimitive
       type={type}
@@ -41,6 +55,31 @@ function Input({ className, type, variant = "default", ...props }: InputProps) {
         className
       )}
       {...props}
+    />
+  )
+}
+
+/** Keep the browser's day/month/year editing buffer intact while synchronizing external values. */
+function NativeDateInput({ value, defaultValue, ref, type = "date", ...props }: React.ComponentProps<"input">) {
+  const element = React.useRef<HTMLInputElement | null>(null)
+  const [initialValue] = React.useState(() => value ?? defaultValue)
+  React.useEffect(() => {
+    if (value === undefined || !element.current) return
+    const next = value == null ? "" : String(value)
+    // Assigning even the same date resets native date segments and moves the caret.
+    if (element.current.value !== next) element.current.value = next
+  }, [value])
+  return (
+    <input
+      {...props}
+      type={type}
+      defaultValue={initialValue}
+      title={props.title ?? (type === "time" ? "Nhập HH:mm hoặc chọn giờ" : type === "datetime-local" ? "Nhập DD/MM/YYYY HH:mm hoặc chọn lịch" : "Nhập DD/MM/YYYY hoặc chọn lịch")}
+      ref={(node) => {
+        element.current = node
+        if (typeof ref === "function") return ref(node)
+        if (ref) ref.current = node
+      }}
     />
   )
 }
