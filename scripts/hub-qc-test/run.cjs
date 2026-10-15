@@ -25,7 +25,7 @@ async function bootstrap(db) {
     "00534_operations_quality_evidence.sql",
     "00535_operations_quality_accounting_and_reports.sql",
     "00536_operations_quality_access.sql",
-    "00537_operations_quality_acceptance_fixes.sql",
+    "00539_operations_quality_acceptance_fixes.sql",
   ]) {
     try {
       if (migration === "00532_operations_quality_foundation.sql" && process.env.HUB_BASELINE_FUNCTIONS) {
