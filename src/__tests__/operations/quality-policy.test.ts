@@ -190,6 +190,7 @@ describe("QC import strictly previews and reports row/column", () => {
     "5",
     "15/10/2026",
     "Không",
+    "Không",
   ];
   it("normalizes valid catalog without relying on display title identity", () => {
     const r = parseQualityCatalog([qualityImportHeaders, row]);
@@ -239,6 +240,25 @@ describe("QC import strictly previews and reports row/column", () => {
   });
   it("rejects mismatched header rather than guessing", () => {
     expect(parseQualityCatalog([["STT"], row]).errors[0].row).toBe(1);
+  });
+  it("preserves the explicit accounting requirement", () => {
+    const value = [...row];
+    value[7] = "Có";
+    const parsed = parseQualityCatalog([qualityImportHeaders, value]);
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.rows[0].accountingRequired).toBe(true);
+  });
+  it("flags an existing code and effective date before submission", () => {
+    expect(parseQualityCatalog([qualityImportHeaders, row], [{ code: "QC-001", effective_from: "2026-10-15" }]).errors)
+      .toContainEqual(expect.objectContaining({ row: 2, column: "Mã tiêu chuẩn" }));
+  });
+  it("keeps the original Excel row number when validating approved standards", () => {
+    expect(parseQualityCatalog([qualityImportHeaders, [], row], [], []).errors)
+      .toContainEqual(expect.objectContaining({ row: 3, column: "Mã công việc OneBiz" }));
+  });
+  it("rejects a missing accounting choice instead of disabling protection", () => {
+    expect(parseQualityCatalog([qualityImportHeaders, row.slice(0, 7)]).errors)
+      .toContainEqual(expect.objectContaining({ row: 2, column: "Cần xác nhận kế toán" }));
   });
 });
 describe("QC command and read boundaries", () => {

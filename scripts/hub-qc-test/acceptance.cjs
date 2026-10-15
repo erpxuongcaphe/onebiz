@@ -783,6 +783,7 @@ module.exports = async function acceptance(db) {
           {
             standardId: bonusStandard,
             code: "VALID-NEW",
+            accountingRequired: false,
             category: "operations",
             scoreType: "deduct",
             weight: 5,
@@ -791,6 +792,7 @@ module.exports = async function acceptance(db) {
           {
             standardId: bonusStandard,
             code: "INVALID",
+            accountingRequired: false,
             category: "operations",
             scoreType: "deduct",
             weight: -5,

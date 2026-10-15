@@ -131,6 +131,11 @@
   font-weight: 500;
   min-width: 0;
 }
+.formStack {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
 .field small,
 .muted {
   font-size: 12px;
@@ -274,6 +279,9 @@
   margin-bottom: 10px;
 }
 .dialog {
+  box-sizing: border-box;
+  min-height: 0;
+  overflow: hidden;
   width: min(1360px, calc(100vw - 32px)) !important;
   max-width: none !important;
   max-height: calc(100dvh - 32px);
@@ -406,9 +414,15 @@
     margin-top: 10px;
   }
   .dialog {
+    top: 0 !important;
+    left: 0 !important;
+    translate: none !important;
+    transform: none !important;
+    scale: 1 !important;
+    animation: none !important;
     width: 100vw !important;
-    max-height: 100dvh;
-    height: 100dvh;
+    max-height: 100dvh !important;
+    height: 100dvh !important;
     border-radius: 0 !important;
   }
   .dialogHeader {

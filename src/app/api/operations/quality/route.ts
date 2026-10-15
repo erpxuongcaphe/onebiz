@@ -32,6 +32,7 @@ const messages: Record<string, string> = {
     "Kỳ này đã có chính sách chấm điểm. Không đổi chính sách giữa kỳ.",
   OPS_Q_REWARD_INCOMPLETE: "Chưa đủ điểm, quỹ hoặc phân bổ để chốt thưởng.",
   OPS_Q_CATALOG_REQUIRED: "Chưa có danh mục tiêu chuẩn QC có hiệu lực.",
+  OPS_Q_ACCOUNTING_CHOICE_REQUIRED: "Tải mẫu Excel mới và chọn Có hoặc Không tại cột Cần xác nhận kế toán cho từng dòng.",
   OPS_Q_EVIDENCE_REQUIRED: "Mục cộng điểm cần minh chứng cụ thể.",
   OPS_Q_ACCOUNTING_REQUIRED:
     "Chọn số liệu kế toán đã xác nhận đúng chi nhánh và kỳ QC.",
