@@ -59,8 +59,11 @@ import { canProposeStandard, canProposeRevision, initialMineFilters } from "@/li
 import { MeasurementPicker } from "./measurement-picker";
 import { OperationsMktLinks } from "./mkt-links";
 import { QualityWorkspace } from "./quality-workspace";
+import type { QualityFocus, QualityDestination } from "./quality-overview";
+import { qualityPeriodKey } from "@/lib/operations/quality-periods";
 
 const tabs = [
+  { key: "overview", label: "Tổng quan", icon: "dashboard" },
   { key: "work", label: "Công việc", icon: "fact_check" },
   { key: "todo", label: "To-do", icon: "checklist" },
   { key: "qc", label: "QC độc lập", icon: "rule" },
@@ -176,6 +179,14 @@ export default function OperationsWorkspace() {
   const [legacy, setLegacy] = useState(false);
   const [branch, setBranch] = useState("");
   const [period, setPeriod] = useState("");
+  const [assessmentPeriod, setAssessmentPeriod] = useState("");
+  const [qualityFocus, setQualityFocus] = useState<QualityFocus | undefined>();
+  const [qualityNavigation, setQualityNavigation] = useState(0);
+  const navigateQuality = (destination: QualityDestination, focus?: QualityFocus) => requestPageLeave(() => {
+    setQualityFocus(focus);
+    setQualityNavigation((value) => value + 1);
+    setTab(destination === "issues" ? "todo" : destination === "report" ? "kpi" : destination);
+  });
   const [data, setData] = useState<Workspace | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -211,7 +222,11 @@ export default function OperationsWorkspace() {
     }
     if (params.get("view") === "qc") {
       setTab("qc");
-      if (/^\d{4}-(0[1-9]|1[0-2])$/.test(params.get("period") ?? "")) setPeriod(params.get("period")!);
+      const selectedPeriod = qualityPeriodKey.safeParse(params.get("period"));
+      if (selectedPeriod.success) {
+        if (selectedPeriod.data.startsWith("custom:")) setAssessmentPeriod(selectedPeriod.data);
+        else setPeriod(selectedPeriod.data);
+      }
     }
   }, []);
   const load = useCallback(async () => {
@@ -452,7 +467,7 @@ export default function OperationsWorkspace() {
             disabled={!!data && !data.branches.length}
             onChange={(e) => {
               const next = e.target.value;
-              requestPageLeave(() => { setEditor(null); setBranch(next); });
+              requestPageLeave(() => { setEditor(null); setBranch(next); setAssessmentPeriod(""); });
             }}
           >
             {data && !data.branches.length && <option value="">Theo công việc được phân công</option>}
@@ -468,7 +483,7 @@ export default function OperationsWorkspace() {
             value={period}
             onChange={(e) => {
               const next = e.target.value;
-              requestPageLeave(() => { setEditor(null); setPeriod(next); });
+              requestPageLeave(() => { setEditor(null); setPeriod(next); setAssessmentPeriod(""); });
             }}
           />
           <button
@@ -490,7 +505,7 @@ export default function OperationsWorkspace() {
               key={key}
               aria-current={tab === key ? "page" : undefined}
               onClick={() => {
-                const finish = () => { setTab(key); setSearch(""); };
+                const finish = () => { setTab(key); setSearch(""); setQualityFocus(undefined); };
                 if (key === tab) finish(); else requestPageLeave(finish);
               }}
             >
@@ -525,7 +540,7 @@ export default function OperationsWorkspace() {
           {loading && !data && <Empty label="Đang tải dữ liệu…" />}
           {data && (
             <>
-              {!legacy && <QualityWorkspace key={`${branch}:${tab}`} workspace={data} branch={branch || data.todos[0]?.branch_id || ""} period={period} initialView={tab === "todo" ? "issues" : tab === "qc" ? "qc" : tab === "kpi" ? "report" : tab === "settings" ? "settings" : "work"} onLegacySettings={() => requestPageLeave(() => {setLegacy(true);setTab("settings");})} />}
+              {!legacy && <QualityWorkspace key={`${branch}:${tab}:${qualityNavigation}`} workspace={data} branch={branch || data.todos[0]?.branch_id || ""} period={period} assessmentPeriod={assessmentPeriod} onAssessmentPeriodChange={setAssessmentPeriod} focus={qualityFocus} onNavigate={navigateQuality} configuration={<SettingsView data={data} canConfigure={can("approve_policy")} canPropose={canProposeStandard(data, branch)} canManageMembers={can("manage_members")} busy={busy} onEdit={setEditor} onSave={send} includeRewardPolicies={false} />} initialView={tab === "overview" ? "overview" : tab === "todo" ? "issues" : tab === "qc" ? "qc" : tab === "kpi" ? "report" : tab === "settings" ? "settings" : "work"} onLegacySettings={() => requestPageLeave(() => {setLegacy(true);setTab("settings");})} />}
               {legacy && <>
               <div className={styles.notice}>Cấu hình và lịch sử Hub hiện có <button onClick={() => requestPageLeave(() => {setLegacy(false);setTab("work");})}>Về Hub mới</button></div>
               <div className={styles.metrics}>
@@ -1048,6 +1063,7 @@ function SettingsView({
   busy,
   onEdit,
   onSave,
+  includeRewardPolicies = true,
 }: {
   data: Workspace;
   canConfigure: boolean;
@@ -1056,6 +1072,7 @@ function SettingsView({
   busy: boolean;
   onEdit: (editor: Editor) => void;
   onSave: (action: string, payload: Record<string, unknown>) => Promise<void>;
+  includeRewardPolicies?: boolean;
 }) {
   const [target, setTarget] = useState<"standards" | "policies" | "members">("standards");
   const [search, setSearch] = useState("");
@@ -1080,10 +1097,10 @@ function SettingsView({
         )}
         {canConfigure && (
           <>
-            <button onClick={() => onEdit({ kind: "policy" })}>
+            {includeRewardPolicies && <button onClick={() => onEdit({ kind: "policy" })}>
               <Icon name="add" size={16} />
               Chính sách thưởng
-            </button>
+            </button>}
             <button
               disabled={busy}
               onClick={() => void onSave("generate", { until: today() })}
@@ -1101,7 +1118,7 @@ function SettingsView({
         )}
       </div>
       <div className={styles.toolbar}>
-        <label className={styles.field}><span>Danh mục thiết lập</span><select aria-label="Danh mục thiết lập" value={target} onChange={event => { setTarget(event.target.value as typeof target); setFilters(initialFilters("settings")); setSearch(""); }}><option value="standards">Standard Working</option><option value="policies">Chính sách thưởng</option><option value="members">Phân công chi nhánh</option></select></label>
+        <label className={styles.field}><span>Danh mục thiết lập</span><select aria-label="Danh mục thiết lập" value={target} onChange={event => { setTarget(event.target.value as typeof target); setFilters(initialFilters("settings")); setSearch(""); }}><option value="standards">Standard Working</option>{includeRewardPolicies && <option value="policies">Chính sách thưởng</option>}<option value="members">Phân công chi nhánh</option></select></label>
         <label className={styles.field}><span>Tìm trong thiết lập</span><input aria-label="Tìm trong thiết lập" type="search" maxLength={200} value={search} onChange={event => setSearch(event.target.value)} placeholder={target === "members" ? "Tên tài khoản" : "Tên mẫu hoặc chính sách"} /></label>
       </div>
       <OperationsFilterBar kind="settings" settingsTarget={target} value={filters} onChange={setFilters} people={data.people} period={data.period} />

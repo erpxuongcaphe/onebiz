@@ -151,6 +151,8 @@ module.exports = async function acceptance(db) {
       ids.owner,
     ],
   );
+  // This synthetic standard existed before its first due time, regardless of test execution hour.
+  await db.query("update ops_standards set created_at=$2::date::timestamp at time zone 'Asia/Ho_Chi_Minh' where id=$1", [standard,day]);
   await db.query("select ops_generate_internal($1,$2)", [ids.branch, day]);
   await db.query("select ops_generate_internal($1,$2)", [ids.branch, day]);
   check(

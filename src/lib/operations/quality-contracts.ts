@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { qualityPeriodKey, type QualityPeriod } from "./quality-periods";
 
 export const qualityActions = [
   "check",
@@ -20,10 +21,19 @@ export const qualityActions = [
   "accounting",
   "accounting_approve",
   "settle",
+  "period",
+  "group",
+  "adhoc",
+  "reference",
+  "target",
+  "revenue",
+  "approve_revenue",
+  "onebiz_revenue",
+  "revenue_batch",
 ] as const;
 export type QualityAction = (typeof qualityActions)[number];
 const uuid = z.uuid();
-const period = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
+const period = qualityPeriodKey;
 export const qualityCommandSchema = z
   .object({
     action: z.enum(qualityActions),
@@ -37,11 +47,12 @@ export const qualityReadSchema = z
     period,
     entity: uuid.nullable().default(null),
     kind: z
-      .enum(["work", "issues", "qc", "settings", "report", "history"])
+      .enum(["work", "adhoc", "issues", "qc", "settings", "report", "history", "overview", "references"])
       .default("work"),
     search: z.string().max(200).default(""),
+    sourceType: z.enum(["", "product", "lot", "supplier", "purchase", "supplier_return"]).default(""),
     state: z.string().max(40).default(""),
-    category: z.string().max(40).default(""),
+    category: z.string().max(80).default(""),
     priority: z.string().max(40).default(""),
     assignee: uuid.nullable().default(null),
     operator: uuid.nullable().default(null),
@@ -55,6 +66,7 @@ export const qualityReadSchema = z
     to: z.iso.datetime({ offset: true }).nullable().default(null),
     mine: z.enum(["true", "false"]).default("false"),
     overdue: z.enum(["true", "false"]).default("false"),
+    periodRange: z.enum(["true", "false"]).default("false"),
     offset: z.coerce.number().int().min(0).max(100000).default(0),
   })
   .superRefine((v, ctx) => {
@@ -74,6 +86,13 @@ export interface QualityRule {
   thresholdBasis: "before_bonus" | "after_bonus" | null;
   allowAbove100: boolean | null;
   bonusCap: number | null;
+  limits?: {
+    floor: boolean;
+    ceiling: boolean;
+    bonus: boolean;
+  };
+  bonusLimits?: { familyId: string; maxAwards: number | null; maxPoints: number | null }[];
+  openIssueAcrossPeriods?: "each_period" | "once_until_closed";
   qcFundCents: number | null;
   businessFundCents: number | null;
   businessThresholdBps: number | null;
@@ -122,6 +141,7 @@ export interface QualityCheck {
   observations: import("./contracts").Observation[];
 }
 export interface QualityIssue {
+  references?: { id: string; source_type: string; source_id: string; label: string; note: string; created_at: string }[];
   sources?: { id: string; qc_line_id: string | null; check_id: string | null; created_at: string }[];
   rechecks?: { id: string; result: string; note: string; evidence: string; actor_id: string; created_at: string }[];
   id: string;
@@ -169,6 +189,13 @@ export interface QualityLine {
   critical: boolean;
 }
 export interface QualityWorkspace {
+  periods?: QualityPeriod[];
+  groups?: { id: string; title: string; active: boolean; version: number }[];
+  target?: { amount_cents: number; definition: { label: string } } | null;
+  revenues?: import('./contracts').Revenue[];
+  adhoc?: (QualityCheck & { standard_snapshot: { title: string }; kind: 'adhoc' })[];
+  compliance?: { due: number; checked: number; met: number; late?: number; unknown: number; overdue: number };
+  issueSummary?: { opened: number; awaiting: number; overdue: number; closed: number };
   relatedBranches?: { id: string; name: string }[];
   business?: {
     ready: boolean;

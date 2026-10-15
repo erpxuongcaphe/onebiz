@@ -15,6 +15,7 @@ export function parseQualityCatalog(
   rows: unknown[][],
   existing: { code: string; effective_from: string }[] = [],
   approvedStandardIds?: string[],
+  qualityGroups: Record<string,string> = {},
 ) {
   const errors: { row: number; column: string; reason: string }[] = [];
   const seen = new Set<string>();
@@ -68,7 +69,7 @@ export function parseQualityCatalog(
       );
     else if (approvedStandardIds && !approvedStandardIds.includes(standardId))
       add(qualityImportHeaders[1], "Công việc chưa được duyệt hoặc không thuộc phạm vi đang chọn.");
-    const categoryKey = Object.entries(categories).find(
+    const categoryKey = Object.entries({...categories,...qualityGroups}).find(
       ([k, v]) => k === category || v === category,
     )?.[0];
     if (!categoryKey)

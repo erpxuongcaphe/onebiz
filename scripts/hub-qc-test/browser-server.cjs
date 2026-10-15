@@ -39,7 +39,14 @@ const ids = {
       },
     }).outputText;
     const m = { exports: {} };
-    new Function("require", "module", "exports", code)(req, m, m.exports);
+    const localRequire = (name) => {
+      if (name !== "./quality-periods") return req(name);
+      const periodModule = { exports: {} };
+      const periodCode = ts.transpileModule(fs.readFileSync(root + "/src/lib/operations/quality-periods.ts", "utf8"), {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;
+      new Function("require", "module", "exports", periodCode)(req, periodModule, periodModule.exports);
+      return periodModule.exports;
+    };
+    new Function("require", "module", "exports", code)(localRequire, m, m.exports);
     return m.exports;
   })();
   const server = await createServer({
