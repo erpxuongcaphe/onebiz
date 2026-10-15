@@ -11,7 +11,7 @@ const sources = [
   ['00156_branch_stock_null_variant_guard.sql', 'upsert_branch_stock'],
   ['00147_variant_aware_bom_lookup.sql', 'get_active_bom_for_branch'],
   ['00142_block_expired_lots_fifo.sql', 'allocate_lots_fifo'],
-  ['00350_fnb_exact_modifier_bom_quantities.sql', 'consume_bom_for_sale'],
+  ['00541_fnb_authoritative_modifier_scale.sql', 'consume_bom_for_sale'],
 ];
 const definitions = sources.map(([file, name]) => {
   const pattern = new RegExp(`create\\s+or\\s+replace\\s+function\\s+public\\.${name}\\s*\\(`, 'i');

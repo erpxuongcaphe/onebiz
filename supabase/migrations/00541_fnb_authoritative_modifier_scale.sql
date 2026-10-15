@@ -226,6 +226,5 @@ select coalesce(sum(quantity), 0) into v_available from public.branch_stock
   return jsonb_build_object('success', true, 'bom_id', v_bom_id, 'bom_name', coalesce(v_bom.name, null),
     'consumed', v_consumed, 'warnings', v_warnings, 'allow_negative', v_allow_negative, 'skipped_bom', p_skip_bom_consume);
 end;
-$function$
-;
+$function$;
 commit;
