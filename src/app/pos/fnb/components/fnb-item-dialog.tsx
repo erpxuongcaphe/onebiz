@@ -703,6 +703,11 @@ export function FnbItemDialog({
           dangThuGon={dangThuGon}
           onToggleThuGon={() => toggleThuGon(g.id)}
         />
+        {g.name.toLocaleLowerCase("vi").startsWith("mức đường") && !dangThuGon && (
+          <p className="text-xs font-normal text-muted-foreground">
+            Theo định lượng đường/nước đường trong BOM; giữ nguyên sữa đặc, mật ong.
+          </p>
+        )}
         {/* Ẩn bằng CSS, KHÔNG gỡ khỏi cây React — thu gọn rồi bung lại vẫn
             còn nguyên lựa chọn. */}
         <div className={cn("flex flex-wrap gap-2", dangThuGon && "hidden")}>

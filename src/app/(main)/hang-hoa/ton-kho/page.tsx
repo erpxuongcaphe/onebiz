@@ -321,7 +321,7 @@ function StockRowDetail({
                     },
                     {
                       label: "Giá trị tồn",
-                      value: formatCurrency(row.stockValue),
+                      value: row.valuationComplete === false ? "Chưa đủ dữ liệu" : formatCurrency(row.stockValue),
                     },
                     { label: "Cập nhật", value: formatDate(row.updatedAt) },
                   ]}
@@ -752,6 +752,7 @@ export default function TonKhoPage() {
   const [rows, setRows] = useState<BranchStockRow[]>([]);
   const [totalRows, setTotalRows] = useState(0);
   const [totalValue, setTotalValue] = useState(0);
+  const [valuationComplete, setValuationComplete] = useState(true);
   const [lowStockCount, setLowStockCount] = useState(0);
   const [branches, setBranches] = useState<BranchDetail[]>([]);
   const [loading, setLoading] = useState(true);
@@ -791,6 +792,7 @@ export default function TonKhoPage() {
   // CEO 28/05/2026: khóa cập nhật tồn kho đầu kỳ.
   const { hasPermission } = useAuth();
   const canLock = hasPermission("inventory.lock");
+  const canViewCost = hasPermission("products.view_cost");
   const [inventoryLocked, setInvLocked] = useState(false);
   const [lockBusy, setLockBusy] = useState(false);
   const [lockConfirmOpen, setLockConfirmOpen] = useState(false);
@@ -855,6 +857,7 @@ export default function TonKhoPage() {
       setRows(pageResult.rows);
       setTotalRows(pageResult.total);
       setTotalValue(aggregates.totalValue);
+      setValuationComplete(aggregates.valuationComplete);
       setLowStockCount(aggregates.lowStockCount);
     } catch (err) {
       // Chỉ toast cho request mới nhất → tránh spam 10+ toast khi gõ nhanh
@@ -1035,7 +1038,7 @@ export default function TonKhoPage() {
       size: 140,
       cell: ({ row }) => (
         <span className="font-medium text-right block">
-          {formatCurrency(row.original.stockValue)}
+          {row.original.valuationComplete === false ? "Chưa đủ dữ liệu" : formatCurrency(row.original.stockValue)}
         </span>
       ),
     },
@@ -1167,7 +1170,8 @@ export default function TonKhoPage() {
               { header: "Khả dụng", key: "available", width: 12, format: (v: number) => v },
               { header: "Giá trị tồn", key: "stockValue", width: 15, format: (v: number) => v },
             ];
-            exportToCsv(all, cols, "ton-kho");
+            exportToCsv(all.map(row => ({ ...row, stockValue: row.valuationComplete === false ? null : row.stockValue })),
+              canViewCost ? cols : cols.filter(column => column.key !== "stockValue"), "ton-kho");
           },
         }}
       />
@@ -1186,14 +1190,14 @@ export default function TonKhoPage() {
       )}
 
       <DataTable
-        columns={columns}
+        columns={canViewCost ? columns : columns.filter(column => !("accessorKey" in column) || column.accessorKey !== "stockValue")}
         data={rows}
         loading={loading}
         density="compact"
         toolbarMetrics={
           <>
             <ListMetric label="Tổng sản phẩm" value={formatStockQuantity(totalRows)} icon={<Icon name="inventory" size={15} />} />
-            <ListMetric label="Giá trị tồn" value={formatCurrency(totalValue)} tone="primary" icon={<Icon name="payments" size={15} />} />
+            {canViewCost && <ListMetric label="Giá trị tồn" value={valuationComplete ? formatCurrency(totalValue) : "Chưa đủ dữ liệu"} tone="primary" icon={<Icon name="payments" size={15} />} />}
             <ListMetric label="Dưới định mức" value={formatStockQuantity(lowStockCount)} tone={lowStockCount > 0 ? "danger" : "default"} icon={<Icon name="warning" size={15} />} />
           </>
         }
@@ -1234,7 +1238,7 @@ export default function TonKhoPage() {
         defaultColumnVisibility={{ reserved: false, minStock: false }}
         summaryRow={{
           quantity: "Nhiều đơn vị · xem từng hàng",
-          stockValue: formatCurrency(totalValue),
+          stockValue: valuationComplete ? formatCurrency(totalValue) : "Chưa đủ dữ liệu",
         }}
         getRowId={(r) => r.id}
         expandedRow={expandedRow}
