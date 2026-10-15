@@ -34,7 +34,9 @@ async function bootstrap(db) {
       }
       if (migration === "00532_operations_quality_foundation.sql" && process.env.HUB_RELEASE_BUNDLE) {
         await db.exec("create schema supabase_migrations; create table supabase_migrations.schema_migrations(version text primary key, name text, statements text[]);");
-        await db.exec(fs.readFileSync(process.env.HUB_RELEASE_BUNDLE, "utf8"));
+        let release = fs.readFileSync(process.env.HUB_RELEASE_BUNDLE, "utf8");
+        if (process.env.HUB_RELEASE_CRLF === "1") release = release.replace(/\r?\n/g, "\r\n");
+        await db.exec(release);
         const history = await db.query("select count(*)::int n from supabase_migrations.schema_migrations");
         if (history.rows[0].n !== 5) throw new Error("Incomplete atomic release history");
         console.log("PASS exact atomic release bundle and five history entries");
