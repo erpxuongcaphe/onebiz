@@ -1,4 +1,4 @@
--- Additive Hub only. Apply/test on an isolated database before explicit production approval.
+-- Additive Hub only. Release number avoids the production 00527 expiry migration.
 -- No automatic conversion of legacy verification, scores, stock or financial records.
 begin;
 set local lock_timeout='3s';

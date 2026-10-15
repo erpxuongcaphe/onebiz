@@ -15,18 +15,31 @@ const migrations = [
   "00508_operations_mkt_links.sql",
   "00509_operations_filters_access.sql",
   "00514_operations_standard_proposals.sql",
-  "00527_operations_quality_foundation.sql",
-  "00528_operations_quality_reads.sql",
+  "00532_operations_quality_foundation.sql",
+  "00533_operations_quality_reads.sql",
 ];
 async function bootstrap(db) {
   await db.exec(fs.readFileSync(path.join(__dirname, "bootstrap.sql"), "utf8"));
   for (const migration of [
     ...migrations,
-    "00529_operations_quality_evidence.sql",
-    "00530_operations_quality_accounting_and_reports.sql",
-    "00531_operations_quality_access.sql",
+    "00534_operations_quality_evidence.sql",
+    "00535_operations_quality_accounting_and_reports.sql",
+    "00536_operations_quality_access.sql",
   ]) {
     try {
+      if (migration === "00532_operations_quality_foundation.sql" && process.env.HUB_BASELINE_FUNCTIONS) {
+        const baseline = JSON.parse(fs.readFileSync(process.env.HUB_BASELINE_FUNCTIONS, "utf8"));
+        for (const row of baseline) await db.exec(row.definition);
+        console.log("PASS production function snapshots loaded into isolated baseline");
+      }
+      if (migration === "00532_operations_quality_foundation.sql" && process.env.HUB_RELEASE_BUNDLE) {
+        await db.exec("create schema supabase_migrations; create table supabase_migrations.schema_migrations(version text primary key, name text, statements text[]);");
+        await db.exec(fs.readFileSync(process.env.HUB_RELEASE_BUNDLE, "utf8"));
+        const history = await db.query("select count(*)::int n from supabase_migrations.schema_migrations");
+        if (history.rows[0].n !== 5) throw new Error("Incomplete atomic release history");
+        console.log("PASS exact atomic release bundle and five history entries");
+        return;
+      }
       await db.exec(
         fs.readFileSync(
           path.join(root, "supabase/migrations", migration),
@@ -51,6 +64,15 @@ if (require.main === module)
       await require("./advanced.cjs")(db);
       await db.exec(fs.readFileSync(path.join(root, "Hub/PREFLIGHT_QC_READ_ONLY.sql"), "utf8"));
       console.log("PASS read-only release preflight compiles on isolated PostgreSQL");
+      if (process.env.HUB_RECOVERY_SQL) {
+        const before = await db.query("select count(*)::int n from public.ops_q_events");
+        await db.exec(fs.readFileSync(process.env.HUB_RECOVERY_SQL, "utf8"));
+        const after = await db.query("select count(*)::int n from public.ops_q_events");
+        if (before.rows[0].n !== after.rows[0].n) throw new Error("Recovery lost quality history");
+        const access = await db.query("select has_function_privilege('authenticated','public.ops_quality_execute(text,jsonb,uuid)','execute') allowed");
+        if (access.rows[0].allowed) throw new Error("Recovery did not disable new writes");
+        console.log("PASS compatibility recovery preserves QC history and disables new writes");
+      }
       const cases = path.join(__dirname, "cases.sql");
       if (fs.existsSync(cases)) {
         const results = await db.exec(fs.readFileSync(cases, "utf8"));
