@@ -11,6 +11,7 @@ create function user_has_permission(uuid,text) returns boolean language sql as $
 $$;
 \ir ../migrations/00307_atomic_customer_code_change.sql
 \ir ../migrations/00537_walk_in_customer_identity.sql
+\ir ../migrations/00538_walk_in_legacy_identity_unique.sql
 create table test_invoices(customer_id uuid references customers(id),total numeric,paid numeric);
 insert into test_invoices select id,205000,0 from customers where code='KL-VL';
 update customers set debt=205000 where code='KL-VL';
@@ -74,6 +75,19 @@ do $$ begin
     update public.customers set is_walk_in=false where is_walk_in;
     raise exception 'direct identity edit accepted';
   exception when insufficient_privilege then null; end;
+end; $$;
+reset role;
+
+-- A legacy client with no SELECT visibility still cannot create a duplicate.
+alter table customers enable row level security;
+create policy test_hidden_walk_in on customers for select to authenticated using(false);
+create policy test_insert_walk_in on customers for insert to authenticated with check(true);
+set role authenticated;
+do $$ begin
+  begin
+    insert into customers(tenant_id,code,name) values('10000000-0000-0000-0000-000000000002','KL-VL','Khách lẻ');
+    raise exception 'RLS-hidden singleton duplicated by legacy client';
+  exception when unique_violation then null; end;
 end; $$;
 reset role;
 
