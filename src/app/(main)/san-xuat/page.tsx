@@ -14,7 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
 import { KpiCard, ChartCard } from "@/app/(main)/phan-tich/_components";
-import { useBranchFilter } from "@/lib/contexts";
+import { useBranchFilter, useAuth } from "@/lib/contexts";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import {
   getProductionKpis,
@@ -183,6 +183,8 @@ function TrendTooltip({ active, payload, label }: any) {
 // ────────────────────────────────────────────
 
 export default function ProductionDashboardPage() {
+  const { hasPermission } = useAuth();
+  const canViewCost = hasPermission("products.view_cost");
   const { activeBranchId, isReady, branchLabel } = useBranchFilter();
   const labels = useProductionLabels();
   const [loading, setLoading] = useState(true);
@@ -269,9 +271,9 @@ export default function ProductionDashboardPage() {
           iconColor="text-status-success"
           valueColor="text-status-success"
         />
-        <KpiCard
+        {canViewCost && <KpiCard
           label={`Giá trị ${labels.nvlLabel}`}
-          value={formatCurrency(kpis?.nvlStockValue ?? 0)}
+          value={kpis?.nvlStockValueComplete === false ? "Chưa đủ dữ liệu" : formatCurrency(kpis?.nvlStockValue ?? 0)}
           change={
             (kpis?.nvlLowStockCount ?? 0) > 0
               ? `${kpis?.nvlLowStockCount} NVL dưới mức tối thiểu`
@@ -282,7 +284,7 @@ export default function ProductionDashboardPage() {
           bg="bg-status-info/10"
           iconColor="text-status-info"
           valueColor="text-status-info"
-        />
+        />}
       </div>
 
       {/* Lot alerts */}
@@ -423,7 +425,7 @@ export default function ProductionDashboardPage() {
                 <th className="hidden sm:table-cell text-left p-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Chi nhánh</th>
                 <th className="text-right p-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tồn kho</th>
                 <th className="hidden sm:table-cell text-right p-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tối thiểu</th>
-                <th className="hidden md:table-cell text-right p-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Giá trị</th>
+                {canViewCost && <th className="hidden md:table-cell text-right p-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Giá trị</th>}
                 <th className="text-center p-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Trạng thái</th>
               </tr>
             </thead>
@@ -437,7 +439,7 @@ export default function ProductionDashboardPage() {
                   <td className="hidden sm:table-cell p-2 text-muted-foreground">{r.branchName}</td>
                   <td className="p-2 text-right font-medium"><StockWithConversion variant="cell" quantity={r.quantity} unit={r.unit} conversions={units.map.get(r.productId)} /></td>
                   <td className="hidden sm:table-cell p-2 text-right text-muted-foreground">{formatNumber(r.minStock)}</td>
-                  <td className="hidden md:table-cell p-2 text-right">{formatCurrency(r.stockValue)}</td>
+                  {canViewCost && <td className="hidden md:table-cell p-2 text-right">{r.valuationComplete === false ? "Chưa đủ dữ liệu" : formatCurrency(r.stockValue)}</td>}
                   <td className="p-2 text-center">
                     {r.isOut ? (
                       <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-status-error/10 text-status-error">

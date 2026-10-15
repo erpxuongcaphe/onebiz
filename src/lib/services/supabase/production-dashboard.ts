@@ -4,6 +4,7 @@
  */
 
 import { getClient, handleError, getCurrentTenantId } from "./base";
+import { getStockValuations, valuationKey, valueStockQuantity } from "./stock-valuation";
 
 // ────────────────────────────────────────────
 // Types
@@ -26,6 +27,7 @@ export interface ProductionKpis {
   expiredLots: number;
   /** Giá trị NVL tồn kho */
   nvlStockValue: number;
+  nvlStockValueComplete?: boolean;
   /** NVL dưới mức tồn kho tối thiểu */
   nvlLowStockCount: number;
 }
@@ -42,6 +44,7 @@ export interface NvlStockRow {
   maxStock: number;
   costPrice: number;
   stockValue: number;
+  valuationComplete?: boolean;
   isLow: boolean;
   isOut: boolean;
 }
@@ -138,7 +141,7 @@ export async function getProductionKpis(branchId?: string): Promise<ProductionKp
 
   let nvlQuery = supabase
     .from("branch_stock")
-    .select("product_id, quantity, products:products_scoped(cost_price, min_stock, product_type)")
+    .select("branch_id, product_id, quantity, products:products_scoped(cost_price, min_stock, product_type)")
     .eq("tenant_id", tenantId);
   if (branchId) nvlQuery = nvlQuery.eq("branch_id", branchId);
 
@@ -176,14 +179,18 @@ export async function getProductionKpis(branchId?: string): Promise<ProductionKp
     return product?.product_type === "nvl" || recipeMaterials.has(r.product_id);
   });
 
+  const valuations = new Map((await getStockValuations(nvlRows.map(row => row.product_id), branchId ? [branchId] : undefined))
+    .map(value => [valuationKey(value.branchId, value.productId), value]));
   let nvlStockValue = 0;
+  let nvlStockValueComplete = true;
   let nvlLowStockCount = 0;
   for (const r of nvlRows) {
     const qty = Number(r.quantity ?? 0);
     const product = r.products as { cost_price?: number; min_stock?: number } | null;
-    const costPrice = Number(product?.cost_price ?? 0);
     const minStock = Number(product?.min_stock ?? 0);
-    nvlStockValue += qty * costPrice;
+    const value = valueStockQuantity(qty, valuations.get(valuationKey(r.branch_id, r.product_id)));
+    nvlStockValue += value ?? 0;
+    if (value === null) nvlStockValueComplete = false;
     if (qty <= 0 || (minStock > 0 && qty <= minStock)) nvlLowStockCount++;
   }
 
@@ -196,6 +203,7 @@ export async function getProductionKpis(branchId?: string): Promise<ProductionKp
     expiringLots,
     expiredLots,
     nvlStockValue,
+    nvlStockValueComplete,
     nvlLowStockCount,
   };
 }
@@ -227,6 +235,8 @@ export async function getNvlStock(params?: {
   const [{ data, error }, recipeMaterials] = await Promise.all([query, getRecipeMaterialIds(params?.branchId)]);
   if (error) handleError(error, "getNvlStock");
 
+  const valuations = new Map((await getStockValuations(((data ?? []) as Array<{ product_id: string }>).map(row => row.product_id), params?.branchId ? [params.branchId] : undefined))
+    .map(value => [valuationKey(value.branchId, value.productId), value]));
   let rows: NvlStockRow[] = ((data ?? []) as any[])
     .filter((r) => {
       const product = r.products as { product_type?: string } | null;
@@ -238,7 +248,9 @@ export async function getNvlStock(params?: {
       const qty = Number(r.quantity ?? 0);
       const minStock = Number(product.min_stock ?? 0);
       const maxStock = Number(product.max_stock ?? 0);
-      const costPrice = Number(product.cost_price ?? 0);
+      const valuation = valuations.get(valuationKey(r.branch_id, r.product_id));
+      const value = valueStockQuantity(qty, valuation);
+      const costPrice = valuation?.unitCost ?? 0;
 
       return {
         productId: r.product_id,
@@ -251,7 +263,8 @@ export async function getNvlStock(params?: {
         minStock,
         maxStock,
         costPrice,
-        stockValue: qty * costPrice,
+        stockValue: value ?? 0,
+        valuationComplete: value !== null,
         isLow: minStock > 0 && qty > 0 && qty <= minStock,
         isOut: qty <= 0,
       };

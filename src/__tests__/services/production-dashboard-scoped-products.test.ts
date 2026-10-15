@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-const state = vi.hoisted(() => ({ cost: 0, quantity: 4, skuInput: false, selects: [] as string[] }));
+const state = vi.hoisted(() => ({ cost: 0, valuation: 0 as number | null, quantity: 4, skuInput: false, selects: [] as string[] }));
 vi.mock("@/lib/services/supabase/base", () => ({
   getCurrentTenantId: async () => "tenant",
   handleError: (error: { message: string }) => { throw new Error(error.message); },
@@ -29,6 +29,12 @@ vi.mock("@/lib/services/supabase/base", () => ({
   } }),
 }));
 
+vi.mock("@/lib/services/supabase/stock-valuation", async importOriginal => ({
+  ...await importOriginal<typeof import("@/lib/services/supabase/stock-valuation")>(),
+  getStockValuations: async () => state.valuation === null ? [] : [{ branchId: "b", productId: "p", quantity: state.quantity,
+    unitCost: state.valuation, value: state.quantity * state.valuation, complete: true }],
+}));
+
 import { getNvlStock, getProductionKpis } from "@/lib/services/supabase/production-dashboard";
 
 describe("production dashboard with scoped product costs", () => {
@@ -43,15 +49,17 @@ describe("production dashboard with scoped product costs", () => {
   });
   it("keeps stock and low-stock indicators usable when cost is masked", async () => {
     state.cost = 0;
+    state.valuation = null;
     state.skuInput = false;
     state.selects = [];
     const [rows, kpis] = await Promise.all([getNvlStock({ branchId: "b" }), getProductionKpis("b")]);
-    expect(rows[0]).toMatchObject({ quantity: 4, isLow: true, costPrice: 0, stockValue: 0 });
-    expect(kpis).toMatchObject({ nvlLowStockCount: 1, nvlStockValue: 0 });
+    expect(rows[0]).toMatchObject({ quantity: 4, isLow: true, costPrice: 0, stockValue: 0, valuationComplete: false });
+    expect(kpis).toMatchObject({ nvlLowStockCount: 1, nvlStockValue: 0, nvlStockValueComplete: false });
     expect(state.selects.filter(s => s.includes("cost_price")).every(s => s.includes("products:products_scoped"))).toBe(true);
   });
   it("uses permitted costs without changing physical quantities", async () => {
-    state.cost = 12;
+    state.cost = 9999; // stale catalog price must never value branch stock
+    state.valuation = 12;
     state.skuInput = false;
     const rows = await getNvlStock({ branchId: "b" });
     expect(rows[0]).toMatchObject({ quantity: 4, costPrice: 12, stockValue: 48 });
