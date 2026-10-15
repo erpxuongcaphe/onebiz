@@ -808,3 +808,12 @@ function mapOption(row: RawOption): ModifierOption {
     isActive: row.is_active,
   };
 }
+
+/** POS: only owner-configured recipes create sweetness selections. Notes stay free text. */
+export async function filterFnbRecipeSweetnessGroups(productId: string, branchId: string, groups: ModifierGroup[]): Promise<ModifierGroup[]> {
+  if (!groups.some(g => /^mức (đường|ngọt)/iu.test(g.name.trim()))) return groups;
+  const { data, error } = await (getClient() as unknown as { rpc: (name: string, args: Record<string, string>) => Promise<{ data: string[] | null; error: { message: string } | null }> }).rpc("get_fnb_exact_sweetness_groups_00544", { p_product_id: productId, p_branch_id: branchId });
+  if (error) handleError(error, "filterFnbRecipeSweetnessGroups");
+  const exact = new Set<string>(data ?? []);
+  return groups.filter(g => !/^mức (đường|ngọt)/iu.test(g.name.trim()) || exact.has(g.id));
+}
