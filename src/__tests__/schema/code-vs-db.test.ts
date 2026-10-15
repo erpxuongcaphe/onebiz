@@ -54,7 +54,8 @@ const RPC_CHO_MIGRATION = new Map<string, string>([
   // vì không có service-role credential. Xóa các dòng này ngay lần dump schema kế tiếp.
 ]);
 const COT_CHO_MIGRATION = new Map<string, string>([
-  // (trống — 00331 đã chạy trên prod 17/08/2026)
+  ["product_lots.expiry_at", "00527_lot_expiry_time.sql"],
+  ["purchase_order_items.expiry_at", "00527_lot_expiry_time.sql"],
 ]);
 const BANG_CHO_MIGRATION = new Map<string, string>([
 ]);
