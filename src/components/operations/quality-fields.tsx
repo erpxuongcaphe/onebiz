@@ -48,6 +48,8 @@ export function SelectField({
   required,
   onChange,
   multiple,
+  allowEmpty = true,
+  emptyLabel,
 }: {
   label: string;
   name?: string;
@@ -56,6 +58,8 @@ export function SelectField({
   required?: boolean;
   onChange?: (v: string) => void;
   multiple?: boolean;
+  allowEmpty?: boolean;
+  emptyLabel?: string;
 }) {
   const entries = Array.isArray(options)
     ? options.map((p) => [p.id, p.name])
@@ -72,8 +76,8 @@ export function SelectField({
           multiple={multiple}
           onChange={(e) => onChange?.(e.target.value)}
         >
-          {!multiple && (
-            <option value="">{onChange ? "Tất cả" : "Chưa chọn"}</option>
+          {!multiple && allowEmpty && (
+            <option value="">{emptyLabel ?? (required || !onChange ? "Chưa chọn" : "Tất cả")}</option>
           )}
           {entries.map(([k, v]) => (
             <option key={k} value={k}>
@@ -321,7 +325,7 @@ export function IssueFields({
     ),
   );
   return (
-    <>
+    <div className={s.formStack}>
       <TextField
         label="Nội dung cần xử lý"
         name={`${prefix}title`}
@@ -384,7 +388,7 @@ export function IssueFields({
         options={workspace.people}
         multiple
       />
-    </>
+    </div>
   );
 }
 export function issuePayload(form: FormData, prefix = "") {

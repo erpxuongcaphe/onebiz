@@ -3,6 +3,7 @@ import { useState, type FormEvent } from "react";
 import { categories, type Workspace } from "@/lib/operations/contracts";
 import {
   draftQualityRule,
+  type QualityItem,
   type QualityRule,
 } from "@/lib/operations/quality-contracts";
 import { qualityRuleIssues } from "@/lib/operations/quality-policy";
@@ -10,7 +11,7 @@ import {
   parseQualityCatalog,
   qualityImportHeaders,
 } from "@/lib/operations/quality-import";
-import { formatNumber, formatDate } from "@/lib/format";
+import { formatNumber, formatShortDate } from "@/lib/format";
 import { parseMoneyUS } from "@/lib/operations/policy";
 import { Field, SelectField, TextField, vnToday } from "./quality-fields";
 import s from "./quality.module.css";
@@ -51,6 +52,10 @@ export function RuleFields({
       name={key}
       options={{ true: "Có", false: "Không" }}
       value={rule[key] === null ? "" : String(rule[key])}
+      emptyLabel="Chưa chọn"
+      onChange={(value) =>
+        setRule((r) => ({ ...r, [key]: value === "" ? null : value === "true" }))
+      }
     />
   );
   return (
@@ -72,6 +77,13 @@ export function RuleFields({
                 once_per_issue: "Mỗi sự việc / hạng mục trừ một lần trong kỳ",
               }}
               value={rule.repeatMode ?? ""}
+              emptyLabel="Chưa chọn"
+              onChange={(value) =>
+                setRule((r) => ({
+                  ...r,
+                  repeatMode: (value || null) as QualityRule["repeatMode"],
+                }))
+              }
             />
             <SelectField
               label="Xét điểm tối thiểu"
@@ -81,6 +93,13 @@ export function RuleFields({
                 after_bonus: "Sau khi cộng điểm khuyến khích",
               }}
               value={rule.thresholdBasis ?? ""}
+              emptyLabel="Chưa chọn"
+              onChange={(value) =>
+                setRule((r) => ({
+                  ...r,
+                  thresholdBasis: (value || null) as QualityRule["thresholdBasis"],
+                }))
+              }
             />
             {bool("Cho điểm/thưởng vượt 100", "allowAbove100")}
           </div>
@@ -261,10 +280,12 @@ export function CatalogFields({ workspace }: { workspace: Workspace }) {
 }
 export function CatalogImport({
   workspace,
+  catalog = [],
   busy,
   onImport,
 }: {
   workspace: Workspace;
+  catalog?: QualityItem[];
   busy: boolean;
   onImport: (
     rows: ReturnType<typeof parseQualityCatalog>["rows"],
@@ -322,7 +343,8 @@ export function CatalogImport({
         wb.Sheets[wb.SheetNames[0]],
         { header: 1, raw: false },
       );
-      setPreview(parseQualityCatalog(rows));
+      const parsed = parseQualityCatalog(rows, catalog, workspace.standards.filter((standard) => standard.status === "approved").map((standard) => standard.id));
+      setPreview(parsed);
     } catch {
       setError("Không đọc được file Excel. Dùng đúng mẫu tải từ Hub.");
     } finally {
@@ -378,8 +400,9 @@ export function CatalogImport({
                 <tr>
                   <th>Mã</th>
                   <th>Loại điểm</th>
-                  <th>Trọng số</th>
+                  <th className={s.numeric}>Trọng số</th>
                   <th>Hiệu lực</th>
+                  <th>Xác nhận kế toán</th>
                 </tr>
               </thead>
               <tbody>
@@ -387,8 +410,9 @@ export function CatalogImport({
                   <tr key={i}>
                     <td>{r.code}</td>
                     <td>{r.scoreType === "bonus" ? "Cộng" : "Trừ"}</td>
-                    <td>{formatNumber(r.weight)}</td>
-                    <td>{formatDate(r.effectiveFrom)}</td>
+                    <td className={s.numeric}>{formatNumber(r.weight)}</td>
+                    <td>{formatShortDate(r.effectiveFrom)}</td>
+                    <td>{r.accountingRequired ? "Bắt buộc" : "Không"}</td>
                   </tr>
                 ))}
               </tbody>

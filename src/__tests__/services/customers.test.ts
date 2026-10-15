@@ -45,7 +45,26 @@ import {
   changeCustomerCode,
   deleteCustomer,
   getCustomerGroups,
+  getOrCreateWalkInCustomer,
 } from "@/lib/services/supabase/customers";
+
+describe("walk-in identity", () => {
+  beforeEach(() => vi.clearAllMocks());
+  it("resolves the same system customer after standardizing its code", async () => {
+    mockRpc.mockResolvedValueOnce({data:{id:"same-id",code:"KHA-KLE-066",name:"Khách lẻ",is_walk_in:true,debt:205000},error:null});
+    mockResult.mockResolvedValueOnce({data:{id:"same-id",code:"KHA-KLE-066",name:"Khách lẻ",is_walk_in:true,debt:205000,customer_groups:{name:"Khách lẻ",discount_percent:5}},error:null});
+    const customer = await getOrCreateWalkInCustomer();
+    expect(mockRpc).toHaveBeenCalledWith("get_or_create_walk_in_customer");
+    expect(customer).toMatchObject({id:"same-id",code:"KHA-KLE-066",isWalkIn:true,currentDebt:205000});
+    expect(customer.groupDiscountPercent).toBe(5);
+    expect(mockChain.insert).not.toHaveBeenCalled();
+  });
+  it("does not insert another customer if singleton lookup fails", async () => {
+    mockRpc.mockResolvedValueOnce({data:null,error:{message:"denied"}});
+    await expect(getOrCreateWalkInCustomer()).rejects.toThrow("denied");
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+});
 
 describe("createCustomer", () => {
   beforeEach(() => vi.clearAllMocks());

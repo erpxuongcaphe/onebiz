@@ -588,75 +588,17 @@ export async function createCustomer(
   return mapCustomer(data);
 }
 
-/**
- * Lấy hoặc tạo system customer "Khách lẻ" (walk-in) cho tenant hiện tại.
- *
- * Use case: POS Retail (CEO 04/05/2026) bỏ nút "Ghi nợ" riêng — khi cashier
- * điền "Khách đưa" nhỏ hơn tổng đơn (hoặc rỗng), hệ thống tự ghi công nợ
- * vào customer. Nếu cashier không chọn khách cụ thể → fallback system
- * customer "Khách lẻ" để track gross debt.
- *
- * Code chuẩn (internal): "KL-VL" — chỉ dùng làm DB key tránh trùng với
- * khách thật. Tên hiển thị: "Khách lẻ" (CEO chốt 04/05 bỏ chữ "vãng lai").
- * Lazy create — chỉ tạo lần đầu có invoice walk-in; các lần sau dùng lại.
- *
- * NOTE: Một tenant chỉ có 1 walk-in customer. Khoá theo (tenant_id, code)
- * — UNIQUE constraint của customers table đảm bảo không tạo trùng.
- *
- * Backward compat: nếu DB đã có customer code KL-VL với name cũ
- * "Khách lẻ vãng lai" → upsert tên mới khi gọi lần kế.
- */
+/** Resolves the tenant singleton atomically, independently of its display code. */
 export async function getOrCreateWalkInCustomer(): Promise<Customer> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-
-  // Tìm trước
-  const { data: existing } = await supabase
-    .from("customers")
-    .select(
-      "*, customer_groups!customers_group_id_fkey(name, discount_percent), loyalty_tiers(name, discount_percent)",
-    )
-    .eq("tenant_id", tenantId)
-    .eq("code", "KL-VL")
-    .maybeSingle();
-
-  if (existing) {
-    // Migration mềm: nếu name cũ "Khách lẻ vãng lai" → đổi thành "Khách lẻ"
-    if (existing.name === "Khách lẻ vãng lai") {
-      await supabase
-        .from("customers")
-        .update({ name: "Khách lẻ" } as CustomerUpdate)
-        .eq("tenant_id", tenantId)
-        .eq("id", existing.id);
-      existing.name = "Khách lẻ";
-    }
-    return mapCustomer(existing);
-  }
-
-  // Chưa có → tạo
-  const { data: created, error } = await supabase
-    .from("customers")
-    .insert({
-      tenant_id: tenantId,
-      code: "KL-VL",
-      name: "Khách lẻ",
-      phone: null,
-      email: null,
-      address: null,
-      group_id: null,
-      gender: null,
-      customer_type: "individual",
-      price_tier_id: null,
-      is_active: true,
-    } satisfies CustomerInsert)
-    .select(
-      "*, customer_groups!customers_group_id_fkey(name, discount_percent), loyalty_tiers(name, discount_percent)",
-    )
-    .single();
-
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)("get_or_create_walk_in_customer");
   if (error) handleError(error, "getOrCreateWalkInCustomer");
-
-  return mapCustomer(created);
+  if (!data?.id) throw new Error("Không xác định được khách lẻ mặc định. Vui lòng tải lại POS.");
+  // Preserve group/tier pricing metadata from the existing customer read path.
+  const customer = await getCustomerById(data.id);
+  if (!customer) throw new Error("Không tìm thấy hồ sơ khách lẻ mặc định. Vui lòng tải lại POS.");
+  return customer;
 }
 
 /**
@@ -791,6 +733,20 @@ export interface ChangeCustomerCodeResult {
   changed: boolean;
 }
 
+export async function standardizeWalkInCustomerCode(
+  customerId: string,
+): Promise<ChangeCustomerCodeResult> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (getClient().rpc as any)(
+    "standardize_walk_in_customer_code", { p_customer_id: customerId },
+  );
+  if (error) handleError(error, "standardizeWalkInCustomerCode");
+  return {
+    customerId: data.customer_id, oldCode: data.old_code,
+    newCode: data.new_code, changed: data.changed,
+  };
+}
+
 /** Đổi riêng mã khách hàng qua RPC có kiểm quyền, tenant, trùng mã và audit. */
 export async function changeCustomerCode(
   customerId: string,
@@ -893,6 +849,7 @@ function mapCustomer(row: any, returnsTotal = 0): Customer {
     code: row.code,
     name: row.name,
     isInternal: row.is_internal === true,
+    isWalkIn: row.is_walk_in === true || row.code === "KL-VL",
     branchId: row.branch_id ?? undefined,
     phone: row.phone ?? "",
     email: row.email ?? undefined,
