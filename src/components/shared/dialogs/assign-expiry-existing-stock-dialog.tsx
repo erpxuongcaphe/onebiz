@@ -16,6 +16,7 @@
  *   - bulk_create_adjustment_lots_atomic (tạo lots + audit log)
  */
 
+import { ExpiryDateInput } from "@/components/shared/expiry-date-input";
 import { useEffect, useMemo, useState } from "react";
 import {
   Dialog,
@@ -562,11 +563,10 @@ export function AssignExpiryDialog({
             <label className="text-xs font-medium text-muted-foreground uppercase">
               HSD chung
             </label>
-            <Input
-              type="date"
+            <ExpiryDateInput
               value={bulkExpiry}
-              onChange={(e) => setBulkExpiry(e.target.value)}
-              className="w-40"
+              onValueChange={nextValue => setBulkExpiry(nextValue)}
+              className="w-64 max-w-full"
             />
           </div>
           <div className="space-y-0.5">
@@ -621,7 +621,7 @@ export function AssignExpiryDialog({
                 <th className="p-2 text-right w-24">Tồn</th>
                 <th className="p-2 text-center w-32">Đã có lot</th>
                 <th className="p-2 text-left w-32">SL gắn HSD</th>
-                <th className="p-2 text-left w-40">HSD *</th>
+                <th className="p-2 text-left min-w-60">HSD *</th>
                 <th className="p-2 text-left w-48">Số lô (auto)</th>
               </tr>
             </thead>
@@ -724,13 +724,11 @@ export function AssignExpiryDialog({
                       </td>
                       <td className="p-2">
                         <div className="flex items-center gap-1.5">
-                          <Input
-                            type="date"
+                          <ExpiryDateInput
                             value={r.expiry}
-                            onChange={(e) =>
-                              updateRow(p.productId, { expiry: e.target.value })
+                            onValueChange={nextValue => updateRow(p.productId, { expiry: nextValue })
                             }
-                            className="h-8 text-xs flex-1"
+                            className="min-w-60 flex-1"
                             disabled={!r.checked}
                           />
                           <ExpiryBadge dateStr={r.expiry} />

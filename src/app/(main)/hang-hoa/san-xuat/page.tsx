@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -57,6 +57,7 @@ import { Icon } from "@/components/ui/icon";
 import { CorrectProductionOrderDialog } from "@/components/shared/dialogs/correct-production-order-dialog";
 import { UnitSnapshotHistory } from "@/components/shared/unit-snapshot-history";
 import { useProductUom } from "@/lib/hooks/use-product-uom";
+import { cashBookDate } from "@/lib/cash-time";
 import { StockWithConversion } from "@/components/shared/stock-with-conversion";
 import { getProductStockUnitsByIds, getUOMConversionsByProductIds } from "@/lib/services/supabase/uom";
 import { formatOperationalQuantity, preferredWeighingUnit, stockToInput } from "@/lib/operational-uom";
@@ -278,6 +279,9 @@ export default function SanXuatPage() {
   const [correctingItem, setCorrectingItem] = useState<{order:ProductionOrder;cancel:boolean}|null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [boardOrderId, setBoardOrderId] = useState<string | null>(null);
+  const [boardSort, setBoardSort] = useState("due");
+  const fetchRequest = useRef(0);
   const [filterOpen, setFilterOpen] = useState(false);
   const [datePreset, setDatePreset] = useState<DatePresetValue>("all");
   const [dateFrom, setDateFrom] = useState("");
@@ -310,9 +314,11 @@ export default function SanXuatPage() {
   useEffect(() => { getProfilesForPersonFilter().then(setCreatorOptions).catch(() => setCreatorOptions([])); }, []);
 
   const fetchData = useCallback(async () => {
+    const request = ++fetchRequest.current;
     if (permissionsLoading) return;
     if (!activeBranchId && !duocXemToanChuoi) { setData([]); setTotal(0); setOtherBranchCount(0); setLoading(false); return; }
     setLoading(true);
+    setBoardOrderId(null);
     try {
       // Branch-aware: chỉ lấy production orders của chi nhánh đang active
       // (Xưởng rang → coffee orders, Kho tổng → yaourt/siro orders).
@@ -322,6 +328,7 @@ export default function SanXuatPage() {
       const query = { search, searchField, statuses: statusFilters, dateFrom: range.from, dateTo: range.to, createdBy: creatorFilter || undefined, qtyMin: qtyMin ? Number(qtyMin) : undefined, qtyMax: qtyMax ? Number(qtyMax) : undefined, branchId: branchScope };
       const result = await getProductionOrderListWorkspace({ page, pageSize, ...query });
       const visibleRows = viewMode === "kanban" ? await getProductionOrdersForExport(query) : result.data;
+      if (request !== fetchRequest.current) return;
       setData(visibleRows);
       setTotal(result.total);
       setSummary(result.summary);
@@ -330,6 +337,7 @@ export default function SanXuatPage() {
       if (duocXemToanChuoi && !viewAllBranches && activeBranchId) {
         if (result.total === 0) {
           const all = await getProductionOrderListWorkspace({ page: 0, pageSize: 1, ...query, branchId: undefined });
+          if (request !== fetchRequest.current) return;
           setOtherBranchCount(all.total);
         } else {
           setOtherBranchCount(0);
@@ -338,13 +346,15 @@ export default function SanXuatPage() {
         setOtherBranchCount(0);
       }
     } catch (err) {
+      if (request !== fetchRequest.current) return;
+      setData([]); setTotal(0);
       toast({
         title: "Lỗi tải lệnh sản xuất",
         description: err instanceof Error ? err.message : "Vui lòng thử lại",
         variant: "error",
       });
     } finally {
-      setLoading(false);
+      if (request === fetchRequest.current) setLoading(false);
     }
   }, [toast, activeBranchId, viewAllBranches, search, searchField, statusFilters, datePreset, dateFrom, dateTo, creatorFilter, qtyMin, qtyMax, page, pageSize, viewMode, duocXemToanChuoi, permissionsLoading]);
 
@@ -417,16 +427,30 @@ export default function SanXuatPage() {
     if (type === "excel") exportToExcel(exportRows, exportColumns, "lenh-san-xuat"); else exportToCsv(exportRows, exportColumns, "lenh-san-xuat");
   };
 
-  // Derive Kanban columns from STATUS_META (skip cancelled in the main board)
+  const today = cashBookDate(new Date().toISOString());
+  const isOverdue = (order: ProductionOrder) => !["completed", "cancelled"].includes(order.status) && !!order.plannedEnd && order.plannedEnd.slice(0, 10) < today;
+  const boardOrder = data.find(order => order.id === boardOrderId);
+  const boardRows = [...filtered].sort((a,b) => {
+    if (boardSort === "due") {
+      const overdue = Number(isOverdue(b)) - Number(isOverdue(a));
+      if (overdue) return overdue;
+      const deadline = (a.plannedEnd ?? "9999").localeCompare(b.plannedEnd ?? "9999");
+      if (deadline) return deadline;
+    }
+    const dateDiff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    return (boardSort === "newest" ? -dateDiff : dateDiff) || a.id.localeCompare(b.id);
+  });
+  // Include cancelled orders when explicitly selected by the filters.
   const kanbanColumns: KanbanColumn<ProductionOrder>[] = (
     Object.keys(STATUS_META) as ProductionOrderStatus[]
   )
-    .filter((s) => s !== "cancelled")
+    .filter((s) => s !== "cancelled" || filtered.some(order => order.status === "cancelled"))
     .map((status) => ({
       id: status,
       label: STATUS_META[status].label,
       color: STATUS_META[status].color,
-      items: filtered.filter((o) => o.status === status),
+      items: boardRows.filter((o) => o.status === status),
+      summary: <span>{boardRows.filter(o => o.status === status && isOverdue(o)).length} lệnh quá hạn</span>,
     }));
 
   const handleCardMove = async (
@@ -434,6 +458,8 @@ export default function SanXuatPage() {
     _fromColumnId: string,
     toColumnId: string
   ) => {
+    if (!canTransitionProductionStatus(_fromColumnId, toColumnId)) return;
+    if (toColumnId === "completed" ? !hasAny(["production.complete_order"]) : !txPerms.canEdit) return;
     if (toColumnId === "completed") {
       const order = data.find((item) => item.id === itemId);
       if (order) {
@@ -530,7 +556,7 @@ export default function SanXuatPage() {
           density="compact"
           actions={[
             {
-              label: viewMode === "list" ? "Xem Kanban" : "Xem danh sách",
+              label: viewMode === "list" ? "Bảng tiến độ" : "Xem danh sách",
               icon:
                 viewMode === "list" ? (
                   <Icon name="view_kanban" size={16} />
@@ -600,13 +626,19 @@ export default function SanXuatPage() {
             </Button>
           </div>
         ) : viewMode === "kanban" ? (
-          <div className="p-4">
-            <KanbanBoard
-              columns={kanbanColumns}
+          <div className="space-y-3 p-3 md:p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div><h2 className="font-semibold">Tiến độ sản xuất</h2><p className="text-xs text-muted-foreground">Toàn bộ lệnh theo bộ lọc. Chọn thẻ để xem chi tiết; hoàn thành cần xác nhận lượng thực dùng và thực nhận.</p></div>
+              <select aria-label="Sắp xếp lệnh trên bảng" className="h-9 rounded-md border bg-background px-2 text-sm" value={boardSort} onChange={event => setBoardSort(event.target.value)}><option value="due">Ưu tiên quá hạn / đến hạn</option><option value="oldest">Cũ nhất trước</option><option value="newest">Mới nhất trước</option></select>
+            </div>
+            {loading ? <p role="status" className="py-8 text-center text-sm text-muted-foreground">Đang tải bảng tiến độ…</p> : boardOrder ? <ProductionOrderDetail orderId={boardOrder.id} onClose={() => setBoardOrderId(null)} onEdit={boardOrder.status !== "cancelled" && txPerms.canEdit && (boardOrder.status !== "completed" || hasAny(["production.complete_order"])) ? () => setCorrectingItem({order:boardOrder,cancel:false}) : undefined} onDelete={boardOrder.status !== "cancelled" && txPerms.canCancel ? () => boardOrder.status === "completed" ? setCorrectingItem({order:boardOrder,cancel:true}) : setCancellingItem(boardOrder) : undefined} /> : <KanbanBoard
+            className="h-[calc(100dvh-22rem)]"
+            columns={kanbanColumns}
               getItemId={(o) => o.id}
-              onCardMove={handleCardMove}
+              onCardMove={txPerms.canEdit || hasAny(["production.complete_order"]) ? handleCardMove : undefined}
+              onCardClick={order => setBoardOrderId(order.id)}
               canDrop={(_id, from, to) =>
-                canTransitionProductionStatus(from, to)
+                canTransitionProductionStatus(from, to) && (to === "completed" ? hasAny(["production.complete_order"]) : txPerms.canEdit)
               }
               emptyMessage="Không có lệnh"
               renderCard={(order) => (
@@ -619,23 +651,21 @@ export default function SanXuatPage() {
                       {formatDate(order.createdAt)}
                     </span>
                   </div>
-                  <div className="text-sm font-medium truncate">
+                  <div className="text-sm font-medium break-words">
                     {order.productName ?? "—"}
                   </div>
                   <div className="text-xs text-muted-foreground truncate">
                     {order.branchName ?? "—"}
                   </div>
-                  <div className="flex items-center justify-between pt-1 border-t mt-1">
-                    <span className="text-xs text-muted-foreground">
-                      SL kế hoạch
-                    </span>
-                    <span className="text-xs font-semibold">
-                      {formatOperationalQuantity(order.completedQty)} / {formatOperationalQuantity(order.plannedQty)} {units.units.get(order.productId)}
-                    </span>
+                  <p className={isOverdue(order) ? "text-xs font-semibold text-status-error" : "text-xs text-muted-foreground"}>{order.plannedEnd ? `Hạn: ${formatDate(order.plannedEnd)}${isOverdue(order) ? " · Quá hạn" : ""}` : "Chưa đặt hạn"}</p>
+                  <p className="text-xs text-muted-foreground">{order.createdByName || "Chưa có tên người tạo"}</p>
+                  <div className="space-y-1 border-t pt-1 text-xs">
+                    <div className="flex flex-wrap items-start justify-between gap-1"><span className="text-muted-foreground">Thực nhận</span><StockWithConversion variant="cell" quantity={order.completedQty} unit={units.units.get(order.productId) ?? ""} conversions={units.map.get(order.productId)} /></div>
+                    <div className="flex flex-wrap items-start justify-between gap-1"><span className="text-muted-foreground">Kế hoạch</span><span className="font-semibold tabular-nums">{formatOperationalQuantity(order.plannedQty)} {units.units.get(order.productId)}</span></div>
                   </div>
                 </div>
               )}
-            />
+            />}
           </div>
         ) : (
           <DataTable

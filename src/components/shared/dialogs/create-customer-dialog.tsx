@@ -498,7 +498,7 @@ export function CreateCustomerDialog({
                   (loyalty marketing)
                 </span>
               </label>
-              <input
+              <Input
                 id="cust-birthday"
                 type="date"
                 value={birthday}

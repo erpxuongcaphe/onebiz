@@ -1,5 +1,6 @@
 "use client";
 
+import { ExpiryDateInput } from "@/components/shared/expiry-date-input";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "@/lib/contexts";
 import { Input } from "@/components/ui/input";
@@ -123,7 +124,7 @@ export function OpeningStockManualEntry({ onPreview, busy, contextContent, onSum
               <details className="mt-1"><summary className="min-h-9 cursor-pointer text-sm text-primary content-center">Lô, hạn sử dụng, ghi chú{line.lot || line.expiry || line.note ? " · Đã bổ sung" : " (tùy chọn)"}</summary>
                 <div className="grid gap-2 sm:grid-cols-2 pt-2">
                   <div><label className="text-xs font-medium" htmlFor={`opening-lot-${line.id}`}>Số lô</label><Input id={`opening-lot-${line.id}`} value={line.lot} maxLength={100} placeholder="Để trống để tạo tự động" onChange={event => update(line.id, { lot: event.target.value })} /></div>
-                  <div><label className="text-xs font-medium" htmlFor={`opening-expiry-${line.id}`}>Hạn sử dụng</label><Input id={`opening-expiry-${line.id}`} type="date" value={line.expiry} onChange={event => update(line.id, { expiry: event.target.value })} /></div>
+                  <div><label className="text-xs font-medium" htmlFor={`opening-expiry-${line.id}`}>Hạn sử dụng</label><ExpiryDateInput id={`opening-expiry-${line.id}`} value={line.expiry} onValueChange={nextValue => update(line.id, { expiry: nextValue })} /></div>
                   <div className="sm:col-span-2"><label className="text-xs font-medium" htmlFor={`opening-note-${line.id}`}>Ghi chú hàng</label><Input id={`opening-note-${line.id}`} value={line.note} maxLength={500} placeholder="Thông tin cần đối chiếu" onChange={event => update(line.id, { note: event.target.value })} /></div>
                 </div>
               </details>

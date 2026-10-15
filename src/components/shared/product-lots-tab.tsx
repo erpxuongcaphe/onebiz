@@ -1,4 +1,5 @@
 "use client";
+import { formatExpiryDate } from "@/lib/expiry-time";
 
 // ProductLotsTab — hiển thị danh sách lô của một sản phẩm (NVL hoặc SKU)
 // Dùng trong inline-detail-panel của trang Hàng hóa.
@@ -134,7 +135,7 @@ export function ProductLotsTab({ productId, branchId }: ProductLotsTabProps) {
                   {lot.manufacturedDate ? formatDate(lot.manufacturedDate) : "—"}
                 </td>
                 <td className="p-2">
-                  {lot.expiryDate ? formatDate(lot.expiryDate) : "—"}
+                  {lot.expiryDate ? formatExpiryDate(lot.expiryDate) : "—"}
                 </td>
                 <td className="p-2 text-center">
                   <ExpiryBadge

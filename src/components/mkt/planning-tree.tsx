@@ -537,9 +537,9 @@ export function PlanningTree({
         </div>
         <div className="flex items-center gap-1 text-xs text-on-surface-variant">
           <span>Hạn từ</span>
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={inputCls} />
+          <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={inputCls} />
           <span>đến</span>
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={inputCls} />
+          <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={inputCls} />
         </div>
         <select value={owner} onChange={(e) => setOwner(e.target.value)} className={inputCls}>
           <option value="">Mọi người phụ trách</option>

@@ -1,5 +1,7 @@
 "use client";
 
+import { Input } from "@/components/ui/input";
+
 /**
  * ReportDateRangePicker — dropdown 16 preset KiotViet + custom range.
  *
@@ -122,7 +124,7 @@ export function ReportDateRangePicker({
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
             <div className="flex-1">
               <label htmlFor={fromInputId} className="text-xs text-muted-foreground">Từ ngày</label>
-              <input
+              <Input
                 id={fromInputId}
                 type="date"
                 value={customFrom}
@@ -132,7 +134,7 @@ export function ReportDateRangePicker({
             </div>
             <div className="flex-1">
               <label htmlFor={toInputId} className="text-xs text-muted-foreground">Đến ngày</label>
-              <input
+              <Input
                 id={toInputId}
                 type="date"
                 value={customTo}
