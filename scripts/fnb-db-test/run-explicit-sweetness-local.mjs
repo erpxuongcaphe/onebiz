@@ -31,6 +31,7 @@ try {
  const start=migration.indexOf('CREATE OR REPLACE FUNCTION');
  const end=migration.indexOf('$function$',migration.indexOf('$function$',start)+10)+10;
  await db.exec(migration.slice(start,end)+';');
+ await db.exec(fs.readFileSync('supabase/migrations/00545_fnb_sweetness_note_topping_guard.sql','utf8')); 
  const consume=async option => (await db.query('select consume_bom_for_sale($1,$2,$3,1,$4,$5,null,$6,false,null) result',
  [id(1),id(2),id(3),id(6),id(7),JSON.stringify([{groupId:id(5),options:[{optionId:option,scaleFactor:0.001}]}])])).rows[0].result;
  for(const [n,factor] of [[20,0],[21,.8],[22,1],[23,1.2]]) {
@@ -53,5 +54,10 @@ try {
  await db.query('insert into bom_modifier_option_quantities values($1,$2,$3,0)',[id(4),id(10),id(20)]);
  await db.exec('begin'); const zero=await consume(id(20));assert.equal(zero.consumed.some(x=>x.material_id===id(10)),false,'explicit zero consumes no sugar');await db.exec('rollback');
  await assert.rejects(()=>consume(id(21)),/FNB_EXACT_RECIPE_OPTION_MISSING/);
+ await db.exec('delete from bom_modifier_option_quantities');
+ await db.exec('begin');
+ const forged=(await db.query('select consume_bom_for_sale($1,$2,$3,1,$4,$5,null,$6,false,null) result',[id(1),id(2),id(3),id(6),id(7),JSON.stringify([{groupId:id(5),options:[{optionId:id(20),linkedProductId:id(11),label:'No sugar'}]}])])).rows[0].result;
+ assert.equal(forged.consumed.filter(x=>x.material_id===id(11)).length,1,'sweetness note cannot add direct topping consumption');
+ await db.exec('rollback');
  console.log('PASS: explicit sweetness only; notes/forged factors unchanged stock, explicit 17 and zero, missing option rejected, milk/honey unchanged, rollback');
 } finally { await db.close(); }
