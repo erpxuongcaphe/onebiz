@@ -112,7 +112,7 @@ import {
   getFnbSupplyBranchScope,
   listFnbSupplyCatalogProductIds,
 } from "@/lib/services/supabase/fnb-supply-catalog";
-import { getFnbBranchComponentCosts } from "@/lib/services/supabase/fnb-branch-cost";
+import { getFnbBranchComponentCosts, getPreparedRecipeUnitCost } from "@/lib/services/supabase/fnb-branch-cost";
 import { invalidateMenuCache } from "@/lib/offline";
 import { useDurableFormDraft } from "@/lib/hooks/use-durable-form-draft";
 
@@ -693,7 +693,7 @@ export function CreateProductDialog({
           const product = materialOptions.find((candidate) => candidate.id === item.materialId);
           const cost = product ? fnbPreparedCostByProductId[product.id] : undefined;
           return product?.isFnbStockItem === true &&
-            !(cost && cost.unitCost > 0 && Math.abs(cost.costedQuantity - cost.physicalQuantity) <= 0.0001);
+            getPreparedRecipeUnitCost(cost) === null;
         },
       ),
     [bomItems, fnbPreparedCostByProductId, materialOptions, recipeRows],
@@ -3710,7 +3710,9 @@ export function CreateProductDialog({
                           sizes={variantItems.map((variant) => ({ key: variant.key, name: variant.name }))}
                           rows={recipeRows}
                           onChange={setRecipeRows}
-                          materials={materialOptions}
+                          materials={fnbCostMaterials}
+                          costPending={fnbPreparedCostLoading || perSizeCostDataPending}
+                          costUnavailable={hasMissingPreparedComponentCost}
                           selectableMaterials={selectableFnbComponentOptions}
                           groups={perSizeModifierGroups}
                           optionsByGroup={variantModifierOptionsByGroup}

@@ -19,6 +19,14 @@ export interface FnbBranchComponentCost {
   physicalQuantity: number;
 }
 
+export function getPreparedRecipeUnitCost(cost: FnbBranchComponentCost | undefined): number | null {
+  if (!cost || !Number.isFinite(cost.unitCost) || cost.unitCost < 0 ||
+    !Number.isFinite(cost.costedQuantity) || !Number.isFinite(cost.physicalQuantity) ||
+    Math.abs(cost.costedQuantity - cost.physicalQuantity) > 0.0001 ||
+    (cost.unitCost === 0 && cost.costedQuantity <= 0)) return null;
+  return cost.unitCost;
+}
+
 /** Quantity-only production check; never returns prices or cost amounts. */
 export async function getFnbProductionStockHealth(branchId: string, productIds: string[]) {
   // Migration RPC precedes generated schema types.
