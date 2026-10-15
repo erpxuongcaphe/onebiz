@@ -58,10 +58,12 @@ import { OperationsTodoPicker } from "./todo-picker";
 import { canProposeStandard, canProposeRevision, initialMineFilters } from "@/lib/operations/standard-permissions";
 import { MeasurementPicker } from "./measurement-picker";
 import { OperationsMktLinks } from "./mkt-links";
+import { QualityWorkspace } from "./quality-workspace";
 
 const tabs = [
   { key: "work", label: "Công việc", icon: "fact_check" },
   { key: "todo", label: "To-do", icon: "checklist" },
+  { key: "qc", label: "QC độc lập", icon: "rule" },
   { key: "review", label: "Xác minh", icon: "verified_user" },
   { key: "kpi", label: "KPI & thưởng", icon: "monitoring" },
   { key: "settings", label: "Thiết lập", icon: "tune" },
@@ -171,6 +173,7 @@ const blankCriterion = (): Criterion => ({
 
 export default function OperationsWorkspace() {
   const [tab, setTab] = useState<Tab>("work");
+  const [legacy, setLegacy] = useState(false);
   const [branch, setBranch] = useState("");
   const [period, setPeriod] = useState("");
   const [data, setData] = useState<Workspace | null>(null);
@@ -205,6 +208,10 @@ export default function OperationsWorkspace() {
     if (params.get("view") === "todo") {
       setTab("todo");
       setSearch((params.get("search") ?? "").slice(0, 200));
+    }
+    if (params.get("view") === "qc") {
+      setTab("qc");
+      if (/^\d{4}-(0[1-9]|1[0-2])$/.test(params.get("period") ?? "")) setPeriod(params.get("period")!);
     }
   }, []);
   const load = useCallback(async () => {
@@ -442,11 +449,13 @@ export default function OperationsWorkspace() {
             aria-label="Chi nhánh"
             title={data?.branches.find((b) => b.id === branch)?.name}
             value={branch}
+            disabled={!!data && !data.branches.length}
             onChange={(e) => {
               const next = e.target.value;
               requestPageLeave(() => { setEditor(null); setBranch(next); });
             }}
           >
+            {data && !data.branches.length && <option value="">Theo công việc được phân công</option>}
             {data?.branches.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.name}
@@ -475,7 +484,7 @@ export default function OperationsWorkspace() {
       </header>
       <div className={styles.layout}>
         <aside className={styles.nav}>
-          {tabs.filter(item => !data || data.isCeo || data.branches.length > 0 || item.key === "todo").map(({ key, label, icon }) => (
+          {tabs.filter(item => (legacy ? item.key !== "qc" : item.key !== "review") && (!data || data.isCeo || data.branches.length > 0 || item.key === "todo")).map(({ key, label, icon }) => (
             <button
               type="button"
               key={key}
@@ -516,6 +525,9 @@ export default function OperationsWorkspace() {
           {loading && !data && <Empty label="Đang tải dữ liệu…" />}
           {data && (
             <>
+              {!legacy && <QualityWorkspace key={`${branch}:${tab}`} workspace={data} branch={branch || data.todos[0]?.branch_id || ""} period={period} initialView={tab === "todo" ? "issues" : tab === "qc" ? "qc" : tab === "kpi" ? "report" : tab === "settings" ? "settings" : "work"} onLegacySettings={() => requestPageLeave(() => {setLegacy(true);setTab("settings");})} />}
+              {legacy && <>
+              <div className={styles.notice}>Cấu hình và lịch sử Hub hiện có <button onClick={() => requestPageLeave(() => {setLegacy(false);setTab("work");})}>Về Hub mới</button></div>
               <div className={styles.metrics}>
                 <div>
                   <span>Đạt đúng hạn</span>
@@ -954,6 +966,7 @@ export default function OperationsWorkspace() {
                   onSave={send}
                 />
               )}
+              </>}
             </>
           )}
         </section>

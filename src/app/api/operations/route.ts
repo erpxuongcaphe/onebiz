@@ -15,6 +15,7 @@ interface RpcClient {
   }>;
 }
 const errors: Record<string, string> = {
+  OPS_Q_USE_WORKFLOW: "Hồ sơ này dùng luồng mới. Về Công việc hoặc To-do trong Hub mới để ghi kết quả và kiểm tra lại.",
   OPS_FORBIDDEN: "Bạn chưa có quyền thực hiện ở chi nhánh này.",
   OPS_PROPOSAL_SCOPE: "Chỉ đề xuất việc riêng hoặc phiên bản của việc riêng trong chi nhánh được giao.",
   OPS_INVALID_PROPOSAL: "Kiểm tra tên công việc, lịch, ngày áp dụng và tiêu chí của đề xuất.",

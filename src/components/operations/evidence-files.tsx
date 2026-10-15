@@ -16,7 +16,7 @@ export function EvidenceFiles({
   canUpload,
 }: {
   entity: string;
-  kind: "run" | "todo";
+  kind: "run" | "todo" | "qc_line";
   canUpload: boolean;
 }) {
   const [files, setFiles] = useState<Attachment[]>([]);

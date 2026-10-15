@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
   if (
     !(file instanceof File) ||
     !z.uuid().safeParse(entity).success ||
-    !["run", "todo"].includes(String(kind)) ||
+    !["run", "todo", "qc_line"].includes(String(kind)) ||
     file.size < 1 ||
     file.size > MAX_EVIDENCE_BYTES ||
     file.name.length > 160

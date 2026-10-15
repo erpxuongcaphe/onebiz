@@ -1,0 +1,11 @@
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+}
+.material-symbols-outlined {
+  width: 1.2em;
+  height: 1.2em;
+  overflow: hidden;
+  color: transparent;
+}
+/* The fixture is fully offline; the real app loads its existing Material font. */
