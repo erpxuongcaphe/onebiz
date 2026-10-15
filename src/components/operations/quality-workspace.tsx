@@ -8,7 +8,7 @@ import {
 } from "react";
 import type { Workspace, Run } from "@/lib/operations/contracts";
 import { categories, priorities } from "@/lib/operations/contracts";
-import { formatDate, formatNumber } from "@/lib/format";
+import { formatDate, formatShortDate, formatNumber } from "@/lib/format";
 import {
   datePresets,
   filterDates,
@@ -68,6 +68,23 @@ function Badge({ value }: { value: string }) {
     </span>
   );
 }
+function CorrectionHistory({ line, people }: { line: QualityLine; people: Workspace["people"] }) {
+  if (!line.corrections?.length) return null;
+  return (
+    <details className={s.section}>
+      <summary>Đính chính ({line.corrections.length}) · Kết quả hiện tại: <Badge value={line.corrections[0].after_data.result} /></summary>
+      {line.corrections.map((correction) => (
+        <article key={correction.id} className={s.section}>
+          <p><Badge value={correction.before_data.result} /> → <Badge value={correction.after_data.result} /></p>
+          <p>{people.find((person) => person.id === correction.actor_id)?.name ?? "Người dùng OneBiz"} · {formatDate(correction.created_at)}</p>
+          <p>{correction.reason}</p>
+          <p>Minh chứng: {correction.evidence}</p>
+        </article>
+      ))}
+    </details>
+  );
+}
+
 function Table({
   heads,
   rows,
@@ -84,7 +101,7 @@ function Table({
           <thead>
             <tr>
               {heads.map((h) => (
-                <th key={h}>{h}</th>
+                <th key={h} className={h === "Trọng số" ? s.numeric : undefined}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -585,6 +602,7 @@ export function QualityWorkspace({
             )}
             <SelectField
               label="Khoảng thời gian"
+              allowEmpty={false}
               options={datePresets}
               value={dates.preset}
               onChange={(v) => {
@@ -696,6 +714,7 @@ export function QualityWorkspace({
               )}
               <SelectField
                 label="Lọc theo ngày"
+                allowEmpty={false}
                 options={
                   view === "work"
                     ? {
@@ -967,10 +986,7 @@ export function QualityWorkspace({
                   </td>
                   <td>
                     <Badge value={l.result} />
-                    {(l as QualityLine & { corrections: unknown[] }).corrections
-                      ?.length > 0 && (
-                      <p className={s.muted}>Có bản đính chính riêng</p>
-                    )}
+                    <CorrectionHistory line={l} people={workspace.people} />
                   </td>
                   <td>{l.evidence || l.note || "—"}</td>
                   <td>
@@ -999,6 +1015,7 @@ export function QualityWorkspace({
                 <article className={s.mobileItem} key={l.id}>
                   <h3>{l.item_snapshot.title}</h3>
                   <Badge value={l.result} />
+                  <CorrectionHistory line={l} people={workspace.people} />
                   <p>
                     {l.item_snapshot.score_type === "bonus" ? "Cộng" : "Trừ"}{" "}
                     {formatNumber(l.item_snapshot.weight)} điểm
@@ -1121,7 +1138,7 @@ export function QualityWorkspace({
                       <tr>
                         <th>Mã / tiêu chuẩn</th>
                         <th>Loại điểm</th>
-                        <th>Trọng số</th>
+                        <th className={s.numeric}>Trọng số</th>
                         <th>Hiệu lực</th>
                       </tr>
                     </thead>
@@ -1132,8 +1149,8 @@ export function QualityWorkspace({
                             {c.code} · {c.title}
                           </td>
                           <td>{c.score_type === "bonus" ? "Cộng" : "Trừ"}</td>
-                          <td>{formatNumber(c.weight)}</td>
-                          <td>{formatDate(c.effective_from)}</td>
+                          <td className={s.numeric}>{formatNumber(c.weight)}</td>
+                          <td>{formatShortDate(c.effective_from)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1143,6 +1160,7 @@ export function QualityWorkspace({
               {data.can.manage && (
                 <CatalogImport
                   workspace={workspace}
+                  catalog={data.catalog}
                   busy={busy}
                   onImport={(rows) => send("catalog_import", { rows })}
                 />
@@ -1153,7 +1171,7 @@ export function QualityWorkspace({
                   <div key={r.id} className={s.section}>
                     <strong>{r.title}</strong> <Badge value={r.state} />
                     <p>
-                      Hiệu lực: {formatDate(r.effective_from)} · QC:{" "}
+                      Hiệu lực: {formatShortDate(r.effective_from)} · QC:{" "}
                       {r.config.qcFundCents === null
                         ? "Chưa cấu hình"
                         : formatNumber(r.config.qcFundCents / 100)}{" "}
@@ -1196,6 +1214,7 @@ export function QualityWorkspace({
             <QualityReport
               data={data}
               workspace={workspace}
+              branch={branch}
               busy={busy}
               onEdit={edit}
               onSave={send}

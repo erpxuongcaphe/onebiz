@@ -11,6 +11,7 @@ import s from "./quality.module.css";
 export function QualityReport({
   data,
   workspace,
+  branch,
   busy,
   onEdit,
   onSave,
@@ -18,6 +19,7 @@ export function QualityReport({
 }: {
   data: QualityWorkspace;
   workspace: Workspace;
+  branch: string;
   busy: boolean;
   onEdit: (editor: QualityEditor) => void;
   onSave: (
@@ -151,7 +153,7 @@ export function QualityReport({
                 <tr key={e.id}>
                   <td>
                     <a
-                      href={`/hub?view=qc&audit=${encodeURIComponent(e.audit_id)}&period=${encodeURIComponent(workspace.period)}`}
+                      href={`/hub?view=qc&branch=${encodeURIComponent(branch)}&audit=${encodeURIComponent(e.audit_id)}&period=${encodeURIComponent(workspace.period)}`}
                     >
                       {e.audit_title}
                     </a>

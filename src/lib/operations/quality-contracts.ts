@@ -122,6 +122,8 @@ export interface QualityCheck {
   observations: import("./contracts").Observation[];
 }
 export interface QualityIssue {
+  sources?: { id: string; qc_line_id: string | null; check_id: string | null; created_at: string }[];
+  rechecks?: { id: string; result: string; note: string; evidence: string; actor_id: string; created_at: string }[];
   id: string;
   branch_id: string;
   todo_id: string;
@@ -154,6 +156,7 @@ export interface QualityAudit {
   version: number;
 }
 export interface QualityLine {
+  corrections?: { id: string; before_data: { result: string }; after_data: { result: string }; reason: string; evidence: string; actor_id: string; created_at: string }[];
   id: string;
   audit_id: string;
   item_snapshot: QualityItem;

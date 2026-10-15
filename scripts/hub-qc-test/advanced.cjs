@@ -58,6 +58,23 @@ module.exports=async(db)=>{
  const emptyAudit=(await exec('qc_create',{title:'Excluded scope',period:current})).id;data=await read(current,'qc',{entity:emptyAudit});
  for(const l of data.rows)await exec('qc_line',{id:l.id,version:l.version,result:'excluded',note:'Outside scope'});
  data=await read(current,'qc',{entity:emptyAudit});await denied(()=>exec('qc_complete',{id:emptyAudit,version:data.audit.version}),'OPS_Q_MISSING_RESULT','Excluding every item cannot certify a 100 score');
+ // Release regressions: selected scope, collaborator safety and explicit import choices.
+ await actor(qc);
+ const scoped=await exec('qc_create',{title:'Selected scope',period:current,catalogIds:[line.item_snapshot.id]});
+ check((await one('select count(*)::int n from ops_q_lines where audit_id=$1',[scoped.id])).n===1,'QC scope snapshots only selected active catalog entries');
+ await denied(()=>exec('qc_create',{title:'Empty scope',period:current,catalogIds:[]}),'OPS_Q_CATALOG_REQUIRED','Empty explicit QC scope is rejected atomically');
+ await denied(()=>exec('qc_create',{title:'Foreign scope',period:current,catalogIds:[crypto.randomUUID()]}),'OPS_FORBIDDEN','Unknown QC scope IDs cannot bypass branch boundaries');
+ await actor(owner);
+ await denied(()=>exec('catalog_import',{rows:[{standardId:standard,code:'NO-ACCOUNTING-CHOICE',category:'goods',scoreType:'deduct',weight:1,effectiveFrom:dates.day}]}),'OPS_Q_ACCOUNTING_CHOICE_REQUIRED','Direct catalog import must explicitly choose accounting protection');
+ await actor(manager);
+ const reassigned=await exec('issue',{title:'Reassignment regression',description:'Synthetic local test',category:'maintenance',priority:'normal',assigneeId:manager,dueAt:dates.day+'T17:00:00+07:00',collaborators:[]});
+ const operator='30000000-0000-4000-8000-000000000005';
+ const todo=await one('select t.version from ops_todos t join ops_q_issues i on i.todo_id=t.id where i.id=$1',[reassigned.id]);
+ await exec('issue_assign',{id:reassigned.id,version:todo.version,departmentId:null,operatorId:operator,collaborators:[operator],assigneeId:manager,dueAt:dates.day+'T18:00:00+07:00',note:'Assign office operator'});
+ const assigned=await one('select i.operator_id,t.collaborators,t.version from ops_q_issues i join ops_todos t on t.id=i.todo_id where i.id=$1',[reassigned.id]);
+ check(assigned.operator_id===operator&&assigned.collaborators.includes(operator),'Reassignment updates operator and collaborators on the same issue');
+ await denied(()=>exec('issue_assign',{id:reassigned.id,version:assigned.version,departmentId:null,operatorId:crypto.randomUUID(),collaborators:[],note:'Invalid operator'}),'OPS_FORBIDDEN','Reassignment rejects unknown operator and rolls back');
+ check((await one('select operator_id from ops_q_issues where id=$1',[reassigned.id])).operator_id===operator,'Rejected reassignment preserves prior operator');
  console.log(`Hub advanced acceptance: ${passed} assertions passed`);
  return passed;
 };

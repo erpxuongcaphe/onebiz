@@ -9,8 +9,13 @@ export const qualityImportHeaders = [
   "Trọng số",
   "Ngày hiệu lực",
   "Loại thưởng khi vi phạm",
+  "Cần xác nhận kế toán",
 ];
-export function parseQualityCatalog(rows: unknown[][]) {
+export function parseQualityCatalog(
+  rows: unknown[][],
+  existing: { code: string; effective_from: string }[] = [],
+  approvedStandardIds?: string[],
+) {
   const errors: { row: number; column: string; reason: string }[] = [];
   const seen = new Set<string>();
   const parsed: {
@@ -21,6 +26,7 @@ export function parseQualityCatalog(rows: unknown[][]) {
     weight: number;
     effectiveFrom: string;
     critical: boolean;
+    accountingRequired: boolean;
   }[] = [];
   const header = rows[0]?.map(String);
   if (!header || qualityImportHeaders.some((h, i) => header[i] !== h))
@@ -45,6 +51,7 @@ export function parseQualityCatalog(rows: unknown[][]) {
         rawWeight,
         effectiveFrom,
         critical,
+        accountingRequired,
       ] = row.map((v) => String(v ?? "").trim());
     const add = (column: string, reason: string) =>
       errors.push({ row: at, column, reason });
@@ -59,6 +66,8 @@ export function parseQualityCatalog(rows: unknown[][]) {
         qualityImportHeaders[1],
         "Chọn mã công việc đã duyệt từ danh mục tải xuống.",
       );
+    else if (approvedStandardIds && !approvedStandardIds.includes(standardId))
+      add(qualityImportHeaders[1], "Công việc chưa được duyệt hoặc không thuộc phạm vi đang chọn.");
     const categoryKey = Object.entries(categories).find(
       ([k, v]) => k === category || v === category,
     )?.[0];
@@ -88,8 +97,12 @@ export function parseQualityCatalog(rows: unknown[][]) {
     const iso = date ? `${date[3]}-${date[2]}-${date[1]}` : effectiveFrom;
     if (!z.iso.date().safeParse(iso).success)
       add(qualityImportHeaders[5], "Ngày phải hợp lệ theo dd/mm/yyyy.");
+    if (existing.some((item) => item.code === code && item.effective_from === iso))
+      add(qualityImportHeaders[0], "Mã và ngày hiệu lực đã có trên Hub. Không nhập lại cùng phiên bản.");
     if (!["Có", "Không"].includes(critical))
       add(qualityImportHeaders[6], "Chỉ nhận Có hoặc Không.");
+    if (!["Có", "Không"].includes(accountingRequired))
+      add(qualityImportHeaders[7], "Chọn Có hoặc Không; không để trống điều kiện kế toán.");
     parsed.push({
       code,
       standardId,
@@ -98,6 +111,7 @@ export function parseQualityCatalog(rows: unknown[][]) {
       weight,
       effectiveFrom: iso,
       critical: critical === "Có",
+      accountingRequired: accountingRequired === "Có",
     });
   });
   if (!parsed.length || parsed.length > 200)

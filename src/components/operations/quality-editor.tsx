@@ -218,6 +218,21 @@ function IssueDetail({
           {formatDate(issue.due_at)}
         </p>
         {issue.resolution && <p>Kết quả khắc phục: {issue.resolution}</p>}
+        <h3>Nguồn ghi nhận</h3>
+        {(issue.sources ?? []).map((source) => (
+          <p key={source.qc_line_id ?? source.check_id ?? source.id}>{source.qc_line_id ? "Kiểm tra QC độc lập" : "Tự kiểm tra công việc"} · {formatDate(source.created_at)}</p>
+        ))}
+        {!issue.sources?.length && <p>To-do phát sinh trực tiếp.</p>}
+        <h3>Các lần kiểm tra lại</h3>
+        {(issue.rechecks ?? []).map((recheck) => (
+          <article key={recheck.id} className={s.section}>
+            <strong>{recheck.result === "met" ? "Đạt" : "Chưa đạt"}</strong>
+            <p>{name(recheck.actor_id)} · {formatDate(recheck.created_at)}</p>
+            <p>{recheck.note}</p>
+            {recheck.evidence && <p>Minh chứng: {recheck.evidence}</p>}
+          </article>
+        ))}
+        {!issue.rechecks?.length && <p>Chưa có lần kiểm tra lại.</p>}
         <EvidenceFiles
           entity={issue.todo_id}
           kind="todo"
@@ -358,6 +373,9 @@ export function QualityEditorDialog({
           id: editor.issue.id,
           version: editor.issue.version,
           assigneeId: get("assigneeId"),
+          departmentId: get("departmentId") || null,
+          operatorId: get("operatorId") || null,
+          collaborators: f.getAll("collaborators").map(String),
           dueAt: new Date(`${get("dueAt")}:00+07:00`).toISOString(),
           note: get("note"),
         };
@@ -372,7 +390,7 @@ export function QualityEditorDialog({
           resolution: get("resolution"),
         };
       else if (editor.kind === "qc_create")
-        payload = { title: get("title"), period };
+        payload = { title: get("title"), period, catalogIds: f.getAll("catalogIds").map(String) };
       else if (editor.kind === "department")
         payload = {
           id: editor.department?.id ?? null,
@@ -429,6 +447,23 @@ export function QualityEditorDialog({
       lock.current = false;
     }
   }
+  if (editor.kind === "issue_detail")
+    return (
+      <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+        <DialogContent className={s.dialog}>
+          <div className={s.dialogHeader}>
+            <DialogTitle>{titles.issue_detail}</DialogTitle>
+            <p className={s.muted}>{workspace.branches.find((b) => b.id === branch)?.name} · {period}</p>
+          </div>
+          <div className={s.dialogBody}>
+            <IssueDetail issue={editor.issue} workspace={workspace} canWork={quality.can.work} />
+          </div>
+          <footer className={s.dialogFooter}>
+            <button type="button" data-dialog-close onClick={onClose}>Đóng</button>
+          </footer>
+        </DialogContent>
+      </Dialog>
+    );
   return (
     <Dialog
       open
@@ -449,13 +484,6 @@ export function QualityEditorDialog({
               <p role="alert" className={s.alert}>
                 {localError || error}
               </p>
-            )}
-            {editor.kind === "issue_detail" && (
-              <IssueDetail
-                issue={editor.issue}
-                workspace={workspace}
-                canWork={quality.can.work}
-              />
             )}
             {(editor.kind === "check" ||
               editor.kind === "qc_line" ||
@@ -675,6 +703,13 @@ export function QualityEditorDialog({
                   options={managers}
                   required
                 />
+                <SelectField label="Bộ phận phối hợp" name="departmentId"
+                  value={editor.issue.department_id ?? ""}
+                  options={quality.departments.filter((d) => d.active).map((d) => ({ id: d.id, name: d.title }))} />
+                <SelectField label="Người phối hợp" name="collaborators" multiple
+                  value={editor.issue.collaborators} options={workspace.people} />
+                <SelectField label="Người xử lý" name="operatorId"
+                  value={editor.issue.operator_id ?? ""} options={workspace.people} />
                 <TextField
                   label="Deadline mới (giờ Việt Nam)"
                   name="dueAt"
@@ -733,6 +768,15 @@ export function QualityEditorDialog({
                   required
                 />
                 <p>Kỳ điểm: {period}</p>
+                <fieldset>
+                  <legend>Phạm vi kiểm tra</legend>
+                  {quality.catalog.filter((item) => item.effective_from <= vnToday()).map((item) => (
+                    <label key={item.id} className={s.check}>
+                      <input type="checkbox" name="catalogIds" value={item.id} defaultChecked />
+                      {item.code} · {item.title}
+                    </label>
+                  ))}
+                </fieldset>
                 <p>
                   {quality.catalog.length} tiêu chuẩn trong danh mục; kết quả QC
                   được ghi độc lập với tự kiểm tra.
@@ -897,9 +941,8 @@ export function QualityEditorDialog({
               disabled={busy}
               onClick={onClose}
             >
-              {editor.kind === "issue_detail" ? "Đóng" : "Hủy"}
+              Hủy
             </button>
-            {editor.kind !== "issue_detail" && (
               <button type="submit" className={s.primary} disabled={busy}>
                 <Icon name={busy ? "hourglass_empty" : "save"} size={18} />
                 {busy
@@ -910,7 +953,6 @@ export function QualityEditorDialog({
                       ? "Chốt kỳ"
                       : "Lưu"}
               </button>
-            )}
           </footer>
         </form>
       </DialogContent>

@@ -142,7 +142,14 @@ const ids = {
                     ).rows[0].value,
                   };
                 }
-              } else if (url.pathname === "/api/operations/inbox")
+              } else if (url.pathname === "/api/operations/history")
+                value = (
+                  await db.query(
+                    "select ops_history($1,$2,$3,$4,$5) value",
+                    [url.searchParams.get("branch"), url.searchParams.get("period"), url.searchParams.get("kind") || "audit", url.searchParams.get("cursorAt"), url.searchParams.get("cursorId")],
+                  )
+                ).rows[0].value;
+              else if (url.pathname === "/api/operations/inbox")
                 value = { rows: [] };
               else if (url.pathname === "/api/operations/evidence")
                 value = { rows: [] };
