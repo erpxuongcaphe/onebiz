@@ -137,6 +137,7 @@ export async function getDashboardKpis(branchId?: string): Promise<DashboardKpis
     bq((supabase as any)
       .from("cash_transactions")
       .select("type, amount, payment_method, reference_type, status")
+      .eq("status", "completed")
       .eq("tenant_id", tenantId)
       .gte("transaction_date", cashBookDate(today.start))
       .lt("transaction_date", cashBookDate(today.end))),
@@ -144,6 +145,7 @@ export async function getDashboardKpis(branchId?: string): Promise<DashboardKpis
     bq((supabase as any)
       .from("cash_transactions")
       .select("type, amount, payment_method, reference_type, status")
+      .eq("status", "completed")
       .eq("tenant_id", tenantId)
       .gte("transaction_date", cashBookDate(yesterday.start))
       .lt("transaction_date", cashBookDate(yesterday.end))),
@@ -171,7 +173,7 @@ export async function getDashboardKpis(branchId?: string): Promise<DashboardKpis
 
   const calcCashBalance = (data: { type: string; amount: number; status?: string | null }[] | null) =>
     (data ?? [])
-      .filter((c) => c.status !== "cancelled")
+      .filter((c) => c.status === "completed")
       .reduce((sum, c) => sum + (c.type === "receipt" ? Number(c.amount ?? 0) : c.type === "payment" ? -Number(c.amount ?? 0) : 0), 0);
 
   type CashRow = {
@@ -192,7 +194,7 @@ export async function getDashboardKpis(branchId?: string): Promise<DashboardKpis
     };
 
     for (const row of data ?? []) {
-      if (row.status === "cancelled") continue;
+      if (row.status !== "completed") continue;
       const amount = Number(row.amount ?? 0);
       const method = row.payment_method === "transfer"
         ? "transfer"

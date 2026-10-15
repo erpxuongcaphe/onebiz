@@ -31,10 +31,10 @@ vi.mock("@/lib/services/supabase/base", () => ({
       }
       if (table === "cash_transactions") {
         return createQueryChain([
-          { type: "receipt", amount: 1200000, reference_type: "invoice" },
-          { type: "receipt", amount: 9000000, status: "cancelled" },
-          { type: "payment", amount: 400000 },
-          { type: "payment", amount: 100000 },
+          { type: "receipt", status: "completed", amount: 1200000, reference_type: "invoice" },
+          { type: "receipt", status: "cancelled", amount: 9000000 },
+          { type: "payment", status: "completed", amount: 400000 },
+          { type: "payment", status: "completed", amount: 100000 },
         ]);
       }
       return createQueryChain(null);
@@ -67,11 +67,13 @@ describe("getDashboardKpis", () => {
       { total: 100000, discount_amount: 0, status: "draft" },
     ];
     overrides.cash_transactions = [
-      { type: "receipt", amount: 300000, payment_method: "cash", reference_type: "invoice" },
-      { type: "receipt", amount: 100000, payment_method: "transfer", reference_type: "invoice" },
-      { type: "payment", amount: 20000, payment_method: "cash", reference_type: "sales_return" },
-      { type: "receipt", amount: 999999, reference_type: "invoice", status: "cancelled" },
-      { type: "receipt", amount: 777777, reference_type: "other" },
+      { type: "receipt", status: "completed", amount: 300000, payment_method: "cash", reference_type: "invoice" },
+      { type: "receipt", status: "completed", amount: 100000, payment_method: "transfer", reference_type: "invoice" },
+      { type: "payment", status: "completed", amount: 20000, payment_method: "cash", reference_type: "sales_return" },
+      { type: "receipt", status: "cancelled", amount: 999999, reference_type: "invoice" },
+      { type: "receipt", status: "completed", amount: 777777, reference_type: "other" },
+      { type: "receipt", status: "draft", amount: 888888, reference_type: "invoice" },
+      { type: "payment", status: "draft", amount: 666666, reference_type: "sales_return" },
     ];
     try {
       const kpis = await getDashboardKpis("branch-1");
@@ -83,6 +85,7 @@ describe("getDashboardKpis", () => {
       expect(kpis.todayRefunds).toBe(20000);
       expect(kpis.todayCash + kpis.todayTransfer + kpis.todayCard).toBe(kpis.todayCollected);
       expect(kpis.todayOrders).toBe(1);
+      expect(kpis.todayProfit).toBe(1157777);
     } finally {
       delete overrides.invoices;
       delete overrides.cash_transactions;
