@@ -993,6 +993,7 @@
    "id",
    "is_active",
    "is_internal",
+   "is_walk_in",
    "last_purchase_at",
    "loyalty_points",
    "loyalty_tier_id",
@@ -3178,6 +3179,7 @@
   "_fnb_send_to_kitchen_impl_before_00449",
   "_fnb_void_invoice_impl_00165",
   "_fnb_void_invoice_impl_00329",
+  "_inventory_value_timeline_00540",
   "_lot_expiry_context_00527",
   "_lot_expiry_moment_00527",
   "_open_shift_checkout_impl_00298",
@@ -3331,6 +3333,7 @@
   "get_bom_items_for_branch",
   "get_branch_profit_and_loss_report",
   "get_branch_profit_and_loss_report_v2",
+  "get_branch_stock_values_00540",
   "get_cash_book_list_workspace",
   "get_cash_performers",
   "get_consolidated_profit_and_loss_report",
@@ -3367,6 +3370,7 @@
   "get_management_finance_workspace",
   "get_mkt_campaign_readiness_score",
   "get_operation_history_00453",
+  "get_or_create_walk_in_customer",
   "get_party_cash_history_sources",
   "get_party_debt_movements",
   "get_payable_aging_report",
@@ -3656,6 +3660,7 @@
   "show_trgm",
   "soft_delete_pos_draft_atomic",
   "split_kitchen_order_atomic",
+  "standardize_walk_in_customer_code",
   "sync_product_bom_status_for_bom",
   "sync_product_bom_uom_00465",
   "sync_product_cost_from_bom",
@@ -3685,6 +3690,6 @@
   "void_internal_export_atomic"
  ],
  "soBang": 226,
- "soCot": 2673,
- "soRpc": 556
+ "soCot": 2674,
+ "soRpc": 560
 }
