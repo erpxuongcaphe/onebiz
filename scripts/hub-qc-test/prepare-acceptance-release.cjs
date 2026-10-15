@@ -16,16 +16,16 @@ for (const row of rows) {
   const hash = crypto.createHash('md5').update(row.definition.replace(/\r/g, '')).digest('hex');
   if (hash !== expected[row.function_name]) throw new Error('Function backup hash mismatch: ' + row.function_name);
 }
-let sql = fs.readFileSync(path.join(__dirname, '../../supabase/migrations/00537_operations_quality_acceptance_fixes.sql'), 'utf8').replace(/\r/g, '');
-sql = sql.replace(/^begin;\n/, '').replace(/commit;\s*$/, '');
+let sql = fs.readFileSync(path.join(__dirname, '../../supabase/migrations/00539_operations_quality_acceptance_fixes.sql'), 'utf8').replace(/\r/g, '');
+sql = sql.slice(sql.indexOf('begin;') + 'begin;'.length).replace(/commit;\s*$/, '');
 const guards = Object.entries(expected).map(([name, hash]) =>
   `if md5(replace(pg_get_functiondef('public.${name}'::regprocedure),chr(13),'')) <> '${hash}' then raise exception 'Hub baseline changed: ${name}'; end if;`).join('\n');
 const bundle = `begin;
 set local lock_timeout='3s';
 set local statement_timeout='30s';
-select pg_advisory_xact_lock(hashtextextended('onebiz-hub-release-00537',0));
+select pg_advisory_xact_lock(hashtextextended('onebiz-hub-release-00539',0));
 do $guard$ begin
-if exists(select 1 from supabase_migrations.schema_migrations where version='00537') then raise exception 'Hub 00537 already registered; do not replay'; end if;
+if exists(select 1 from supabase_migrations.schema_migrations where version='00539' or name='operations_quality_acceptance_fixes') then raise exception 'Hub acceptance fixes already registered; do not replay'; end if;
 ${guards}
 end $guard$;
 do $release$
@@ -33,12 +33,12 @@ declare migration_sql text := $migration$${sql}$migration$;
 begin
 execute migration_sql;
 insert into supabase_migrations.schema_migrations(version,name,statements)
-values('00537','operations_quality_acceptance_fixes',array[migration_sql]);
+values('00539','operations_quality_acceptance_fixes',array[migration_sql]);
 end $release$;
 commit;
-select version,name from supabase_migrations.schema_migrations where version='00537';
+select version,name from supabase_migrations.schema_migrations where version='00539';
 `;
-fs.writeFileSync(path.join(output,'APPLY_HUB_00537.sql'),bundle);
+fs.writeFileSync(path.join(output,'APPLY_HUB_00539.sql'),bundle);
 fs.writeFileSync(path.join(output,'RESTORE_HUB_FUNCTIONS_BEFORE_00537.sql'),
   "begin;\nset local lock_timeout='3s';\n" + rows.map(row => row.definition + ';').join('\n') + "\nnotify pgrst,'reload schema';\ncommit;\n");
 console.log('Verified three production backups; generated atomic release and non-destructive function recovery.');
