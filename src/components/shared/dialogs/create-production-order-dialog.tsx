@@ -1,7 +1,6 @@
 "use client";
 
 import { DateTimeInput } from "@/components/shared/date-time-input";
-import { cashDateTimeInput } from "@/lib/cash-time";
 import { validateProductionDateTimes } from "@/lib/production-date-time";
 import { ExpiryDateInput } from "@/components/shared/expiry-date-input";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -150,7 +149,7 @@ export function CreateProductionOrderDialog({
       setCheckedMaterialKey("");
       setErrors({});
       setLotNumber("");
-      setManufacturedDate(cashDateTimeInput());
+      setManufacturedDate(formatDateInputValue());
       setExpiryDate("");
     }
   }, [open]);

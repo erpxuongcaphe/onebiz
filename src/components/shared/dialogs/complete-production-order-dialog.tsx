@@ -1,7 +1,6 @@
 "use client";
 
 import { DateTimeInput } from "@/components/shared/date-time-input";
-import { cashDateTimeInput } from "@/lib/cash-time";
 import { validateProductionDateTimes } from "@/lib/production-date-time";
 import { ExpiryDateInput } from "@/components/shared/expiry-date-input";
 import { useState, useEffect, useRef } from "react";
@@ -92,7 +91,7 @@ export function CompleteProductionOrderDialog({
       }).catch(e => { if (active) toast({title:"Chưa tải được đơn vị",description:e instanceof Error ? e.message : "Mở lại để tải đơn vị trước khi hoàn tất.",variant:"warning"}); })
         .finally(() => { if (active) setUnitsLoading(false); });
       const today = formatDateInputValue(new Date());
-      setManufacturedDate(cashDateTimeInput());
+      setManufacturedDate(today);
       setLotNumber(`${order.code}-${today.replace(/-/g, "")}`);
       setExpiryDate("");
       setAutoSell(false);
