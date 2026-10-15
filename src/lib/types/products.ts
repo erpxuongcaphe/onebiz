@@ -16,6 +16,9 @@ export type InventoryRole =
   | 'fnb_stock_item';
 
 export interface Product {
+  /** Exact branch-ledger valuation when viewed within one branch. */
+  stockValue?: number | null;
+  stockValuationComplete?: boolean;
   id: string;
   code: string;
   name: string;

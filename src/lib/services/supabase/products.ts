@@ -10,6 +10,7 @@ import { isRpcUnavailable } from "./rpc-utils";
 // Đợt 2 (CEO 17/07): nhãn hướng giao dịch lấy từ nguồn sự thật chung.
 import { MOVEMENT_TYPE_LABELS } from "@/lib/constants/stock-movement-refs";
 import { getRecordedMovementPrices } from "@/lib/stock-movement-values";
+import { getStockValuations } from "./stock-valuation";
 
 type ProductInsert = Database["public"]["Tables"]["products"]["Insert"];
 type ProductUpdate = Database["public"]["Tables"]["products"]["Update"];
@@ -203,6 +204,16 @@ export async function getProducts(params: QueryParams): Promise<QueryResult<Prod
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const products: Product[] = (data ?? []).map((row: any) => mapProduct(row));
+  if (branchId) {
+    const values = new Map((await getStockValuations(products.map(product => product.id), [branchId]))
+      .map(value => [value.productId, value]));
+    for (const product of products) {
+      const value = values.get(product.id);
+      if (value?.complete && value.unitCost != null) product.costPrice = value.unitCost;
+      product.stockValue = value?.value ?? ((product.branchStock ?? 0) === 0 ? 0 : null);
+      product.stockValuationComplete = product.stockValue !== null;
+    }
+  }
 
   return { data: products, total: count ?? 0 };
 }
@@ -326,6 +337,7 @@ export async function getProductStats(
 ): Promise<{
   totalCount: number;
   stockValue: number;
+  stockValueComplete: boolean;
   outOfStock: number;
   lowStock: number;
 }> {
@@ -337,7 +349,7 @@ export async function getProductStats(
   let query = (supabase as any)
     .from("products_scoped")
     .select(
-      "stock, cost_price, inventory_role" +
+      "id, stock, cost_price, inventory_role" +
         (branchId ? ", branch_stock(quantity)" : ""),
       { count: "exact" },
     )
@@ -365,6 +377,9 @@ export async function getProductStats(
   let stockValue = 0;
   let outOfStock = 0;
   let lowStock = 0;
+  let stockValueComplete = true;
+  const values = branchId ? new Map((await getStockValuations((data ?? []).map((row: { id: string }) => row.id), [branchId]))
+    .map(value => [value.productId, value])) : null;
 
   for (const row of data ?? []) {
     // A2 (07/07): món menu F&B (fnb_menu_item) KHÔNG giữ tồn → bỏ khỏi giá trị
@@ -381,7 +396,9 @@ export async function getProductStats(
       ? Number(typedRow.branch_stock?.[0]?.quantity ?? 0)
       : Number(typedRow.stock ?? 0);
     const cost = Number((row as { cost_price: number | null }).cost_price ?? 0);
-    stockValue += stock * cost;
+    const valuation = values?.get((row as { id: string }).id);
+    stockValue += values ? valuation?.value ?? 0 : stock * cost;
+    if (values && stock !== 0 && !valuation?.complete) stockValueComplete = false;
     if (stock === 0) outOfStock++;
     else if (stock <= 5) lowStock++;
   }
@@ -389,6 +406,7 @@ export async function getProductStats(
   return {
     totalCount: count ?? 0,
     stockValue,
+    stockValueComplete,
     outOfStock,
     lowStock,
   };

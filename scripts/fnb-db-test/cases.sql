@@ -23,7 +23,7 @@ begin
     (bom_m,coffee,'Kg',.016,null,0),(bom_m,sugar,'Kg',.006,grp,1),
     (bom_l,coffee,'Kg',.0229,null,0),(bom_l,sugar,'Kg',.009,grp,1);
   for i in 1..4 loop
-    insert into modifier_options values(options[i],grp);
+    insert into modifier_options(id,group_id) values(options[i],grp);
     insert into bom_modifier_option_quantities values
       (bom_m,sugar,options[i],amounts_m[i]),(bom_l,sugar,options[i],amounts_l[i]);
   end loop;

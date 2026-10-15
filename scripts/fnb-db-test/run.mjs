@@ -11,7 +11,7 @@ const sources = [
   ['00156_branch_stock_null_variant_guard.sql', 'upsert_branch_stock'],
   ['00147_variant_aware_bom_lookup.sql', 'get_active_bom_for_branch'],
   ['00142_block_expired_lots_fifo.sql', 'allocate_lots_fifo'],
-  ['00350_fnb_exact_modifier_bom_quantities.sql', 'consume_bom_for_sale'],
+  ['00541_fnb_authoritative_modifier_scale.sql', 'consume_bom_for_sale'],
 ];
 const definitions = sources.map(([file, name]) => {
   const pattern = new RegExp(`create\\s+or\\s+replace\\s+function\\s+public\\.${name}\\s*\\(`, 'i');
@@ -29,7 +29,8 @@ const definitions = sources.map(([file, name]) => {
   console.log(`Testing source: ${file} / ${name}`);
   return tail.slice(0, end + delimiter[1].length + 1);
 });
-const sql = [readFileSync(new URL('./schema.sql', import.meta.url), 'utf8'), ...definitions,
+const sql = [readFileSync(new URL('./schema.sql', import.meta.url), 'utf8'),
+  'create function _allow_negative_sale_00473(uuid,uuid) returns boolean language sql as $$ select false $$;', ...definitions,
   readFileSync(new URL('./cases.sql', import.meta.url), 'utf8')].join('\n');
 const result = spawnSync('psql', ['-X', '-v', 'ON_ERROR_STOP=1', '-h', '127.0.0.1', '-p', '55432',
   '-U', 'fnb_test', '-d', 'onebiz_fnb_test'], {

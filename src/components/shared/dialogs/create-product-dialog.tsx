@@ -3880,6 +3880,10 @@ export function CreateProductDialog({
 
               {/* Items table */}
               <div className="space-y-2">
+                {channel === "fnb" && bomModifierGroups.some(group =>
+                  group.name.toLocaleLowerCase("vi").startsWith("mức đường") && !bomItems.some(item => item.modifierScaleTarget === group.id)) && (
+                  <p className="text-xs text-amber-700">Mức đường chưa gắn nguyên liệu; giữ định lượng gốc. Gắn đường/nước đường ở cột lựa chọn nếu cần thay đổi lượng trừ kho.</p>
+                )}
                 {channel === "fnb" && (
                   <FnbSupplyCatalogNote
                     targetBranches={fnbTargetBranches.length}

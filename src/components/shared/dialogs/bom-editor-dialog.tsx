@@ -540,6 +540,8 @@ export function BOMEditorDialog({
     (group) => effectiveModifierGroupIds.includes(group.id)
       && (group.rule === "single" || group.rule === "single_required"),
   );
+  const unlinkedSweetness = selectableModifierGroups.filter(group =>
+    group.name.toLocaleLowerCase("vi").startsWith("mức đường") && !items.some(item => item.modifierScaleTarget === group.id));
   const pickerOptions = useMemo(() => {
     const query = pickerSearch.trim().toLocaleLowerCase("vi");
     return nvlOptions
@@ -729,7 +731,7 @@ export function BOMEditorDialog({
                 <table className={`w-full text-sm ${output?.isFnbStockItem ? "min-w-[680px]" : ""}`}>
                   <thead className="bg-muted/30">
                     <tr>
-                      <th className="text-left p-2 font-medium">Thành phần</th>
+                      <th className="text-left p-2 font-medium">Thành phần{unlinkedSweetness.length > 0 && <span className="block text-xs font-normal text-amber-700">Mức đường chưa gắn nguyên liệu; giữ định lượng gốc.</span>}</th>
                       <th className="text-right p-2 font-medium w-40">{output?.isFnbStockItem ? "Lượng / mẻ" : "Số lượng"}</th>
                       <th className="text-left p-2 font-medium w-20">ĐVT</th>
                       {output?.isFnbStockItem && <th scope="col" className="bg-muted/20 text-right p-2 font-medium w-32">Cho 1 {yieldUnit} BTP<span className="block text-[11px] font-normal">Tự tính</span></th>}

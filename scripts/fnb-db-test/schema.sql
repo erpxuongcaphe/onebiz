@@ -12,7 +12,8 @@ create table products(id uuid primary key, tenant_id uuid, code text, name text,
 create table product_variants(id uuid primary key, product_id uuid, tenant_id uuid, bom_code text);
 create table bom(id uuid primary key, tenant_id uuid, product_id uuid, branch_id uuid, code text, name text, version integer default 1, is_active boolean default true);
 create table bom_items(id uuid primary key default gen_random_uuid(), bom_id uuid, material_id uuid, unit text, quantity numeric, waste_percent numeric default 0, modifier_scale_target uuid, sort_order integer default 0);
-create table modifier_options(id uuid primary key, group_id uuid);
+create table modifier_groups(id uuid primary key, tenant_id uuid, is_active boolean default true);
+create table modifier_options(id uuid primary key, group_id uuid, scale_factor numeric, is_active boolean default true);
 create table bom_modifier_option_quantities(bom_id uuid, material_id uuid, modifier_option_id uuid, quantity numeric);
 create table branch_stock(tenant_id uuid, branch_id uuid, product_id uuid, variant_id uuid, quantity numeric, reserved numeric default 0, updated_at timestamptz default now());
 create unique index base_stock_unique on branch_stock(tenant_id,branch_id,product_id) where variant_id is null;
@@ -26,3 +27,4 @@ begin
   if ok is distinct from true then raise exception 'FAIL: %', label; end if;
   raise notice 'PASS: %', label;
 end $$;
+

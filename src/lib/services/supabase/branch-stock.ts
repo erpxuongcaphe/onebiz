@@ -6,6 +6,7 @@
 import { getClient } from "./base";
 import { getCurrentTenantId } from "./base";
 import type { BranchStock } from "@/lib/types";
+import { getStockValuations, valuationKey, valueStockQuantity } from "./stock-valuation";
 
 const supabase = getClient();
 
@@ -43,6 +44,7 @@ export interface BranchStockRow {
   maxStock?: number;
   costPrice?: number;
   stockValue: number;
+  valuationComplete?: boolean;
   updatedAt: string;
 }
 
@@ -79,7 +81,8 @@ function mergeBranchStockRows(rows: BranchStockRow[]): BranchStockRow[] {
       reserved,
       available: quantity - reserved,
       costPrice: cost,
-      stockValue: quantity * cost,
+      stockValue: existing.stockValue + row.stockValue,
+      valuationComplete: existing.valuationComplete !== false && row.valuationComplete !== false,
       updatedAt: latestIso(existing.updatedAt, row.updatedAt),
     });
   }
@@ -264,6 +267,15 @@ export async function getBranchStockPage(params: {
   });
 
   const rows = mergeBranchStockRows(rawRows);
+  const values = new Map((await getStockValuations(rows.map(row => row.productId), [...new Set(rows.map(row => row.branchId))]))
+    .map(value => [valuationKey(value.branchId, value.productId), value]));
+  for (const row of rows) {
+    const valuation = values.get(valuationKey(row.branchId, row.productId));
+    const value = valueStockQuantity(row.quantity, valuation);
+    row.stockValue = value ?? 0;
+    row.valuationComplete = value !== null;
+    row.costPrice = valuation?.unitCost ?? undefined;
+  }
 
   // Client-side filter (lowStockOnly — cross-column comparison)
   let filtered = rows;
@@ -292,6 +304,7 @@ export async function getBranchStockAggregates(params: {
   totalQty: number;
   totalValue: number;
   lowStockCount: number;
+  valuationComplete: boolean;
 }> {
   const tenantId = await getCurrentTenantId();
   const pageSize = 1000;
@@ -333,7 +346,7 @@ export async function getBranchStockAggregates(params: {
 
   const grouped = new Map<
     string,
-    { quantity: number; cost: number; minStock?: number | null }
+    { branchId: string; productId: string; quantity: number; cost: number; minStock?: number | null }
   >();
   const productIds = new Set<string>();
   for (const row of rawRows) {
@@ -345,12 +358,14 @@ export async function getBranchStockAggregates(params: {
       String(row.variant_id ?? "__base__"),
     ].join(":");
     const current = grouped.get(key) ?? {
+      branchId: String(row.branch_id), productId,
       quantity: 0,
       cost: 0,
       minStock: null,
     };
     const product = (row.products ?? {}) as Record<string, unknown>;
     grouped.set(key, {
+      branchId: current.branchId, productId,
       quantity: current.quantity + Number(row.quantity ?? 0),
       cost: Number(product.cost_price ?? current.cost),
       minStock:
@@ -361,14 +376,15 @@ export async function getBranchStockAggregates(params: {
   }
 
   const rows = Array.from(grouped.values());
+  const valuations = new Map((await getStockValuations([...productIds], params.branchId ? [params.branchId] : undefined))
+    .map(value => [valuationKey(value.branchId, value.productId), value]));
+  const stockValues = rows.map(row => valueStockQuantity(row.quantity, valuations.get(valuationKey(row.branchId, row.productId))));
   return {
     totalRows: grouped.size,
     totalProducts: productIds.size,
     totalQty: rows.reduce((sum, row) => sum + row.quantity, 0),
-    totalValue: rows.reduce(
-      (sum, row) => sum + row.quantity * row.cost,
-      0,
-    ),
+    totalValue: stockValues.reduce<number>((sum, value) => sum + (value ?? 0), 0),
+    valuationComplete: stockValues.every(value => value !== null),
     lowStockCount: rows.filter(
       (row) =>
         row.minStock != null &&

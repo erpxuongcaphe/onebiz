@@ -428,6 +428,7 @@ export default function HangHoaPage() {
   const [stats, setStats] = useState<{
     totalCount: number;
     stockValue: number;
+    stockValueComplete?: boolean;
     outOfStock: number;
     lowStock: number;
   } | null>(null);
@@ -1294,7 +1295,7 @@ export default function HangHoaPage() {
         // Gộp theo nhóm hàng: số mã · tổng tồn · tổng giá trị tồn.
         const byGroup = new Map<
           string,
-          { group: string; skuCount: number; stock: number; value: number }
+          { group: string; skuCount: number; stock: number; value: number | null }
         >();
         for (const p of rows) {
           const key = p.categoryName || "(Chưa phân nhóm)";
@@ -1302,10 +1303,11 @@ export default function HangHoaPage() {
             byGroup.get(key) ?? { group: key, skuCount: 0, stock: 0, value: 0 };
           cur.skuCount += 1;
           cur.stock += p.stock ?? 0;
-          cur.value += (p.stock ?? 0) * (p.costPrice ?? 0);
+          cur.value = cur.value === null || p.stockValue === null ? null
+            : cur.value + (p.stockValue ?? (p.branchStock ?? p.stock ?? 0) * (p.costPrice ?? 0));
           byGroup.set(key, cur);
         }
-        const summaryRows = [...byGroup.values()].sort((a, b) => b.value - a.value);
+        const summaryRows = [...byGroup.values()].sort((a, b) => (b.value ?? -1) - (a.value ?? -1));
         await exportToExcel(
           summaryRows,
           [
@@ -2081,7 +2083,7 @@ export default function HangHoaPage() {
               <ListMetric
                 icon={<Icon name="savings" size={15} />}
                 label="Giá trị tồn kho"
-                value={stats ? formatCurrency(stats.stockValue) : "—"}
+                value={stats ? stats.stockValueComplete === false ? "Chưa đủ dữ liệu" : formatCurrency(stats.stockValue) : "—"}
                 loading={!stats}
                 tone="primary"
               />

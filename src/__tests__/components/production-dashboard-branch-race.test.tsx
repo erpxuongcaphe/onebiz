@@ -2,9 +2,9 @@ import React from "react";
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 
-const state = vi.hoisted(() => ({ ready: false, branch: undefined as string | undefined }));
+const state = vi.hoisted(() => ({ ready: false, costAccess: true, branch: undefined as string | undefined }));
 const services = vi.hoisted(() => ({ kpis: vi.fn() }));
-vi.mock("@/lib/contexts", () => ({ useBranchFilter: () => ({
+vi.mock("@/lib/contexts", () => ({ useAuth: () => ({hasPermission: () => state.costAccess}), useBranchFilter: () => ({
   isReady: state.ready, activeBranchId: state.branch, branchLabel: state.branch ?? "Tất cả chi nhánh",
   currentBranch: { branchType: "store" },
 }) }));
@@ -42,4 +42,18 @@ it("waits for auth scope and ignores an older branch response", async () => {
   await act(async () => { finishOld({ ordersThisMonth: 99 }); });
   expect(screen.queryByText("Lệnh chế biến tháng này: 99")).toBeNull();
   expect(screen.getByText("Phạm vi: new")).toBeTruthy();
+});
+
+it("hides inventory value without cost permission and labels incomplete permitted valuations", async () => {
+  state.ready = true;
+  state.branch = "current";
+  state.costAccess = false;
+  services.kpis.mockResolvedValue({ ordersThisMonth: 2, nvlStockValue: 0, nvlStockValueComplete: false });
+  const view = render(<Page />);
+  await waitFor(() => expect(screen.getByText("Lệnh chế biến tháng này: 2")).toBeTruthy());
+  expect(screen.queryByText(/Giá trị Nguyên liệu:/)).toBeNull();
+  expect(screen.queryByText("Giá trị")).toBeNull();
+  state.costAccess = true;
+  view.rerender(<Page />);
+  expect(screen.getByText("Giá trị Nguyên liệu: Chưa đủ dữ liệu")).toBeTruthy();
 });
