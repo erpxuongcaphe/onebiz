@@ -1137,6 +1137,7 @@ export default function NhapHangPage() {
           <FilterChips filters={filterChips} onClearAll={clearListFilters} />
           <ListStrip metrics={<><ListMetric label="Phiếu theo bộ lọc" value={formatNumber(total)} /><ListMetric label="Chờ nhận / nhận thiếu" value={formatNumber(data.filter(order => ["ordered", "partial"].includes(order.status)).length)} /><ListMetric label="Còn phải trả NCC" value={formatCurrency(kpiTotalOwed)} hint="Toàn bộ phiếu theo bộ lọc" /></>} />
           {loading ? <p role="status" className="py-8 text-center text-sm text-muted-foreground">Đang tải bảng tiến độ…</p> : boardOrder ? renderDetail(boardOrder, () => setBoardOrderId(null)) : <KanbanBoard
+            className="h-[calc(100dvh-22rem)]"
             columns={kanbanColumns}
             getItemId={(o) => o.id}
             onCardClick={order => setBoardOrderId(order.id)}

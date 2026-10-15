@@ -632,7 +632,8 @@ export default function SanXuatPage() {
               <select aria-label="Sắp xếp lệnh trên bảng" className="h-9 rounded-md border bg-background px-2 text-sm" value={boardSort} onChange={event => setBoardSort(event.target.value)}><option value="due">Ưu tiên quá hạn / đến hạn</option><option value="oldest">Cũ nhất trước</option><option value="newest">Mới nhất trước</option></select>
             </div>
             {loading ? <p role="status" className="py-8 text-center text-sm text-muted-foreground">Đang tải bảng tiến độ…</p> : boardOrder ? <ProductionOrderDetail orderId={boardOrder.id} onClose={() => setBoardOrderId(null)} onEdit={boardOrder.status !== "cancelled" && txPerms.canEdit && (boardOrder.status !== "completed" || hasAny(["production.complete_order"])) ? () => setCorrectingItem({order:boardOrder,cancel:false}) : undefined} onDelete={boardOrder.status !== "cancelled" && txPerms.canCancel ? () => boardOrder.status === "completed" ? setCorrectingItem({order:boardOrder,cancel:true}) : setCancellingItem(boardOrder) : undefined} /> : <KanbanBoard
-              columns={kanbanColumns}
+            className="h-[calc(100dvh-22rem)]"
+            columns={kanbanColumns}
               getItemId={(o) => o.id}
               onCardMove={txPerms.canEdit || hasAny(["production.complete_order"]) ? handleCardMove : undefined}
               onCardClick={order => setBoardOrderId(order.id)}

@@ -133,7 +133,7 @@ export function KanbanBoard<T>({
             onDragLeave={() => handleDragLeave(col.id)}
             onDrop={(e) => handleDrop(e, col.id)}
             className={cn(
-              "w-72 max-w-[85vw] shrink-0 rounded-lg border bg-muted/20 flex flex-col transition-colors",
+              "w-72 max-w-[85vw] min-h-0 shrink-0 rounded-lg border bg-muted/20 flex flex-col transition-colors",
               isHover && canAccept && "border-primary bg-primary/5",
               isSource && "opacity-60",
               col.readOnly && "border-dashed"
@@ -165,7 +165,7 @@ export function KanbanBoard<T>({
             {col.summary && <div className="border-b px-3 py-2 text-xs text-muted-foreground tabular-nums">{col.summary}</div>}
 
             {/* Cards */}
-            <div className="flex-1 p-2 space-y-2 overflow-y-auto">
+            <div className="min-h-0 flex-1 p-2 space-y-2 overflow-y-auto">
               {col.items.length === 0 ? (
                 <div className="text-center text-xs text-muted-foreground py-6">
                   {emptyMessage}
