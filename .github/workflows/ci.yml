@@ -437,6 +437,24 @@ jobs:
           wait "$second"
           psql -X -v ON_ERROR_STOP=1 -c "do \$\$ begin if (select count(distinct code) from public.customers where name like 'Concurrent %')<>2 then raise exception 'concurrent codes collided'; end if; end; \$\$;"
 
+      - name: Verify stable walk-in customer identity in isolated PostgreSQL
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          createdb walk_in_identity_test
+          export PGDATABASE=walk_in_identity_test
+          psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00537_walk_in_customer_identity.integration.sql
+          psql -X -qAt -v ON_ERROR_STOP=1 -c "BEGIN; SELECT test_concurrent_walk_in(); SELECT pg_sleep(2); COMMIT;" > /tmp/walk-in-first.txt &
+          first=$!
+          psql -X -qAt -v ON_ERROR_STOP=1 -c "SELECT test_concurrent_walk_in();" > /tmp/walk-in-second.txt &
+          second=$!
+          wait "$first"
+          wait "$second"
+          psql -X -v ON_ERROR_STOP=1 -c "DO \$\$ BEGIN IF (SELECT count(*) FROM customers WHERE tenant_id='10000000-0000-0000-0000-000000000002' AND is_walk_in)<>1 THEN RAISE EXCEPTION 'walk-in duplicated'; END IF; END; \$\$;"
+
       - name: Verify management recognition and cash linkage in isolated PostgreSQL
         env:
           PGHOST: localhost
