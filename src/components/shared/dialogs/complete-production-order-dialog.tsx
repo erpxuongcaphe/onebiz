@@ -1,5 +1,6 @@
 "use client";
 
+import { ExpiryDateInput } from "@/components/shared/expiry-date-input";
 import { useState, useEffect, useRef } from "react";
 import {
   Dialog,
@@ -58,6 +59,7 @@ export function CompleteProductionOrderDialog({
   // CEO 06/07: chống double-submit CỨNG — disabled={saving} dựa trên state async
   // có thể trễ 1 nhịp render, không chặn được 2 click cực nhanh. Ref chặn tức thì.
   const submittingRef = useRef(false);
+  const dateFieldsRef = useRef<HTMLFieldSetElement>(null);
 
   // Material check state — dùng shared helper checkMaterialsAvailability
   const [materialChecks, setMaterialChecks] = useState<MaterialCheckResult[]>([]);
@@ -151,6 +153,8 @@ export function CompleteProductionOrderDialog({
   const completedStockQty = order ? quantityToStock(completedQty,outputStockUnit,entryUnit,outputConversions) : null;
 
   async function handleComplete() {
+    const invalidDate = dateFieldsRef.current?.querySelector<HTMLInputElement>('input[type="date"]:invalid,input[type="time"]:invalid');
+    if (invalidDate) { invalidDate.reportValidity(); return; }
     if (!order) return;
     if (checking || detailError || emptyMaterials || unitsLoading) return;
     if (!completedQty || !Number.isFinite(Number(completedQty)) || Number(completedQty) <= 0 || completedStockQty == null || completedStockQty <= 0) {
@@ -268,7 +272,7 @@ export function CompleteProductionOrderDialog({
         </DialogHeader>
 
         <div className="min-h-0 min-w-0 overflow-y-auto py-2 pr-1" data-production-scroll-area>
-        <fieldset disabled={saving} className="flex min-w-0 flex-col gap-4 [&>*]:shrink-0">
+        <fieldset ref={dateFieldsRef} disabled={saving} className="flex min-w-0 flex-col gap-4 [&>*]:shrink-0">
           <div className="space-y-2">
             <label htmlFor="production-completed-qty" className="text-sm font-medium">Số lượng thực tế {entryUnit && `(${entryUnit})`}</label>
             <Input
@@ -304,10 +308,9 @@ export function CompleteProductionOrderDialog({
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">HSD</label>
-              <Input
-                type="date"
+              <ExpiryDateInput
                 value={expiryDate}
-                onChange={(e) => setExpiryDate(e.target.value)}
+                onValueChange={nextValue => setExpiryDate(nextValue)}
               />
             </div>
           </div>

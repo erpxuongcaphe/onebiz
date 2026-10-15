@@ -1,5 +1,6 @@
 "use client";
 
+import { ExpiryDateInput } from "@/components/shared/expiry-date-input";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Dialog,
@@ -358,7 +359,11 @@ export function CreateProductionOrderDialog({
     checkedMaterialKey === materialCheckKey && materials.length > 0 &&
     !hasShortage && !hasCostMismatch;
 
+  const dateFieldsRef = useRef<HTMLFieldSetElement>(null);
+
   function validate(): boolean {
+    const invalidDate = dateFieldsRef.current?.querySelector<HTMLInputElement>('input[type="date"]:invalid,input[type="time"]:invalid');
+    if (invalidDate) { invalidDate.reportValidity(); return false; }
     const e: Record<string, string> = {};
     if (!productId) e.productId = "Chọn sản phẩm cần SX";
     else if (!productOptions.some((product) => product.id === productId)) {
@@ -458,7 +463,7 @@ export function CreateProductionOrderDialog({
         </DialogHeader>
 
         <div className="min-h-0 min-w-0 flex-auto overflow-y-auto py-2 pr-1" data-production-scroll-area>
-        <fieldset disabled={saving} className="grid min-w-0 gap-4">
+        <fieldset ref={dateFieldsRef} disabled={saving} className="grid min-w-0 gap-4">
           <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <label className="text-sm font-medium">
@@ -681,10 +686,9 @@ export function CreateProductionOrderDialog({
               </div>
               <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">HSD</label>
-                <Input
-                  type="date"
+                <ExpiryDateInput
                   value={expiryDate}
-                  onChange={(e) => setExpiryDate(e.target.value)}
+                  onValueChange={nextValue => setExpiryDate(nextValue)}
                 />
               </div>
             </div>

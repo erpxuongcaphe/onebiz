@@ -1,4 +1,5 @@
 "use client";
+import { formatExpiryDate, isExpiryPast } from "@/lib/expiry-time";
 
 import { useCallback, useEffect, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -92,7 +93,7 @@ export default function HSDPage() {
         { header: "Số lô", key: "lotNumber", width: 20 }, { header: "Mã hàng", key: "productCode", width: 18 },
         { header: "Tên hàng", key: "productName", width: 32 }, { header: "Chi nhánh", key: "branchName", width: 24 },
         { header: "Tồn lô", key: "currentQty", width: 14 },
-        { header: "Hạn sử dụng", key: "expiryDate", width: 16, format: (v: string) => formatDate(v) },
+        { header: "Hạn sử dụng", key: "expiryDate", width: 22, format: (v: string) => formatExpiryDate(v) },
         { header: "Số ngày còn lại", key: "daysUntilExpiry", width: 18 },
       ], "han-su-dung");
     } catch (error) {
@@ -109,8 +110,8 @@ export default function HSDPage() {
     { id: "product", header: "Sản phẩm", size: 280, cell: ({ row }) => <div><div className="font-medium">{row.original.productName}</div><div className="text-xs text-muted-foreground">{row.original.productCode}</div></div> },
     { accessorKey: "branchName", header: "Chi nhánh", size: 170 },
     { accessorKey: "currentQty", header: "Tồn lô", size: 110, cell: ({ row }) => <span className="font-medium tabular-nums">{formatNumber(row.original.currentQty)}</span> },
-    { accessorKey: "expiryDate", header: "Hạn sử dụng", size: 135, cell: ({ row }) => row.original.expiryDate ? formatDate(row.original.expiryDate) : "—" },
-    { accessorKey: "daysUntilExpiry", header: "Còn lại", size: 150, cell: ({ row }) => { const days=row.original.daysUntilExpiry ?? 0; return days<0 ? <span className="font-medium text-destructive"><Icon name="warning" size={14} className="mr-1 inline"/>Hết hạn {Math.abs(days)} ngày</span> : <span className={days<=7?"font-medium text-destructive":"text-status-warning"}>{days} ngày</span>; } },
+    { accessorKey: "expiryDate", header: "Hạn sử dụng", size: 135, cell: ({ row }) => row.original.expiryDate ? formatExpiryDate(row.original.expiryDate) : "—" },
+    { accessorKey: "daysUntilExpiry", header: "Còn lại", size: 150, cell: ({ row }) => { const days=row.original.daysUntilExpiry ?? 0; return isExpiryPast(row.original.expiryDate) ? <span className="font-medium text-destructive"><Icon name="warning" size={14} className="mr-1 inline"/>Hết hạn{days < 0 ? ` ${Math.abs(days)} ngày` : ""}</span> : <span className={days<=7?"font-medium text-destructive":"text-status-warning"}>{days} ngày</span>; } },
   ];
 
   return <ListPageLayout sidebar={null}>

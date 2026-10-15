@@ -1,4 +1,6 @@
 "use client";
+
+import { Input } from "@/components/ui/input";
 import { useId } from "react";
 import { Icon } from "@/components/ui/icon";
 import { formatShortDate } from "@/lib/format";
@@ -26,7 +28,7 @@ export function OperationsFilterBar({ kind, value, onChange, people, standards =
       {!(kind === "settings" && settingsTarget === "members") && <>
         {kind !== "settings" && select("dateField", "Lọc theo ngày", kind === "todo" ? { created: "Ngày tạo", due: "Deadline hiện tại", completed: "Ngày hoàn thành", follow_up: "Ngày theo dõi lại" } : { due: "Hạn công việc", completed: "Ngày đạt", verified: "Ngày xác minh" }, "Chọn loại ngày")}
         <label className={styles.field} htmlFor={`${id}-preset`}><span>{kind === "settings" ? "Ngày áp dụng" : "Khoảng thời gian"}</span><select aria-label={kind === "settings" ? "Ngày áp dụng" : "Khoảng thời gian"} id={`${id}-preset`} value={value.preset} onChange={event => set("preset", event.target.value)}>{Object.entries(datePresets).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
-        {value.preset === "custom" && <>{(["from", "to"] as const).map(key => <label key={key} className={styles.field} htmlFor={`${id}-${key}`}><span>{key === "from" ? "Từ ngày" : "Đến ngày"}</span><input aria-label={key === "from" ? "Từ ngày" : "Đến ngày"} id={`${id}-${key}`} type="date" value={value[key]} onChange={event => set(key, event.target.value)} /></label>)}</>}
+        {value.preset === "custom" && <>{(["from", "to"] as const).map(key => <label key={key} className={styles.field} htmlFor={`${id}-${key}`}><span>{key === "from" ? "Từ ngày" : "Đến ngày"}</span><Input aria-label={key === "from" ? "Từ ngày" : "Đến ngày"} id={`${id}-${key}`} type="date" value={value[key]} onChange={event => set(key, event.target.value)} /></label>)}</>}
       </>}
     </div>
     {!(kind === "settings" && settingsTarget === "policies") && <details className={styles.filterDetails}><summary>Tiêu chí bổ sung{active ? ` (${active})` : ""}</summary><div className={styles.filterGrid}>

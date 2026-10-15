@@ -1,5 +1,7 @@
 "use client";
 
+import { Input } from "@/components/ui/input";
+
 /**
  * InvoiceDateRow — dòng "Ngày hóa đơn" trên POS Retail (00335 Pha B).
  *
@@ -169,7 +171,7 @@ export function InvoiceDateRow({ value, reason, onChange, canEdit }: InvoiceDate
           <div className="space-y-3">
             <div className="space-y-1">
               <label className="text-xs font-medium">Ngày và giờ</label>
-              <input
+              <Input
                 type="datetime-local"
                 value={nhapNgay}
                 onChange={(e) => setNhapNgay(e.target.value)}

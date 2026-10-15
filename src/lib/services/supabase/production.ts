@@ -1,3 +1,4 @@
+import { expiryInputParts, expiryToIso } from "@/lib/expiry-time";
 // Production service — Production orders, lot tracking, FIFO allocation
 
 import { getClient, handleError } from "./base";
@@ -301,13 +302,14 @@ export async function completeProductionAtomic(
   input?: { quantity: number; unit: string; expectedFactor?: number; materials?: {productId:string;quantity:number;unit:string;expectedFactor?:number}[] }
 ) {
   // RPC 00159 chưa có trong types sinh tự động (giống create_internal_sale_atomic).
+  const exactExpiry = !!expiryInputParts(expiryDate).time;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase.rpc as any)(input ? "complete_production_with_uom" : "complete_production_atomic", {
+  const { data, error } = await (supabase.rpc as any)(exactExpiry ? "complete_production_with_expiry_time" : input ? "complete_production_with_uom" : "complete_production_atomic", {
     p_production_order_id: productionOrderId,
     ...(input ? { p_input_quantity: input.quantity, p_input_unit: input.unit, p_expected_factor: input.expectedFactor, p_material_inputs: input.materials ?? null } : { p_completed_qty: completedQty }),
     p_lot_number: lotNumber,
     p_manufactured_date: manufacturedDate,
-    p_expiry_date: expiryDate,
+    ...(exactExpiry ? { p_expiry_value: expiryToIso(expiryDate), p_completed_qty: completedQty } : { p_expiry_date: expiryDate }),
   });
 
   if (error) {
@@ -456,7 +458,7 @@ export async function getAllProductLots(options?: {
       productionOrderId: row.production_order_id as string | undefined,
       purchaseOrderId: row.purchase_order_id as string | undefined,
       manufacturedDate: row.manufactured_date as string | undefined,
-      expiryDate: row.expiry_date as string | undefined,
+      expiryDate: (row.expiry_at ?? row.expiry_date) as string | undefined,
       receivedDate: row.received_date as string,
       initialQty: row.initial_qty as number,
       currentQty: row.current_qty as number,
@@ -506,7 +508,7 @@ function mapProductLotWorkspaceRow(row: Record<string, unknown>) {
     productionOrderId: (row.production_order_id as string) || undefined,
     purchaseOrderId: (row.purchase_order_id as string) || undefined,
     manufacturedDate: (row.manufactured_date as string) || undefined,
-    expiryDate: (row.expiry_date as string) || undefined,
+    expiryDate: ((row.expiry_at ?? row.expiry_date) as string) || undefined,
     receivedDate: row.received_date as string,
     initialQty: Number(row.initial_qty ?? 0),
     currentQty: Number(row.current_qty ?? 0),
@@ -589,7 +591,7 @@ export async function getProductLots(
     lotNumber: row.lot_number as string,
     sourceType: row.source_type as "production" | "purchase",
     manufacturedDate: (row.manufactured_date as string) ?? undefined,
-    expiryDate: (row.expiry_date as string) ?? undefined,
+    expiryDate: ((row.expiry_at ?? row.expiry_date) as string) ?? undefined,
     receivedDate: row.received_date as string,
     initialQty: row.initial_qty as number,
     currentQty: row.current_qty as number,
@@ -651,7 +653,7 @@ export async function getExpiringLots(
         productId: l.product_id as string,
         productName: l.product_name as string,
         productCode: l.product_code as string,
-        expiryDate: l.expiry_date as string,
+        expiryDate: (l.expiry_at ?? l.expiry_date) as string,
         currentQty: l.current_qty as number,
         branchName: l.branch_name as string,
         daysRemaining: l.days_remaining as number,
@@ -688,7 +690,8 @@ export async function createPurchaseLot(lot: {
       purchase_order_id: lot.purchaseOrderId,
       supplier_id: lot.supplierId,
       manufactured_date: lot.manufacturedDate,
-      expiry_date: lot.expiryDate,
+      expiry_date: expiryInputParts(lot.expiryDate).day || null,
+      expiry_at: expiryInputParts(lot.expiryDate).time ? expiryToIso(lot.expiryDate) : null,
       // E (07/07): dùng helper an toàn múi giờ — trước 7h sáng VN, toISOString()
       // lùi 1 ngày (UTC) → sai ngày nhập lô (ảnh hưởng HSD/FIFO).
       received_date: formatDateInputValue(new Date()),
