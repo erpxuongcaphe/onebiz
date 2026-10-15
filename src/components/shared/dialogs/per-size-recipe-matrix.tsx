@@ -28,7 +28,7 @@ import type {
   ModifierGroup,
   ModifierOption,
 } from "@/lib/services/supabase/modifier-groups";
-import { formatNumber } from "@/lib/format";
+import { formatCurrency, formatNumber } from "@/lib/format";
 import type { UOMConversion } from "@/lib/types";
 import {
   getDirectConversionFactor,
@@ -76,7 +76,7 @@ export const rekeyRecipeRows = (rows: RecipeRow[]): RecipeRow[] =>
   rows.map((row) => ({ ...row, key: newRecipeRowKey() }));
 
 const FIXED = "__fixed__";
-const fmtMoney = (n: number) => formatNumber(Math.round(n || 0));
+const fmtMoney = (n: number) => formatCurrency(n);
 
 interface Props {
   sizes: SizeCol[];
@@ -92,6 +92,9 @@ interface Props {
     { approvedBranches: number; requiredBranches: number }
   >;
   loading?: boolean;
+  costPending?: boolean;
+  costUnavailable?: boolean;
+  showCost?: boolean;
 }
 
 function SupplyCatalogBadge({
@@ -286,6 +289,9 @@ export function PerSizeRecipeMatrix({
   conversionsByMaterial,
   supplyStatusByProductId,
   loading,
+  costPending,
+  costUnavailable,
+  showCost = true,
 }: Props) {
   const fnbGroups = useMemo(
     () => groups.filter((g) => g.channel === "fnb" || g.channel === "all"),
@@ -622,21 +628,21 @@ export function PerSizeRecipeMatrix({
               </tr>
             )}
           </tbody>
-          {rows.some((r) => r.materialId) && (
+          {showCost && rows.some((r) => r.materialId) && (
             <tfoot>
               <tr className="border-t-2 border-border bg-surface-container-low/60 text-xs">
                 <td
                   colSpan={3}
                   className="px-2 py-2 text-right font-medium text-muted-foreground"
                 >
-                  Giá vốn F&B / cỡ (theo giá bán Retail)
+                  Dự toán BOM / size
                 </td>
                 {sizes.map((s) => (
                   <td
                     key={s.key}
                     className="px-2 py-2 text-center font-semibold tabular-nums"
                   >
-                    {fmtMoney(costBySize[s.key] ?? 0)} đ
+                    {costPending ? "Đang tính..." : costUnavailable ? "Chưa đủ giá BTP" : `${fmtMoney(costBySize[s.key] ?? 0)} đ`}
                   </td>
                 ))}
                 <td />
