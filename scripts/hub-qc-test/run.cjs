@@ -26,6 +26,8 @@ async function bootstrap(db) {
     "00535_operations_quality_accounting_and_reports.sql",
     "00536_operations_quality_access.sql",
     "00539_operations_quality_acceptance_fixes.sql",
+    "00550_operations_complete_foundation.sql",
+    "00551_operations_complete_workflows.sql",
   ]) {
     try {
       if (migration === "00532_operations_quality_foundation.sql" && process.env.HUB_BASELINE_FUNCTIONS) {
@@ -65,6 +67,7 @@ if (require.main === module)
       );
       await require("./acceptance.cjs")(db);
       await require("./advanced.cjs")(db);
+      await require("./complete.cjs")(db);
       await db.exec(fs.readFileSync(path.join(root, "Hub/PREFLIGHT_QC_READ_ONLY.sql"), "utf8"));
       console.log("PASS read-only release preflight compiles on isolated PostgreSQL");
       if (process.env.HUB_RECOVERY_SQL) {

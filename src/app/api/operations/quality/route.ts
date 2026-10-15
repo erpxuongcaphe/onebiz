@@ -37,6 +37,8 @@ const messages: Record<string, string> = {
   OPS_Q_ACCOUNTING_REQUIRED:
     "Chọn số liệu kế toán đã xác nhận đúng chi nhánh và kỳ QC.",
   OPS_Q_LOCKED: "Hồ sơ đã đóng; dùng hồ sơ tái phát hoặc điều chỉnh có lý do.",
+  OPS_Q_PERIOD_OVERLAP: "Khoảng ngày trùng kỳ đã tạo hoặc kỳ đang có QC. Chọn kỳ hiện có để tránh tính điểm hai lần.",
+  OPS_INVALID_RANGE: "Khoảng ngày chưa hợp lệ. Ngày kết thúc phải từ ngày bắt đầu trở đi.",
   OPS_Q_USE_WORKFLOW:
     "Hồ sơ này dùng luồng kiểm tra và xác nhận mới trong Hub.",
   OPS_REASON_REQUIRED: "Cần ghi rõ lý do và minh chứng.",

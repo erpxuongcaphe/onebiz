@@ -17,7 +17,7 @@ const base='http://127.0.0.1:3315',out=process.env.HUB_QA_OUTPUT,results=[];
   await d().getByLabel('Lỗi lặp trong kỳ',{exact:true}).selectOption('each_audit');await d().getByLabel('Xét điểm tối thiểu',{exact:true}).selectOption('after_bonus');await d().getByLabel('Cho điểm/thưởng vượt 100',{exact:true}).selectOption('true');
   await test('rule-warning-reacts-to-current-selections',async()=>{assert.equal(await d().getByText(/Chưa chọn quy tắc lỗi lặp|Chưa chọn cách xét ngưỡng thưởng|Chưa chọn chương trình vượt 100/).count(),0);});
   await close();await nav('To-do');
-  await test('date-filter-has-no-ambiguous-empty-choice',async()=>{const options=await page.getByLabel('Khoảng thời gian',{exact:true}).locator('option').allTextContents();assert.equal(options.filter(t=>t==='Tất cả').length,0);});
+  await test('date-filter-has-no-ambiguous-empty-choice',async()=>{await page.getByRole('button',{name:/^Bộ lọc/}).click();const options=await page.getByLabel('Khoảng thời gian',{exact:true}).locator('option').allTextContents();assert.equal(options.filter(t=>t==='Tất cả').length,0);await page.getByRole('button',{name:'Xem kết quả',exact:true}).click();});
   await test('ledger-link-retains-branch-and-period',async()=>{await nav('KPI & thưởng');const href=await page.locator('a[href*="view=qc"]').first().getAttribute('href');const url=new URL(href,base);assert.equal(url.searchParams.get('branch'),'20000000-0000-4000-8000-000000000001');assert.ok(url.searchParams.get('period'));assert.ok(url.searchParams.get('audit'));});
   await test('qc-line-real-editor-mobile',async()=>{
    await actor('qc');await nav('QC độc lập');await page.getByRole('button',{name:'Tạo đợt QC',exact:true}).click();
@@ -39,8 +39,8 @@ const base='http://127.0.0.1:3315',out=process.env.HUB_QA_OUTPUT,results=[];
    assert.equal(await d().locator('form form').count(),0);
    assert.deepEqual(consoleErrors,[]);await close();
   });
-  await test('legacy-config-api-routes-available',async()=>{
-   await actor('owner');await nav('Thiết lập');await page.getByRole('button',{name:'Mẫu công việc và quyền Hub',exact:true}).click();await nav('KPI & thưởng');await page.waitForTimeout(500);assert.deepEqual(consoleErrors,[]);
+  await test('unified-config-api-routes-available',async()=>{
+   await actor('owner');await nav('Thiết lập');await page.getByRole('heading',{name:'Công việc và quyền chi nhánh',exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:'Mẫu công việc và quyền Hub',exact:true}).count(),0);await nav('KPI & thưởng');await page.getByRole('button',{name:'Thiết lập chỉ tiêu',exact:true}).waitFor();assert.deepEqual(consoleErrors,[]);
   });
  }finally{fs.writeFileSync(path.join(out,'browser-regressions.json'),JSON.stringify(results,null,2));await browser.close();}
  if(results.some(r=>!r.pass))process.exitCode=1;

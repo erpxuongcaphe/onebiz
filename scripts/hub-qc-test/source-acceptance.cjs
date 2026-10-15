@@ -37,7 +37,8 @@ function loadTs(file){const code=ts.transpileModule(fs.readFileSync(file,'utf8')
   const {parseQualityCatalog,qualityImportHeaders}=loadTs(path.resolve(__dirname,'../../src/lib/operations/quality-import.ts'));
   check(parseQualityCatalog(source).errors[0]?.column==='Tiêu đề','SRC04 raw source workbook is explicitly rejected, never silently mis-imported');
   await actor(owner); await exec('qc_grant',{userId:qc,canAudit:true,canCorrect:true,active:true});
-  const importRows=[];const category={'Không gian và trải nghiệm':'space','Dịch vụ khách hàng':'complaint','VSATTP':'food_safety','Chất lượng đồ uống':'product','Vận hành ca và nhân sự':'operations','Hàng hóa và tồn kho':'goods'};
+  const importRows=[];const category={};const qualityGroups={};
+  for(const title of new Set(rows.map(row=>row[2]))){const group=await exec('group',{title});category[title]='group:'+group.id;qualityGroups['group:'+group.id]=title;}
   for(const r of rows){
    const [_,index,group,title,description,scope,frequency,rawScore]=r;
    const score=Number(String(rawScore).trim().replace('−','-')); const criteria=[{id:crypto.randomUUID(),title:description.trim(),kind:'boolean',operator:'eq',threshold:1,samples:1,critical:false,evidenceRequired:true,measurementScope:group}];
@@ -45,18 +46,20 @@ function loadTs(file){const code=ts.transpileModule(fs.readFileSync(file,'utf8')
    if(index===32){Object.assign(criteria[0],{kind:'percent',operator:'lt',threshold:0.7,ratioBasis:'Số liệu do kế toán cung cấp; phương pháp thực tế cần cấu hình'});}
    const standard=await legacy('standard',{title,description:`Nhóm gốc: ${group}\n${description}`,scope:'common',assigneeId:manager,frequency:frequency==='Daily'?'daily':'weekly',dayNumber:dow,dueTime:'17:00',effectiveFrom:date,criteria});
    await legacy('approve_standard',{id:standard.id});
+   await db.query("update ops_standards set created_at=$2::date::timestamp at time zone 'Asia/Ho_Chi_Minh',approved_at=$2::date::timestamp at time zone 'Asia/Ho_Chi_Minh' where id=$1",[standard.id,date]);
    await exec('assignment',{familyId:standard.family_id,managerIds:[manager]});
    const code='TEST-'+crypto.randomUUID().slice(0,8).toUpperCase();
    importRows.push([code,standard.id,category[group],score<0?'Trừ':'Cộng',String(rawScore).trim(),date,'Không',index===32?'Có':'Không']);
    report.items.push({sourceRow:index+4,index,group,title,description,scope,frequency,rawScore,score,standardId:standard.id,familyId:standard.family_id,code,criteria,notes:index===30?'Hai điều kiện mở/đóng; một trọng số 10':index===32?'Ngưỡng <0.7%; kế toán cung cấp số tử/mẫu, chưa tự suy ra phương pháp':'Giữ nguyên mô tả; các SOP/quan sát thực tế do CEO cấu hình'});
   }
-  const parsed=parseQualityCatalog([qualityImportHeaders,...importRows]);
+  const parsed=parseQualityCatalog([qualityImportHeaders,...importRows],[],undefined,qualityGroups);
   check(parsed.errors.length===0,'SRC05 mapped 34-row Hub template accepts Unicode minus and numeric scores');
   check(parsed.rows.filter(r=>r.scoreType==='deduct').reduce((n,r)=>n+r.weight,0)===197,'SRC06 total deductions 197, not an automatic negative opening score');
   check(parsed.rows.filter(r=>r.scoreType==='bonus').length===2&&parsed.rows.filter(r=>r.scoreType==='bonus').reduce((n,r)=>n+r.weight,0)===10,'SRC07 only source items 13 and 18 award bonus, total 10');
   await exec('catalog_import',{rows:parsed.rows});
   check((await one('select count(*)::int n from ops_q_catalog')).n===34,'SRC08 real SQL atomic import stores all 34 mapped items');
   const saved=(await db.query('select c.*,c.effective_from::text as effective_from from ops_q_catalog c')).rows;
+  check(new Set(saved.map(item=>item.group_title)).size===6&&saved.every(item=>qualityGroups[item.category]===item.group_title),'SRC03 database preserves all six independent QC groups without mapping to To-do categories');
   for(const item of report.items){const value=saved.find(c=>c.standard_id===item.standardId);assert.equal(value.title,item.title);assert.equal(Number(value.weight),Math.abs(item.score));assert.deepEqual(value.criteria,item.criteria);item.storageVerified=true;}
   check(report.items.every(i=>i.storageVerified),'SRC09 all 34 titles, full criteria and weights match stored snapshots');
   await db.query('select ops_generate_internal($1,$2)',[branch,date]);
@@ -87,7 +90,7 @@ function loadTs(file){const code=ts.transpileModule(fs.readFileSync(file,'utf8')
   await db.query('update ops_q_accounting set numerator=7 where id=$1',[metric]);
   for(const line of (await db.query('select * from ops_q_lines where audit_id=$1',[failedAudit.id])).rows){
    const observations=line.item_snapshot.criteria.map(c=>({criterionId:c.id,slot:'1',value:c.kind==='percent'?0.7:0,...(c.kind==='percent'?{numerator:7,denominator:1000}:{}),evidence:'Bằng chứng lỗi giả'}));
-   await exec('qc_line',{id:line.id,version:line.version,observations,accountingId:metric,evidence:'Bằng chứng lỗi giả',issues:[{title:'Lỗi giả '+line.item_snapshot.title,description:'Tình huống nghiệm thu, không phải dữ liệu thực',category:line.item_snapshot.category,priority:'normal',assigneeId:manager,dueAt:date+'T17:00:00+07:00',collaborators:[]}]});
+   await exec('qc_line',{id:line.id,version:line.version,observations,accountingId:metric,evidence:'Bằng chứng lỗi giả',issues:[{title:'Lỗi giả '+line.item_snapshot.title,description:'Tình huống nghiệm thu, không phải dữ liệu thực',category:'goods',priority:'normal',assigneeId:manager,dueAt:date+'T17:00:00+07:00',collaborators:[]}]});
   }
   await exec('qc_complete',{id:failedAudit.id,version:(await one('select version from ops_q_audits where id=$1',[failedAudit.id])).version});
   const totals=await one('select sum(delta)::numeric deductions, count(*)::int entries from ops_q_events where audit_id=$1',[failedAudit.id]);
@@ -106,7 +109,7 @@ function loadTs(file){const code=ts.transpileModule(fs.readFileSync(file,'utf8')
   let duplicateRejected=false;
   try{await exec('catalog_import',{rows:parsed.rows});}catch(e){if(e.code!=='23505')throw e;duplicateRejected=true;}
   const versions=await one('select count(*)::int n from ops_q_catalog');
-  const duplicatePreview=parseQualityCatalog([qualityImportHeaders,...importRows],saved);
+  const duplicatePreview=parseQualityCatalog([qualityImportHeaders,...importRows],saved,undefined,qualityGroups);
   check(duplicatePreview.errors.filter(error=>error.column==='Mã tiêu chuẩn').length===34,'REGRESSION preview flags all34 duplicate code/date rows before import');
   check(duplicateRejected&&versions.n===34,'SRC15 same-file reimport with a new request is rejected atomically; 34 records remain');
   const old=(await one("select ((now() at time zone 'Asia/Ho_Chi_Minh')::date-interval '1 month')::date::text as old_day")).old_day;

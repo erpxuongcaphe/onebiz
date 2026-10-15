@@ -26,10 +26,15 @@ import {
 } from "./quality-fields";
 import { EvidenceFiles } from "./evidence-files";
 import { OperationsMktLinks } from "./mkt-links";
+import { QualityReferences } from "./quality-references";
+import { scoringPeriodSchema } from "@/lib/operations/quality-periods";
 import s from "./quality.module.css";
 
 export type QualityEditor =
   | { kind: "check"; run: Run }
+  | { kind: "adhoc" }
+  | { kind: "period" }
+  | { kind: "group"; group?: NonNullable<QualityWorkspace['groups']>[number] }
   | { kind: "issue"; recurrenceOf?: string; title?: string }
   | {
       kind: "issue_update" | "recheck" | "issue_assign" | "issue_detail";
@@ -51,6 +56,9 @@ export type QualityEditor =
   | { kind: "settle" };
 const titles: Record<QualityEditor["kind"], string> = {
   check: "Ghi nhận tự kiểm tra",
+  adhoc: "Tự kiểm tra phát sinh",
+  period: "Kỳ đánh giá tùy chỉnh",
+  group: "Nhóm tiêu chuẩn QC",
   issue: "Tạo To-do",
   issue_update: "Cập nhật xử lý",
   recheck: "Quản lý kiểm tra lại",
@@ -171,10 +179,20 @@ function IssueDetail({
   issue,
   workspace,
   canWork,
+  branch,
+  period,
+  busy,
+  onSave,
+  commandError,
 }: {
   issue: QualityIssue;
   workspace: Workspace;
   canWork: boolean;
+  branch: string;
+  period: string;
+  busy: boolean;
+  onSave: (action: QualityAction, payload: Record<string, unknown>) => Promise<boolean>;
+  commandError?: string;
 }) {
   const [history, setHistory] = useState<
     {
@@ -189,7 +207,7 @@ function IssueDetail({
   useEffect(() => {
     const c = new AbortController();
     void fetch(
-      `/api/operations/quality?${new URLSearchParams({ branch: issue.branch_id ?? workspace.branches[0]?.id ?? "", period: workspace.period, kind: "history", entity: issue.id })}`,
+      `/api/operations/quality?${new URLSearchParams({ branch: issue.branch_id ?? branch, period, kind: "history", entity: issue.id })}`,
       { signal: c.signal },
     )
       .then(async (r) => {
@@ -201,7 +219,7 @@ function IssueDetail({
         if (!c.signal.aborted) setError(e.message);
       });
     return () => c.abort();
-  }, [issue.id, issue.branch_id, workspace]);
+  }, [issue.id, issue.branch_id, branch, period]);
   const name = (id: string) =>
     workspace.people.find((p) => p.id === id)?.name ?? "Người dùng OneBiz";
   return (
@@ -242,6 +260,7 @@ function IssueDetail({
           todoId={issue.todo_id}
           canLink={canWork && issue.assignee_id === workspace.userId}
         />
+        <QualityReferences issue={issue} branch={branch} period={period} busy={busy} canLink={canWork && issue.assignee_id===workspace.userId && !['done','canceled'].includes(issue.state)} onSave={onSave} commandError={commandError}/>
       </section>
       <section>
         <h3>Lịch sử xử lý</h3>
@@ -302,6 +321,8 @@ export function QualityEditorDialog({
     editor.kind === "qc_correct" ? editor.line.issue_ids : [],
   );
   const [newIssue, setNewIssue] = useState(false);
+  const [issueCount, setIssueCount] = useState(1);
+  const [standardId, setStandardId] = useState('');
   const [excluded, setExcluded] = useState(false);
   const [localError, setLocalError] = useState("");
   const [accountingId, setAccountingId] = useState("");
@@ -311,7 +332,7 @@ export function QualityEditorDialog({
       ? editor.run.criteria
       : "line" in editor
         ? editor.line.item_snapshot.criteria
-        : [];
+        : editor.kind === 'adhoc' ? workspace.standards.find((item) => item.id === standardId)?.criteria ?? [] : [];
   const qualityResult = evaluateQualityObservations(criteria, observations);
   const failed = criteria.length > 0 && qualityResult === "unmet" && !excluded;
   const managers = workspace.people.filter((u) =>
@@ -330,6 +351,7 @@ export function QualityEditorDialog({
       let payload: Record<string, unknown> = {};
       if (
         editor.kind === "check" ||
+        editor.kind === "adhoc" ||
         editor.kind === "qc_line" ||
         editor.kind === "qc_correct"
       ) {
@@ -342,10 +364,11 @@ export function QualityEditorDialog({
         const issues: Record<string, unknown>[] = links.map((issueId) => ({
           issueId,
         }));
-        if (failed && newIssue) issues.push(issuePayload(f, "issue:"));
+        if (failed && newIssue) for (let i = 0; i < issueCount; i++) issues.push(issuePayload(f, i === 0 ? 'issue:' : `issue:${i}:`));
         payload = {
-          id: "run" in editor ? editor.run.id : editor.line.id,
-          version: "run" in editor ? editor.run.version : editor.line.version,
+          id: "run" in editor ? editor.run.id : "line" in editor ? editor.line.id : undefined,
+          version: "run" in editor ? editor.run.version : "line" in editor ? editor.line.version : undefined,
+          ...(editor.kind === 'adhoc' ? { standardId } : {}),
           observations,
           result: excluded ? "excluded" : qualityResult,
           note: get("note"),
@@ -355,7 +378,13 @@ export function QualityEditorDialog({
           closedConfirm: f.get("closedConfirm") === "on",
           settlementRevision: quality.settlement?.revision ?? null,
         };
-      } else if (editor.kind === "issue")
+      } else if (editor.kind === 'period') {
+        const parsed = scoringPeriodSchema.safeParse({ title: get('title'), startsOn: get('startsOn'), endsOn: get('endsOn') });
+        if (!parsed.success) throw new Error("Kiểm tra tên kỳ, ngày bắt đầu và kết thúc; kỳ tối đa 367 ngày.");
+        payload = parsed.data;
+      }
+      else if (editor.kind === 'group') payload = { id: editor.group?.id, version: editor.group?.version, title: get('title'), active: f.get('active') === 'on' };
+      else if (editor.kind === "issue")
         payload = {
           ...issuePayload(f),
           recurrenceOf: editor.recurrenceOf ?? null,
@@ -427,7 +456,7 @@ export function QualityEditorDialog({
         payload = {
           title: get("title"),
           effectiveFrom: get("effectiveFrom"),
-          config: rulePayload(f, managers),
+          config: rulePayload(f, managers, quality.catalog),
         };
       else if (editor.kind === "accounting")
         payload = {
@@ -456,7 +485,7 @@ export function QualityEditorDialog({
             <p className={s.muted}>{workspace.branches.find((b) => b.id === branch)?.name} · {period}</p>
           </div>
           <div className={s.dialogBody}>
-            <IssueDetail issue={editor.issue} workspace={workspace} canWork={quality.can.work} />
+            <IssueDetail issue={editor.issue} workspace={workspace} canWork={quality.can.work} branch={branch} period={period} busy={busy} onSave={onSave} commandError={error}/>
           </div>
           <footer className={s.dialogFooter}>
             <button type="button" data-dialog-close onClick={onClose}>Đóng</button>
@@ -475,7 +504,7 @@ export function QualityEditorDialog({
         <div className={s.dialogHeader}>
           <DialogTitle>{titles[editor.kind]}</DialogTitle>
           <p className={s.muted}>
-            {workspace.branches.find((b) => b.id === branch)?.name} · {period}
+            {workspace.branches.find((b) => b.id === branch)?.name} · {quality.periods?.find(item => item.key === period)?.title ?? period}
           </p>
         </div>
         <form onSubmit={submit} style={{ display: "contents" }}>
@@ -485,7 +514,7 @@ export function QualityEditorDialog({
                 {localError || error}
               </p>
             )}
-            {(editor.kind === "check" ||
+            {(editor.kind === "check" || editor.kind === 'adhoc' ||
               editor.kind === "qc_line" ||
               editor.kind === "qc_correct") && (
               <>
@@ -494,8 +523,9 @@ export function QualityEditorDialog({
                     <h3>
                       {"run" in editor
                         ? editor.run.title
-                        : editor.line.item_snapshot.title}
+                        : "line" in editor ? editor.line.item_snapshot.title : 'Kiểm tra ngoài lịch'}
                     </h3>
+                    {editor.kind === 'adhoc' && <SelectField label="Công việc được kiểm tra" name="standardId" options={workspace.standards.filter((item) => item.status === 'approved').map((item) => ({ id: item.id, name: item.title }))} value={standardId} required onChange={(id) => { setStandardId(id); setObservations([]); }} />}
                     {"line" in editor && (
                       <label className={s.check}>
                         <input
@@ -563,7 +593,7 @@ export function QualityEditorDialog({
                         />
                       )}
                     <Notes
-                      required={excluded || editor.kind === "qc_correct"}
+                      required={excluded || editor.kind === "qc_correct" || editor.kind === "adhoc"}
                     />
                     {"line" in editor && (
                       <TextField
@@ -610,7 +640,7 @@ export function QualityEditorDialog({
                             "run" in editor
                               ? (editor.run as Run & { family_id?: string })
                                   .family_id
-                              : editor.line.item_snapshot.family_id
+                              : "line" in editor ? editor.line.item_snapshot.family_id : workspace.standards.find((item) => item.id === standardId)?.family_id
                           }
                         />
                         <label className={s.check}>
@@ -621,18 +651,19 @@ export function QualityEditorDialog({
                           />
                           Tạo To-do cho sự việc khác / chưa có
                         </label>
-                        {newIssue && (
-                          <IssueFields
+                        {newIssue && Array.from({length: issueCount}, (_, i) => (
+                          <fieldset key={i}><legend>Vấn đề mới {i + 1}</legend><IssueFields
                             workspace={workspace}
                             quality={quality}
-                            prefix="issue:"
+                            prefix={i === 0 ? 'issue:' : `issue:${i}:`}
                             initialTitle={
                               "run" in editor
                                 ? editor.run.title
-                                : editor.line.item_snapshot.title
+                                : "line" in editor ? editor.line.item_snapshot.title : workspace.standards.find((item) => item.id === standardId)?.title
                             }
-                          />
-                        )}
+                          /></fieldset>
+                        ))}
+                        {newIssue && <div className={s.actions}><button type="button" disabled={issueCount + links.length >= 20} onClick={() => setIssueCount((count) => count + 1)}><Icon name="add" size={16} />Thêm vấn đề khác</button>{issueCount > 1 && <button type="button" onClick={() => setIssueCount((count) => count - 1)}>Bỏ vấn đề cuối</button>}</div>}
                       </>
                     ) : (
                       <p className={s.muted}>
@@ -860,8 +891,10 @@ export function QualityEditorDialog({
               </div>
             )}
             {editor.kind === "catalog" && (
-              <CatalogFields workspace={workspace} />
+              <CatalogFields workspace={workspace} groups={quality.groups} />
             )}
+            {editor.kind === 'period' && <div className={s.formGrid}><TextField label="Tên kỳ đánh giá" name="title" required /><TextField label="Ngày bắt đầu" name="startsOn" type="date" required /><TextField label="Đến hết ngày" name="endsOn" type="date" required /></div>}
+            {editor.kind === 'group' && <><TextField label="Tên nhóm tiêu chuẩn" name="title" value={editor.group?.title} required /><label className={s.check}><input type="checkbox" name="active" defaultChecked={editor.group?.active ?? true} />Đang áp dụng</label></>}
             {editor.kind === "rule" && (
               <>
                 <div className={s.ruleFields}>
@@ -878,7 +911,7 @@ export function QualityEditorDialog({
                     required
                   />
                 </div>
-                <RuleFields people={managers} value={editor.rule} />
+                <RuleFields people={managers} value={editor.rule} catalog={quality.catalog} />
               </>
             )}
             {editor.kind === "accounting" && (

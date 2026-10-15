@@ -19,12 +19,14 @@ import s from "./quality.module.css";
 export function RuleFields({
   people,
   value = draftQualityRule,
+  catalog = [],
 }: {
   people: Workspace["people"];
   value?: QualityRule;
+  catalog?: QualityItem[];
 }) {
   const [rule, setRule] = useState(value);
-  const number = (label: string, key: keyof QualityRule) => (
+  const number = (label: string, key: keyof QualityRule, enabled = true) => (
     <Field key={key} label={label}>
       {(id) => (
         <input
@@ -34,6 +36,7 @@ export function RuleFields({
           max="1000"
           step="0.01"
           name={key}
+          disabled={!enabled}
           defaultValue={typeof rule[key] === "number" ? String(rule[key]) : ""}
           onChange={(e) =>
             setRule((r) => ({
@@ -60,15 +63,17 @@ export function RuleFields({
   );
   return (
     <>
+      <input type="hidden" name="limitsVersion" value="1" />
       <div className={s.formGrid}>
         <section>
           <h3>Điểm QC</h3>
           <div className={s.ruleFields}>
             {number("Điểm cơ sở", "baseScore")}
             {number("Điểm tối thiểu xét thưởng", "minimumScore")}
-            {number("Sàn điểm", "floorScore")}
-            {number("Trần điểm", "capScore")}
-            {number("Tổng điểm cộng tối đa mỗi kỳ", "bonusCap")}
+            {([['floor', 'Áp dụng sàn điểm', 'floorScore', 'Sàn điểm'], ['ceiling', 'Áp dụng trần điểm', 'capScore', 'Trần điểm'], ['bonus', 'Giới hạn tổng điểm cộng', 'bonusCap', 'Tổng điểm cộng tối đa mỗi kỳ']] as const).map(([key, label, field, inputLabel]) => <section key={key}>
+              <label className={s.check}><input type="checkbox" name={`limit:${key}`} checked={rule.limits?.[key] ?? true} onChange={(event) => setRule((current) => ({ ...current, limits: { floor: true, ceiling: true, bonus: true, ...current.limits, [key]: event.target.checked } }))} />{label}</label>
+              {number(inputLabel, field, rule.limits?.[key] ?? true)}
+            </section>)}
             <SelectField
               label="Lỗi lặp trong kỳ"
               name="repeatMode"
@@ -102,6 +107,7 @@ export function RuleFields({
               }
             />
             {bool("Cho điểm/thưởng vượt 100", "allowAbove100")}
+            <SelectField label="Lỗi chưa khắc phục qua kỳ mới" name="openIssueAcrossPeriods" value={rule.openIssueAcrossPeriods ?? ""} options={{ each_period: "Chấm lại trong mỗi kỳ", once_until_closed: "Không trừ lại cùng lỗi khi chưa khắc phục" }} onChange={(next) => setRule((current) => ({ ...current, openIssueAcrossPeriods: next as QualityRule['openIssueAcrossPeriods'] }))} />
           </div>
         </section>
         <section>
@@ -171,6 +177,10 @@ export function RuleFields({
           ))}
         </section>
       </div>
+      {catalog.some((item) => item.score_type === 'bonus') && <section className={s.section}><h3>Giới hạn điểm cộng từng hạng mục trong kỳ</h3>{catalog.filter((item) => item.score_type === 'bonus').map((item) => {
+        const limit = rule.bonusLimits?.find((entry) => entry.familyId === item.family_id);
+        return <fieldset key={item.family_id} className={s.ruleFields}><legend>{item.code} · {item.title}</legend><TextField label="Số lần cộng tối đa" name={`bonusAwards:${item.family_id}`} type="number" step="1" value={limit?.maxAwards ?? ''} hint="Không giới hạn khi không đặt mức tối đa" /><TextField label="Số điểm cộng tối đa" name={`bonusPoints:${item.family_id}`} type="number" step="0.01" value={limit?.maxPoints ?? ''} hint="Không giới hạn khi không đặt mức tối đa" /></fieldset>;
+      })}</section>}
       {qualityRuleIssues(rule).length > 0 && (
         <p className={s.muted}>Bản nháp: {qualityRuleIssues(rule).join(" ")}</p>
       )}
@@ -180,6 +190,7 @@ export function RuleFields({
 export function rulePayload(
   form: FormData,
   people: Workspace["people"],
+  catalog: QualityItem[] = [],
 ): QualityRule {
   const num = (name: string) =>
     form.get(name) === "" || form.get(name) === null
@@ -202,6 +213,11 @@ export function rulePayload(
     floorScore: num("floorScore"),
     capScore: num("capScore"),
     bonusCap: num("bonusCap"),
+    ...(form.get('limitsVersion') === '1' ? {
+      limits: { floor: form.get('limit:floor') === 'on', ceiling: form.get('limit:ceiling') === 'on', bonus: form.get('limit:bonus') === 'on' },
+      openIssueAcrossPeriods: (String(form.get('openIssueAcrossPeriods') ?? '') || undefined) as QualityRule['openIssueAcrossPeriods'],
+      bonusLimits: catalog.filter((item) => item.score_type === 'bonus').map((item) => ({ familyId: item.family_id, maxAwards: num(`bonusAwards:${item.family_id}`), maxPoints: num(`bonusPoints:${item.family_id}`) })),
+    } : {}),
     repeatMode: (String(form.get("repeatMode") ?? "") ||
       null) as QualityRule["repeatMode"],
     thresholdBasis: (String(form.get("thresholdBasis") ?? "") ||
@@ -226,7 +242,7 @@ export function rulePayload(
       .filter((a) => a.shareBps > 0),
   };
 }
-export function CatalogFields({ workspace }: { workspace: Workspace }) {
+export function CatalogFields({ workspace, groups = [] }: { workspace: Workspace; groups?: {id:string;title:string;active:boolean}[] }) {
   return (
     <div className={s.formGrid}>
       <SelectField
@@ -241,7 +257,7 @@ export function CatalogFields({ workspace }: { workspace: Workspace }) {
       <SelectField
         label="Phân loại"
         name="category"
-        options={categories}
+        options={{...categories,...Object.fromEntries(groups.filter((group) => group.active).map((group) => [`group:${group.id}`, group.title]))}}
         required
       />
       <SelectField
@@ -281,11 +297,13 @@ export function CatalogFields({ workspace }: { workspace: Workspace }) {
 export function CatalogImport({
   workspace,
   catalog = [],
+  groups = [],
   busy,
   onImport,
 }: {
   workspace: Workspace;
   catalog?: QualityItem[];
+  groups?: { id: string; title: string; active: boolean }[];
   busy: boolean;
   onImport: (
     rows: ReturnType<typeof parseQualityCatalog>["rows"],
@@ -319,6 +337,7 @@ export function CatalogImport({
       x.utils.aoa_to_sheet([
         ["Phân loại"],
         ...Object.values(categories).map((v) => [v]),
+        ...groups.filter((group) => group.active).map((group) => [group.title]),
       ]),
       "Phan loai",
     );
@@ -343,7 +362,7 @@ export function CatalogImport({
         wb.Sheets[wb.SheetNames[0]],
         { header: 1, raw: false },
       );
-      const parsed = parseQualityCatalog(rows, catalog, workspace.standards.filter((standard) => standard.status === "approved").map((standard) => standard.id));
+      const parsed = parseQualityCatalog(rows, catalog, workspace.standards.filter((standard) => standard.status === "approved").map((standard) => standard.id), Object.fromEntries(groups.filter((group) => group.active).map((group) => [`group:${group.id}`, group.title])));
       setPreview(parsed);
     } catch {
       setError("Không đọc được file Excel. Dùng đúng mẫu tải từ Hub.");

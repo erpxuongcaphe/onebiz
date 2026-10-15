@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   revenueHeaders,
+  revenueImportHeaders,
   validateRevenueRows,
 } from "@/lib/operations/revenue-import";
 import { isOperationsHubHost } from "@/lib/operations/routing";
@@ -15,6 +16,14 @@ const row = [
   "report-01",
 ];
 describe("Operations revenue import", () => {
+  it("supports an explicitly selected custom cycle without guessing a calendar month", () => {
+    const selected={key:"custom:12345678-1234-4123-8123-123456789abc",label:"Kỳ 26/09–25/10"};
+    const cells=row.map((value,index)=>index===1?selected.label:value);
+    const parsed=validateRevenueRows([revenueImportHeaders(selected),cells],branch,selected);
+    expect(parsed.issues).toEqual([]);
+    expect(parsed.rows[0]).toMatchObject({period:selected.key,amountCents:123456});
+    expect(validateRevenueRows([revenueImportHeaders(selected),row],branch,selected).rows).toEqual([]);
+  });
   it("parses US numbers to exact cents", () =>
     expect(
       validateRevenueRows([[...revenueHeaders], row], branch).rows[0]

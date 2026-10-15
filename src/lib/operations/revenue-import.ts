@@ -16,6 +16,10 @@ export interface ImportIssue {
   column: string;
   message: string;
 }
+export interface RevenueAssessmentPeriod { key: string; label: string }
+export function revenueImportHeaders(selectedPeriod?: RevenueAssessmentPeriod) {
+  return revenueHeaders.map((header,index) => index === 1 && selectedPeriod ? "Kỳ đánh giá" : header);
+}
 export interface RevenueImportRow {
   branchId: string;
   period: string;
@@ -29,14 +33,16 @@ export interface RevenueImportRow {
 export function validateRevenueRows(
   rows: unknown[][],
   branch: { id: string; code: string },
+  selectedPeriod?: RevenueAssessmentPeriod,
 ) {
+  const headers = revenueImportHeaders(selectedPeriod);
   const issues: ImportIssue[] = [],
     valid: RevenueImportRow[] = [],
     seen = new Set<string>();
   if (
     !rows.length ||
-    revenueHeaders.some((header, index) => rows[0][index] !== header) ||
-    rows[0].length !== revenueHeaders.length
+    headers.some((header, index) => rows[0][index] !== header) ||
+    rows[0].length !== headers.length
   )
     return {
       issues: [
@@ -59,11 +65,11 @@ export function validateRevenueRows(
     if (!cells.some((cell) => cell !== "" && cell != null)) continue;
     const get = (col: number) => String(cells[col] ?? "").trim();
     const fail = (col: number, message: string) =>
-      issues.push({ row: index + 1, column: revenueHeaders[col], message });
+      issues.push({ row: index + 1, column: headers[col], message });
     if (get(0) !== branch.code)
       fail(0, "Mã chi nhánh không khớp chi nhánh đang chọn.");
-    if (!/^(0[1-9]|1[0-2])\/\d{4}$/.test(get(1)))
-      fail(1, "Kỳ phải đúng mm/yyyy, ví dụ 10/2026.");
+    if (selectedPeriod ? get(1) !== selectedPeriod.label : !/^(0[1-9]|1[0-2])\/\d{4}$/.test(get(1)))
+      fail(1, selectedPeriod ? "Kỳ không khớp kỳ đang chọn; dùng đúng nhãn trong mẫu tải từ Hub." : "Kỳ phải đúng mm/yyyy, ví dụ 10/2026.");
     const amount = parseMoneyUS(get(2));
     if (amount === null)
       fail(2, "Số US 1,234.56; không dùng 1.234,56 hoặc quá hai số thập phân.");
@@ -74,7 +80,7 @@ export function validateRevenueRows(
     seen.add(get(6));
     valid.push({
       branchId: branch.id,
-      period: `${get(1).slice(3)}-${get(1).slice(0, 2)}`,
+      period: selectedPeriod?.key ?? `${get(1).slice(3)}-${get(1).slice(0, 2)}`,
       amountCents: amount ?? 0,
       source: "xlsx",
       sourceName: get(3),

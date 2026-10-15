@@ -2,7 +2,8 @@
 import { useRef, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import {
-  revenueHeaders,
+  revenueImportHeaders,
+  type RevenueAssessmentPeriod,
   validateRevenueRows,
   type ImportIssue,
   type RevenueImportRow,
@@ -16,26 +17,29 @@ export function RevenueExcel({
   period,
   busy,
   onSave,
+  assessmentPeriod,
 }: {
   branch: Branch;
   definition: string;
   period: string;
   busy: boolean;
-  onSave: (action: string, payload: Record<string, unknown>) => Promise<void>;
+  onSave: (action: string, payload: Record<string, unknown>) => Promise<void | boolean>;
+  assessmentPeriod?: RevenueAssessmentPeriod;
 }) {
   const [rows, setRows] = useState<RevenueImportRow[]>([]);
   const [issues, setIssues] = useState<ImportIssue[]>([]);
   const [reading, setReading] = useState(false);
   const [requests, setRequests] = useState<string[]>([]);
   const fileInput = useRef<HTMLInputElement>(null);
+  const saving = useRef(false);
   const download = async () => {
     const XLSX = await import("xlsx");
     const workbook = XLSX.utils.book_new();
     const sheet = XLSX.utils.aoa_to_sheet([
-      [...revenueHeaders],
+      revenueImportHeaders(assessmentPeriod),
       [
         branch.code,
-        `${period.slice(5)}/${period.slice(0, 4)}`,
+        assessmentPeriod?.label ?? `${period.slice(5)}/${period.slice(0, 4)}`,
         "",
         "",
         definition,
@@ -112,6 +116,7 @@ export function RevenueExcel({
                   raw: true,
                 }),
                 branch,
+                assessmentPeriod,
               );
               setIssues(result.issues);
               setRows(result.rows);
@@ -160,7 +165,7 @@ export function RevenueExcel({
                 {rows.map((row, i) => (
                   <tr key={i}>
                     <td>
-                      {row.period.slice(5)}/{row.period.slice(0, 4)}
+                      {assessmentPeriod?.label ?? `${row.period.slice(5)}/${row.period.slice(0, 4)}`}
                     </td>
                     <td>{row.sourceName}</td>
                     <td style={{ textAlign: "right" }}>
@@ -174,12 +179,18 @@ export function RevenueExcel({
           <button
             disabled={busy || reading}
             onClick={async () => {
-              await onSave("revenue_batch", {
+              if (saving.current || busy) return;
+              saving.current = true;
+              try {
+              const result = await onSave("revenue_batch", {
                 rows: rows.map((row, i) => ({
                   ...row,
                   requestId: requests[i],
                 })),
               });
+              if (result !== false) { setRows([]);setRequests([]); }
+              } catch { setIssues([{row:1,column:"Lưu dữ liệu",message:"Chưa gửi được. Nội dung xem trước vẫn được giữ; kiểm tra lỗi rồi gửi lại."}]); }
+              finally { saving.current=false; }
             }}
           >
             Gửi {rows.length} dòng chờ duyệt

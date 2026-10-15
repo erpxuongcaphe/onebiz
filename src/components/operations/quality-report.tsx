@@ -12,21 +12,21 @@ export function QualityReport({
   data,
   workspace,
   branch,
+  period,
   busy,
   onEdit,
   onSave,
-  onLegacySettings,
 }: {
   data: QualityWorkspace;
   workspace: Workspace;
   branch: string;
+  period?: string;
   busy: boolean;
   onEdit: (editor: QualityEditor) => void;
   onSave: (
     action: QualityAction,
     payload: Record<string, unknown>,
   ) => Promise<boolean>;
-  onLegacySettings: () => void;
 }) {
   const name = (id: string) =>
     workspace.people.find((p) => p.id === id)?.name ?? "Người dùng OneBiz";
@@ -94,9 +94,6 @@ export function QualityReport({
             {r}
           </p>
         ))}
-        <button onClick={onLegacySettings}>
-          Thiết lập nguồn, chỉ tiêu và công việc
-        </button>
       </section>
       {data.settlement && (
         <section className={s.section}>
@@ -153,7 +150,7 @@ export function QualityReport({
                 <tr key={e.id}>
                   <td>
                     <a
-                      href={`/hub?view=qc&branch=${encodeURIComponent(branch)}&audit=${encodeURIComponent(e.audit_id)}&period=${encodeURIComponent(workspace.period)}`}
+                      href={`/hub?view=qc&branch=${encodeURIComponent(branch)}&audit=${encodeURIComponent(e.audit_id)}&period=${encodeURIComponent(period ?? workspace.period)}`}
                     >
                       {e.audit_title}
                     </a>
