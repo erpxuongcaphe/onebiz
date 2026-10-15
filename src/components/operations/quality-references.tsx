@@ -49,7 +49,7 @@ export function QualityReferences({issue,branch,period,canLink,busy,onSave,comma
     {(issue.references??[]).map(reference=><article key={reference.id}><button type="button" onClick={()=>{setError('');setSelected({type:reference.source_type,id:reference.source_id});}}>{types[reference.source_type as SourceType]} · {reference.label}</button>{reference.note&&<p>{reference.note}</p>}</article>)}
     {!issue.references?.length&&<p>Chưa liên kết hồ sơ nguồn.</p>}
     {canLink&&<button type="button" onClick={()=>{setSource('');setRows([]);setError('');setOpen(true);}}>Liên kết hồ sơ</button>}
-    <Dialog open={open} onOpenChange={(value)=>{if(!busy)setOpen(value);}}><DialogContent className={s.dialog} showCloseButton={false}>
+    <Dialog open={open} onOpenChange={(value)=>{if(!busy)setOpen(value);}}><DialogContent className={`${s.dialog} translate-x-0 translate-y-0`} showCloseButton={false}>
       <div className={s.dialogHeader}><DialogTitle>Liên kết hàng hóa hoặc chứng từ</DialogTitle></div>
       <form onSubmit={submit} className={s.dialogForm}>
         <div className={s.dialogBody}>
@@ -63,7 +63,7 @@ export function QualityReferences({issue,branch,period,canLink,busy,onSave,comma
         <div className={s.dialogFooter}><button type="button" disabled={busy} onClick={()=>setOpen(false)}>Đóng</button><button type="submit" className={s.primary} disabled={busy||loading||!source}>Lưu liên kết</button></div>
       </form>
     </DialogContent></Dialog>
-    <Dialog open={selected!==null} onOpenChange={value=>{if(!value)setSelected(null);}} protectUnsavedChanges={false}><DialogContent className={s.dialog} showCloseButton={false}>
+    <Dialog open={selected!==null} onOpenChange={value=>{if(!value)setSelected(null);}} protectUnsavedChanges={false}><DialogContent className={`${s.dialog} translate-x-0 translate-y-0`} showCloseButton={false}>
       <div className={s.dialogHeader}><DialogTitle>Đối chiếu hồ sơ nguồn</DialogTitle></div>
       <div className={s.dialogBody}>
         {loading?<p role="status">Đang đọc thông tin mới nhất…</p>:error?<p role="alert" className={s.alert}>{error}</p>:detail?<dl><dt>Mã</dt><dd>{detail.code||'—'}</dd><dt>Tên</dt><dd>{detail.title}</dd><dt>Trạng thái</dt><dd>{({active:'Đang sử dụng',expired:'Hết hạn',consumed:'Đã dùng hết',disposed:'Đã hủy',draft:'Nháp',completed:'Hoàn thành',received:'Đã nhận',partial:'Nhận một phần',canceled:'Đã hủy'} as Record<string,string>)[detail.status??'']??'—'}</dd>{detail.expiry_date&&<><dt>Hạn sử dụng</dt><dd>{formatShortDate(detail.expiry_date)}</dd></>}{detail.received_date&&<><dt>Ngày nhận</dt><dd>{formatShortDate(detail.received_date)}</dd></>}{detail.created_at&&<><dt>Ngày tạo</dt><dd>{formatDate(detail.created_at)}</dd></>}</dl>:<p>Hồ sơ không còn trong phạm vi được phép xem.</p>}
