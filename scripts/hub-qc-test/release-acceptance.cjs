@@ -9,11 +9,15 @@ const { bootstrap } = require('./run.cjs');
   try {
     await bootstrap(db);
     const recovery = fs.readFileSync(path.join(output,'RESTORE_HUB_FUNCTIONS_BEFORE_00537.sql'),'utf8');
-    const release = fs.readFileSync(path.join(output,'APPLY_HUB_00537.sql'),'utf8');
+    const release = fs.readFileSync(path.join(output,'APPLY_HUB_00539.sql'),'utf8');
     await db.exec(recovery);
     await db.exec('create schema supabase_migrations; create table supabase_migrations.schema_migrations(version text primary key,name text,statements text[]);');
     await db.exec(release);
-    assert.equal((await db.query("select count(*)::int n from supabase_migrations.schema_migrations where version='00537'")).rows[0].n,1);
+    assert.equal((await db.query("select count(*)::int n from supabase_migrations.schema_migrations where version='00539'")).rows[0].n,1);
+    await db.exec("update supabase_migrations.schema_migrations set version='00537' where version='00539';");
+    await db.exec(fs.readFileSync(path.join(__dirname,'reconcile-00539.sql'),'utf8'));
+    assert.equal((await db.query("select count(*)::int n from supabase_migrations.schema_migrations where version='00539' and name='operations_quality_acceptance_fixes'")).rows[0].n,1);
+    console.log('PASS migration metadata reconciles 00537 to00539 without replaying Hub DDL');
     await require('./acceptance.cjs')(db);
     await require('./advanced.cjs')(db);
     const before=(await db.query('select count(*)::int n from ops_q_events')).rows[0].n;

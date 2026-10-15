@@ -1,3 +1,5 @@
+-- Published originally as 00537; metadata is reconciled to 00539 only.
+-- Never replay this migration on an environment where these fixes are installed.
 begin;
 set local lock_timeout = '3s';
 set local statement_timeout = '30s';
