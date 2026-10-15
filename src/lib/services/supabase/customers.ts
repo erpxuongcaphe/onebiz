@@ -595,7 +595,10 @@ export async function getOrCreateWalkInCustomer(): Promise<Customer> {
   const { data, error } = await (supabase.rpc as any)("get_or_create_walk_in_customer");
   if (error) handleError(error, "getOrCreateWalkInCustomer");
   if (!data?.id) throw new Error("Không xác định được khách lẻ mặc định. Vui lòng tải lại POS.");
-  return mapCustomer(data);
+  // Preserve group/tier pricing metadata from the existing customer read path.
+  const customer = await getCustomerById(data.id);
+  if (!customer) throw new Error("Không tìm thấy hồ sơ khách lẻ mặc định. Vui lòng tải lại POS.");
+  return customer;
 }
 
 /**
