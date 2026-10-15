@@ -133,6 +133,20 @@
    "updated_at",
    "version_number"
   ],
+  "ops_q_lines": [
+   "audit_id",
+   "branch_id",
+   "critical",
+   "evidence",
+   "id",
+   "item_id",
+   "item_snapshot",
+   "note",
+   "observations",
+   "result",
+   "tenant_id",
+   "version"
+  ],
   "rpc_backup_chung_tu_ban": [
    "chu_ky",
    "chup_luc",
@@ -150,6 +164,17 @@
    "tenant_id",
    "title",
    "updated_at"
+  ],
+  "ops_q_rechecks": [
+   "actor_id",
+   "branch_id",
+   "created_at",
+   "evidence",
+   "id",
+   "issue_id",
+   "note",
+   "result",
+   "tenant_id"
   ],
   "fnb_supply_branch_scopes": [
    "branch_id",
@@ -324,6 +349,18 @@
   "fnb_invoice_kitchen_line_sources": [
    "invoice_item_id",
    "kitchen_order_item_id"
+  ],
+  "ops_q_issues": [
+   "branch_id",
+   "department_id",
+   "family_id",
+   "id",
+   "operator_id",
+   "recurrence_of",
+   "stage",
+   "tenant_id",
+   "todo_id",
+   "updated_at"
   ],
   "kpi_breakdowns": [
    "actual_value",
@@ -515,8 +552,10 @@
    "lot_number",
    "notes",
    "planned_end",
+   "planned_end_at",
    "planned_qty",
    "planned_start",
+   "planned_start_at",
    "product_id",
    "status",
    "tenant_id",
@@ -549,6 +588,19 @@
    "transaction_date",
    "type",
    "updated_at"
+  ],
+  "ops_q_checks": [
+   "actor_id",
+   "branch_id",
+   "correction_of",
+   "created_at",
+   "id",
+   "note",
+   "observations",
+   "result",
+   "run_id",
+   "standard_snapshot",
+   "tenant_id"
   ],
   "print_templates": [
    "branch_id",
@@ -598,6 +650,19 @@
    "id",
    "permission_code",
    "role_id"
+  ],
+  "ops_q_rules": [
+   "approved_at",
+   "approved_by",
+   "branch_id",
+   "config",
+   "created_at",
+   "created_by",
+   "effective_from",
+   "id",
+   "state",
+   "tenant_id",
+   "title"
   ],
   "supplier_advances": [
    "branch_id",
@@ -753,6 +818,25 @@
    "state",
    "target_cents",
    "tenant_id"
+  ],
+  "ops_q_catalog": [
+   "accounting_required",
+   "branch_id",
+   "category",
+   "code",
+   "created_at",
+   "created_by",
+   "criteria",
+   "critical",
+   "effective_from",
+   "family_id",
+   "id",
+   "score_type",
+   "standard_id",
+   "tenant_id",
+   "title",
+   "version",
+   "weight"
   ],
   "supplier_return_items": [
    "id",
@@ -1129,6 +1213,19 @@
    "yield_qty",
    "yield_unit"
   ],
+  "ops_q_audits": [
+   "auditor_id",
+   "branch_id",
+   "completed_at",
+   "created_at",
+   "id",
+   "period",
+   "rule_id",
+   "state",
+   "tenant_id",
+   "title",
+   "version"
+  ],
   "mkt_audit_access_tokens": [
    "created_at",
    "created_by",
@@ -1321,6 +1418,18 @@
    "request_id",
    "tenant_id"
   ],
+  "ops_q_corrections": [
+   "actor_id",
+   "after_data",
+   "before_data",
+   "branch_id",
+   "created_at",
+   "evidence",
+   "id",
+   "line_id",
+   "reason",
+   "tenant_id"
+  ],
   "product_lots_backup_00226": [
    "backed_up_at",
    "current_qty",
@@ -1385,6 +1494,17 @@
    "tenant_id",
    "user_id"
   ],
+  "ops_q_settlements": [
+   "actor_id",
+   "branch_id",
+   "created_at",
+   "id",
+   "period",
+   "reason",
+   "revision",
+   "snapshot",
+   "tenant_id"
+  ],
   "mkt_channel_plans": [
    "approved_at",
    "approved_by",
@@ -1446,6 +1566,15 @@
    "reference_type",
    "tenant_id",
    "type"
+  ],
+  "ops_q_grants": [
+   "active",
+   "branch_id",
+   "can_accounting",
+   "can_audit",
+   "can_correct",
+   "tenant_id",
+   "user_id"
   ],
   "loyalty_tiers": [
    "created_at",
@@ -1679,6 +1808,14 @@
    "updated_at",
    "uploaded_by"
   ],
+  "ops_q_sources": [
+   "branch_id",
+   "check_id",
+   "created_at",
+   "issue_id",
+   "qc_line_id",
+   "tenant_id"
+  ],
   "suppliers": [
    "address",
    "branch_id",
@@ -1741,8 +1878,10 @@
    "lot_number",
    "notes",
    "planned_end",
+   "planned_end_at",
    "planned_qty",
    "planned_start",
+   "planned_start_at",
    "product_id",
    "status",
    "tenant_id",
@@ -1796,6 +1935,15 @@
    "pipeline_item_id",
    "to_stage_id",
    "transition_id"
+  ],
+  "ops_q_departments": [
+   "active",
+   "branch_id",
+   "id",
+   "members",
+   "tenant_id",
+   "title",
+   "version"
   ],
   "shipping_orders": [
    "cod_amount",
@@ -1949,6 +2097,12 @@
    "tenant_id",
    "updated_at",
    "updated_by"
+  ],
+  "ops_q_assignments": [
+   "branch_id",
+   "family_id",
+   "manager_ids",
+   "tenant_id"
   ],
   "mkt_audit_results": [
    "actual",
@@ -2335,6 +2489,22 @@
    "unit_cost",
    "unit_price"
   ],
+  "ops_q_accounting": [
+   "approved_by",
+   "branch_id",
+   "created_at",
+   "created_by",
+   "denominator",
+   "evidence",
+   "id",
+   "numerator",
+   "period",
+   "state",
+   "tenant_id",
+   "title",
+   "unit",
+   "version"
+  ],
   "customer_group_code_counters": [
    "next_value",
    "prefix",
@@ -2590,6 +2760,7 @@
    "id",
    "initial_qty",
    "lot_number",
+   "manufactured_at",
    "manufactured_date",
    "note",
    "product_id",
@@ -2701,6 +2872,21 @@
    "tenant_id",
    "updated_at",
    "updated_by"
+  ],
+  "ops_q_events": [
+   "actor_id",
+   "audit_id",
+   "branch_id",
+   "created_at",
+   "critical_delta",
+   "delta",
+   "id",
+   "kind",
+   "line_id",
+   "period",
+   "reason",
+   "reverses",
+   "tenant_id"
   ],
   "stock_transfer_items": [
    "created_at",
@@ -2938,187 +3124,6 @@
    "kind",
    "next_value",
    "tenant_id"
-  ],
-  "ops_q_accounting": [
-   "approved_by",
-   "branch_id",
-   "created_at",
-   "created_by",
-   "denominator",
-   "evidence",
-   "id",
-   "numerator",
-   "period",
-   "state",
-   "tenant_id",
-   "title",
-   "unit",
-   "version"
-  ],
-  "ops_q_assignments": [
-   "branch_id",
-   "family_id",
-   "manager_ids",
-   "tenant_id"
-  ],
-  "ops_q_audits": [
-   "auditor_id",
-   "branch_id",
-   "completed_at",
-   "created_at",
-   "id",
-   "period",
-   "rule_id",
-   "state",
-   "tenant_id",
-   "title",
-   "version"
-  ],
-  "ops_q_catalog": [
-   "accounting_required",
-   "branch_id",
-   "category",
-   "code",
-   "created_at",
-   "created_by",
-   "criteria",
-   "critical",
-   "effective_from",
-   "family_id",
-   "id",
-   "score_type",
-   "standard_id",
-   "tenant_id",
-   "title",
-   "version",
-   "weight"
-  ],
-  "ops_q_checks": [
-   "actor_id",
-   "branch_id",
-   "correction_of",
-   "created_at",
-   "id",
-   "note",
-   "observations",
-   "result",
-   "run_id",
-   "standard_snapshot",
-   "tenant_id"
-  ],
-  "ops_q_corrections": [
-   "actor_id",
-   "after_data",
-   "before_data",
-   "branch_id",
-   "created_at",
-   "evidence",
-   "id",
-   "line_id",
-   "reason",
-   "tenant_id"
-  ],
-  "ops_q_departments": [
-   "active",
-   "branch_id",
-   "id",
-   "members",
-   "tenant_id",
-   "title",
-   "version"
-  ],
-  "ops_q_events": [
-   "actor_id",
-   "audit_id",
-   "branch_id",
-   "created_at",
-   "critical_delta",
-   "delta",
-   "id",
-   "kind",
-   "line_id",
-   "period",
-   "reason",
-   "reverses",
-   "tenant_id"
-  ],
-  "ops_q_grants": [
-   "active",
-   "branch_id",
-   "can_accounting",
-   "can_audit",
-   "can_correct",
-   "tenant_id",
-   "user_id"
-  ],
-  "ops_q_issues": [
-   "branch_id",
-   "department_id",
-   "family_id",
-   "id",
-   "operator_id",
-   "recurrence_of",
-   "stage",
-   "tenant_id",
-   "todo_id",
-   "updated_at"
-  ],
-  "ops_q_lines": [
-   "audit_id",
-   "branch_id",
-   "critical",
-   "evidence",
-   "id",
-   "item_id",
-   "item_snapshot",
-   "note",
-   "observations",
-   "result",
-   "tenant_id",
-   "version"
-  ],
-  "ops_q_rechecks": [
-   "actor_id",
-   "branch_id",
-   "created_at",
-   "evidence",
-   "id",
-   "issue_id",
-   "note",
-   "result",
-   "tenant_id"
-  ],
-  "ops_q_rules": [
-   "approved_at",
-   "approved_by",
-   "branch_id",
-   "config",
-   "created_at",
-   "created_by",
-   "effective_from",
-   "id",
-   "state",
-   "tenant_id",
-   "title"
-  ],
-  "ops_q_settlements": [
-   "actor_id",
-   "branch_id",
-   "created_at",
-   "id",
-   "period",
-   "reason",
-   "revision",
-   "snapshot",
-   "tenant_id"
-  ],
-  "ops_q_sources": [
-   "branch_id",
-   "check_id",
-   "created_at",
-   "issue_id",
-   "qc_line_id",
-   "tenant_id"
   ]
  },
  "rpc": [
@@ -3179,6 +3184,8 @@
   "_parse_expiry_time_00527",
   "_post_fnb_branch_cost_in_00390",
   "_post_fnb_branch_cost_out_00390",
+  "_production_create_base_00528",
+  "_production_time_00528",
   "_promotion_customer_eligible_00458",
   "_receive_purchase_items_atomic_impl_00102",
   "_reconcile_product_lots_to_branch_00284",
@@ -3254,6 +3261,7 @@
   "complete_legacy_sales_order_atomic",
   "complete_production_atomic",
   "complete_production_order",
+  "complete_production_with_date_times",
   "complete_production_with_expiry_time",
   "complete_production_with_uom",
   "complete_stock_transfer_atomic",
@@ -3515,6 +3523,7 @@
   "ops_execute",
   "ops_execute_core",
   "ops_execute_pre_proposals",
+  "ops_execute_pre_quality",
   "ops_filtered_page",
   "ops_generate",
   "ops_generate_internal",
@@ -3675,7 +3684,7 @@
   "void_disposal_export_atomic",
   "void_internal_export_atomic"
  ],
- "soBang": 211,
- "soCot": 2517,
- "soRpc": 541
+ "soBang": 226,
+ "soCot": 2673,
+ "soRpc": 556
 }

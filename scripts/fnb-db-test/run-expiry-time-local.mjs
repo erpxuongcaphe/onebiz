@@ -114,6 +114,37 @@ try {
   await db.exec('set role authenticated');
   await assert.rejects(()=>db.query('select _expiry_po_base_00527($1,$2)',['[]',branch]),/permission denied/);
   await db.exec('reset role');
+  // Extend the same real stock/cost chain with optional production times.
+  await db.exec(`create function get_user_tenant_id() returns uuid language sql as $$select '${tenant}'::uuid$$;
+    alter table production_orders add column planned_start date,add column planned_end date;
+    create function create_production_order_atomic(p_input jsonb) returns jsonb language plpgsql as $$
+    declare result uuid:=gen_random_uuid();begin
+      insert into production_orders(id,tenant_id,branch_id,product_id,code,created_by,status,planned_qty,planned_start,planned_end)
+      values(result,'${tenant}','${branch}','${prepared}','SX-TIME-CREATE','${actor}','planned',600,(p_input->>'planned_start')::date,(p_input->>'planned_end')::date);
+      return jsonb_build_object('id',result);end $$;
+    create view production_orders_scoped as select * from production_orders;
+    create view product_lots_scoped as select * from product_lots;
+  `);
+  const originalCreate=(await db.query(`select prosrc from pg_proc where oid='create_production_order_atomic(jsonb)'::regprocedure`)).rows[0].prosrc;
+  await db.exec(fs.readFileSync('supabase/migrations/00528_production_date_times.sql','utf8'));
+  assert.equal((await db.query(`select prosrc from pg_proc where oid='_production_create_base_00528(jsonb)'::regprocedure`)).rows[0].prosrc,originalCreate);
+  const created=(await db.query(`select create_production_order_atomic($1) result`,[JSON.stringify({planned_start:'2030-10-15T00:15',planned_end:'2030-10-15T08:30'})])).rows[0].result;
+  const times=(await db.query('select planned_start::text day_value,planned_start_at::text time_value,planned_end_at::text end_at from production_orders_scoped where id=$1',[created.id])).rows[0];
+  assert.equal(times.day_value,'2030-10-15');assert.match(times.time_value,/2030-10-14 17:15/);assert.match(times.end_at,/2030-10-15 01:30/);
+  await assert.rejects(()=>db.query(`select create_production_order_atomic($1)`,[JSON.stringify({planned_start:'2030-10-15T10:30',planned_end:'2030-10-15T08:30'})]),/PRODUCTION_DATE_RANGE_INVALID/);
+  await db.query(`insert into production_order_materials(id,production_order_id,product_id,planned_qty,unit,unit_cost) values(gen_random_uuid(),$1,$2,.1,'Tui',12500)`,[created.id,raw]);
+  const rawBeforeTime=await qty(raw),outputBeforeTime=await qty(prepared);
+  const timeLot=(await db.query(`select complete_production_with_date_times($1,585,'2030-10-15T00:15','2030-10-15T08:30','ALL-TIME') id`,[created.id])).rows[0].id;
+  const made=(await db.query('select manufactured_date::text day_value,manufactured_at::text time_value,expiry_at::text expires from product_lots_scoped where id=$1',[timeLot])).rows[0];
+  assert.equal(made.day_value,'2030-10-15');assert.match(made.time_value,/2030-10-14 17:15/);assert.match(made.expires,/2030-10-15 01:30/);
+  assert.ok(Math.abs(await qty(raw)-(rawBeforeTime-.1))<.00001);assert.equal(await qty(prepared),outputBeforeTime+585);
+  await assert.rejects(()=>db.query(`select complete_production_with_date_times($1,585,'2030-10-15T00:15','2030-10-15T08:30','ALL-TIME')`,[created.id]));
+  assert.equal(await qty(prepared),outputBeforeTime+585,'all-time replay cannot duplicate output');
+  assert.ok(Math.abs(await qty(raw)-(rawBeforeTime-.1))<.00001,'all-time replay cannot duplicate consumption');
+  await db.exec('set role authenticated');
+  await assert.rejects(()=>db.query(`select _production_create_base_00528('{}')`),/permission denied/);
+  await db.exec('reset role');
+  console.log('PASS: all production times persist across VN midnight, date-only columns preserved, scoped views include clock times, stock/cost chain and replay/private guards unchanged');
   console.log('PASS: exact-hour production uses real inventory chain; retry, legacy end-of-day, partial receipt, unchanged payload, invalid time and branch/private-RPC guards');
   console.log('PASS: under/over standard yield, independent raw consumption and cost, replay prevention, invalid yield rollback. Legacy full-chain assertions passed.');
 } catch(error) { console.error(error.message); process.exitCode=1; }

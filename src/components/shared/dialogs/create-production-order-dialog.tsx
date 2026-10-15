@@ -1,5 +1,7 @@
 "use client";
 
+import { DateTimeInput } from "@/components/shared/date-time-input";
+import { validateProductionDateTimes } from "@/lib/production-date-time";
 import { ExpiryDateInput } from "@/components/shared/expiry-date-input";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -364,6 +366,8 @@ export function CreateProductionOrderDialog({
   function validate(): boolean {
     const invalidDate = dateFieldsRef.current?.querySelector<HTMLInputElement>('input[type="date"]:invalid,input[type="time"]:invalid');
     if (invalidDate) { invalidDate.reportValidity(); return false; }
+    const dateError = validateProductionDateTimes({ plannedStart, plannedEnd, manufacturedDate, expiryDate });
+    if (dateError) { toast({ title: "Kiểm tra ngày giờ", description: dateError, variant: "warning" }); return false; }
     const e: Record<string, string> = {};
     if (!productId) e.productId = "Chọn sản phẩm cần SX";
     else if (!productOptions.some((product) => product.id === productId)) {
@@ -637,11 +641,7 @@ export function CreateProductionOrderDialog({
               <label className="text-sm font-medium">
                 Ngày bắt đầu sản xuất
               </label>
-              <Input
-                type="date"
-                value={plannedStart}
-                onChange={(e) => setPlannedStart(e.target.value)}
-              />
+              <DateTimeInput aria-label="Bắt đầu sản xuất" value={plannedStart} onValueChange={setPlannedStart} />
               <p className="text-xs text-muted-foreground">
                 Khi nào bắt đầu làm? (để trống = bắt đầu ngay khi tạo lệnh)
               </p>
@@ -650,11 +650,7 @@ export function CreateProductionOrderDialog({
               <label className="text-sm font-medium">
                 Ngày dự kiến hoàn thành
               </label>
-              <Input
-                type="date"
-                value={plannedEnd}
-                onChange={(e) => setPlannedEnd(e.target.value)}
-              />
+              <DateTimeInput aria-label="Dự kiến hoàn thành" value={plannedEnd} onValueChange={setPlannedEnd} />
               <p className="text-xs text-muted-foreground">
                 Khi nào làm xong? (để trống nếu chưa rõ — có thể cập nhật sau)
               </p>
@@ -678,11 +674,7 @@ export function CreateProductionOrderDialog({
               </div>
               <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">NSX</label>
-                <Input
-                  type="date"
-                  value={manufacturedDate}
-                  onChange={(e) => setManufacturedDate(e.target.value)}
-                />
+                <DateTimeInput aria-label="Ngày sản xuất" value={manufacturedDate} onValueChange={setManufacturedDate} />
               </div>
               <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">HSD</label>
