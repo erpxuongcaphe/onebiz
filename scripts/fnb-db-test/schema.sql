@@ -28,4 +28,3 @@ begin
   raise notice 'PASS: %', label;
 end $$;
 
-create function _allow_negative_sale_00473(uuid,uuid) returns boolean language sql as $$ select false $$;
