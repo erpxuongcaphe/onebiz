@@ -54,7 +54,7 @@ export function QualityBusinessSetup({ data, period, busy, onSave, commandError,
     </div>}
     {branch && data.can.manage && !data.settlement && data.target && data.target.definition.label !== ONEBIZ_REVENUE_DEFINITION && <RevenueExcel branch={branch} period={period} definition={data.target.definition.label} busy={busy} assessmentPeriod={{key:period,label:data.periods?.find(item=>item.key===period)?.title ?? `${period.slice(5)}/${period.slice(0,4)}`}} onSave={(action,payload)=>action==='revenue_batch'?onSave('revenue_batch',payload):Promise.resolve(false)}/>}
     <Dialog open={editor !== null} onOpenChange={(open) => { if (!open && !busy) setEditor(null); }}>
-      <DialogContent className={s.dialog} showCloseButton={false}>
+      <DialogContent className={`${s.dialog} translate-x-0 translate-y-0`} showCloseButton={false}>
       <div className={s.dialogHeader}><DialogTitle>{editor === 'target' ? 'Chỉ tiêu kinh doanh' : 'Doanh thu ngoài OneBiz'}</DialogTitle></div>
       {(error || commandError) && <p role="alert" className={s.alert}>{error || commandError}</p>}
       {editor === 'target' && <form className={s.dialogForm} onSubmit={(event) => void submit(event,'target')}>
@@ -78,7 +78,7 @@ export function QualityBusinessSetup({ data, period, busy, onSave, commandError,
       </DialogContent>
     </Dialog>
     <Dialog open={approval !== null} onOpenChange={(open) => { if (!open && !busy) setApproval(null); }}>
-      <DialogContent className={s.dialog} showCloseButton={false}>
+      <DialogContent className={`${s.dialog} translate-x-0 translate-y-0`} showCloseButton={false}>
         <div className={s.dialogHeader}><DialogTitle>Xác nhận nguồn doanh thu</DialogTitle></div>
         <form className={s.dialogForm} onSubmit={async (event) => {
           event.preventDefault();

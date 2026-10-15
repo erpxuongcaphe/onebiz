@@ -22,7 +22,7 @@ export function QualityFilters({ children, activeCount }: { children: ReactNode;
       <Icon name="filter_list" size={18}/>Bộ lọc{activeCount ? ` (${activeCount})` : ""}
     </button>
     <Dialog open={open} onOpenChange={setOpen} protectUnsavedChanges={false}>
-      <DialogContent className={s.dialog} showCloseButton={false}>
+      <DialogContent className={`${s.dialog} translate-x-0 translate-y-0`} showCloseButton={false}>
         <div className={s.dialogHeader}><DialogTitle>Lọc công việc</DialogTitle><button type="button" aria-label="Đóng bộ lọc" onClick={() => setOpen(false)}><Icon name="close" size={20}/></button></div>
         <div className={s.dialogBody}>{children}</div>
         <div className={s.dialogFooter}><button type="button" className={s.primary} onClick={() => setOpen(false)}>Xem kết quả</button></div>
