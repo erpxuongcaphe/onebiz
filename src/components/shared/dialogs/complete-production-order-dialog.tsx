@@ -1,5 +1,8 @@
 "use client";
 
+import { DateTimeInput } from "@/components/shared/date-time-input";
+import { cashDateTimeInput } from "@/lib/cash-time";
+import { validateProductionDateTimes } from "@/lib/production-date-time";
 import { ExpiryDateInput } from "@/components/shared/expiry-date-input";
 import { useState, useEffect, useRef } from "react";
 import {
@@ -89,7 +92,7 @@ export function CompleteProductionOrderDialog({
       }).catch(e => { if (active) toast({title:"Chưa tải được đơn vị",description:e instanceof Error ? e.message : "Mở lại để tải đơn vị trước khi hoàn tất.",variant:"warning"}); })
         .finally(() => { if (active) setUnitsLoading(false); });
       const today = formatDateInputValue(new Date());
-      setManufacturedDate(today);
+      setManufacturedDate(cashDateTimeInput());
       setLotNumber(`${order.code}-${today.replace(/-/g, "")}`);
       setExpiryDate("");
       setAutoSell(false);
@@ -155,6 +158,8 @@ export function CompleteProductionOrderDialog({
   async function handleComplete() {
     const invalidDate = dateFieldsRef.current?.querySelector<HTMLInputElement>('input[type="date"]:invalid,input[type="time"]:invalid');
     if (invalidDate) { invalidDate.reportValidity(); return; }
+    const dateError = validateProductionDateTimes({ manufacturedDate, expiryDate });
+    if (dateError) { toast({ title: "Kiểm tra ngày giờ", description: dateError, variant: "warning" }); return; }
     if (!order) return;
     if (checking || detailError || emptyMaterials || unitsLoading) return;
     if (!completedQty || !Number.isFinite(Number(completedQty)) || Number(completedQty) <= 0 || completedStockQty == null || completedStockQty <= 0) {
@@ -300,11 +305,7 @@ export function CompleteProductionOrderDialog({
           <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <label className="text-sm font-medium">NSX</label>
-              <Input
-                type="date"
-                value={manufacturedDate}
-                onChange={(e) => setManufacturedDate(e.target.value)}
-              />
+              <DateTimeInput aria-label="Ngày sản xuất" value={manufacturedDate} onValueChange={setManufacturedDate} />
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">HSD</label>

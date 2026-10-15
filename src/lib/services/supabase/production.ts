@@ -133,8 +133,8 @@ export async function createProductionOrder(order: {
         variant_id: order.variantId ?? null,
         planned_qty: order.plannedQty,
         ...(order.stockUnit ? { stock_unit: order.stockUnit } : {}),
-        planned_start: order.plannedStart ?? null,
-        planned_end: order.plannedEnd ?? null,
+        planned_start: expiryToIso(order.plannedStart) ?? null,
+        planned_end: expiryToIso(order.plannedEnd) ?? null,
         notes: order.notes ?? null,
         materials: order.materials.map((material) => ({
           product_id: material.productId,
@@ -302,14 +302,15 @@ export async function completeProductionAtomic(
   input?: { quantity: number; unit: string; expectedFactor?: number; materials?: {productId:string;quantity:number;unit:string;expectedFactor?:number}[] }
 ) {
   // RPC 00159 chưa có trong types sinh tự động (giống create_internal_sale_atomic).
+  const exactManufactured = !!expiryInputParts(manufacturedDate).time;
   const exactExpiry = !!expiryInputParts(expiryDate).time;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase.rpc as any)(exactExpiry ? "complete_production_with_expiry_time" : input ? "complete_production_with_uom" : "complete_production_atomic", {
+  const { data, error } = await (supabase.rpc as any)(exactManufactured ? "complete_production_with_date_times" : exactExpiry ? "complete_production_with_expiry_time" : input ? "complete_production_with_uom" : "complete_production_atomic", {
     p_production_order_id: productionOrderId,
     ...(input ? { p_input_quantity: input.quantity, p_input_unit: input.unit, p_expected_factor: input.expectedFactor, p_material_inputs: input.materials ?? null } : { p_completed_qty: completedQty }),
     p_lot_number: lotNumber,
-    p_manufactured_date: manufacturedDate,
-    ...(exactExpiry ? { p_expiry_value: expiryToIso(expiryDate), p_completed_qty: completedQty } : { p_expiry_date: expiryDate }),
+    ...(exactManufactured ? { p_manufactured_value: expiryToIso(manufacturedDate) } : { p_manufactured_date: manufacturedDate }),
+    ...((exactManufactured || exactExpiry) ? { p_expiry_value: expiryToIso(expiryDate), p_completed_qty: completedQty } : { p_expiry_date: expiryDate }),
   });
 
   if (error) {
@@ -457,7 +458,7 @@ export async function getAllProductLots(options?: {
       sourceType: row.source_type as "production" | "purchase",
       productionOrderId: row.production_order_id as string | undefined,
       purchaseOrderId: row.purchase_order_id as string | undefined,
-      manufacturedDate: row.manufactured_date as string | undefined,
+      manufacturedDate: (row.manufactured_at ?? row.manufactured_date) as string | undefined,
       expiryDate: (row.expiry_at ?? row.expiry_date) as string | undefined,
       receivedDate: row.received_date as string,
       initialQty: row.initial_qty as number,
@@ -507,7 +508,7 @@ function mapProductLotWorkspaceRow(row: Record<string, unknown>) {
     sourceType: row.source_type as ProductLot["sourceType"],
     productionOrderId: (row.production_order_id as string) || undefined,
     purchaseOrderId: (row.purchase_order_id as string) || undefined,
-    manufacturedDate: (row.manufactured_date as string) || undefined,
+    manufacturedDate: ((row.manufactured_at ?? row.manufactured_date) as string) || undefined,
     expiryDate: ((row.expiry_at ?? row.expiry_date) as string) || undefined,
     receivedDate: row.received_date as string,
     initialQty: Number(row.initial_qty ?? 0),
@@ -590,7 +591,7 @@ export async function getProductLots(
     productId,
     lotNumber: row.lot_number as string,
     sourceType: row.source_type as "production" | "purchase",
-    manufacturedDate: (row.manufactured_date as string) ?? undefined,
+    manufacturedDate: ((row.manufactured_at ?? row.manufactured_date) as string) ?? undefined,
     expiryDate: ((row.expiry_at ?? row.expiry_date) as string) ?? undefined,
     receivedDate: row.received_date as string,
     initialQty: row.initial_qty as number,
@@ -729,8 +730,8 @@ function mapProductionOrder(row: Record<string, unknown>): ProductionOrder {
     completedQty: (row.completed_qty as number) ?? 0,
     status: row.status as ProductionOrder["status"],
     lotNumber: (row.lot_number as string) ?? undefined,
-    plannedStart: (row.planned_start as string) ?? undefined,
-    plannedEnd: (row.planned_end as string) ?? undefined,
+    plannedStart: ((row.planned_start_at ?? row.planned_start) as string) ?? undefined,
+    plannedEnd: ((row.planned_end_at ?? row.planned_end) as string) ?? undefined,
     actualStart: (row.actual_start as string) ?? undefined,
     actualEnd: (row.actual_end as string) ?? undefined,
     notes: (row.notes as string) ?? undefined,

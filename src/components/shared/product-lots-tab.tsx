@@ -132,7 +132,7 @@ export function ProductLotsTab({ productId, branchId }: ProductLotsTabProps) {
                   )}
                 </td>
                 <td className="p-2 text-muted-foreground">
-                  {lot.manufacturedDate ? formatDate(lot.manufacturedDate) : "—"}
+                  {formatExpiryDate(lot.manufacturedDate)}
                 </td>
                 <td className="p-2">
                   {lot.expiryDate ? formatExpiryDate(lot.expiryDate) : "—"}
