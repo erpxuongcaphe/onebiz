@@ -657,7 +657,7 @@ export default function SanXuatPage() {
                   <div className="text-xs text-muted-foreground truncate">
                     {order.branchName ?? "—"}
                   </div>
-                  <p className={isOverdue(order) ? "text-xs font-semibold text-status-error" : "text-xs text-muted-foreground"}>{order.plannedEnd ? `Hạn: ${formatDate(order.plannedEnd)}${isOverdue(order) ? " · Quá hạn" : ""}` : "Chưa đặt hạn"}</p>
+                  {!["completed", "cancelled"].includes(order.status) && <p className={isOverdue(order) ? "text-xs font-semibold text-status-error" : "text-xs text-muted-foreground"}>{order.plannedEnd ? `Hẹn hoàn thành: ${formatDate(cashBookDate(order.plannedEnd))}${isOverdue(order) ? " · Quá hạn" : ""}` : "Chưa hẹn ngày hoàn thành"}</p>}
                   <p className="text-xs text-muted-foreground">{order.createdByName || "Chưa có tên người tạo"}</p>
                   <div className="space-y-1 border-t pt-1 text-xs">
                     <div className="flex flex-wrap items-start justify-between gap-1"><span className="text-muted-foreground">Thực nhận</span><StockWithConversion variant="cell" quantity={order.completedQty} unit={units.units.get(order.productId) ?? ""} conversions={units.map.get(order.productId)} /></div>
