@@ -1,4 +1,5 @@
 \set ON_ERROR_STOP on
+select set_config('test.actor',test_id(1)::text,false);
 -- Actual payment/cancellation/allocation RPCs are loaded by the setup fixture.
 do $$ declare account jsonb; cash jsonb; old_cash cash_transactions%rowtype; result jsonb; payload jsonb; request uuid:=gen_random_uuid(); n bigint; balance jsonb; begin
  account:=save_money_account(null,null,jsonb_build_object('branchId',test_id(3),'code','BANK-1','name','Test bank','kind','bank','bankName','Test Bank','accountNumber','000123','accountHolder','Test owner','openingDate',current_date-10,'openingAmount',10000),'Initial test opening');

@@ -511,7 +511,7 @@ export function SettleDebtDialog({
             </p>
           )}
         </div>
-        <DialogFooter className="shrink-0 border-t p-4">
+        <DialogFooter className="mx-0 mb-0 shrink-0 border-t p-4">
           <Button
             variant="outline"
             disabled={saving}
