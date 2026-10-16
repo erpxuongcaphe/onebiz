@@ -15,6 +15,7 @@ interface RpcClient {
   }>;
 }
 const errors: Record<string, string> = {
+  OPS_WORKBOOK_APPROVAL_REQUIRED: "Công việc thuộc bộ nhập Excel. Duyệt cả bộ trong màn hình nhập để công việc và QC được áp dụng cùng nhau.",
   OPS_Q_USE_WORKFLOW: "Hồ sơ này dùng luồng mới. Về Công việc hoặc To-do trong Hub mới để ghi kết quả và kiểm tra lại.",
   OPS_FORBIDDEN: "Bạn chưa có quyền thực hiện ở chi nhánh này.",
   OPS_PROPOSAL_SCOPE: "Chỉ đề xuất việc riêng hoặc phiên bản của việc riêng trong chi nhánh được giao.",

@@ -1,5 +1,5 @@
 \set ON_ERROR_STOP on
-\ir ../migrations/00556_advance_refund_report_classification.sql
+\ir ../migrations/00558_advance_refund_report_classification.sql
 do $$ declare before_report jsonb;after_report jsonb;before_branch jsonb;after_branch jsonb;begin
  before_report:=public.get_profit_and_loss_report_v2('2026-09-01','2026-10-01','2026-08-01','2026-09-01','40000000-0000-0000-0000-000000000001',false);
  before_branch:=public.get_branch_profit_and_loss_report_v2('2026-09-01','2026-10-01');

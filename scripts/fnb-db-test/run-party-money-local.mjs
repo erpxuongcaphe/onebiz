@@ -11,7 +11,7 @@ try {
   await db.exec(expand('supabase/tests/00552_party_money.setup.sql'));
   await db.exec(expand('supabase/tests/00553_party_money.integration.sql'));
   execFileSync(process.execPath,['scripts/fnb-db-test/extract-party-refund-dependencies.mjs','.tmp/party-refund-dependencies.sql']);
-  await db.exec(expand('supabase/tests/00555_party_advance_refunds.integration.sql'));
+  await db.exec(expand('supabase/tests/00557_party_advance_refunds.integration.sql'));
   console.log('PASS: real payment/allocation/amendment RPCs on disposable in-memory PostgreSQL');
 } catch(error) {
   console.error(JSON.stringify({message:error.message,code:error.code,detail:error.detail,where:error.where,position:error.position}));

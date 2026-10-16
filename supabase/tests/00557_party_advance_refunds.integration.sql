@@ -8,8 +8,8 @@ alter table debt_opening_balances add column created_at timestamptz default now(
 alter table sales_returns add column code text,add column status text,add column total numeric,add column created_at timestamptz,add column note text;
 alter table supplier_returns add column code text,add column status text,add column total numeric,add column created_at timestamptz,add column note text;
 \ir ../migrations/00522_party_debt_movement_report.sql
-\ir ../migrations/00555_party_advance_refunds.sql
-\ir ../migrations/00556_advance_refund_report_classification.sql
+\ir ../migrations/00557_party_advance_refunds.sql
+\ir ../migrations/00558_advance_refund_report_classification.sql
 select save_money_account(null,null,jsonb_build_object('branchId',test_id(3),'code','CASH-1','name','Test cash drawer','kind','cash','openingDate',current_date,'openingAmount',0),'Initial test cash drawer');
 
 do $$ declare s jsonb;c jsonb;r jsonb;p jsonb;request uuid:=gen_random_uuid();aid uuid;cid uuid;account uuid;count_before bigint;begin

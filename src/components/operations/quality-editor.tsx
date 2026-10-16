@@ -50,7 +50,7 @@ export type QualityEditor =
     }
   | { kind: "assignment" }
   | { kind: "qc_grant" }
-  | { kind: "catalog" }
+  | { kind: "catalog"; item?: import("@/lib/operations/quality-contracts").QualityItem }
   | { kind: "rule"; rule?: QualityRule }
   | { kind: "accounting" }
   | { kind: "settle" };
@@ -730,6 +730,7 @@ export function QualityEditorDialog({
                 <SelectField
                   label="Quản lý chịu trách nhiệm"
                   name="assigneeId"
+                  userPurpose="manager"
                   value={editor.issue.assignee_id}
                   options={managers}
                   required
@@ -737,9 +738,9 @@ export function QualityEditorDialog({
                 <SelectField label="Bộ phận phối hợp" name="departmentId"
                   value={editor.issue.department_id ?? ""}
                   options={quality.departments.filter((d) => d.active).map((d) => ({ id: d.id, name: d.title }))} />
-                <SelectField label="Người phối hợp" name="collaborators" multiple
+                <SelectField userPurpose="participant" label="Người phối hợp" name="collaborators" multiple
                   value={editor.issue.collaborators} options={workspace.people} />
-                <SelectField label="Người xử lý" name="operatorId"
+                <SelectField userPurpose="participant" label="Người xử lý" name="operatorId"
                   value={editor.issue.operator_id ?? ""} options={workspace.people} />
                 <TextField
                   label="Deadline mới (giờ Việt Nam)"
@@ -825,10 +826,12 @@ export function QualityEditorDialog({
                 <SelectField
                   label="Người có thể nhận việc"
                   name="members"
+                  userPurpose="department"
                   options={workspace.people}
                   value={editor.department?.members}
                   multiple
                 />
+                <p className={s.muted}>Bộ phận có thể gồm người văn phòng hỗ trợ nhiều chi nhánh. Việc thêm vào bộ phận là phân công phối hợp rõ ràng, không cấp quyền quản lý chi nhánh.</p>
                 <label className={s.check}>
                   <input
                     type="checkbox"
@@ -852,6 +855,7 @@ export function QualityEditorDialog({
                 <SelectField
                   label="Quản lý được cùng thực hiện"
                   name="managerIds"
+                  userPurpose="manager"
                   options={managers}
                   multiple
                   required
@@ -863,6 +867,7 @@ export function QualityEditorDialog({
                 <SelectField
                   label="Tài khoản OneBiz"
                   name="userId"
+                  userPurpose="qc_grant"
                   options={workspace.people.filter(
                     (p) => p.id !== workspace.userId,
                   )}
@@ -891,7 +896,7 @@ export function QualityEditorDialog({
               </div>
             )}
             {editor.kind === "catalog" && (
-              <CatalogFields workspace={workspace} groups={quality.groups} />
+              <CatalogFields workspace={workspace} groups={quality.groups} value={editor.item} />
             )}
             {editor.kind === 'period' && <div className={s.formGrid}><TextField label="Tên kỳ đánh giá" name="title" required /><TextField label="Ngày bắt đầu" name="startsOn" type="date" required /><TextField label="Đến hết ngày" name="endsOn" type="date" required /></div>}
             {editor.kind === 'group' && <><TextField label="Tên nhóm tiêu chuẩn" name="title" value={editor.group?.title} required /><label className={s.check}><input type="checkbox" name="active" defaultChecked={editor.group?.active ?? true} />Đang áp dụng</label></>}

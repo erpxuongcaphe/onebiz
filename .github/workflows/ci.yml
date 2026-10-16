@@ -367,7 +367,7 @@ jobs:
         run: |
           createdb profit_loss_test
           PGDATABASE=profit_loss_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00406_profit_loss_snapshot_cogs.integration.sql
-          PGDATABASE=profit_loss_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00556_advance_refund_pnl.integration.sql
+          PGDATABASE=profit_loss_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00558_advance_refund_pnl.integration.sql
           createdb profit_loss_cross_period_test
           PGDATABASE=profit_loss_cross_period_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00426_profit_loss_cross_period.integration.sql
 
@@ -558,7 +558,7 @@ jobs:
           PGDATABASE=party_money_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00552_party_money.setup.sql
           PGDATABASE=party_money_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00553_party_money.integration.sql
           node scripts/fnb-db-test/extract-party-refund-dependencies.mjs .tmp/party-refund-dependencies.sql
-          PGDATABASE=party_money_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00555_party_advance_refunds.integration.sql
+          PGDATABASE=party_money_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00557_party_advance_refunds.integration.sql
           PGDATABASE=party_money_test node scripts/fnb-db-test/verify-advance-refund-concurrency.mjs
 
   test-and-build:

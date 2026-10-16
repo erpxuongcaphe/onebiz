@@ -16,6 +16,7 @@ import { categories, priorities } from "@/lib/operations/contracts";
 import type { QualityWorkspace } from "@/lib/operations/quality-contracts";
 import { formatNumber } from "@/lib/format";
 import s from "./quality.module.css";
+import { UserPicker, type UserPurpose } from "./user-picker";
 
 export function Field({
   label,
@@ -50,6 +51,7 @@ export function SelectField({
   multiple,
   allowEmpty = true,
   emptyLabel,
+  userPurpose,
 }: {
   label: string;
   name?: string;
@@ -60,7 +62,9 @@ export function SelectField({
   multiple?: boolean;
   allowEmpty?: boolean;
   emptyLabel?: string;
+  userPurpose?: UserPurpose;
 }) {
+  if (userPurpose) return <UserPicker label={label} name={name} purpose={userPurpose} value={value} onChange={onChange} multiple={multiple} required={required}/>;
   const entries = Array.isArray(options)
     ? options.map((p) => [p.id, p.name])
     : Object.entries(options);
@@ -341,12 +345,9 @@ export function IssueFields({
         <SelectField
           label="Quản lý chịu trách nhiệm"
           name={`${prefix}assigneeId`}
+          userPurpose="manager"
           options={managers}
-          value={
-            managers.some((u) => u.id === workspace.userId)
-              ? workspace.userId
-              : ""
-          }
+          value=""
           required
         />
         <SelectField
@@ -379,12 +380,14 @@ export function IssueFields({
         <SelectField
           label="Người xử lý (có thể nhận việc sau)"
           name={`${prefix}operatorId`}
+          userPurpose="participant"
           options={workspace.people}
         />
       </div>
       <SelectField
         label="Người phối hợp"
         name={`${prefix}collaborators`}
+        userPurpose="participant"
         options={workspace.people}
         multiple
       />

@@ -1,5 +1,6 @@
 \set ON_ERROR_STOP on
-set timezone = 'Asia/Ho_Chi_Minh';
+-- Match business dates to the application's Vietnam timezone, including UTC midnight boundaries.
+set time zone 'Asia/Ho_Chi_Minh';
 select set_config('test.actor',test_id(1)::text,false);
 -- Actual payment/cancellation/allocation RPCs are loaded by the setup fixture.
 do $$ declare account jsonb; cash jsonb; old_cash cash_transactions%rowtype; result jsonb; payload jsonb; request uuid:=gen_random_uuid(); n bigint; balance jsonb; begin

@@ -7,6 +7,7 @@ import { formatShortDate } from "@/lib/format";
 import { categories, priorities, states, type Person, type Standard } from "@/lib/operations/contracts";
 import { datePresets, filterDates, initialFilters, type FilterKind, type OperationsFilters } from "@/lib/operations/filters";
 import styles from "./workspace.module.css";
+import { UserPicker } from "./user-picker";
 
 export function OperationsFilterBar({ kind, value, onChange, people, standards = [], period, settingsTarget = "standards" }: {
   kind: FilterKind; value: OperationsFilters; onChange: (value: OperationsFilters) => void;
@@ -15,7 +16,6 @@ export function OperationsFilterBar({ kind, value, onChange, people, standards =
   const id = useId();
   const set = (key: keyof OperationsFilters, selected: string) => onChange({ ...value, [key]: selected });
   const select = (key: keyof OperationsFilters, label: string, options: Record<string, string>, empty = "Tất cả") => <label className={styles.field} key={key} htmlFor={`${id}-${key}`}><span>{label}</span><select aria-label={label} id={`${id}-${key}`} value={value[key]} onChange={event => set(key, event.target.value)}>{key !== "dateField" && <option value="">{empty}</option>}{Object.entries(options).map(([key, text]) => <option key={key} value={key}>{text}</option>)}</select></label>;
-  const peopleOptions = Object.fromEntries(people.map(person => [person.id, person.name]));
   let error = "";
   let calendar = "Tất cả thời gian";
   try { const range = filterDates(value, period); if (range.from) calendar = `${formatShortDate(range.from)} - ${formatShortDate(range.to)}`; } catch (cause) { error = (cause as Error).message; }
@@ -24,7 +24,7 @@ export function OperationsFilterBar({ kind, value, onChange, people, standards =
     <div className={styles.filterHeading}><strong><Icon name="filter_alt" size={17} /> Bộ lọc{active ? ` · ${active}` : ""}</strong><button type="button" onClick={() => onChange(initialFilters(kind))}><Icon name="filter_alt_off" size={16} /> Đặt lại</button></div>
     <div className={`${styles.filterGrid} ${kind !== "settings" && value.preset === "custom" ? styles.filterGridDates : ""}`}>
       {!(kind === "settings" && settingsTarget === "members") && select("state", "Trạng thái", kind === "settings" ? (settingsTarget === "standards" ? { draft: states.draft, pending: states.pending_approval, changes_requested: states.changes_requested, approved: states.approved, retired: states.retired } : { draft: states.draft, approved: states.approved }) : kind === "todo" ? { pending: states.pending, in_progress: states.in_progress, waiting: states.waiting, done: states.done, canceled: states.canceled } : { pending: states.pending, transferred: states.transferred, done: states.done })}
-      {!(kind === "settings" && settingsTarget === "policies") && select("assignee", settingsTarget === "members" && kind === "settings" ? "Tài khoản" : "Người chịu trách nhiệm", peopleOptions)}
+      {!(kind === "settings" && settingsTarget === "policies") && <UserPicker label={settingsTarget === "members" && kind === "settings" ? "Tài khoản" : "Người chịu trách nhiệm"} value={value.assignee} onChange={(id) => set("assignee",id)} options={people}/>}
       {!(kind === "settings" && settingsTarget === "members") && <>
         {kind !== "settings" && select("dateField", "Lọc theo ngày", kind === "todo" ? { created: "Ngày tạo", due: "Deadline hiện tại", completed: "Ngày hoàn thành", follow_up: "Ngày theo dõi lại" } : { due: "Hạn công việc", completed: "Ngày đạt", verified: "Ngày xác minh" }, "Chọn loại ngày")}
         <label className={styles.field} htmlFor={`${id}-preset`}><span>{kind === "settings" ? "Ngày áp dụng" : "Khoảng thời gian"}</span><select aria-label={kind === "settings" ? "Ngày áp dụng" : "Khoảng thời gian"} id={`${id}-preset`} value={value.preset} onChange={event => set("preset", event.target.value)}>{Object.entries(datePresets).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
@@ -32,7 +32,7 @@ export function OperationsFilterBar({ kind, value, onChange, people, standards =
       </>}
     </div>
     {!(kind === "settings" && settingsTarget === "policies") && <details className={styles.filterDetails}><summary>Tiêu chí bổ sung{active ? ` (${active})` : ""}</summary><div className={styles.filterGrid}>
-      {kind === "todo" && <>{select("category", "Phân loại", categories)}{select("priority", "Mức độ", priorities)}{select("collaborator", "Người phối hợp", peopleOptions)}</>}
+      {kind === "todo" && <>{select("category", "Phân loại", categories)}{select("priority", "Mức độ", priorities)}<UserPicker label="Người phối hợp" value={value.collaborator} onChange={(id) => set("collaborator",id)} options={people}/></>}
       {kind === "run" && <>{select("quality", "Kết quả", { met: states.met, unmet: states.unmet, unknown: states.unknown })}{select("verification", "Xác minh", { pending_review: "Chờ xác minh đến hạn", unverified: "Chưa xác minh", verified: "Đã xác minh" })}{select("standard", "Mẫu công việc", Object.fromEntries(standards.map(s => [s.id, `${s.title} · v${s.revision}`])))}{select("frequency", "Tần suất", { daily: "Hàng ngày", weekly: "Hàng tuần", monthly: "Hàng tháng", event: "Theo sự kiện" })}</>}
       {kind !== "settings" && select("deadline", "Tình trạng hạn", { overdue: "Quá hạn chưa hoàn thành", upcoming: "Chưa đến hạn", on_time: "Hoàn thành đúng hạn gốc", late: "Hoàn thành trễ hạn gốc", ...(kind === "todo" ? { follow_up: "Đến ngày theo dõi lại" } : {}) })}
       {kind === "settings" && settingsTarget === "standards" && <>{select("frequency", "Tần suất", { daily: "Hàng ngày", weekly: "Hàng tuần", monthly: "Hàng tháng", event: "Theo sự kiện" })}{select("scope", "Phạm vi", { common: "Mẫu chung", branch: "Riêng chi nhánh" })}</>}
