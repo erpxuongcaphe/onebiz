@@ -107,6 +107,7 @@ export function CashAmendmentHistory({
           { header: "Nội dung thu/chi", key: "note", width: 60 },
         ],
         `OneBiz_LichSuSuaPhieu_${cashId}`,
+        { financialTable: true },
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Không xuất được lịch sử.");

@@ -121,7 +121,7 @@ export function PartyCashHistory({ mode, partyId, partyName, onChanged }: {
         { header: "Tiền ứng gốc", key: "advanceOriginal", width: 20 }, { header: "Đã cấn từ nguồn ứng", key: "advanceApplied", width: 22 },
         { header: "Tiền ứng còn lại", key: "advanceRemaining", width: 22 }, { header: "Thay cho phiếu", key: "originalCode", width: 20 },
         { header: "Phiếu thay thế", key: "replacementCode", width: 20 },
-      ], `OneBiz_LichSuThuChi_${mode}_${partyId}_${filters.dateFrom || "tatca"}_${filters.dateTo || "tatca"}`);
+      ], `OneBiz_LichSuThuChi_${mode}_${partyId}_${filters.dateFrom || "tatca"}_${filters.dateTo || "tatca"}`, { financialTable: true });
     } catch (err) { setActionError(err instanceof Error ? err.message : "Không xuất được lịch sử thu chi."); }
     finally { setExporting(false); }
   };

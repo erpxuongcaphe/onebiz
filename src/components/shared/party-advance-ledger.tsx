@@ -115,6 +115,7 @@ export function PartyAdvanceLedger({
                     },
                   ],
                   `Nguon-tien-ung-${mode}-${partyId}`,
+                  { financialTable: true },
                 );
               } catch (e) {
                 setError(

@@ -136,6 +136,7 @@ export default function MoneyAccountsPage() {
                       },
                     ],
                     `So-tien-${from}-${to}`,
+                    { financialTable: true },
                   );
                 } catch (e) {
                   setError(
