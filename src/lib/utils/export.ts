@@ -52,7 +52,7 @@ export async function exportToExcel<T extends Record<string, any>>(
   data: T[],
   columns: ExportColumn[],
   fileName: string,
-  options?: { financialTable?: boolean },
+  options?: { financialTable?: boolean; onPrepared?: (blob: Blob, fileName: string) => void },
 ): Promise<void> {
   // Lazy import — xlsx chỉ tải khi function thực sự được gọi.
   const { XLSX, saveAs } = await loadXlsxAndSaver();
@@ -92,6 +92,7 @@ export async function exportToExcel<T extends Record<string, any>>(
   const blob = new Blob([excelBuffer], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
+  options?.onPrepared?.(blob, `${fileName}.xlsx`);
   saveAs(blob, `${fileName}.xlsx`);
 }
 

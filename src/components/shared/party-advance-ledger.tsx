@@ -18,6 +18,7 @@ import { RefundAdvanceDialog } from "@/components/shared/dialogs/refund-advance-
 import { ConfirmDialog } from "@/components/shared/dialogs/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { advanceLedgerExportRows } from "@/lib/utils/advance-ledger-export";
+import { useExcelDownload } from "@/lib/hooks/use-excel-download";
 
 export function PartyAdvanceLedger({
   mode,
@@ -51,6 +52,7 @@ export function PartyAdvanceLedger({
   const [cancelling, setCancelling] = useState(false);
   const [success, setSuccess] = useState("");
   const [localRevision, setLocalRevision] = useState(0);
+  const excelDownload = useExcelDownload(JSON.stringify([mode, partyId, branchId, revision, localRevision, canExport]));
   const [rows, setRows] = useState<PartyAdvanceLedgerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -105,6 +107,7 @@ export function PartyAdvanceLedger({
             disabled={loading || exporting || !!error}
             onClick={async () => {
               setExporting(true);
+              excelDownload.clear();
               try {
                 await exportToExcel(
                   advanceLedgerExportRows(rows, partyName, mode),
@@ -157,7 +160,7 @@ export function PartyAdvanceLedger({
                     },
                   ],
                   `Nguon-tien-ung-${mode}-${partyId}`,
-                  { financialTable: true },
+                  { financialTable: true, onPrepared: excelDownload.onPrepared },
                 );
               } catch (e) {
                 setError(
@@ -175,6 +178,7 @@ export function PartyAdvanceLedger({
           </Button>
         )}
       </div>
+      {excelDownload.file && <div role="status" className="flex flex-wrap items-center gap-3 border-l-2 border-primary pl-3 text-sm"><span>Excel đã sẵn sàng.</span><a className="inline-flex items-center gap-1 font-medium text-primary underline underline-offset-2" href={excelDownload.file.url} download={excelDownload.file.name}><Icon name="download" size={16}/>Tải file Excel nguồn ứng</a></div>}
       {success && (
         <p role="status" className="text-sm text-status-success">
           {success}

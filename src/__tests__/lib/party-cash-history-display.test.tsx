@@ -19,7 +19,7 @@ describe("party cash history presentation", () => {
   beforeEach(() => { cleanup(); vi.clearAllMocks(); actions.canCancel = true; actions.category = "supplier_payment"; actions.cancel.mockResolvedValue(undefined); actions.export.mockResolvedValue(undefined); actions.all.mockResolvedValue([{ id: "cash-1", code: "PC000334", date: "2026-10-12", type: "payment", category: "supplier_payment", amount: 630000, status: "completed" }]); });
   it("separates booking day from actual payment time and labels payment categories", async () => {
     render(<PartyCashHistory mode="supplier" partyId="supplier-1" partyName="Trung Kien" />);
-    expect(await screen.findByText("Chi trả NCC")).toBeInTheDocument();
+    expect(await screen.findByText("Thanh toán NCC")).toBeInTheDocument();
     expect(screen.getByText("12/10/2026")).toBeInTheDocument();
     expect(screen.queryByText("12/10/2026 07:00")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Xem phiếu PC000334" }));
@@ -29,7 +29,7 @@ describe("party cash history presentation", () => {
   });
   it("exports all filtered rows with numeric amounts rather than the displayed page", async () => {
     render(<PartyCashHistory mode="supplier" partyId="supplier-1" partyName="Trung Kien" />);
-    await screen.findByText("Chi trả NCC");
+    await screen.findByText("Thanh toán NCC");
     fireEvent.click(screen.getByRole("button", { name: "Xuất Excel" }));
     await waitFor(() => expect(actions.export).toHaveBeenCalled());
     expect(actions.all).toHaveBeenCalledWith("supplier", "supplier-1", "branch-1", {});
@@ -58,7 +58,7 @@ describe("party cash history presentation", () => {
   });
   it("contains the wide table without expanding the surrounding dialog", async () => {
     const { container } = render(<PartyCashHistory mode="supplier" partyId="supplier-1" partyName="Trung Kien" />);
-    await screen.findByText("Chi trả NCC");
+    await screen.findByText("Thanh toán NCC");
     expect(container.firstElementChild).toHaveClass("min-w-0", "w-full");
     expect(screen.getByRole("table").parentElement).toHaveClass("min-w-0", "w-full", "overflow-auto");
   });
