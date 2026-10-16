@@ -23,17 +23,12 @@ const settleDialog = readFileSync(
 );
 
 describe("branch-scoped debt workspace", () => {
-  it("loads receivable and payable reports once for one consistent snapshot", () => {
-    expect(
-      workspaceService.split(
-        "getReceivableAgingReport({ branchId: branchId ?? null })",
-      ),
-    ).toHaveLength(2);
-    expect(
-      workspaceService.split(
-        "getPayableAgingReport({ branchId: branchId ?? null })",
-      ),
-    ).toHaveLength(2);
+  it("loads gross document aging once, independently of unused advances", () => {
+    expect(workspaceService.split("getOpenDebtAging(branchId)")).toHaveLength(
+      2,
+    );
+    expect(workspaceService).toContain('"get_counterparty_open_debt_aging"');
+    expect(workspaceService).not.toContain("getPayableAgingReport(");
     expect(workspaceService).not.toContain(".insert(");
     expect(workspaceService).not.toContain(".update(");
     expect(workspaceService).not.toContain(".delete(");
@@ -66,7 +61,9 @@ describe("branch-scoped debt workspace", () => {
 
   it("scopes debt details and settlement documents to the selected branch", () => {
     expect(paymentsService).toContain("branchId?: string | null");
-    expect(paymentsService.split('query.eq("branch_id", branchId)')).toHaveLength(3);
+    expect(
+      paymentsService.split('query.eq("branch_id", branchId)'),
+    ).toHaveLength(3);
     expect(detailDialog).toContain(
       "getOpenInvoicesByCustomer(partyId, branchId)",
     );

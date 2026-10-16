@@ -15,6 +15,7 @@ export const settingsNav: SettingsGroup[] = [
   { label: "Bán hàng & thanh toán", items: [
     { label: "Quy tắc bán hàng", href: "/cai-dat/ban-hang", icon: "shopping_cart" },
     { label: "Thanh toán", href: "/cai-dat/thanh-toan", icon: "credit_card" },
+    { label: "Quỹ & tài khoản tiền", href: "/cai-dat/tai-khoan-tien", icon: "account_balance_wallet" },
     { label: "Bảng giá", href: "/cai-dat/bang-gia", icon: "attach_money" },
     { label: "Khuyến mãi", href: "/cai-dat/khuyen-mai", icon: "sell" },
     { label: "Mã giảm giá", href: "/cai-dat/ma-giam-gia", icon: "confirmation_number" },

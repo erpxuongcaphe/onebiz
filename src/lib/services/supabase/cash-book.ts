@@ -58,7 +58,7 @@ export async function getPartyCashHistory(
 ): Promise<QueryResult<CashBookEntry>> {
   if (!Number.isInteger(page) || page < 0 || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 1000) throw new Error("Invalid history page");
   const supabase = getClient();
-  const { data, error } = await supabase.rpc("get_party_cash_history_sources" as never, {
+  const { data, error } = await supabase.rpc("get_party_cash_history_detail" as never, {
     p_mode: mode, p_party_id: partyId, p_branch_id: branchId || null,
     p_page: page, p_size: pageSize, p_filters: filters,
   } as never);
@@ -334,7 +334,7 @@ export async function createManualCashTransactionAtomic(
   input: CreateManualCashTransactionInput,
 ): Promise<CashBookEntry> {
   const supabase = getClient();
-  const { data, error } = input.occurredAt || input.transactionDate || input.performedBy
+  const { data, error } = input.occurredAt || input.transactionDate || input.performedBy || input.moneyAccountId
     ? { data: await recordTimedCash("manual", { ...input }, { ...input, timeReason: input.timeReason || input.note }), error: null }
     : await (supabase.rpc as any)(
     "create_manual_cash_transaction_atomic",
@@ -370,6 +370,7 @@ export async function createCashTransaction(tx: Partial<CashTransaction>): Promi
     transactionDate: tx.date,
     timeReason: tx.timeReason,
     performedBy: tx.performedBy,
+    moneyAccountId: tx.moneyAccountId,
   });
 }
 
@@ -443,5 +444,68 @@ function mapCashEntry(row: any): CashBookEntry {
     occurredAt: row.occurred_at ?? null,
     timeSource: row.time_source ?? null,
     timeReason: row.time_reason ?? null,
+    updatedAt: row.updated_at,
+    moneyAccountId: row.money_account_id,
+    moneyAccountName: row.money_account_name,
+    moneyAccountCode: row.money_account_code,
+    advanceOriginal: row.advance_original == null ? undefined : Number(row.advance_original),
+    advanceApplied: row.advance_applied == null ? undefined : Number(row.advance_applied),
+    advanceRemaining: row.advance_remaining == null ? undefined : Number(row.advance_remaining),
+    originalCode: row.original_code,
+    replacementCode: row.replacement_code,
   };
+}
+
+export interface CashAmendmentInput {
+  amount: number; paymentMethod: string; transactionDate: string;
+  occurredAt: string | null; moneyAccountId: string | null; note: string;
+}
+export class CashAmendmentRejectedError extends Error {}
+export async function amendPartyCash(row: CashBookEntry, requestId: string, payload: CashAmendmentInput, reason: string) {
+  if (!row.updatedAt) throw new Error('Cần tải lại phiếu trước khi chỉnh sửa.');
+  const {data,error} = await getClient().rpc('amend_party_cash' as never, {
+    p_cash_id: row.id, p_expected_updated_at: row.updatedAt, p_request_id: requestId, p_payload: payload, p_reason: reason,
+  } as never);
+  const messages: Record<string,string> = {
+    CASH_AMEND_ADVANCE_ALREADY_ALLOCATED: 'Tiền ứng đã dùng cho chứng từ khác. Không thể đổi số tiền trước khi đối soát và hoàn tác phân bổ; vẫn có thể sửa nội dung/ngày/tài khoản khi giữ nguyên số tiền.',
+    CASH_AMEND_CHANGED_RELOAD: 'Phiếu vừa được người khác thay đổi. Đóng và tải lại trước khi sửa.',
+    CASH_AMEND_USE_SOURCE_WORKFLOW: 'Số tiền phiếu này do nghiệp vụ gốc tạo. Hãy điều chỉnh tại chứng từ gốc; tại đây có thể sửa thông tin khi giữ nguyên số tiền.',
+    CASH_AMEND_DOCUMENT_RECONCILIATION_REQUIRED: 'Chứng từ có trả hàng hoặc điều chỉnh công nợ khác. Cần đối soát các liên kết trước khi đổi số tiền; không tự ghi đè số dư.',
+    MONEY_ACCOUNT_METHOD_OR_BRANCH_INVALID: 'Tài khoản không phù hợp phương thức hoặc chi nhánh của phiếu.',
+  };
+  if (error) {
+    const known = Object.keys(messages).find(code => error.message.includes(code));
+    if (known) throw new CashAmendmentRejectedError(messages[known]);
+    if (error.code && /^[0-9A-Z]{5}$/.test(error.code) && !error.code.startsWith('PGRST')) throw new CashAmendmentRejectedError(error.message);
+    handleError(error,'amendPartyCash');
+  }
+  return data as unknown as {cash_id: string; replacement: boolean; idempotent: boolean};
+}
+
+export interface PartyAdvanceLedgerRow {
+  id: string; branchId: string; branchName: string; cashCode: string; date: string; note: string | null;
+  originalAmount: number; remainingAmount: number; status: string;
+  allocations: Array<{documentCode: string; amount: number; note: string; createdAt: string}>;
+}
+
+export interface CashAmendmentSnapshot {
+  amount: number; note: string | null; date: string; occurredAt: string | null;
+  paymentMethod: string; accountName: string | null;
+}
+export interface CashAmendmentHistoryRow {
+  id: string; createdAt: string; createdByName: string | null; reason: string;
+  originalCode: string; replacementCode: string | null;
+  before: CashAmendmentSnapshot; after: CashAmendmentSnapshot;
+}
+export async function getCashAmendmentHistory(cashId: string): Promise<CashAmendmentHistoryRow[]> {
+  const {data,error} = await getClient().rpc('get_cash_amendment_history' as never, {p_cash_id:cashId} as never);
+  if (error) handleError(error,'getCashAmendmentHistory');
+  if (!Array.isArray(data)) throw new Error('Không tải được lịch sử chỉnh sửa phiếu.');
+  return data as unknown as CashAmendmentHistoryRow[];
+}
+export async function getPartyAdvanceLedger(mode: 'customer'|'supplier', partyId: string, branchId?: string | null) {
+  const {data,error} = await getClient().rpc('get_party_advance_ledger' as never,{p_mode:mode,p_party_id:partyId,p_branch_id:branchId || null} as never);
+  if (error) handleError(error,'getPartyAdvanceLedger');
+  if (!Array.isArray(data)) throw new Error('Chưa tải được nguồn tiền ứng.');
+  return data as unknown as PartyAdvanceLedgerRow[];
 }

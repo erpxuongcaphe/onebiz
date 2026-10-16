@@ -24,11 +24,14 @@ import {
   recordInvoicePayment,
   recordPurchasePayment,
   getDocumentAdvanceAvailable,
+  getPaymentDocumentBranch,
 } from "@/lib/services/supabase/payments";
 import { ApplyAdvanceDialog } from "@/components/shared/dialogs/apply-advance-dialog";
 import { Icon } from "@/components/ui/icon";
 import { CashTimeFields, useCashTimeDraft } from "@/components/shared/cash-time-fields";
 import { cashInputToIso, validateCashTime } from "@/lib/cash-time";
+import { MoneyAccountSelect } from "@/components/shared/money-account-select";
+import { NumericInput } from "@/components/ui/numeric-input";
 
 interface RecordPaymentDialogProps {
   open: boolean;
@@ -58,6 +61,14 @@ export function RecordPaymentDialog({
   const [note, setNote] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [documentBranch,setDocumentBranch] = useState<string>();
+  const [moneyAccountId,setMoneyAccountId] = useState("");
+  useEffect(()=>{setMoneyAccountId("");},[open,referenceId,paymentMethod]);
+  useEffect(()=>{
+    if(!open)return;let active=true;setDocumentBranch(undefined);
+    getPaymentDocumentBranch(type,referenceId).then(b=>{if(active)setDocumentBranch(b);}).catch(()=>{});
+    return ()=>{active=false;};
+  },[open,type,referenceId]);
   const [remainingDebt, setRemainingDebt] = useState(currentDebt);
   const [availableAdvance, setAvailableAdvance] = useState(0);
   const [advanceLoading, setAdvanceLoading] = useState(false);
@@ -98,9 +109,7 @@ export function RecordPaymentDialog({
     if (isInvoice && amount > remainingDebt) {
       newErrors.amount = `Vượt quá công nợ (${formatCurrency(remainingDebt)})`;
     }
-    if (!isInvoice && amount > remainingDebt && note.trim().length < 3) {
-      newErrors.note = "Cần ghi lý do cho khoản ứng trước nhà cung cấp";
-    }
+    if (note.trim().length < 3) newErrors.note = "Ghi rõ nội dung thu/chi để đối soát khoản thanh toán.";
     const timeError=validateCashTime(cashTime.occurredLocal,cashTime.transactionDate,cashTime.timeReason);
     if(timeError) newErrors.time=timeError;
     setErrors(newErrors);
@@ -115,7 +124,8 @@ export function RecordPaymentDialog({
         referenceId,
         amount,
         paymentMethod,
-        note: note || undefined,
+        moneyAccountId: moneyAccountId || null,
+        note: `${note.trim()} · ${referenceCode} · ${counterpartyName}`,
         occurredAt: cashInputToIso(cashTime.occurredLocal),
         transactionDate: cashTime.transactionDate,
         timeReason: cashTime.timeReason,
@@ -178,10 +188,10 @@ export function RecordPaymentDialog({
             <label className="text-sm font-medium">
               Số tiền thanh toán <span className="text-destructive">*</span>
             </label>
-            <Input
-              type="number"
+            <NumericInput
+              aria-label="Số tiền thanh toán"
               value={amount}
-              onChange={(e) => setAmount(Number(e.target.value) || 0)}
+              onChange={(value) => setAmount(value || 0)}
               placeholder="Nhập số tiền"
               aria-invalid={!!errors.amount}
             />
@@ -244,6 +254,7 @@ export function RecordPaymentDialog({
           </div>
         </div>
 
+        <MoneyAccountSelect branchId={documentBranch} method={paymentMethod} value={moneyAccountId} onChange={setMoneyAccountId} disabled={saving}/>
         <CashTimeFields value={cashTime} onChange={setCashTime} error={errors.time} />
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

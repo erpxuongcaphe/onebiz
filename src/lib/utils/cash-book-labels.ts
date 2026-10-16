@@ -5,6 +5,11 @@ const CATEGORY_LABELS: Record<string, string> = {
   thu_khac: "Thu khác",
   supplier_payment: "Chi trả NCC",
   chi_tra_ncc: "Chi trả NCC",
+  supplier_advance: "Ứng trước NCC",
+  customer_advance: "Khách trả trước",
+  purchase: "Trả tiền nhập hàng",
+  invoice_payment: "Thu tiền bán hàng",
+  invoice_void: "Hoàn tiền hủy hóa đơn",
   chi_phi_van_chuyen: "Chi phí vận chuyển",
   chi_phi_khac: "Chi phí khác",
   salary: "Lương nhân viên",
@@ -26,7 +31,35 @@ export function cashCategoryLabel(category: string | null | undefined): string {
   return CATEGORY_LABELS[category] ?? category;
 }
 
-export function cashPaymentMethodLabel(method: string | null | undefined): string {
+/** Classify by stored source links, never guess from a user's free-text note. */
+export function cashOperationLabel(row: {
+  category?: string | null;
+  referenceType?: string | null;
+  advanceOriginal?: number | null;
+}): string {
+  if (
+    row.category === "supplier_advance" ||
+    row.category === "customer_advance"
+  ) {
+    return cashCategoryLabel(row.category);
+  }
+  if (
+    row.referenceType === "purchase_order" &&
+    ["purchase", "supplier_payment", "chi_tra_ncc"].includes(row.category ?? "")
+  ) {
+    return Number(row.advanceOriginal ?? 0) > 0
+      ? "Trả tiền nhập hàng và ứng trước NCC"
+      : "Trả tiền nhập hàng";
+  }
+  if (row.referenceType === "invoice" && row.category === "customer_payment") {
+    return "Thu tiền bán hàng";
+  }
+  return cashCategoryLabel(row.category);
+}
+
+export function cashPaymentMethodLabel(
+  method: string | null | undefined,
+): string {
   if (!method) return "—";
   return PAYMENT_METHOD_LABELS[method] ?? method;
 }

@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Icon } from "@/components/ui/icon";
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
@@ -149,15 +150,12 @@ export function ApplyAdvanceDialog({
             <label htmlFor="apply-advance-amount" className="text-sm font-medium">
               Số tiền cấn <span className="text-destructive">*</span>
             </label>
-            <Input
+            <NumericInput
               id="apply-advance-amount"
-              type="number"
-              inputMode="numeric"
               min={1}
               max={maximum}
-              step={1000}
-              value={amount}
-              onChange={(event) => setAmount(event.target.value)}
+              value={amount === "" ? null : Number(amount)}
+              onChange={(value) => setAmount(value === null ? "" : String(value))}
             />
             <p className="text-xs text-muted-foreground">
               Tối đa {formatCurrency(maximum)}. Hệ thống lấy các khoản ứng cũ nhất trước, cùng đối tượng và chi nhánh.

@@ -3,7 +3,8 @@ import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/re
 import type { ReactNode } from "react";
 const state = vi.hoisted(() => ({ available: vi.fn(), purchasePayment: vi.fn(), invoicePayment: vi.fn(), toast: vi.fn() }));
 vi.mock("@/lib/contexts", () => ({ useToast: () => ({ toast: state.toast }) }));
-vi.mock("@/lib/services/supabase/payments", () => ({ getDocumentAdvanceAvailable: state.available, recordPurchasePayment: state.purchasePayment, recordInvoicePayment: state.invoicePayment }));
+vi.mock("@/lib/services/supabase/payments", () => ({ getPaymentDocumentBranch: async () => "branch-1", getDocumentAdvanceAvailable: state.available, recordPurchasePayment: state.purchasePayment, recordInvoicePayment: state.invoicePayment }));
+vi.mock("@/components/shared/money-account-select", () => ({ MoneyAccountSelect: () => null }));
 vi.mock("@/components/ui/dialog", () => ({
   Dialog: ({ children, open }: { children: ReactNode; open: boolean }) => open ? <div>{children}</div> : null,
   DialogContent: ({ children }: { children: ReactNode }) => <div>{children}</div>, DialogHeader: ({ children }: { children: ReactNode }) => <div>{children}</div>, DialogFooter: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -20,7 +21,7 @@ describe("payment advance choice", () => {
     render(<RecordPaymentDialog open onOpenChange={() => {}} type="purchase_order" referenceId="po-1" referenceCode="PO1" counterpartyName="Trung Kiên" currentDebt={500} />);
     fireEvent.click(await screen.findByRole("button", { name: "Cấn tiền ứng" }));
     fireEvent.click(screen.getByRole("button", { name: "Cấn cô lập" }));
-    await waitFor(() => expect(screen.getByRole("spinbutton")).toHaveValue(400));
+    await waitFor(() => expect(screen.getByLabelText("Số tiền thanh toán")).toHaveValue("400"));
     expect(state.purchasePayment).not.toHaveBeenCalled(); expect(state.invoicePayment).not.toHaveBeenCalled();
   });
   it("does not offer allocation when no source money is available", async () => {

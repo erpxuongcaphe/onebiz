@@ -1,7 +1,5 @@
 import { getClient, getCurrentTenantId, handleError } from "./base";
 import {
-  getPayableAgingReport,
-  getReceivableAgingReport,
   type PayableAgingRow,
   type ReceivableAgingRow,
 } from "./finance-marketing-reports";
@@ -118,14 +116,13 @@ export async function getDebtWorkspace(
 ): Promise<DebtWorkspace> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const [receivableReport, payableReport, balanceSummary] = await Promise.all([
-    getReceivableAgingReport({ branchId: branchId ?? null }),
-    getPayableAgingReport({ branchId: branchId ?? null }),
+  const [openDebt, balanceSummary] = await Promise.all([
+    getOpenDebtAging(branchId),
     getCounterpartyBalanceSummary(branchId),
   ]);
 
-  const receivableRows = positiveReceivables(receivableReport.rows);
-  const payableRows = positivePayables(payableReport.rows);
+  const receivableRows = positiveReceivables(openDebt.receivables);
+  const payableRows = positivePayables(openDebt.payables);
   const customerBalanceMap = new Map(
     (balanceSummary?.customers ?? []).map((row) => [row.partyId, row]),
   );
@@ -282,9 +279,64 @@ export async function getDebtWorkspace(
     },
     receivables,
     payables,
-    generatedAt:
-      receivableReport.generatedAt ||
-      payableReport.generatedAt ||
-      new Date().toISOString(),
+    generatedAt: openDebt.generatedAt,
+  };
+}
+
+interface OpenDebtAgingRow {
+  party_id: string;
+  party_name: string;
+  document_count: number;
+  outstanding: number;
+  oldest_days: number;
+  oldest_date: string;
+  bucket_0_30: number;
+  bucket_31_60: number;
+  bucket_61_90: number;
+  bucket_91_plus: number;
+}
+
+// Never subtract an unused advance from a document's count or age.
+async function getOpenDebtAging(branchId?: string | null) {
+  const { data, error } = await getClient().rpc(
+    "get_counterparty_open_debt_aging" as never,
+    { p_branch_id: branchId ?? null } as never,
+  );
+  if (error) handleError(error, "getOpenDebtAging");
+  if (!data)
+    throw new Error("Không tải được chi tiết tuổi nợ. Vui lòng tải lại.");
+  const raw = data as unknown as {
+    generated_at: string;
+    customers: OpenDebtAgingRow[];
+    suppliers: OpenDebtAgingRow[];
+  };
+  const amounts = (row: OpenDebtAgingRow) => ({
+    outstanding: Number(row.outstanding),
+    bucket0_30: Number(row.bucket_0_30),
+    bucket31_60: Number(row.bucket_31_60),
+    bucket61_90: Number(row.bucket_61_90),
+    bucket91Plus: Number(row.bucket_91_plus),
+    oldestDays: Number(row.oldest_days),
+  });
+  return {
+    generatedAt: raw.generated_at,
+    receivables: raw.customers.map(
+      (row): ReceivableAgingRow => ({
+        ...amounts(row),
+        customerId: row.party_id,
+        customerName: row.party_name,
+        invoiceCount: Number(row.document_count),
+        oldestInvoiceDate: row.oldest_date,
+      }),
+    ),
+    payables: raw.suppliers.map(
+      (row): PayableAgingRow => ({
+        ...amounts(row),
+        supplierId: row.party_id,
+        supplierName: row.party_name,
+        documentCount: Number(row.document_count),
+        oldestDocumentDate: row.oldest_date,
+      }),
+    ),
   };
 }

@@ -7,13 +7,14 @@ export async function recordTimedCash(
   payload: Record<string, unknown>,
   timing: CashTimingInput,
 ): Promise<Record<string, unknown>> {
-  const { data, error } = await getClient().rpc((timing.performedBy ? 'record_cash_transaction_context' : 'record_cash_transaction_timed') as never, {
+  const { data, error } = await getClient().rpc((timing.moneyAccountId ? 'record_cash_with_account' : timing.performedBy ? 'record_cash_transaction_context' : 'record_cash_transaction_timed') as never, {
     p_operation: operation,
     p_payload: payload,
     p_occurred_at: timing.occurredAt ?? null,
     p_transaction_date: timing.transactionDate ?? null,
     p_time_reason: timing.timeReason?.trim() || null,
     ...(timing.performedBy ? { p_performed_by: timing.performedBy } : {}),
+    ...(timing.moneyAccountId ? { p_money_account_id: timing.moneyAccountId } : {}),
   } as never);
   if (error) handleError(error, 'recordTimedCash.rpc');
   if (!data) throw new Error('Máy chủ không trả về phiếu thu/chi hợp lệ');

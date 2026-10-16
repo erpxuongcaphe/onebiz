@@ -11,6 +11,7 @@ import {SearchableSelect} from '@/components/ui/searchable-select';
 import {useAuth} from '@/lib/contexts';
 import {cashDateTimeInput, cashInputToIso, validateCashTime} from '@/lib/cash-time';
 import {CashTimeFields, useCashTimeDraft} from '@/components/shared/cash-time-fields';
+import {MoneyAccountSelect} from '@/components/shared/money-account-select';
 import {getCashPerformers} from '@/lib/services/supabase/cash-timing';
 import {useDurableFormDraft} from '@/lib/hooks/use-durable-form-draft';
 import {FinanceRpcError, saveFinanceDocument, settleFinanceDocument,
@@ -40,6 +41,7 @@ export function ManagementFinanceDialog({open, onOpenChange, categories, event, 
   const [cashBranch, setCashBranch] = useState('');
   const [performedBy, setPerformedBy] = useState('');
   const [method, setMethod] = useState<FinancePayment['paymentMethod']>('cash');
+  const [moneyAccountId,setMoneyAccountId]=useState('');
   const [direction, setDirection] = useState<'receipt' | 'payment'>('payment');
   const [performers, setPerformers] = useState<Array<{id: string; name: string}>>([]);
   const [performerError, setPerformerError] = useState('');
@@ -60,7 +62,7 @@ export function ManagementFinanceDialog({open, onOpenChange, categories, event, 
     setCategoryId(''); setBusinessDate(date); setAmount(''); setCounterparty(''); setNote('');
     setAllocations([{branchId: currentBranch?.id ?? '', recognitionDate: date, amount: ''}]);
     setCashBranch(currentBranch?.id ?? ''); setPaymentMode(event ? 'partial' : 'unpaid');
-    setPaymentAmount(''); setAttempt(null); setError('');
+    setPaymentAmount(''); setMoneyAccountId(''); setAttempt(null); setError('');
     unreadableRequest.current = false;
     if (requestKey) {
       try {
@@ -87,13 +89,13 @@ export function ManagementFinanceDialog({open, onOpenChange, categories, event, 
     form: event ? 'management-finance' : `management-finance-${recordKind}`, entityId: event?.id, open,
     onRequestOpen: () => onOpenChange(true),
     snapshot: {categoryId, businessDate, amount, counterparty, note, allocations, paymentMode, paymentAmount,
-      cashBranch, performedBy, method, direction, cashTime, attempt},
+      cashBranch, performedBy, method, moneyAccountId, direction, cashTime, attempt},
     hasContent: d => !!d.amount || !!d.counterparty || !!d.attempt,
     restore: d => {
       setCategoryId(d.categoryId); setBusinessDate(d.businessDate); setAmount(d.amount); setCounterparty(d.counterparty);
       setNote(d.note); setAllocations(d.allocations); setPaymentMode(d.paymentMode); setPaymentAmount(d.paymentAmount);
       setCashBranch(d.cashBranch); setPerformedBy(d.performedBy); setMethod(d.method); setDirection(d.direction);
-      setCashTime(d.cashTime); setAttempt(d.attempt);
+      setMoneyAccountId(d.moneyAccountId || ''); setCashTime(d.cashTime); setAttempt(d.attempt);
     },
   });
 
@@ -113,7 +115,7 @@ export function ManagementFinanceDialog({open, onOpenChange, categories, event, 
           if (!cashBranch || !performedBy) throw new Error('Chọn chi nhánh thu/chi và người thực hiện.');
           const value = Number(paymentMode === 'full' && !event ? amount : paymentAmount);
           if (!Number.isFinite(value) || value <= 0) throw new Error('Số tiền thanh toán phải lớn hơn 0.');
-          payment = {branchId: cashBranch, performedBy, amount: value, paymentMethod: method, direction: kind === 'income' ? 'receipt' : kind === 'expense' ? 'payment' : direction,
+          payment = {branchId: cashBranch, performedBy, amount: value, paymentMethod: method, moneyAccountId:moneyAccountId||null, direction: kind === 'income' ? 'receipt' : kind === 'expense' ? 'payment' : direction,
             transactionDate: cashTime.transactionDate, occurredAt: cashInputToIso(cashTime.occurredLocal), timeReason: cashTime.timeReason, note};
         }
         let payload: FinanceDocumentInput | FinancePayment;
@@ -177,12 +179,13 @@ export function ManagementFinanceDialog({open, onOpenChange, categories, event, 
         {(event || paymentMode !== 'unpaid') && <div className="space-y-3 border-t pt-3">
           <div className="grid gap-3 sm:grid-cols-2">
             {(event || paymentMode === 'partial') && <label className="grid gap-1 text-sm">Số tiền lần này<NumericInput value={paymentAmount === '' ? null : Number(paymentAmount)} decimals={2} onChange={value => setPaymentAmount(value === null ? '' : String(value))}/></label>}
-            <label className="grid gap-1 text-sm">Chi nhánh thực {cashVerb}<SearchableSelect disabled={saving || !!attempt} value={cashBranch} onValueChange={setCashBranch} options={branchOptions} placeholder="Chọn chi nhánh"/></label>
+            <label className="grid gap-1 text-sm">Chi nhánh thực {cashVerb}<SearchableSelect disabled={saving || !!attempt} value={cashBranch} onValueChange={value => {setCashBranch(value);setMoneyAccountId('');}} options={branchOptions} placeholder="Chọn chi nhánh"/></label>
             <label className="grid gap-1 text-sm">Người thực hiện<SearchableSelect disabled={saving || !!attempt} value={performedBy} onValueChange={setPerformedBy} options={performers.map(p => ({value: p.id, label: p.name}))} placeholder="Chọn người thực hiện"/></label>
-            <label className="grid gap-1 text-sm">Hình thức<select className="h-10 rounded-md border bg-background px-3" value={method} onChange={e => setMethod(e.target.value as FinancePayment['paymentMethod'])}><option value="cash">Tiền mặt</option><option value="bank_transfer">Chuyển khoản</option><option value="card">Thẻ</option><option value="other">Khác</option></select></label>
+            <label className="grid gap-1 text-sm">Hình thức<select className="h-10 rounded-md border bg-background px-3" value={method} onChange={e => {setMethod(e.target.value as FinancePayment['paymentMethod']);setMoneyAccountId('');}}><option value="cash">Tiền mặt</option><option value="transfer">Chuyển khoản</option><option value="card">Thẻ</option><option value="ewallet">Ví điện tử</option></select></label>
             {kind === 'non_pnl' && <label className="grid gap-1 text-sm">Hướng tiền<select className="h-10 rounded-md border bg-background px-3" value={direction} onChange={e => setDirection(e.target.value as 'receipt' | 'payment')}><option value="receipt">Thu</option><option value="payment">Chi</option></select></label>}
           </div>
           {performerError && <p role="alert" className="text-sm text-destructive">{performerError}</p>}
+          <MoneyAccountSelect branchId={cashBranch} method={method==='bank_transfer'?'transfer':method} value={moneyAccountId} onChange={setMoneyAccountId} disabled={saving||!!attempt}/>
           <CashTimeFields value={cashTime} onChange={setCashTime} verb={cashVerb}/>
         </div>}
         <label className="grid gap-1 text-sm">Nội dung<Input value={note} onChange={e => setNote(e.target.value)}/></label>
