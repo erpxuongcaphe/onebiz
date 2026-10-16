@@ -21,6 +21,8 @@ describe('scoped chip-style user picker',()=>{
   expect(screen.queryByRole('button',{name:another.name})).toBeNull();
   fireEvent.click(screen.getByRole('button',{name:person.name}));
   expect(new FormData(container.querySelector('form')!).get('assigneeId')).toBe(person.id);
+  expect(screen.getByRole('button',{name:`Bỏ ${person.name}`})).toHaveTextContent('×');
+  expect(screen.getByRole('button',{name:`Bỏ ${person.name}`})).toHaveAttribute('title',`Bỏ ${person.name}`);
   fireEvent.click(screen.getByRole('button',{name:`Bỏ ${person.name}`}));
   expect(new FormData(container.querySelector('form')!).get('assigneeId')).toBe('');
  });
