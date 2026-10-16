@@ -6,6 +6,7 @@ import { CashAmendmentHistory } from "@/components/shared/cash-amendment-history
 import { FilterPanel } from "@/components/shared/filter-sidebar/filter-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PartyAdvanceLedger } from "@/components/shared/party-advance-ledger";
 
 function App() {
   const [open, setOpen] = useState(false),
@@ -23,6 +24,7 @@ function App() {
         </Button>
       </div>
       <CashAmendmentHistory cashId="fixture" canExport />
+      <PartyAdvanceLedger mode="supplier" partyId="supplier" partyName="Nhà cung cấp kiểm thử" branchId="branch" canExport canRefund revision={0}/>
       <SettleDebtDialog
         open={open}
         onOpenChange={setOpen}

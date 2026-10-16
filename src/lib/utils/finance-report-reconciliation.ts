@@ -10,6 +10,7 @@ export const CASH_FLOW_LABELS: Record<CashFlowActivity, string> = {
 };
 
 const OPERATING_CATEGORIES = new Set([
+  'supplier_advance', 'customer_advance', 'supplier_advance_refund', 'customer_advance_refund',
   'Bán hàng', 'Nhập hàng', 'Mua hàng nội bộ', 'Hoàn tiền hủy đơn', 'Hoàn trả', 'Trả hàng', 'Tra hang',
   'Trả nhà cung cấp', 'supplier_payment', 'customer_payment', 'thu_tien_khach', 'chi_tra_ncc',
   'chi_phi_van_chuyen', 'salary', 'rent', 'utility',

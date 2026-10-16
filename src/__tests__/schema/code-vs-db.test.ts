@@ -57,6 +57,8 @@ const RPC_CHO_MIGRATION = new Map<string, string>([
   ["settle_party_documents_atomic", "00553_party_cash_amendments"],
   ["get_cash_amendment_history", "00553_party_cash_amendments"],
     ["get_counterparty_open_debt_aging", "00554_gross_open_debt_aging"],
+    ["refund_party_advance", "00555_party_advance_refunds"],
+    ["cancel_party_advance_refund", "00555_party_advance_refunds"],
   // 00390 đã chạy trên Production; snapshot không thể làm mới tại workspace này
   // vì không có service-role credential. Xóa các dòng này ngay lần dump schema kế tiếp.
 ]);

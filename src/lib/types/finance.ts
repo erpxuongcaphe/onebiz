@@ -37,6 +37,8 @@ export interface CashBookEntry {
   advanceOriginal?: number;
   advanceApplied?: number;
   advanceRemaining?: number;
+  advanceRefunded?: number;
+  refundSourceCode?: string;
   originalCode?: string;
   replacementCode?: string;
 }

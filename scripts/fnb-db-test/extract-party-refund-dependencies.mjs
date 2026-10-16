@@ -1,0 +1,10 @@
+import fs from 'node:fs';
+import path from 'node:path';
+const source=fs.readFileSync('supabase/migrations/00290_atomic_debt_opening_and_aging.sql','utf8');
+const start=source.indexOf('create or replace function public.recompute_customer_debt(');
+const end=source.indexOf('$$;',source.indexOf('as $$',start))+3;
+if(start<0||end<=start) throw new Error('Customer debt aggregate definition not found');
+const target=process.argv[2];
+if(!target) throw new Error('Generated SQL output path required');
+fs.mkdirSync(path.dirname(target),{recursive:true});
+fs.writeFileSync(target,source.slice(start,end));

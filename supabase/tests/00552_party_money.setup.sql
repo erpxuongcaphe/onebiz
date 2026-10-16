@@ -1,4 +1,5 @@
 \set ON_ERROR_STOP on
+set timezone = 'Asia/Ho_Chi_Minh';
 -- Disposable fixture only; no production connection is accepted by its runner.
 do $$ begin if to_regclass('public.profiles') is not null then raise exception 'Fresh isolated database required'; end if; end $$;
 create schema auth;
