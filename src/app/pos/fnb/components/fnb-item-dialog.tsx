@@ -984,9 +984,14 @@ export function FnbItemDialog({
             <Label className="text-sm font-medium flex items-center gap-2">
               <Icon name="sticky_note_2" size={16} /> Ghi chú pha chế
             </Label>
-            <div className="flex flex-wrap gap-2" aria-label="Ghi chú pha chế nhanh">
+            <Textarea aria-label="Ghi chú pha chế" value={note} onChange={(e) => setNote(e.target.value)}
+              placeholder="VD: ít ngọt, đá riêng, pha ấm..." rows={2}
+              className="resize-none text-sm" />
+            <div className="flex flex-wrap items-center gap-x-1 gap-y-0" aria-label="Ghi chú pha chế nhanh">
+              <span className="mr-1 text-xs text-muted-foreground">Gợi ý ghi chú:</span>
               {["Ít đường", "Không đường", "Nhiều đường", "Ít ngọt", "Pha đắng", "Ít béo"].map(text => (
-                <button key={text} type="button" className={CHIP}
+                <button key={text} type="button"
+                  className="min-h-8 pointer-coarse:min-h-11 rounded-md px-2 py-1 text-xs font-normal text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary aria-pressed:bg-primary/5 aria-pressed:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                   aria-pressed={note.split(";").some(part => part.trim() === text)}
                   onClick={() => setNote(current => {
                     const parts = current.split(";").map(part => part.trim()).filter(Boolean);
@@ -996,10 +1001,8 @@ export function FnbItemDialog({
                 </button>
               ))}
             </div>
-            <p className="text-xs text-muted-foreground">Chỉ gửi ghi chú cho bếp, không thay đổi định lượng trừ kho.</p>
-            <Textarea aria-label="Ghi chú pha chế" value={note} onChange={(e) => setNote(e.target.value)}
-              placeholder="VD: ít ngọt, đá riêng, pha ấm..." rows={2}
-              className="resize-none text-sm" />
+            <p className="text-[11px] leading-4 text-muted-foreground">Ghi chú gửi bếp, không đổi định lượng.</p>
+
           </section>
         </div>
 
