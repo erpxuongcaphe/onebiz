@@ -8,6 +8,7 @@ import { formatCurrency, formatShortDate } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { exportToExcel } from "@/lib/utils/export";
+import { cashCategoryLabel } from "@/lib/utils/cash-book-labels";
 
 export function PartyAdvanceLedger({
   mode,
@@ -68,6 +69,11 @@ export function PartyAdvanceLedger({
                       party: partyName,
                       branch: r.branchName,
                       cash: r.cashCode,
+                      operation: cashCategoryLabel(
+                        mode === "supplier"
+                          ? "supplier_advance"
+                          : "customer_advance",
+                      ),
                       date: r.date,
                       note: r.note,
                       original: r.originalAmount,
@@ -78,6 +84,7 @@ export function PartyAdvanceLedger({
                       ? r.allocations.map((a) => ({
                           ...common,
                           document: a.documentCode,
+                          allocationType: "Cấn tiền ứng",
                           applied: a.amount,
                           allocationNote: a.note,
                           allocatedAt: a.createdAt,
@@ -86,6 +93,7 @@ export function PartyAdvanceLedger({
                           {
                             ...common,
                             document: "",
+                            allocationType: "Chưa phân bổ",
                             applied: 0,
                             allocationNote: "",
                             allocatedAt: "",
@@ -96,12 +104,22 @@ export function PartyAdvanceLedger({
                     { header: "Đối tượng", key: "party", width: 40 },
                     { header: "Chi nhánh", key: "branch", width: 35 },
                     { header: "Phiếu nguồn", key: "cash", width: 18 },
+                    {
+                      header: "Khoản mục thu/chi",
+                      key: "operation",
+                      width: 25,
+                    },
                     { header: "Ngày thu/chi", key: "date", width: 18 },
                     { header: "Nội dung thu/chi", key: "note", width: 60 },
                     { header: "Tiền ứng gốc", key: "original", width: 20 },
                     { header: "Tiền ứng còn lại", key: "remaining", width: 22 },
                     { header: "Trạng thái nguồn", key: "status", width: 20 },
                     { header: "Chứng từ được cấn", key: "document", width: 20 },
+                    {
+                      header: "Loại phân bổ",
+                      key: "allocationType",
+                      width: 22,
+                    },
                     { header: "Số tiền cấn", key: "applied", width: 20 },
                     {
                       header: "Nội dung phân bổ",
@@ -170,6 +188,13 @@ export function PartyAdvanceLedger({
                   <td className="p-2 font-medium whitespace-nowrap">
                     {r.cashCode}
                     <span className="block text-xs text-muted-foreground">
+                      {cashCategoryLabel(
+                        mode === "supplier"
+                          ? "supplier_advance"
+                          : "customer_advance",
+                      )}
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
                       {r.status === "cancelled"
                         ? "Đã hủy"
                         : r.status === "exhausted"
@@ -203,7 +228,8 @@ export function PartyAdvanceLedger({
                       ? r.allocations.map((a, i) => (
                           <div key={`${a.documentCode}-${i}`} className="mb-2">
                             <strong>
-                              {a.documentCode}: {formatCurrency(a.amount)}
+                              Cấn tiền ứng · {a.documentCode}:{" "}
+                              {formatCurrency(a.amount)}
                             </strong>
                             <p className="text-xs whitespace-pre-wrap break-words text-muted-foreground">
                               {a.note}

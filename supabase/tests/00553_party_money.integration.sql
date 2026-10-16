@@ -110,3 +110,35 @@ do $$ declare r jsonb; c cash_transactions%rowtype; payload jsonb; account uuid;
  perform test_assert((select money_account_id=account and amount=60 from cash_transactions where id=(r->>'id')::uuid),'later management settlement preserves selected bank');
 end $$;
 select 'PASS: accounts, audit, supplier/customer settlements, overpayments, management recognition and retry safety';
+
+begin;
+insert into suppliers(id,tenant_id,name) values(test_id(80),test_id(2),'Gross debt supplier');
+insert into customers(id,tenant_id,name) values(test_id(81),test_id(2),'Gross debt customer');
+insert into purchase_orders(id,tenant_id,branch_id,code,supplier_id,total,paid,debt,status,created_at)
+values(test_id(82),test_id(2),test_id(3),'PO-GROSS',test_id(80),630000,0,630000,'completed',now()-interval '45 days');
+insert into invoices(id,tenant_id,branch_id,code,customer_id,total,paid,debt,status,created_at,ngay_chung_tu)
+values(test_id(83),test_id(2),test_id(3),'HD-GROSS',test_id(81),200000,0,200000,'completed',now()-interval '95 days',now()-interval '95 days'),
+(test_id(84),test_id(2),test_id(3),'HD-DRAFT',test_id(81),900,0,900,'draft',now(),now()),
+(test_id(85),test_id(2),test_id(4),'HD-OTHER-BRANCH',test_id(81),700,0,700,'completed',now(),now());
+select record_supplier_advance(test_id(80),4457009,'cash','Unused supplier advance exceeds gross debt',test_id(3),null);
+select record_customer_advance(test_id(81),500000,'cash','Unused customer advance exceeds gross debt',test_id(3),null);
+do $$ declare r jsonb; s jsonb; c jsonb; n bigint; begin
+ select count(*) into n from cash_transactions;
+ r:=get_counterparty_open_debt_aging(test_id(3));
+ select value into s from jsonb_array_elements(r->'suppliers') where value->>'party_id'=test_id(80)::text;
+ select value into c from jsonb_array_elements(r->'customers') where value->>'party_id'=test_id(81)::text;
+ perform test_assert((s->>'document_count')::int=1 and (s->>'outstanding')::numeric=630000,'unused supplier advance never hides unpaid PO');
+ perform test_assert((s->>'bucket_31_60')::numeric=630000 and (s->>'oldest_days')::int=45,'supplier age stays with its unpaid document');
+ perform test_assert((c->>'document_count')::int=1 and (c->>'bucket_91_plus')::numeric=200000,'customer advance does not hide debt; drafts and foreign branch excluded');
+ perform test_assert((select count(*)=n from cash_transactions),'aging reader never creates cash');
+ perform test_assert((select debt=630000 and paid=0 from purchase_orders where id=test_id(82)),'aging reader never allocates advances');
+ perform set_config('test.actor',test_id(98)::text,true);
+ r:=get_counterparty_open_debt_aging(null);
+ perform test_assert(r->'customers'='[]'::jsonb and r->'suppliers'='[]'::jsonb,'aging reader isolates tenant');
+ perform set_config('test.actor',test_id(1)::text,true);
+ perform set_config('test.denied','reports.view_detail',true);
+ begin perform get_counterparty_open_debt_aging(test_id(3));raise exception 'expected report permission denial';
+ exception when others then if sqlerrm<>'REPORT_DENIED' then raise;end if;end;
+end $$;
+rollback;
+select 'PASS: gross open document count and aging remain visible with excess advances';

@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { formatCurrency, formatShortDate } from "@/lib/format";
-import { cashCategoryLabel, cashPaymentMethodLabel } from "@/lib/utils/cash-book-labels";
+import { cashOperationLabel, cashPaymentMethodLabel } from "@/lib/utils/cash-book-labels";
 import { exportToExcel } from "@/lib/utils/export";
 import { ConfirmDialog } from "@/components/shared/dialogs/confirm-dialog";
 import { Input } from "@/components/ui/input";
@@ -105,7 +105,7 @@ export function PartyCashHistory({ mode, partyId, partyName, onChanged }: {
         ...row, partyName, bookingDate: formatShortDate(row.date),
         occurredTime: row.occurredAt ? new Date(row.occurredAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "Chưa ghi nhận",
         typeLabel: row.type === "receipt" ? "Thu" : "Chi",
-        categoryLabel: row.category === "supplier_advance" ? "Ứng trước NCC" : row.category === "customer_advance" ? "Khách trả trước" : cashCategoryLabel(row.category),
+        categoryLabel: cashOperationLabel(row),
         accountLabel: row.moneyAccountName ? `${row.moneyAccountCode} · ${row.moneyAccountName}` : "Chưa xác định tài khoản",
         methodLabel: cashPaymentMethodLabel(row.paymentMethod),
         statusLabel: row.status === "cancelled" ? "Đã hủy" : row.status === "completed" ? "Hoàn thành" : "Chưa hoàn tất",
@@ -164,7 +164,7 @@ export function PartyCashHistory({ mode, partyId, partyName, onChanged }: {
           <td className="sticky left-0 bg-background px-3 py-2 whitespace-nowrap"><button className="text-primary font-medium hover:underline" onClick={() => setSelected(row)} aria-label={`Xem phiếu ${row.code}`}>{row.code}</button></td>
           <td className="px-3 py-2 whitespace-nowrap">{formatShortDate(row.date)}</td>
           <td className="px-3 py-2 whitespace-nowrap">{row.type === "receipt" ? "Thu" : "Chi"}</td>
-          <td className="px-3 py-2">{row.category === "supplier_advance" ? "Ứng trước NCC" : row.category === "customer_advance" ? "Khách trả trước" : cashCategoryLabel(row.category)}</td>
+          <td className="px-3 py-2">{cashOperationLabel(row)}</td>
           <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap font-medium">{formatCurrency(row.amount)}</td>
           <td className="px-3 py-2 whitespace-nowrap">{cashPaymentMethodLabel(row.paymentMethod)}</td>
           <td className="px-3 py-2 whitespace-nowrap">{row.branchName || "—"}</td>
@@ -186,6 +186,7 @@ export function PartyCashHistory({ mode, partyId, partyName, onChanged }: {
       <dt>Ngày ghi nhận</dt><dd>{formatShortDate(selected.date)}</dd><dt>Thời điểm thu/chi</dt><dd>{selected.occurredAt ? new Date(selected.occurredAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "Chưa ghi nhận giờ thu/chi"}</dd>
       <dt>Chi nhánh</dt><dd>{selected.branchName || "—"}</dd><dt>Người lập</dt><dd>{selected.createdByName || "—"}</dd><dt>Người thực hiện</dt><dd>{selected.performedByName || "Chưa ghi nhận"}</dd>
       <dt>Ngày lập phiếu</dt><dd>{selected.createdAt ? new Date(selected.createdAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "—"}</dd>
+      <dt>Khoản mục</dt><dd>{cashOperationLabel(selected)}</dd>
       <dt>Thanh toán</dt><dd>{cashPaymentMethodLabel(selected.paymentMethod)}</dd>
       <dt>Quỹ / tài khoản</dt><dd>{selected.moneyAccountName || "Chưa xác định tài khoản"}</dd>
       <dt>Chứng từ gốc</dt><dd>{selected.referenceCode || "Chưa liên kết"}</dd>
