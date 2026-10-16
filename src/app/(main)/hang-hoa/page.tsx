@@ -80,7 +80,6 @@ import {
   bulkDeleteProducts,
   deleteProduct,
   duplicateProduct,
-  restoreProduct,
   bulkRestoreProducts,
   cleanupTestProduct,
   bulkCleanupTestProducts,

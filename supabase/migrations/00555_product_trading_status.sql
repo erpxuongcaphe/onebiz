@@ -1,5 +1,5 @@
 -- Trading status is reversible and independent of inventory/document deletion.
-create or replace function public.set_product_trading_status_00552(
+create or replace function public.set_product_trading_status_00555(
   p_ids uuid[], p_active boolean
 ) returns integer
 language plpgsql security definer set search_path = public, extensions
@@ -34,5 +34,5 @@ begin
   return v_count;
 end;
 $$;
-revoke all on function public.set_product_trading_status_00552(uuid[],boolean) from public, anon;
-grant execute on function public.set_product_trading_status_00552(uuid[],boolean) to authenticated;
+revoke all on function public.set_product_trading_status_00555(uuid[],boolean) from public, anon;
+grant execute on function public.set_product_trading_status_00555(uuid[],boolean) to authenticated;

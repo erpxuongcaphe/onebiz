@@ -12,21 +12,21 @@ const {PGlite}=require(process.env.FNB_PGLITE_DIR || '@electric-sql/pglite');
  insert into products values('20000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001','A','A',true,17,now()),
  ('20000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000001','B','B',false,-2,now()),
  ('20000000-0000-0000-0000-000000000003','10000000-0000-0000-0000-000000000002','C','C',true,10,now());`);
- await db.exec(fs.readFileSync('supabase/migrations/00552_product_trading_status.sql','utf8'));
+ await db.exec(fs.readFileSync('supabase/migrations/00555_product_trading_status.sql','utf8'));
  await db.exec(`select set_config('test.actor','00000000-0000-0000-0000-000000000001',false);
  do $$declare n int; begin
- n:=set_product_trading_status_00552(array['20000000-0000-0000-0000-000000000001'::uuid,'20000000-0000-0000-0000-000000000002'::uuid],false);
+ n:=set_product_trading_status_00555(array['20000000-0000-0000-0000-000000000001'::uuid,'20000000-0000-0000-0000-000000000002'::uuid],false);
  if n<>1 then raise exception 'mixed selection count'; end if;
- n:=set_product_trading_status_00552(array['20000000-0000-0000-0000-000000000001'::uuid],false);
+ n:=set_product_trading_status_00555(array['20000000-0000-0000-0000-000000000001'::uuid],false);
  if n<>0 then raise exception 'not idempotent'; end if;
- begin perform set_product_trading_status_00552(array['20000000-0000-0000-0000-000000000001'::uuid,'20000000-0000-0000-0000-000000000003'::uuid],true);
+ begin perform set_product_trading_status_00555(array['20000000-0000-0000-0000-000000000001'::uuid,'20000000-0000-0000-0000-000000000003'::uuid],true);
  raise exception 'cross-tenant accepted'; exception when insufficient_privilege then null; end;
  if exists(select 1 from products where id='20000000-0000-0000-0000-000000000001' and is_active) then raise exception 'partial mutation'; end if;
- n:=set_product_trading_status_00552(array['20000000-0000-0000-0000-000000000001'::uuid,'20000000-0000-0000-0000-000000000002'::uuid],true);
+ n:=set_product_trading_status_00555(array['20000000-0000-0000-0000-000000000001'::uuid,'20000000-0000-0000-0000-000000000002'::uuid],true);
  if n<>2 or (select stock from products where code='A')<>17 or (select stock from products where code='B')<>-2 then raise exception 'stock changed'; end if;
  if (select count(*) from audit_log)<>3 then raise exception 'audit missing'; end if;
  perform set_config('test.actor','00000000-0000-0000-0000-000000000002',false);
- begin perform set_product_trading_status_00552(array['20000000-0000-0000-0000-000000000001'::uuid],false);
+ begin perform set_product_trading_status_00555(array['20000000-0000-0000-0000-000000000001'::uuid],false);
  raise exception 'permission bypass'; exception when insufficient_privilege then null; end;
  end $$;`);
  console.log('PASS: mixed states, positive/negative stock unchanged, idempotency, tenant isolation, all-or-nothing, edit permission, audit');
