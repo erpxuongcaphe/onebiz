@@ -46,24 +46,6 @@ const RPC = new Set(schema.rpc as string[]);
  * dưới sẽ BẮT XOÁ dòng ngay khi dump đã có (sau `node scripts/dump-db-schema.mjs`).
  */
 const RPC_CHO_MIGRATION = new Map<string, string>([
-  ["set_product_trading_status_00559", "00559_product_trading_status"],
-  ["ops_eligible_people", "00555_operations_ceo_workbook_people"],
-  ["ops_workbook_batches_read", "00555_operations_ceo_workbook_people"],
-  ["ops_workbook_import", "00555_operations_ceo_workbook_people"],
-  ["ops_workbook_discard", "00555_operations_ceo_workbook_people"],
-  ["get_money_account_workspace", "00552_money_account_register"],
-  ["save_money_account", "00552_money_account_register"],
-  ["record_cash_with_account", "00552_money_account_register"],
-  ["save_management_finance_with_account", "00552_money_account_register"],
-  ["settle_management_finance_with_account", "00552_money_account_register"],
-  ["amend_party_cash", "00553_party_cash_amendments"],
-  ["get_party_cash_history_detail", "00553_party_cash_amendments"],
-  ["get_party_advance_ledger", "00553_party_cash_amendments"],
-  ["settle_party_documents_atomic", "00553_party_cash_amendments"],
-  ["get_cash_amendment_history", "00553_party_cash_amendments"],
-    ["get_counterparty_open_debt_aging", "00554_gross_open_debt_aging"],
-    ["refund_party_advance", "00557_party_advance_refunds"],
-    ["cancel_party_advance_refund", "00557_party_advance_refunds"],
   // 00390 đã chạy trên Production; snapshot không thể làm mới tại workspace này
   // vì không có service-role credential. Xóa các dòng này ngay lần dump schema kế tiếp.
 ]);
