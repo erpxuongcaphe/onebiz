@@ -12,7 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { formatCurrency, formatShortDate } from "@/lib/format";
-import { cashOperationLabel, cashPaymentMethodLabel } from "@/lib/utils/cash-book-labels";
+import { cashOperationLabel, cashPaymentMethodLabel, cashPaymentSplit, cashNoteSummary } from "@/lib/utils/cash-book-labels";
+import { useExcelDownload } from "@/lib/hooks/use-excel-download";
 import { exportToExcel } from "@/lib/utils/export";
 import { ConfirmDialog } from "@/components/shared/dialogs/confirm-dialog";
 import { Input } from "@/components/ui/input";
@@ -22,6 +23,16 @@ import { CashAmendmentHistory } from "@/components/shared/cash-amendment-history
 import { SettleDebtDialog } from "@/components/shared/dialogs/settle-debt-dialog";
 import { cancelAdvanceRefund } from "@/lib/services/supabase/advance-refunds";
 import type { CashBookEntry } from "@/lib/types";
+
+function CashHistoryOperation({ row }: { row: CashBookEntry }) {
+  const split = cashPaymentSplit(row);
+  return <div className="min-w-40 space-y-1"><span className="font-medium">{cashOperationLabel(row)}</span>{split && <p className="text-xs text-muted-foreground tabular-nums">Tiền hàng: {formatCurrency(split.documentAmount)}<br/>Ứng dư: {formatCurrency(split.advanceAmount)}</p>}</div>;
+}
+
+function CashHistoryNote({ row, partyName, onOpen }: { row: CashBookEntry; partyName: string; onOpen: () => void }) {
+  const note = cashNoteSummary(row, partyName);
+  return <div className="space-y-1"><p>{note.summary}</p>{note.cancellationReason && <p className="text-xs text-muted-foreground">Lý do hủy: {note.cancellationReason}</p>}{note.shortened && <button type="button" className="text-xs text-primary hover:underline" aria-label={`Xem nội dung gốc ${row.code}`} onClick={onOpen}>Nội dung gốc</button>}</div>;
+}
 
 export function PartyCashHistory({ mode, partyId, partyName, onChanged }: {
   mode: "customer" | "supplier"; partyId: string; partyName: string; onChanged?: () => void;
@@ -50,6 +61,7 @@ export function PartyCashHistory({ mode, partyId, partyName, onChanged }: {
   const [balanceError, setBalanceError] = useState<string | null>(null);
   const [filters, setFilters] = useState<PartyCashHistoryFilters>({});
   const [searchText, setSearchText] = useState("");
+  const excelDownload = useExcelDownload(JSON.stringify([mode, partyId, activeBranchId, filters, searchText, revision, canExport]));
   const [exporting, setExporting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
@@ -99,7 +111,7 @@ export function PartyCashHistory({ mode, partyId, partyName, onChanged }: {
   if (permissionsLoading) return <p className="py-4 text-sm">Đang kiểm tra quyền...</p>;
   if (!canRead) return <p className="py-4 text-sm text-muted-foreground">Bạn chưa có quyền xem sổ quỹ.</p>;
   const exportHistory = async () => {
-    setExporting(true); setActionError(null);
+    setExporting(true); setActionError(null); excelDownload.clear();
     try {
       const allRows = await getAllPartyCashHistory(mode, partyId, activeBranchId, filters);
       if (allRows.length === 0) throw new Error("Không có phiếu phù hợp để xuất.");
@@ -108,6 +120,10 @@ export function PartyCashHistory({ mode, partyId, partyName, onChanged }: {
         occurredTime: row.occurredAt ? new Date(row.occurredAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "Chưa ghi nhận",
         typeLabel: row.type === "receipt" ? "Thu" : "Chi",
         categoryLabel: cashOperationLabel(row),
+        summaryNote: cashNoteSummary(row, partyName).summary,
+        cancellationReason: cashNoteSummary(row, partyName).cancellationReason,
+        documentPayment: cashPaymentSplit(row)?.documentAmount,
+        excessAdvance: cashPaymentSplit(row)?.advanceAmount,
         accountLabel: row.moneyAccountName ? `${row.moneyAccountCode} · ${row.moneyAccountName}` : "Chưa xác định tài khoản",
         methodLabel: cashPaymentMethodLabel(row.paymentMethod),
         statusLabel: row.status === "cancelled" ? "Đã hủy" : row.status === "completed" ? "Hoàn thành" : "Chưa hoàn tất",
@@ -118,13 +134,17 @@ export function PartyCashHistory({ mode, partyId, partyName, onChanged }: {
         { header: "Số tiền", key: "amount", width: 20 }, { header: "Phương thức", key: "methodLabel", width: 20 },
         { header: "Chi nhánh", key: "branchName", width: 35 }, { header: "Người lập", key: "createdByName", width: 25 },
         { header: "Người thực hiện", key: "performedByName", width: 25 }, { header: "Chứng từ liên quan", key: "referenceCode", width: 22 },
-        { header: "Nội dung thu/chi", key: "note", width: 60 }, { header: "Trạng thái", key: "statusLabel", width: 18 },
+        { header: "Nội dung ngắn", key: "summaryNote", width: 45 },
+        { header: "Nội dung thu/chi gốc", key: "note", width: 60 }, { header: "Trạng thái", key: "statusLabel", width: 18 },
+        { header: "Lý do hủy", key: "cancellationReason", width: 40 },
+        { header: "Tiền hàng (phiếu có ứng dư)", key: "documentPayment", width: 28 },
+        { header: "Ứng dư khi thanh toán", key: "excessAdvance", width: 22 },
         { header: "Quỹ / tài khoản", key: "accountLabel", width: 35 },
         { header: "Tiền ứng gốc", key: "advanceOriginal", width: 20 }, { header: "Đã cấn từ nguồn ứng", key: "advanceApplied", width: 22 },
         { header: "Tiền ứng còn lại", key: "advanceRemaining", width: 22 }, { header: "Thay cho phiếu", key: "originalCode", width: 20 },
         { header: "Tiền ứng đã hoàn", key: "advanceRefunded", width: 22 }, { header: "Phiếu nguồn hoàn ứng", key: "refundSourceCode", width: 22 },
         { header: "Phiếu thay thế", key: "replacementCode", width: 20 },
-      ], `OneBiz_LichSuThuChi_${mode}_${partyId}_${filters.dateFrom || "tatca"}_${filters.dateTo || "tatca"}`, { financialTable: true });
+      ], `OneBiz_LichSuThuChi_${mode}_${partyId}_${filters.dateFrom || "tatca"}_${filters.dateTo || "tatca"}`, { financialTable: true, onPrepared: excelDownload.onPrepared });
     } catch (err) { setActionError(err instanceof Error ? err.message : "Không xuất được lịch sử thu chi."); }
     finally { setExporting(false); }
   };
@@ -138,6 +158,7 @@ export function PartyCashHistory({ mode, partyId, partyName, onChanged }: {
         {canExport && <Button size="sm" variant="outline" disabled={exporting || invalidDates || loading || searchText !== (filters.search || "")} onClick={exportHistory}><Icon name="download" size={16} />{exporting ? "Đang xuất..." : "Xuất Excel"}</Button>}
       </div>
     </div>
+    {excelDownload.file && <div role="status" className="flex flex-wrap items-center gap-3 border-l-2 border-primary pl-3 text-sm"><span>Excel đã sẵn sàng.</span><a className="inline-flex items-center gap-1 font-medium text-primary underline underline-offset-2" href={excelDownload.file.url} download={excelDownload.file.name}><Icon name="download" size={16}/>Tải file Excel</a></div>}
     <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
       <label className="text-xs space-y-1 col-span-2"><span>Tìm mã phiếu / ghi chú</span><Input value={searchText} onChange={e => setSearchText(e.target.value)} /></label>
       <label className="text-xs space-y-1"><span>Từ ngày ghi nhận</span><Input type="date" value={filters.dateFrom || ""} onChange={e => changeFilters({ dateFrom: e.target.value })} /></label>
@@ -167,13 +188,13 @@ export function PartyCashHistory({ mode, partyId, partyName, onChanged }: {
           <td className="sticky left-0 bg-background px-3 py-2 whitespace-nowrap"><button className="text-primary font-medium hover:underline" onClick={() => setSelected(row)} aria-label={`Xem phiếu ${row.code}`}>{row.code}</button></td>
           <td className="px-3 py-2 whitespace-nowrap">{formatShortDate(row.date)}</td>
           <td className="px-3 py-2 whitespace-nowrap">{row.type === "receipt" ? "Thu" : "Chi"}</td>
-          <td className="px-3 py-2">{cashOperationLabel(row)}</td>
+          <td className="px-3 py-2"><CashHistoryOperation row={row}/></td>
           <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap font-medium">{formatCurrency(row.amount)}</td>
           <td className="px-3 py-2 whitespace-nowrap">{cashPaymentMethodLabel(row.paymentMethod)}</td>
           <td className="px-3 py-2 whitespace-nowrap">{row.branchName || "—"}</td>
           <td className="px-3 py-2 whitespace-nowrap">{row.createdByName || "—"}</td>
           <td className="px-3 py-2 whitespace-nowrap">{row.status === "cancelled" ? "Đã hủy" : row.status === "completed" ? "Hoàn thành" : "Chưa hoàn tất"}</td>
-          <td className="min-w-64 max-w-96 whitespace-pre-wrap break-words px-3 py-2">{row.note || "Chưa ghi nội dung"}</td>
+          <td className="min-w-56 max-w-80 whitespace-pre-wrap break-words px-3 py-2"><CashHistoryNote row={row} partyName={partyName} onOpen={() => setSelected(row)}/></td>
           <td className="px-3 py-2 whitespace-nowrap">{row.referenceCode || "—"}{row.originalCode && <span className="block text-xs">Thay {row.originalCode}</span>}{row.replacementCode && <span className="block text-xs">Thay bằng {row.replacementCode}</span>}</td>
           <td className="px-3 py-2 whitespace-nowrap">{row.moneyAccountName || "Chưa xác định"}</td>
           <td className="px-3 py-2 whitespace-nowrap">{row.performedByName || "Chưa ghi nhận"}</td>
@@ -190,6 +211,7 @@ export function PartyCashHistory({ mode, partyId, partyName, onChanged }: {
       <dt>Chi nhánh</dt><dd>{selected.branchName || "—"}</dd><dt>Người lập</dt><dd>{selected.createdByName || "—"}</dd><dt>Người thực hiện</dt><dd>{selected.performedByName || "Chưa ghi nhận"}</dd>
       <dt>Ngày lập phiếu</dt><dd>{selected.createdAt ? new Date(selected.createdAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "—"}</dd>
       <dt>Khoản mục</dt><dd>{cashOperationLabel(selected)}</dd>
+      {cashPaymentSplit(selected) && <><dt>Thanh toán tiền hàng</dt><dd className="tabular-nums">{formatCurrency(cashPaymentSplit(selected)!.documentAmount)}</dd><dt>Ứng dư khi thanh toán</dt><dd className="tabular-nums">{formatCurrency(cashPaymentSplit(selected)!.advanceAmount)}</dd></>}
       <dt>Thanh toán</dt><dd>{cashPaymentMethodLabel(selected.paymentMethod)}</dd>
       <dt>Quỹ / tài khoản</dt><dd>{selected.moneyAccountName || "Chưa xác định tài khoản"}</dd>
       <dt>Chứng từ gốc</dt><dd>{selected.referenceCode || "Chưa liên kết"}</dd>

@@ -3,7 +3,7 @@ import { CashTimeFields, useCashTimeDraft } from "@/components/shared/cash-time-
 import { MoneyAccountSelect } from "@/components/shared/money-account-select";
 import { NumericInput } from "@/components/ui/numeric-input";
 import { cashInputToIso, validateCashTime } from "@/lib/cash-time";
-import { cashPaymentMethodLabel } from "@/lib/utils/cash-book-labels";
+import { cashCategoryLabel, cashPaymentMethodLabel } from "@/lib/utils/cash-book-labels";
 
 import { useState, useEffect } from "react";
 import {
@@ -51,13 +51,13 @@ interface CreateCashTransactionDialogProps {
 }
 
 const receiptCategories = [
-  { label: "Thu tiền khách hàng", value: "customer_payment" },
+  { label: cashCategoryLabel("customer_payment"), value: "customer_payment" },
   { label: "Thu tiền mặt", value: "cash_collection" },
   { label: "Thu khác", value: "other_receipt" },
 ];
 
 const paymentCategories = [
-  { label: "Chi trả NCC", value: "supplier_payment" },
+  { label: cashCategoryLabel("supplier_payment"), value: "supplier_payment" },
   { label: "Chi phí vận chuyển", value: "shipping" },
   { label: "Chi phí thuê kho", value: "warehouse_rent" },
   { label: "Chi phí khác", value: "other_expense" },

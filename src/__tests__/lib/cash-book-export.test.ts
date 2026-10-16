@@ -30,4 +30,22 @@ describe("real generated cashbook export roundtrip",()=>{
     saved.mockImplementationOnce(()=>{throw new Error("download failed");});
     await expect(exportToCsv(rows,cashBookExportColumns,"test")).rejects.toThrow("download failed");
   });
+  it("prepares a genuine numeric/filterable workbook before handing it to automatic download",async()=>{
+    const ready=vi.fn();
+    saved.mockImplementationOnce(()=>{throw new Error("browser blocked automatic download");});
+    await expect(exportToExcel([{code:"PC000333",amount:6291006,goods:4894000,advance:1397006,note:"Nội dung gốc đầy đủ"}],
+      [{header:"Mã phiếu",key:"code"},{header:"Số tiền",key:"amount"},{header:"Tiền hàng",key:"goods"},{header:"Ứng dư",key:"advance"},{header:"Nội dung gốc",key:"note"}],
+      "lich-su",{financialTable:true,onPrepared:ready})).rejects.toThrow("browser blocked");
+    expect(ready).toHaveBeenCalledOnce();
+    expect(ready.mock.calls[0][1]).toBe("lich-su.xlsx");
+    expect(ready.mock.calls[0][0]).toBe(saved.mock.calls[0][0]);
+    const wb=XLSX.read(await readBlob(ready.mock.calls[0][0]),{type:"array",cellNF:true});
+    const sheet=wb.Sheets.Data;
+    expect(sheet.B2.v).toBe(6291006);
+    expect(sheet.B2.t).toBe("n");
+    expect(sheet.B2.z).toBe("#,##0");
+    expect(sheet.C2.v+sheet.D2.v).toBe(sheet.B2.v);
+    expect(sheet.E2.v).toBe("Nội dung gốc đầy đủ");
+    expect(sheet["!autofilter"]?.ref).toBe("A1:E2");
+  });
 });
