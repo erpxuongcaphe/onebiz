@@ -16,7 +16,9 @@ function snapshot(element: HTMLElement | null): string {
       return [control.name, control.id, control.type, control.value, control.checked,
         control.files ? Array.from(control.files).map(f => [f.name, f.size, f.lastModified]) : null];
     }
-    if (control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement) return [control.name, control.id, control.value];
+    if (control instanceof HTMLSelectElement) return [control.name, control.id,
+      control.multiple ? Array.from(control.selectedOptions, option => option.value) : control.value];
+    if (control instanceof HTMLTextAreaElement) return [control.name, control.id, control.value];
     return [control.getAttribute("role"), control.getAttribute("aria-checked"), control.getAttribute("aria-pressed"), control.textContent];
   }).filter(Boolean));
 }

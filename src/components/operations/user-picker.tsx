@@ -72,7 +72,7 @@ export function UserPicker({ name, label, branch, purpose = "participant", value
     <div className={styles.control}>
       {controlled.map((key) => <span key={key} className={styles.chip}>
         {pool.find((person) => person.id === key)?.name ?? (loading ? "Đang kiểm tra…" : "Cần chọn lại người")}
-        <button type="button" disabled={disabled} aria-label={`Bỏ ${pool.find((person) => person.id === key)?.name ?? "người đã chọn"}`} onClick={() => change(controlled.filter((item) => item !== key))}><Icon name="close" size={14}/>Bỏ</button>
+        <button type="button" disabled={disabled} title={`Bỏ ${pool.find((person) => person.id === key)?.name ?? "người đã chọn"}`} aria-label={`Bỏ ${pool.find((person) => person.id === key)?.name ?? "người đã chọn"}`} onClick={() => change(controlled.filter((item) => item !== key))}><span aria-hidden="true">×</span></button>
       </span>)}
       <button ref={button} className={styles.add} type="button" disabled={disabled || loading || !!error}
         aria-labelledby={`${id}-label ${id}-button`} aria-expanded={open} aria-controls={`${id}-list`}

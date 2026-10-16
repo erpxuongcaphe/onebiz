@@ -5,6 +5,7 @@ import { PageLeaveGuard } from "@/components/shared/page-leave-guard";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { UserPicker } from "@/components/operations/user-picker";
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 const render = (element: ReactElement) => baseRender(<><PageLeaveGuard />{element}</>);
@@ -29,6 +30,28 @@ const change = () => fireEvent.change(screen.getByLabelText("Tên công việc")
 const discard = () => fireEvent.click(screen.getByRole("button", { name: "Bỏ thay đổi và đóng" }));
 
 describe("shared popup edit guard", () => {
+  it.each(["add", "remove"])("guards %s of a second selected person and preserves choices on return", async (mode) => {
+    const people = [{ id: "first", name: "Người thứ nhất" }, { id: "second", name: "Người thứ hai" }];
+    render(<Dialog defaultOpen><DialogContent><DialogTitle>Phân công thử</DialogTitle>
+      <UserPicker name="collaborators" label="Người phối hợp" multiple options={people}
+        value={mode === "add" ? ["first"] : ["first", "second"]} />
+      <DialogClose>Hủy</DialogClose>
+    </DialogContent></Dialog>);
+    if (mode === "add") {
+      const choose = screen.getByRole("button", { name: "Người phối hợp Chọn người" });
+      fireEvent.pointerDown(choose); fireEvent.click(choose);
+      fireEvent.click(screen.getByRole("button", { name: "Người thứ hai" }));
+      fireEvent.click(choose);
+    } else {
+      const remove = screen.getByRole("button", { name: "Bỏ Người thứ hai" });
+      fireEvent.pointerDown(remove); fireEvent.click(remove);
+    }
+    fireEvent.click(screen.getByRole("button", { name: "Hủy" }));
+    await screen.findByText("Có nội dung chưa lưu");
+    fireEvent.click(screen.getByRole("button", { name: "Quay lại để lưu" }));
+    expect(screen.getByRole("button", { name: "Bỏ Người thứ nhất" })).toBeVisible();
+    expect(!!screen.queryByRole("button", { name: "Bỏ Người thứ hai" })).toBe(mode === "add");
+  });
   it("asks only once for a link inside an edited popup", async () => {
     const navigate = vi.fn();
     render(<Dialog defaultOpen><DialogContent><DialogTitle>Phiếu liên kết</DialogTitle><input aria-label="Nội dung" /><a href="/other" onClick={event => { event.preventDefault(); navigate(); }}>Trang khác</a></DialogContent></Dialog>);
