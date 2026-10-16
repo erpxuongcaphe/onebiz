@@ -1,0 +1,314 @@
+{
+  "fileName": "Data_Hub_Working_Standard_To_do_QC_20261014.xlsx",
+  "sha256": "7cf2d91df6df0c226eaa9b6c19cf39fe661bf1815e760a1d63867a3b1140acba",
+  "sheet": "Sheet1",
+  "notes": "* Cách tính điểm:\r\n- Ngày đi chấm điểm sẽ được thông báo trước trong tháng đầu tiên\r\n- Tổng thưởng là 2 triệu (2tr) và điểm tương ứng là 100 điểm (đ)\r\n- Mỗi lỗi vi phạm sẽ bị trừ điểm tương ứng (không làm được theo đúng yêu cầu)\r\n- Trường hợp được cộng điểm sẽ là trường hợp 13 và 18\r\n* Điểm liệt: không được thưởng\r\n- Có đánh giá xấu trên Google Map hoặc nhận được phản hồi không tốt từ khách hàng sau khi được xác minh liên quan đến thời gian ra món, thái độ và vệ sinh của quán\r\n- Kỹ thuật pha cà phê bị lỗi (Cà phê ra vị không đúng do các yếu tố như nguồn nước, hạt cà phê, máy móc mà không được báo trước sẽ là lỗi chất lượng đồ uống)\r\n- Có dị vật trong đồ uống\r\n- Quán mở cửa muộn và đóng cửa sớm\r\n- Quản lí/nhân viên tỏ thái độ với khách hàng\r\n- Tổng điểm còn lại dưới 70 điểm",
+  "rows": [
+    {
+      "number": 1,
+      "group": "Không gian và trải nghiệm",
+      "title": "Khu vực pha chế",
+      "requirement": "Sạch sẽ và gọn gàng, không có rác, dụng cụ và NVL được sắp xếp đúng theo tiêu chuẩn",
+      "scope": "Chung",
+      "frequency": "daily",
+      "points": -5
+    },
+    {
+      "number": 2,
+      "group": "Không gian và trải nghiệm",
+      "title": "Khu vực phục vụ",
+      "requirement": "Không có rác, vết bẩn hoặc chất đổ chưa xử lý trên sàn",
+      "scope": "Chung",
+      "frequency": "daily",
+      "points": -5
+    },
+    {
+      "number": 3,
+      "group": "Không gian và trải nghiệm",
+      "title": "Khu vực phía trước và xung quanh quán",
+      "requirement": "Cần được vệ sinh sạch không có rác",
+      "scope": "Chung",
+      "frequency": "daily",
+      "points": -2
+    },
+    {
+      "number": 4,
+      "group": "Không gian và trải nghiệm",
+      "title": "Khu vực nhà vệ sinh",
+      "requirement": "Vệ sinh sạch; sàn khô theo phạm vi quy định; không có mùi hôi; đủ giấy.",
+      "scope": "Chung",
+      "frequency": "daily",
+      "points": -10
+    },
+    {
+      "number": 5,
+      "group": "Không gian và trải nghiệm",
+      "title": "Khu vực trưng bày",
+      "requirement": "Sạch sẽ và gọn gàng theo chuẩn trưng bày của chi nhánh, không bụi bẩn",
+      "scope": "Chung",
+      "frequency": "daily",
+      "points": -2
+    },
+    {
+      "number": 6,
+      "group": "Không gian và trải nghiệm",
+      "title": "Cây xanh",
+      "requirement": "Cây xanh trong quán luôn được xanh tươi, không có cây héo, lá héo, lá có bụi bẩn",
+      "scope": "Chung",
+      "frequency": "daily",
+      "points": -2
+    },
+    {
+      "number": 7,
+      "group": "Không gian và trải nghiệm",
+      "title": "Bàn ghế",
+      "requirement": "Bố trí bàn ghế đúng chuẩn sơ đồ bố trí",
+      "scope": "Chung",
+      "frequency": "daily",
+      "points": -2
+    },
+    {
+      "number": 8,
+      "group": "Không gian và trải nghiệm",
+      "title": "Nhiệt độ",
+      "requirement": "Nhiệt độ trong quán luôn bảo đảm mát mẻ (máy lạnh và quạt)",
+      "scope": "Chung",
+      "frequency": "daily",
+      "points": -5
+    },
+    {
+      "number": 9,
+      "group": "Không gian và trải nghiệm",
+      "title": "Âm thanh",
+      "requirement": "Phát đúng playlist theo khung giờ; duy trì âm lượng đúng quy định",
+      "scope": "Chung",
+      "frequency": "daily",
+      "points": -2
+    },
+    {
+      "number": 10,
+      "group": "Không gian và trải nghiệm",
+      "title": "Mùi",
+      "requirement": "Không có mùi lạ và mùi hôi (thuốc lá, toilet, cống...) theo đúng quy định",
+      "scope": "Chung",
+      "frequency": "daily",
+      "points": -5
+    },
+    {
+      "number": 11,
+      "group": "Dịch vụ khách hàng",
+      "title": "Chào đón khách",
+      "requirement": "Khách hàng được chào đón ngay khi vào quán (trong vòng 30s) dù nhân viên đang bận việc",
+      "scope": "Chung",
+      "frequency": "daily",
+      "points": -5
+    },
+    {
+      "number": 12,
+      "group": "Dịch vụ khách hàng",
+      "title": "Thái độ",
+      "requirement": "Nhân viên giao tiếp lịch sự, niềm nở và hỗ trợ phù hợp nhu cầu khách.",
+      "scope": "Chung",
+      "frequency": "daily",
+      "points": -5
+    },
+    {
+      "number": 13,
+      "group": "Dịch vụ khách hàng",
+      "title": "Chủ động",
+      "requirement": "Chủ động tương tác với khách hàng để hỏi thăm về đồ uống, không gian, nhân sự quán vào thời điểm phù hợp với nhu cầu của khách",
+      "scope": "Chung",
+      "frequency": "daily",
+      "points": 5
+    },
+    {
+      "number": 14,
+      "group": "Dịch vụ khách hàng",
+      "title": "Trà đá",
+      "requirement": "Trà đá phải được mang ra cho khách, chậm nhất là trong vòng 1 phút ngay khi khách ngồi xuống bàn và được châm thêm khi ly trà đá của khách chỉ còn 1/3 ly",
+      "scope": "Chung",
+      "frequency": "daily",
+      "points": -5
+    },
+    {
+      "number": 15,
+      "group": "Dịch vụ khách hàng",
+      "title": "Order khách",
+      "requirement": "Order món đồ uống chậm nhất là trong vòng 2 phút ngay khi khách ngồi xuống bàn",
+      "scope": "Chung",
+      "frequency": "daily",
+      "points": -5
+    },
+    {
+      "number": 16,
+      "group": "Dịch vụ khách hàng",
+      "title": "Tốc độ ra món",
+      "requirement": "Đồ uống mang ra cho khách tối đa không quá 3 phút (nếu là món liên quan đến cà phê) và tối đa không quá 8 phút (các món khác) ngay sau khi nhận được order",
+      "scope": "Chung",
+      "frequency": "daily",
+      "points": -5
+    },
+    {
+      "number": 17,
+      "group": "Dịch vụ khách hàng",
+      "title": "Dọn dẹp",
+      "requirement": "Dọn dẹp bàn và khu vực quanh bàn ngay khi khách rời đi",
+      "scope": "Chung",
+      "frequency": "daily",
+      "points": -5
+    },
+    {
+      "number": 18,
+      "group": "Dịch vụ khách hàng",
+      "title": "Bán hàng",
+      "requirement": "Tư vấn món chủ lực/upsale (theo yêu cầu từ quản lý/MKT) thành công và phù hợp với nhu cầu của khách hàng",
+      "scope": "Chung",
+      "frequency": "daily",
+      "points": 5
+    },
+    {
+      "number": 19,
+      "group": "Vệ sinh an toàn thực phẩm",
+      "title": "Nguyên liệu",
+      "requirement": "Bao bì nguyên liệu chưa mở không bị rách, hở, hoặc hư hỏng",
+      "scope": "Chung",
+      "frequency": "daily",
+      "points": -10
+    },
+    {
+      "number": 20,
+      "group": "Vệ sinh an toàn thực phẩm",
+      "title": "Nguyên liệu",
+      "requirement": "Nguyên liệu/bán thành phẩm đã mở/chế biến, đã châm có nhãn ngày giờ mở/chế biến để xác định hạn dùng sau mở/chế biến theo từng nguyên liệu.",
+      "scope": "Chung",
+      "frequency": "daily",
+      "points": -10
+    },
+    {
+      "number": 21,
+      "group": "Vệ sinh an toàn thực phẩm",
+      "title": "Bảo quản",
+      "requirement": "Các nguyên liệu/bán thành phẩm được bảo quản đúng theo quy định",
+      "scope": "Chung",
+      "frequency": "daily",
+      "points": -10
+    },
+    {
+      "number": 22,
+      "group": "Vệ sinh an toàn thực phẩm",
+      "title": "Môi trường",
+      "requirement": "Cống thoát/lọc bã không được ứ đọng, cần được vệ sinh theo đúng quy định",
+      "scope": "Chung",
+      "frequency": "daily",
+      "points": -5
+    },
+    {
+      "number": 23,
+      "group": "Vệ sinh an toàn thực phẩm",
+      "title": "Hết hạn sử dụng",
+      "requirement": "Không sử dụng hàng hóa hư hỏng và hết hạn sử dụng",
+      "scope": "Chung",
+      "frequency": "daily",
+      "points": -10
+    },
+    {
+      "number": 24,
+      "group": "Vệ sinh an toàn thực phẩm",
+      "title": "Thiết bị/Dụng cụ",
+      "requirement": "Máy móc, thiết bị, và vật dụng (bao gồm ly) được vệ sinh sạch sẽ theo đúng quy định",
+      "scope": "Chung",
+      "frequency": "daily",
+      "points": -5
+    },
+    {
+      "number": 25,
+      "group": "Vệ sinh an toàn thực phẩm",
+      "title": "Dị vật",
+      "requirement": "Không phát hiện dị vật trong đồ uống",
+      "scope": "Chung",
+      "frequency": "daily",
+      "points": -10
+    },
+    {
+      "number": 26,
+      "group": "Vệ sinh an toàn thực phẩm",
+      "title": "Côn trùng và động vật",
+      "requirement": "Chủ động ngăn ngừa và kịp thời phát hiện xử lí côn trùng và động vật gây hại cho quán theo đúng quy định",
+      "scope": "Chung",
+      "frequency": "daily",
+      "points": -10
+    },
+    {
+      "number": 27,
+      "group": "Chất lượng sản phẩm",
+      "title": "Chất lượng đồ uống",
+      "requirement": "Chất lượng ly đồ uống đúng quy chuẩn bao gồm kỹ thuật, công thức, trang trí, và nhiệt độ theo đúng quy cách chuẩn",
+      "scope": "Chung",
+      "frequency": "daily",
+      "points": -10
+    },
+    {
+      "number": 28,
+      "group": "Chất lượng sản phẩm",
+      "title": "Chất lượng cà phê",
+      "requirement": "Không có cà phê sai vị do nguồn nước, hạt hoặc máy; khi phát hiện ra vấn đề cần phải xử lí theo đúng các quy đinh chung",
+      "scope": "Chung",
+      "frequency": "daily",
+      "points": -10
+    },
+    {
+      "number": 29,
+      "group": "Vận hành và nhân sự",
+      "title": "Đồng phục và tác phong",
+      "requirement": "Nhân viên mặc đồng phục và tác phong theo đúng quy định ",
+      "scope": "Chung",
+      "frequency": "daily",
+      "points": -2
+    },
+    {
+      "number": 30,
+      "group": "Vận hành và nhân sự",
+      "title": "Mở và đóng cửa",
+      "requirement": "Mở cửa đúng giờ; đóng cửa đúng giờ.",
+      "scope": "Chung",
+      "frequency": "daily",
+      "points": -10
+    },
+    {
+      "number": 31,
+      "group": "Vận hành và nhân sự",
+      "title": "Phân công và bàn giao ca",
+      "requirement": "Theo dõi các công việc liên quan đến phân công bao gồm: mở ca, giao ca, và đóng ca",
+      "scope": "Chung",
+      "frequency": "daily",
+      "points": -5
+    },
+    {
+      "number": 32,
+      "group": "Hàng hóa và tồn kho",
+      "title": "Tỷ lệ hao hụt",
+      "requirement": "Kiểm soát tỷ lệ hao hụt của chi nhánh dưới 0.7% theo kì báo cáo",
+      "scope": "Chung",
+      "frequency": "weekly",
+      "points": -10
+    },
+    {
+      "number": 33,
+      "group": "Hàng hóa và tồn kho",
+      "title": "Hàng tồn kho",
+      "requirement": "Đảm bảo luôn có đủ hàng hóa tồn kho để phục vụ bán hàng",
+      "scope": "Chung",
+      "frequency": "weekly",
+      "points": -5
+    },
+    {
+      "number": 34,
+      "group": "Hàng hóa và tồn kho",
+      "title": "Xuất sử dụng hàng hóa",
+      "requirement": "Luôn tuân thủ nguyên tắc FEFO",
+      "scope": "Chung",
+      "frequency": "daily",
+      "points": -5
+    }
+  ]
+}

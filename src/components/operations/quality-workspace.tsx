@@ -1,4 +1,7 @@
 "use client";
+import { UserBranchContext, UserPicker } from "./user-picker";
+import { filterPeople } from "@/lib/operations/people-filters";
+import { WorkingImport } from "./working-import";
 import {
   useCallback,
   useEffect,
@@ -127,9 +130,11 @@ export function QualityWorkspace({
   focus,
   onNavigate,
   onLegacySettings,
+  onConfigurationRefresh,
   initialView = "work",
 }: {
   workspace: Workspace;
+  onConfigurationRefresh?: () => void;
   branch: string;
   period: string;
   assessmentPeriod?: string;
@@ -673,9 +678,9 @@ export function QualityWorkspace({
           <details className={s.filterExtra}>
             <summary>Thêm tiêu chí lọc</summary>
             <div className={s.filterGrid}>
-              <SelectField
+              <UserPicker
                 label={view === "qc" ? "Người QC" : "Quản lý phụ trách"}
-                options={workspace.people}
+                options={filterPeople(workspace,data)}
                 value={assignee}
                 onChange={(v) => {
                   setAssignee(v);
@@ -715,9 +720,9 @@ export function QualityWorkspace({
                       setOffset(0);
                     }}
                   />
-                  <SelectField
+                  <UserPicker
                     label="Người xử lý"
-                    options={workspace.people}
+                    options={filterPeople(workspace,data)}
                     value={operator}
                     onChange={(v) => {
                       setOperator(v);
@@ -1098,6 +1103,7 @@ export function QualityWorkspace({
           )}
           {view === "settings" && (
             <>
+              {workspace.isCeo && data.can.manage && <section className={s.section}><h3>Thiết lập từ file công việc</h3><WorkingImport workspace={workspace} onImported={() => { if (onConfigurationRefresh) onConfigurationRefresh(); else setRevision((current) => current + 1); }}/></section>}
               {configuration && <section className={s.section}><h3>Công việc và quyền chi nhánh</h3>{configuration}</section>}
               <section className={s.section}>
                 <h3>Phân công và phòng ban</h3>
@@ -1175,6 +1181,7 @@ export function QualityWorkspace({
                         <th>Loại điểm</th>
                         <th className={s.numeric}>Trọng số</th>
                         <th>Hiệu lực</th>
+                        {data.can.manage && <th>Thao tác</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -1187,6 +1194,7 @@ export function QualityWorkspace({
                           <td>{c.score_type === "bonus" ? "Cộng" : "Trừ"}</td>
                           <td className={s.numeric}>{formatNumber(c.weight)}</td>
                           <td>{formatShortDate(c.effective_from)}</td>
+                          {data.can.manage && <td><button onClick={() => edit({kind:"catalog",item:c})}>Sửa bằng phiên bản mới</button></td>}
                         </tr>
                       ))}
                     </tbody>
@@ -1264,7 +1272,7 @@ export function QualityWorkspace({
         </>
       )}
       {editor && data && (
-        <QualityEditorDialog
+        <UserBranchContext.Provider value={branch}><QualityEditorDialog
           key={JSON.stringify(editor)}
           editor={editor}
           workspace={workspace}
@@ -1280,7 +1288,7 @@ export function QualityWorkspace({
             }
           }}
           onSave={send}
-        />
+        /></UserBranchContext.Provider>
       )}
     </div>
   );

@@ -242,27 +242,30 @@ export function rulePayload(
       .filter((a) => a.shareBps > 0),
   };
 }
-export function CatalogFields({ workspace, groups = [] }: { workspace: Workspace; groups?: {id:string;title:string;active:boolean}[] }) {
+export function CatalogFields({ workspace, groups = [], value }: { workspace: Workspace; groups?: {id:string;title:string;active:boolean}[]; value?: QualityItem }) {
   return (
     <div className={s.formGrid}>
       <SelectField
         label="Công việc đã được duyệt"
         name="standardId"
+        value={value?.standard_id}
         options={workspace.standards
           .filter((x) => x.status === "approved")
           .map((x) => ({ id: x.id, name: x.title }))}
         required
       />
-      <TextField label="Mã tiêu chuẩn QC (duy nhất)" name="code" required />
+      <TextField label="Mã tiêu chuẩn QC" name="code" required value={value?.code}/>
       <SelectField
         label="Phân loại"
         name="category"
+        value={value?.category}
         options={{...categories,...Object.fromEntries(groups.filter((group) => group.active).map((group) => [`group:${group.id}`, group.title]))}}
         required
       />
       <SelectField
         label="Loại điểm"
         name="scoreType"
+        value={value?.score_type}
         options={{
           deduct: "Trừ khi không đạt",
           bonus: "Cộng khi đạt điều kiện",
@@ -272,6 +275,7 @@ export function CatalogFields({ workspace, groups = [] }: { workspace: Workspace
       <TextField
         label="Trọng số (không nhập dấu âm)"
         name="weight"
+        value={value?.weight}
         type="number"
         step="0.01"
         required
@@ -284,11 +288,11 @@ export function CatalogFields({ workspace, groups = [] }: { workspace: Workspace
         required
       />
       <label className={s.check}>
-        <input type="checkbox" name="critical" />
+        <input type="checkbox" name="critical" defaultChecked={value?.critical}/>
         Vi phạm loại thưởng QC
       </label>
       <label className={s.check}>
-        <input type="checkbox" name="accountingRequired" />
+        <input type="checkbox" name="accountingRequired" defaultChecked={value?.accounting_required}/>
         Tỷ lệ cần số liệu kế toán đã xác nhận
       </label>
     </div>
@@ -341,6 +345,19 @@ export function CatalogImport({
       ]),
       "Phan loai",
     );
+    const guide = x.utils.aoa_to_sheet([
+      ["HƯỚNG DẪN CẬP NHẬT QC CHO CÔNG VIỆC ĐÃ DUYỆT"],
+      ["Mục đích", "Mẫu này không tạo công việc. Để nhập từ đầu, dùng Nhập công việc và tiêu chí Excel trong Thiết lập."],
+      ["Mã công việc OneBiz", "Sao chép đúng mã từ sheet Cong viec da duyet; không tự tạo hoặc gõ mã tài khoản."],
+      ["Mã tiêu chuẩn", "Mã nghiệp vụ tự đặt; không trùng cùng ngày hiệu lực trong file hoặc danh mục đã có."],
+      ["Phân loại", "Chọn đúng tên từ sheet Phan loai. Nhóm QC có thể cấu hình trong Hub."],
+      ["Loại điểm / Trọng số", "Loại điểm: Trừ hoặc Cộng. Trọng số không dấu âm, số US tối đa 2 số lẻ, ví dụ 5 hoặc 2.5."],
+      ["Ngày hiệu lực", "dd/mm/yyyy; không nhập ngày đã qua."],
+      ["Loại thưởng khi vi phạm", "Có hoặc Không. CEO quyết định theo chính sách, không suy diễn từ tên nhóm."],
+      ["Cần xác nhận kế toán", "Có hoặc Không. Không để trống."],
+      ["Kiểm tra", "Giữ nguyên thứ tự cột. Hub xem trước và báo dòng/cột lỗi; chỉ nhập khi toàn bộ hợp lệ."],
+    ]); guide["!cols"] = [{wch:35},{wch:110}];
+    x.utils.book_append_sheet(wb, guide, "Huong dan");
     x.writeFile(wb, "OneBiz_Mau_tieu_chuan_QC.xlsx");
   }
   async function read(file: File | undefined) {
@@ -377,7 +394,7 @@ export function CatalogImport({
   }
   return (
     <section className={s.section}>
-      <h3>Nhập danh mục Excel</h3>
+      <h3>Nhập QC cho công việc đã duyệt</h3>
       <div className={s.actions}>
         <button type="button" onClick={() => void template()}>
           Tải mẫu và danh mục công việc

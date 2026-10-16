@@ -46,6 +46,10 @@ const RPC = new Set(schema.rpc as string[]);
  * dưới sẽ BẮT XOÁ dòng ngay khi dump đã có (sau `node scripts/dump-db-schema.mjs`).
  */
 const RPC_CHO_MIGRATION = new Map<string, string>([
+  ["ops_eligible_people", "00555_operations_ceo_workbook_people"],
+  ["ops_workbook_batches_read", "00555_operations_ceo_workbook_people"],
+  ["ops_workbook_import", "00555_operations_ceo_workbook_people"],
+  ["ops_workbook_discard", "00555_operations_ceo_workbook_people"],
   ["get_money_account_workspace", "00552_money_account_register"],
   ["save_money_account", "00552_money_account_register"],
   ["record_cash_with_account", "00552_money_account_register"],
