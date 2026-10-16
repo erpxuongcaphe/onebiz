@@ -22,11 +22,15 @@ export default function CaiDatKhoHangPage() {
     activeBranch.current = branchId;
     if (!branchId) return;
     let active = true;
-    Promise.all([branchSaleStockPolicy(branchId), isRequireBomForSku(), listSaleCostShortfalls(branchId)])
-      .then(([policy, bom, shortfalls]) => {
+    // A secondary report must never prevent an owner from changing the sale rule.
+    Promise.all([branchSaleStockPolicy(branchId), isRequireBomForSku()])
+      .then(([policy, bom]) => {
         if (!active) return;
-        setAllow(policy); setRequireBom(bom); setRows(shortfalls); setError(""); setReadyBranch(branchId);
+        setAllow(policy); setRequireBom(bom); setError(""); setReadyBranch(branchId);
       }).catch((err) => { if (active) setError(err instanceof Error ? err.message : "Không tải được cài đặt."); });
+    setRows([]);
+    listSaleCostShortfalls(branchId).then(shortfalls => { if (active) setRows(shortfalls); })
+      .catch(err => { console.error("[stock-settings] shortfall report unavailable", err); });
     return () => { active = false; };
   }, [branchId]);
   async function save(kind: "stock" | "bom", value: boolean) {

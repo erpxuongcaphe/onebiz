@@ -84,6 +84,7 @@ export interface BulkAction<TData> {
    */
   onClick: (selectedRows: TData[], selectedIds: string[]) => void;
   variant?: "default" | "destructive";
+  disabled?: boolean;
 }
 
 interface DataTableProps<TData, TValue> {
@@ -1014,8 +1015,8 @@ export function DataTable<TData, TValue>({
         bulkActions.length > 0 && (
           <div
             className={cn(
-              "fixed bottom-0 left-0 right-0 z-50 md:left-auto md:right-4 md:bottom-4 md:max-w-xl md:rounded-lg",
-              "bg-foreground text-background shadow-2xl",
+              "sticky bottom-0 z-20 w-full shrink-0 rounded-lg border border-primary/20",
+              "bg-card text-foreground shadow-md",
               "transform transition-all duration-300 ease-out",
               "animate-in slide-in-from-bottom-4 fade-in-0"
             )}
@@ -1025,7 +1026,7 @@ export function DataTable<TData, TValue>({
                 Đã chọn {selectedCount} mục
               </span>
 
-              <div className="h-4 w-px bg-background/20 mx-1 hidden sm:block" />
+              <div className="h-4 w-px bg-border mx-1 hidden sm:block" />
 
               <div className="flex items-center gap-2 flex-wrap">
                 {bulkActions.map((action, idx) => (
@@ -1033,11 +1034,12 @@ export function DataTable<TData, TValue>({
                     key={idx}
                     type="button"
                     className={cn(
-                      "inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                      "inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-wait",
                       action.variant === "destructive"
-                        ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        : "bg-background/15 hover:bg-background/25 text-background"
+                        ? "bg-destructive/10 text-destructive hover:bg-destructive/20"
+                        : "bg-primary/5 hover:bg-primary/10 text-primary"
                     )}
+                    disabled={action.disabled}
                     onClick={() => action.onClick(selectedRows, selectedRowIds)}
                   >
                     {action.icon && (
@@ -1052,7 +1054,7 @@ export function DataTable<TData, TValue>({
 
               <button
                 type="button"
-                className="ml-auto inline-flex items-center gap-1 rounded-lg px-2 py-2 text-sm hover:bg-background/15 transition-colors text-background/70 hover:text-background"
+                className="ml-auto inline-flex items-center gap-1 rounded-lg px-2 py-2 text-sm hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
                 onClick={() => {
                   // Day 17/05/2026: phải reset cả rowSelection (kể cả IDs ngoài
                   // page hiện tại từ "Chọn tất cả X SP khớp bộ lọc") +

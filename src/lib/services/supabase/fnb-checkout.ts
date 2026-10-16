@@ -220,6 +220,10 @@ export function getFnbPaymentErrorMessage(error: unknown): string | null {
         ? String((error as { message?: unknown }).message ?? "")
         : "";
 
+  if (/NVL_INSUFFICIENT|POS_STOCK_SHORTAGE|INSUFFICIENT_STOCK/.test(rawMessage)) {
+    const material = rawMessage.match(/NVL\s+"([^"]+)"/)?.[1];
+    return `${material ? `Nguyên liệu ${material}` : "Nguyên liệu tại chi nhánh"} không đủ tồn. Nhập/nhận hàng hoặc nhờ chủ quán bật “Cho phép bán khi không đủ tồn kho” tại Cài đặt → Kho & công thức, đúng chi nhánh này. Chưa ghi nhận thanh toán; không gửi lại món đã báo bếp.`;
+  }
   return (
     FNB_PAYMENT_ERROR_MESSAGES.find((item) =>
       item.codes.some((code) => rawMessage.includes(code)),
