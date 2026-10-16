@@ -296,6 +296,13 @@ describe("fnbPayment (atomic RPC wrapper)", () => {
     expect(result.invoiceId).toBe("inv-1");
     expect(insertCalls).toHaveLength(0);
   });
+  it("stock shortage names the ingredient and the branch setting without a raw RPC error", () => {
+    const message = getFnbPaymentErrorMessage({message: 'NVL_INSUFFICIENT: NVL "Kem Sữa" tại chi nhánh thiếu'});
+    expect(message).toContain('Kem Sữa');
+    expect(message).toContain('Kho & công thức');
+    expect(message).toContain('không gửi lại món');
+    expect(message).not.toContain('NVL_INSUFFICIENT');
+  });
   it("nói rõ phải mở ca trước khi thanh toán lần đầu", () => {
     expect(getFnbPaymentErrorMessage({ message: "FNB_PAYMENT_OPEN_SHIFT_REQUIRED" }))
       .toBe("Cần mở ca của chính anh/chị tại chi nhánh này trước khi thanh toán.");

@@ -20,9 +20,10 @@ alter table stock_movements add column id uuid primary key default gen_random_uu
 create table fnb_branch_product_cost_balances(tenant_id uuid,branch_id uuid,product_id uuid,costed_quantity numeric(18,4) default 0,total_cost numeric(18,4) default 0,unit_cost numeric(18,6) default 0,opening_cost_confirmed boolean default false,updated_by uuid,updated_at timestamptz default now(),primary key(tenant_id,branch_id,product_id));
 create table fnb_branch_product_cost_events(id uuid primary key default gen_random_uuid(),tenant_id uuid,branch_id uuid,product_id uuid,direction text,source_type text,source_reference_type text,source_reference_id uuid,source_stock_movement_id uuid unique,quantity numeric,unit_cost numeric,total_cost numeric,note text,created_by uuid,created_at timestamptz default now());`);
 for(const [f,n] of [['00011_atomic_stock_rpcs.sql','increment_product_stock'],['00156_branch_stock_null_variant_guard.sql','upsert_branch_stock'],['00147_variant_aware_bom_lookup.sql','get_active_bom_for_branch'],['00142_block_expired_lots_fifo.sql','allocate_lots_fifo'],['00350_fnb_exact_modifier_bom_quantities.sql','consume_bom_for_sale'],['00095_tenant_settings.sql','set_tenant_setting'],['00412_fnb_invoice_line_branch_bom_cost.sql','_snapshot_fnb_invoice_line_cost_00412']])await db.exec(fn(f,n));
-if(process.env.FNB_LIVE_BOM) await db.exec(fs.readFileSync(process.env.FNB_LIVE_BOM,'utf8'));
 if(process.env.FNB_LIVE_SNAPSHOT) await db.exec(fs.readFileSync(process.env.FNB_LIVE_SNAPSHOT,'utf8'));
 await db.exec(fs.readFileSync(root+'/supabase/migrations/00473_branch_negative_sale_policy.sql','utf8'));
+if(process.env.FNB_LIVE_BOM) await db.exec(fs.readFileSync(process.env.FNB_LIVE_BOM,'utf8'));
+
 await db.exec(fn('00390_fnb_branch_cost_ledger.sql','_capture_fnb_branch_cost_stock_movement_00390'));
 if(process.env.FNB_LIVE_TRIGGER) await db.exec(fs.readFileSync(process.env.FNB_LIVE_TRIGGER,'utf8'));
 await db.exec(fs.readFileSync(root+'/supabase/migrations/00474_legacy_linked_modifier_branch_cost.sql','utf8'));

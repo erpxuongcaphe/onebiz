@@ -80,7 +80,6 @@ import {
   bulkDeleteProducts,
   deleteProduct,
   duplicateProduct,
-  restoreProduct,
   bulkRestoreProducts,
   cleanupTestProduct,
   bulkCleanupTestProducts,
@@ -105,6 +104,8 @@ import { OtpApprovalDialog } from "@/components/shared/dialogs/otp-approval-dial
 import { OTP_ACTION_CODES } from "@/lib/services/supabase/manager-otp";
 import type { Product, UOMConversion } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
+import { SettingsSwitch } from "@/components/shared/settings-toggle";
+import { setProductTradingStatus } from "@/lib/services/supabase/product-trading-status";
 import { findLatestFormDraft } from "@/lib/hooks/use-durable-form-draft";
 
 type ProductScope = "nvl" | "sku";
@@ -548,6 +549,9 @@ export default function HangHoaPage() {
     "system.manage_branches",
   ]);
   const canDeleteProduct = hasPermission(PERMISSIONS.PRODUCTS_DELETE);
+  const canEditTrading = hasPermission(PERMISSIONS.PRODUCTS_EDIT);
+  const tradingLock = useRef(false);
+  const [tradingBusy, setTradingBusy] = useState(false);
   // Sprint A.2 (CEO 12/05): cashier KHÔNG được thấy giá vốn / lợi nhuận
   // → leak business KPI. Gate cả column trong DataTable + detail panel.
   const canViewCost = hasPermission(PERMISSIONS.PRODUCTS_VIEW_COST);
@@ -918,6 +922,18 @@ export default function HangHoaPage() {
     },
     [toast]
   );
+
+  const changeTradingStatus = async (ids: string[], active: boolean) => {
+    if (!canEditTrading || tradingLock.current || !ids.length) return;
+    tradingLock.current = true; setTradingBusy(true);
+    try {
+      const count = await setProductTradingStatus(ids, active);
+      await finishBulkSuccess(active ? "Đã bật kinh doanh" : "Đã ngừng kinh doanh",
+        `${count} mã thay đổi · áp dụng toàn hệ thống. Tồn kho và chứng từ giữ nguyên.`);
+      await fetchStats();
+    } catch (err) { finishBulkError("Chưa đổi được trạng thái", err); }
+    finally { tradingLock.current = false; setTradingBusy(false); }
+  };
 
   const handleConfirmBulkChangeCategory = useCallback(async () => {
     if (!bulkCategoryValue) {
@@ -1455,6 +1471,18 @@ export default function HangHoaPage() {
       header: "Tên hàng",
       size: 280,
       enableHiding: false,
+    },
+    {
+      id: "trading_status",
+      header: "Kinh doanh chung",
+      size: 150,
+      enableSorting: false,
+      cell: ({ row }) => <div className="flex items-center gap-1" onClick={event => event.stopPropagation()} title="Trạng thái kinh doanh toàn hệ thống">
+        <SettingsSwitch label={`${row.original.status === "inactive" ? "Bật" : "Ngừng"} kinh doanh ${row.original.name} · toàn hệ thống`}
+          checked={row.original.status !== "inactive"} disabled={!canEditTrading || tradingBusy}
+          onCheckedChange={(active) => void changeTradingStatus([row.original.id], active)} />
+        <span className="text-xs text-muted-foreground">{row.original.status === "inactive" ? "Đã ngừng" : "Đang bán"}</span>
+      </div>,
     },
     {
       accessorKey: "categoryName",
@@ -2238,35 +2266,12 @@ export default function HangHoaPage() {
                 setBulkChangePriceOpen(true);
               },
             },
-            // Day 17/05/2026 (CEO bảo gộp): tab "Đang KD" → "Ngừng KD";
-            // tab "Đã ngừng KD" → "Khôi phục" (bulk restore, thay "Xoá idempotent").
-            ...(canDeleteProduct && statusFilter !== "inactive"
-              ? [
-                  {
-                    label: "Ngừng KD",
-                    icon: <Icon name="block" size={16} />,
-                    variant: "destructive" as const,
-                    onClick: (rows: Product[], ids: string[]) => {
-                      setSelectedRowsForBulk(rows);
-                      setSelectedIdsForBulk(ids);
-                      setBulkDeleteConfirmOpen(true);
-                    },
-                  },
-                ]
-              : []),
-            ...(statusFilter === "inactive"
-              ? [
-                  {
-                    label: "Khôi phục",
-                    icon: <Icon name="restore" size={16} />,
-                    onClick: (rows: Product[], ids: string[]) => {
-                      setSelectedRowsForBulk(rows);
-                      setSelectedIdsForBulk(ids);
-                      setBulkRestoreConfirmOpen(true);
-                    },
-                  },
-                ]
-              : []),
+            ...(canEditTrading ? [
+              { label: "Bật kinh doanh", icon: <Icon name="toggle_on" size={16} />,
+                disabled: tradingBusy, onClick: (_rows: Product[], ids: string[]) => void changeTradingStatus(ids, true) },
+              { label: "Ngừng kinh doanh", icon: <Icon name="toggle_off" size={16} />,
+                disabled: tradingBusy, onClick: (_rows: Product[], ids: string[]) => void changeTradingStatus(ids, false) },
+            ] : []),
             // Day 17/05/2026 (CEO): gộp "Xoá hẳn" + "Xoá triệt để" thành 1 nút
             // "Xoá vĩnh viễn". Logic dùng cleanup_test_product (bypass stock +
             // active, vẫn check 15 bảng FK giao dịch thực). Password verify.
@@ -2358,27 +2363,11 @@ export default function HangHoaPage() {
               },
             ];
 
-            if (isInactive) {
+            if (isInactive && canEditTrading) {
               actions.push({
                 label: "Khôi phục",
                 icon: <Icon name="restore" size={16} />,
-                onClick: async () => {
-                  try {
-                    await restoreProduct(row.id);
-                    toast({
-                      variant: "success",
-                      title: "Đã khôi phục SP",
-                      description: `${row.code} — ${row.name} đang kinh doanh trở lại`,
-                    });
-                    fetchData();
-                  } catch (err) {
-                    toast({
-                      variant: "error",
-                      title: "Không khôi phục được",
-                      description: err instanceof Error ? err.message : "Lỗi không xác định",
-                    });
-                  }
-                },
+                onClick: () => void changeTradingStatus([row.id], true),
                 separator: true,
               });
               // Day 17/05/2026 (CEO gộp): row action "Xoá vĩnh viễn" — chỉ owner.
@@ -2395,15 +2384,11 @@ export default function HangHoaPage() {
                   variant: "destructive" as const,
                 });
               }
-            } else {
+            } else if (canEditTrading) {
               actions.push({
                 label: "Ngừng kinh doanh",
                 icon: <Icon name="block" size={16} />,
-                onClick: () => {
-                  setDeletingProduct(row);
-                  setDeleteConfirmOpen(true);
-                },
-                variant: "destructive" as const,
+                onClick: () => void changeTradingStatus([row.id], false),
                 separator: true,
               });
             }
