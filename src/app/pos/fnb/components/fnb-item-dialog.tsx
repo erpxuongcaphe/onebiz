@@ -143,7 +143,7 @@ const CHIP = "min-h-9 pointer-coarse:min-h-11 px-3.5 py-1.5 rounded-full border 
  * Mỗi nhóm giữ một hàng riêng theo thứ tự đã cấu hình trên mọi màn hình.
  * Chỉ lựa chọn bên trong nhóm xuống dòng; trạng thái lỗi không đổi padding.
  */
-const O_NHOM = "min-w-0 w-full space-y-1.5 rounded-lg border border-border/60 p-3";
+const O_NHOM = "min-w-0 w-full space-y-1 rounded-lg border border-border/60 p-2";
 const NUT_TRON = "size-9 pointer-coarse:size-11 shrink-0 rounded-full border border-border " +
   "flex items-center justify-center text-muted-foreground " +
   "hover:bg-surface-container-high hover:text-foreground transition-colors";
@@ -216,7 +216,7 @@ function NhanNhomTuyChon({
   const noiDung = (
     <>
       <span className="flex flex-wrap items-center gap-2">
-        <span className="text-base font-medium break-words">{ten}</span>
+        <span className="text-sm font-medium break-words">{ten}</span>
         <span
           className={cn(
             "rounded-full px-2 py-0.5 text-xs font-normal whitespace-nowrap",
@@ -228,9 +228,9 @@ function NhanNhomTuyChon({
           {conThieu ? (thongBaoThieu ?? "Chưa chọn — bắt buộc") : nhanQuyTac}
         </span>
       </span>
-      {/* Đã chọn gì — luôn hiện, kể cả khi nhóm đang thu gọn. */}
+      {/* Khi mở, nút đang chọn đã có màu; chỉ tóm tắt khi thu gọn. */}
       {daChonNhan && (
-        <span className="block text-xs text-muted-foreground break-words">
+        <span className={cn("block text-xs text-muted-foreground break-words", !dangThuGon && "sr-only")}>
           Đang chọn: <span className="text-foreground">{daChonNhan}</span>
         </span>
       )}
@@ -245,7 +245,7 @@ function NhanNhomTuyChon({
       type="button"
       onClick={onToggleThuGon}
       aria-expanded={!dangThuGon}
-      className="flex min-h-11 w-full items-start justify-between gap-2 text-left"
+      className="flex min-h-9 pointer-coarse:min-h-11 w-full items-center justify-between gap-2 text-left"
     >
       <span className="min-w-0 space-y-1">{noiDung}</span>
       <Icon
@@ -761,7 +761,7 @@ export function FnbItemDialog({
           đơn" nằm ở y=791 NGOÀI màn — thu ngân không bấm được.
           (cn dùng tailwind-merge nên `flex` thay `grid` của nền đúng cách.) */}
       {/* Bề ngang cố định; nội dung cuộn riêng, đầu và nút xác nhận luôn hiện. */}
-      <DialogContent className="max-w-[95vw] sm:max-w-[36rem] max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col [@media(max-height:720px)]:max-h-[calc(100dvh-0.5rem)] [@media(max-height:720px)]:gap-3 [@media(max-height:720px)]:p-4">
+      <DialogContent className="max-w-[95vw] sm:max-w-[36rem] max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col gap-3 p-4 [@media(max-height:720px)]:max-h-[calc(100dvh-0.5rem)] [@media(max-height:720px)]:gap-3 [@media(max-height:720px)]:p-4">
         {/* 07/08 (CEO chốt): ĐẦU POPUP GỘP — tên món · giá gốc · SỐ LƯỢNG ·
             tổng tạm tính, tất cả trong một khu gọn. Trước đây "Số lượng" là
             một khối riêng chiếm nguyên một cột rồi bỏ trống bên dưới, còn
@@ -814,7 +814,7 @@ export function FnbItemDialog({
         </DialogHeader>
 
         {/* Giữ thứ tự dọc khi chọn, thu gọn hoặc đổi kích thước màn hình. */}
-        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-1 flex flex-col gap-2 [@media(max-height:720px)]:gap-3 [@media(max-height:720px)]:py-1">
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-1 flex flex-col gap-2 [@media(max-height:720px)]:gap-2 [@media(max-height:720px)]:py-1">
           {/* 06/08 — tải tuỳ chọn HỎNG: nói thật, không im lặng coi như món
               "không có tuỳ chọn". Nút xác nhận bị khoá cho tới khi tải lại
               được, vì thêm vào giỏ lúc này là bếp pha sai + mất tiền topping. */}
