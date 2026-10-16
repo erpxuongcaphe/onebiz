@@ -70,22 +70,24 @@ export function FilterSidebar({ children, className }: FilterSidebarProps) {
       </Button>
 
       {/* Mobile filter sheet */}
-      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent side="left" className="w-[320px] p-0 sm:w-[360px]">
+      <Sheet open={mobileOpen} onOpenChange={setMobileOpen} protectUnsavedChanges={false}>
+        <SheetContent side="left" className="w-[320px] gap-0 overflow-hidden p-0 sm:w-[360px]" showCloseButton={false}>
           <SheetTitle className="flex items-center justify-between px-4 py-3 border-b">
             <span className="font-semibold">Bộ lọc</span>
             <Button
               variant="ghost"
               size="icon"
               className="h-11 w-11"
+              aria-label="Đóng bộ lọc"
               onClick={() => setMobileOpen(false)}
             >
               <Icon name="close" size={16} />
             </Button>
           </SheetTitle>
-          <ScrollArea className="h-[calc(100vh-4rem)]">
+          <ScrollArea className="min-h-0 flex-1">
             <div className="p-3 space-y-2">{children}</div>
           </ScrollArea>
+          <div className="shrink-0 border-t bg-background p-3"><Button type="button" className="w-full" onClick={() => setMobileOpen(false)}>Xem kết quả</Button></div>
         </SheetContent>
       </Sheet>
 

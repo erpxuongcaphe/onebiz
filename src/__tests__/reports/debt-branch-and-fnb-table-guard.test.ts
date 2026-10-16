@@ -15,16 +15,9 @@ describe("branch-aware debt aging and F&B table permissions", () => {
   it("passes the selected branch to one consistent debt workspace", () => {
     expect(debtService).toContain("getDebtAging(branchId?: string | null)");
     expect(debtWorkspace).toContain("getDebtWorkspace(");
-    expect(
-      debtWorkspace.split(
-        "getReceivableAgingReport({ branchId: branchId ?? null })",
-      ),
-    ).toHaveLength(2);
-    expect(
-      debtWorkspace.split(
-        "getPayableAgingReport({ branchId: branchId ?? null })",
-      ),
-    ).toHaveLength(2);
+    expect(debtWorkspace.split("getOpenDebtAging(branchId)")).toHaveLength(2);
+    expect(debtWorkspace).toContain('"get_counterparty_open_debt_aging" as never');
+    expect(debtWorkspace).toContain("{ p_branch_id: branchId ?? null } as never");
     expect(debtPage).toContain("getDebtWorkspace(activeBranchId)");
     expect(debtPage).not.toContain("getDebtTotals(activeBranchId)");
     expect(debtPage).not.toContain('mode === "aging" ? activeBranchId : null');

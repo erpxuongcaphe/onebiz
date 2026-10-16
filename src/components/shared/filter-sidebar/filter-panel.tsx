@@ -3,7 +3,6 @@
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Sheet,
   SheetContent,
@@ -33,16 +32,16 @@ export function FilterPanel({
   const desktop = useBreakpoint("md");
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={onOpenChange} protectUnsavedChanges={false}>
       <SheetContent
         side={desktop ? "left" : "bottom"}
         className={
           desktop
-            ? "w-[360px] max-w-[min(360px,90vw)] gap-0 p-0"
-            : "max-h-[85dvh] gap-0 rounded-t-lg p-0"
+            ? "w-[360px] max-w-[min(360px,90vw)] gap-0 overflow-hidden p-0"
+            : "max-h-[85dvh] gap-0 overflow-hidden rounded-t-lg p-0"
         }
       >
-        <SheetHeader className="flex-row items-center justify-between border-b px-4 py-3 pr-14">
+        <SheetHeader className="shrink-0 flex-row items-center justify-between border-b px-4 py-3 pr-14">
           <SheetTitle className="flex items-center gap-2">
             <Icon name="filter_alt" size={17} />
             {title}
@@ -64,9 +63,12 @@ export function FilterPanel({
             </Button>
           )}
         </SheetHeader>
-        <ScrollArea className={desktop ? "h-[calc(100dvh-3.25rem)]" : "max-h-[calc(85dvh-3.25rem)]"}>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <div className="space-y-2 p-4">{children}</div>
-        </ScrollArea>
+        </div>
+        <div className="shrink-0 border-t bg-background p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <Button type="button" className="w-full" onClick={() => onOpenChange(false)}><Icon name="check" size={16}/>Xem kết quả</Button>
+        </div>
       </SheetContent>
     </Sheet>
   );

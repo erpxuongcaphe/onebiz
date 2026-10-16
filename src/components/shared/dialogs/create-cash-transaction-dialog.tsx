@@ -1,5 +1,7 @@
 "use client";
 import { CashTimeFields, useCashTimeDraft } from "@/components/shared/cash-time-fields";
+import { MoneyAccountSelect } from "@/components/shared/money-account-select";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { cashInputToIso, validateCashTime } from "@/lib/cash-time";
 import { cashPaymentMethodLabel } from "@/lib/utils/cash-book-labels";
 
@@ -81,6 +83,8 @@ export function CreateCashTransactionDialog({
   const [amount, setAmount] = useState("");
   const [counterparty, setCounterparty] = useState("");
   const [method, setMethod] = useState("cash");
+  const [moneyAccountId,setMoneyAccountId] = useState("");
+  useEffect(()=>{setMoneyAccountId("");},[open,currentBranch?.id,method]);
   const [category, setCategory] = useState("");
   const [note, setNote] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -281,6 +285,7 @@ export function CreateCashTransactionDialog({
           transactionDate: cashTime.transactionDate,
           timeReason: cashTime.timeReason,
           performedBy,
+          moneyAccountId: moneyAccountId || null,
         });
       } else if (
         category === "supplier_payment" &&
@@ -297,6 +302,7 @@ export function CreateCashTransactionDialog({
           transactionDate: cashTime.transactionDate,
           timeReason: cashTime.timeReason,
           performedBy,
+          moneyAccountId: moneyAccountId || null,
         });
       } else {
         const created = await createCashTransaction({
@@ -311,6 +317,7 @@ export function CreateCashTransactionDialog({
           date: cashTime.transactionDate,
           timeReason: cashTime.timeReason,
           performedBy,
+          moneyAccountId: moneyAccountId || undefined,
           branchId: currentBranch!.id,
         });
         setCode(created.code);
@@ -404,11 +411,10 @@ export function CreateCashTransactionDialog({
             <label className="text-sm font-medium">
               Số tiền <span className="text-destructive">*</span>
             </label>
-            <Input
+            <NumericInput
               aria-label="Số tiền"
-              type="number"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              value={amount === "" ? null : Number(amount)}
+              onChange={(value) => setAmount(value === null ? "" : String(value))}
               placeholder="0"
               aria-invalid={!!errors.amount}
             />
@@ -555,6 +561,7 @@ export function CreateCashTransactionDialog({
           </div>
         </div>
 
+        <MoneyAccountSelect branchId={currentBranch?.id} method={method} value={moneyAccountId} onChange={setMoneyAccountId} disabled={saving}/>
         <CashTimeFields value={cashTime} onChange={setCashTime} error={errors.time} />
         </DialogBody>
         <DialogFooter>

@@ -52,6 +52,7 @@ export async function exportToExcel<T extends Record<string, any>>(
   data: T[],
   columns: ExportColumn[],
   fileName: string,
+  options?: { financialTable?: boolean },
 ): Promise<void> {
   // Lazy import — xlsx chỉ tải khi function thực sự được gọi.
   const { XLSX, saveAs } = await loadXlsxAndSaver();
@@ -73,6 +74,16 @@ export async function exportToExcel<T extends Record<string, any>>(
 
   // Set column widths
   ws["!cols"] = columns.map((col) => ({ wch: col.width || 15 }));
+  if (options?.financialTable) {
+    if (ws["!ref"]) ws["!autofilter"] = { ref: ws["!ref"] };
+    for (const [address, cell] of Object.entries(ws)) {
+      if (address.startsWith("!") || !cell || typeof cell !== "object") continue;
+      const value = cell as { t?: string; v?: unknown; z?: string };
+      if (value.t === "n" && typeof value.v === "number") {
+        value.z = Number.isInteger(value.v) ? "#,##0" : "#,##0.00";
+      }
+    }
+  }
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Data");

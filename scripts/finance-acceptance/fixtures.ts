@@ -1,0 +1,18 @@
+// Browser-only acceptance data. No production client or credentials are loaded.
+export const useAuth = () => ({tenant:{id:'fixture-tenant'},user:{id:'fixture-user'}});
+export const useToast = () => ({toast:()=>{}});
+export const getOpenPurchasesBySupplier = async () => [
+ {id:'po-1',code:'PO-DEMO-001',date:'2026-10-12',total:630000,paid:0,debt:630000},
+ {id:'po-2',code:'PO-DEMO-002',date:'2026-10-13',total:1250000,paid:500000,debt:750000},
+];
+export const getOpenInvoicesByCustomer = getOpenPurchasesBySupplier;
+export const getCounterpartyBalanceSummary = async () => ({customers:[],suppliers:[{partyId:'supplier',advance:4457009,debt:1380000}]});
+export class PartySettlementRejectedError extends Error {}
+export const settlePartyDocuments = async () => ({documents:[{},{}]});
+export const getMoneyAccounts = async () => [];
+export const accountSupportsMethod = () => true;
+export const getCashAmendmentHistory = async () => [{
+ id:'revision-1',createdAt:'2026-10-16T02:00:00Z',createdByName:'Quản trị viên',reason:'Đối soát lại số tiền chuyển trả đơn hàng tháng 09',originalCode:'PC-DEMO-001',replacementCode:'PC-DEMO-002',
+ before:{amount:600000,note:'Chuyển khoản thanh toán tiền nguyên liệu theo PO-DEMO-001',date:'2026-09-30',occurredAt:null,paymentMethod:'transfer',accountName:'Vietcombank · Quỹ vận hành'},
+ after:{amount:400000,note:'Thanh toán một phần PO-DEMO-001 sau đối soát với nhà cung cấp, phần còn lại thanh toán đợt sau.',date:'2026-09-30',occurredAt:null,paymentMethod:'transfer',accountName:'Vietcombank · Quỹ vận hành'},
+}];

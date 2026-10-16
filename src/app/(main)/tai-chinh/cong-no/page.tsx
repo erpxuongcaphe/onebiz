@@ -1264,7 +1264,7 @@ export default function CongNoPage() {
           }}
         />
       )}
-      <Dialog open={!!historyTarget} onOpenChange={open => !open && setHistoryTarget(null)}>
+      <Dialog open={!!historyTarget} onOpenChange={open => !open && setHistoryTarget(null)} protectUnsavedChanges={false}>
         <DialogContent className="sm:max-w-5xl max-h-[92vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Thu chi — {historyTarget?.partyName}</DialogTitle></DialogHeader>
           {historyTarget && <PartyCashHistory {...historyTarget} onChanged={fetchData} />}

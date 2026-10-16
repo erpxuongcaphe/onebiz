@@ -28,6 +28,8 @@ import {
   recordSupplierAdvance,
 } from "@/lib/services/supabase/payments";
 import { getCustomers, getSuppliers } from "@/lib/services/supabase";
+import { MoneyAccountSelect } from "@/components/shared/money-account-select";
+import { NumericInput } from "@/components/ui/numeric-input";
 
 interface RecordAdvanceDialogProps {
   open: boolean;
@@ -70,6 +72,8 @@ export function RecordAdvanceDialog({
   const [note, setNote] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [moneyAccountId,setMoneyAccountId] = useState("");
+  useEffect(()=>{setMoneyAccountId("");},[open,branchId,paymentMethod]);
   const {cashTime,setCashTime} = useCashTimeDraft(open);
   const [partySearch, setPartySearch] = useState("");
   const [selectedParty, setSelectedParty] = useState<PartyOption | null>(null);
@@ -165,6 +169,7 @@ export function RecordAdvanceDialog({
         branchId,
         amount,
         paymentMethod,
+        moneyAccountId: moneyAccountId || null,
         note: note.trim(),
         occurredAt: cashInputToIso(cashTime.occurredLocal),
         transactionDate: cashTime.transactionDate,
@@ -319,15 +324,12 @@ export function RecordAdvanceDialog({
             <label htmlFor="advance-amount" className="text-sm font-medium">
               Số tiền <span className="text-destructive">*</span>
             </label>
-            <Input
+            <NumericInput
               id="advance-amount"
-              type="number"
               min={0}
-              step={1000}
-              inputMode="numeric"
-              value={amount || ""}
-              onChange={(event) => {
-                setAmount(Number(event.target.value) || 0);
+              value={amount || null}
+              onChange={(value) => {
+                setAmount(value || 0);
                 if (errors.amount)
                   setErrors((current) => ({ ...current, amount: "" }));
               }}
@@ -392,6 +394,7 @@ export function RecordAdvanceDialog({
           </div>
         </div>
 
+        <MoneyAccountSelect branchId={branchId} method={paymentMethod} value={moneyAccountId} onChange={setMoneyAccountId} disabled={saving}/>
         <CashTimeFields value={cashTime} onChange={setCashTime} error={errors.time} />
         <DialogFooter>
           <Button
