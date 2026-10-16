@@ -55,6 +55,39 @@ export interface ApplyAdvanceInput {
   note: string;
 }
 
+export interface PartySettlementInput extends CashTimingInput {
+  mode: 'customer'|'supplier'; source: 'cash'|'advance'; branchId: string; partyId: string;
+  lines: Array<{id:string;amount:number}>; note: string; paymentMethod: string;
+}
+export class PartySettlementRejectedError extends Error {}
+export async function settlePartyDocuments(requestId: string, payload: PartySettlementInput) {
+  const {data,error} = await getClient().rpc('settle_party_documents_atomic' as never,{p_request_id:requestId,p_payload:payload} as never);
+  if (error) {
+    const labels:Record<string,string>={
+      PARTY_SETTLEMENT_DENIED:'Tài khoản chưa có quyền thanh toán công nợ tại chi nhánh này.',
+      PARTY_SETTLEMENT_DOCUMENT_CHANGED_RELOAD:'Công nợ chứng từ đã thay đổi. Đóng và tải lại trước khi thanh toán.',
+      PARTY_SETTLEMENT_REQUEST_REUSED:'Yêu cầu thanh toán đã được dùng với nội dung khác. Không gửi lại bằng mã cũ.',
+      PARTY_SETTLEMENT_DUPLICATE_DOCUMENT:'Một chứng từ đang được chọn nhiều lần. Tải lại danh sách.',
+      PARTY_SETTLEMENT_AMOUNT_INVALID:'Số tiền phân bổ không hợp lệ.',
+      PARTY_SETTLEMENT_INPUT_INVALID:'Cần chọn chi nhánh, chứng từ và ghi rõ nội dung thanh toán.',
+      ADVANCE_AMOUNT_EXCEEDS_AVAILABLE:'Tiền ứng đã thay đổi hoặc không đủ. Tải lại nguồn tiền ứng.',
+      ADVANCE_AMOUNT_EXCEEDS_DEBT:'Công nợ không còn đủ để nhận số tiền cấn này. Tải lại chứng từ.',
+    };
+    const message=Object.entries(labels).find(([code])=>error.message.includes(code))?.[1]||error.message;
+    if (error.code && /^[0-9A-Z]{5}$/.test(error.code) && !error.code.startsWith('PGRST')) throw new PartySettlementRejectedError(message);
+    handleError(error,'settlePartyDocuments');
+  }
+  return data as unknown as {source:'cash'|'advance';documents: Array<Record<string,unknown>>;idempotent:boolean};
+}
+
+export async function getPaymentDocumentBranch(type: 'invoice'|'purchase_order', id: string): Promise<string> {
+  const ctx = await getCurrentContext();
+  const {data,error} = await getClient().from(type === 'invoice' ? 'invoices' : 'purchase_orders').select('branch_id').eq('tenant_id',ctx.tenantId).eq('id',id).single();
+  if (error) handleError(error,'getPaymentDocumentBranch');
+  if (!data?.branch_id) throw new Error('Chưa xác định được chi nhánh chứng từ.');
+  return data.branch_id;
+}
+
 export interface ApplyAdvanceResult {
   appliedAmount: number;
   remainingDebt: number;
@@ -98,7 +131,7 @@ async function recordPartyAdvance(
   const rpcName =
     type === "customer" ? "record_customer_advance" : "record_supplier_advance";
   const partyKey = type === "customer" ? "p_customer_id" : "p_supplier_id";
-  const { data, error } = input.occurredAt || input.transactionDate || input.performedBy
+  const { data, error } = input.occurredAt || input.transactionDate || input.performedBy || input.moneyAccountId
     ? { data: await recordTimedCash(type === "customer" ? "customer_advance" : "supplier_advance", { ...input }, input), error: null }
     : await supabase.rpc(
     rpcName as never,
@@ -189,7 +222,7 @@ export async function recordInvoicePayment(
   const supabase = getClient();
   await getCurrentContext();
 
-  const { data, error } = input.occurredAt || input.transactionDate || input.performedBy
+  const { data, error } = input.occurredAt || input.transactionDate || input.performedBy || input.moneyAccountId
     ? { data: await recordTimedCash("invoice", { ...input }, input), error: null }
     : await supabase.rpc(
     "record_invoice_payment" as never,
@@ -229,7 +262,7 @@ export async function recordPurchasePayment(
   const supabase = getClient();
   await getCurrentContext();
 
-  const { data, error } = input.occurredAt || input.transactionDate || input.performedBy
+  const { data, error } = input.occurredAt || input.transactionDate || input.performedBy || input.moneyAccountId
     ? { data: await recordTimedCash("purchase_order", { ...input }, input), error: null }
     : await supabase.rpc(
     "record_purchase_payment" as never,

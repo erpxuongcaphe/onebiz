@@ -7,7 +7,7 @@ describe('party cash history source RPC',()=>{
  it('passes exact identity, branch and filters without guessing by name',async()=>{
   const filters={search:'%_, note',dateFrom:'2026-09-01',dateTo:'2026-09-30',sortBy:'amount' as const,ascending:true};
   await getPartyCashHistory('supplier','supplier','branch',1,filters);
-  expect(mocked.rpc).toHaveBeenCalledWith('get_party_cash_history_sources',{p_mode:'supplier',p_party_id:'supplier',p_branch_id:'branch',p_page:1,p_size:25,p_filters:filters});
+  expect(mocked.rpc).toHaveBeenCalledWith('get_party_cash_history_detail',{p_mode:'supplier',p_party_id:'supplier',p_branch_id:'branch',p_page:1,p_size:25,p_filters:filters});
  });
  it('maps a legacy null-party voucher and retains cancellation and cash timing',async()=>{
   mocked.rpc.mockResolvedValue({data:{total:1,items:[{id:'legacy',code:'CA1',amount:1234.56,status:'cancelled',transaction_date:'2026-09-01',occurred_at:'2026-09-02T00:00:00Z',profiles:{full_name:'Actor'},branches:{name:'Kho Tổng'}}]},error:null});

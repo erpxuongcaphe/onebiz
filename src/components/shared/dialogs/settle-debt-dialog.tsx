@@ -1,22 +1,5 @@
 "use client";
-import { CashTimeFields, useCashTimeDraft } from "@/components/shared/cash-time-fields";
-import { cashInputToIso, validateCashTime } from "@/lib/cash-time";
-
-/**
- * SettleDebtDialog — Thanh toán tổng nợ KH / Trả tổng nợ NCC
- * CEO 03/06/2026 — Sprint 3 (Công nợ C1+C2):
- *
- * Mục đích: từ trang /tai-chinh/cong-no, mỗi row KH/NCC có nút "Thanh toán" →
- * mở dialog này → list HĐ/PO còn nợ → user gõ tổng tiền khách trả → auto
- * phân bổ FIFO theo HĐ cũ nhất → ghi N phiếu thu/chi atomic.
- *
- * Khác biệt KH vs NCC:
- *   - KH: getOpenInvoicesByCustomer + recordInvoicePayment + type='receipt'
- *   - NCC: getOpenPurchasesBySupplier + recordPurchasePayment + type='payment'
- * Khác biệt khác đều UI label only — share logic.
- */
-
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -27,56 +10,36 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Icon } from "@/components/ui/icon";
-import { formatCurrency } from "@/lib/format";
-import { useToast } from "@/lib/contexts";
+import {
+  CashTimeFields,
+  useCashTimeDraft,
+} from "@/components/shared/cash-time-fields";
+import { MoneyAccountSelect } from "@/components/shared/money-account-select";
+import { cashInputToIso, validateCashTime } from "@/lib/cash-time";
+import { formatCurrency, formatShortDate } from "@/lib/format";
+import { useAuth, useToast } from "@/lib/contexts";
+import { getCounterpartyBalanceSummary } from "@/lib/services/supabase/debt-workspace";
 import {
   getOpenInvoicesByCustomer,
   getOpenPurchasesBySupplier,
-  recordInvoicePayment,
-  recordPurchasePayment,
+  settlePartyDocuments,
+  PartySettlementRejectedError,
   type OpenInvoiceLine,
-  type OpenPurchaseLine,
+  type PartySettlementInput,
 } from "@/lib/services/supabase/payments";
-import { cn } from "@/lib/utils";
 
 interface SettleDebtDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** "customer" = thu nợ KH, "supplier" = trả nợ NCC. */
   mode: "customer" | "supplier";
-  /** ID của KH hoặc NCC. */
   partyId: string;
-  /** Chi nhánh đang xem công nợ; không phân bổ chéo chi nhánh. */
   branchId?: string | null;
-  /** Tên hiển thị header (vd tên KH). */
   partyName: string;
-  /** Tổng nợ ước tính (hiển thị, FE refetch khi mở). */
   estimatedDebt: number;
-  /** Callback sau khi pay thành công — gọi để refetch list cha. */
   onSuccess?: () => void;
 }
-
-type DocLine = (OpenInvoiceLine | OpenPurchaseLine) & {
-  /** allocate amount FIFO sẽ tính. */
-  allocate: number;
-};
-
-const PAYMENT_METHODS = [
-  { value: "cash", label: "Tiền mặt" },
-  { value: "transfer", label: "Chuyển khoản" },
-  { value: "card", label: "Thẻ" },
-  { value: "ewallet", label: "Ví điện tử" },
-] as const;
-
 export function SettleDebtDialog({
   open,
   onOpenChange,
@@ -84,517 +47,498 @@ export function SettleDebtDialog({
   partyId,
   branchId,
   partyName,
-  estimatedDebt,
   onSuccess,
 }: SettleDebtDialogProps) {
   const { toast } = useToast();
-  const [docs, setDocs] = useState<DocLine[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [totalAmount, setTotalAmount] = useState<string>("");
-  const [paymentMethod, setPaymentMethod] = useState<
-    "cash" | "transfer" | "card" | "ewallet"
-  >("cash");
+  const { tenant, user } = useAuth();
+  const submissionLock = useRef(false);
+  const pendingKey =
+    tenant && user && branchId
+      ? `onebiz_party_settlement_v1:${tenant.id}:${user.id}:${mode}:${partyId}:${branchId}`
+      : "";
+  const [pendingUnreadable, setPendingUnreadable] = useState(false);
+  const [docs, setDocs] = useState<OpenInvoiceLine[]>([]);
+  const [excluded, setExcluded] = useState<Set<string>>(new Set());
+  const [amount, setAmount] = useState<number | null>(null);
+  const [advance, setAdvance] = useState(0);
+  const [source, setSource] = useState<"cash" | "advance">("cash");
+  const [method, setMethod] = useState("cash");
+  const [account, setAccount] = useState("");
   const [note, setNote] = useState("");
-  const [noteError, setNoteError] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const {cashTime,setCashTime} = useCashTimeDraft(open);
-  const [timeError,setTimeError] = useState<string>();
-
-  // Reset khi đóng/mở
+  const [attempt, setAttempt] = useState<{
+    id: string;
+    payload: PartySettlementInput;
+  } | null>(null);
+  const { cashTime, setCashTime } = useCashTimeDraft(open);
   useEffect(() => {
-    if (!open) {
-      setDocs([]);
-      setTotalAmount("");
-      setPaymentMethod("cash");
-      setNote("");
-      setNoteError("");
-      setTimeError(undefined);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    const fetcher =
-      mode === "customer"
-        ? getOpenInvoicesByCustomer(partyId, branchId)
-        : getOpenPurchasesBySupplier(partyId, branchId);
-    fetcher
-      .then((rows) => {
-        if (cancelled) return;
-        setDocs(rows.map((r) => ({ ...r, allocate: 0 })));
-        // Default amount = tổng debt (tròn) — user có thể chỉnh
-        const total = rows.reduce((s, r) => s + r.debt, 0);
-        if (total > 0) setTotalAmount(String(Math.round(total)));
-      })
-      .catch((err) => {
-        toast({
-          title: "Không tải được danh sách",
-          description: (err as Error).message,
-          variant: "error",
-        });
-      })
-      .finally(() => !cancelled && setLoading(false));
-    return () => {
-      cancelled = true;
-    };
-  }, [open, mode, partyId, branchId, toast]);
-
-  // Auto-allocate FIFO mỗi khi totalAmount thay đổi
-  const allocatedDocs = useMemo<DocLine[]>(() => {
-    const total = Math.max(0, Number(totalAmount) || 0);
-    let remaining = total;
-    return docs.map((d) => {
-      const alloc = Math.min(remaining, d.debt);
-      remaining -= alloc;
-      return { ...d, allocate: alloc };
-    });
-  }, [docs, totalAmount]);
-
-  const totalDebt = docs.reduce((s, d) => s + d.debt, 0);
-  const totalAlloc = allocatedDocs.reduce((s, d) => s + d.allocate, 0);
-  const remainder = (Number(totalAmount) || 0) - totalAlloc;
-  const docsCount = allocatedDocs.filter((d) => d.allocate > 0).length;
-
-  const handleConfirm = useCallback(async () => {
-    const timingError=validateCashTime(cashTime.occurredLocal,cashTime.transactionDate,cashTime.timeReason);
-    setTimeError(timingError || undefined);
-    if(timingError) return;
-    const amount = Number(totalAmount) || 0;
-    if (amount <= 0) {
-      toast({
-        title: "Số tiền không hợp lệ",
-        description: "Nhập số tiền > 0 để tiếp tục.",
-        variant: "error",
-      });
-      return;
-    }
-    if (mode === "customer" && amount > totalDebt) {
-      toast({
-        title: "Số tiền vượt tổng nợ",
-        description: `Tổng nợ chỉ ${formatCurrency(totalDebt)}. Nhập số nhỏ hơn hoặc bằng.`,
-        variant: "error",
-      });
-      return;
-    }
-    if (mode === "supplier" && amount > totalDebt && note.trim().length < 3) {
-      setNoteError("Nhập lý do để đối soát khoản ứng trước nhà cung cấp.");
-      toast({
-        title: "Cần ghi lý do ứng trước",
-        description: "Nhập ghi chú để đối soát phần thanh toán vượt công nợ.",
-        variant: "error",
-      });
-      return;
-    }
-    const docsToPay = allocatedDocs.filter((d) => d.allocate > 0);
-    if (docsToPay.length === 0) {
-      toast({
-        title: "Không có chứng từ nào để phân bổ",
-        variant: "error",
-      });
-      return;
-    }
-
-    setSaving(true);
-    try {
-      let okCount = 0;
-      const failures: string[] = [];
-      // Sequential — đảm bảo audit log đúng thứ tự, không spam RPC
-      for (const [index, d] of docsToPay.entries()) {
-        try {
-          if (mode === "customer") {
-            await recordInvoicePayment({
-              referenceId: d.id,
-              amount: d.allocate,
-              paymentMethod,
-              occurredAt: cashInputToIso(cashTime.occurredLocal),
-              transactionDate: cashTime.transactionDate,
-              timeReason: cashTime.timeReason,
-              note: note
-                ? `${note} — phân bổ HĐ ${d.code}`
-                : `Thu nợ tổng KH ${partyName} — HĐ ${d.code}`,
-            });
-          } else {
-            const isLastAllocation = index === docsToPay.length - 1;
-            await recordPurchasePayment({
-              referenceId: d.id,
-              amount:
-                d.allocate + (isLastAllocation ? Math.max(0, remainder) : 0),
-              paymentMethod,
-              occurredAt: cashInputToIso(cashTime.occurredLocal),
-              transactionDate: cashTime.transactionDate,
-              timeReason: cashTime.timeReason,
-              note: note
-                ? `${note} — phân bổ PO ${d.code}`
-                : `Trả nợ tổng NCC ${partyName} — PO ${d.code}`,
-            });
-          }
-          okCount++;
-        } catch (err) {
-          failures.push(`${d.code}: ${(err as Error).message}`);
+    if (!open) return;
+    let active = true;
+    setDocs([]);
+    setExcluded(new Set());
+    setAmount(null);
+    setAdvance(0);
+    setSource("cash");
+    setMethod("cash");
+    setAccount("");
+    setNote("");
+    setError("");
+    setAttempt(null);
+    setPendingUnreadable(false);
+    let restored: NonNullable<typeof attempt> | null = null;
+    if (pendingKey) {
+      try {
+        const stored = localStorage.getItem(pendingKey);
+        if (stored) {
+          const pending = JSON.parse(stored) as NonNullable<typeof attempt>;
+          if (
+            !pending.id ||
+            pending.payload?.mode !== mode ||
+            pending.payload.partyId !== partyId ||
+            pending.payload.branchId !== branchId ||
+            !Array.isArray(pending.payload.lines)
+          )
+            throw new Error("Invalid pending settlement");
+          setAttempt(pending);
+          restored = pending;
+          setSource(pending.payload.source);
+          setAmount(pending.payload.lines.reduce((sum, line) => sum + line.amount, 0));
+          setNote(pending.payload.note);
+          setMethod(pending.payload.paymentMethod || "cash");
+          setAccount(pending.payload.moneyAccountId || "");
         }
+      } catch {
+        setPendingUnreadable(true);
+        setError(
+          "Không đọc được yêu cầu đang chờ. Chưa gửi thanh toán mới; cần đối soát yêu cầu cũ.",
+        );
       }
-
-      if (okCount > 0 && failures.length === 0) {
-        toast({
-          title: mode === "customer" ? "Đã thu nợ" : "Đã trả nợ",
-          description:
-            mode === "supplier" && remainder > 0
-              ? `Đã trả ${formatCurrency(totalAlloc)} công nợ và ghi nhận ${formatCurrency(remainder)} ứng trước NCC.`
-              : `Phân bổ vào ${okCount} chứng từ — tổng ${formatCurrency(totalAlloc)}.`,
-          variant: "success",
-        });
-        onOpenChange(false);
-        onSuccess?.();
-      } else if (okCount > 0) {
-        toast({
-          title: "Phân bổ một phần",
-          description: `Thành công ${okCount}/${docsToPay.length} chứng từ. Lỗi: ${failures.join("; ")}`,
-          variant: "warning",
-        });
-        onSuccess?.();
-      } else {
-        toast({
-          title: "Không phân bổ được",
-          description: failures.join("; ") || "Lỗi không xác định",
-          variant: "error",
-        });
+    }
+    if (!branchId) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    const load = async () => {
+      const rows =
+        mode === "customer"
+          ? await getOpenInvoicesByCustomer(partyId, branchId)
+          : await getOpenPurchasesBySupplier(partyId, branchId);
+      const summary = await getCounterpartyBalanceSummary(branchId);
+      if (!summary)
+        throw new Error(
+          "Chưa xác minh được nguồn tiền ứng; tải lại trước khi thanh toán.",
+        );
+      const available =
+        (mode === "customer" ? summary.customers : summary.suppliers).find(
+          (r) => r.partyId === partyId,
+        )?.advance || 0;
+      if (active) {
+        setDocs(rows);
+        setAdvance(available);
+        if (restored) return;
+        setSource(available > 0 ? "advance" : "cash");
+        setAmount(
+          available > 0
+            ? Math.min(
+                available,
+                rows.reduce((s, r) => s + r.debt, 0),
+              )
+            : rows.reduce((s, r) => s + r.debt, 0),
+        );
       }
+    };
+    load()
+      .catch((e) => {
+        if (active)
+          setError(e instanceof Error ? e.message : "Không tải được công nợ.");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [open, mode, partyId, branchId, pendingKey]);
+  const allocations = useMemo(() => {
+    let remaining = amount || 0;
+    return docs.map((d) => {
+      const allocated = excluded.has(d.id) ? 0 : Math.min(d.debt, remaining);
+      remaining = Math.max(0, remaining - allocated);
+      return { ...d, allocated };
+    });
+  }, [docs, excluded, amount]);
+  const totalDebt = docs.reduce((s, d) => s + d.debt, 0);
+  const totalAllocated = allocations.reduce((s, d) => s + d.allocated, 0);
+  const extra = Math.max(0, (amount || 0) - totalAllocated);
+  const frozen = saving || !!attempt;
+  const execute = async (request: NonNullable<typeof attempt>) => {
+    if (submissionLock.current || !pendingKey) return;
+    submissionLock.current = true;
+    setSaving(true);
+    setError("");
+    try {
+      // Persist before sending, so reopening or reloading cannot create a second payment.
+      localStorage.setItem(pendingKey, JSON.stringify(request));
+      setAttempt(request);
+      const result = await settlePartyDocuments(request.id, request.payload);
+      localStorage.removeItem(pendingKey);
+      setAttempt(null);
+      toast({
+        title:
+          request.payload.source === "advance"
+            ? "Đã cấn tiền ứng"
+            : mode === "customer"
+              ? "Đã thu nợ"
+              : "Đã thanh toán NCC",
+        description: `${result.documents.length} chứng từ · ${formatCurrency(request.payload.lines.reduce((sum, line) => sum + line.amount, 0))}`,
+        variant: "success",
+      });
+      onOpenChange(false);
+      onSuccess?.();
+    } catch (e) {
+      if (e instanceof PartySettlementRejectedError) {
+        localStorage.removeItem(pendingKey);
+        setAttempt(null);
+      }
+      setError(
+        e instanceof Error
+          ? e.message
+          : "Chưa xác nhận được kết quả; thử lại cùng yêu cầu.",
+      );
+    } finally {
+      submissionLock.current = false;
+      setSaving(false);
+    }
+  };
+  const submit = async () => {
+    if (saving || !branchId || pendingUnreadable) return;
+    if (!pendingKey) {
+      setError(
+        "Chưa xác định được tài khoản đăng nhập. Tải lại trước khi thanh toán.",
+      );
+      return;
+    }
+    if (attempt) {
+      await execute(attempt);
+      return;
+    }
+    if (!amount || amount <= 0 || !Number.isFinite(amount) || !totalAllocated) {
+      setError("Chọn chứng từ và nhập số tiền lớn hơn 0.");
+      return;
+    }
+    if (note.trim().length < 3) {
+      setError("Ghi rõ nội dung thu/chi hoặc lý do cấn tiền ứng.");
+      return;
+    }
+    if (source === "advance" && (amount > advance || extra > 0)) {
+      setError(
+        "Số tiền cấn không được vượt tiền ứng còn lại hoặc nợ các chứng từ đã chọn.",
+      );
+      return;
+    }
+    if (source === "cash" && mode === "customer" && extra > 0) {
+      setError(
+        "Số tiền thu vượt công nợ đã chọn. Ghi nhận tiền khách trả trước bằng chức năng riêng.",
+      );
+      return;
+    }
+    if (source === "cash") {
+      const timeError = validateCashTime(
+        cashTime.occurredLocal,
+        cashTime.transactionDate,
+        cashTime.timeReason,
+      );
+      if (timeError) {
+        setError(timeError);
+        return;
+      }
+    }
+    setError("");
+    try {
+      const lines = allocations
+        .filter((d) => d.allocated > 0)
+        .map((d) => ({ id: d.id, amount: d.allocated }));
+      if (source === "cash" && mode === "supplier" && extra > 0)
+        lines[lines.length - 1].amount += extra;
+      const request = attempt || {
+        id: crypto.randomUUID(),
+        payload: {
+          mode,
+          source,
+          branchId,
+          partyId,
+          lines,
+          note: note.trim(),
+          paymentMethod: method,
+          moneyAccountId: account || null,
+          ...(source === "cash"
+            ? {
+                occurredAt: cashInputToIso(cashTime.occurredLocal),
+                transactionDate: cashTime.transactionDate,
+                timeReason: cashTime.timeReason,
+              }
+            : {}),
+        },
+      };
+      await execute(request);
+    } catch (e) {
+      if (e instanceof PartySettlementRejectedError) setAttempt(null);
+      setError(
+        e instanceof Error
+          ? e.message
+          : "Chưa xác nhận được kết quả; thử lại cùng yêu cầu.",
+      );
     } finally {
       setSaving(false);
     }
-  }, [
-    totalAmount,
-    totalDebt,
-    allocatedDocs,
-    mode,
-    paymentMethod,
-    note,
-    partyName,
-    toast,
-    onOpenChange,
-    onSuccess,
-    totalAlloc,
-    remainder,
-    cashTime,
-  ]);
-
-  const titleLabel =
-    mode === "customer" ? "Thu tiền khách" : "Trả tiền nhà cung cấp";
-  const docLabel = mode === "customer" ? "Hóa đơn" : "Phiếu nhập";
-  const actionVerb = mode === "customer" ? "Thu" : "Trả";
-
+  };
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[92vh] flex flex-col p-0">
-        <DialogHeader className="px-6 pt-6 pb-2 shrink-0">
-          <DialogTitle className="flex items-center gap-2">
-            <Icon
-              name={mode === "customer" ? "payments" : "account_balance_wallet"}
-              size={20}
-              className={
-                mode === "customer"
-                  ? "text-status-success"
-                  : "text-status-warning"
-              }
-            />
-            {titleLabel} — {partyName}
-          </DialogTitle>
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        if (!saving) onOpenChange(v);
+      }}
+    >
+      <DialogContent className="sm:max-w-3xl max-h-[92dvh] flex flex-col gap-0 p-0">
+        <DialogHeader className="shrink-0 border-b p-5">
+          <DialogTitle>Thanh toán công nợ · {partyName}</DialogTitle>
           <DialogDescription>
-            Nhập số tiền tổng → hệ thống tự phân bổ vào {docLabel.toLowerCase()}{" "}
-            cũ nhất trước (FIFO). Mỗi {docLabel.toLowerCase()} sẽ tạo 1 phiếu{" "}
-            {mode === "customer" ? "thu" : "chi"} riêng có audit log.
+            {mode === "customer" ? "Khách hàng" : "Nhà cung cấp"}
           </DialogDescription>
         </DialogHeader>
-
-        <div className="px-6 py-3 overflow-y-auto flex-1 min-h-0 space-y-4">
-          {/* Tổng quan */}
-          <div className="grid grid-cols-3 gap-3">
-            <SummaryRow
-              label={`Tổng nợ ${mode === "customer" ? "khách" : "NCC"}`}
-              value={formatCurrency(totalDebt || estimatedDebt)}
-              tone="neutral"
-            />
-            <SummaryRow
-              label={`Số ${docLabel.toLowerCase()} nợ`}
-              value={String(docs.length)}
-              tone="neutral"
-            />
-            <SummaryRow
-              label={`Phân bổ vào`}
-              value={`${docsCount} chứng từ`}
-              tone={docsCount > 0 ? "success" : "neutral"}
-            />
-          </div>
-
-          {/* Form thanh toán */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="settle-amount">
-                Số tiền {actionVerb.toLowerCase()}{" "}
-                <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="settle-amount"
-                type="number"
-                inputMode="numeric"
-                min={0}
-                step={1000}
-                value={totalAmount}
-                onChange={(e) => setTotalAmount(e.target.value)}
-                placeholder="Nhập tổng số tiền"
-                className="font-semibold text-base"
-              />
-              {remainder !== 0 && (
-                <p
-                  className={cn(
-                    "text-xs",
-                    remainder > 0
-                      ? "text-status-warning"
-                      : "text-status-success",
-                  )}
-                >
-                  {remainder > 0
-                    ? mode === "supplier"
-                      ? `${formatCurrency(remainder)} sẽ được ghi nhận là tiền ứng trước NCC.`
-                      : `Còn dư ${formatCurrency(remainder)} chưa phân bổ — không được thu vượt công nợ khách hàng.`
-                    : `Phân bổ đủ vào ${docsCount} chứng từ.`}
-                </p>
+        <div className="min-h-0 flex-1 overflow-auto space-y-4 p-5">
+          {attempt && (
+            <p role="status" className="text-sm text-status-warning">
+              Đang giữ yêu cầu {attempt.id}. {attempt.payload.note} ·{" "}
+              {formatCurrency(
+                attempt.payload.lines.reduce(
+                  (sum, line) => sum + line.amount,
+                  0,
+                ),
               )}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="settle-method">Hình thức</Label>
-              <Select
-                value={paymentMethod}
-                onValueChange={(v) =>
-                  setPaymentMethod(
-                    v as "cash" | "transfer" | "card" | "ewallet",
-                  )
-                }
-                items={[...PAYMENT_METHODS]}
+              . Thử lại chỉ kiểm tra yêu cầu này, không tạo lần thanh toán mới.
+            </p>
+          )}
+          {!branchId ? (
+            <p role="alert">
+              Chọn một chi nhánh để thanh toán hoặc cấn tiền ứng đúng phạm vi.
+            </p>
+          ) : loading ? (
+            <p>Đang tải chứng từ và nguồn tiền ứng...</p>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-3 border-y py-3 text-sm">
+                <div>
+                  Còn nợ
+                  <p className="font-semibold tabular-nums">
+                    {formatCurrency(totalDebt)}
+                  </p>
+                </div>
+                <div>
+                  Tiền ứng còn lại
+                  <p className="font-semibold tabular-nums text-status-success">
+                    {formatCurrency(advance)}
+                  </p>
+                </div>
+              </div>
+              <fieldset
+                className="flex flex-wrap gap-4 text-sm"
+                disabled={frozen}
               >
-                <SelectTrigger id="settle-method" className="w-full">
-                  <SelectValue placeholder="Chọn hình thức">
-                    {(v) =>
-                      PAYMENT_METHODS.find((m) => m.value === v)?.label ?? ""
-                    }
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {PAYMENT_METHODS.map((m) => (
-                    <SelectItem key={m.value} value={m.value}>
-                      {m.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="settle-note">
-                Ghi chú{" "}
-                {mode === "supplier" && remainder > 0 ? "*" : "(tuỳ chọn)"}
-              </Label>
-              <Input
-                id="settle-note"
-                value={note}
-                onChange={(e) => {
-                  setNote(e.target.value);
-                  if (noteError) setNoteError("");
-                }}
-                aria-invalid={Boolean(noteError)}
-                placeholder={
-                  mode === "supplier"
-                    ? "VD: Ứng trước cho lô hàng tháng 9"
-                    : "VD: Khách trả qua VCB ngày 03/06"
-                }
-              />
-              {mode === "supplier" && remainder > 0 && !noteError && (
-                <p className="text-xs text-status-warning">
-                  Bắt buộc nhập lý do vì {formatCurrency(remainder)} sẽ được
-                  treo là ứng trước NCC.
+                <legend className="mb-2 font-medium">Nguồn thanh toán</legend>
+                {[
+                  ["advance", "Dùng tiền ứng đã ghi nhận"],
+                  [
+                    "cash",
+                    mode === "customer" ? "Thu tiền mới" : "Chi tiền mới",
+                  ],
+                ].map(([v, l]) => (
+                  <label key={v} className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="party-settlement-source"
+                      value={v}
+                      checked={source === v}
+                      disabled={v === "advance" && advance <= 0}
+                      onChange={() => {
+                        setSource(v as "cash" | "advance");
+                        setAmount(
+                          v === "advance"
+                            ? Math.min(advance, totalDebt)
+                            : totalDebt,
+                        );
+                      }}
+                    />
+                    {l}
+                  </label>
+                ))}
+              </fieldset>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="space-y-1 text-sm">
+                  Số tiền
+                  <NumericInput
+                    value={amount}
+                    onChange={setAmount}
+                    disabled={frozen}
+                  />
+                </label>
+                {source === "cash" && (
+                  <label className="space-y-1 text-sm">
+                    Phương thức
+                    <select
+                      value={method}
+                      onChange={(e) => {
+                        setMethod(e.target.value);
+                        setAccount("");
+                      }}
+                      disabled={frozen}
+                      className="h-10 w-full rounded-md border bg-background px-3"
+                    >
+                      {[
+                        ["cash", "Tiền mặt"],
+                        ["transfer", "Chuyển khoản"],
+                        ["card", "Thẻ"],
+                        ["ewallet", "Ví điện tử"],
+                      ].map(([v, l]) => (
+                        <option key={v} value={v}>
+                          {l}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+              </div>
+              {source === "cash" && (
+                <>
+                  <MoneyAccountSelect
+                    branchId={branchId}
+                    method={method}
+                    value={account}
+                    onChange={setAccount}
+                    disabled={frozen}
+                  />
+                  <fieldset disabled={frozen}>
+                    <CashTimeFields value={cashTime} onChange={setCashTime} />
+                  </fieldset>
+                </>
+              )}
+              <label className="block space-y-1 text-sm">
+                {source === "advance"
+                  ? "Nội dung cấn tiền ứng"
+                  : "Nội dung thu/chi"}
+                <Input
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  disabled={frozen}
+                />
+              </label>
+              <div className="max-h-72 overflow-auto rounded-md border">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-muted">
+                    <tr>
+                      {[
+                        "Chọn",
+                        "Chứng từ",
+                        "Ngày",
+                        "Tổng tiền",
+                        "Đã thanh toán",
+                        "Còn nợ",
+                        "Phân bổ",
+                      ].map((h) => (
+                        <th key={h} className="whitespace-nowrap p-2 text-left">
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {allocations.map((d) => (
+                      <tr key={d.id} className="border-t">
+                        <td className="p-2">
+                          <input
+                            type="checkbox"
+                            aria-label={`Phân bổ ${d.code}`}
+                            checked={!excluded.has(d.id)}
+                            disabled={frozen}
+                            onChange={(e) => {
+                              const next = new Set(excluded);
+                              if (e.target.checked) next.delete(d.id);
+                              else next.add(d.id);
+                              setExcluded(next);
+                            }}
+                          />
+                        </td>
+                        <td className="p-2 font-medium whitespace-nowrap">
+                          {d.code}
+                        </td>
+                        <td className="p-2 whitespace-nowrap">
+                          {formatShortDate(d.date)}
+                        </td>
+                        {[d.total, d.paid, d.debt, d.allocated].map((n, i) => (
+                          <td
+                            key={i}
+                            className="p-2 text-right tabular-nums whitespace-nowrap"
+                          >
+                            {formatCurrency(n)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {!docs.length && (
+                  <p className="p-4 text-muted-foreground">
+                    Không có chứng từ còn nợ.
+                  </p>
+                )}
+              </div>
+              {extra > 0 && (
+                <p className="text-sm text-status-warning">
+                  Vượt nợ chứng từ được chọn: {formatCurrency(extra)}
+                  {mode === "supplier" && source === "cash"
+                    ? " · Sẽ ghi nhận thành tiền ứng NCC."
+                    : ""}
                 </p>
               )}
-              {noteError && (
-                <p className="text-xs text-destructive">{noteError}</p>
-              )}
-            </div>
-          </div>
-
-          {/* List chứng từ + phân bổ */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="text-sm font-semibold">
-                Phân bổ FIFO theo {docLabel.toLowerCase()} cũ nhất
-              </h4>
-              <span className="text-xs text-muted-foreground">
-                Tổng phân bổ:{" "}
-                <span className="font-semibold tabular-nums">
-                  {formatCurrency(totalAlloc)}
-                </span>
-              </span>
-            </div>
-
-            {loading ? (
-              <div className="border rounded-lg p-6 text-center text-sm text-muted-foreground">
-                <Icon
-                  name="progress_activity"
-                  className="animate-spin inline mr-1"
-                />
-                Đang tải...
-              </div>
-            ) : docs.length === 0 ? (
-              <div className="border border-dashed rounded-lg p-6 text-center text-sm text-muted-foreground">
-                Không có {docLabel.toLowerCase()} nào còn nợ. Có thể đã được
-                thanh toán hết.
-              </div>
-            ) : (
-              /* CEO 06/06/2026: redesign từ table 6 cột dính nhau thành
-                 card list. Trên desktop giữ table; mobile/tablet card.
-                 Pattern Sapo/KiotViet — mỗi HD = 1 card có nhịp đọc rõ. */
-              <div className="space-y-2">
-                {allocatedDocs.map((d) => (
-                  <div
-                    key={d.id}
-                    className={cn(
-                      "border rounded-lg p-3 space-y-2.5 transition-all",
-                      d.allocate > 0
-                        ? "border-status-success/40 bg-status-success/5 shadow-none"
-                        : "border-border bg-card",
-                    )}
-                  >
-                    {/* Header: mã HD + tuổi */}
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono text-primary font-bold text-sm">
-                        {d.code}
-                      </span>
-                      <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-                        <Icon name="schedule" size={11} />
-                        {d.ageDays === 0
-                          ? "Hôm nay"
-                          : d.ageDays === 1
-                            ? "Hôm qua"
-                            : `${d.ageDays} ngày`}
-                      </span>
-                    </div>
-
-                    {/* Row info: 3 cột rõ ràng — không dính */}
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className="space-y-0.5">
-                        <div className="text-xs uppercase font-medium text-muted-foreground tracking-wide">
-                          Tổng
-                        </div>
-                        <div className="text-xs font-medium tabular-nums">
-                          {formatCurrency(d.total)}đ
-                        </div>
-                      </div>
-                      <div className="space-y-0.5">
-                        <div className="text-xs uppercase font-medium text-muted-foreground tracking-wide">
-                          Đã trả
-                        </div>
-                        <div className="text-xs font-medium tabular-nums text-muted-foreground">
-                          {formatCurrency(d.paid)}đ
-                        </div>
-                      </div>
-                      <div className="space-y-0.5">
-                        <div className="text-xs uppercase font-medium text-muted-foreground tracking-wide">
-                          Còn nợ
-                        </div>
-                        <div className="text-xs font-bold tabular-nums text-status-error">
-                          {formatCurrency(d.debt)}đ
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Phân bổ lần này — highlight nếu có */}
-                    {d.allocate > 0 ? (
-                      <div className="flex items-center justify-between bg-status-success rounded-md px-3 py-2">
-                        <span className="text-xs font-semibold text-white flex items-center gap-1">
-                          <Icon name="arrow_downward" size={12} />
-                          {actionVerb} lần này
-                        </span>
-                        <span className="text-sm font-bold tabular-nums text-white">
-                          {formatCurrency(d.allocate)}đ
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="text-xs text-muted-foreground italic text-center py-1">
-                        Chưa phân bổ vào chứng từ này
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          <CashTimeFields value={cashTime} onChange={setCashTime} error={timeError} />
+            </>
+          )}
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          )}
         </div>
-        <DialogFooter className="px-6 pb-6 pt-3 border-t shrink-0">
+        <DialogFooter className="shrink-0 border-t p-4">
           <Button
             variant="outline"
-            onClick={() => onOpenChange(false)}
             disabled={saving}
+            onClick={() => onOpenChange(false)}
           >
-            Huỷ
+            Đóng
           </Button>
           <Button
-            onClick={handleConfirm}
-            disabled={saving || loading || docs.length === 0 || totalAlloc <= 0}
-            className={
-              mode === "customer"
-                ? ""
-                : "bg-status-warning hover:bg-status-warning/90"
+            disabled={
+              saving ||
+              pendingUnreadable ||
+              !pendingKey ||
+              (!attempt && (loading || !branchId || !docs.length))
             }
+            onClick={submit}
           >
-            {saving ? (
-              <>
-                <Icon
-                  name="progress_activity"
-                  className="animate-spin mr-1"
-                  size={16}
-                />
-                Đang xử lý...
-              </>
-            ) : (
-              <>
-                <Icon
-                  name={
-                    mode === "customer" ? "payments" : "account_balance_wallet"
-                  }
-                  size={16}
-                  className="mr-1"
-                />
-                {actionVerb} {formatCurrency(totalAlloc)} vào {docsCount} chứng
-                từ
-              </>
-            )}
+            <Icon name="check" size={16} />
+            {saving
+              ? "Đang xử lý..."
+              : attempt
+                ? "Kiểm tra / thử lại yêu cầu"
+                : source === "advance"
+                  ? "Xác nhận cấn tiền ứng"
+                  : "Xác nhận thanh toán"}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function SummaryRow({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone: "neutral" | "success" | "warning";
-}) {
-  const toneColor =
-    tone === "success"
-      ? "text-status-success"
-      : tone === "warning"
-        ? "text-status-warning"
-        : "text-foreground";
-  return (
-    <div className="border rounded-lg p-3 bg-card">
-      <p className="text-xs uppercase font-semibold text-muted-foreground tracking-wide">
-        {label}
-      </p>
-      <p className={cn("text-base font-bold tabular-nums mt-0.5", toneColor)}>
-        {value}
-      </p>
-    </div>
   );
 }

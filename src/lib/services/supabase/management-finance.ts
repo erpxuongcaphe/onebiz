@@ -12,7 +12,8 @@ export interface FinanceAllocation {
 }
 export interface FinancePayment {
   branchId: string; performedBy: string; amount: number;
-  paymentMethod: 'cash' | 'bank_transfer' | 'card' | 'other';
+  paymentMethod: 'cash' | 'transfer' | 'bank_transfer' | 'card' | 'ewallet';
+  moneyAccountId?: string | null;
   transactionDate: string; occurredAt: string; timeReason?: string;
   direction?: 'receipt' | 'payment'; note?: string;
 }
@@ -89,11 +90,12 @@ export async function getFinanceCashLinks(from: string, to: string, branchId?: s
 
 // The caller retains this request ID and payload after a timeout; never generate a retry ID here.
 export function saveFinanceDocument(requestId: string, payload: FinanceDocumentInput): Promise<{event: FinanceEvent; cash: {id: string} | null}> {
-  return rpc('save_management_finance_document', {p_request_id: requestId, p_payload: payload});
+  const normalized = payload.payment ? {...payload,payment:{...payload.payment,paymentMethod:payload.payment.paymentMethod==='bank_transfer'?'transfer':payload.payment.paymentMethod}} : payload;
+  return rpc(payload.payment?.moneyAccountId ? 'save_management_finance_with_account' : 'save_management_finance_document', {p_request_id: requestId, p_payload: normalized});
 }
 
 export function settleFinanceDocument(eventId: string, requestId: string, payload: FinancePayment): Promise<{id: string; event_id: string}> {
-  return rpc('settle_management_finance_event', {p_event_id: eventId, p_request_id: requestId, p_payload: payload});
+  return rpc(payload.moneyAccountId ? 'settle_management_finance_with_account' : 'settle_management_finance_event', {p_event_id: eventId, p_request_id: requestId, p_payload: {...payload,paymentMethod:payload.paymentMethod==='bank_transfer'?'transfer':payload.paymentMethod}});
 }
 
 export async function cancelFinanceDocument(eventId: string, reason: string): Promise<void> {

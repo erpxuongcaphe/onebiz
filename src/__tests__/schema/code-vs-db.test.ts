@@ -46,6 +46,16 @@ const RPC = new Set(schema.rpc as string[]);
  * dưới sẽ BẮT XOÁ dòng ngay khi dump đã có (sau `node scripts/dump-db-schema.mjs`).
  */
 const RPC_CHO_MIGRATION = new Map<string, string>([
+  ["get_money_account_workspace", "00552_money_account_register"],
+  ["save_money_account", "00552_money_account_register"],
+  ["record_cash_with_account", "00552_money_account_register"],
+  ["save_management_finance_with_account", "00552_money_account_register"],
+  ["settle_management_finance_with_account", "00552_money_account_register"],
+  ["amend_party_cash", "00553_party_cash_amendments"],
+  ["get_party_cash_history_detail", "00553_party_cash_amendments"],
+  ["get_party_advance_ledger", "00553_party_cash_amendments"],
+  ["settle_party_documents_atomic", "00553_party_cash_amendments"],
+  ["get_cash_amendment_history", "00553_party_cash_amendments"],
   // 00390 đã chạy trên Production; snapshot không thể làm mới tại workspace này
   // vì không có service-role credential. Xóa các dòng này ngay lần dump schema kế tiếp.
 ]);

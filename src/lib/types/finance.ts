@@ -30,6 +30,15 @@ export interface CashBookEntry {
   occurredAt?: string | null;
   timeSource?: 'system' | 'entered' | 'offline' | 'date_only' | null;
   timeReason?: string | null;
+  updatedAt?: string;
+  moneyAccountId?: string;
+  moneyAccountName?: string;
+  moneyAccountCode?: string;
+  advanceOriginal?: number;
+  advanceApplied?: number;
+  advanceRemaining?: number;
+  originalCode?: string;
+  replacementCode?: string;
 }
 
 // Giao dịch thu chi (alias vì CashBookEntry đã chứa toàn bộ field)
