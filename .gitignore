@@ -34,3 +34,7 @@ backups/
 
 # Tài liệu handover/working nội bộ (rar/docx/prototype tham khảo, không đưa lên repo)
 Working/
+
+# Isolated Hub build and local dependency recovery (never publish these artifacts).
+/.tmp/ceo-build-20261016/
+/.tmp/lint-plugin-recovery-20261016/

@@ -7,6 +7,8 @@ export const operationActions = [
   "approve_standard",
   "propose_standard",
   "request_standard_changes",
+  "retire_standard",
+  "discard_standard",
   "generate",
   "ensure_schedule",
   "event",
@@ -86,6 +88,7 @@ export interface Run {
 }
 export interface Standard {
   id: string;
+  workbook_batch_id?: string | null;
   branch_id: string;
   family_id: string;
   revision: number;
