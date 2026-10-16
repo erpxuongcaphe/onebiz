@@ -21,15 +21,20 @@ describe('scoped chip-style user picker',()=>{
   expect(screen.queryByRole('button',{name:another.name})).toBeNull();
   fireEvent.click(screen.getByRole('button',{name:person.name}));
   expect(new FormData(container.querySelector('form')!).get('assigneeId')).toBe(person.id);
+  expect(screen.queryByRole('button',{name:/Đổi người|Chọn người|Thêm người/})).toBeNull();
   expect(screen.getByRole('button',{name:`Bỏ ${person.name}`})).toHaveTextContent('×');
   expect(screen.getByRole('button',{name:`Bỏ ${person.name}`})).toHaveAttribute('title',`Bỏ ${person.name}`);
   fireEvent.click(screen.getByRole('button',{name:`Bỏ ${person.name}`}));
   expect(new FormData(container.querySelector('form')!).get('assigneeId')).toBe('');
+  fireEvent.click(screen.getByRole('button',{name:'Phụ trách * Chọn người'}));
+  fireEvent.click(screen.getByRole('button',{name:another.name}));
+  expect(new FormData(container.querySelector('form')!).get('assigneeId')).toBe(another.id);
  });
  it('adds multiple users without Ctrl and serializes all selected IDs',()=>{
   const {container}=render(<form><UserPicker label="Phối hợp" name="collaborators" multiple options={[person,another]}/></form>);
   fireEvent.click(screen.getByRole('button',{name:'Phối hợp Chọn người'}));
   fireEvent.click(screen.getByRole('button',{name:person.name}));
+  expect(screen.getByRole('button',{name:'Phối hợp Thêm người'})).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button',{name:another.name}));
   expect(new FormData(container.querySelector('form')!).getAll('collaborators')).toEqual([person.id,another.id]);
   expect(screen.getByRole('button',{name:person.name})).toHaveAttribute('aria-pressed','true');

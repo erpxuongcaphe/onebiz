@@ -63,26 +63,26 @@ export function UserPicker({ name, label, branch, purpose = "participant", value
   };
   const choose = (key: string) => {
     change(multiple ? (valid.includes(key) ? valid.filter((item) => item !== key) : [...valid, key]) : [key]);
-    setQuery(""); if (!multiple) { setOpen(false); button.current?.focus(); }
+    setQuery(""); if (!multiple) { setOpen(false); root.current?.focus(); }
   };
   const matches = pool.filter((person) => (multiple || !valid.includes(person.id)) &&
     person.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
-  return <div className={styles.root} ref={root}>
+  return <div className={styles.root} ref={root} tabIndex={-1}>
     <span id={`${id}-label`} className={styles.label}>{label}{required ? " *" : ""}</span>
     <div className={styles.control}>
       {controlled.map((key) => <span key={key} className={styles.chip}>
         {pool.find((person) => person.id === key)?.name ?? (loading ? "Đang kiểm tra…" : "Cần chọn lại người")}
         <button type="button" disabled={disabled} title={`Bỏ ${pool.find((person) => person.id === key)?.name ?? "người đã chọn"}`} aria-label={`Bỏ ${pool.find((person) => person.id === key)?.name ?? "người đã chọn"}`} onClick={() => change(controlled.filter((item) => item !== key))}><span aria-hidden="true">×</span></button>
       </span>)}
-      <button ref={button} className={styles.add} type="button" disabled={disabled || loading || !!error}
+      {(multiple || !controlled.length) && <button ref={button} className={styles.add} type="button" disabled={disabled || loading || !!error}
         aria-labelledby={`${id}-label ${id}-button`} aria-expanded={open} aria-controls={`${id}-list`}
-        onClick={() => setOpen(!open)}><Icon name="add" size={16}/><span id={`${id}-button`}>{loading ? "Đang tải…" : controlled.length && !multiple ? "Đổi người" : "Chọn người"}</span></button>
+        onClick={() => setOpen(!open)}>{multiple && <Icon name="add" size={16}/>}<span id={`${id}-button`}>{loading ? "Đang tải…" : multiple && controlled.length ? "Thêm người" : "Chọn người"}</span></button>}
     </div>
     {/* Native validity and FormData remain compatible with existing guarded forms. */}
     <select className={styles.validation} tabIndex={-1} aria-hidden="true" aria-label={`${label}: kiểm tra lựa chọn`}
       name={name} multiple={multiple} value={multiple ? (stale || error || loading ? [] : valid) : stale || error || loading ? "" : valid[0] ?? ""}
       required={required || stale || !!error || loading} disabled={disabled}
-      onChange={() => {}} onInvalid={() => button.current?.focus()}>
+      onChange={() => {}} onInvalid={() => (button.current ?? root.current?.querySelector("button"))?.focus()}>
       {!multiple && <option value=""/>}{pool.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
     </select>
     {stale && <small role="alert">Người đã chọn không còn hợp lệ tại chi nhánh này. Bỏ lựa chọn cũ và chọn lại.</small>}

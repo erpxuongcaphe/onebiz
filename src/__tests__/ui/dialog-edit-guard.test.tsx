@@ -38,7 +38,7 @@ describe("shared popup edit guard", () => {
       <DialogClose>Hủy</DialogClose>
     </DialogContent></Dialog>);
     if (mode === "add") {
-      const choose = screen.getByRole("button", { name: "Người phối hợp Chọn người" });
+      const choose = screen.getByRole("button", { name: "Người phối hợp Thêm người" });
       fireEvent.pointerDown(choose); fireEvent.click(choose);
       fireEvent.click(screen.getByRole("button", { name: "Người thứ hai" }));
       fireEvent.click(choose);
