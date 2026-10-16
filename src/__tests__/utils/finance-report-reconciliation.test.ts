@@ -9,7 +9,7 @@ describe('finance report reconciliation',() => {
   it('uses shared cash labels without changing source categories or classification',() => {
     const entry=cash('supplier','payment',40,'supplier_payment');
     const report=reconcileCashFlow([entry,cash('customer','receipt',50,'customer_payment')],[]);
-    expect(report.detail.map(row=>row.category)).toEqual(['Chi trả NCC','Thu tiền khách hàng']);
+    expect(report.detail.map(row=>row.category)).toEqual(['Thanh toán NCC','Thu bán hàng']);
     expect(entry.category).toBe('supplier_payment');
     expect(report.totals[0]).toMatchObject({receipt:50,payment:40,count:2});
     expect(reconcileCashFlow([cash('custom','receipt',1,'Khoản riêng')],[]).detail[0].category).toBe('Khoản riêng');
