@@ -9,7 +9,12 @@ export const getOpenInvoicesByCustomer = getOpenPurchasesBySupplier;
 export const getCounterpartyBalanceSummary = async () => ({customers:[],suppliers:[{partyId:'supplier',advance:4457009,debt:1380000}]});
 export class PartySettlementRejectedError extends Error {}
 export const settlePartyDocuments = async () => ({documents:[{},{}]});
-export const getMoneyAccounts = async () => [];
+export const getMoneyAccounts = async () => [{id:'cash-demo',branch_id:'branch',code:'TM-DEMO',name:'Quỹ tiền mặt kiểm thử',kind:'cash',active:true,account_number:null}];
+export const getPartyAdvanceLedger = async () => [{id:'advance-demo',branchId:'branch',branchName:'Kho kiểm thử',cashCode:'PC-DEMO-001',date:'2026-10-01',note:'Ứng trước mua nguyên liệu tháng 10',originalAmount:1000000,remainingAmount:600000,appliedAmount:300000,refundedAmount:100000,status:'active',allocations:[{documentCode:'PO-DEMO-001',amount:300000,note:'Cấn tiền nhận hàng đợt 1',createdAt:'2026-10-02'}],refunds:[{cashId:'demo-refund',cashCode:'PT-DEMO-001',amount:100000,date:'2026-10-03',note:'NCC hoàn phần ứng chưa sử dụng',status:'completed',cancellationReason:null}]}];
+export class AdvanceRefundRejectedError extends Error {}
+export const advanceRefundPendingKey = (tenant:string,user:string,mode:string,id:string) => `onebiz_advance_refund_v1:${tenant}:${user}:${mode}:${id}`;
+export const refundPartyAdvance = async () => ({cash_id:'demo-only',cash_code:'PT-DEMO-002',status:'completed'});
+export const cancelAdvanceRefund = async () => ({});
 export const accountSupportsMethod = () => true;
 export const getCashAmendmentHistory = async () => [{
  id:'revision-1',createdAt:'2026-10-16T02:00:00Z',createdByName:'Quản trị viên',reason:'Đối soát lại số tiền chuyển trả đơn hàng tháng 09',originalCode:'PC-DEMO-001',replacementCode:'PC-DEMO-002',

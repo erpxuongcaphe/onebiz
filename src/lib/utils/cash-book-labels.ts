@@ -7,6 +7,8 @@ const CATEGORY_LABELS: Record<string, string> = {
   chi_tra_ncc: "Chi trả NCC",
   supplier_advance: "Ứng trước NCC",
   customer_advance: "Khách trả trước",
+  supplier_advance_refund: "NCC hoàn tiền ứng",
+  customer_advance_refund: "Hoàn tiền ứng cho khách",
   purchase: "Trả tiền nhập hàng",
   invoice_payment: "Thu tiền bán hàng",
   invoice_void: "Hoàn tiền hủy hóa đơn",

@@ -20,6 +20,7 @@ import { AmendPartyCashDialog } from "@/components/shared/dialogs/amend-party-ca
 import { PartyAdvanceLedger } from "@/components/shared/party-advance-ledger";
 import { CashAmendmentHistory } from "@/components/shared/cash-amendment-history";
 import { SettleDebtDialog } from "@/components/shared/dialogs/settle-debt-dialog";
+import { cancelAdvanceRefund } from "@/lib/services/supabase/advance-refunds";
 import type { CashBookEntry } from "@/lib/types";
 
 export function PartyCashHistory({ mode, partyId, partyName, onChanged }: {
@@ -66,6 +67,7 @@ export function PartyCashHistory({ mode, partyId, partyName, onChanged }: {
   }, [searchText, filters.search]);
   const invalidDates = !!(filters.dateFrom && filters.dateTo && filters.dateFrom > filters.dateTo);
   const cancellable = (row: CashBookEntry) => {
+    if (row.status === "completed" && ["supplier_advance_refund", "customer_advance_refund"].includes(row.category)) return true;
     if (row.status !== "completed" || ["customer_advance", "supplier_advance"].includes(row.category)) return false;
     if (!row.referenceType && !row.referenceId) return true;
     return (row.referenceType === "invoice" && row.category === "customer_payment") ||
@@ -120,6 +122,7 @@ export function PartyCashHistory({ mode, partyId, partyName, onChanged }: {
         { header: "Quỹ / tài khoản", key: "accountLabel", width: 35 },
         { header: "Tiền ứng gốc", key: "advanceOriginal", width: 20 }, { header: "Đã cấn từ nguồn ứng", key: "advanceApplied", width: 22 },
         { header: "Tiền ứng còn lại", key: "advanceRemaining", width: 22 }, { header: "Thay cho phiếu", key: "originalCode", width: 20 },
+        { header: "Tiền ứng đã hoàn", key: "advanceRefunded", width: 22 }, { header: "Phiếu nguồn hoàn ứng", key: "refundSourceCode", width: 22 },
         { header: "Phiếu thay thế", key: "replacementCode", width: 20 },
       ], `OneBiz_LichSuThuChi_${mode}_${partyId}_${filters.dateFrom || "tatca"}_${filters.dateTo || "tatca"}`, { financialTable: true });
     } catch (err) { setActionError(err instanceof Error ? err.message : "Không xuất được lịch sử thu chi."); }
@@ -156,7 +159,7 @@ export function PartyCashHistory({ mode, partyId, partyName, onChanged }: {
     </div>}
     {balanceError && <p role="alert" className="text-sm text-destructive">{balanceError}</p>}
     {canReadDebt && <Button size="sm" variant="outline" onClick={() => setShowAdvances(v=>!v)} aria-expanded={showAdvances}><Icon name="account_balance_wallet" size={16}/>Nguồn tiền ứng & phân bổ</Button>}
-    {canReadDebt && showAdvances && <PartyAdvanceLedger mode={mode} partyId={partyId} partyName={partyName} branchId={activeBranchId} canExport={canExport} revision={revision}/>}
+    {canReadDebt && showAdvances && <PartyAdvanceLedger mode={mode} partyId={partyId} partyName={partyName} branchId={activeBranchId} canExport={canExport} revision={revision} canRefund={canCreate} canCancelRefund={canCancel} onChanged={()=>{setRevision(v=>v+1);onChanged?.();}}/>}
     {invalidDates ? null : error ? <p role="alert" className="py-4 text-sm text-destructive">{error}</p> : loading ? <p className="py-4 text-sm text-muted-foreground">Đang tải phiếu thu chi...</p> : rows.length === 0 ? <p className="py-4 text-sm text-muted-foreground">Chưa có phiếu thu chi trong phạm vi này.</p> : <div className="min-w-0 w-full overflow-auto max-h-[480px] border rounded-md">
       <table className="w-full text-sm">
         <thead className="sticky top-0 z-10 bg-muted text-left"><tr>{["Mã phiếu", "Ngày ghi nhận", "Thu / Chi", "Khoản mục", "Số tiền", "Phương thức", "Chi nhánh", "Người lập", "Trạng thái", "Nội dung thu/chi", "Chứng từ gốc", "Quỹ / tài khoản", "Người thực hiện"].map((label, index) => <th key={label} className={`px-3 py-2 whitespace-nowrap ${index === 0 ? "sticky left-0 z-20 bg-muted" : ""}`}>{label}</th>)}</tr></thead>
@@ -190,7 +193,8 @@ export function PartyCashHistory({ mode, partyId, partyName, onChanged }: {
       <dt>Thanh toán</dt><dd>{cashPaymentMethodLabel(selected.paymentMethod)}</dd>
       <dt>Quỹ / tài khoản</dt><dd>{selected.moneyAccountName || "Chưa xác định tài khoản"}</dd>
       <dt>Chứng từ gốc</dt><dd>{selected.referenceCode || "Chưa liên kết"}</dd>
-      {canReadDebt && <><dt>Tiền ứng gốc / đã cấn / còn lại</dt><dd className="tabular-nums">{[selected.advanceOriginal,selected.advanceApplied,selected.advanceRemaining].map(v=>v==null?'Chưa xác định':formatCurrency(v)).join(" / ")}</dd></>}
+      {selected.refundSourceCode && <><dt>Phiếu nguồn hoàn ứng</dt><dd>{selected.refundSourceCode}</dd></>}
+      {canReadDebt && selected.advanceOriginal != null && <><dt>Tiền ứng gốc / đã cấn / đã hoàn / còn lại</dt><dd className="tabular-nums">{[selected.advanceOriginal,selected.advanceApplied,selected.advanceRefunded ?? 0,selected.advanceRemaining].map(v=>v==null?'Chưa xác định':formatCurrency(v)).join(" / ")}</dd></>}
       <dt>Ghi chú</dt><dd className="break-words whitespace-pre-wrap">{selected.note || "—"}</dd>
       <dt>Trạng thái</dt><dd>{selected.status === "cancelled" ? "Đã hủy" : selected.status === "completed" ? "Hoàn thành" : "Chưa hoàn tất"}</dd>
     </dl>}{selected && <div className="flex flex-wrap gap-2">{canAmend && selected.status === "completed" && <Button onClick={() => setAmendTarget(selected)}><Icon name="edit" size={16}/>Sửa phiếu</Button>}{canCancel && cancellable(selected) && <Button variant="destructive" disabled={cancelling} onClick={() => { setCancelTarget(selected); setCancelReason(""); setActionError(null); setActionSuccess(null); }}><Icon name="cancel" size={16} />Hủy phiếu</Button>}</div>}{selected && <CashAmendmentHistory key={selected.id} cashId={selected.id} canExport={canExport}/>}</DialogContent></Dialog>
@@ -198,7 +202,7 @@ export function PartyCashHistory({ mode, partyId, partyName, onChanged }: {
     <ConfirmDialog open={!!cancelTarget} onOpenChange={open => { if (!open && !cancelling) { setCancelTarget(null); setCancelReason(""); } }} title={`Hủy phiếu ${cancelTarget?.code || ""}`} description={<div className="space-y-3"><p>Phiếu được giữ trong lịch sử. Phần thanh toán liên quan sẽ được đảo; số dư công nợ có thể thay đổi.</p><label className="block text-sm">Lý do hủy<Input value={cancelReason} onChange={e => setCancelReason(e.target.value)} disabled={cancelling} /></label>{actionError && <p role="alert" className="text-destructive">{actionError}</p>}</div>} confirmLabel="Hủy phiếu" variant="destructive" loading={cancelling} confirmDisabled={cancelReason.trim().length < 3 || !canCancel} onConfirm={async () => {
       if (!cancelTarget || !canCancel || !cancellable(cancelTarget) || cancelReason.trim().length < 3 || cancelling) return;
       setCancelling(true); setActionError(null);
-      try { await cancelCashTransaction(cancelTarget.id, cancelReason.trim()); setActionSuccess(`Đã hủy phiếu ${cancelTarget.code}. Công nợ đang được cập nhật.`); setCancelTarget(null); setSelected(null); setCancelReason(""); setRevision(value => value + 1); onChanged?.(); }
+      try { if (["supplier_advance_refund", "customer_advance_refund"].includes(cancelTarget.category)) await cancelAdvanceRefund(cancelTarget.id, cancelReason.trim()); else await cancelCashTransaction(cancelTarget.id, cancelReason.trim()); setActionSuccess(`Đã hủy phiếu ${cancelTarget.code}. Công nợ đang được cập nhật.`); setCancelTarget(null); setSelected(null); setCancelReason(""); setRevision(value => value + 1); onChanged?.(); }
       catch (err) { setActionError(err instanceof Error ? err.message : "Không hủy được phiếu."); }
       finally { setCancelling(false); }
     }} />

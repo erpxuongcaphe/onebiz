@@ -451,6 +451,8 @@ function mapCashEntry(row: any): CashBookEntry {
     advanceOriginal: row.advance_original == null ? undefined : Number(row.advance_original),
     advanceApplied: row.advance_applied == null ? undefined : Number(row.advance_applied),
     advanceRemaining: row.advance_remaining == null ? undefined : Number(row.advance_remaining),
+    advanceRefunded: row.advance_refunded == null ? undefined : Number(row.advance_refunded),
+    refundSourceCode: row.refund_source_code,
     originalCode: row.original_code,
     replacementCode: row.replacement_code,
   };
@@ -486,6 +488,8 @@ export interface PartyAdvanceLedgerRow {
   id: string; branchId: string; branchName: string; cashCode: string; date: string; note: string | null;
   originalAmount: number; remainingAmount: number; status: string;
   allocations: Array<{documentCode: string; amount: number; note: string; createdAt: string}>;
+  appliedAmount?: number; refundedAmount?: number;
+  refunds?: Array<{cashId: string; cashCode: string; amount: number; date: string; note: string; status: string; cancellationReason: string | null}>;
 }
 
 export interface CashAmendmentSnapshot {
