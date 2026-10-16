@@ -61,6 +61,9 @@ import { OperationsMktLinks } from "./mkt-links";
 import { QualityWorkspace } from "./quality-workspace";
 import type { QualityFocus, QualityDestination } from "./quality-overview";
 import { qualityPeriodKey } from "@/lib/operations/quality-periods";
+import { UserPicker } from "./user-picker";
+import { StandardLifecycle } from "./standard-lifecycle";
+import { filterPeople } from "@/lib/operations/people-filters";
 
 const tabs = [
   { key: "overview", label: "Tổng quan", icon: "dashboard" },
@@ -540,7 +543,7 @@ export default function OperationsWorkspace() {
           {loading && !data && <Empty label="Đang tải dữ liệu…" />}
           {data && (
             <>
-              {!legacy && <QualityWorkspace key={`${branch}:${tab}:${qualityNavigation}`} workspace={data} branch={branch || data.todos[0]?.branch_id || ""} period={period} assessmentPeriod={assessmentPeriod} onAssessmentPeriodChange={setAssessmentPeriod} focus={qualityFocus} onNavigate={navigateQuality} configuration={<SettingsView data={data} canConfigure={can("approve_policy")} canPropose={canProposeStandard(data, branch)} canManageMembers={can("manage_members")} busy={busy} onEdit={setEditor} onSave={send} includeRewardPolicies={false} />} initialView={tab === "overview" ? "overview" : tab === "todo" ? "issues" : tab === "qc" ? "qc" : tab === "kpi" ? "report" : tab === "settings" ? "settings" : "work"} onLegacySettings={() => requestPageLeave(() => {setLegacy(true);setTab("settings");})} />}
+              {!legacy && <QualityWorkspace key={`${branch}:${tab}:${qualityNavigation}`} workspace={data} onConfigurationRefresh={() => void load()} branch={branch || data.todos[0]?.branch_id || ""} period={period} assessmentPeriod={assessmentPeriod} onAssessmentPeriodChange={setAssessmentPeriod} focus={qualityFocus} onNavigate={navigateQuality} configuration={<SettingsView data={data} error={error} canConfigure={can("approve_policy")} canPropose={canProposeStandard(data, branch)} canManageMembers={can("manage_members")} busy={busy} onEdit={setEditor} onSave={send} includeRewardPolicies={false} />} initialView={tab === "overview" ? "overview" : tab === "todo" ? "issues" : tab === "qc" ? "qc" : tab === "kpi" ? "report" : tab === "settings" ? "settings" : "work"} onLegacySettings={() => requestPageLeave(() => {setLegacy(true);setTab("settings");})} />}
               {legacy && <>
               <div className={styles.notice}>Cấu hình và lịch sử Hub hiện có <button onClick={() => requestPageLeave(() => {setLegacy(false);setTab("work");})}>Về Hub mới</button></div>
               <div className={styles.metrics}>
@@ -1057,6 +1060,7 @@ function actionLabel(action: string) {
 
 function SettingsView({
   data,
+  error,
   canConfigure,
   canPropose,
   canManageMembers,
@@ -1066,6 +1070,7 @@ function SettingsView({
   includeRewardPolicies = true,
 }: {
   data: Workspace;
+  error?: string;
   canConfigure: boolean;
   canPropose: boolean;
   canManageMembers: boolean;
@@ -1121,7 +1126,7 @@ function SettingsView({
         <label className={styles.field}><span>Danh mục thiết lập</span><select aria-label="Danh mục thiết lập" value={target} onChange={event => { setTarget(event.target.value as typeof target); setFilters(initialFilters("settings")); setSearch(""); }}><option value="standards">Standard Working</option>{includeRewardPolicies && <option value="policies">Chính sách thưởng</option>}<option value="members">Phân công chi nhánh</option></select></label>
         <label className={styles.field}><span>Tìm trong thiết lập</span><input aria-label="Tìm trong thiết lập" type="search" maxLength={200} value={search} onChange={event => setSearch(event.target.value)} placeholder={target === "members" ? "Tên tài khoản" : "Tên mẫu hoặc chính sách"} /></label>
       </div>
-      <OperationsFilterBar kind="settings" settingsTarget={target} value={filters} onChange={setFilters} people={data.people} period={data.period} />
+      <OperationsFilterBar kind="settings" settingsTarget={target} value={filters} onChange={setFilters} people={filterPeople(data)} period={data.period} />
       {target === "standards" && <>
       <h2 className={styles.sectionTitle}>Standard Working · {formatNumber(standards.length)}</h2>
       <div className={styles.list}>
@@ -1146,6 +1151,8 @@ function SettingsView({
             </div>
             <Badge value={s.status === "pending" ? "pending_approval" : s.status} />
             <button onClick={() => onEdit({ kind: "standard_details", standard: s })}><Icon name="search" size={16} />Xem chi tiết</button>
+            {canConfigure && data.isCeo && (s.status === "approved" || (s.status === "draft" && !s.workbook_batch_id)) && <StandardLifecycle standard={s} busy={busy} error={error} onSave={onSave}/>}
+            {s.status === "draft" && s.workbook_batch_id && <p>Duyệt hoặc hủy bản nháp này trong bộ nhập Excel để công việc và QC luôn đi cùng nhau.</p>}
             {s.review_note && <p className={styles.notice}>CEO yêu cầu sửa: {s.review_note}</p>}
             {canConfigure &&
               s.status === "approved" &&
@@ -1167,7 +1174,7 @@ function SettingsView({
                 {canPropose ? s.status === "changes_requested" ? "Sửa và gửi lại" : "Đề xuất thay đổi" : "Phiên bản mới"}
               </button>
             )}
-            {["draft", "pending"].includes(s.status) && canConfigure && data.isCeo && (
+            {["draft", "pending"].includes(s.status) && canConfigure && data.isCeo && !s.workbook_batch_id && (
               <button
                 disabled={busy}
                 onClick={() => void onSave("approve_standard", { id: s.id })}
@@ -1267,18 +1274,14 @@ function EditorForm({
   const [commonScope, setCommonScope] = useState(
     !editor.proposal && editor.standard?.scope === "common",
   );
+  const [assignmentBranches, setAssignmentBranches] = useState<string[]>([]);
   const [correction, setCorrection] = useState(false);
   const [formError, setFormError] = useState("");
   const [todoState, setTodoState] = useState(editor.todo?.state ?? "pending");
   const [existingTodo, setExistingTodo] = useState<Todo | null>(null);
   const [recordKey] = useState(() => crypto.randomUUID());
   const memberCaps = data.branches.find((b) => b.id === branch)?.capabilities ?? [];
-  const eligibleMembers = data.people.filter((person) => data.isCeo || (
-    person.id !== data.userId && !data.members.some((member) => member.user_id === person.id &&
-      ((member.member_role === "manager" && !memberCaps.includes("work")) ||
-        member.capabilities?.some((cap) => cap === "manage_members" || !memberCaps.includes(cap))))
-  ));
-  const [memberUserId, setMemberUserId] = useState(() => eligibleMembers[0]?.id ?? "");
+  const [memberUserId, setMemberUserId] = useState("");
   const selectedMember = data.members.find((member) => member.user_id === memberUserId);
   const [frequency, setFrequency] = useState<Frequency>(
     (editor.standard?.frequency as Frequency) ?? "daily",
@@ -1328,6 +1331,7 @@ function EditorForm({
           dueAt: `${text("dueAt")}:00+07:00`,
         };
       if (editor.kind === "standard") {
+        if (commonScope && !editor.standard && !assignmentBranches.length) throw new Error("Chọn ít nhất một chi nhánh áp dụng và người phụ trách.");
         const issues = validateCriteria(criteria);
         if (issues.length) throw new Error(issues.join(" "));
         payload = {
@@ -1488,21 +1492,15 @@ function EditorForm({
     }
   };
   const managerSelect = (
-    <select
+    <UserPicker label="Quản lý phụ trách" branch={branch} purpose="manager"
       name="assigneeId"
       required
-      defaultValue={
+      value={
         editor.standard?.assignee_id ??
         editor.run?.assignee_id ??
-        managers[0]?.id
+        ""
       }
-    >
-      {managers.map((p) => (
-        <option key={p.id} value={p.id}>
-          {p.name}
-        </option>
-      ))}
-    </select>
+    />
   );
   return (
     <form
@@ -1716,22 +1714,14 @@ function EditorForm({
                       <input
                         type="checkbox"
                         name={`branch-${item.id}`}
-                        defaultChecked={item.id === data.branches[0]?.id}
+                        checked={assignmentBranches.includes(item.id)}
+                        onChange={(event) => setAssignmentBranches((current) => event.target.checked ? [...current,item.id] : current.filter((id) => id !== item.id))}
                       />
                       {item.name}
                     </label>
-                    <Field label="Quản lý phụ trách">
-                      <select
+                    {assignmentBranches.includes(item.id) && <UserPicker required label={`Quản lý phụ trách ${item.name}`} branch={item.id} purpose="manager"
                         name={`manager-${item.id}`}
-                        defaultValue={managers[0]?.id}
-                      >
-                        {data.people.map((person) => (
-                          <option key={person.id} value={person.id}>
-                            {person.name}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
+                    />}
                   </div>
                 ))}
               <h3
@@ -1743,7 +1733,7 @@ function EditorForm({
               {criteria.map((c, i) => (
                 <fieldset key={c.id} className={styles.criterion}>
                   <legend>Tiêu chí {i + 1}</legend>
-                  <Field label="Tiêu chí trong bộ KPI">
+                  <Field label="Chọn từ bộ tiêu chí CEO (Excel 34 mục)">
                     <select
                       defaultValue=""
                       onChange={(event) => {
@@ -1763,7 +1753,7 @@ function EditorForm({
                           key={item.criterion.id}
                           value={item.criterion.id}
                         >
-                          {item.group} · {item.criterion.title}
+                          {item.group} · {item.workTitle} · {item.points > 0 ? "+" : ""}{item.points} điểm
                         </option>
                       ))}
                     </select>
@@ -2022,6 +2012,7 @@ function EditorForm({
                     />
                   </Field>
                   <TodoFields
+                    branch={branch}
                     data={data}
                     managers={managers}
                     assigneeId={editor.run?.assignee_id}
@@ -2046,7 +2037,7 @@ function EditorForm({
                   defaultValue={editor.todo!.description}
                 />
               </Field>
-              <TodoFields data={data} managers={managers} todo={editor.todo} />
+              <TodoFields branch={branch} data={data} managers={managers} todo={editor.todo} />
               <Field label="Tình trạng">
                 <select
                   value={todoState}
@@ -2087,18 +2078,7 @@ function EditorForm({
           )}
           {editor.kind === "member" && (
             <>
-              <Field label="Tài khoản OneBiz">
-                <select name="userId" required value={memberUserId}
-                  onChange={(event) => setMemberUserId(event.target.value)}>
-                  {!eligibleMembers.length && <option value="">Không có tài khoản phù hợp</option>}
-                  {eligibleMembers.map((p) => (
-                    <option key={p.id} value={p.id}
-                    >
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
+              <UserPicker label="Tài khoản OneBiz" name="userId" branch={branch} purpose="membership" required value={memberUserId} onChange={setMemberUserId}/>
               <Field label="Vai trò">
                 <select name="memberRole" key={`role-${memberUserId}`} defaultValue={selectedMember?.member_role ?? (memberCaps.includes("work") ? "manager" : "reviewer")}>
                   <option value="manager" disabled={!memberCaps.includes("work")}>Quản lý</option>
@@ -2505,11 +2485,13 @@ function EditorForm({
 }
 
 function TodoFields({
+  branch,
   data,
   managers,
   todo,
   assigneeId,
 }: {
+  branch: string;
   data: Workspace;
   managers: Workspace["people"];
   todo?: Todo;
@@ -2533,24 +2515,15 @@ function TodoFields({
   return (
     <>
       <div className={styles.formGrid}>
-        <Field label="Người chịu trách nhiệm">
-          <select
+          <UserPicker label="Người chịu trách nhiệm" branch={branch} purpose="manager"
             name="assigneeId"
             required
-            defaultValue={
+            value={
               todo?.assignee_id ??
               assigneeId ??
-              managers.find((p) => p.id === data.userId)?.id ??
-              managers[0]?.id
+              ""
             }
-          >
-            {managers.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </Field>
+          />
         <Field label="Deadline (Việt Nam)">
           <Input
             name="dueAt"
@@ -2578,19 +2551,11 @@ function TodoFields({
           </select>
         </Field>
       </div>
-      <Field label="Người phối hợp">
-        <select
+        <UserPicker label="Người phối hợp" branch={branch} purpose="participant"
           name="collaborators"
           multiple
-          defaultValue={todo?.collaborators}
-        >
-          {data.people.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-      </Field>
+          value={todo?.collaborators}
+        />
     </>
   );
 }

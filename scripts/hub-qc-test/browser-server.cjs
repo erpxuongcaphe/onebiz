@@ -20,6 +20,10 @@ const ids = {
   const db = new PGlite();
   await bootstrap(db);
   await require("./acceptance.cjs")(db);
+  if (process.env.HUB_CEO_ENTRY === '1') {
+    await db.exec('create table user_branches(user_id uuid,branch_id uuid); insert into user_branches select user_id,branch_id from ops_members');
+    await db.exec(fs.readFileSync(root + '/supabase/migrations/00555_operations_ceo_workbook_people.sql','utf8'));
+  }
   await db.query("update ops_q_grants set active=true");
   let actor = ids.owner;
   const req = createRequire(root + "/package.json");
@@ -106,7 +110,15 @@ const ids = {
               ]);
               await db.exec("set role authenticated");
               let value;
-              if (url.pathname === "/api/operations/quality") {
+              if (url.pathname === "/api/operations/people") {
+                value = {people:(await db.query('select ops_eligible_people($1,$2) value',[url.searchParams.get('branch'),url.searchParams.get('purpose')])).rows[0].value};
+              } else if (url.pathname === '/api/operations/workbook') {
+                if (req.method === 'GET') value={batches:(await db.query('select ops_workbook_batches_read() value')).rows[0].value};
+                else {
+                  const {requestId,activate,discard,reason,...payload}=JSON.parse(body);
+                  value={batch:discard ? (await db.query('select ops_workbook_discard($1,$2) value',[requestId,reason])).rows[0].value : (await db.query('select ops_workbook_import($1,$2,$3) value',[requestId,activate?null:JSON.stringify(payload),!!activate])).rows[0].value};
+                }
+              } else if (url.pathname === "/api/operations/quality") {
                 if (req.method === "GET") {
                   const v = qualityReadSchema.parse(
                     Object.fromEntries(url.searchParams),
