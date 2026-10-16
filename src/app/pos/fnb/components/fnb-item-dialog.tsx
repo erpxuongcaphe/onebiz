@@ -1001,7 +1001,7 @@ export function FnbItemDialog({
                 </button>
               ))}
             </div>
-            <p className="text-[11px] leading-4 text-muted-foreground">Ghi chú gửi bếp, không đổi định lượng.</p>
+            <p className="text-xs leading-4 text-muted-foreground">Ghi chú gửi bếp, không đổi định lượng.</p>
 
           </section>
         </div>
