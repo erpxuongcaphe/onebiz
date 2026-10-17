@@ -26,6 +26,7 @@ const ids = {
     if (process.env.HUB_LIBRARY_ENTRY === '1') {
       await db.exec(fs.readFileSync(root + '/supabase/migrations/00556_operations_shared_working_library.sql','utf8'));
       await db.exec(fs.readFileSync(root + '/supabase/migrations/00560_operations_library_shared_managers.sql','utf8'));
+      if(process.env.HUB_RECURRENCE_ENTRY==='1')await db.exec(fs.readFileSync(root+'/supabase/migrations/00561_operations_recurrence.sql','utf8'));
     }
   }
   await db.query("update ops_q_grants set active=true");

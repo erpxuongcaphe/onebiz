@@ -5,7 +5,8 @@ import {
   type RewardPolicy,
 } from "./policy";
 
-export type Frequency = "daily" | "weekly" | "monthly" | "event";
+import type { ScheduleFrequency } from "./recurrence";
+export type Frequency = ScheduleFrequency | "event";
 
 export function validateCriteria(criteria: readonly Criterion[]): string[] {
   const issues: string[] = [];

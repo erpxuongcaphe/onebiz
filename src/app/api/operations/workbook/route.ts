@@ -30,6 +30,11 @@ export async function POST(request: NextRequest) {
   if (session.error || !session.data.user) return failure("Vui lòng đăng nhập lại.", 401);
   const activate = "activate" in parsed.data;
   const { requestId, ...payload } = parsed.data;
+  if('rows' in payload && (payload.rows.some(row=>!['daily','weekly'].includes(row.frequency)||row.dayNumber!==undefined||row.monthNumber!==undefined)||payload.effectiveUntil)){
+    const capabilities=await (client as unknown as Rpc).rpc('ops_access_context',{});
+    if(capabilities.error||Number((capabilities.data as {recurrenceVersion?:number}|null)?.recurrenceVersion??0)<1)
+      return failure('Lịch mở rộng đang chờ cập nhật hệ thống. Chưa ghi dữ liệu.',503);
+  }
   const result = "discard" in parsed.data ? await (client as unknown as Rpc).rpc("ops_workbook_discard", {p_id:requestId,p_reason:parsed.data.reason}) : await (client as unknown as Rpc).rpc("ops_workbook_import_v2", { p_request_id: requestId, p_body: activate ? null : payload, p_activate: activate });
   if (result.error) {
     const error = result.error.message;

@@ -6,6 +6,7 @@ export const libraryRowsSchema = z.array(workingRowSchema).min(1).max(200)
 const scheduleFields = {
   branchId: z.uuid(), effectiveFrom: z.iso.date(),
   dueTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), weeklyDay: z.number().int().min(1).max(7),
+  effectiveUntil: z.iso.date().nullable().optional(),
 };
 const branchSchedule = z.union([
   z.object({...scheduleFields, assigneeIds: z.array(z.uuid()).min(1).max(20)
@@ -25,7 +26,7 @@ export const libraryCommandSchema = z.discriminatedUnion("action", [
   }).strict(),
   z.object({ action: z.literal("apply"), requestId: z.uuid(), id: z.uuid(), version: z.number().int().positive(),
     assignments: z.array(branchSchedule).min(1).max(20).refine(rows => new Set(rows.map(row => row.branchId)).size === rows.length),
-  }).strict(),
+  }).strict().refine(v=>v.assignments.every(a=>!a.effectiveUntil||a.effectiveUntil>=a.effectiveFrom),{message:'Ngày kết thúc phải từ ngày bắt đầu.',path:['assignments']}),
 ]);
 export type WorkingLibrary = {
   id: string; title: string; version: number; rows: z.infer<typeof libraryRowsSchema>;

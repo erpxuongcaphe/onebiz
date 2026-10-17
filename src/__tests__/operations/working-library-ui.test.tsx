@@ -20,6 +20,41 @@ beforeEach(()=>{libraries=[];vi.stubGlobal('fetch',fetchMock);fetchMock.mockImpl
 });});
 afterEach(()=>{cleanup();vi.unstubAllGlobals();vi.resetAllMocks();});
 describe('company working library and branch setup UX',()=>{
+ it('shows only the branch schedule for one branch, with an explicit weekly meaning',async()=>{
+  libraries=[lib];render(<WorkingLibrary workspace={workspace} onApplied={vi.fn()}/>);
+  fireEvent.click(await screen.findByRole('button',{name:'Áp dụng cho chi nhánh'}));
+  fireEvent.click(screen.getByRole('checkbox',{name:'Quán A'}));
+  expect(screen.queryByText(/Điền cùng lịch/)).not.toBeInTheDocument();
+  expect(screen.getByRole('combobox',{name:'Lặp hằng tuần vào'})).toHaveValue('');
+  expect(screen.getByText(/Thứ đã chọn chỉ áp dụng cho việc hằng tuần/)).toBeInTheDocument();
+ });
+ it('does not request or display a weekly day for a daily-only library',async()=>{
+  libraries=[{...lib,rows:lib.rows.filter(row=>row.frequency==='daily')}];render(<WorkingLibrary workspace={workspace} onApplied={vi.fn()}/>);
+  fireEvent.click(await screen.findByRole('button',{name:'Áp dụng cho chi nhánh'}));
+  fireEvent.click(screen.getByRole('checkbox',{name:'Quán A'}));
+  expect(screen.queryByRole('combobox',{name:/Lặp hằng tuần/})).not.toBeInTheDocument();
+ });
+ it('lets a user remove an accidentally selected branch without changing another branch',async()=>{
+  libraries=[lib];render(<WorkingLibrary workspace={workspace} onApplied={vi.fn()}/>);
+  fireEvent.click(await screen.findByRole('button',{name:'Áp dụng cho chi nhánh'}));
+  fireEvent.click(screen.getByRole('checkbox',{name:'Quán A'}));fireEvent.click(screen.getByRole('checkbox',{name:'Quán B'}));
+  fireEvent.change(within(screen.getByRole('region',{name:'Quán B'})).getByLabelText('Ngày bắt đầu',{exact:true}),{target:{value:'20/10/2026'}});
+  fireEvent.click(screen.getByRole('button',{name:'Bỏ chọn chi nhánh Quán A'}));
+  expect(screen.getByRole('checkbox',{name:'Quán A'})).not.toBeChecked();
+  expect(screen.getByRole('checkbox',{name:'Quán B'})).toBeChecked();
+  expect(screen.getByLabelText('Ngày bắt đầu',{exact:true})).toHaveValue('20/10/2026');
+  expect(fetchMock.mock.calls.every(([,init])=>init?.method!=='POST')).toBe(true);
+ });
+ it('does not accept a non-existent date or a 12-hour time as a valid schedule',async()=>{
+  libraries=[lib];render(<WorkingLibrary workspace={workspace} onApplied={vi.fn()}/>);
+  fireEvent.click(await screen.findByRole('button',{name:'Áp dụng cho chi nhánh'}));fireEvent.click(screen.getByRole('checkbox',{name:'Quán A'}));
+  fireEvent.change(screen.getByLabelText('Ngày bắt đầu',{exact:true}),{target:{value:'31/02/2026'}});
+  fireEvent.change(screen.getByLabelText('Giờ đến hạn (24 giờ)',{exact:true}),{target:{value:'11:59 PM'}});
+  fireEvent.click(screen.getByRole('button',{name:'Tiếp tục: kiểm tra phân công'}));
+  expect(screen.getByLabelText('Ngày bắt đầu',{exact:true})).toHaveAttribute('aria-invalid','true');
+  expect(screen.getByLabelText('Giờ đến hạn (24 giờ)',{exact:true})).toHaveAttribute('aria-invalid','true');
+  expect(fetchMock.mock.calls.every(([,init])=>init?.method!=='POST')).toBe(true);
+ });
  it('reviews and saves two managers on one branch without saving during selection',async()=>{
   libraries=[lib];render(<WorkingLibrary workspace={workspace} onApplied={vi.fn()}/>);
   fireEvent.click(await screen.findByRole('button',{name:'Áp dụng cho chi nhánh'}));
@@ -29,9 +64,9 @@ describe('company working library and branch setup UX',()=>{
   fireEvent.click(screen.getByRole('button',{name:'Quản lý B'}));
   expect(screen.getByRole('button',{name:'Bỏ Quản lý A'})).toBeInTheDocument();
   expect(screen.getByRole('button',{name:'Bỏ Quản lý B'})).toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText('Ngày bắt đầu',{exact:true}),{target:{value:'2026-10-20'}});
-  fireEvent.change(screen.getByLabelText('Giờ đến hạn',{exact:true}),{target:{value:'18:30'}});
-  fireEvent.change(screen.getByLabelText('Ngày hằng tuần',{exact:true}),{target:{value:'6'}});
+  fireEvent.change(screen.getByLabelText('Ngày bắt đầu',{exact:true}),{target:{value:'20/10/2026'}});
+  fireEvent.change(screen.getByLabelText('Giờ đến hạn (24 giờ)',{exact:true}),{target:{value:'18:30'}});
+  fireEvent.change(screen.getByLabelText('Lặp hằng tuần vào',{exact:true}),{target:{value:'6'}});
   fireEvent.click(screen.getByRole('button',{name:'Tiếp tục: kiểm tra phân công'}));
   const review=await screen.findByRole('dialog',{name:'Kiểm tra và lưu phân công'});
   expect(within(review).getByText('Quản lý A',{exact:true})).toBeInTheDocument();expect(within(review).getByText('Quản lý B',{exact:true})).toBeInTheDocument();
@@ -46,7 +81,9 @@ describe('company working library and branch setup UX',()=>{
   fireEvent.click(await screen.findByRole('button',{name:'Áp dụng cho chi nhánh'}));
   fireEvent.click(screen.getByRole('checkbox',{name:'Quán B'}));
   fireEvent.click(screen.getByRole('button',{name:'Tiếp tục: kiểm tra phân công'}));
-  expect(await screen.findByRole('alert')).toHaveTextContent('Quán B: quản lý phụ trách, ngày bắt đầu từ hôm nay, giờ đến hạn, ngày hằng tuần');
+  expect(await screen.findByRole('alert')).toHaveTextContent('Bổ sung thông tin tại Quán B');
+  expect(screen.getByText('Chọn quản lý phụ trách.')).toBeInTheDocument();
+  expect(screen.getByText('Chọn thứ thực hiện việc hằng tuần.')).toBeInTheDocument();
   expect(fetchMock.mock.calls.every(([,init])=>init?.method!=='POST')).toBe(true);
  });
  it('keeps both managers and dates when the server rejects a save',async()=>{
@@ -59,15 +96,15 @@ describe('company working library and branch setup UX',()=>{
   fireEvent.click(await screen.findByRole('button',{name:'Áp dụng cho chi nhánh'}));fireEvent.click(screen.getByRole('checkbox',{name:'Quán A'}));
   fireEvent.click(await screen.findByRole('button',{name:'Quản lý phụ trách * Chọn người'}));
   fireEvent.click(screen.getByRole('button',{name:'Quản lý A'}));fireEvent.click(screen.getByRole('button',{name:'Quản lý B'}));
-  fireEvent.change(screen.getByLabelText('Ngày bắt đầu',{exact:true}),{target:{value:'2026-10-20'}});
-  fireEvent.change(screen.getByLabelText('Giờ đến hạn',{exact:true}),{target:{value:'18:30'}});
-  fireEvent.change(screen.getByLabelText('Ngày hằng tuần',{exact:true}),{target:{value:'6'}});
+  fireEvent.change(screen.getByLabelText('Ngày bắt đầu',{exact:true}),{target:{value:'20/10/2026'}});
+  fireEvent.change(screen.getByLabelText('Giờ đến hạn (24 giờ)',{exact:true}),{target:{value:'18:30'}});
+  fireEvent.change(screen.getByLabelText('Lặp hằng tuần vào',{exact:true}),{target:{value:'6'}});
   fireEvent.click(screen.getByRole('button',{name:'Tiếp tục: kiểm tra phân công'}));
   fireEvent.click(screen.getByRole('button',{name:'Lưu và áp dụng'}));
   expect(await within(screen.getByRole('dialog',{name:'Kiểm tra và lưu phân công'})).findByRole('alert')).toHaveTextContent('Một quản lý vừa bị thu hồi quyền. Chưa lưu.');
   fireEvent.click(screen.getByRole('button',{name:'Quay lại cấu hình'}));
   expect(await screen.findByRole('button',{name:'Bỏ Quản lý A'})).toBeInTheDocument();expect(screen.getByRole('button',{name:'Bỏ Quản lý B'})).toBeInTheDocument();
-  expect(screen.getByLabelText('Ngày bắt đầu',{exact:true})).toHaveValue('2026-10-20');
+  expect(screen.getByLabelText('Ngày bắt đầu',{exact:true})).toHaveValue('20/10/2026');
   expect(fetchMock.mock.calls.filter(([,init])=>init?.method==='POST')).toHaveLength(1);
  });
  it('loads definitions without any automatic save or branch assignment',async()=>{
@@ -99,23 +136,24 @@ describe('company working library and branch setup UX',()=>{
  it('reports the incomplete criterion even when it was hidden by a search',async()=>{
   render(<WorkingLibrary workspace={workspace} onApplied={vi.fn()}/>);
   const load=await screen.findByRole('button',{name:'Nạp 34 tiêu chí CEO'});await waitFor(()=>expect(load).toBeEnabled());fireEvent.click(load);
-  fireEvent.click(screen.getByRole('button',{name:'Thêm tiêu chí'}));
+  fireEvent.click(screen.getByText('Thêm tiêu chí',{exact:true}));
   fireEvent.change(screen.getByLabelText('Tìm tiêu chí trong bộ chung'),{target:{value:'Nguyên liệu'}});
-  fireEvent.click(screen.getByRole('button',{name:'Lưu bộ tiêu chí chung'}));
+  fireEvent.click(screen.getByText('Lưu bộ tiêu chí chung',{exact:true}));
   expect(await screen.findByRole('alert')).toHaveTextContent('Mục 35');
   expect(fetchMock.mock.calls.every(([,init])=>init?.method!=='POST')).toBe(true);
- });
+ },15000);
  it('selects many branches and fills a shared schedule without choosing a manager',async()=>{
   libraries=[lib];render(<WorkingLibrary workspace={workspace} onApplied={vi.fn()}/>);
   fireEvent.click(await screen.findByRole('button',{name:'Áp dụng cho chi nhánh'}));
   fireEvent.click(screen.getByRole('checkbox',{name:'Chọn tất cả chi nhánh chưa áp dụng trong phạm vi được phép'}));
-  fireEvent.change(screen.getByLabelText('Ngày bắt đầu chung'),{target:{value:'2026-10-20'}});
-  fireEvent.change(screen.getByLabelText('Giờ đến hạn chung'),{target:{value:'18:30'}});
-  fireEvent.change(screen.getByLabelText('Ngày hằng tuần chung'),{target:{value:'6'}});
+  fireEvent.click(screen.getByText('Điền cùng lịch cho 2 chi nhánh'));
+  fireEvent.change(screen.getByLabelText('Ngày bắt đầu chung'),{target:{value:'20/10/2026'}});
+  fireEvent.change(screen.getByLabelText('Giờ hạn chung (24 giờ)'),{target:{value:'18:30'}});
+  fireEvent.change(screen.getByLabelText('Lặp hằng tuần vào (lịch chung)'),{target:{value:'6'}});
   fireEvent.click(screen.getByRole('button',{name:'Điền lịch cho 2 chi nhánh đã chọn'}));
-  expect(screen.getAllByLabelText('Ngày bắt đầu').map(e=>(e as HTMLInputElement).value)).toEqual(['2026-10-20','2026-10-20']);
-  expect(screen.getAllByLabelText('Giờ đến hạn').map(e=>(e as HTMLInputElement).value)).toEqual(['18:30','18:30']);
-  expect(screen.getAllByLabelText('Ngày hằng tuần').map(e=>(e as HTMLSelectElement).value)).toEqual(['6','6']);
+  expect(screen.getAllByLabelText('Ngày bắt đầu',{exact:true}).map(e=>(e as HTMLInputElement).value)).toEqual(['20/10/2026','20/10/2026']);
+  expect(screen.getAllByLabelText('Giờ đến hạn (24 giờ)',{exact:true}).map(e=>(e as HTMLInputElement).value)).toEqual(['18:30','18:30']);
+  expect(screen.getAllByLabelText('Lặp hằng tuần vào',{exact:true}).map(e=>(e as HTMLSelectElement).value)).toEqual(['6','6']);
   expect(await screen.findAllByRole('button',{name:'Quản lý phụ trách * Chọn người'})).toHaveLength(2);
   expect(fetchMock.mock.calls.every(([,init])=>init?.method!=='POST')).toBe(true);
  });

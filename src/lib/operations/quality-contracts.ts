@@ -57,7 +57,7 @@ export const qualityReadSchema = z
     assignee: uuid.nullable().default(null),
     operator: uuid.nullable().default(null),
     department: uuid.nullable().default(null),
-    frequency: z.enum(["", "daily", "weekly", "monthly", "event"]).default(""),
+    frequency: z.enum(["", "once", "daily", "weekly", "monthly", "quarterly", "yearly", "event"]).default(""),
     result: z.enum(["", "met", "unmet", "unknown"]).default(""),
     dateField: z
       .enum(["due", "created", "completed", "checked"])

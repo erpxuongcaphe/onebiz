@@ -5,6 +5,9 @@ import { Icon } from "@/components/ui/icon";
 import type { Workspace } from "@/lib/operations/contracts";
 import { ceoWorkingNotes, ceoWorkingRows, parseWorkingWorkbook, workingHeaders, workingImportSchema, type WorkingRow } from "@/lib/operations/workbook-import";
 import { UserPicker } from "./user-picker";
+import { ScheduleDateInput, ScheduleTimeInput } from "./schedule-input";
+import { RecurrenceFields } from "./recurrence-fields";
+import { frequencyLabels } from "@/lib/operations/recurrence";
 import { formatNumber } from "@/lib/format";
 import { vnToday } from "./quality-fields";
 import s from "./quality.module.css";
@@ -63,15 +66,15 @@ export function WorkingImport({ workspace, onImported }: { workspace: Workspace;
   async function template() {
     try {
       const x = await import("xlsx"); const book = x.utils.book_new();
-      const sheet = x.utils.aoa_to_sheet([workingHeaders, ...ceoWorkingRows.map((row) => [row.number, row.group, row.title, row.requirement, row.scope, row.frequency === "daily" ? "Daily" : "Weekly", row.points])]);
-      sheet["!cols"] = [8, 30, 34, 100, 20, 18, 12].map((wch) => ({ wch }));
+      const sheet = x.utils.aoa_to_sheet([[...workingHeaders,'Ngày lặp','Tháng lặp'], ...ceoWorkingRows.map((row) => [row.number, row.group, row.title, row.requirement, row.scope, frequencyLabels[row.frequency], row.points,row.dayNumber??'',row.monthNumber??''])]);
+      sheet["!cols"] = [8, 30, 34, 100, 20, 18, 12, 14, 14].map((wch) => ({ wch }));
       x.utils.book_append_sheet(book, sheet, "Cong viec");
       const guide = x.utils.aoa_to_sheet([
         ["HƯỚNG DẪN NHẬP CÔNG VIỆC"],
         ["1", "Sheet Cong viec có 34 mục từ file CEO. Có thể thêm, sửa hoặc xóa dòng trước khi nhập."],
-        ["2", "Giữ đúng 7 tiêu đề cột. STT là mã ổn định, không trùng; tên công việc có thể trùng nếu yêu cầu khác nhau."],
+        ["2", "Giữ 7 tiêu đề gốc và 2 cột lịch bổ sung: Ngày lặp, Tháng lặp. File cũ 7 cột vẫn nhập được. STT là mã ổn định, không trùng."],
         ["3", "Phân loại, công việc và tiêu chí: nhập nội dung nghiệp vụ. Tiêu chí tối đa 300 ký tự."],
-        ["4", "Phạm vi: Chung. Frequency: Daily hoặc Weekly. Điểm: số US, ví dụ -5 hoặc +5; không nhập công thức."],
+        ["4", "Phạm vi: Chung. Frequency là lịch: Một lần, Hằng ngày/tuần/tháng/quý/năm. Lịch tháng/quý/năm cần Ngày lặp (1–31); quý cần Tháng lặp (1–3 trong quý), năm cần Tháng lặp (1–12). Điểm dùng số US; không dùng công thức."],
         ["5", "Lên Hub chọn file, xem trước, chọn chi nhánh, người phụ trách, lịch và ngày áp dụng. Không cần gõ mã tài khoản."],
         ["6", "Lưu bản nháp chưa sinh lịch hay chấm điểm. CEO kiểm tra rồi duyệt bộ để áp dụng công việc và QC cùng lúc."],
         ["7", "Lỗi ghi theo dòng/cột. Không ghi một phần nếu gói có lỗi. Không tự thay thế bộ đã nhập trùng mã."],
@@ -86,7 +89,7 @@ export function WorkingImport({ workspace, onImported }: { workspace: Workspace;
     setError(""); setMessage("");
     if (fileErrors.length) { setError("File còn lỗi. Sửa file và chọn lại trước khi lưu."); return; }
     const form = new FormData(event.currentTarget);
-    const body = { rows, assignments: branches.map((branchId) => ({ branchId, assigneeIds: form.getAll(`manager-${branchId}`).map(String) })), effectiveFrom: form.get("effectiveFrom"), dueTime: form.get("dueTime"), weeklyDay: rows.some((row) => row.frequency === "weekly") ? Number(form.get("weeklyDay")) : 1 };
+    const body = { rows, assignments: branches.map((branchId) => ({ branchId, assigneeIds: form.getAll(`manager-${branchId}`).map(String) })), effectiveFrom: form.get("effectiveFrom"), dueTime: form.get("dueTime"), weeklyDay: rows.some((row) => row.frequency === "weekly"&&!row.dayNumber) ? Number(form.get("weeklyDay")) : 1 };
     const signature = JSON.stringify(body);
     if (request.current?.body !== signature) request.current = { body: signature, id: crypto.randomUUID() };
     const parsed = workingImportSchema.safeParse({ ...body, requestId: request.current.id });
@@ -137,15 +140,15 @@ export function WorkingImport({ workspace, onImported }: { workspace: Workspace;
             {!!rows.length && <>
               <h3>{formatNumber(rows.length)} mục · {new Set(rows.map((row) => row.group)).size} nhóm</h3>
               <div className={w.settings}>
-                <label>Ngày bắt đầu<input type="date" name="effectiveFrom" min={vnToday()} required/></label>
-                <label>Hạn hoàn thành trong ngày<input type="time" name="dueTime" required/></label>
-                {rows.some((row) => row.frequency === "weekly") && <label>Ngày thực hiện việc hằng tuần<select name="weeklyDay" required defaultValue=""><option value="">Chọn ngày</option>{["Thứ hai", "Thứ ba", "Thứ tư", "Thứ năm", "Thứ sáu", "Thứ bảy", "Chủ nhật"].map((day, at) => <option value={at + 1} key={day}>{day}</option>)}</select></label>}
+                <label>Ngày bắt đầu<ScheduleDateInput aria-label="Ngày bắt đầu" name="effectiveFrom" min={vnToday()} required/></label>
+                <label>Hạn hoàn thành trong ngày (24 giờ)<ScheduleTimeInput name="dueTime" required/></label>
+                {rows.some((row) => row.frequency === "weekly"&&!row.dayNumber) && <label>Lặp hằng tuần vào<select name="weeklyDay" required defaultValue=""><option value="">Chọn thứ</option>{["Thứ hai", "Thứ ba", "Thứ tư", "Thứ năm", "Thứ sáu", "Thứ bảy", "Chủ nhật"].map((day, at) => <option value={at + 1} key={day}>{day}</option>)}</select><small>Chỉ áp dụng cho việc hằng tuần chưa đặt thứ riêng.</small></label>}
               </div>
               <section><h3>Chi nhánh và người phụ trách</h3><div className={w.branchGrid}>{workspace.branches.filter((branch) => branch.capabilities.includes("approve_policy")).map((branch) => <div className={w.branch} key={branch.id}>
                 <label><input type="checkbox" checked={branches.includes(branch.id)} onChange={(event) => setBranches((old) => event.target.checked ? [...old, branch.id] : old.filter((id) => id !== branch.id))}/>{branch.name}</label>
                 {branches.includes(branch.id) && <UserPicker label="Quản lý phụ trách" branch={branch.id} purpose="manager" name={`manager-${branch.id}`} multiple required/>}
               </div>)}</div></section>
-              <div className={s.actions}><input aria-label="Tìm công việc trong bản nhập" placeholder="Tìm nhóm, công việc hoặc tiêu chí…" value={filter} onChange={(event) => setFilter(event.target.value)}/><button type="button" onClick={() => {setFilter("");setRows((old) => [...old, { number: Math.max(0, ...old.map((row) => row.number)) + 1, group: "", title: "", requirement: "", scope: "Chung", frequency: "daily", points: NaN, critical: false, accountingRequired: false }]);}}><Icon name="add" size={16}/>Thêm mục</button></div>
+              <div className={s.actions}><input aria-label="Tìm công việc trong bản nhập" placeholder="Tìm nhóm, công việc hoặc tiêu chí…" value={filter} onChange={(event) => setFilter(event.target.value)}/><button type="button" onClick={() => {setFilter("");setRows((old) => [...old, { number: Math.max(0, ...old.map((row) => row.number)) + 1, group: "", title: "", requirement: "", scope: "Chung", frequency: "once", points: NaN, critical: false, accountingRequired: false }]);}}><Icon name="add" size={16}/>Thêm mục</button></div>
               <div className={w.rows}>{rows.map((row, index) => <fieldset className={w.row} key={index} hidden={!!filter && !`${row.group} ${row.title} ${row.requirement}`.toLocaleLowerCase().includes(filter.toLocaleLowerCase())}>
                 <legend>Mục {row.number}</legend>
                 <div className={w.settings}>
@@ -155,7 +158,7 @@ export function WorkingImport({ workspace, onImported }: { workspace: Workspace;
                 </div>
                 <label>Tiêu chí đánh giá<textarea required maxLength={300} value={row.requirement} onChange={(event) => update(index, { requirement: event.target.value })}/></label>
                 <div className={w.settings}>
-                  <label>Lịch<select value={row.frequency} onChange={(event) => update(index, { frequency: event.target.value as WorkingRow["frequency"] })}><option value="daily">Hằng ngày</option><option value="weekly">Hằng tuần</option></select></label>
+                  <RecurrenceFields frequency={row.frequency} weeklyFallback dayNumber={row.dayNumber??(row.frequency==='weekly'?0:1)} monthNumber={row.monthNumber??1} onChange={frequency=>update(index,{frequency:frequency==='event'?'once':frequency,dayNumber:frequency==='weekly'?undefined:1,monthNumber:frequency==='quarterly'||frequency==='yearly'?1:undefined})} onDayChange={dayNumber=>update(index,{dayNumber:dayNumber||undefined})} onMonthChange={monthNumber=>update(index,{monthNumber})}/>
                   <label>Điểm cộng / trừ<input type="number" step="0.01" min={-1000} max={1000} required value={Number.isFinite(row.points) ? row.points : ""} onChange={(event) => update(index, { points: event.target.value === "" ? NaN : Number(event.target.value) })}/></label>
                   <div className={w.flags}><label><input type="checkbox" checked={row.critical} onChange={(event) => update(index, { critical: event.target.checked })}/>Vi phạm loại thưởng</label><label><input type="checkbox" checked={row.accountingRequired} onChange={(event) => update(index, { accountingRequired: event.target.checked })}/>Cần xác nhận kế toán</label></div>
                 </div>

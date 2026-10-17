@@ -3,6 +3,7 @@ import { UserBranchContext, UserPicker } from "./user-picker";
 import { filterPeople } from "@/lib/operations/people-filters";
 import { WorkingImport } from "./working-import";
 import { WorkingLibrary } from "./working-library";
+import { OperationsHistoryPanel } from "./history";
 import {
   useCallback,
   useEffect,
@@ -64,9 +65,12 @@ const statusNames: Record<string, string> = {
   excluded: "Ngoài phạm vi",
 };
 const freq = {
+    once: "Một lần",
   daily: "Hàng ngày",
   weekly: "Hàng tuần",
   monthly: "Hàng tháng",
+    quarterly: "Hằng quý",
+    yearly: "Hằng năm",
   event: "Phát sinh",
 };
 function Badge({ value }: { value: string }) {
@@ -1106,6 +1110,7 @@ export function QualityWorkspace({
             <>
               {workspace.isCeo && data.can.manage && <><WorkingLibrary workspace={workspace} onApplied={() => { if (onConfigurationRefresh) onConfigurationRefresh(); else setRevision((current) => current + 1); }}/><details className={s.section}><summary>Các bộ nhập theo chi nhánh trước đây</summary><WorkingImport workspace={workspace} onImported={() => { if (onConfigurationRefresh) onConfigurationRefresh(); else setRevision((current) => current + 1); }}/></details></>}
               {configuration && <section className={s.section}><h3>Công việc và quyền chi nhánh</h3>{configuration}</section>}
+              <section className={s.section}><OperationsHistoryPanel branch={branch} period={period}/></section>
               <section className={s.section}>
                 <h3>Phân công và phòng ban</h3>
                 <div className={s.actions}>

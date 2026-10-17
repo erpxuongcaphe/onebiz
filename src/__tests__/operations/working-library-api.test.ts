@@ -10,6 +10,14 @@ const command=()=>({action:'save',requestId:crypto.randomUUID(),id:null,version:
 const post=(body:unknown,origin='http://localhost:3000')=>new NextRequest('http://localhost:3000/api/operations/library',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify(body)});
 beforeEach(()=>{vi.resetAllMocks();mocks.getUser.mockResolvedValue({data:{user:{id}},error:null});mocks.rpc.mockResolvedValue({data:{libraries:[],applications:[]},error:null});});
 describe('shared working library API',()=>{
+ it('blocks new schedules without the database capability and does not attempt a write',async()=>{
+  const body={...command(),rows:[{...ceoWorkingRows[0],frequency:'quarterly',dayNumber:31,monthNumber:2}]};
+  expect((await POST(post(body))).status).toBe(503);
+  expect(mocks.rpc).toHaveBeenCalledOnce();expect(mocks.rpc).toHaveBeenCalledWith('ops_working_library_read',{});
+  mocks.rpc.mockReset();mocks.rpc.mockResolvedValueOnce({data:{recurrenceVersion:1},error:null}).mockResolvedValueOnce({data:{id},error:null});
+  expect((await POST(post(body))).status).toBe(200);
+  expect(mocks.rpc).toHaveBeenLastCalledWith('ops_working_library_execute',expect.objectContaining({p_action:'save',p_payload:expect.objectContaining({rows:body.rows})}));
+ });
  it('saves 34 definitions without any branch, person or schedule',async()=>{
   const body=command();expect((await POST(post(body))).status).toBe(200);
   expect(mocks.rpc).toHaveBeenCalledWith('ops_working_library_execute',{p_action:'save',p_request_id:body.requestId,p_payload:expect.objectContaining({id:null,version:null,rows:ceoWorkingRows})});

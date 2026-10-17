@@ -45,6 +45,7 @@ const errors: Record<string, string> = {
   OPS_WAITING_REQUIRED: "Khi chờ phối hợp, cần ghi lý do và ngày theo dõi lại.",
   OPS_CATCHUP_RANGE:
     "Lịch thiếu quá 366 ngày. Cần kiểm tra ngày hiệu lực trước khi tạo lịch.",
+  OPS_INVALID_SCHEDULE: "Kiểm tra chu kỳ, ngày thực hiện, giờ hạn và ngày kết thúc của lịch.",
   OPS_REQUEST_CONFLICT:
     "Yêu cầu lưu đã được dùng cho nội dung khác. Tải lại và kiểm tra trước khi gửi.",
   OPS_INVALID_MEASUREMENT:
@@ -123,6 +124,13 @@ export async function POST(request: NextRequest) {
   const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) return failure("OPS_UNAUTHENTICATED");
+  const payload=parsed.data.payload;
+  if(['standard','common_standard','propose_standard'].includes(parsed.data.action)
+    && (['once','quarterly','yearly'].includes(String(payload.frequency))||payload.monthNumber!==undefined||payload.effectiveUntil)){
+    const capabilities=await (supabase as unknown as RpcClient).rpc('ops_access_context',{});
+    if(capabilities.error||Number((capabilities.data as {recurrenceVersion?:number}|null)?.recurrenceVersion??0)<1)
+      return NextResponse.json({error:'Lịch mở rộng đang chờ cập nhật hệ thống. Chưa ghi dữ liệu.'},{status:503});
+  }
   const result = await (supabase as unknown as RpcClient).rpc("ops_execute", {
     p_action: parsed.data.action,
     p_payload: parsed.data.payload,
