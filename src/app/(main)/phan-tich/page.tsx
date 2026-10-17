@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   LineChart,
   Line,
@@ -112,7 +112,14 @@ export default function TongQuanPage() {
   const visibleBranches = useMemo(() => sortManagementBranches(branchRows, branchSort), [branchRows, branchSort]);
   const scopeKey = `${tenant?.id}:${activeBranchId ?? "all"}:${range.from}:${range.to}:${canViewProfit}`;
   const pending = loadedScope !== scopeKey || (!kpis && loading);
-  const refresh = useCallback(() => setRevision(value => value + 1), []);
+  const refreshState = useRef({ inFlight: false, queued: false });
+  const refresh = useCallback(() => {
+    if (refreshState.current.inFlight) {
+      refreshState.current.queued = true;
+      return;
+    }
+    setRevision(value => value + 1);
+  }, []);
   useLiveDataRefresh(refresh, tenant?.id, activeBranchId, ["dashboard_live_signals"], isReady);
   const [dailyRows, setDailyRows] = useState<SalesReportDailyRow[]>([]);
   const dailyRevenue = dailyRows.map((row) => ({
@@ -366,6 +373,7 @@ export default function TongQuanPage() {
 
     async function fetchData() {
       if (!isReady) return;
+      refreshState.current = { inFlight: true, queued: false };
       setLoading(true);
       setLoadError(null);
       try {
@@ -395,7 +403,14 @@ export default function TongQuanPage() {
           setLoadedScope(scopeKey);
         }
       } finally {
-        if (isCurrentRequest) setLoading(false);
+        if (isCurrentRequest) {
+          refreshState.current.inFlight = false;
+          setLoading(false);
+          if (refreshState.current.queued) {
+            refreshState.current.queued = false;
+            setRevision(value => value + 1);
+          }
+        }
       }
     }
 
