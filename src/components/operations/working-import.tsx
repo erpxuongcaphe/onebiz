@@ -123,7 +123,7 @@ export function WorkingImport({ workspace, onImported }: { workspace: Workspace;
   return <>
     <button type="button" onClick={() => setOpen(true)}><Icon name="upload" size={16}/>Nhập công việc và tiêu chí Excel</button>
     <Dialog open={open} protectUnsavedChanges={rows.length > 0} onOpenChange={(next) => { if (!next) close(); }}>
-      <DialogContent className={`${s.dialog} translate-x-0 translate-y-0`} showCloseButton={false}>
+      <DialogContent className={`${s.dialog} ${w.dialog} translate-x-0 translate-y-0`} showCloseButton={false}>
         <header className={s.dialogHeader}><DialogTitle>Công việc và bộ tiêu chí của CEO</DialogTitle></header>
         <form className={s.dialogForm} onSubmit={(event) => void save(event)}>
           <fieldset className={w.body} disabled={busy}>

@@ -3229,6 +3229,40 @@
    "kind",
    "next_value",
    "tenant_id"
+  ],
+  "ops_working_libraries": [
+   "archived",
+   "created_at",
+   "created_by",
+   "id",
+   "notes",
+   "rows",
+   "source_key",
+   "tenant_id",
+   "title",
+   "updated_at",
+   "updated_by",
+   "version"
+  ],
+  "ops_working_library_versions": [
+   "actor_id",
+   "created_at",
+   "document",
+   "library_id",
+   "reason",
+   "tenant_id",
+   "version"
+  ],
+  "ops_working_library_applications": [
+   "batch_id",
+   "branch_id",
+   "created_at",
+   "created_by",
+   "id",
+   "library_id",
+   "library_version",
+   "settings",
+   "tenant_id"
   ]
  },
  "rpc": [
@@ -3689,6 +3723,9 @@
   "ops_workbook_batches_read",
   "ops_workbook_discard",
   "ops_workbook_import",
+  "ops_working_library_check",
+  "ops_working_library_execute",
+  "ops_working_library_read",
   "ops_workspace",
   "patch_tenant_settings_atomic",
   "peek_next_group_code",
@@ -3826,7 +3863,7 @@
   "void_disposal_export_atomic",
   "void_internal_export_atomic"
  ],
- "soBang": 234,
- "soCot": 2762,
- "soRpc": 593
+ "soBang": 237,
+ "soCot": 2790,
+ "soRpc": 596
 }

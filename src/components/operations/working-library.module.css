@@ -1,0 +1,30 @@
+.heading { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.heading p { margin:4px 0; color:#526172; }
+.table { overflow-x:auto; margin-top:12px; }
+.table table { width:100%; border-collapse:collapse; min-width:660px; }
+.table th,.table td { text-align:left; vertical-align:top; padding:12px 10px; border-bottom:1px solid #dce2eb; }
+.table th { background:#f0f4fc; font-size:13px; color:#435472; }
+.dialog { overflow:clip !important; }
+.dialog [hidden] { display:none !important; }
+.body { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; padding:18px 20px; }
+.body label { display:grid; gap:6px; min-width:0; }
+.body section { margin:16px 0; }
+.form { display:flex; flex-direction:column; min-height:0; flex:1; overflow:hidden; }
+.notice { border-left:3px solid #ca8a04; background:#fff8e4; padding:10px 12px; color:#664d0d; }
+.success { border-left:3px solid #16835e; background:#eef9f3; padding:10px 12px; color:#16613b; }
+.summary { display:flex; gap:16px; flex-wrap:wrap; color:#365076; margin:12px 0; }
+.grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+.row { border:1px solid #dce2eb; border-radius:6px; padding:14px; min-width:0; margin:12px 0; }
+.row legend { color:#174397; font-weight:600; }
+.row[hidden] { display:none; }
+.check { display:flex !important; align-items:center; gap:8px; min-height:38px; }
+.rowHeader { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; }
+.selected { border-left:3px solid #174bc4; padding-left:12px; }
+.status { color:#526172; font-size:13px; }
+.ready { color:#157047; }
+.branch { padding:14px 0; border-bottom:1px solid #dce2eb; }
+.branchFields { display:grid; grid-template-columns:minmax(230px,2fr) repeat(3,minmax(130px,1fr)); gap:12px; margin-top:10px; }
+.empty { padding:16px 0; color:#526172; }
+.notes { white-space:pre-wrap; }
+@media(max-width:800px){.branchFields{grid-template-columns:repeat(2,minmax(0,1fr));}.branchFields > :first-child{grid-column:1/-1;}}
+@media(max-width:600px){.body{padding:12px;}.grid,.branchFields{grid-template-columns:minmax(0,1fr);}.branchFields > :first-child{grid-column:auto;}.row{padding:10px;}.heading{align-items:flex-start;}.table table{min-width:540px;}}

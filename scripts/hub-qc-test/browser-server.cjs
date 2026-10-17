@@ -23,6 +23,7 @@ const ids = {
   if (process.env.HUB_CEO_ENTRY === '1') {
     await db.exec('create table user_branches(user_id uuid,branch_id uuid); insert into user_branches select user_id,branch_id from ops_members');
     await db.exec(fs.readFileSync(root + '/supabase/migrations/00555_operations_ceo_workbook_people.sql','utf8'));
+    if (process.env.HUB_LIBRARY_ENTRY === '1') await db.exec(fs.readFileSync(root + '/supabase/migrations/00556_operations_shared_working_library.sql','utf8'));
   }
   await db.query("update ops_q_grants set active=true");
   let actor = ids.owner;
@@ -112,6 +113,12 @@ const ids = {
               let value;
               if (url.pathname === "/api/operations/people") {
                 value = {people:(await db.query('select ops_eligible_people($1,$2) value',[url.searchParams.get('branch'),url.searchParams.get('purpose')])).rows[0].value};
+              } else if (url.pathname === '/api/operations/library') {
+                if (req.method === 'GET') value=(await db.query('select ops_working_library_read() value')).rows[0].value;
+                else {
+                  const {action,requestId,...payload}=JSON.parse(body);
+                  value={result:(await db.query('select ops_working_library_execute($1,$2,$3) value',[action,JSON.stringify(payload),requestId])).rows[0].value};
+                }
               } else if (url.pathname === '/api/operations/workbook') {
                 if (req.method === 'GET') value={batches:(await db.query('select ops_workbook_batches_read() value')).rows[0].value};
                 else {

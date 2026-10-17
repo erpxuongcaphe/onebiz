@@ -2,6 +2,7 @@
 import { UserBranchContext, UserPicker } from "./user-picker";
 import { filterPeople } from "@/lib/operations/people-filters";
 import { WorkingImport } from "./working-import";
+import { WorkingLibrary } from "./working-library";
 import {
   useCallback,
   useEffect,
@@ -1103,7 +1104,7 @@ export function QualityWorkspace({
           )}
           {view === "settings" && (
             <>
-              {workspace.isCeo && data.can.manage && <section className={s.section}><h3>Thiết lập từ file công việc</h3><WorkingImport workspace={workspace} onImported={() => { if (onConfigurationRefresh) onConfigurationRefresh(); else setRevision((current) => current + 1); }}/></section>}
+              {workspace.isCeo && data.can.manage && <><WorkingLibrary workspace={workspace} onApplied={() => { if (onConfigurationRefresh) onConfigurationRefresh(); else setRevision((current) => current + 1); }}/><details className={s.section}><summary>Các bộ nhập theo chi nhánh trước đây</summary><WorkingImport workspace={workspace} onImported={() => { if (onConfigurationRefresh) onConfigurationRefresh(); else setRevision((current) => current + 1); }}/></details></>}
               {configuration && <section className={s.section}><h3>Công việc và quyền chi nhánh</h3>{configuration}</section>}
               <section className={s.section}>
                 <h3>Phân công và phòng ban</h3>
