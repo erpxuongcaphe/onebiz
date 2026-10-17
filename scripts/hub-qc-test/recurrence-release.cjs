@@ -8,6 +8,8 @@ create temp table hub_recurrence_before on commit drop as
 select 'standards' kind,id,to_jsonb(s) value from public.ops_standards s
 union all select 'libraries',id,to_jsonb(l) from public.ops_working_libraries l
 union all select 'applications',id,to_jsonb(a) from public.ops_working_library_applications a;
+alter table hub_recurrence_before enable row level security;
+revoke all on hub_recurrence_before from public,anon,authenticated;
 `;
 const verify = `
 do $preserved$
