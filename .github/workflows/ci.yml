@@ -50,6 +50,20 @@ jobs:
           node scripts/fnb-db-test/run-production-corrections-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
           node scripts/fnb-db-test/run-expiry-time-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
 
+      - name: Verify FNB stock hardening and concurrent checkout
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: fnb_hardening_test
+        run: |
+          createdb fnb_hardening_test
+          node scripts/fnb-db-test/extract-stock-hardening-fixture.mjs /tmp/fnb-hardening-fixture.sql
+          psql -X -v ON_ERROR_STOP=1 -f /tmp/fnb-hardening-fixture.sql
+          python3 scripts/fnb-db-test/stock-hardening-concurrency.py
+          node scripts/fnb-db-test/run-stock-hardening-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
+
       - name: Verify atomic opening stock and isolated branch value
         env:
           PGHOST: localhost
@@ -598,4 +612,3 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-for-ci-build
           SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key-for-ci-build
-
