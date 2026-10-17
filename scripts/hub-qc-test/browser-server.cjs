@@ -27,6 +27,13 @@ const ids = {
       await db.exec(fs.readFileSync(root + '/supabase/migrations/00556_operations_shared_working_library.sql','utf8'));
       await db.exec(fs.readFileSync(root + '/supabase/migrations/00560_operations_library_shared_managers.sql','utf8'));
       if(process.env.HUB_RECURRENCE_ENTRY==='1')await db.exec(fs.readFileSync(root+'/supabase/migrations/00561_operations_recurrence.sql','utf8'));
+      if(process.env.HUB_LIFECYCLE_ENTRY==='1')await db.exec(fs.readFileSync(root+'/supabase/migrations/00562_operations_schedule_lifecycle.sql','utf8'));
+      if(process.env.HUB_LIFECYCLE_ENTRY==='1') {
+        await db.query("select set_config('test.actor',$1,false)",[ids.owner]);
+        const fixture=(await db.query("insert into ops_standards(tenant_id,branch_id,family_id,revision,title,assignee_id,frequency,day_number,due_time,effective_from,criteria,status,created_by,approved_by,approved_at) values(get_user_tenant_id(),$1,gen_random_uuid(),1,'Kiểm tra vệ sinh cuối ca',$2,'daily',1,'17:00',(now() at time zone 'Asia/Ho_Chi_Minh')::date,'[{\"id\":\"clean\",\"title\":\"Khu vực sạch\",\"kind\":\"boolean\",\"operator\":\"eq\",\"threshold\":1,\"samples\":1,\"critical\":false,\"evidenceRequired\":false}]','approved',$3,$3,now()-interval '1 day') returning *",[ids.branch,ids.manager,ids.owner])).rows[0];
+        await db.query("select ops_generate_internal($1,(now() at time zone 'Asia/Ho_Chi_Minh')::date+3)",[ids.branch]);
+        await db.query('select ops_execute($1,$2,gen_random_uuid())',['standard',JSON.stringify({branchId:ids.branch,title:'Kiểm tra vệ sinh cuối ca',assigneeId:ids.manager,frequency:'daily',dayNumber:1,dueTime:'20:00',effectiveFrom:new Date(Date.now()+86400000).toISOString().slice(0,10),criteria:fixture.criteria,familyId:fixture.family_id,revision:2,reason:'Điều chỉnh giờ kiểm tra theo giờ đóng cửa'})]);
+      }
     }
   }
   await db.query("update ops_q_grants set active=true");
@@ -115,7 +122,9 @@ const ids = {
               ]);
               await db.exec("set role authenticated");
               let value;
-              if (url.pathname === "/api/operations/people") {
+              if (url.pathname === "/api/operations/schedule") {
+                value=(await db.query('select ops_schedule_impact($1,$2) value',[url.searchParams.get('id'),url.searchParams.get('from')])).rows[0].value;
+              } else if (url.pathname === "/api/operations/people") {
                 value = {people:(await db.query('select ops_eligible_people($1,$2) value',[url.searchParams.get('branch'),url.searchParams.get('purpose')])).rows[0].value};
               } else if (url.pathname === '/api/operations/library') {
                 if (req.method === 'GET') value=(await db.query('select ops_working_library_read() value')).rows[0].value;

@@ -9,6 +9,8 @@ export const operationActions = [
   "request_standard_changes",
   "retire_standard",
   "discard_standard",
+  "end_schedule",
+  "move_run",
   "generate",
   "ensure_schedule",
   "event",
@@ -76,6 +78,7 @@ export interface Run {
   title: string;
   assignee_id: string;
   original_due_at: string;
+  current_due_at?: string | null;
   state: string;
   quality: "met" | "unmet" | "unknown";
   met_at: string | null;
@@ -98,6 +101,7 @@ export interface Standard {
   due_time: string;
   effective_from: string;
   effective_until?: string | null;
+  stop_after?: string | null;
   month_number?: number | null;
   title: string;
   status: string;

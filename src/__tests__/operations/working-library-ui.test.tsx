@@ -124,14 +124,19 @@ describe('company working library and branch setup UX',()=>{
   const body=JSON.parse(fetchMock.mock.calls.find(([,init])=>init?.method==='POST')![1].body);
   expect(body.action).toBe('save');expect(body.rows).toHaveLength(34);expect(body).not.toHaveProperty('assignments');
  });
- it('supports adding, editing and removing a source criterion before saving',async()=>{
+ it('supports adding, editing and removing a criterion in an editable library',async()=>{
+  libraries=[{...lib,rows:ceoWorkingRows.slice(0,1)}];
   render(<WorkingLibrary workspace={workspace} onApplied={vi.fn()}/>);
-  const load=await screen.findByRole('button',{name:'Nạp 34 tiêu chí CEO'});await waitFor(()=>expect(load).toBeEnabled());fireEvent.click(load);
-  fireEvent.click(screen.getByRole('button',{name:'Thêm tiêu chí'}));
-  fireEvent.change(within(screen.getByRole('group',{name:'Mục 35'})).getByLabelText('Công việc'),{target:{value:'Việc do CEO thêm'}});
-  expect(within(screen.getByRole('group',{name:'Mục 35'})).getByLabelText('Công việc')).toHaveValue('Việc do CEO thêm');
-  fireEvent.click(screen.getByRole('button',{name:'Xóa tiêu chí 35: Việc do CEO thêm'}));
-  expect(screen.getAllByRole('group',{name:/^Mục \d+$/})).toHaveLength(34);
+  fireEvent.click(await screen.findByRole('button',{name:'Sửa nội dung'}));
+  fireEvent.click(screen.getByText('Thêm tiêu chí',{exact:true}));
+  const addedRow=screen.getByText('Mục 2',{exact:true}).closest('fieldset')!;
+  const title=within(addedRow).getByLabelText('Công việc');
+  fireEvent.change(title,{target:{value:'Việc do CEO thêm'}});
+  expect(title).toHaveValue('Việc do CEO thêm');
+  fireEvent.click(screen.getByLabelText('Xóa tiêu chí 2: Việc do CEO thêm'));
+  expect(screen.getAllByText(/^Mục \d+$/)).toHaveLength(1);
+  expect(screen.getByText('Mục 1',{exact:true})).toBeInTheDocument();
+  expect(fetchMock.mock.calls.every(([,init])=>init?.method!=='POST')).toBe(true);
  });
  it('reports the incomplete criterion even when it was hidden by a search',async()=>{
   render(<WorkingLibrary workspace={workspace} onApplied={vi.fn()}/>);

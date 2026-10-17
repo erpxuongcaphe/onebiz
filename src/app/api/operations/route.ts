@@ -15,6 +15,10 @@ interface RpcClient {
   }>;
 }
 const errors: Record<string, string> = {
+  OPS_SCHEDULE_REVIEW_REQUIRED: "Lịch hoặc công việc đã thay đổi. Mở lại phần xem trước rồi xác nhận.",
+  OPS_SCHEDULE_PROTECTED: "Việc này đã có kết quả, hồ sơ liên quan hoặc kỳ đã chốt. Không được đổi hạn tự động.",
+  OPS_SCHEDULE_CANCELED: "Việc đã được hủy do thay đổi lịch. Tải lại để xem công việc đang áp dụng.",
+  OPS_ONEOFF_MOVE_REQUIRED: "Việc một lần đã có hồ sơ hoặc đang được giữ nguyên. Muốn dời hạn, mở Công việc → Đổi hạn việc này; không tạo thêm một lần thực hiện.",
   OPS_WORKBOOK_APPROVAL_REQUIRED: "Công việc thuộc bộ nhập Excel. Duyệt cả bộ trong màn hình nhập để công việc và QC được áp dụng cùng nhau.",
   OPS_Q_USE_WORKFLOW: "Hồ sơ này dùng luồng mới. Về Công việc hoặc To-do trong Hub mới để ghi kết quả và kiểm tra lại.",
   OPS_FORBIDDEN: "Bạn chưa có quyền thực hiện ở chi nhánh này.",

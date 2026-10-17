@@ -39,3 +39,5 @@ jobs:
         run: HUB_PGLITE_DIR="$RUNNER_TEMP/hub-quality-runtime/node_modules/@electric-sql/pglite" node scripts/hub-qc-test/shared-managers-acceptance.cjs
       - name: Verify recurrence calendar, audit trail and preserved business data
         run: HUB_PGLITE_DIR="$RUNNER_TEMP/hub-quality-runtime/node_modules/@electric-sql/pglite" node scripts/hub-qc-test/recurrence-acceptance.cjs
+      - name: Verify reviewed schedule changes and original deadline preservation
+        run: HUB_PGLITE_DIR="$RUNNER_TEMP/hub-quality-runtime/node_modules/@electric-sql/pglite" node scripts/hub-qc-test/lifecycle-acceptance.cjs

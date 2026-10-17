@@ -1,0 +1,52 @@
+import React from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { ScheduleReview } from "@/components/operations/schedule-review";
+import { scheduleState } from "@/lib/operations/schedule-lifecycle";
+import type { Standard } from "@/lib/operations/contracts";
+vi.mock("@/components/ui/icon", () => ({ Icon: () => null }));
+const standard = { id: "11111111-1111-4111-8111-111111111111", branch_id: "22222222-2222-4222-8222-222222222222", title: "Kiểm tra vệ sinh", frequency: "daily", day_number: 1, due_time: "17:00", effective_from: "2026-11-01", revision: 2, status: "draft" } as Standard;
+const impact = { token: "review-token", replaceable: [{ id: "task-a", title: "Việc chưa thực hiện", due: "2026-11-01T17:00:00+07:00" }], protected: [{ id: "task-b", title: "Việc đã có kết quả", due: "2026-11-01T17:00:00+07:00" }], count: 2 };
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+describe("Hub schedule lifecycle", () => {
+ it("distinguishes a draft, future start, active schedule and ended schedule", () => {
+  expect(scheduleState(standard,"2026-10-17")).toBe("draft");
+  expect(scheduleState({...standard,status:"approved"},"2026-10-17")).toBe("scheduled");
+  expect(scheduleState({...standard,status:"approved"},"2026-11-01")).toBe("active");
+  expect(scheduleState({...standard,status:"approved",stop_after:"2026-11-01"},"2026-11-02")).toBe("ended");
+  expect(scheduleState({...standard,status:"approved",effective_until:"2026-11-01"},"2026-11-02")).toBe("ended");
+ });
+ it("requires preview, future-work decision and confirmation before saving", async () => {
+  const fetchMock=vi.fn().mockResolvedValue({ok:true,json:async()=>impact});
+  vi.stubGlobal("fetch",fetchMock);const refreshed=vi.fn();
+  render(<ScheduleReview standard={standard} branch={standard.branch_id} mode="approve" busy={false} onSaved={refreshed}/>);
+  fireEvent.click(screen.getByRole("button",{name:"Duyệt lịch áp dụng"}));
+  const dialog=await screen.findByRole("dialog",{name:"Duyệt lịch áp dụng"});
+  const ui=within(dialog);
+  expect(ui.getByRole("button",{name:"Xác nhận lưu"})).toBeDisabled();
+  fireEvent.click(ui.getByRole("button",{name:"Xem việc bị ảnh hưởng"}));
+  await ui.findByText(/1 việc chưa thực hiện/);
+  expect(fetchMock.mock.calls.every(([,init])=>init?.method!=="POST")).toBe(true);
+  fireEvent.click(ui.getByRole("radio",{name:"Thay bằng lịch mới"}));
+  fireEvent.change(ui.getByLabelText("Lý do"),{target:{value:"Đổi giờ theo lịch vận hành mới"}});
+  fireEvent.click(ui.getByRole("checkbox",{name:"Tôi đã kiểm tra phạm vi thay đổi"}));
+  fireEvent.click(ui.getByRole("button",{name:"Xác nhận lưu"}));
+  await waitFor(()=>expect(refreshed).toHaveBeenCalledOnce());
+  const body=JSON.parse(fetchMock.mock.calls.find(([,init])=>init?.method==="POST")![1].body);
+  expect(body).toMatchObject({action:"approve_standard",payload:{branchId:standard.branch_id,id:standard.id,impactToken:impact.token,futurePolicy:"replace_empty"}});
+ });
+ it("keeps the modal and reason after a failed save, with no automatic retries", async () => {
+  const fetchMock=vi.fn().mockImplementation(async(_url,init)=>init?.method==="POST"?{ok:false,json:async()=>({error:"Lịch vừa thay đổi. Hãy xem lại."})}:{ok:true,json:async()=>impact});
+  vi.stubGlobal("fetch",fetchMock);
+  render(<ScheduleReview standard={standard} branch={standard.branch_id} mode="approve" busy={false}/>);
+  fireEvent.click(screen.getByRole("button",{name:"Duyệt lịch áp dụng"}));
+  fireEvent.click(screen.getByRole("button",{name:"Xem việc bị ảnh hưởng"}));
+  fireEvent.click(await screen.findByRole("radio",{name:"Giữ các việc đã tạo và hạn hiện tại"}));
+  fireEvent.change(screen.getByLabelText("Lý do"),{target:{value:"Giữ các công việc đã giao"}});
+  fireEvent.click(screen.getByRole("checkbox",{name:"Tôi đã kiểm tra phạm vi thay đổi"}));
+  fireEvent.click(screen.getByRole("button",{name:"Xác nhận lưu"}));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Lịch vừa thay đổi");
+  expect(screen.getByLabelText("Lý do")).toHaveValue("Giữ các công việc đã giao");
+  expect(fetchMock.mock.calls.filter(([,init])=>init?.method==="POST")).toHaveLength(1);
+ });
+});

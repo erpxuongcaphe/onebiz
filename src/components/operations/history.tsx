@@ -17,9 +17,9 @@ interface HistoryRow {
   before_schedule?: ScheduleSnapshot | null;
   after_schedule?: ScheduleSnapshot | null;
 }
-type ScheduleSnapshot={frequency:string;day_number?:number;month_number?:number|null;due_time?:string;effective_from?:string;effective_until?:string|null};
+type ScheduleSnapshot={frequency?:string;day_number?:number;month_number?:number|null;due_time?:string;effective_from?:string;effective_until?:string|null;stop_after?:string|null;original_due_at?:string;current_due_at?:string|null};
 function ScheduleHistory({title,value}:{title:string;value:ScheduleSnapshot}){
-  return <div><strong>{title}</strong><p>{scheduleSummary(value.frequency,value.day_number??1,value.month_number??1)}{value.due_time?` · ${value.due_time.slice(0,5)}`:''}</p><p>{value.effective_from?`Từ ${formatShortDate(`${value.effective_from}T00:00:00+07:00`)}`:''}{value.effective_until?` đến ${formatShortDate(`${value.effective_until}T00:00:00+07:00`)}`:''}</p></div>;
+  return <div><strong>{title}</strong>{value.frequency&&<p>{scheduleSummary(value.frequency,value.day_number??1,value.month_number??1)}{value.due_time?` · ${value.due_time.slice(0,5)}`:''}</p>}<p>{value.effective_from?`Từ ${formatShortDate(`${value.effective_from}T00:00:00+07:00`)}`:''}{value.effective_until?` đến ${formatShortDate(`${value.effective_until}T00:00:00+07:00`)}`:''}</p>{value.stop_after&&<p>Ngày thực hiện cuối: {formatShortDate(`${value.stop_after}T00:00:00+07:00`)}</p>}{value.original_due_at&&<p>Hạn gốc: {formatDate(value.original_due_at)}</p>}{value.current_due_at&&<p>Hạn hiện tại: {formatDate(value.current_due_at)}</p>}</div>;
 }
 interface Page {
   rows: HistoryRow[];
@@ -58,6 +58,10 @@ const labels: Record<string, string> = {
   event: "Công việc sự kiện",
   onebiz_revenue: "Lấy doanh thu OneBiz",
   configure_schedule: "Thiết lập lịch thực hiện",
+  end_schedule: "Kết thúc lịch lặp",
+  move_run: "Đổi hạn một công việc",
+  replace_schedule: "Thay lịch cùng ngày",
+  apply_schedule_change: "Áp dụng thay đổi lịch",
   generate_schedule: "Sinh công việc theo lịch",
   apply_working_library: "Áp dụng bộ tiêu chí cho chi nhánh",
   common_standard: "Tạo công việc chung",

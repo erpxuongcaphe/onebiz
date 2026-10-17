@@ -4,6 +4,7 @@ import { filterPeople } from "@/lib/operations/people-filters";
 import { WorkingImport } from "./working-import";
 import { WorkingLibrary } from "./working-library";
 import { OperationsHistoryPanel } from "./history";
+import { ScheduleReview } from "./schedule-review";
 import {
   useCallback,
   useEffect,
@@ -797,7 +798,7 @@ export function QualityWorkspace({
                       setOffset(0);
                     }}
                   />
-                  Quá hạn
+                  {view === "work" ? "Trễ hạn gốc" : "Quá hạn"}
                 </label>}
               </>
             )}
@@ -840,7 +841,8 @@ export function QualityWorkspace({
                   </td>
                   <td>
                     {freq[r.frequency]}
-                    <p>{formatDate(r.original_due_at)}</p>
+                    <p>{formatDate(r.current_due_at ?? r.original_due_at)}</p>
+                    {r.current_due_at && <small>Hạn gốc: {formatDate(r.original_due_at)}</small>}
                   </td>
                   <td>{r.manager_ids.map(name).join(", ")}</td>
                   <td>
@@ -855,6 +857,7 @@ export function QualityWorkspace({
                       : "Chưa kiểm tra"}
                   </td>
                   <td>
+                    {workspace.isCeo && r.state === "pending" && r.quality === "unknown" && !r.checks.length && <ScheduleReview mode="move" run={r} branch={branch} busy={busy} onSaved={() => setRevision(v => v + 1)}/>}
                     {data.can.work &&
                       r.manager_ids.includes(workspace.userId) && (
                         <button onClick={() => edit({ kind: "check", run: r })}>
@@ -869,8 +872,10 @@ export function QualityWorkspace({
                   <h3>{r.title}</h3>
                   <Badge value={r.quality} />
                   <p>
-                    {freq[r.frequency]} · {formatDate(r.original_due_at)}
+                    {freq[r.frequency]} · {formatDate(r.current_due_at ?? r.original_due_at)}
                   </p>
+                  {r.current_due_at && <p>Hạn gốc: {formatDate(r.original_due_at)}</p>}
+                  {workspace.isCeo && r.state === "pending" && r.quality === "unknown" && !r.checks.length && <ScheduleReview mode="move" run={r} branch={branch} busy={busy} onSaved={() => setRevision(v => v + 1)}/>}
                   <p className={s.muted}>
                     {r.manager_ids.map(name).join(", ")}
                   </p>
