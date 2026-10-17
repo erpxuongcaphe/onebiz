@@ -128,10 +128,12 @@ describe('company working library and branch setup UX',()=>{
   render(<WorkingLibrary workspace={workspace} onApplied={vi.fn()}/>);
   const load=await screen.findByText('Nạp 34 tiêu chí CEO',{exact:true});await waitFor(()=>expect(load).toBeEnabled());fireEvent.click(load);
   fireEvent.click(screen.getByText('Thêm tiêu chí',{exact:true}));
-  fireEvent.change(within(screen.getByRole('group',{name:'Mục 35'})).getByLabelText('Công việc'),{target:{value:'Việc do CEO thêm'}});
-  expect(within(screen.getByRole('group',{name:'Mục 35'})).getByLabelText('Công việc')).toHaveValue('Việc do CEO thêm');
+  const addedRow=screen.getByText('Mục 35',{exact:true}).closest('fieldset')!;
+  const title=within(addedRow).getByLabelText('Công việc');
+  fireEvent.change(title,{target:{value:'Việc do CEO thêm'}});
+  expect(title).toHaveValue('Việc do CEO thêm');
   fireEvent.click(screen.getByLabelText('Xóa tiêu chí 35: Việc do CEO thêm'));
-  expect(screen.getAllByRole('group',{name:/^Mục \d+$/})).toHaveLength(34);
+  expect(screen.getAllByText(/^Mục \d+$/)).toHaveLength(34);
  });
  it('reports the incomplete criterion even when it was hidden by a search',async()=>{
   render(<WorkingLibrary workspace={workspace} onApplied={vi.fn()}/>);
