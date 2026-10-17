@@ -15,6 +15,7 @@ import { getBranchStockAggregates, getBranchStockRows } from "./branch-stock";
 import { summarizeChannelSales, type ChannelOnlineOrder } from "@/lib/utils/channel-report";
 import { aggregateProductSaleLines } from "@/lib/reports/product-sales-aggregation";
 import { aggregateStockMovementRows, type MovementReportRow, type MovementSourceRow } from "@/lib/reports/stock-movement-aggregation";
+import { getProfitAndLoss, getConsolidatedPnL } from "./reports";
 
 // === Shared Types ===
 
@@ -380,6 +381,7 @@ export async function getOverviewKpis(
   profit: number; prevProfit: number;
   expense: number; prevExpense: number;
   profitMargin: number; prevProfitMargin: number;
+  financial: Awaited<ReturnType<typeof getProfitAndLoss>> | Awaited<ReturnType<typeof getConsolidatedPnL>>;
 }> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
@@ -405,7 +407,7 @@ export async function getOverviewKpis(
           withBranch(
             supabase
               .from("invoices")
-              .select("status")
+              .select("status, source")
               .eq("tenant_id", tenantId)
               .gte("ngay_chung_tu", current.start)
               .lt("ngay_chung_tu", current.end),
@@ -417,7 +419,7 @@ export async function getOverviewKpis(
           withBranch(
             supabase
               .from("invoices")
-              .select("status")
+              .select("status, source")
               .eq("tenant_id", tenantId)
               .gte("ngay_chung_tu", previous.start)
               .lt("ngay_chung_tu", previous.end),
@@ -425,25 +427,26 @@ export async function getOverviewKpis(
         "[getOverviewKpis.previousInvoices]",
       ),
       getCustomerKpis(branchId, range),
-      getFinanceDashboardReport(branchId, range),
+      branchId ? getProfitAndLoss(branchId, range) : getConsolidatedPnL(range),
     ]);
 
-  const countCompleted = (rows: Array<{ status: string }> | null) =>
-    (rows ?? []).filter((invoice) => invoice.status === "completed").length;
+  const countCompleted = (rows: Array<{ status: string; source?: string }> | null) =>
+    (rows ?? []).filter((invoice) => invoice.status === "completed" && (branchId || invoice.source !== "internal")).length;
 
   return {
-    revenue: finance.kpis.revenue,
-    prevRevenue: finance.kpis.prevRevenue,
+    revenue: finance.current.goodsRevenue,
+    prevRevenue: finance.previous.goodsRevenue,
     orders: countCompleted(currentInvoices),
     prevOrders: countCompleted(previousInvoices),
     newCustomers: customerKpis.newThisMonth,
     prevNewCustomers: customerKpis.prevNewMonth,
-    profit: Math.round(finance.kpis.profit),
-    prevProfit: Math.round(finance.kpis.prevProfit),
-    expense: finance.kpis.expense,
-    prevExpense: finance.kpis.prevExpense,
-    profitMargin: finance.kpis.profitMargin,
-    prevProfitMargin: finance.kpis.prevProfitMargin,
+    profit: finance.current.netProfit,
+    prevProfit: finance.previous.netProfit,
+    expense: finance.current.cogs + finance.current.operatingExpense,
+    prevExpense: finance.previous.cogs + finance.previous.operatingExpense,
+    profitMargin: finance.current.netMargin,
+    prevProfitMargin: finance.previous.netMargin,
+    financial: finance,
   };
 }
 

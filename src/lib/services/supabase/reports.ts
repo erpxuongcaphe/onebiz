@@ -908,6 +908,8 @@ export async function getConsolidatedPnL(
         number(row.delivery_fee),
         row.cogs_complete === true,
         number(row.missing_sales_cost_lines) + number(row.missing_return_cost_lines),
+        number(row.other_income),
+        number(row.legacy_cash_expense),
       ),
       internalRevenue: number(row.internal_revenue),
     });
@@ -948,6 +950,7 @@ export interface BranchPnLRow {
   netMargin: number;
   cogsComplete: boolean;
   missingCostLines: number;
+  otherIncome?: number;
 }
 
 /**
@@ -998,6 +1001,7 @@ export async function getBranchPnLComparison(
       netMargin: number(row.operating_margin),
       cogsComplete: row.cogs_complete === true,
       missingCostLines: number(row.missing_cost_lines),
+      otherIncome: number(row.other_income),
     }));
   } catch (error) {
     const message =
