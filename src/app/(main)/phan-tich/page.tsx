@@ -166,7 +166,9 @@ export default function TongQuanPage() {
       const kpiRows = [
         { metric: "Doanh thu hàng hóa", value: kpis?.revenue ?? 0, prev: kpis?.prevRevenue ?? 0 },
         { metric: "Đơn hàng", value: kpis?.orders ?? 0, prev: kpis?.prevOrders ?? 0 },
-        { metric: "Khách mới", value: kpis?.newCustomers ?? 0, prev: kpis?.prevNewCustomers ?? 0 },
+        ...(canViewProfit
+          ? [{ metric: "Lãi gộp", value: kpis.financial.current.cogsComplete ? kpis.financial.current.grossProfit : null, prev: kpis.financial.previous.cogsComplete ? kpis.financial.previous.grossProfit : null }]
+          : [{ metric: "Khách mới", value: kpis.newCustomers, prev: kpis.prevNewCustomers }]),
         ...(canViewProfit ? [{ metric: "Kết quả sau chi phí đã ghi nhận", value: kpis.financial.current.cogsComplete ? kpis.profit : null, prev: kpis.financial.previous.cogsComplete ? kpis.prevProfit : null }] : []),
       ];
 

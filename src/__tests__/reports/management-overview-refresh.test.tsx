@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 
 const state = vi.hoisted(() => ({
   branchId: "branch-a", refresh: undefined as (() => void) | undefined,
-  getOverviewKpis: vi.fn(), range: { from: "2026-09-01", to: "2026-09-30" },
+  getOverviewKpis: vi.fn(), exportReportToExcel: vi.fn(), range: { from: "2026-09-01", to: "2026-09-30" },
 }));
 vi.mock("@/lib/contexts", () => ({
   useBranchFilter: () => ({ activeBranchId: state.branchId, branchLabel: state.branchId, isReady: true }),
@@ -25,8 +25,12 @@ vi.mock("@/lib/services", () => ({
 }));
 vi.mock("@/lib/services/supabase/reports", () => ({ getBranchPnLComparison: async () => [] }));
 vi.mock("@/components/shared/report", () => ({
-  ReportPageHeader: () => <h1>Tổng quan kinh doanh</h1>,
+  ReportPageHeader: ({ onExportView, exportDisabled }: { onExportView: () => void; exportDisabled: boolean }) => <><h1>Tổng quan kinh doanh</h1><button onClick={onExportView} disabled={exportDisabled}>Xuất bảng</button></>,
   ReportTableFrame: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+}));
+vi.mock("@/lib/utils/excel-export", async importOriginal => ({
+  ...await importOriginal<typeof import("@/lib/utils/excel-export")>(),
+  exportReportToExcel: state.exportReportToExcel,
 }));
 vi.mock("@/components/shared/report/management-review", () => ({ ManagementReview: () => <div>Đối chiếu quản trị</div> }));
 import Overview from "@/app/(main)/phan-tich/page";
@@ -40,7 +44,7 @@ function deferred<T>() {
   const promise = new Promise<T>(done => { resolve = done; });
   return { promise, resolve };
 }
-beforeEach(() => { state.branchId = "branch-a"; state.getOverviewKpis.mockReset(); });
+beforeEach(() => { state.branchId = "branch-a"; state.getOverviewKpis.mockReset(); state.exportReportToExcel.mockReset().mockResolvedValue(undefined); });
 afterEach(cleanup);
 
 describe("overview refresh safety", () => {
@@ -67,5 +71,17 @@ describe("overview refresh safety", () => {
     await act(async () => { old.resolve(result(111111)); });
     expect(screen.queryByText("111,111đ")).not.toBeInTheDocument();
     expect(state.getOverviewKpis).toHaveBeenLastCalledWith("branch-b", state.range);
+  });
+
+  it("exports the gross-profit KPI shown on screen and the same financial bridge", async () => {
+    state.getOverviewKpis.mockResolvedValue(result(444444));
+    render(<Overview />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Xuất bảng" })).toBeEnabled());
+    await act(async () => { screen.getByRole("button", { name: "Xuất bảng" }).click(); });
+    const exported = state.exportReportToExcel.mock.calls[0][0];
+    expect(exported.range).toEqual(state.range);
+    expect(exported.branchName).toBe("branch-a");
+    expect(exported.sheets[0].rows.find((row: { metric: string }) => row.metric === "Lãi gộp")).toMatchObject({ value: 444444 });
+    expect(exported.sheets[1].rows.find((row: { metric: string }) => row.metric === "Lãi gộp")).toMatchObject({ current: 444444 });
   });
 });
