@@ -18,7 +18,7 @@ import {
 } from "react";
 import { Icon } from "@/components/ui/icon";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { formatNumber, formatDate } from "@/lib/format";
+import { formatNumber, formatDate, formatShortDate } from "@/lib/format";
 import {
   categories,
   priorities,
@@ -66,6 +66,8 @@ import { ScheduleDateInput, ScheduleTimeInput } from "./schedule-input";
 import { RecurrenceFields } from "./recurrence-fields";
 import { frequencyLabels, scheduleSummary } from "@/lib/operations/recurrence";
 import { StandardLifecycle } from "./standard-lifecycle";
+import { ScheduleReview } from "./schedule-review";
+import { scheduleState, scheduleStateLabels } from "@/lib/operations/schedule-lifecycle";
 import { filterPeople } from "@/lib/operations/people-filters";
 
 const tabs = [
@@ -133,9 +135,10 @@ const money = (v: FormDataEntryValue | null) => {
   return result;
 };
 function Badge({ value }: { value: string }) {
+  const tone = ({ active: "approved", scheduled: "pending", ended: "retired" } as Record<string,string>)[value] ?? value;
   return (
-    <span className={`${styles.badge} ${styles[value] ?? ""}`}>
-      {states[value] ?? value}
+    <span className={`${styles.badge} ${styles[tone] ?? ""}`}>
+      {scheduleStateLabels[value] ?? states[value] ?? value}
     </span>
   );
 }
@@ -546,7 +549,7 @@ export default function OperationsWorkspace() {
           {loading && !data && <Empty label="Đang tải dữ liệu…" />}
           {data && (
             <>
-              {!legacy && <QualityWorkspace key={`${branch}:${tab}:${qualityNavigation}`} workspace={data} onConfigurationRefresh={() => void load()} branch={branch || data.todos[0]?.branch_id || ""} period={period} assessmentPeriod={assessmentPeriod} onAssessmentPeriodChange={setAssessmentPeriod} focus={qualityFocus} onNavigate={navigateQuality} configuration={<SettingsView data={data} error={error} canConfigure={can("approve_policy")} canPropose={canProposeStandard(data, branch)} canManageMembers={can("manage_members")} busy={busy} onEdit={setEditor} onSave={send} includeRewardPolicies={false} />} initialView={tab === "overview" ? "overview" : tab === "todo" ? "issues" : tab === "qc" ? "qc" : tab === "kpi" ? "report" : tab === "settings" ? "settings" : "work"} onLegacySettings={() => requestPageLeave(() => {setLegacy(true);setTab("settings");})} />}
+              {!legacy && <QualityWorkspace key={`${branch}:${tab}:${qualityNavigation}`} workspace={data} onConfigurationRefresh={() => void load()} branch={branch || data.todos[0]?.branch_id || ""} period={period} assessmentPeriod={assessmentPeriod} onAssessmentPeriodChange={setAssessmentPeriod} focus={qualityFocus} onNavigate={navigateQuality} configuration={<SettingsView data={data} error={error} canConfigure={can("approve_policy")} canPropose={canProposeStandard(data, branch)} canManageMembers={can("manage_members")} busy={busy} onEdit={setEditor} onSave={send} onScheduleChanged={() => void load()} includeRewardPolicies={false} />} initialView={tab === "overview" ? "overview" : tab === "todo" ? "issues" : tab === "qc" ? "qc" : tab === "kpi" ? "report" : tab === "settings" ? "settings" : "work"} onLegacySettings={() => requestPageLeave(() => {setLegacy(true);setTab("settings");})} />}
               {legacy && <>
               <div className={styles.notice}>Cấu hình và lịch sử Hub hiện có <button onClick={() => requestPageLeave(() => {setLegacy(false);setTab("work");})}>Về Hub mới</button></div>
               <div className={styles.metrics}>
@@ -634,7 +637,8 @@ export default function OperationsWorkspace() {
                         <h2>{r.title}</h2>
                         <p>
                           {name(r.assignee_id)} ·{" "}
-                          {formatDate(r.original_due_at)}
+                          {formatDate(r.current_due_at ?? r.original_due_at)}
+                          {r.current_due_at && <small> · Hạn gốc: {formatDate(r.original_due_at)}</small>}
                         </p>
                       </div>
                       <div className={styles.rowStatus}>
@@ -756,7 +760,8 @@ export default function OperationsWorkspace() {
                             <h2>{r.title}</h2>
                             <p>
                               {name(r.assignee_id)} ·{" "}
-                              {formatDate(r.original_due_at)}
+                              {formatDate(r.current_due_at ?? r.original_due_at)}
+                              {r.current_due_at && <small> · Hạn gốc: {formatDate(r.original_due_at)}</small>}
                             </p>
                           </div>
                           <Badge value={r.quality} />
@@ -985,6 +990,7 @@ export default function OperationsWorkspace() {
                   busy={busy}
                   onEdit={setEditor}
                   onSave={send}
+                  onScheduleChanged={() => void load()}
                 />
               )}
               </>}
@@ -1070,6 +1076,7 @@ function SettingsView({
   busy,
   onEdit,
   onSave,
+  onScheduleChanged,
   includeRewardPolicies = true,
 }: {
   data: Workspace;
@@ -1080,6 +1087,7 @@ function SettingsView({
   busy: boolean;
   onEdit: (editor: Editor) => void;
   onSave: (action: string, payload: Record<string, unknown>) => Promise<void>;
+  onScheduleChanged?: () => void;
   includeRewardPolicies?: boolean;
 }) {
   const [target, setTarget] = useState<"standards" | "policies" | "members">("standards");
@@ -1142,10 +1150,12 @@ function SettingsView({
                 {frequencyLabels[s.frequency as Frequency]}{" "}
                 · {s.criteria.length} tiêu chí
               </p>
+              <p>Từ {formatShortDate(`${s.effective_from}T00:00:00+07:00`)}{(s.stop_after || s.effective_until) && ` · Ngày cuối ${formatShortDate(`${s.stop_after || s.effective_until}T00:00:00+07:00`)}`}</p>
             </div>
-            <Badge value={s.status === "pending" ? "pending_approval" : s.status} />
+            <Badge value={s.status === "pending" ? "pending_approval" : scheduleState(s, today(), data.standards)} />
             <button onClick={() => onEdit({ kind: "standard_details", standard: s })}><Icon name="search" size={16} />Xem chi tiết</button>
-            {canConfigure && data.isCeo && (s.status === "approved" || (s.status === "draft" && !s.workbook_batch_id)) && <StandardLifecycle standard={s} busy={busy} error={error} onSave={onSave}/>}
+            {canConfigure && data.isCeo && s.status === "approved" && !["ended","superseded"].includes(scheduleState(s,today(),data.standards)) && !["once","event"].includes(s.frequency) && <ScheduleReview standard={s} branch={s.branch_id} mode="end" busy={busy} onSaved={onScheduleChanged}/>}
+            {canConfigure && data.isCeo && s.status === "draft" && !s.workbook_batch_id && <StandardLifecycle standard={s} busy={busy} error={error} onSave={onSave}/>}
             {s.status === "draft" && s.workbook_batch_id && <p>Duyệt hoặc hủy bản nháp này trong bộ nhập Excel để công việc và QC luôn đi cùng nhau.</p>}
             {s.review_note && <p className={styles.notice}>CEO yêu cầu sửa: {s.review_note}</p>}
             {canConfigure &&
@@ -1159,17 +1169,17 @@ function SettingsView({
                   Tạo lần thực hiện
                 </button>
               )}
-            {((canConfigure && data.isCeo && s.status !== "pending") || (canPropose && canProposeRevision(s, data.userId))) && (
+            {((canConfigure && data.isCeo && s.status !== "pending" && !data.standards.some(next=>next.family_id===s.family_id&&next.branch_id===s.branch_id&&next.revision>s.revision)) || (canPropose && canProposeRevision(s, data.userId))) && (
               <button
                 disabled={busy}
                 onClick={() => onEdit({ kind: "standard", standard: s, proposal: canPropose })}
               >
                 <Icon name="add" size={16} />
-                {canPropose ? s.status === "changes_requested" ? "Sửa và gửi lại" : "Đề xuất thay đổi" : "Phiên bản mới"}
+                {canPropose ? s.status === "changes_requested" ? "Sửa và gửi lại" : "Đề xuất thay đổi" : "Sửa công việc / lịch"}
               </button>
             )}
             {["draft", "pending"].includes(s.status) && canConfigure && data.isCeo && !s.workbook_batch_id && (
-              <button
+              s.revision > 1 ? <ScheduleReview standard={s} branch={s.branch_id} mode="approve" busy={busy} onSaved={onScheduleChanged}/> : <button
                 disabled={busy}
                 onClick={() => void onSave("approve_standard", { id: s.id })}
               >
@@ -1576,6 +1586,7 @@ function EditorForm({
               <div><dt>Lịch thực hiện</dt><dd>{scheduleSummary(editor.standard!.frequency,editor.standard!.day_number,editor.standard!.month_number??1)}</dd></div>
               <div><dt>Ngày bắt đầu</dt><dd>{formatDate(`${editor.standard!.effective_from}T00:00:00+07:00`)}</dd></div>
               {editor.standard!.effective_until&&<div><dt>Ngày kết thúc lặp</dt><dd>{formatDate(`${editor.standard!.effective_until}T00:00:00+07:00`)}</dd></div>}
+              {editor.standard!.stop_after&&<div><dt>Ngày thực hiện cuối cùng đã xác nhận</dt><dd>{formatShortDate(`${editor.standard!.stop_after}T00:00:00+07:00`)}</dd></div>}
               <div><dt>Giờ hạn (Việt Nam)</dt><dd>{editor.standard!.due_time.slice(0,5)}{editor.standard!.frequency === "weekly" ? ` · ${["Thứ Hai","Thứ Ba","Thứ Tư","Thứ Năm","Thứ Sáu","Thứ Bảy","Chủ Nhật"][editor.standard!.day_number-1]}` : editor.standard!.frequency === "monthly" ? ` · Ngày ${editor.standard!.day_number}` : ""}</dd></div>
             </dl>
             <h3>Tiêu chí kết quả</h3>

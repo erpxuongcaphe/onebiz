@@ -1,0 +1,11 @@
+.dialog {width:min(1100px,calc(100vw - 32px))!important;max-width:calc(100vw - 32px)!important;max-height:calc(100dvh - 32px);}
+.fields {display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.header {display:flex;align-items:center;justify-content:space-between;gap:12px;padding-right:20px;}
+.impact {border-left:3px solid #2563eb;background:#eff6ff;padding:12px 16px;}
+.impact fieldset {display:grid;gap:10px;margin:12px 0;}
+.impact label,.confirm {display:flex;align-items:flex-start;gap:8px;}
+.impact input,.confirm input {width:18px!important;height:18px;flex-shrink:0;margin-top:2px;}
+.impact ul {max-height:180px;overflow:auto;padding-left:20px;}
+.impact li {margin:8px 0;overflow-wrap:anywhere;}
+.dialog small {display:block;color:#475569;margin-top:6px;}
+@media(max-width:640px){.dialog{inset:0!important;transform:none!important;width:100vw!important;max-width:100vw!important;height:100dvh;max-height:100dvh;border-radius:0!important;}.fields{grid-template-columns:1fr;}}
