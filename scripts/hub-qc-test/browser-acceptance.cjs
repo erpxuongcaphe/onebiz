@@ -108,7 +108,7 @@ const results = [];
         const responsible=await d.getByText('Quản lý chịu trách nhiệm',{exact:true}).boundingBox();
         assert.ok(responsible.y-description.y-description.height>=8,'Description and next field need spacing');
         await inspect(`issue-long-${width}`,d);
-        await page.keyboard.press('Escape'); await page.getByRole('button',{name:'Quay lại để lưu',exact:true}).click();
+        await page.keyboard.press('Escape'); await page.getByRole('button',{name:'Tiếp tục chỉnh sửa',exact:true}).click();
         assert.equal(await d.getByLabel('Nội dung cần xử lý',{exact:true}).inputValue(),title);
         await close();
       });

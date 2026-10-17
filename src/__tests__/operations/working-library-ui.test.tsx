@@ -9,16 +9,67 @@ const fetchMock=vi.fn();
 const branch='11111111-1111-4111-8111-111111111111';
 const branch2='22222222-2222-4222-8222-222222222222';
 const user='33333333-3333-4333-8333-333333333333';
+const user2='44444444-4444-4444-8444-444444444444';
 const workspace={branches:[{id:branch,name:'Quán A',capabilities:['approve_policy']},{id:branch2,name:'Quán B',capabilities:['approve_policy']}],people:[{id:user,name:'Quản lý A'}]} as Workspace;
 const lib={id:branch,title:'Bộ CEO',version:1,rows:ceoWorkingRows,notes:'',source_key:'ceo-working-20261014',archived:false,updated_at:'2026-10-17T00:00:00Z'};
 let libraries:unknown[]=[];
 beforeEach(()=>{libraries=[];vi.stubGlobal('fetch',fetchMock);fetchMock.mockImplementation(async(url:string,init?:RequestInit)=>{
- if(url.startsWith('/api/operations/people'))return{ok:true,json:async()=>({people:[{id:user,name:'Quản lý A'}]})};
+ if(url.startsWith('/api/operations/people'))return{ok:true,json:async()=>({people:[{id:user,name:'Quản lý A'},{id:user2,name:'Quản lý B'}]})};
  if(init?.method==='POST')return{ok:true,json:async()=>({result:{}})};
  return{ok:true,json:async()=>({libraries,applications:[]})};
 });});
 afterEach(()=>{cleanup();vi.unstubAllGlobals();vi.resetAllMocks();});
 describe('company working library and branch setup UX',()=>{
+ it('reviews and saves two managers on one branch without saving during selection',async()=>{
+  libraries=[lib];render(<WorkingLibrary workspace={workspace} onApplied={vi.fn()}/>);
+  fireEvent.click(await screen.findByRole('button',{name:'Áp dụng cho chi nhánh'}));
+  fireEvent.click(screen.getByRole('checkbox',{name:'Quán A'}));
+  fireEvent.click(await screen.findByRole('button',{name:'Quản lý phụ trách * Chọn người'}));
+  fireEvent.click(screen.getByRole('button',{name:'Quản lý A'}));
+  fireEvent.click(screen.getByRole('button',{name:'Quản lý B'}));
+  expect(screen.getByRole('button',{name:'Bỏ Quản lý A'})).toBeInTheDocument();
+  expect(screen.getByRole('button',{name:'Bỏ Quản lý B'})).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Ngày bắt đầu',{exact:true}),{target:{value:'2026-10-20'}});
+  fireEvent.change(screen.getByLabelText('Giờ đến hạn',{exact:true}),{target:{value:'18:30'}});
+  fireEvent.change(screen.getByLabelText('Ngày hằng tuần',{exact:true}),{target:{value:'6'}});
+  fireEvent.click(screen.getByRole('button',{name:'Tiếp tục: kiểm tra phân công'}));
+  const review=await screen.findByRole('dialog',{name:'Kiểm tra và lưu phân công'});
+  expect(within(review).getByText('Quản lý A',{exact:true})).toBeInTheDocument();expect(within(review).getByText('Quản lý B',{exact:true})).toBeInTheDocument();
+  expect(fetchMock.mock.calls.every(([,init])=>init?.method!=='POST')).toBe(true);
+  fireEvent.click(within(review).getByRole('button',{name:'Lưu và áp dụng'}));
+  await waitFor(()=>expect(fetchMock.mock.calls.some(([,init])=>init?.method==='POST')).toBe(true));
+  const body=JSON.parse(fetchMock.mock.calls.find(([,init])=>init?.method==='POST')![1].body);
+  expect(body.assignments).toEqual([{branchId:branch,assigneeIds:[user,user2],effectiveFrom:'2026-10-20',dueTime:'18:30',weeklyDay:6}]);
+ });
+ it('names the incomplete branch next to the footer and does not write',async()=>{
+  libraries=[lib];render(<WorkingLibrary workspace={workspace} onApplied={vi.fn()}/>);
+  fireEvent.click(await screen.findByRole('button',{name:'Áp dụng cho chi nhánh'}));
+  fireEvent.click(screen.getByRole('checkbox',{name:'Quán B'}));
+  fireEvent.click(screen.getByRole('button',{name:'Tiếp tục: kiểm tra phân công'}));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Quán B: quản lý phụ trách, ngày bắt đầu từ hôm nay, giờ đến hạn, ngày hằng tuần');
+  expect(fetchMock.mock.calls.every(([,init])=>init?.method!=='POST')).toBe(true);
+ });
+ it('keeps both managers and dates when the server rejects a save',async()=>{
+  libraries=[lib];fetchMock.mockImplementation(async(url:string,init?:RequestInit)=>{
+   if(url.startsWith('/api/operations/people'))return{ok:true,json:async()=>({people:[{id:user,name:'Quản lý A'},{id:user2,name:'Quản lý B'}]})};
+   if(init?.method==='POST')return{ok:false,json:async()=>({error:'Một quản lý vừa bị thu hồi quyền. Chưa lưu.'})};
+   return{ok:true,json:async()=>({libraries,applications:[]})};
+  });
+  render(<WorkingLibrary workspace={workspace} onApplied={vi.fn()}/>);
+  fireEvent.click(await screen.findByRole('button',{name:'Áp dụng cho chi nhánh'}));fireEvent.click(screen.getByRole('checkbox',{name:'Quán A'}));
+  fireEvent.click(await screen.findByRole('button',{name:'Quản lý phụ trách * Chọn người'}));
+  fireEvent.click(screen.getByRole('button',{name:'Quản lý A'}));fireEvent.click(screen.getByRole('button',{name:'Quản lý B'}));
+  fireEvent.change(screen.getByLabelText('Ngày bắt đầu',{exact:true}),{target:{value:'2026-10-20'}});
+  fireEvent.change(screen.getByLabelText('Giờ đến hạn',{exact:true}),{target:{value:'18:30'}});
+  fireEvent.change(screen.getByLabelText('Ngày hằng tuần',{exact:true}),{target:{value:'6'}});
+  fireEvent.click(screen.getByRole('button',{name:'Tiếp tục: kiểm tra phân công'}));
+  fireEvent.click(screen.getByRole('button',{name:'Lưu và áp dụng'}));
+  expect(await within(screen.getByRole('dialog',{name:'Kiểm tra và lưu phân công'})).findByRole('alert')).toHaveTextContent('Một quản lý vừa bị thu hồi quyền. Chưa lưu.');
+  fireEvent.click(screen.getByRole('button',{name:'Quay lại cấu hình'}));
+  expect(await screen.findByRole('button',{name:'Bỏ Quản lý A'})).toBeInTheDocument();expect(screen.getByRole('button',{name:'Bỏ Quản lý B'})).toBeInTheDocument();
+  expect(screen.getByLabelText('Ngày bắt đầu',{exact:true})).toHaveValue('2026-10-20');
+  expect(fetchMock.mock.calls.filter(([,init])=>init?.method==='POST')).toHaveLength(1);
+ });
  it('loads definitions without any automatic save or branch assignment',async()=>{
   render(<WorkingLibrary workspace={workspace} onApplied={vi.fn()}/>);
   await screen.findByRole('button',{name:'Nạp 34 tiêu chí CEO'});

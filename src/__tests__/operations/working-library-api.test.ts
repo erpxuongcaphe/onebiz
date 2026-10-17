@@ -23,8 +23,23 @@ describe('shared working library API',()=>{
  it('requires an exact version on update and unique row numbers',async()=>{expect((await POST(post({...command(),id,version:null}))).status).toBe(400);expect((await POST(post({...command(),rows:[ceoWorkingRows[0],ceoWorkingRows[0]]}))).status).toBe(400);expect(mocks.rpc).not.toHaveBeenCalled();});
  it('requires complete independent schedules for every selected branch',async()=>{
   const body={action:'apply',requestId:id,id,version:1,assignments:[{branchId:id,assigneeId:id,effectiveFrom:'2026-10-17',dueTime:'17:30',weeklyDay:1}]};
-  expect((await POST(post(body))).status).toBe(200);expect(mocks.rpc).toHaveBeenCalledWith('ops_working_library_execute',expect.objectContaining({p_action:'apply'}));mocks.rpc.mockClear();
+  expect((await POST(post(body))).status).toBe(200);expect(mocks.rpc).toHaveBeenCalledWith('ops_working_library_execute_v2',expect.objectContaining({p_action:'apply'}));mocks.rpc.mockClear();
   expect((await POST(post({...body,assignments:[body.assignments[0],body.assignments[0]]}))).status).toBe(400);expect((await POST(post({...body,assignments:[{...body.assignments[0],assigneeId:''}]}))).status).toBe(400);expect(mocks.rpc).not.toHaveBeenCalled();
+ });
+ it('preserves all managers and rejects empty, repeated or ambiguous selections',async()=>{
+  const other='22222222-2222-4222-8222-222222222222';
+  const schedule={branchId:id,assigneeIds:[id,other],effectiveFrom:'2026-10-20',dueTime:'17:30',weeklyDay:1};
+  const body={action:'apply',requestId:crypto.randomUUID(),id,version:1,assignments:[schedule]};
+  expect((await POST(post(body))).status).toBe(200);
+  expect(mocks.rpc).toHaveBeenLastCalledWith('ops_working_library_execute_v2',expect.objectContaining({p_payload:expect.objectContaining({assignments:[schedule]})}));
+  mocks.rpc.mockClear();
+  for(const assignment of [{...schedule,assigneeIds:[]},{...schedule,assigneeIds:[id,id]},{...schedule,assigneeId:id}]) expect((await POST(post({...body,assignments:[assignment]}))).status).toBe(400);
+  expect(mocks.rpc).not.toHaveBeenCalled();
+ });
+ it('does not fall back to the single-manager RPC when migration is missing',async()=>{
+  mocks.rpc.mockResolvedValue({data:null,error:{code:'PGRST202',message:'function missing'}});
+  const response=await POST(post({action:'apply',requestId:id,id,version:1,assignments:[{branchId:id,assigneeIds:[id],effectiveFrom:'2026-10-20',dueTime:'17:30',weeklyDay:1}]}));
+  expect(response.status).toBe(503);expect((await response.json()).error).toContain('giữ nguyên');expect(mocks.rpc).toHaveBeenCalledOnce();
  });
  it.each(['OPS_LIBRARY_STALE','OPS_LIBRARY_EXISTS','OPS_LIBRARY_APPLIED','OPS_WORKBOOK_DUPLICATE'])('shows a conflict without retrying %s',async(message)=>{mocks.rpc.mockResolvedValue({data:null,error:{message}});expect((await POST(post(command()))).status).toBe(409);expect(mocks.rpc).toHaveBeenCalledOnce();});
  it('requires a reason before archiving, and never issues delete directly',async()=>{expect((await POST(post({action:'archive',requestId:id,id,version:1,reason:''}))).status).toBe(400);expect(mocks.rpc).not.toHaveBeenCalled();});

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { UserPicker } from "@/components/operations/user-picker";
@@ -9,6 +9,21 @@ afterEach(()=>{cleanup();vi.unstubAllGlobals();vi.resetAllMocks();});
 const person={id:'11111111-1111-4111-8111-111111111111',name:'Nguyễn Quản Lý'};
 const another={id:'22222222-2222-4222-8222-222222222222',name:'Trần Phối Hợp'};
 describe('scoped chip-style user picker',()=>{
+ it('keeps every selected user in a controlled multiple picker, including after removal',()=>{
+  function Controlled(){const [ids,setIds]=useState<string[]>([]);return <form><UserPicker label="Quản lý" name="managers" multiple required options={[person,another]} value={ids} onValuesChange={setIds}/></form>;}
+  const {container}=render(<Controlled/>);
+  fireEvent.click(screen.getByRole('button',{name:'Quản lý * Chọn người'}));
+  fireEvent.click(screen.getByRole('button',{name:person.name}));fireEvent.click(screen.getByRole('button',{name:another.name}));
+  expect(new FormData(container.querySelector('form')!).getAll('managers')).toEqual([person.id,another.id]);
+  fireEvent.click(screen.getByRole('button',{name:`Bỏ ${person.name}`}));
+  expect(new FormData(container.querySelector('form')!).getAll('managers')).toEqual([another.id]);
+ });
+ it('explains missing manager setup without broadening the directory',async()=>{
+  fetchMock.mockResolvedValue({ok:true,json:async()=>({people:[]})});
+  render(<UserPicker label="Quản lý" purpose="manager" branch="empty-branch" required/>);
+  expect(await screen.findByRole('status')).toHaveTextContent('phân công Quản lý Hub');
+  expect(fetchMock).toHaveBeenCalledOnce();
+ });
  it('never selects the first available user automatically',()=>{
   const {container}=render(<form><UserPicker label="Phụ trách" name="assigneeId" required options={[person]}/></form>);
   expect(new FormData(container.querySelector('form')!).get('assigneeId')).toBe('');

@@ -509,11 +509,6 @@ export function QualityEditorDialog({
         </div>
         <form onSubmit={submit} style={{ display: "contents" }}>
           <div className={s.dialogBody}>
-            {(error || localError) && (
-              <p role="alert" className={s.alert}>
-                {localError || error}
-              </p>
-            )}
             {(editor.kind === "check" || editor.kind === 'adhoc' ||
               editor.kind === "qc_line" ||
               editor.kind === "qc_correct") && (
@@ -973,6 +968,7 @@ export function QualityEditorDialog({
             )}
           </div>
           <footer className={s.dialogFooter}>
+            {(error || localError) && <p role="alert" className={s.alert}>{localError || error}</p>}
             <button
               type="button"
               data-dialog-close

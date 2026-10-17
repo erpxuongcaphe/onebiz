@@ -12,8 +12,9 @@ import s from "./quality.module.css";
 import w from "./working-library.module.css";
 
 type Editor = { kind:"edit"; library:Library|null } | { kind:"apply"|"archive"|"restore"; library:Library };
-type BranchDraft = { assigneeId:string; effectiveFrom:string; dueTime:string; weeklyDay:string };
-type ApplyPayload = {action:"apply";id:string;version:number;assignments:{branchId:string;assigneeId:string;effectiveFrom:string;dueTime:string;weeklyDay:number}[]};
+type BranchDraft = { assigneeIds:string[]; names:Record<string,string>; effectiveFrom:string; dueTime:string; weeklyDay:string };
+type ApplyPayload = {action:"apply";id:string;version:number;assignments:{branchId:string;assigneeIds:string[];effectiveFrom:string;dueTime:string;weeklyDay:number}[]};
+const emptyDraft = ():BranchDraft => ({assigneeIds:[],names:{},effectiveFrom:'',dueTime:'',weeklyDay:''});
 const emptyRow = (number:number):WorkingRow => ({number,group:"",title:"",requirement:"",scope:"Chung",frequency:"daily",points:-5,critical:false,accountingRequired:false});
 export function WorkingLibrary({ workspace, onApplied }: { workspace:Workspace; onApplied:()=>void }) {
   const [libraries,setLibraries]=useState<Library[]>([]);
@@ -61,10 +62,10 @@ export function WorkingLibrary({ workspace, onApplied }: { workspace:Workspace; 
     setEditor({kind:'edit',library});
   }
   function openApply(library:Library){setError('');setMessage('');setSelected([]);setBranchDrafts({});setBulkSchedule({effectiveFrom:'',dueTime:'',weeklyDay:''});setConfirmApply(false);setApplyPayload(null);request.current=null;setEditor({kind:'apply',library});}
-  function branchDraft(id:string):BranchDraft{return branchDrafts[id]??{assigneeId:'',effectiveFrom:'',dueTime:'',weeklyDay:''};}
-  function updateBranch(id:string,patch:Partial<BranchDraft>){setBranchDrafts(old=>({...old,[id]:{...(old[id]??{assigneeId:'',effectiveFrom:'',dueTime:'',weeklyDay:''}),...patch}}));}
+  function branchDraft(id:string):BranchDraft{return branchDrafts[id]??emptyDraft();}
+  function updateBranch(id:string,patch:Partial<BranchDraft>){setError('');setBranchDrafts(old=>({...old,[id]:{...(old[id]??emptyDraft()),...patch}}));}
   function fillSchedule(){
-    setBranchDrafts(old=>{const next={...old};for(const id of selected)next[id]={...(old[id]??{assigneeId:'',effectiveFrom:'',dueTime:'',weeklyDay:''}),...bulkSchedule};return next;});
+    setBranchDrafts(old=>{const next={...old};for(const id of selected)next[id]={...(old[id]??emptyDraft()),...bulkSchedule};return next;});
   }
   async function send(payload:Record<string,unknown>){
     if(lock.current)return;
@@ -119,8 +120,10 @@ export function WorkingLibrary({ workspace, onApplied }: { workspace:Workspace; 
       void send({action:'save',id:editor.library?.id??null,version:editor.library?.version??null,title,rows,notes,sourceKey,reason:String(form.get('reason')??'')});
     }else if(editor.kind==='archive'||editor.kind==='restore')void send({action:editor.kind,id:editor.library.id,version:editor.library.version,reason:String(form.get('reason')??'')});
     else{
-      const payload:ApplyPayload={action:'apply',id:editor.library.id,version:editor.library.version,assignments:selected.map(branchId=>({branchId,assigneeId:String(form.get(`user-${branchId}`)??''),effectiveFrom:String(form.get(`date-${branchId}`)??''),dueTime:String(form.get(`time-${branchId}`)??''),weeklyDay:editor.library.rows.some(r=>r.frequency==='weekly')?Number(form.get(`day-${branchId}`)):1}))};
-      if(!libraryCommandSchema.safeParse({...payload,requestId:crypto.randomUUID()}).success){setError('Chọn ít nhất một chi nhánh và điền đủ người phụ trách, ngày, giờ, lịch của từng chi nhánh.');return;}
+      const hasWeekly=editor.library.rows.some(r=>r.frequency==='weekly');
+      const payload:ApplyPayload={action:'apply',id:editor.library.id,version:editor.library.version,assignments:selected.map(branchId=>({branchId,assigneeIds:form.getAll(`user-${branchId}`).map(String),effectiveFrom:String(form.get(`date-${branchId}`)??''),dueTime:String(form.get(`time-${branchId}`)??''),weeklyDay:hasWeekly?Number(form.get(`day-${branchId}`)):1}))};
+      const missing=payload.assignments.flatMap(a=>{const fields=[!a.assigneeIds.length?'quản lý phụ trách':'',!a.effectiveFrom||a.effectiveFrom<vnToday()?'ngày bắt đầu từ hôm nay':'',!a.dueTime?'giờ đến hạn':'',hasWeekly&&!a.weeklyDay?'ngày hằng tuần':''].filter(Boolean);return fields.length?[`${branches.find(b=>b.id===a.branchId)?.name??'Chi nhánh'}: ${fields.join(', ')}`]:[];});
+      if(!libraryCommandSchema.safeParse({...payload,requestId:crypto.randomUUID()}).success||missing.length){setError(missing.length?`Chưa lưu. Cần kiểm tra ${missing.join('; ')}.`:'Chọn ít nhất một chi nhánh và điền đủ người phụ trách, ngày, giờ, lịch của từng chi nhánh.');return;}
       setApplyPayload(payload);setConfirmApply(true);
     }
   }
@@ -137,9 +140,9 @@ export function WorkingLibrary({ workspace, onApplied }: { workspace:Workspace; 
     <div className={s.actions}><input type="search" aria-label="Tìm bộ tiêu chí chung" placeholder="Tìm tên bộ hoặc nhóm…" value={listFilter} onChange={e=>setListFilter(e.target.value)}/><label className={w.check}><input type="checkbox" checked={includeArchived} onChange={e=>setIncludeArchived(e.target.checked)}/>Hiện bộ đã ẩn</label></div>
     {loading?<p role="status">Đang tải bộ tiêu chí…</p>:<div className={w.table}><table><thead><tr><th>Bộ tiêu chí</th><th>Nội dung</th><th>Áp dụng</th><th>Thao tác</th></tr></thead><tbody>{shown.map(l=><tr key={l.id}><td><strong>{l.title}</strong><p className={w.status}>Phiên bản {formatNumber(l.version)} · {l.archived?'Đã ẩn':formatDate(l.updated_at)}</p></td><td>{formatNumber(l.rows.length)} mục · {formatNumber(new Set(l.rows.map(r=>r.group)).size)} nhóm</td><td>{formatNumber(applications.filter(a=>a.library_id===l.id).length)} chi nhánh</td><td><div className={s.actions}>{!l.archived?<><button type="button" onClick={()=>edit(l)}><Icon name="edit" size={16}/>Sửa nội dung</button><button type="button" onClick={()=>openApply(l)}><Icon name="store" size={16}/>Áp dụng cho chi nhánh</button><button type="button" onClick={()=>{setError('');setEditor({kind:'archive',library:l});}}>Ẩn bộ</button></>:<button type="button" onClick={()=>{setError('');setEditor({kind:'restore',library:l});}}>Khôi phục bộ</button>}</div></td></tr>)}</tbody></table>{!shown.length&&<p className={w.empty}>Chưa có bộ tiêu chí phù hợp. Có thể nạp bộ 34 mục của CEO hoặc thêm bộ mới.</p>}</div>}
     <Dialog open={!!editor} onOpenChange={open=>{if(!open)close();}}><DialogContent className={`${s.dialog} ${w.dialog} translate-x-0 translate-y-0`} showCloseButton={false}>
-      <header className={s.dialogHeader}><DialogTitle>{editor?.kind==='edit'?'Nội dung bộ tiêu chí chung':editor?.kind==='apply'?'Áp dụng bộ tiêu chí cho chi nhánh':editor?.kind==='restore'?'Khôi phục bộ tiêu chí chung':'Ẩn bộ tiêu chí chung'}</DialogTitle></header>
+      <header className={s.dialogHeader}><DialogTitle>{editor?.kind==='edit'?'Nội dung bộ tiêu chí chung':editor?.kind==='apply'?'Áp dụng bộ tiêu chí cho chi nhánh':editor?.kind==='restore'?'Khôi phục bộ tiêu chí chung':'Ẩn bộ tiêu chí chung'}</DialogTitle>{editor?.kind==='apply'&&<p className={w.step}>Bước 1/2 · Chọn chi nhánh, quản lý và lịch. Bước tiếp theo sẽ kiểm tra trước khi lưu.</p>}</header>
       <form className={w.form} onSubmit={submit} noValidate><div className={w.body}>
-        {error&&<p role="alert" className={s.alert}>{error}</p>}
+        {error&&editor?.kind!=='apply'&&<p role="alert" className={s.alert}>{error}</p>}
         {editor?.kind==='edit'&&<fieldset disabled={busy} style={{border:0,padding:0,margin:0,minWidth:0}}>
           <p className={w.notice}>Lưu bộ chung chưa tạo việc, chưa phân công, chưa chấm điểm. Các chi nhánh đang dùng giữ nguyên phiên bản đã áp dụng.</p>
           <label>Tên bộ tiêu chí<input required maxLength={200} value={title} onChange={e=>setTitle(e.target.value)}/></label>
@@ -163,27 +166,27 @@ export function WorkingLibrary({ workspace, onApplied }: { workspace:Workspace; 
           <p className={w.notice}>Chi nhánh đã áp dụng giữ nguyên công việc và lịch sử. Muốn thay đổi tại chi nhánh đó, dùng “Phiên bản mới” hoặc “Ngừng áp dụng” trong Standard Working.</p>
           <label className={w.check}><input type="checkbox" checked={eligible.length>0&&selected.length===eligible.length} disabled={!eligible.length||busy} onChange={e=>setSelected(e.target.checked?eligible.map(b=>b.id):[])}/>Chọn tất cả chi nhánh chưa áp dụng trong phạm vi được phép</label>
           {!!selected.length&&<section><h3>Điền lịch chung cho chi nhánh đã chọn</h3><div className={w.grid}><label>Ngày bắt đầu chung<input type="date" min={vnToday()} value={bulkSchedule.effectiveFrom} onChange={e=>setBulkSchedule(old=>({...old,effectiveFrom:e.target.value}))}/></label><label>Giờ đến hạn chung<input type="time" value={bulkSchedule.dueTime} onChange={e=>setBulkSchedule(old=>({...old,dueTime:e.target.value}))}/></label>{editor.library.rows.some(r=>r.frequency==='weekly')&&<label>Ngày hằng tuần chung<select value={bulkSchedule.weeklyDay} onChange={e=>setBulkSchedule(old=>({...old,weeklyDay:e.target.value}))}><option value="">Chọn ngày</option>{['Thứ hai','Thứ ba','Thứ tư','Thứ năm','Thứ sáu','Thứ bảy','Chủ nhật'].map((day,i)=><option key={day} value={i+1}>{day}</option>)}</select></label>}</div><button type="button" disabled={busy||!bulkSchedule.effectiveFrom||!bulkSchedule.dueTime||(editor.library.rows.some(r=>r.frequency==='weekly')&&!bulkSchedule.weeklyDay)} onClick={fillSchedule}>Điền lịch cho {selected.length} chi nhánh đã chọn</button><p className={w.status}>Có thể chỉnh lại lịch từng chi nhánh bên dưới. Không tự chọn người phụ trách.</p></section>}
-          {branches.map(branch=>{const applied=existing.find(a=>a.branch_id===branch.id);const picked=selected.includes(branch.id);const draft=branchDraft(branch.id);const ready=!!draft.assigneeId&&!!draft.effectiveFrom&&!!draft.dueTime&&(!editor.library.rows.some(r=>r.frequency==='weekly')||!!draft.weeklyDay);return <section key={branch.id} className={`${w.branch} ${picked?w.selected:''}`}><div className={w.rowHeader}><label className={w.check}><input type="checkbox" checked={picked} disabled={!!applied||busy} onChange={e=>setSelected(old=>e.target.checked?[...old,branch.id]:old.filter(id=>id!==branch.id))}/><strong>{branch.name}</strong></label><span className={ready?w.ready:w.status}>{applied?`Đã áp dụng · phiên bản ${applied.library_version}`:picked?ready?'Đã điền cấu hình · chờ xác nhận':'Cần điền đủ người và lịch':'Chưa áp dụng'}</span></div>
+          {branches.map(branch=>{const applied=existing.find(a=>a.branch_id===branch.id);const picked=selected.includes(branch.id);const draft=branchDraft(branch.id);const ready=!!draft.assigneeIds.length&&!!draft.effectiveFrom&&!!draft.dueTime&&(!editor.library.rows.some(r=>r.frequency==='weekly')||!!draft.weeklyDay);return <section aria-label={branch.name} key={branch.id} className={`${w.branch} ${picked?w.selected:''}`}><div className={w.rowHeader}><label className={w.check}><input type="checkbox" checked={picked} disabled={!!applied||busy} onChange={e=>setSelected(old=>e.target.checked?[...old,branch.id]:old.filter(id=>id!==branch.id))}/><strong>{branch.name}</strong></label><span className={ready?w.ready:w.status}>{applied?`Đã áp dụng · phiên bản ${applied.library_version}`:picked?ready?'Đã điền cấu hình · chờ xác nhận':'Cần điền đủ người và lịch':'Chưa áp dụng'}</span></div>
             {applied&&<p className={w.status}>Bắt đầu {formatShortDate(`${applied.settings.effectiveFrom}T00:00:00+07:00`)} · hạn {applied.settings.dueTime}. Không tự thay thế khi sửa bộ chung.</p>}
-            {picked&&<div className={w.branchFields}><UserPicker branch={branch.id} purpose="manager" name={`user-${branch.id}`} label="Quản lý phụ trách" required disabled={busy} value={draft.assigneeId} onChange={assigneeId=>updateBranch(branch.id,{assigneeId})}/><label>Ngày bắt đầu<input type="date" name={`date-${branch.id}`} min={vnToday()} required disabled={busy} value={draft.effectiveFrom} onChange={e=>updateBranch(branch.id,{effectiveFrom:e.target.value})}/></label><label>Giờ đến hạn<input type="time" name={`time-${branch.id}`} required disabled={busy} value={draft.dueTime} onChange={e=>updateBranch(branch.id,{dueTime:e.target.value})}/></label>{editor.library.rows.some(r=>r.frequency==='weekly')&&<label>Ngày hằng tuần<select name={`day-${branch.id}`} required disabled={busy} value={draft.weeklyDay} onChange={e=>updateBranch(branch.id,{weeklyDay:e.target.value})}><option value="">Chọn ngày</option>{['Thứ hai','Thứ ba','Thứ tư','Thứ năm','Thứ sáu','Thứ bảy','Chủ nhật'].map((day,i)=><option key={day} value={i+1}>{day}</option>)}</select></label>}</div>}
+            {picked&&<div className={w.branchFields}><div><UserPicker branch={branch.id} purpose="manager" name={`user-${branch.id}`} label="Quản lý phụ trách" multiple required disabled={busy} value={draft.assigneeIds} onValuesChange={(assigneeIds,people)=>updateBranch(branch.id,{assigneeIds,names:Object.fromEntries(people.map(p=>[p.id,p.name]))})}/><p className={w.status}>Có thể chọn nhiều quản lý cùng một lịch; không nhân đôi công việc. Bấm × cạnh tên để bỏ chọn.</p></div><label>Ngày bắt đầu<input type="date" name={`date-${branch.id}`} min={vnToday()} required disabled={busy} value={draft.effectiveFrom} onChange={e=>updateBranch(branch.id,{effectiveFrom:e.target.value})}/></label><label>Giờ đến hạn<input type="time" name={`time-${branch.id}`} required disabled={busy} value={draft.dueTime} onChange={e=>updateBranch(branch.id,{dueTime:e.target.value})}/></label>{editor.library.rows.some(r=>r.frequency==='weekly')&&<label>Ngày hằng tuần<select name={`day-${branch.id}`} required disabled={busy} value={draft.weeklyDay} onChange={e=>updateBranch(branch.id,{weeklyDay:e.target.value})}><option value="">Chọn ngày</option>{['Thứ hai','Thứ ba','Thứ tư','Thứ năm','Thứ sáu','Thứ bảy','Chủ nhật'].map((day,i)=><option key={day} value={i+1}>{day}</option>)}</select></label>}</div>}
           </section>;})}
           {!branches.length&&<p className={w.empty}>Chưa có chi nhánh trong phạm vi được phép cấu hình.</p>}
         </>}
-      </div><footer className={s.dialogFooter}><button type="button" disabled={busy} onClick={close}>Đóng</button><button type="submit" className={s.primary} disabled={busy||(editor?.kind==='edit'&&(!rows.length||!!fileErrors.length))||(editor?.kind==='apply'&&!selected.length)}>{busy?'Đang xử lý…':editor?.kind==='edit'?'Lưu bộ tiêu chí chung':editor?.kind==='apply'?`Xem lại ${selected.length} chi nhánh`:editor?.kind==='restore'?'Xác nhận khôi phục':'Xác nhận ẩn bộ'}</button></footer></form>
+      </div><footer className={`${s.dialogFooter} ${w.footer}`}>{editor?.kind==='apply'&&(error?<p role="alert" className={s.alert}>{error}</p>:<p className={w.status}>{selected.length} chi nhánh đã chọn · Chưa lưu</p>)}<div><button type="button" disabled={busy} onClick={close}>Đóng</button><button type="submit" className={s.primary} disabled={busy||(editor?.kind==='edit'&&(!rows.length||!!fileErrors.length))||(editor?.kind==='apply'&&!selected.length)}>{busy?'Đang xử lý…':editor?.kind==='edit'?'Lưu bộ tiêu chí chung':editor?.kind==='apply'?'Tiếp tục: kiểm tra phân công':editor?.kind==='restore'?'Xác nhận khôi phục':'Xác nhận ẩn bộ'}</button></div></footer></form>
     </DialogContent></Dialog>
     <Dialog open={confirmApply} protectUnsavedChanges={false} onOpenChange={open=>{if(!busy)setConfirmApply(open);}}>
       <DialogContent className={`${s.dialog} ${w.dialog} translate-x-0 translate-y-0`} showCloseButton={false}>
-        <header className={s.dialogHeader}><DialogTitle>Xác nhận áp dụng</DialogTitle></header>
+        <header className={s.dialogHeader}><DialogTitle>Kiểm tra và lưu phân công</DialogTitle><p className={w.step}>Bước 2/2 · Kiểm tra đủ người và lịch trước khi lưu.</p></header>
         <div className={w.body}>
           <p>Áp dụng {editor?.library?.rows.length} tiêu chí, phiên bản {editor?.library?.version} cho {selected.length} chi nhánh đã chọn. Công việc và QC sẽ được tạo cùng lúc, không tự tạo kết quả đạt hoặc tính thưởng.</p>
-          <div className={w.table}><table>
+          <div className={`${w.table} ${w.review}`}><table>
             <thead><tr><th>Chi nhánh</th><th>Quản lý</th><th>Bắt đầu</th><th>Giờ hạn</th><th>Ngày hằng tuần</th></tr></thead>
             <tbody>{applyPayload?.assignments.map(a=><tr key={a.branchId}>
-              <td>{branches.find(b=>b.id===a.branchId)?.name}</td>
-              <td>{workspace.people.find(p=>p.id===a.assigneeId)?.name??'Người đã chọn'}</td>
-              <td>{formatShortDate(`${a.effectiveFrom}T00:00:00+07:00`)}</td>
-              <td>{a.dueTime}</td>
-              <td>{['Thứ hai','Thứ ba','Thứ tư','Thứ năm','Thứ sáu','Thứ bảy','Chủ nhật'][a.weeklyDay-1]}</td>
+              <td data-label="Chi nhánh"><span>{branches.find(b=>b.id===a.branchId)?.name}</span></td>
+              <td data-label="Quản lý"><div>{a.assigneeIds.map(id=><div key={id}>{branchDraft(a.branchId).names[id]??workspace.people.find(p=>p.id===id)?.name??'Cần kiểm tra lại tên'}</div>)}</div></td>
+              <td data-label="Bắt đầu"><span>{formatShortDate(`${a.effectiveFrom}T00:00:00+07:00`)}</span></td>
+              <td data-label="Giờ hạn"><span>{a.dueTime}</span></td>
+              <td data-label="Hằng tuần"><span>{['Thứ hai','Thứ ba','Thứ tư','Thứ năm','Thứ sáu','Thứ bảy','Chủ nhật'][a.weeklyDay-1]}</span></td>
             </tr>)}</tbody>
           </table></div>
           <p>Chi nhánh không được chọn giữ nguyên. Không ghi một phần nếu một chi nhánh không hợp lệ.</p>
@@ -191,7 +194,7 @@ export function WorkingLibrary({ workspace, onApplied }: { workspace:Workspace; 
         </div>
         <footer className={s.dialogFooter}>
           <button type="button" disabled={busy} onClick={()=>setConfirmApply(false)}>Quay lại cấu hình</button>
-          <button type="button" disabled={busy||!applyPayload} onClick={()=>{if(applyPayload)void send(applyPayload);}}>{busy?'Đang áp dụng…':'Xác nhận áp dụng cho chi nhánh'}</button>
+          <button type="button" className={s.primary} disabled={busy||!applyPayload} onClick={()=>{if(applyPayload)void send(applyPayload);}}>{busy?'Đang lưu và áp dụng…':'Lưu và áp dụng'}</button>
         </footer>
       </DialogContent>
     </Dialog>

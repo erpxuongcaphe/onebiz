@@ -118,13 +118,13 @@ export function PageLeaveGuard() {
       <Primitive.Backdrop className="fixed inset-0 z-[80] bg-black/40" />
       <Primitive.Popup initialFocus={continueButton} className="fixed left-1/2 top-1/2 z-[80] grid max-h-[90dvh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-lg border bg-popover p-5 text-sm text-popover-foreground shadow-xl">
         <Primitive.Title className="text-base font-semibold">Có nội dung chưa lưu</Primitive.Title>
-        <Primitive.Description>Anh còn nội dung đang làm hoặc thay đổi chưa lưu. Quay lại để kiểm tra và lưu, hoặc xác nhận rời trang. Hệ thống không tự lưu thay anh.</Primitive.Description>
+        <Primitive.Description>Nội dung đang nhập sẽ mất nếu rời trang. Tiếp tục chỉnh sửa để hoàn tất thao tác, hoặc xác nhận bỏ thay đổi và rời trang. Hệ thống không tự lưu.</Primitive.Description>
         <div className="flex flex-wrap justify-end gap-2">
           <Button variant="outline" className="text-status-error" onClick={async () => {
             const finish = pending; setPending(null); approved.current = true;
             try { await finish?.(); } finally { approved.current = false; }
           }}>Bỏ thay đổi và rời trang</Button>
-          <Button ref={continueButton} onClick={() => setPending(null)}>Quay lại để lưu</Button>
+          <Button ref={continueButton} onClick={() => setPending(null)}>Tiếp tục chỉnh sửa</Button>
         </div>
       </Primitive.Popup>
     </Primitive.Portal>

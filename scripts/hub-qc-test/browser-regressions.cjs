@@ -31,7 +31,7 @@ const base='http://127.0.0.1:3315',out=process.env.HUB_QA_OUTPUT,results=[];
    await actor('owner');await nav('Thiết lập');
    await page.evaluate(()=>{history.replaceState({},'', '/?qa=before');history.pushState({},'', '/?qa=editing');});
    await page.getByRole('button',{name:'Chính sách mới',exact:true}).click();await d().getByLabel('Tên phiên bản chính sách',{exact:true}).fill('Nội dung phải còn sau Back');
-   await page.goBack({waitUntil:'commit'});await page.getByRole('button',{name:'Quay lại để lưu',exact:true}).click();
+   await page.goBack({waitUntil:'commit'});await page.getByRole('button',{name:'Tiếp tục chỉnh sửa',exact:true}).click();
    assert.equal(await d().getByLabel('Tên phiên bản chính sách',{exact:true}).inputValue(),'Nội dung phải còn sau Back');await close();
   });
   await test('issue-detail-mkt-has-no-nested-form',async()=>{

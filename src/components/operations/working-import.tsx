@@ -86,7 +86,7 @@ export function WorkingImport({ workspace, onImported }: { workspace: Workspace;
     setError(""); setMessage("");
     if (fileErrors.length) { setError("File còn lỗi. Sửa file và chọn lại trước khi lưu."); return; }
     const form = new FormData(event.currentTarget);
-    const body = { rows, assignments: branches.map((branchId) => ({ branchId, assigneeId: String(form.get(`manager-${branchId}`) ?? "") })), effectiveFrom: form.get("effectiveFrom"), dueTime: form.get("dueTime"), weeklyDay: rows.some((row) => row.frequency === "weekly") ? Number(form.get("weeklyDay")) : 1 };
+    const body = { rows, assignments: branches.map((branchId) => ({ branchId, assigneeIds: form.getAll(`manager-${branchId}`).map(String) })), effectiveFrom: form.get("effectiveFrom"), dueTime: form.get("dueTime"), weeklyDay: rows.some((row) => row.frequency === "weekly") ? Number(form.get("weeklyDay")) : 1 };
     const signature = JSON.stringify(body);
     if (request.current?.body !== signature) request.current = { body: signature, id: crypto.randomUUID() };
     const parsed = workingImportSchema.safeParse({ ...body, requestId: request.current.id });
@@ -143,7 +143,7 @@ export function WorkingImport({ workspace, onImported }: { workspace: Workspace;
               </div>
               <section><h3>Chi nhánh và người phụ trách</h3><div className={w.branchGrid}>{workspace.branches.filter((branch) => branch.capabilities.includes("approve_policy")).map((branch) => <div className={w.branch} key={branch.id}>
                 <label><input type="checkbox" checked={branches.includes(branch.id)} onChange={(event) => setBranches((old) => event.target.checked ? [...old, branch.id] : old.filter((id) => id !== branch.id))}/>{branch.name}</label>
-                {branches.includes(branch.id) && <UserPicker label="Quản lý phụ trách" branch={branch.id} purpose="manager" name={`manager-${branch.id}`} required/>}
+                {branches.includes(branch.id) && <UserPicker label="Quản lý phụ trách" branch={branch.id} purpose="manager" name={`manager-${branch.id}`} multiple required/>}
               </div>)}</div></section>
               <div className={s.actions}><input aria-label="Tìm công việc trong bản nhập" placeholder="Tìm nhóm, công việc hoặc tiêu chí…" value={filter} onChange={(event) => setFilter(event.target.value)}/><button type="button" onClick={() => {setFilter("");setRows((old) => [...old, { number: Math.max(0, ...old.map((row) => row.number)) + 1, group: "", title: "", requirement: "", scope: "Chung", frequency: "daily", points: NaN, critical: false, accountingRequired: false }]);}}><Icon name="add" size={16}/>Thêm mục</button></div>
               <div className={w.rows}>{rows.map((row, index) => <fieldset className={w.row} key={index} hidden={!!filter && !`${row.group} ${row.title} ${row.requirement}`.toLocaleLowerCase().includes(filter.toLocaleLowerCase())}>

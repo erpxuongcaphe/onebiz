@@ -22,7 +22,7 @@ describe("global page leave guard", () => {
     expect(unload()).toBe(true);
     fireEvent.click(screen.getByText("Trang khác"));
     await screen.findByText("Có nội dung chưa lưu");
-    fireEvent.click(screen.getByText("Quay lại để lưu"));
+    fireEvent.click(screen.getByText("Tiếp tục chỉnh sửa"));
     expect(screen.getByLabelText("Cài đặt")).toHaveValue("Chưa lưu");
     fireEvent.click(screen.getByText("Lưu cài đặt")); expect(unload()).toBe(false);
   });

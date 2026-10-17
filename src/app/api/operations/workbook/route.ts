@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
   if (session.error || !session.data.user) return failure("Vui lòng đăng nhập lại.", 401);
   const activate = "activate" in parsed.data;
   const { requestId, ...payload } = parsed.data;
-  const result = "discard" in parsed.data ? await (client as unknown as Rpc).rpc("ops_workbook_discard", {p_id:requestId,p_reason:parsed.data.reason}) : await (client as unknown as Rpc).rpc("ops_workbook_import", { p_request_id: requestId, p_body: activate ? null : payload, p_activate: activate });
+  const result = "discard" in parsed.data ? await (client as unknown as Rpc).rpc("ops_workbook_discard", {p_id:requestId,p_reason:parsed.data.reason}) : await (client as unknown as Rpc).rpc("ops_workbook_import_v2", { p_request_id: requestId, p_body: activate ? null : payload, p_activate: activate });
   if (result.error) {
     const error = result.error.message;
     if (error.includes("OPS_FORBIDDEN")) return failure("Bạn chưa đủ quyền cấu hình các chi nhánh trong gói nhập.", 403);
