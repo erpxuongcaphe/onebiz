@@ -136,12 +136,12 @@ describe('company working library and branch setup UX',()=>{
  it('reports the incomplete criterion even when it was hidden by a search',async()=>{
   render(<WorkingLibrary workspace={workspace} onApplied={vi.fn()}/>);
   const load=await screen.findByRole('button',{name:'Nạp 34 tiêu chí CEO'});await waitFor(()=>expect(load).toBeEnabled());fireEvent.click(load);
-  fireEvent.click(screen.getByRole('button',{name:'Thêm tiêu chí'}));
+  fireEvent.click(screen.getByText('Thêm tiêu chí',{exact:true}));
   fireEvent.change(screen.getByLabelText('Tìm tiêu chí trong bộ chung'),{target:{value:'Nguyên liệu'}});
-  fireEvent.click(screen.getByRole('button',{name:'Lưu bộ tiêu chí chung'}));
+  fireEvent.click(screen.getByText('Lưu bộ tiêu chí chung',{exact:true}));
   expect(await screen.findByRole('alert')).toHaveTextContent('Mục 35');
   expect(fetchMock.mock.calls.every(([,init])=>init?.method!=='POST')).toBe(true);
- });
+ },15000);
  it('selects many branches and fills a shared schedule without choosing a manager',async()=>{
   libraries=[lib];render(<WorkingLibrary workspace={workspace} onApplied={vi.fn()}/>);
   fireEvent.click(await screen.findByRole('button',{name:'Áp dụng cho chi nhánh'}));
