@@ -22,7 +22,7 @@ describe("điều hướng module", () => {
     navigation.push.mockClear();
     fireEvent.change(screen.getByRole("combobox", { name: "Mục Cài đặt" }), { target: { value: "/cai-dat/cua-hang" } });
     expect(navigation.push).not.toHaveBeenCalled();
-    fireEvent.click(await screen.findByText("Quay lại để lưu")); expect(navigation.push).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByText("Tiếp tục chỉnh sửa")); expect(navigation.push).not.toHaveBeenCalled();
     fireEvent.change(screen.getByRole("combobox", { name: "Mục Cài đặt" }), { target: { value: "/cai-dat/cua-hang" } });
     fireEvent.click(await screen.findByText("Bỏ thay đổi và rời trang"));
     expect(navigation.push).toHaveBeenCalledWith("/cai-dat/cua-hang");

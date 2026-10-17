@@ -3,10 +3,15 @@ import { workingRowSchema } from "./workbook-import";
 
 export const libraryRowsSchema = z.array(workingRowSchema).min(1).max(200)
   .refine(rows => new Set(rows.map(row => row.number)).size === rows.length, "STT không được trùng.");
-const branchSchedule = z.object({
-  branchId: z.uuid(), assigneeId: z.uuid(), effectiveFrom: z.iso.date(),
+const scheduleFields = {
+  branchId: z.uuid(), effectiveFrom: z.iso.date(),
   dueTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), weeklyDay: z.number().int().min(1).max(7),
-}).strict();
+};
+const branchSchedule = z.union([
+  z.object({...scheduleFields, assigneeIds: z.array(z.uuid()).min(1).max(20)
+    .refine(ids => new Set(ids.map(id=>id.toLowerCase())).size === ids.length, "Không chọn trùng người.")}).strict(),
+  z.object({...scheduleFields, assigneeId: z.uuid()}).strict(),
+]);
 export const libraryCommandSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("save"), requestId: z.uuid(), id: z.uuid().nullable(), version: z.number().int().positive().nullable(),
     title: z.string().trim().min(1).max(200), rows: libraryRowsSchema, notes: z.string().max(10000),

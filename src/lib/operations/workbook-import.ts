@@ -13,7 +13,10 @@ export type WorkingRow = z.infer<typeof workingRowSchema>;
 export const workingImportSchema = z.object({
   requestId: z.uuid(),
   rows: z.array(workingRowSchema).min(1).max(200).refine((rows) => new Set(rows.map((row) => row.number)).size === rows.length),
-  assignments: z.array(z.object({ branchId: z.uuid(), assigneeId: z.uuid() })).min(1).max(100)
+  assignments: z.array(z.union([
+    z.object({branchId:z.uuid(),assigneeIds:z.array(z.uuid()).min(1).max(20).refine(ids=>new Set(ids.map(id=>id.toLowerCase())).size===ids.length)}).strict(),
+    z.object({branchId:z.uuid(),assigneeId:z.uuid()}).strict(),
+  ])).min(1).max(100)
     .refine((rows) => new Set(rows.map((row) => row.branchId)).size === rows.length),
   effectiveFrom: z.iso.date(), dueTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
   weeklyDay: z.number().int().min(1).max(7),

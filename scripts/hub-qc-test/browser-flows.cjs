@@ -13,7 +13,7 @@ try{
 await actor('owner');await nav('Thiết lập');await page.getByRole('button',{name:'Chính sách mới',exact:true}).click();let d=dialog();await d.getByLabel('Tên phiên bản chính sách',{exact:true}).fill('Bản nháp giữ nội dung');
 const box=await d.boundingBox();assert.ok(box.width>1200);checks++;
 await page.mouse.click(1,1);assert.equal(await d.getByLabel('Tên phiên bản chính sách',{exact:true}).inputValue(),'Bản nháp giữ nội dung');checks++;
-await page.keyboard.press('Escape');await page.getByRole('button',{name:'Quay lại để lưu',exact:true}).click();assert.equal(await d.getByLabel('Tên phiên bản chính sách',{exact:true}).inputValue(),'Bản nháp giữ nội dung');checks++;
+await page.keyboard.press('Escape');await page.getByRole('button',{name:'Tiếp tục chỉnh sửa',exact:true}).click();assert.equal(await d.getByLabel('Tên phiên bản chính sách',{exact:true}).inputValue(),'Bản nháp giữ nội dung');checks++;
 await page.screenshot({path:path.join(out,'desktop-policy-dialog.png'),fullPage:true});
 await d.getByRole('button',{name:'Hủy',exact:true}).click();await page.getByRole('button',{name:'Bỏ thay đổi và đóng',exact:true}).click();await noDialog();
 for(const [width,height] of [[1366,768],[390,844]]){

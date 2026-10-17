@@ -286,6 +286,7 @@
   overflow: hidden;
   width: min(1360px, calc(100vw - 32px)) !important;
   max-width: none !important;
+  height: calc(100dvh - 32px);
   max-height: calc(100dvh - 32px);
   display: flex !important;
   flex-direction: column;
@@ -322,6 +323,12 @@
   padding: 12px 20px;
   border-top: 1px solid #dce2eb;
   background: #fff;
+}
+.dialogFooter > [role="alert"] {
+  flex-basis: 100%;
+  max-height: min(120px, 24dvh);
+  overflow-y: auto;
+  margin: 0;
 }
 .observations {
   display: grid;

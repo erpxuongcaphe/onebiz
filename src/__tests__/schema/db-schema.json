@@ -3723,8 +3723,10 @@
   "ops_workbook_batches_read",
   "ops_workbook_discard",
   "ops_workbook_import",
+  "ops_workbook_import_v2",
   "ops_working_library_check",
   "ops_working_library_execute",
+  "ops_working_library_execute_v2",
   "ops_working_library_read",
   "ops_workspace",
   "patch_tenant_settings_atomic",
@@ -3865,5 +3867,5 @@
  ],
  "soBang": 237,
  "soCot": 2790,
- "soRpc": 596
+ "soRpc": 598
 }

@@ -48,7 +48,7 @@ describe("shared popup edit guard", () => {
     }
     fireEvent.click(screen.getByRole("button", { name: "Hủy" }));
     await screen.findByText("Có nội dung chưa lưu");
-    fireEvent.click(screen.getByRole("button", { name: "Quay lại để lưu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tiếp tục chỉnh sửa" }));
     expect(screen.getByRole("button", { name: "Bỏ Người thứ nhất" })).toBeVisible();
     expect(!!screen.queryByRole("button", { name: "Bỏ Người thứ hai" })).toBe(mode === "add");
   });
@@ -86,7 +86,7 @@ describe("shared popup edit guard", () => {
     change(); traverse();
     expect(routerRestore).not.toHaveBeenCalled();
     await screen.findByText("Có nội dung chưa lưu");
-    fireEvent.click(screen.getByRole("button", { name: "Quay lại để lưu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tiếp tục chỉnh sửa" }));
     expect(screen.getByLabelText("Tên công việc")).toHaveValue("Việc đang nhập");
     expect(navigation.currentEntry.key).toBe("current");
     traverse();
@@ -107,7 +107,7 @@ describe("shared popup edit guard", () => {
   it("guards direct cancel callbacks and preserves data when continuing", async () => {
     render(<Form />); change(); fireEvent.click(screen.getByRole("button", { name: "Hủy" }));
     expect(await screen.findByText("Có nội dung chưa lưu")).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Quay lại để lưu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tiếp tục chỉnh sửa" }));
     expect(screen.getByLabelText("Tên công việc")).toHaveValue("Việc đang nhập");
   });
   it("discards only after explicit confirmation", async () => {
@@ -127,7 +127,7 @@ describe("shared popup edit guard", () => {
   });
   it("guards Escape and keeps changes when cancelling the confirmation", async () => {
     render(<Form />); change(); fireEvent.keyDown(screen.getByLabelText("Tên công việc"), { key: "Escape" });
-    await screen.findByText("Có nội dung chưa lưu"); fireEvent.click(screen.getByRole("button", { name: "Quay lại để lưu" }));
+    await screen.findByText("Có nội dung chưa lưu"); fireEvent.click(screen.getByRole("button", { name: "Tiếp tục chỉnh sửa" }));
     expect(screen.getByLabelText("Tên công việc")).toHaveValue("Việc đang nhập");
   });
   it("does not interfere with successful business save", async () => {

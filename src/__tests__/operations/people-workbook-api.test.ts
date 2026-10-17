@@ -20,8 +20,13 @@ describe('branch user options and atomic work import API',()=>{
  it('requires sign-in for both options and saved batches',async()=>{mocks.getUser.mockResolvedValue({data:{user:null},error:null});expect((await people(new NextRequest(`http://localhost:3000/api/operations/people?branch=${id}&purpose=manager`))).status).toBe(401);expect((await batches()).status).toBe(401);expect(mocks.rpc).not.toHaveBeenCalled();});
  it('rejects cross-origin writes',async()=>{expect((await save(post(body(),'https://other.invalid'))).status).toBe(403);expect(mocks.rpc).not.toHaveBeenCalled();});
  it('requires explicit valid users and unique branch assignments',async()=>{const invalid=body();invalid.assignments[0].assigneeId='';expect((await save(post(invalid))).status).toBe(400);expect(mocks.rpc).not.toHaveBeenCalled();});
- it('saves 34 source works in one database transaction and never approves by default',async()=>{const value=body();expect((await save(post(value))).status).toBe(200);expect(mocks.rpc).toHaveBeenCalledWith('ops_workbook_import',expect.objectContaining({p_request_id:value.requestId,p_activate:false}));expect(mocks.rpc).toHaveBeenCalledOnce();});
- it('activation has a separate explicit request',async()=>{expect((await save(post({requestId:id,activate:true}))).status).toBe(200);expect(mocks.rpc).toHaveBeenCalledWith('ops_workbook_import',{p_request_id:id,p_body:null,p_activate:true});});
+ it('saves 34 source works in one database transaction and never approves by default',async()=>{const value=body();expect((await save(post(value))).status).toBe(200);expect(mocks.rpc).toHaveBeenCalledWith('ops_workbook_import_v2',expect.objectContaining({p_request_id:value.requestId,p_activate:false}));expect(mocks.rpc).toHaveBeenCalledOnce();});
+ it('activation has a separate explicit request',async()=>{expect((await save(post({requestId:id,activate:true}))).status).toBe(200);expect(mocks.rpc).toHaveBeenCalledWith('ops_workbook_import_v2',{p_request_id:id,p_body:null,p_activate:true});});
+ it('keeps all selected managers for the legacy Excel screen',async()=>{
+  const other='22222222-2222-4222-8222-222222222222';const value={...body(),assignments:[{branchId:id,assigneeIds:[id,other]}]};
+  expect((await save(post(value))).status).toBe(200);expect(mocks.rpc).toHaveBeenCalledWith('ops_workbook_import_v2',expect.objectContaining({p_body:expect.objectContaining({assignments:value.assignments})}));
+  mocks.rpc.mockClear();expect((await save(post({...value,assignments:[{branchId:id,assigneeIds:[id,id]}]}))).status).toBe(400);expect(mocks.rpc).not.toHaveBeenCalled();
+ });
  it('requires a reason for discarding a draft',async()=>{expect((await save(post({requestId:id,discard:true,reason:''}))).status).toBe(400);expect(mocks.rpc).not.toHaveBeenCalled();});
  it('reports duplicate import as conflict and does not retry',async()=>{mocks.rpc.mockResolvedValue({data:null,error:{message:'OPS_WORKBOOK_DUPLICATE'}});expect((await save(post(body()))).status).toBe(409);expect(mocks.rpc).toHaveBeenCalledOnce();});
 });

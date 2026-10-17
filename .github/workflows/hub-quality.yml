@@ -35,3 +35,5 @@ jobs:
         run: HUB_PGLITE_DIR="$RUNNER_TEMP/hub-quality-runtime/node_modules/@electric-sql/pglite" node scripts/hub-qc-test/run.cjs
       - name: Verify shared criteria library and branch rollout without production data
         run: HUB_PGLITE_DIR="$RUNNER_TEMP/hub-quality-runtime/node_modules/@electric-sql/pglite" node scripts/hub-qc-test/working-library-acceptance.cjs
+      - name: Verify shared managers and atomic branch permissions
+        run: HUB_PGLITE_DIR="$RUNNER_TEMP/hub-quality-runtime/node_modules/@electric-sql/pglite" node scripts/hub-qc-test/shared-managers-acceptance.cjs

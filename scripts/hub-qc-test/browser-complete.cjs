@@ -77,7 +77,7 @@ const base='http://127.0.0.1:3315';
    await inspect(`adhoc-${width}`);
    await dialog.locator('textarea[name="note"]').fill('Giữ nội dung khi vô tình đóng');
    await dialog.getByRole('button',{name:'Hủy',exact:true}).click();
-   await page.getByRole('button',{name:'Quay lại để lưu',exact:true}).click();
+   await page.getByRole('button',{name:'Tiếp tục chỉnh sửa',exact:true}).click();
    assert.equal(await dialog.locator('textarea[name="note"]').inputValue(),'Giữ nội dung khi vô tình đóng');
    results.push(`adhoc-keep-unsaved-${width}`);await close();
    await page.getByRole('button',{name:'Phát sinh ngoài lịch',exact:true}).click();

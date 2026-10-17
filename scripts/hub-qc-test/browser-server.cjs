@@ -23,7 +23,10 @@ const ids = {
   if (process.env.HUB_CEO_ENTRY === '1') {
     await db.exec('create table user_branches(user_id uuid,branch_id uuid); insert into user_branches select user_id,branch_id from ops_members');
     await db.exec(fs.readFileSync(root + '/supabase/migrations/00555_operations_ceo_workbook_people.sql','utf8'));
-    if (process.env.HUB_LIBRARY_ENTRY === '1') await db.exec(fs.readFileSync(root + '/supabase/migrations/00556_operations_shared_working_library.sql','utf8'));
+    if (process.env.HUB_LIBRARY_ENTRY === '1') {
+      await db.exec(fs.readFileSync(root + '/supabase/migrations/00556_operations_shared_working_library.sql','utf8'));
+      await db.exec(fs.readFileSync(root + '/supabase/migrations/00560_operations_library_shared_managers.sql','utf8'));
+    }
   }
   await db.query("update ops_q_grants set active=true");
   let actor = ids.owner;
@@ -69,7 +72,7 @@ const ids = {
     css: { postcss: root + "/postcss.config.mjs" },
     server: {
       host: "127.0.0.1",
-      port: 3315,
+      port: Number(process.env.HUB_TEST_PORT || 3315),
       strictPort: true,
       fs: { allow: [root] },
     },
@@ -117,13 +120,13 @@ const ids = {
                 if (req.method === 'GET') value=(await db.query('select ops_working_library_read() value')).rows[0].value;
                 else {
                   const {action,requestId,...payload}=JSON.parse(body);
-                  value={result:(await db.query('select ops_working_library_execute($1,$2,$3) value',[action,JSON.stringify(payload),requestId])).rows[0].value};
+                  value={result:(await db.query('select ops_working_library_execute_v2($1,$2,$3) value',[action,JSON.stringify(payload),requestId])).rows[0].value};
                 }
               } else if (url.pathname === '/api/operations/workbook') {
                 if (req.method === 'GET') value={batches:(await db.query('select ops_workbook_batches_read() value')).rows[0].value};
                 else {
                   const {requestId,activate,discard,reason,...payload}=JSON.parse(body);
-                  value={batch:discard ? (await db.query('select ops_workbook_discard($1,$2) value',[requestId,reason])).rows[0].value : (await db.query('select ops_workbook_import($1,$2,$3) value',[requestId,activate?null:JSON.stringify(payload),!!activate])).rows[0].value};
+                  value={batch:discard ? (await db.query('select ops_workbook_discard($1,$2) value',[requestId,reason])).rows[0].value : (await db.query('select ops_workbook_import_v2($1,$2,$3) value',[requestId,activate?null:JSON.stringify(payload),!!activate])).rows[0].value};
                 }
               } else if (url.pathname === "/api/operations/quality") {
                 if (req.method === "GET") {
@@ -204,7 +207,7 @@ const ids = {
     ],
   });
   await server.listen();
-  console.log("ISOLATED_HUB_READY http://127.0.0.1:3315");
+  console.log(`ISOLATED_HUB_READY http://127.0.0.1:${process.env.HUB_TEST_PORT || 3315}`);
   for (const signal of ["SIGINT", "SIGTERM"])
     process.on(signal, async () => {
       await server.close();

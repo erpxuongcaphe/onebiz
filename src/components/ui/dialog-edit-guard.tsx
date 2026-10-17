@@ -108,10 +108,10 @@ export function GuardedDialogRoot({ open, defaultOpen, onOpenChange, children,
         <Primitive.Backdrop className="fixed inset-0 z-[70] bg-black/40" />
         <Primitive.Popup initialFocus={continueButton} className="fixed left-1/2 top-1/2 z-[70] grid max-h-[90dvh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-lg border bg-popover p-5 text-sm text-popover-foreground shadow-xl">
           <Primitive.Title className="text-base font-semibold">Có nội dung chưa lưu</Primitive.Title>
-          <Primitive.Description>Nội dung đang nhập sẽ mất nếu đóng. Quay lại để kiểm tra và bấm Lưu, hoặc xác nhận bỏ thay đổi.</Primitive.Description>
+          <Primitive.Description>Nội dung đang nhập sẽ mất nếu đóng. Tiếp tục chỉnh sửa để hoàn tất thao tác, hoặc xác nhận bỏ thay đổi.</Primitive.Description>
           <div className="flex flex-wrap justify-end gap-2">
             <Button variant="outline" onClick={finishDiscard} className="text-status-error">Bỏ thay đổi và đóng</Button>
-            <Button ref={continueButton} onClick={() => setPending(null)}>Quay lại để lưu</Button>
+            <Button ref={continueButton} onClick={() => setPending(null)}>Tiếp tục chỉnh sửa</Button>
           </div>
         </Primitive.Popup>
       </Primitive.Portal>

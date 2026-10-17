@@ -8,12 +8,14 @@ import styles from "./user-picker.module.css";
 export type UserPurpose = "manager" | "participant" | "membership" | "qc_grant" | "department";
 export const UserBranchContext = createContext("");
 
-export function UserPicker({ name, label, branch, purpose = "participant", value, onChange,
-  multiple = false, required = false, disabled = false, options,
+export function UserPicker({ name, label, branch, purpose = "participant", value, onChange, onValuesChange,
+  multiple = false, required = false, disabled = false, options, emptyHint,
 }: {
   name?: string; label: string; branch?: string; purpose?: UserPurpose;
   value?: string | string[]; onChange?: (value: string) => void;
+  onValuesChange?: (values: string[], people: Person[]) => void;
   multiple?: boolean; required?: boolean; disabled?: boolean; options?: Person[];
+  emptyHint?: React.ReactNode;
 }) {
   const id = useId();
   const inheritedBranch = useContext(UserBranchContext);
@@ -30,7 +32,7 @@ export function UserPicker({ name, label, branch, purpose = "participant", value
   const loading = !!branch && result.key !== requestKey;
   const people = loading ? [] : result.people;
   const error = branch && result.key === requestKey ? result.error : "";
-  const controlled = onChange ? initial : selected;
+  const controlled = onChange || onValuesChange ? initial : selected;
   useEffect(() => {
     if (!branch) return;
     const controller = new AbortController();
@@ -58,6 +60,7 @@ export function UserPicker({ name, label, branch, purpose = "participant", value
   const stale = !loading && !error && valid.length !== controlled.length;
   const change = (keys: string[]) => {
     setSelected(keys); onChange?.(keys[0] ?? "");
+    onValuesChange?.(keys, keys.map(key => pool.find(person => person.id === key)).filter((person): person is Person => !!person));
     root.current?.dispatchEvent(new Event("input", { bubbles: true }));
     root.current?.dispatchEvent(new Event("change", { bubbles: true }));
   };
@@ -87,7 +90,7 @@ export function UserPicker({ name, label, branch, purpose = "participant", value
     </select>
     {stale && <small role="alert">Người đã chọn không còn hợp lệ tại chi nhánh này. Bỏ lựa chọn cũ và chọn lại.</small>}
     {error && <small role="alert">{error} <button type="button" onClick={() => setRetry((n) => n + 1)}>Thử lại</button></small>}
-    {!loading && !error && !pool.length && <small>Chưa có tài khoản phù hợp trong phạm vi này.</small>}
+    {!loading && !error && !pool.length && <small role="status">{emptyHint ?? (purpose === "manager" ? "Chưa có quản lý đủ điều kiện tại chi nhánh này. Kiểm tra quyền Xem Hub, Ghi kết quả và phân công Quản lý Hub trong Thiết lập." : "Chưa có tài khoản phù hợp trong phạm vi này.")}</small>}
     {open && <div className={styles.popup} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setOpen(false); button.current?.focus(); } }}>
       <input autoFocus aria-label={`Tìm ${label.toLowerCase()}`} placeholder="Tìm theo tên…" value={query} onChange={(event) => setQuery(event.target.value)} />
       <ul id={`${id}-list`} aria-label={`Danh sách ${label.toLowerCase()}`}>

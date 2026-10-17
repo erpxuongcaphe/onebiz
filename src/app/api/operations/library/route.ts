@@ -28,11 +28,12 @@ export async function POST(request: NextRequest) {
   const session = await client.auth.getUser();
   if (session.error || !session.data.user) return failure("Vui lòng đăng nhập lại.", 401);
   const { action, requestId, ...payload } = parsed.data;
-  const result = await (client as unknown as Rpc).rpc("ops_working_library_execute", { p_action: action, p_payload: payload, p_request_id: requestId });
+  const result = await (client as unknown as Rpc).rpc(action === "apply" ? "ops_working_library_execute_v2" : "ops_working_library_execute", { p_action: action, p_payload: payload, p_request_id: requestId });
   if (result.error) {
     const message = result.error.message;
     if (message.includes("OPS_FORBIDDEN")) return failure("Bạn chưa có quyền thiết lập bộ chung hoặc áp dụng tại chi nhánh đã chọn.", 403);
-    if (message.includes("OPS_INVALID_ASSIGNEE")) return failure("Người phụ trách không còn đủ quyền tại chi nhánh. Chọn lại người phù hợp.", 409);
+    if (message.includes("OPS_INVALID_ASSIGNEE")) return failure("Một quản lý đã chọn không còn đủ quyền tại chi nhánh. Kiểm tra quyền Xem Hub, Ghi kết quả và phân công Quản lý Hub; chưa lưu bất kỳ chi nhánh nào.", 409);
+    if (["PGRST202", "42883"].includes(result.error.code ?? "")) return failure("Chức năng phân công đang chờ cập nhật hệ thống. Nội dung đang nhập được giữ nguyên; chưa áp dụng dữ liệu.", 503);
     if (message.includes("OPS_LIBRARY_STALE")) return failure("Bộ tiêu chí vừa được cập nhật. Tải lại và kiểm tra trước khi lưu hoặc áp dụng.", 409);
     if (message.includes("OPS_LIBRARY_EXISTS")) return failure("Bộ tiêu chí CEO đã được lưu. Mở bộ hiện có để chỉnh, không tạo thêm bản trùng.", 409);
     if (message.includes("OPS_LIBRARY_APPLIED")) return failure("Một chi nhánh đã áp dụng bộ này. Không ghi đè; chỉnh công việc tại chi nhánh bằng phiên bản mới.", 409);
