@@ -20,7 +20,7 @@ import { SettingsSwitch } from "@/components/shared/settings-toggle";
 
 import { useEffect, useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { FnbPaymentMethodSettings } from "@/components/shared/fnb-payment-method-settings";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -350,48 +350,7 @@ export default function PaymentSettingsPage() {
       </Card>
 
       {/* ── Section 2: Phương thức TT hỗ trợ ── */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Icon name="payments" size={16} className="text-primary" />
-            Phương thức thanh toán hỗ trợ
-          </CardTitle>
-          <CardDescription>
-            Mọi phương thức dưới đều có sẵn ở POS Retail + FnB
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {[
-              { code: "cash", label: "Tiền mặt", icon: "payments" },
-              { code: "transfer", label: "Chuyển khoản (có QR auto)", icon: "account_balance" },
-              { code: "card", label: "Thẻ tín dụng/ghi nợ", icon: "credit_card" },
-              { code: "ewallet", label: "Ví điện tử (Momo/Zalo/VNPay)", icon: "account_balance_wallet" },
-            ].map((m) => (
-              <div
-                key={m.code}
-                className="flex items-center gap-3 p-3 rounded-lg border bg-surface-container-lowest"
-              >
-                <span className="inline-flex size-9 items-center justify-center rounded-lg bg-primary-fixed text-primary">
-                  <Icon name={m.icon} size={16} />
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium">{m.label}</div>
-                  <div className="text-xs text-muted-foreground font-mono">
-                    {m.code}
-                  </div>
-                </div>
-                <Badge
-                  variant="outline"
-                  className="bg-status-success/10 text-status-success border-status-success/25 text-xs"
-                >
-                  Đã bật
-                </Badge>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      <FnbPaymentMethodSettings />
     </div>
   );
 }

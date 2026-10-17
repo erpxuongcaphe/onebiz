@@ -272,6 +272,7 @@ export default function SalesSettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Phương thức thanh toán</CardTitle>
+          <p className="text-sm text-muted-foreground">POS FnB dùng cấu hình riêng theo chi nhánh tại <Link className="text-primary underline" href="/cai-dat/thanh-toan">Cài đặt thanh toán</Link>.</p>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">

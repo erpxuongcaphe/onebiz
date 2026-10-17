@@ -3952,6 +3952,8 @@ function FnbPosPageInner() {
       {paymentOpen && (
         <Suspense fallback={null}>
           <FnbPaymentDialog
+            key={currentBranch?.id}
+            branchId={currentBranch?.id}
             open={paymentOpen}
             onOpenChange={setPaymentOpen}
             subtotal={pos.subtotal}

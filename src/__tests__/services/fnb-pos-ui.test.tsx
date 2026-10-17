@@ -1,3 +1,5 @@
+import { getFnbPaymentMethods } from "@/lib/services/supabase/fnb-payment-methods";
+vi.mock("@/lib/services/supabase/fnb-payment-methods", () => ({ getFnbPaymentMethods: vi.fn() }));
 import { describe, it, expect, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
@@ -963,6 +965,44 @@ describe("FnbPaymentDialog — component", () => {
     onConfirm: vi.fn(),
   };
 
+  it("transfer defaults to full amount, requires explicit debt and rejects excess noncash", async () => {
+    const onConfirm = vi.fn().mockResolvedValue(true);
+    render(<FnbPaymentDialog {...baseProps} onConfirm={onConfirm} />);
+    fireEvent.click(screen.getByText("100k"));
+    fireEvent.click(screen.getByRole("button", { name: "Chuyển khoản" }));
+    const input = screen.getByLabelText("Số tiền chuyển khoản");
+    expect(input).toHaveValue("200000");
+    fireEvent.change(input, { target: { value: "250000" } });
+    expect(screen.getByRole("button", { name: /Hoàn tất thanh toán/ })).toBeDisabled();
+    fireEvent.change(input, { target: { value: "150000" } });
+    expect(screen.getByRole("button", { name: /Hoàn tất thanh toán/ })).toBeDisabled();
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("button", { name: /Hoàn tất thanh toán/ }));
+    await waitFor(() => expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ paymentMethod: "transfer", paid: 150000, allowDebt: true })));
+  });
+  it("branch setting hides card in single and mixed payments", async () => {
+    vi.mocked(getFnbPaymentMethods).mockResolvedValue({ cash: true, transfer: true, card: false });
+    render(<FnbPaymentDialog {...baseProps} branchId="branch-a" />);
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Thẻ" })).toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: "Hỗn hợp" }));
+    expect(screen.queryByLabelText("Thẻ")).toBeNull();
+    fireEvent.change(screen.getByLabelText("Chuyển khoản"), { target: { value: "200000" } });
+    expect(screen.getByRole("button", { name: /Hoàn tất thanh toán/ })).toBeEnabled();
+  });
+  it("failed configuration can retry and a branch change discards old choices", async () => {
+    vi.mocked(getFnbPaymentMethods).mockRejectedValueOnce(new Error("Lỗi mạng"))
+      .mockResolvedValueOnce({ cash: false, transfer: true, card: false })
+      .mockResolvedValueOnce({ cash: true, transfer: false, card: false });
+    const view = render(<FnbPaymentDialog {...baseProps} branchId="branch-a" />);
+    await screen.findByText("Lỗi mạng");
+    expect(screen.getByRole("button", { name: /Hoàn tất thanh toán/ })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Thử lại" }));
+    await screen.findByLabelText("Số tiền chuyển khoản");
+    expect(screen.queryByRole("button", { name: "Hỗn hợp" })).toBeNull();
+    view.rerender(<FnbPaymentDialog {...baseProps} branchId="branch-b" />);
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Chuyển khoản" })).toBeNull());
+    expect(screen.getByRole("button", { name: /Hoàn tất thanh toán/ })).toBeDisabled();
+  });
   it("hiện order summary: Tạm tính + Tổng cộng", () => {
     render(<FnbPaymentDialog {...baseProps} />);
     expect(screen.getByText("Tạm tính")).toBeDefined();
@@ -1231,7 +1271,7 @@ describe("FnbPaymentDialog — component", () => {
     fireEvent.click(screen.getByText("Chuyển khoản"));
 
     // Denomination buttons should not be visible (cash input hidden)
-    expect(screen.queryByText("Đủ")).toBeNull();
+    expect(screen.getByRole("button", { name: "Đủ" })).toBeVisible();
     expect(screen.queryByText("50k")).toBeNull();
   });
 
