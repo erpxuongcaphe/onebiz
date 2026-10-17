@@ -30,7 +30,8 @@ const explicit=fs.readFileSync('supabase/migrations/00544_fnb_explicit_sweetness
 const start=explicit.indexOf('CREATE OR REPLACE FUNCTION public.consume_bom_for_sale');
 const end=explicit.indexOf('$function$;',start)+'$function$;'.length;
 if(start<0||end<20)throw Error('consume boundary changed');
-let sql=fixture+'\n'+support+'\n'+explicit.slice(start,end)+'\n'+fs.readFileSync('supabase/migrations/00545_fnb_sweetness_note_topping_guard.sql','utf8');
+const roles="do $$ begin if not exists(select 1 from pg_roles where rolname='anon') then create role anon;end if;if not exists(select 1 from pg_roles where rolname='authenticated') then create role authenticated;end if;if not exists(select 1 from pg_roles where rolname='service_role') then create role service_role;end if;end $$;\n";
+let sql=roles+fixture+'\n'+support+'\n'+explicit.slice(start,end)+'\n'+fs.readFileSync('supabase/migrations/00545_fnb_sweetness_note_topping_guard.sql','utf8');
 if(!process.argv.includes('--before'))sql+='\n'+fs.readFileSync('supabase/migrations/00562_fnb_stock_boundary_and_lot_allocation.sql','utf8');
 sql+=String.raw`
 create function test_new_order(p_order uuid) returns void language plpgsql as $$
@@ -42,5 +43,6 @@ end $$;
 `;
 fs.writeFileSync(process.argv[2],sql);
 fs.rmSync(dir,{recursive:true,force:true});
+
 
 
