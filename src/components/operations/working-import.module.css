@@ -18,3 +18,4 @@
 .batch summary { cursor: pointer; min-height: 36px; padding-top: 8px; }
 .file { max-width: 320px; }
 @media (max-width: 700px) { .body { padding: 12px; } .settings, .branchGrid { grid-template-columns: minmax(0,1fr); } .row { padding: 10px; } }
+.dialog { overflow: clip !important; }
