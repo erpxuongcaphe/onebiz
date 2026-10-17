@@ -11,7 +11,7 @@ const sources = [
   ['00156_branch_stock_null_variant_guard.sql', 'upsert_branch_stock'],
   ['00147_variant_aware_bom_lookup.sql', 'get_active_bom_for_branch'],
   ['00527_lot_expiry_time.sql', '_lot_expiry_moment_00527'],
-  ['00562_fnb_stock_boundary_and_lot_allocation.sql', 'allocate_lots_fifo'],
+  ['00563_fnb_stock_boundary_and_lot_allocation.sql', 'allocate_lots_fifo'],
   ['00544_fnb_explicit_sweetness_only.sql', 'consume_bom_for_sale'],
 ];
 const definitions = sources.map(([file, name]) => {
@@ -43,4 +43,3 @@ process.stdout.write(result.stdout || '');
 process.stderr.write(result.stderr || '');
 if (result.error) throw result.error;
 process.exitCode = result.status ?? 1;
-

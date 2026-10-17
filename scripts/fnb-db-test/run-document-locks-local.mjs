@@ -1,0 +1,15 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import {execFileSync} from 'node:child_process';
+const migration=fs.readFileSync('supabase/migrations/00563_fnb_stock_boundary_and_lot_allocation.sql','utf8');
+const block=migration.match(/do \$document_locks\$[\s\S]*?end \$document_locks\$;/)?.[0];
+if(!block)throw Error('Document lock patch missing');
+fs.mkdirSync('.tmp',{recursive:true});
+fs.writeFileSync('.tmp/document-locks-00563.sql',block);
+const source=fs.readFileSync('scripts/fnb-db-test/run-actual-prepared-yield-local.mjs','utf8');
+const generated=source.replace('  const branch=',()=> "  await db.exec(fs.readFileSync('.tmp/document-locks-00563.sql','utf8'));\n  const branch=");
+if(generated===source)throw Error('Production fixture boundary changed');
+const target=path.resolve('.tmp/document-locks-00563.generated.mjs');
+fs.writeFileSync(target,generated);
+execFileSync(process.execPath,[target,path.resolve(process.argv[2])],{stdio:'inherit'});
+console.log('PASS: production material/output/cost chain with shared product-first document lock patch');

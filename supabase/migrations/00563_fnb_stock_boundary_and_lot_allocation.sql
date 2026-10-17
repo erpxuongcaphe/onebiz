@@ -1,12 +1,12 @@
 -- Definition-only: never rewrite historical stock, money, recipes or lots.
 begin;
 set local lock_timeout='3s';
-create table public.stock_hardening_backups_00562(signature text primary key,definition text not null,captured_at timestamptz not null default now());
-revoke all on public.stock_hardening_backups_00562 from public,anon,authenticated;
-alter table public.stock_hardening_backups_00562 enable row level security;
-insert into public.stock_hardening_backups_00562(signature,definition)
+create table public.stock_hardening_backups_00563(signature text primary key,definition text not null,captured_at timestamptz not null default now());
+revoke all on public.stock_hardening_backups_00563 from public,anon,authenticated;
+alter table public.stock_hardening_backups_00563 enable row level security;
+insert into public.stock_hardening_backups_00563(signature,definition)
 select p.oid::regprocedure::text,pg_get_functiondef(p.oid) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-where n.nspname='public' and p.proname in ('allocate_lots_fifo','consume_bom_for_sale','_fnb_complete_payment_impl_00230','_fnb_complete_payment_checkout_impl_00345');
+where n.nspname='public' and p.proname in ('allocate_lots_fifo','consume_bom_for_sale','_fnb_complete_payment_impl_00230','_fnb_complete_payment_checkout_impl_00345','receive_purchase_items_atomic','complete_production_atomic');
 
 create or replace function public.allocate_lots_fifo(p_tenant_id uuid,p_product_id uuid,p_branch_id uuid,p_quantity numeric,p_source_type text,p_source_id uuid,p_allocated_by uuid default null)
 returns jsonb language plpgsql security definer set search_path=public,extensions as $$
@@ -35,7 +35,7 @@ end $$;
 
 -- Operational audit only: no second stock/cost ledger, no fabricated or expired lot.
 -- The established sale policy remains authoritative; missing lots do not add a new sales block.
-create function public._allocate_fnb_sale_lots_00562(p_tenant_id uuid,p_product_id uuid,p_branch_id uuid,p_quantity numeric,p_source_type text,p_source_id uuid,p_allocated_by uuid default null)
+create function public._allocate_fnb_sale_lots_00563(p_tenant_id uuid,p_product_id uuid,p_branch_id uuid,p_quantity numeric,p_source_type text,p_source_id uuid,p_allocated_by uuid default null)
 returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
 declare result jsonb;shortage numeric;
 begin
@@ -51,7 +51,7 @@ begin
 end $$;
 
 -- Union for the entire bill, including legacy toppings. No recursive BTP expansion.
-create function public._lock_fnb_checkout_products_00562(p_order uuid,p_tenant uuid,p_branch uuid)
+create function public._lock_fnb_checkout_products_00563(p_order uuid,p_tenant uuid,p_branch uuid)
 returns void language plpgsql security definer set search_path=public,pg_temp as $$
 declare ids uuid[];locked_count integer;
 begin
@@ -86,31 +86,52 @@ begin
  definition:=pg_get_functiondef(fn.oid);
  select count(*) into calls from regexp_matches(definition,pattern,'g');
  if calls<>(case when fn.proname='consume_bom_for_sale' then 2 else 4 end) then
- raise exception 'FNB_00562_ALLOCATION_BOUNDARY_CHANGED: % (% calls)',fn.proname,calls;end if;
- patched:=regexp_replace(definition,pattern,'perform public._allocate_fnb_sale_lots_00562(\1);','g');
+ raise exception 'FNB_00563_ALLOCATION_BOUNDARY_CHANGED: % (% calls)',fn.proname,calls;end if;
+ patched:=regexp_replace(definition,pattern,'perform public._allocate_fnb_sale_lots_00563(\1);','g');
  if fn.proname='consume_bom_for_sale' then
- if strpos(patched,'order by p.id for share;')=0 then raise exception 'FNB_00562_UNIT_LOCK_BOUNDARY_CHANGED';end if;
+ if strpos(patched,'order by p.id for share;')=0 then raise exception 'FNB_00563_UNIT_LOCK_BOUNDARY_CHANGED';end if;
  patched:=replace(patched,'order by p.id for share;','order by p.id for update;');
  end if;
  execute patched;
  end loop;
  if not exists(select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='_fnb_complete_payment_impl_00230') then
- raise exception 'FNB_00562_POSTING_SIGNATURE_MISSING';end if;
+ raise exception 'FNB_00563_POSTING_SIGNATURE_MISSING';end if;
  definition:=pg_get_functiondef('public._fnb_complete_payment_checkout_impl_00345(uuid,uuid,text,text,jsonb,numeric,boolean,numeric,uuid,text,text,uuid,numeric,uuid,text)'::regprocedure);
- if strpos(definition,'-- Retry trả lại hóa đơn đã có')=0 then raise exception 'FNB_00562_PAYMENT_LOCK_BOUNDARY_CHANGED';end if;
+ if strpos(definition,'-- Retry trả lại hóa đơn đã có')=0 then raise exception 'FNB_00563_PAYMENT_LOCK_BOUNDARY_CHANGED';end if;
  patched:=replace(definition,'-- Retry trả lại hóa đơn đã có',
- E'if v_order.invoice_id is null then\n    perform public._lock_fnb_checkout_products_00562(p_kitchen_order_id,v_tenant_id,v_order.branch_id);\n  end if;\n\n  -- Retry trả lại hóa đơn đã có');
+ E'if v_order.invoice_id is null then\n    perform public._lock_fnb_checkout_products_00563(p_kitchen_order_id,v_tenant_id,v_order.branch_id);\n  end if;\n\n  -- Retry trả lại hóa đơn đã có');
  execute patched;
 end $patch$;
+
+
+-- The same product-first order is required on receipt and direct production completion.
+do $document_locks$
+declare signature text;definition text;needle text;insertion text;entry record;
+begin
+ for entry in select * from (values
+ ('public.receive_purchase_items_atomic(uuid,jsonb,uuid)',
+ 'v_result := public._receive_purchase_items_atomic_impl_00102(',
+ E'perform p.id from public.products p where p.tenant_id=v_tenant_id and p.id in\n      (select i.product_id from public.purchase_order_items i where i.purchase_order_id=p_order_id)\n      order by p.id for update;\n\n  '),
+ ('public.complete_production_atomic(uuid,numeric,text,date,date)',
+ '-- Reject incomplete prepared ingredient snapshots before either stock posting.',
+ E'perform p.id from public.products p where p.tenant_id=v_order.tenant_id and\n      (p.id in(select po.product_id from public.production_orders po where po.id=p_production_order_id)\n       or p.id in(select m.product_id from public.production_order_materials m where m.production_order_id=p_production_order_id))\n      order by p.id for update;\n\n ')
+ ) x(signature,needle,insertion) loop
+ signature:=entry.signature;
+ -- Focused fixtures may omit an unrelated document. Production preflight requires all six backups.
+ if to_regprocedure(signature) is null then continue;end if;
+ definition:=pg_get_functiondef(to_regprocedure(signature));needle:=entry.needle;insertion:=entry.insertion;
+ if (length(definition)-length(replace(definition,needle,'')))/length(needle)<>1 then
+ raise exception 'FNB_00563_DOCUMENT_LOCK_BOUNDARY_CHANGED: %',signature;end if;
+ execute replace(definition,needle,insertion||needle);
+ end loop;
+end $document_locks$;
 
 revoke all on function public.increment_product_stock(uuid,numeric),
  public.upsert_branch_stock(uuid,uuid,uuid,numeric),
  public.consume_bom_for_sale(uuid,uuid,uuid,numeric,uuid,uuid,text,jsonb,boolean,uuid),
  public.allocate_lots_fifo(uuid,uuid,uuid,numeric,text,uuid,uuid),
- public._allocate_fnb_sale_lots_00562(uuid,uuid,uuid,numeric,text,uuid,uuid),
- public._lock_fnb_checkout_products_00562(uuid,uuid,uuid)
+ public._allocate_fnb_sale_lots_00563(uuid,uuid,uuid,numeric,text,uuid,uuid),
+ public._lock_fnb_checkout_products_00563(uuid,uuid,uuid)
 from public,anon,authenticated;
 notify pgrst,'reload schema';
 commit;
-
-

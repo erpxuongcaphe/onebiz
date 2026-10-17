@@ -30,9 +30,30 @@ const explicit=fs.readFileSync('supabase/migrations/00544_fnb_explicit_sweetness
 const start=explicit.indexOf('CREATE OR REPLACE FUNCTION public.consume_bom_for_sale');
 const end=explicit.indexOf('$function$;',start)+'$function$;'.length;
 if(start<0||end<20)throw Error('consume boundary changed');
+
+const receiptSource=fs.readFileSync('supabase/migrations/00245_harden_purchase_order_rpcs.sql','utf8').replaceAll('\r\n','\n');
+const receiptStart=receiptSource.indexOf('create or replace function public.receive_purchase_items_atomic(');
+const receiptEnd=receiptSource.indexOf('\n$$;',receiptStart)+4;
+if(receiptStart<0||receiptEnd<10)throw Error('Receipt guard boundary changed');
+const receiptFixture=String.raw`
+create table purchase_orders(id uuid primary key,tenant_id uuid,branch_id uuid,code text,supplier_name text,status text,paid numeric default 0);
+alter table purchase_order_items add column id uuid default gen_random_uuid(),add column quantity numeric default 0;
+alter table cash_transactions add column status text default 'completed';
+create function _receive_purchase_items_atomic_impl_00102(p_order uuid,p_lines jsonb,p_actor uuid)
+returns jsonb language plpgsql as $$
+declare item record;
+begin
+ for item in select product_id,quantity,unit_price from purchase_order_items where purchase_order_id=p_order and quantity>0 order by product_id desc loop
+  perform test_receipt(p_order,item.product_id,item.quantity,item.unit_price);
+ end loop;
+ update purchase_orders set status='completed' where id=p_order;
+ return jsonb_build_object('success',true);
+end $$;
+`;
+
 const roles="do $$ begin if not exists(select 1 from pg_roles where rolname='anon') then create role anon;end if;if not exists(select 1 from pg_roles where rolname='authenticated') then create role authenticated;end if;if not exists(select 1 from pg_roles where rolname='service_role') then create role service_role;end if;end $$;\n";
-let sql=roles+fixture+'\n'+support+'\n'+explicit.slice(start,end)+'\n'+fs.readFileSync('supabase/migrations/00545_fnb_sweetness_note_topping_guard.sql','utf8');
-if(!process.argv.includes('--before'))sql+='\n'+fs.readFileSync('supabase/migrations/00562_fnb_stock_boundary_and_lot_allocation.sql','utf8');
+let sql=roles+fixture+'\n'+support+'\n'+receiptFixture+'\n'+receiptSource.slice(receiptStart,receiptEnd)+'\n'+explicit.slice(start,end)+'\n'+fs.readFileSync('supabase/migrations/00545_fnb_sweetness_note_topping_guard.sql','utf8');
+if(!process.argv.includes('--before'))sql+='\n'+fs.readFileSync('supabase/migrations/00563_fnb_stock_boundary_and_lot_allocation.sql','utf8');
 sql+=String.raw`
 create function test_new_order(p_order uuid) returns void language plpgsql as $$
 begin
@@ -43,6 +64,3 @@ end $$;
 `;
 fs.writeFileSync(process.argv[2],sql);
 fs.rmSync(dir,{recursive:true,force:true});
-
-
-

@@ -35,7 +35,17 @@ sql(f"select test_new_order('{order}')")
 before=int(sql("select count(*) from invoices"))
 with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool: list(pool.map(pay,[order,order]))
 assert int(sql("select count(*) from invoices"))==before+1
+# Receipt guard is the real authenticated RPC; its stock/cost delegate is a fixture.
+receipt_id="00000000-0000-0000-0004-000000000001"
+sql(f"insert into purchase_orders(id,tenant_id,branch_id,code,supplier_name,status,paid) values('{receipt_id}','00000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000003','RECEIPT-RACE','Fixture','ordered',0);insert into purchase_order_items(purchase_order_id,product_id,unit_price,quantity) values('{receipt_id}','00000000-0000-0000-0000-000000000011',120000,1),('{receipt_id}','00000000-0000-0000-0000-000000000012',40000,1)")
+race_orders=["00000000-0000-0000-0005-000000000001","00000000-0000-0000-0005-000000000002"]
+for race in race_orders: sql(f"select test_new_order('{race}')")
+race_before=raw_quantity()
+def receive():
+    sql(f"begin;select set_config('test.actor','{actor}',true);select receive_purchase_items_atomic('{receipt_id}',null,null);select pg_sleep(0.1);commit;")
+with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+    futures=[pool.submit(pay,race) for race in race_orders]+[pool.submit(receive)]
+    for future in futures: future.result()
+assert raw_quantity()==race_before+Decimal(1)-Decimal("0.12"),"Receipt and sales quantity mismatch"
 assert sql("select count(*) from (select p.id from products p left join branch_stock b on b.product_id=p.id group by p.id,p.stock having p.stock<>coalesce(sum(b.quantity),0)) q")=="0"
-print(json.dumps({"status":"PASS","parallelBatches":out,"sameOrderReplay":"PASS","globalVsBranch":"PASS"}))
-
-
+print(json.dumps({"status":"PASS","parallelBatches":out,"sameOrderReplay":"PASS","globalVsBranch":"PASS","receiptBoundaryRace":"PASS (real guard, fixture stock delegate)"}))

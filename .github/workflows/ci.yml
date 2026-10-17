@@ -63,6 +63,7 @@ jobs:
           psql -X -v ON_ERROR_STOP=1 -f /tmp/fnb-hardening-fixture.sql
           python3 scripts/fnb-db-test/stock-hardening-concurrency.py
           node scripts/fnb-db-test/run-stock-hardening-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
+          node scripts/fnb-db-test/run-document-locks-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
 
       - name: Verify atomic opening stock and isolated branch value
         env:
