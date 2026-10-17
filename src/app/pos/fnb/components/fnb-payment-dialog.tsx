@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 import { Icon } from "@/components/ui/icon";
+import { availableFnbMethods, DEFAULT_FNB_METHODS, type FnbMethodPreferences } from "@/lib/fnb-payment-methods";
+import { getFnbPaymentMethods } from "@/lib/services/supabase/fnb-payment-methods";
 import { previewFnbSettlement } from "@/lib/fnb-settlement-preview";
 
 // ── Types ──
@@ -26,6 +28,7 @@ export interface FnbPaymentConfirmPayload {
 }
 
 interface FnbPaymentDialogProps {
+  branchId?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   subtotal: number;
@@ -73,11 +76,34 @@ function formatDenom(v: number): string {
 // ── Component ──
 
 export function FnbPaymentDialog({
-  open, onOpenChange, subtotal, discountAmount = 0, manualDiscountAmount = 0,
+  branchId, open, onOpenChange, subtotal, discountAmount = 0, manualDiscountAmount = 0,
   persistedOrderDiscountAmount = 0, promotionDiscountAmount = 0, couponDiscountAmount = 0, total: baseTotal, lineCount, orderNumber,
   initialCustomerName, customerLocked = false, customerConfirmationRequired = false, onSelectCustomer, onConfirm,
   deliveryFee = 0, commissionPercent = 0,
 }: FnbPaymentDialogProps) {
+  const [preferences, setPreferences] = useState<FnbMethodPreferences>(DEFAULT_FNB_METHODS);
+  const [readyBranch, setReadyBranch] = useState<string | null>(null);
+  const [configError, setConfigError] = useState("");
+  const [configRetry, setConfigRetry] = useState(0);
+  useEffect(() => {
+    if (!open || !branchId) return;
+    let active = true;
+    setReadyBranch(null);
+    setConfigError("");
+    getFnbPaymentMethods(branchId).then(value => {
+      if (!active) return;
+      setPreferences(value);
+      setMethod(availableFnbMethods(value)[0]);
+      setReadyBranch(branchId);
+    }).catch(error => {
+      if (active) setConfigError(error instanceof Error ? error.message : "Chưa đọc được cấu hình thanh toán.");
+    });
+    return () => { active = false; };
+  }, [open, branchId, configRetry]);
+  const configReady = !branchId || readyBranch === branchId;
+  const visibleMethods = availableFnbMethods(preferences);
+  const [singleTransfer, setSingleTransfer] = useState<string | null>(null);
+  const [singleCard, setSingleCard] = useState<string | null>(null);
   const [method, setMethod] = useState<PaymentMethod>("cash");
   const [cashInput, setCashInput] = useState("");
   const [transferInput, setTransferInput] = useState("");
@@ -94,6 +120,7 @@ export function FnbPaymentDialog({
   useEffect(() => {
     if (open) {
       setMethod("cash");
+      setSingleTransfer(null); setSingleCard(null);
       setCashInput(""); setTransferInput(""); setCardInput("");
       setCustomerName(initialCustomerName?.trim() || "Khách lẻ");
       setAllowDebt(false);
@@ -108,9 +135,9 @@ export function FnbPaymentDialog({
     setAllowDebt(false);
   }, [method]);
 
-  const cashAmount = parseAmount(cashInput);
-  const transferAmount = parseAmount(transferInput);
-  const cardAmount = parseAmount(cardInput);
+  const cashAmount = preferences.cash ? parseAmount(cashInput) : 0;
+  const transferAmount = preferences.transfer ? parseAmount(transferInput) : 0;
+  const cardAmount = preferences.card ? parseAmount(cardInput) : 0;
   const tipAmount = parseAmount(tipInput);
 
   const settlement = previewFnbSettlement(baseTotal, tipAmount, commissionPercent);
@@ -118,10 +145,12 @@ export function FnbPaymentDialog({
 
   const totalPaid = useMemo(() => {
     if (method === "cash") return cashAmount;
-    if (method === "transfer" || method === "card") return total;
+    if (method === "transfer") return singleTransfer === null ? total : parseAmount(singleTransfer);
+    if (method === "card") return singleCard === null ? total : parseAmount(singleCard);
     return cashAmount + transferAmount + cardAmount;
-  }, [method, cashAmount, transferAmount, cardAmount, total]);
+  }, [method, cashAmount, transferAmount, cardAmount, total, singleTransfer, singleCard]);
 
+  const nonCashAmount = method === "mixed" ? transferAmount + cardAmount : method === "cash" ? 0 : totalPaid;
   const change = Math.max(0, totalPaid - total);
   const debt = Math.max(0, total - totalPaid);
   const isFullyPaid = totalPaid >= total;
@@ -140,7 +169,8 @@ export function FnbPaymentDialog({
   // Allow confirm if: free order OR fully paid OR user explicitly ticked "Ghi nợ"
   const canConfirm =
     (isFreeOrder || (mixedHasAnyAmount && totalPaid > 0 && (isFullyPaid || allowDebt))) &&
-    !customerConfirmationRequired;
+    !customerConfirmationRequired && configReady && visibleMethods.includes(method) &&
+    (method === "cash" || nonCashAmount <= total);
 
   const handleConfirm = async () => {
     if (!canConfirm || submittingRef.current) return;
@@ -301,9 +331,13 @@ export function FnbPaymentDialog({
             />
           </div>
 
+          {!configReady && <div role="status" className="rounded-lg border p-3 text-sm">
+            {configError || "Đang đọc phương thức thanh toán…"}
+            {configError && <Button type="button" variant="outline" className="ml-2" onClick={() => setConfigRetry(value => value + 1)}>Thử lại</Button>}
+          </div>}
           {/* Payment method tabs */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2">
-            {METHODS.map(({ key, label, icon }) => (
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(80px,1fr))] gap-2">
+            {METHODS.filter(item => visibleMethods.includes(item.key)).map(({ key, label, icon }) => (
               <button key={key} type="button" onClick={() => setMethod(key)}
                 className={cn(
                   "flex min-h-11 flex-col items-center justify-center gap-1 rounded-lg border p-3 sm:p-2 text-sm sm:text-xs transition-colors [@media(max-height:720px)]:gap-0.5",
@@ -318,7 +352,7 @@ export function FnbPaymentDialog({
           </div>
 
           {/* Cash input (for cash & mixed) */}
-          {(method === "cash" || method === "mixed") && (
+          {(method === "cash" || (method === "mixed" && preferences.cash)) && (
             <div className="space-y-2">
               <Label htmlFor={`${fieldId}-cash`} className="text-sm">{method === "mixed" ? "Tiền mặt" : "Tiền khách đưa"}</Label>
               <Input id={`${fieldId}-cash`} type="text" inputMode="numeric" placeholder="0"
@@ -350,21 +384,31 @@ export function FnbPaymentDialog({
             </div>
           )}
 
+          {(method === "transfer" || method === "card") && (
+            <div className="space-y-2">
+              <Label htmlFor={fieldId + "-single-noncash"}>{method === "transfer" ? "Số tiền chuyển khoản" : "Số tiền thanh toán thẻ"}</Label>
+              <div className="flex gap-2">
+                <Input id={fieldId + "-single-noncash"} type="text" inputMode="numeric" className="tabular-nums" value={(method === "transfer" ? singleTransfer : singleCard) ?? String(total)} onChange={event => (method === "transfer" ? setSingleTransfer : setSingleCard)(event.target.value)} />
+                <Button type="button" variant="outline" onClick={() => (method === "transfer" ? setSingleTransfer : setSingleCard)(String(total))}>Đủ</Button>
+              </div>
+              <p className="text-xs text-muted-foreground">Xác nhận tiền đã nhận trước khi hoàn tất.</p>
+            </div>
+          )}
           {/* Transfer & card inputs (mixed only) */}
           {method === "mixed" && (
             <>
-              <div className="space-y-2">
+              {preferences.transfer && <div className="space-y-2">
                 <Label htmlFor={`${fieldId}-transfer`} className="text-sm">Chuyển khoản</Label>
                 <Input id={`${fieldId}-transfer`} type="text" inputMode="numeric" placeholder="0"
                   value={transferInput} onChange={(e) => setTransferInput(e.target.value)}
                   className="tabular-nums" />
-              </div>
-              <div className="space-y-2">
+              </div>}
+              {preferences.card && <div className="space-y-2">
                 <Label htmlFor={`${fieldId}-card`} className="text-sm">Thẻ</Label>
                 <Input id={`${fieldId}-card`} type="text" inputMode="numeric" placeholder="0"
                   value={cardInput} onChange={(e) => setCardInput(e.target.value)}
                   className="tabular-nums" />
-              </div>
+              </div>}
               {/* Mixed breakdown running total */}
               <div className="rounded-lg border bg-surface-container px-3 py-2 space-y-1">
                 {/* 06/08: TIỀN KHÔNG ĐƯỢC CẮT (CEO) — màn hẹp thì xuống dòng
@@ -394,16 +438,10 @@ export function FnbPaymentDialog({
             </>
           )}
 
-          {/* Info display: transfer/card auto-fills */}
-          {(method === "transfer" || method === "card") && (
-            <div className="rounded-lg bg-surface-container px-3 py-2 text-xs text-muted-foreground flex items-center gap-2">
-              <Icon name="info" size={14} />
-              <span>Hệ thống tự ghi nhận số tiền bằng tổng hoá đơn.</span>
-            </div>
-          )}
+          {method !== "cash" && nonCashAmount > total && <p role="alert" className="text-sm text-destructive">Tiền chuyển khoản/thẻ không được vượt số cần thanh toán. Kiểm tra lại số tiền.</p>}
 
           {/* Change / Debt display */}
-          {(method === "cash" || method === "mixed") && totalPaid > 0 && (
+          {totalPaid > 0 && (
             <div className="flex items-center justify-between rounded-lg bg-muted px-3 py-2 text-sm">
               <span className="text-muted-foreground">
                 {debt > 0 ? "Còn nợ" : "Tiền thừa"}
