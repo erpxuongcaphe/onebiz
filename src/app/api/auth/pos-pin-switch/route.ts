@@ -186,53 +186,60 @@ export async function POST(req: NextRequest) {
     const targetUser = verifyData as {
       user_id: string;
       full_name: string;
-      email: string;
+      email: string | null;
       tenant_id: string;
       role: string;
       role_id: string | null;
     };
 
-    // ─── 3. Generate magiclink cho target user qua Admin API ───
-    // Supabase admin.generateLink trả properties.action_link chứa
-    // hashed_token. Client dùng verifyOtp để swap session.
-    const admin = getAdminClient();
-    const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
-      type: "magiclink",
-      email: targetUser.email,
-    });
-
-    if (linkErr || !linkData) {
-      console.error("[pos-pin-switch] generateLink failed:", linkErr);
+    // Resolve the verified identity by UUID. Contact email is optional and
+    // may differ from the private Auth email of phone-only staff accounts.
+    if (targetUser.user_id !== body.userId) {
       return NextResponse.json(
-        { success: false, message: "Không tạo được session swap. Liên hệ admin." },
-        { status: 500 },
+        { success: false, message: "Chưa xác nhận được tài khoản tiếp nhận. Vui lòng thử lại.", code: "VERIFY_RESPONSE_INVALID" },
+        { status: 503, headers: { "Cache-Control": "no-store" } },
       );
     }
-
-    // Extract hashed_token từ properties để client verifyOtp
-    const props = linkData.properties as {
-      hashed_token?: string;
-      email_otp?: string;
-      action_link?: string;
-    };
-
-    if (!props.hashed_token) {
-      console.error("[pos-pin-switch] hashed_token missing in response", props);
+    const admin = getAdminClient();
+    const { data: accountData, error: accountErr } = await admin.auth.admin.getUserById(body.userId);
+    const account = accountData?.user;
+    const authEmail = account?.email?.trim();
+    if (accountErr || !account || account.id !== body.userId || !authEmail) {
+      console.error("[pos-pin-switch] Auth identity unavailable", { code: accountErr?.code, status: accountErr?.status });
       return NextResponse.json(
-        { success: false, message: "Server không tạo được token swap. Liên hệ admin." },
-        { status: 500 },
+        { success: false, message: "Chưa đọc được tài khoản đăng nhập của nhân viên. Vui lòng thử lại hoặc liên hệ quản lý.", code: "TARGET_AUTH_UNAVAILABLE" },
+        { status: 503, headers: { "Cache-Control": "no-store" } },
+      );
+    }
+    const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
+      type: "magiclink",
+      email: authEmail,
+    });
+    if (linkErr || !linkData || linkData.user?.id !== body.userId) {
+      console.error("[pos-pin-switch] session creation failed", { code: linkErr?.code, status: linkErr?.status });
+      return NextResponse.json(
+        { success: false, message: "Chưa chuyển được nhân viên. Phiên hiện tại vẫn được giữ; vui lòng thử lại.", code: "SESSION_CREATION_FAILED" },
+        { status: 503, headers: { "Cache-Control": "no-store" } },
+      );
+    }
+    const props = linkData.properties;
+    if (!props?.hashed_token) {
+      console.error("[pos-pin-switch] session token missing");
+      return NextResponse.json(
+        { success: false, message: "Chưa chuyển được nhân viên. Phiên hiện tại vẫn được giữ; vui lòng thử lại.", code: "SESSION_TOKEN_MISSING" },
+        { status: 503, headers: { "Cache-Control": "no-store" } },
       );
     }
 
     return NextResponse.json({
       success: true,
       hashed_token: props.hashed_token,
-      email: targetUser.email,
+      email: authEmail,
       user_id: targetUser.user_id,
       full_name: targetUser.full_name,
       role: targetUser.role,
       role_id: targetUser.role_id,
-    });
+    }, { headers: { "Cache-Control": "no-store" } });
   } catch (err) {
     console.error("[pos-pin-switch] unexpected error:", err);
     return NextResponse.json(
