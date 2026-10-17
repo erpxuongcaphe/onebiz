@@ -359,12 +359,7 @@ function mapBranch(row: Record<string, unknown>): BranchDetail {
 
 // Branch type labels (Vietnamese)
 // CEO 13/05: phân định rõ FnB vs Retail. Cửa hàng = mảng FnB. Kho tổng = mảng Retail.
-export const BRANCH_TYPE_LABELS: Record<BranchDetail["branchType"], string> = {
-  store: "Cửa hàng FnB",
-  warehouse: "Kho tổng",
-  factory: "Xưởng sản xuất",
-  office: "Văn phòng",
-};
+export { BRANCH_TYPE_LABELS } from "@/lib/branch-type-labels";
 
 // Mô tả ngắn cho từng loại — hiển thị dưới dropdown để user hiểu rõ.
 export const BRANCH_TYPE_DESCRIPTIONS: Record<BranchDetail["branchType"], string> = {

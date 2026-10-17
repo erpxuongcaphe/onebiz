@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   LineChart,
   Line,
@@ -45,13 +45,15 @@ import {
 import { Icon } from "@/components/ui/icon";
 import { formatSelectedPeriodLabel } from "@/lib/utils/date-presets";
 import { buildSalesInvoiceDayLink, buildSalesReturnDayLink } from "@/lib/reports/sales-drilldown";
+import { getBranchPnLComparison, type BranchPnLRow } from "@/lib/services/supabase/reports";
+import { ManagementReview } from "@/components/shared/report/management-review";
+import { managementFinancialRows, reportChange, sortManagementBranches } from "@/lib/reports/management-review";
+import { useLiveDataRefresh } from "@/lib/hooks/use-live-data-refresh";
 
 // === Helpers ===
 
 function calcChange(current: number, previous: number): string {
-  if (previous === 0) return current > 0 ? "+100%" : "0%";
-  const pct = ((current - previous) / previous) * 100;
-  return `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}% so với kỳ trước`;
+  return reportChange(current, previous);
 }
 
 // === Custom tooltip ===
@@ -81,7 +83,9 @@ function RevenueTooltip({ active, payload, label }: RevenueTooltipProps) {
   );
 }
 export default function TongQuanPage() {
-  const { activeBranchId, branchLabel } = useBranchFilter();
+  const { activeBranchId, branchLabel, isReady } = useBranchFilter();
+  const { tenant, hasPermission } = useAuth();
+  const canViewProfit = hasPermission("reports.view_profit") && hasPermission("reports.view_detail");
   const { toast } = useToast();
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisMonth", defaultViewMode: "chart" });
@@ -97,12 +101,26 @@ export default function TongQuanPage() {
   const salesDetailHref = "/phan-tich/ban-hang?" + detailParams.toString();
   const productDetailHref = "/phan-tich/hang-hoa?" + detailParams.toString();
   const [loading, setLoading] = useState(true);
-  const [kpis, setKpis] = useState<{
-    revenue: number; prevRevenue: number;
-    orders: number; prevOrders: number;
-    newCustomers: number; prevNewCustomers: number;
-    profit: number; prevProfit: number;
-  } | null>(null);
+  const [kpis, setKpis] = useState<Awaited<ReturnType<typeof getOverviewKpis>> | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [revision, setRevision] = useState(0);
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [loadedScope, setLoadedScope] = useState("");
+  const [branchRows, setBranchRows] = useState<BranchPnLRow[]>([]);
+  const [branchError, setBranchError] = useState<string | null>(null);
+  const [branchSort, setBranchSort] = useState<{ id: string; direction: "asc" | "desc" } | null>(null);
+  const visibleBranches = useMemo(() => sortManagementBranches(branchRows, branchSort), [branchRows, branchSort]);
+  const scopeKey = `${tenant?.id}:${activeBranchId ?? "all"}:${range.from}:${range.to}:${canViewProfit}`;
+  const pending = loadedScope !== scopeKey || (!kpis && loading);
+  const refreshState = useRef({ inFlight: false, queued: false });
+  const refresh = useCallback(() => {
+    if (refreshState.current.inFlight) {
+      refreshState.current.queued = true;
+      return;
+    }
+    setRevision(value => value + 1);
+  }, []);
+  useLiveDataRefresh(refresh, tenant?.id, activeBranchId, ["dashboard_live_signals"], isReady);
   const [dailyRows, setDailyRows] = useState<SalesReportDailyRow[]>([]);
   const dailyRevenue = dailyRows.map((row) => ({
     date: `${row.date.slice(8, 10)}/${row.date.slice(5, 7)}`,
@@ -110,19 +128,32 @@ export default function TongQuanPage() {
   }));
   const [categoryRevenue, setCategoryRevenue] = useState<CategoryRevenue[]>([]);
   const [topProducts, setTopProducts] = useState<TopProductRevenue[]>([]);
-  // Finance KPI cho Excel export (chi phí, biên LN — KPI Snapshot cần)
-  const [financeKpis, setFinanceKpis] = useState<{
-    revenue: number; prevRevenue: number;
-    expense: number; prevExpense: number;
-    profit: number; prevProfit: number;
-    profitMargin: number; prevProfitMargin: number;
-  } | null>(null);
 
   // CEO 13/05: helper resolve tên branch để in title row Excel
-  const tenantName = useAuth().tenant?.name;
+  const tenantName = tenant?.name;
+  const financialSheets = useCallback((): ExcelSheet[] => {
+    if (!canViewProfit || !kpis) return [];
+    const financial = kpis.financial;
+    return [{ name: "Ket qua kinh doanh", titleRows: buildReportTitleRows({ title: "KẾT QUẢ KINH DOANH", range, branchName: branchLabel, generatedAt: new Date() }), columns: [
+      { label: "Chỉ tiêu", key: "metric", width: 38 },
+      { label: "Kỳ hiện tại", key: "current", format: "currency", width: 20 },
+      { label: "Kỳ trước", key: "previous", format: "currency", width: 20 },
+      { label: "Chênh lệch", key: "difference", format: "currency", width: 20 },
+    ], rows: managementFinancialRows(financial.current, financial.previous) }, ...(!activeBranchId && !branchError ? [{ name: "Dong gop chi nhanh", titleRows: buildReportTitleRows({ title: "ĐÓNG GÓP CHI NHÁNH (GỒM NỘI BỘ)", range, branchName: branchLabel, generatedAt: new Date() }), columns: [
+      { label: "Chi nhánh", key: "branchName", width: 30 },
+      { label: "Doanh thu hàng hóa", key: "goodsRevenue", format: "currency" as const, width: 20 },
+      { label: "Giá vốn", key: "cogs", format: "currency" as const, width: 20 },
+      { label: "Lãi gộp", key: "grossProfit", format: "currency" as const, width: 20 },
+      { label: "Thu nhập khác", key: "otherIncome", format: "currency" as const, width: 20 },
+      { label: "Chi phí vận hành", key: "opEx", format: "currency" as const, width: 20 },
+      { label: "Kết quả đã ghi nhận", key: "netProfit", format: "currency" as const, width: 20 },
+      { label: "Thiếu giá vốn (dòng)", key: "missingCostLines", format: "number" as const, width: 20 },
+    ], rows: visibleBranches.map(row => ({ ...row, cogs: row.cogsComplete ? row.cogs : null, grossProfit: row.cogsComplete ? row.grossProfit : null, netProfit: row.cogsComplete ? row.netProfit : null })) }] : [])];
+  }, [canViewProfit, kpis, activeBranchId, branchError, visibleBranches, range, branchLabel]);
 
   // ── Export Excel — 2 mode ──
-  const handleExportView = useCallback(() => {
+  const handleExportView = useCallback(async () => {
+    if (pending || loading || loadError || !kpis) return;
     try {
       const title = buildReportTitleRows({
         title: "BÁO CÁO TỔNG QUAN",
@@ -135,8 +166,10 @@ export default function TongQuanPage() {
       const kpiRows = [
         { metric: "Doanh thu hàng hóa", value: kpis?.revenue ?? 0, prev: kpis?.prevRevenue ?? 0 },
         { metric: "Đơn hàng", value: kpis?.orders ?? 0, prev: kpis?.prevOrders ?? 0 },
-        { metric: "Khách mới", value: kpis?.newCustomers ?? 0, prev: kpis?.prevNewCustomers ?? 0 },
-        { metric: "Lợi nhuận", value: kpis?.profit ?? 0, prev: kpis?.prevProfit ?? 0 },
+        ...(canViewProfit
+          ? [{ metric: "Lãi gộp", value: kpis.financial.current.cogsComplete ? kpis.financial.current.grossProfit : null, prev: kpis.financial.previous.cogsComplete ? kpis.financial.previous.grossProfit : null }]
+          : [{ metric: "Khách mới", value: kpis.newCustomers, prev: kpis.prevNewCustomers }]),
+        ...(canViewProfit ? [{ metric: "Kết quả sau chi phí đã ghi nhận", value: kpis.financial.current.cogsComplete ? kpis.profit : null, prev: kpis.financial.previous.cogsComplete ? kpis.prevProfit : null }] : []),
       ];
 
       const sheet: ExcelSheet = {
@@ -149,12 +182,12 @@ export default function TongQuanPage() {
         ],
         rows: kpiRows,
       };
-      exportReportToExcel({
+      await exportReportToExcel({
         kind: "tong-quan",
         mode: "view",
         range,
         branchName: branchLabel,
-        sheets: [sheet],
+        sheets: [sheet, ...financialSheets()],
       });
       toast({
         title: "Đã xuất Excel (view)",
@@ -168,9 +201,10 @@ export default function TongQuanPage() {
         variant: "error",
       });
     }
-  }, [kpis, range, branchLabel, toast]);
+  }, [kpis, range, branchLabel, toast, pending, loading, loadError, canViewProfit, financialSheets]);
 
-  const handleExportFull = useCallback(() => {
+  const handleExportFull = useCallback(async () => {
+    if (pending || loading || loadError || !kpis) return;
     try {
       // CEO 14/05 (research): Tổng quan = FOCUSED file, chỉ KPI snapshot +
       // tóm tắt theo chi nhánh. Top SP/KH/Chi phí/Cash flow đã có module
@@ -213,7 +247,7 @@ export default function TongQuanPage() {
         rows: [
           // ─ Doanh thu ─
           {
-            metric: "Tổng doanh thu",
+            metric: "Doanh thu thuần hàng hóa",
             current: kpis?.revenue ?? 0,
             prev: kpis?.prevRevenue ?? 0,
             diff: (kpis?.revenue ?? 0) - (kpis?.prevRevenue ?? 0),
@@ -227,7 +261,7 @@ export default function TongQuanPage() {
             pct: calcChange(kpis?.orders ?? 0, kpis?.prevOrders ?? 0),
           },
           {
-            metric: "  TB / đơn hàng",
+            metric: "  Doanh thu thuần / hóa đơn hoàn tất",
             current:
               (kpis?.orders ?? 0) > 0
                 ? Math.round((kpis?.revenue ?? 0) / (kpis?.orders ?? 1))
@@ -236,7 +270,7 @@ export default function TongQuanPage() {
               (kpis?.prevOrders ?? 0) > 0
                 ? Math.round((kpis?.prevRevenue ?? 0) / (kpis?.prevOrders ?? 1))
                 : 0,
-            diff: 0,
+            diff: (kpis.orders > 0 ? Math.round(kpis.revenue / kpis.orders) : 0) - (kpis.prevOrders > 0 ? Math.round(kpis.prevRevenue / kpis.prevOrders) : 0),
             pct: "",
           },
           // ─ Khách hàng ─
@@ -250,24 +284,23 @@ export default function TongQuanPage() {
           // ─ Chi phí + Lợi nhuận ─
           {
             metric: "Tổng chi phí",
-            current: financeKpis?.expense ?? 0,
-            prev: financeKpis?.prevExpense ?? 0,
-            diff: (financeKpis?.expense ?? 0) - (financeKpis?.prevExpense ?? 0),
-            pct: calcChange(financeKpis?.expense ?? 0, financeKpis?.prevExpense ?? 0),
+            current: kpis.financial.current.cogsComplete ? kpis.expense : null,
+            prev: kpis.financial.previous.cogsComplete ? kpis.prevExpense : null,
+            diff: kpis.financial.current.cogsComplete && kpis.financial.previous.cogsComplete ? kpis.expense - kpis.prevExpense : null,
+            pct: kpis.financial.current.cogsComplete && kpis.financial.previous.cogsComplete ? calcChange(kpis.expense, kpis.prevExpense) : "Chưa đủ giá vốn",
           },
           {
-            metric: "Lợi nhuận gộp",
-            current: kpis?.profit ?? 0,
-            prev: kpis?.prevProfit ?? 0,
-            diff: (kpis?.profit ?? 0) - (kpis?.prevProfit ?? 0),
-            pct: calcChange(kpis?.profit ?? 0, kpis?.prevProfit ?? 0),
+            metric: "Kết quả sau chi phí đã ghi nhận",
+            current: canViewProfit && kpis.financial.current.cogsComplete ? kpis.profit : null,
+            prev: canViewProfit && kpis.financial.previous.cogsComplete ? kpis.prevProfit : null,
+            diff: canViewProfit && kpis.financial.current.cogsComplete && kpis.financial.previous.cogsComplete ? kpis.profit - kpis.prevProfit : null,
+            pct: canViewProfit && kpis.financial.current.cogsComplete && kpis.financial.previous.cogsComplete ? calcChange(kpis.profit, kpis.prevProfit) : "Chưa đủ cơ sở",
           },
           {
             metric: "Biên lợi nhuận (%)",
-            current: financeKpis?.profitMargin ?? 0,
-            prev: financeKpis?.prevProfitMargin ?? 0,
-            diff:
-              (financeKpis?.profitMargin ?? 0) - (financeKpis?.prevProfitMargin ?? 0),
+            current: kpis.financial.current.cogsComplete ? kpis.profitMargin : null,
+            prev: kpis.financial.previous.cogsComplete ? kpis.prevProfitMargin : null,
+            diff: kpis.financial.current.cogsComplete && kpis.financial.previous.cogsComplete ? kpis.profitMargin - kpis.prevProfitMargin : null,
             pct: "",
           },
         ],
@@ -284,9 +317,9 @@ export default function TongQuanPage() {
       // /luong-tien) sẽ xuất file CHI TIẾT cho mỗi module — tránh duplicate
       // data + giữ file Tổng quan gọn (research industry KiotViet/MISA/SAP).
 
-      const sheets: ExcelSheet[] = [infoSheet, execSummary];
+      const sheets: ExcelSheet[] = [infoSheet, { ...execSummary, rows: canViewProfit ? execSummary.rows : execSummary.rows.slice(0, 4) }, ...financialSheets()];
 
-      exportReportToExcel({
+      await exportReportToExcel({
         kind: "tong-quan",
         mode: "full",
         range,
@@ -310,17 +343,21 @@ export default function TongQuanPage() {
     }
   }, [
     kpis,
-    financeKpis,
     range,
     branchLabel,
     tenantName,
     toast,
+    pending,
+    loading,
+    loadError,
+    canViewProfit,
+    financialSheets,
   ]);
 
   const reportHeader = (
     <ReportPageHeader
-      title="Tổng quan"
-      subtitle="Phân tích kinh doanh tổng hợp"
+      title="Tổng quan kinh doanh"
+      subtitle="Bán hàng, đóng góp chi nhánh và kết quả đã ghi nhận"
       preset={preset}
       range={range}
       onPresetChange={setPreset}
@@ -329,7 +366,7 @@ export default function TongQuanPage() {
       onViewModeChange={setViewMode}
       onExportView={handleExportView}
       onExportFull={handleExportFull}
-      exportDisabled={loading || !kpis}
+      exportDisabled={pending || loading || Boolean(loadError) || !kpis}
     />
   );
 
@@ -337,35 +374,45 @@ export default function TongQuanPage() {
     let isCurrentRequest = true;
 
     async function fetchData() {
+      if (!isReady) return;
+      refreshState.current = { inFlight: true, queued: false };
       setLoading(true);
+      setLoadError(null);
       try {
-        const [kpiData, daily, category, products] = await Promise.all([
+        const [kpiData, daily, category, products, branchResult] = await Promise.all([
           getOverviewKpis(activeBranchId, range),
           getSalesReportDailyRows(activeBranchId, range),
           getRevenueByCategory(activeBranchId, range),
           getTopProductsByRevenue(10, activeBranchId, range),
+          !activeBranchId && canViewProfit
+            ? getBranchPnLComparison(range).then(rows => ({ rows, error: null })).catch((error: unknown) => ({ rows: [] as BranchPnLRow[], error: error instanceof Error ? error.message : "Không thể đối chiếu chi nhánh" }))
+            : Promise.resolve({ rows: [] as BranchPnLRow[], error: null }),
         ]);
         if (!isCurrentRequest) return;
         setKpis(kpiData);
-        setFinanceKpis({
-          revenue: kpiData.revenue,
-          prevRevenue: kpiData.prevRevenue,
-          expense: kpiData.expense,
-          prevExpense: kpiData.prevExpense,
-          profit: kpiData.profit,
-          prevProfit: kpiData.prevProfit,
-          profitMargin: kpiData.profitMargin,
-          prevProfitMargin: kpiData.prevProfitMargin,
-        });
         setDailyRows(daily);
         setCategoryRevenue(category);
         setTopProducts(products);
+        setBranchRows(branchResult.rows);
+        setBranchError(branchResult.error);
+        setLoadedScope(scopeKey);
+        setUpdatedAt(new Date().toISOString());
       } catch (err) {
         if (isCurrentRequest) {
           console.error("Failed to fetch analytics data:", err);
+          setLoadError(err instanceof Error ? err.message : "Không thể tải báo cáo. Vui lòng thử lại.");
+          setKpis(null);
+          setLoadedScope(scopeKey);
         }
       } finally {
-        if (isCurrentRequest) setLoading(false);
+        if (isCurrentRequest) {
+          refreshState.current.inFlight = false;
+          setLoading(false);
+          if (refreshState.current.queued) {
+            refreshState.current.queued = false;
+            setRevision(value => value + 1);
+          }
+        }
       }
     }
 
@@ -373,9 +420,9 @@ export default function TongQuanPage() {
     return () => {
       isCurrentRequest = false;
     };
-  }, [activeBranchId, range]);
+  }, [activeBranchId, range, isReady, revision, scopeKey, canViewProfit]);
 
-  if (loading) {
+  if (pending) {
     return (
       <div className="flex h-full flex-col">
         {reportHeader}
@@ -404,6 +451,7 @@ export default function TongQuanPage() {
       </div>
     );
   }
+  if (loadError || !kpis) return <div className="flex h-full flex-col">{reportHeader}<div role="alert" className="m-6 space-y-3 border-l-4 border-status-error p-4"><h2 className="font-semibold">Chưa tải được báo cáo</h2><p className="text-sm text-muted-foreground">{loadError ?? "Máy chủ chưa trả dữ liệu."}</p><button type="button" onClick={refresh} className="inline-flex min-h-9 items-center gap-2 rounded border px-3 text-sm"><Icon name="refresh" size={17} />Thử lại</button></div></div>;
   return (
     <div className="flex flex-col h-full">
       {reportHeader}
@@ -431,7 +479,17 @@ export default function TongQuanPage() {
             iconColor="text-status-success"
             valueColor="text-foreground"
           />
-          <KpiCard
+          {canViewProfit ? <KpiCard
+            label="Lãi gộp"
+            value={kpis.financial.current.cogsComplete ? formatCurrency(kpis.financial.current.grossProfit) + "đ" : "Chưa đủ giá vốn"}
+            change={kpis.financial.current.cogsComplete && kpis.financial.previous.cogsComplete ? calcChange(kpis.financial.current.grossProfit, kpis.financial.previous.grossProfit) : undefined}
+            positive={kpis.financial.current.grossProfit >= kpis.financial.previous.grossProfit}
+            subValue={!kpis.financial.current.cogsComplete ? "Cần kiểm tra giá vốn lịch sử" : undefined}
+            icon="price_check"
+            bg="bg-status-info/10"
+            iconColor="text-status-info"
+            valueColor="text-foreground"
+          /> : <KpiCard
             label="Khách mới"
             value={formatNumber(kpis?.newCustomers ?? 0)}
             change={calcChange(kpis?.newCustomers ?? 0, kpis?.prevNewCustomers ?? 0)}
@@ -440,18 +498,22 @@ export default function TongQuanPage() {
             bg="bg-status-info/10"
             iconColor="text-status-info"
             valueColor="text-foreground"
-          />
-          <KpiCard
-            label="Lợi nhuận"
-            value={formatCurrency(kpis?.profit ?? 0) + "đ"}
-            change={calcChange(kpis?.profit ?? 0, kpis?.prevProfit ?? 0)}
+          />}
+          {canViewProfit && <KpiCard
+            label="Kết quả đã ghi nhận"
+            value={kpis.financial.current.cogsComplete ? formatCurrency(kpis.profit) + "đ" : "Chưa đủ giá vốn"}
+            change={kpis.financial.current.cogsComplete && kpis.financial.previous.cogsComplete ? calcChange(kpis.profit, kpis.prevProfit) : undefined}
+            subValue="Sau các chi phí đã ghi nhận, không phải số dư tiền"
             positive={(kpis?.profit ?? 0) >= (kpis?.prevProfit ?? 0)}
             icon="trending_up"
             bg="bg-status-warning/10"
             iconColor="text-status-warning"
             valueColor="text-foreground"
-          />
+          />}
         </div>
+        {canViewProfit && updatedAt && <ManagementReview current={kpis.financial.current} previous={kpis.financial.previous} branchId={activeBranchId} range={range} branches={visibleBranches} branchError={branchError} updatedAt={updatedAt} branchSort={branchSort} onBranchSort={setBranchSort} />}
+
+        {!activeBranchId && <p className="border-l-2 border-border pl-3 text-xs leading-5 text-muted-foreground">Các bảng bán hàng bên dưới phản ánh phát sinh hóa đơn, gồm giao dịch nội bộ; khác cơ sở với doanh thu quản trị đã loại nội bộ ở trên.</p>}
 
         {/* CEO 13/05: 2 mode — Biểu đồ (chart) vs Bảng số liệu kế toán (table) */}
         {viewMode === "chart" ? (
