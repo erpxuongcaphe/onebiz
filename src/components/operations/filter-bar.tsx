@@ -8,6 +8,7 @@ import { categories, priorities, states, type Person, type Standard } from "@/li
 import { datePresets, filterDates, initialFilters, type FilterKind, type OperationsFilters } from "@/lib/operations/filters";
 import styles from "./workspace.module.css";
 import { UserPicker } from "./user-picker";
+import { frequencyLabels } from "@/lib/operations/recurrence";
 
 export function OperationsFilterBar({ kind, value, onChange, people, standards = [], period, settingsTarget = "standards" }: {
   kind: FilterKind; value: OperationsFilters; onChange: (value: OperationsFilters) => void;
@@ -33,9 +34,9 @@ export function OperationsFilterBar({ kind, value, onChange, people, standards =
     </div>
     {!(kind === "settings" && settingsTarget === "policies") && <details className={styles.filterDetails}><summary>Tiêu chí bổ sung{active ? ` (${active})` : ""}</summary><div className={styles.filterGrid}>
       {kind === "todo" && <>{select("category", "Phân loại", categories)}{select("priority", "Mức độ", priorities)}<UserPicker label="Người phối hợp" value={value.collaborator} onChange={(id) => set("collaborator",id)} options={people}/></>}
-      {kind === "run" && <>{select("quality", "Kết quả", { met: states.met, unmet: states.unmet, unknown: states.unknown })}{select("verification", "Xác minh", { pending_review: "Chờ xác minh đến hạn", unverified: "Chưa xác minh", verified: "Đã xác minh" })}{select("standard", "Mẫu công việc", Object.fromEntries(standards.map(s => [s.id, `${s.title} · v${s.revision}`])))}{select("frequency", "Tần suất", { daily: "Hàng ngày", weekly: "Hàng tuần", monthly: "Hàng tháng", event: "Theo sự kiện" })}</>}
+      {kind === "run" && <>{select("quality", "Kết quả", { met: states.met, unmet: states.unmet, unknown: states.unknown })}{select("verification", "Xác minh", { pending_review: "Chờ xác minh đến hạn", unverified: "Chưa xác minh", verified: "Đã xác minh" })}{select("standard", "Mẫu công việc", Object.fromEntries(standards.map(s => [s.id, `${s.title} · v${s.revision}`])))}{select("frequency", "Tần suất", frequencyLabels)}</>}
       {kind !== "settings" && select("deadline", "Tình trạng hạn", { overdue: "Quá hạn chưa hoàn thành", upcoming: "Chưa đến hạn", on_time: "Hoàn thành đúng hạn gốc", late: "Hoàn thành trễ hạn gốc", ...(kind === "todo" ? { follow_up: "Đến ngày theo dõi lại" } : {}) })}
-      {kind === "settings" && settingsTarget === "standards" && <>{select("frequency", "Tần suất", { daily: "Hàng ngày", weekly: "Hàng tuần", monthly: "Hàng tháng", event: "Theo sự kiện" })}{select("scope", "Phạm vi", { common: "Mẫu chung", branch: "Riêng chi nhánh" })}</>}
+      {kind === "settings" && settingsTarget === "standards" && <>{select("frequency", "Tần suất", frequencyLabels)}{select("scope", "Phạm vi", { common: "Mẫu chung", branch: "Riêng chi nhánh" })}</>}
       {kind === "settings" && settingsTarget === "members" && <>{select("role", "Vai trò", { manager: "Quản lý", reviewer: "Xác minh", collaborator: "Phối hợp" })}{select("active", "Tình trạng phân công", { true: "Đang áp dụng", false: "Ngừng áp dụng" })}</>}
     </div></details>}
     {error && <p className={styles.error} role="alert">{error}</p>}

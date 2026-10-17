@@ -29,6 +29,23 @@
 .footer [role=alert] { flex-basis:100%; max-height:120px; overflow:auto; margin:0; }
 .branch { padding:14px 0; border-bottom:1px solid #dce2eb; }
 .branchFields { display:grid; align-items:start; grid-template-columns:minmax(230px,2fr) repeat(3,minmax(130px,1fr)); gap:12px; margin-top:10px; }
+.branchFields [data-field-error=true] { scroll-margin-block:20px; }
+.branchFields [data-field-error=true] input:not([type=hidden]),.branchFields [data-field-error=true] select,.branchFields [data-field-error=true] > div > button { border-color:#be123c; }
+.fieldError { display:block; color:#a11935; font-size:12px; margin-top:4px; }
+.selectedBranches { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
+.selectedBranches > span { display:flex; align-items:center; gap:6px; max-width:100%; background:#edf3ff; color:#174397; padding:3px 6px 3px 10px; border-radius:5px; font-size:13px; overflow-wrap:anywhere; }
+.selectedBranches > span > button { min-height:28px; width:28px; padding:0; flex-shrink:0; background:transparent; border:0; }
+.commonSchedule { border-block:1px solid #dce2eb; padding:12px 0; }
+.commonSchedule summary { cursor:pointer; color:#174397; font-weight:600; }
+.commonSchedule[open] summary { margin-bottom:12px; }
+.recurrence { margin:12px 0; padding:10px 0; border-block:1px solid #e1e6ee; }
+.endSchedule { margin-top:12px; max-width:300px; }
+.schedulePreview { margin-top:12px; }
+.schedulePreview summary { cursor:pointer; color:#174397; font-size:13px; }
+.scheduleList { margin-top:8px; display:grid; gap:0; }
+.scheduleList > div { display:flex; justify-content:space-between; align-items:start; gap:12px; padding:8px 0; border-bottom:1px solid #edf0f5; font-size:13px; }
+.scheduleList strong { font-weight:500; color:#526172; text-align:right; }
+@media(max-width:600px){.scheduleList > div{display:grid;gap:4px;}.scheduleList strong{text-align:left;}}
 .empty { padding:16px 0; color:#526172; }
 .notes { white-space:pre-wrap; }
 @media(max-width:800px){.branchFields{grid-template-columns:repeat(2,minmax(0,1fr));}.branchFields > :first-child{grid-column:1/-1;}}

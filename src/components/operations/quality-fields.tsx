@@ -17,6 +17,7 @@ import type { QualityWorkspace } from "@/lib/operations/quality-contracts";
 import { formatNumber } from "@/lib/format";
 import s from "./quality.module.css";
 import { UserPicker, type UserPurpose } from "./user-picker";
+import { ScheduleDateInput, ScheduleTimeInput } from "./schedule-input";
 
 export function Field({
   label,
@@ -113,6 +114,8 @@ export function TextField({
   return (
     <Field label={label} hint={hint}>
       {(id) => (
+        type === 'date' ? <ScheduleDateInput id={id} name={name} defaultValue={String(value)} required={required}/> :
+        type === 'time' ? <ScheduleTimeInput id={id} name={name} defaultValue={String(value)} required={required}/> :
         <input
           id={id}
           name={name}

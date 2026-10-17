@@ -97,6 +97,8 @@ export interface Standard {
   day_number: number;
   due_time: string;
   effective_from: string;
+  effective_until?: string | null;
+  month_number?: number | null;
   title: string;
   status: string;
   frequency: string;

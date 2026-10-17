@@ -62,6 +62,9 @@ import { QualityWorkspace } from "./quality-workspace";
 import type { QualityFocus, QualityDestination } from "./quality-overview";
 import { qualityPeriodKey } from "@/lib/operations/quality-periods";
 import { UserPicker } from "./user-picker";
+import { ScheduleDateInput, ScheduleTimeInput } from "./schedule-input";
+import { RecurrenceFields } from "./recurrence-fields";
+import { frequencyLabels, scheduleSummary } from "@/lib/operations/recurrence";
 import { StandardLifecycle } from "./standard-lifecycle";
 import { filterPeople } from "@/lib/operations/people-filters";
 
@@ -146,8 +149,8 @@ function Field({
   const id = useId();
   const control =
     isValidElement(children) &&
-    typeof children.type === "string" &&
-    ["input", "select", "textarea"].includes(children.type);
+    ((typeof children.type === "string" && ["input", "select", "textarea"].includes(children.type)) ||
+      children.type === ScheduleDateInput || children.type === ScheduleTimeInput);
   return (
     <label className={styles.field} htmlFor={control ? id : undefined}>
       <span id={`${id}-label`}>{label}</span>
@@ -1136,16 +1139,7 @@ function SettingsView({
               <h2>{s.title}</h2>
               <p>
                 {name(s.assignee_id)} ·{" "}
-                {
-                  (
-                    {
-                      daily: "Hàng ngày",
-                      weekly: "Hàng tuần",
-                      monthly: "Hàng tháng",
-                      event: "Theo sự kiện",
-                    } as Record<string, string>
-                  )[s.frequency]
-                }{" "}
+                {frequencyLabels[s.frequency as Frequency]}{" "}
                 · {s.criteria.length} tiêu chí
               </p>
             </div>
@@ -1284,8 +1278,12 @@ function EditorForm({
   const [memberUserId, setMemberUserId] = useState("");
   const selectedMember = data.members.find((member) => member.user_id === memberUserId);
   const [frequency, setFrequency] = useState<Frequency>(
-    (editor.standard?.frequency as Frequency) ?? "daily",
+    (editor.standard?.frequency as Frequency) ?? "once",
   );
+  const [scheduleDay,setScheduleDay]=useState(editor.standard?.day_number??1);
+  const [scheduleMonth,setScheduleMonth]=useState(editor.standard?.month_number??1);
+  const [scheduleUntil,setScheduleUntil]=useState(editor.standard?.effective_until??'');
+  const [hasEndDate,setHasEndDate]=useState(!!editor.standard?.effective_until);
   const formRef = useRef<HTMLFormElement>(null);
   const [formSnapshot, setFormSnapshot] = useState<FormData | null>(null);
   const [tiers, setTiers] = useState([
@@ -1303,7 +1301,7 @@ function EditorForm({
   useEffect(() => {
     if (isConfiguration && formRef.current)
       setFormSnapshot(new FormData(formRef.current));
-  }, [isConfiguration, criteria, tiers, frequency, commonScope]);
+  }, [isConfiguration, criteria, tiers, frequency, commonScope, scheduleDay, scheduleMonth, scheduleUntil, hasEndDate]);
   const configurationErrors =
     editor.kind === "standard" ? validateCriteria(criteria) : [];
   if (editor.kind === "policy" && formSnapshot) {
@@ -1334,16 +1332,21 @@ function EditorForm({
         if (commonScope && !editor.standard && !assignmentBranches.length) throw new Error("Chọn ít nhất một chi nhánh áp dụng và người phụ trách.");
         const issues = validateCriteria(criteria);
         if (issues.length) throw new Error(issues.join(" "));
+        if (hasEndDate && frequency !== "once" && frequency !== "event" && (!scheduleUntil || scheduleUntil < text("effectiveFrom")))
+          throw new Error("Ngày kết thúc lặp phải bằng hoặc sau ngày bắt đầu áp dụng.");
         payload = {
           title: text("title"),
           description: text("description"),
           assigneeId: text("assigneeId"),
           frequency: text("frequency"),
-          dayNumber: ["weekly", "monthly"].includes(frequency)
+          dayNumber: ["weekly", "monthly", "quarterly", "yearly"].includes(frequency)
             ? number("dayNumber")
             : 1,
+          ...(frequency==='quarterly'||frequency==='yearly'?{monthNumber:number('monthNumber')} : {}),
+          effectiveUntil:frequency!=='once'&&frequency!=='event'&&hasEndDate?scheduleUntil:null,
           dueTime: text("dueTime"),
           effectiveFrom: text("effectiveFrom"),
+          ...(editor.standard ? { reason: text("reason") } : {}),
           criteria,
           scope: commonScope ? "common" : "branch",
           ...(editor.standard
@@ -1508,8 +1511,10 @@ function EditorForm({
       className={styles.form}
       onSubmit={submit}
       onChange={() => {
-        if (isConfiguration && formRef.current)
-          setFormSnapshot(new FormData(formRef.current));
+        // Controlled date/time fields update their canonical hidden inputs after this event.
+        if (isConfiguration) requestAnimationFrame(() => {
+          if (formRef.current) setFormSnapshot(new FormData(formRef.current));
+        });
       }}
     >
       <div
@@ -1568,8 +1573,9 @@ function EditorForm({
               <div><dt>Quản lý phụ trách</dt><dd>{data.people.find(person => person.id === editor.standard!.assignee_id)?.name ?? "Tài khoản OneBiz"}</dd></div>
               <div><dt>Phiên bản</dt><dd>{formatNumber(editor.standard!.revision)}</dd></div>
               <div><dt>Phạm vi</dt><dd>{editor.standard!.scope === "branch" ? "Đặc thù chi nhánh" : "Công việc chung"}</dd></div>
-              <div><dt>Tần suất</dt><dd>{({daily:"Hàng ngày",weekly:"Hàng tuần",monthly:"Hàng tháng",event:"Theo sự kiện"} as Record<string,string>)[editor.standard!.frequency]}</dd></div>
+              <div><dt>Lịch thực hiện</dt><dd>{scheduleSummary(editor.standard!.frequency,editor.standard!.day_number,editor.standard!.month_number??1)}</dd></div>
               <div><dt>Ngày bắt đầu</dt><dd>{formatDate(`${editor.standard!.effective_from}T00:00:00+07:00`)}</dd></div>
+              {editor.standard!.effective_until&&<div><dt>Ngày kết thúc lặp</dt><dd>{formatDate(`${editor.standard!.effective_until}T00:00:00+07:00`)}</dd></div>}
               <div><dt>Giờ hạn (Việt Nam)</dt><dd>{editor.standard!.due_time.slice(0,5)}{editor.standard!.frequency === "weekly" ? ` · ${["Thứ Hai","Thứ Ba","Thứ Tư","Thứ Năm","Thứ Sáu","Thứ Bảy","Chủ Nhật"][editor.standard!.day_number-1]}` : editor.standard!.frequency === "monthly" ? ` · Ngày ${editor.standard!.day_number}` : ""}</dd></div>
             </dl>
             <h3>Tiêu chí kết quả</h3>
@@ -1613,6 +1619,7 @@ function EditorForm({
                   defaultValue={editor.standard?.description}
                 />
               </Field>
+              {editor.standard && <Field label="Lý do cập nhật phiên bản"><textarea name="reason" required minLength={5} maxLength={1000} rows={2}/></Field>}
               <div className={styles.formGrid}>
                 <Field label="Phạm vi">
                   <select
@@ -1627,59 +1634,16 @@ function EditorForm({
                   </select>
                 </Field>
                 {(!commonScope || editor.standard) && (
-                  <Field label="Quản lý phụ trách">{managerSelect}</Field>
+                  <div className={styles.field}>{managerSelect}</div>
                 )}
-                <Field label="Tần suất">
-                  <select
-                    name="frequency"
-                    value={frequency}
-                    onChange={(event) =>
-                      setFrequency(event.target.value as Frequency)
-                    }
-                  >
-                    <option value="daily">Hàng ngày</option>
-                    <option value="weekly">Hàng tuần</option>
-                    <option value="monthly">Hàng tháng</option>
-                    <option value="event">Theo sự kiện</option>
-                  </select>
-                </Field>
-                {frequency === "weekly" && (
-                  <Field label="Ngày trong tuần">
-                    <select
-                      name="dayNumber"
-                      defaultValue={Math.min(
-                        editor.standard?.day_number ?? 1,
-                        7,
-                      )}
-                    >
-                      {[
-                        "Thứ Hai",
-                        "Thứ Ba",
-                        "Thứ Tư",
-                        "Thứ Năm",
-                        "Thứ Sáu",
-                        "Thứ Bảy",
-                        "Chủ Nhật",
-                      ].map((label, index) => (
-                        <option key={label} value={index + 1}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                )}
-                {frequency === "monthly" && (
-                  <Field label="Ngày trong tháng">
-                    <input
-                      name="dayNumber"
-                      type="number"
-                      min={1}
-                      max={31}
-                      defaultValue={editor.standard?.day_number ?? 1}
-                      required
-                    />
-                  </Field>
-                )}
+                <div className={styles.scheduleSection}>
+                  <RecurrenceFields name="frequency" frequency={frequency} onChange={value=>{setFrequency(value);if(value==='weekly'&&scheduleDay>7)setScheduleDay(1);if(value==='quarterly'&&scheduleMonth>3)setScheduleMonth(1);}} dayNumber={scheduleDay} monthNumber={scheduleMonth} onDayChange={setScheduleDay} onMonthChange={setScheduleMonth}/>
+                  {frequency!=='once'&&frequency!=='event'&&<>
+                    <label className={styles.endSchedule}><input type="checkbox" checked={hasEndDate} onChange={e=>setHasEndDate(e.target.checked)}/>Kết thúc lặp vào ngày</label>
+                    {hasEndDate&&<ScheduleDateInput name="effectiveUntil" aria-label="Ngày kết thúc lặp" required min={today()} value={scheduleUntil} onValueChange={setScheduleUntil}/>}
+                  </>}
+                  <p>{scheduleSummary(frequency,scheduleDay,scheduleMonth)}</p>
+                </div>
                 <Field
                   label={
                     frequency === "event"
@@ -1687,8 +1651,7 @@ function EditorForm({
                       : "Giờ hạn (Việt Nam)"
                   }
                 >
-                  <input
-                    type="time"
+                  <ScheduleTimeInput
                     name="dueTime"
                     defaultValue={
                       editor.standard?.due_time.slice(0, 5) ?? "17:00"
@@ -1696,9 +1659,8 @@ function EditorForm({
                     required
                   />
                 </Field>
-                <Field label="Ngày áp dụng">
-                  <Input
-                    type="date"
+                <Field label={frequency==='once'?'Ngày cần hoàn thành':'Ngày bắt đầu áp dụng'}>
+                  <ScheduleDateInput
                     name="effectiveFrom"
                     min={today()}
                     defaultValue={today()}

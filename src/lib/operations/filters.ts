@@ -54,7 +54,7 @@ export const filteredPageSchema = z.object({
   quality: z.enum(["", "met", "unmet", "unknown"]).default(""),
   verification: z.enum(["", "verified", "unverified", "pending_review"]).default(""),
   deadline: z.enum(["", "overdue", "on_time", "late", "upcoming", "follow_up"]).default(""),
-  frequency: z.enum(["", "daily", "weekly", "monthly", "event"]).default(""),
+  frequency: z.enum(["", "once", "daily", "weekly", "monthly", "quarterly", "yearly", "event"]).default(""),
   dateField: z.enum(["due", "created", "completed", "verified", "follow_up"]).default("due"),
   from: z.iso.datetime({ offset: true }).nullable().default(null),
   to: z.iso.datetime({ offset: true }).nullable().default(null),

@@ -28,6 +28,13 @@ export async function POST(request: NextRequest) {
   const session = await client.auth.getUser();
   if (session.error || !session.data.user) return failure("Vui lòng đăng nhập lại.", 401);
   const { action, requestId, ...payload } = parsed.data;
+  const needsRecurrence = action === 'save' && 'rows' in payload && payload.rows.some(row=>!['daily','weekly'].includes(row.frequency)||row.dayNumber!==undefined||row.monthNumber!==undefined)
+    || action==='apply'&&'assignments' in payload&&payload.assignments.some(a=>a.effectiveUntil);
+  if(needsRecurrence){
+    const capabilities=await (client as unknown as Rpc).rpc('ops_working_library_read',{});
+    if(capabilities.error||Number((capabilities.data as {recurrenceVersion?:number}|null)?.recurrenceVersion??0)<1)
+      return failure('Lịch mở rộng đang chờ cập nhật hệ thống. Nội dung được giữ nguyên, chưa có dữ liệu được ghi.',503);
+  }
   const result = await (client as unknown as Rpc).rpc(action === "apply" ? "ops_working_library_execute_v2" : "ops_working_library_execute", { p_action: action, p_payload: payload, p_request_id: requestId });
   if (result.error) {
     const message = result.error.message;
@@ -39,7 +46,7 @@ export async function POST(request: NextRequest) {
     if (message.includes("OPS_LIBRARY_APPLIED")) return failure("Một chi nhánh đã áp dụng bộ này. Không ghi đè; chỉnh công việc tại chi nhánh bằng phiên bản mới.", 409);
     if (message.includes("OPS_WORKBOOK_DUPLICATE")) return failure("Chi nhánh có mã công việc trùng với bộ đã nhập trước. Chưa áp dụng thay thế dữ liệu cũ.", 409);
     if (message.includes("OPS_REQUEST_CONFLICT")) return failure("Yêu cầu đã thay đổi. Kiểm tra nội dung rồi thực hiện lại.", 409);
-    if (message.includes("OPS_INVALID_SCHEDULE")) return failure("Kiểm tra ngày bắt đầu từ hôm nay, giờ hạn và ngày hằng tuần ở từng chi nhánh.");
+    if (message.includes("OPS_INVALID_SCHEDULE")) return failure("Kiểm tra chu kỳ, ngày thực hiện, giờ hạn và ngày kết thúc của lịch.");
     return failure("Chưa hoàn tất thao tác. Không có phần nào của lần ghi này được áp dụng.", ["PGRST202", "42883"].includes(result.error.code ?? "") ? 503 : 400);
   }
   return NextResponse.json({ result: result.data }, { headers });

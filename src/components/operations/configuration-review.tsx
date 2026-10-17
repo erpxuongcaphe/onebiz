@@ -12,6 +12,7 @@ import {
   type RewardPolicy,
 } from "@/lib/operations/policy";
 import { formatNumber } from "@/lib/format";
+import { frequencyLabels } from "@/lib/operations/recurrence";
 import styles from "./workspace.module.css";
 
 export function ConfigurationReview({
@@ -86,14 +87,7 @@ export function ConfigurationReview({
             <div>
               <dt>Tần suất</dt>
               <dd>
-                {
-                  {
-                    daily: "Hàng ngày",
-                    weekly: "Hàng tuần",
-                    monthly: "Hàng tháng",
-                    event: "Theo sự kiện",
-                  }[frequency]
-                }
+                {frequencyLabels[frequency]}
               </dd>
             </div>
             <div>

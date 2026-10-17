@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatShortDate } from "@/lib/format";
+import { scheduleSummary } from "@/lib/operations/recurrence";
 import { states, type Person } from "@/lib/operations/contracts";
+import type { QualityAction } from "@/lib/operations/quality-contracts";
 import styles from "./workspace.module.css";
 
 interface HistoryRow {
@@ -12,12 +14,29 @@ interface HistoryRow {
   actor_name: string;
   created_at: string;
   reason: string | null;
+  before_schedule?: ScheduleSnapshot | null;
+  after_schedule?: ScheduleSnapshot | null;
+}
+type ScheduleSnapshot={frequency:string;day_number?:number;month_number?:number|null;due_time?:string;effective_from?:string;effective_until?:string|null};
+function ScheduleHistory({title,value}:{title:string;value:ScheduleSnapshot}){
+  return <div><strong>{title}</strong><p>{scheduleSummary(value.frequency,value.day_number??1,value.month_number??1)}{value.due_time?` · ${value.due_time.slice(0,5)}`:''}</p><p>{value.effective_from?`Từ ${formatShortDate(`${value.effective_from}T00:00:00+07:00`)}`:''}{value.effective_until?` đến ${formatShortDate(`${value.effective_until}T00:00:00+07:00`)}`:''}</p></div>;
 }
 interface Page {
   rows: HistoryRow[];
   next: { at: string; id: string } | null;
 }
+const qualityLabels: Record<QualityAction,string> = {
+  check:"Ghi kết quả tự kiểm tra",issue:"Tạo vấn đề",issue_update:"Cập nhật vấn đề",issue_assign:"Phân công xử lý",recheck:"Kiểm tra lại",
+  department:"Cấu hình bộ phận",assignment:"Phân công cùng lịch",qc_grant:"Cấp / thu hồi quyền QC, kế toán",catalog:"Cấu hình tiêu chuẩn QC",catalog_import:"Nhập tiêu chuẩn QC",
+  rule:"Cấu hình chính sách",rule_approve:"Duyệt chính sách",qc_create:"Tạo đợt QC",qc_line:"Ghi kết quả QC",qc_complete:"Hoàn tất đợt QC",qc_correct:"Đính chính kết quả QC",
+  accounting:"Ghi chỉ số kế toán",accounting_approve:"Duyệt chỉ số kế toán",settle:"Chốt kỳ",period:"Cấu hình kỳ đánh giá",group:"Cấu hình nhóm QC",adhoc:"Tạo công việc phát sinh",reference:"Liên kết hồ sơ",
+  target:"Cấu hình chỉ tiêu",revenue:"Ghi nguồn doanh thu",approve_revenue:"Duyệt nguồn doanh thu",onebiz_revenue:"Lấy doanh thu OneBiz",revenue_batch:"Nhập doanh thu theo lô",
+};
 const labels: Record<string, string> = {
+  ...Object.fromEntries(Object.entries(qualityLabels).map(([key,value])=>[`quality:${key}`,value])),
+  'working_library:save':"Lưu bộ tiêu chí chung",
+  'working_library:archive':"Ẩn bộ tiêu chí chung",
+  'working_library:restore':"Khôi phục bộ tiêu chí chung",
   member: "Phân quyền",
   standard: "Tạo mẫu",
   approve_standard: "Duyệt mẫu",
@@ -38,7 +57,19 @@ const labels: Record<string, string> = {
   generate: "Sinh lịch",
   event: "Công việc sự kiện",
   onebiz_revenue: "Lấy doanh thu OneBiz",
+  configure_schedule: "Thiết lập lịch thực hiện",
+  generate_schedule: "Sinh công việc theo lịch",
+  apply_working_library: "Áp dụng bộ tiêu chí cho chi nhánh",
+  common_standard: "Tạo công việc chung",
+  propose_standard: "Đề xuất công việc",
+  request_standard_changes: "Yêu cầu sửa đề xuất",
+  retire_standard: "Ngừng áp dụng công việc",
+  discard_standard: "Hủy bản nháp",
 };
+export function OperationsHistoryPanel({branch,period}:{branch:string;period:string}) {
+  const [open,setOpen]=useState(false);
+  return <details onToggle={event=>setOpen(event.currentTarget.open)}><summary>Nhật ký thao tác</summary>{open&&<OperationsHistory branch={branch} period={period}/>}</details>;
+}
 export function OperationsHistory({
   branch,
   period,
@@ -132,6 +163,7 @@ export function OperationsHistory({
             {labels[row.action] || states[row.action] || "Thay đổi vận hành"}
           </p>
           {row.reason && <small>{row.reason}</small>}
+          {(row.before_schedule||row.after_schedule)&&<details><summary>Xem lịch thực hiện</summary>{row.before_schedule&&<ScheduleHistory title="Trước thay đổi" value={row.before_schedule}/>} {row.after_schedule&&<ScheduleHistory title={row.before_schedule?'Sau thay đổi':'Lịch đã sử dụng'} value={row.after_schedule}/>}</details>}
         </article>
       ))}
       {!busy && !error && !page.rows.length && (

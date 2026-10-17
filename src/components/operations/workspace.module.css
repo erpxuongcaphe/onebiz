@@ -354,6 +354,10 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
+.scheduleSection { grid-column:1/-1; border-block:1px solid #dce2eb; padding:12px 0; min-width:0; }
+.endSchedule { display:flex; align-items:center; gap:8px; margin-top:12px; font-size:13px; }
+.scheduleSection > p { color:#526172; font-size:13px; margin:8px 0 0; }
+.scheduleSection > span { max-width:240px; margin-top:8px; }
 .field {
   display: flex;
   flex-direction: column;
