@@ -828,6 +828,7 @@ export function DataTable<TData, TValue>({
                       return (
                       <TableCell
                         key={cell.id}
+                        onClick={cell.column.id === "select" ? (event) => event.stopPropagation() : undefined}
                         className={cn(
                           "text-sm",
                           tableColumnAlignmentClass(alignmentFor(cell.column.id)),
