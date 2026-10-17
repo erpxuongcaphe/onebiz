@@ -104,6 +104,7 @@ import { OtpApprovalDialog } from "@/components/shared/dialogs/otp-approval-dial
 import { OTP_ACTION_CODES } from "@/lib/services/supabase/manager-otp";
 import type { Product, UOMConversion } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
+import { SettingsSwitch } from "@/components/shared/settings-toggle";
 import { setProductTradingStatus } from "@/lib/services/supabase/product-trading-status";
 import { findLatestFormDraft } from "@/lib/hooks/use-durable-form-draft";
 
@@ -1874,7 +1875,26 @@ export default function HangHoaPage() {
     },
   ];
 
-  const columns = scope === "nvl" ? nvlColumns : skuColumns;
+  const tradingColumn: ColumnDef<Product, unknown> = {
+    id: "trading_status",
+    header: "Kinh doanh",
+    size: 140,
+    enableSorting: false,
+    cell: ({ row }) => (
+      <div className="flex items-center gap-1" onClick={(event) => event.stopPropagation()}
+        title="Trạng thái kinh doanh toàn hệ thống">
+        <SettingsSwitch
+          label={(row.original.status === "inactive" ? "Bật" : "Ngừng") + " kinh doanh " + row.original.name + " · toàn hệ thống"}
+          checked={row.original.status !== "inactive"}
+          disabled={!canEditTrading || tradingBusy}
+          onCheckedChange={(active) => void changeTradingStatus([row.original.id], active)} />
+        <span className="whitespace-nowrap text-xs text-muted-foreground">
+          {row.original.status === "inactive" ? "Đã ngừng" : "Đang bán"}
+        </span>
+      </div>
+    ),
+  };
+  const columns = [...(scope === "nvl" ? nvlColumns : skuColumns), tradingColumn];
 
   const stockOptions = [
     { label: "Còn hàng", value: "in_stock" },
