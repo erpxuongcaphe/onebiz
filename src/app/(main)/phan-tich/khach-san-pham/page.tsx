@@ -1,6 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { useLiveDataRefresh } from "@/lib/hooks/use-live-data-refresh";
+import { managementReportLink } from "@/lib/reports/management-review";
+import { financialExportSheets } from "@/lib/reports/financial-export";
 import {
   Bar,
   BarChart,
@@ -29,7 +33,7 @@ import {
 } from "@/components/ui/select";
 import { ReportPageHeader } from "@/components/shared/report";
 import { cn } from "@/lib/utils";
-import { useBranchFilter, useToast } from "@/lib/contexts";
+import { useAuth, useBranchFilter, useToast } from "@/lib/contexts";
 import { useReportState } from "@/lib/hooks/use-report-state";
 import {
   clearReportViewPreferences,
@@ -143,7 +147,6 @@ const CUSTOMER_COLUMN_OPTIONS: Array<{
   { id: "share", label: "Tỷ trọng" },
   { id: "orders", label: "Số đơn" },
   { id: "products", label: "Số mã hàng" },
-  { id: "quantity", label: "Số lượng" },
   { id: "topProduct", label: "Mặt hàng mua nhiều nhất" },
   { id: "lastPurchase", label: "Lần mua gần nhất" },
 ];
@@ -463,6 +466,7 @@ function Pager({
 
 export default function CustomerProductReportPage() {
   const { activeBranchId, branchLabel, isReady } = useBranchFilter();
+  const { tenant } = useAuth();
   const { toast } = useToast();
   const { preset, range, setPreset, setCustomRange } = useReportState({
     defaultPreset: "thisMonth",
@@ -484,7 +488,8 @@ export default function CustomerProductReportPage() {
   const [matrixCategoryLimit, setMatrixCategoryLimit] =
     useState<MatrixLimit>(10);
   const [highlightValues, setHighlightValues] = useState(true);
-  const [report, setReport] = useState<CustomerProductReport | null>(null);
+  const [reportData, setReport] = useState<CustomerProductReport | null>(null);
+  const [loadedReportScope, setLoadedReportScope] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -501,9 +506,25 @@ export default function CustomerProductReportPage() {
   const [productSort, setProductSort] = useState<ProductSort>("revenue_desc");
   const [productPage, setProductPage] = useState(0);
   const [productPageSize, setProductPageSize] = useState(50);
-  const [detail, setDetail] = useState<CustomerProductDetailPage | null>(null);
+  const [detailData, setDetail] = useState<CustomerProductDetailPage | null>(null);
+  const [loadedDetailScope, setLoadedDetailScope] = useState("");
   const [detailLoading, setDetailLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const reportScope = `${tenant?.id}:${activeBranchId ?? "all"}:${range.from}:${range.to}:${deferredSearch}:${sort}:${page}:${pageSize}`;
+  const reportScopeRef = useRef(reportScope);
+  reportScopeRef.current = reportScope;
+  const report = loadedReportScope === reportScope ? reportData : null;
+  const detailScope = `${reportScope}:${selectedCustomerId}:${deferredProductSearch}:${productSort}:${productPage}:${productPageSize}`;
+  const detailScopeRef = useRef(detailScope);
+  detailScopeRef.current = detailScope;
+  const detail = loadedDetailScope === detailScope ? detailData : null;
+  const liveRequest = useRef({ scope: "", inFlight: false, queued: false });
+  const refreshReport = useCallback(() => {
+    if (liveRequest.current.scope === reportScope && liveRequest.current.inFlight) liveRequest.current.queued = true;
+    else setReloadKey(value => value + 1);
+  }, [reportScope]);
+  useLiveDataRefresh(refreshReport, tenant?.id, activeBranchId, ["dashboard_live_signals"], isReady && preferencesReady);
+  const reportPending = loading || (!error && loadedReportScope !== reportScope) || search !== deferredSearch;
 
   useEffect(() => {
     const initial = readInitialViewPreferences();
@@ -609,6 +630,7 @@ export default function CustomerProductReportPage() {
   useEffect(() => {
     if (!isReady || !preferencesReady) return;
     let cancelled = false;
+    liveRequest.current = { scope: reportScope, inFlight: true, queued: false };
     setLoading(true);
     setError(null);
 
@@ -621,16 +643,21 @@ export default function CustomerProductReportPage() {
       limit: pageSize,
     })
       .then((nextReport) => {
-        if (!cancelled) setReport(nextReport);
+        if (!cancelled && reportScopeRef.current === reportScope) { setReport(nextReport); setLoadedReportScope(reportScope); }
       })
       .catch((reason: unknown) => {
-        if (cancelled) return;
+        if (cancelled || reportScopeRef.current !== reportScope) return;
         const message =
           reason instanceof Error ? reason.message : "Không thể tải báo cáo.";
         setError(message);
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled && reportScopeRef.current === reportScope) {
+          setLoading(false);
+          const queued = liveRequest.current.queued;
+          liveRequest.current.inFlight = false;
+          if (queued) setReloadKey(value => value + 1);
+        }
       });
 
     return () => {
@@ -646,6 +673,7 @@ export default function CustomerProductReportPage() {
     range,
     reloadKey,
     sort,
+    reportScope,
   ]);
 
   useEffect(() => {
@@ -685,10 +713,10 @@ export default function CustomerProductReportPage() {
       limit: productPageSize,
     })
       .then((nextDetail) => {
-        if (!cancelled) setDetail(nextDetail);
+        if (!cancelled && detailScopeRef.current === detailScope) { setDetail(nextDetail); setLoadedDetailScope(detailScope); }
       })
       .catch((reason: unknown) => {
-        if (cancelled) return;
+        if (cancelled || detailScopeRef.current !== detailScope) return;
         setDetail(null);
         toast({
           title: "Không tải được mặt hàng",
@@ -698,7 +726,7 @@ export default function CustomerProductReportPage() {
         });
       })
       .finally(() => {
-        if (!cancelled) setDetailLoading(false);
+        if (!cancelled && detailScopeRef.current === detailScope) setDetailLoading(false);
       });
 
     return () => {
@@ -716,6 +744,8 @@ export default function CustomerProductReportPage() {
     range,
     selectedCustomerId,
     toast,
+    detailScope,
+    reloadKey,
   ]);
 
   const selectedCustomer = useMemo(
@@ -763,7 +793,7 @@ export default function CustomerProductReportPage() {
   );
 
   const handleExportView = useCallback(async () => {
-    if (!report) return;
+    if (!report || reportPending || error || (mode === "products" && (!detail || detailLoading || productSearch !== deferredProductSearch))) return;
     setExporting(true);
     try {
       const titleRows = buildReportTitleRows({
@@ -968,7 +998,7 @@ export default function CustomerProductReportPage() {
         range,
         branchName: branchLabel,
         reportTitle: "Khách hàng mua sản phẩm nào",
-        sheets: [sheet],
+        sheets: financialExportSheets([sheet], titleRows).map(item => ({ ...item, titleRows: [...(item.titleRows ?? []), `Tìm khách: ${deferredSearch || "Tất cả"}; Tìm hàng: ${mode === "products" ? deferredProductSearch || "Tất cả" : "Tất cả"}`, "Doanh số dòng hàng; chưa trừ chiết khấu hóa đơn/hàng trả; gồm nội bộ."] })),
       });
       toast({ title: "Đã xuất nội dung đang xem", variant: "success" });
     } catch (reason) {
@@ -983,17 +1013,24 @@ export default function CustomerProductReportPage() {
   }, [
     branchLabel,
     customerColumns,
-    detail?.rows,
     matrix,
     mode,
     productColumns,
     range,
     report,
     toast,
+    deferredSearch,
+    deferredProductSearch,
+    detail,
+    detailLoading,
+    error,
+    productSearch,
+    reportPending,
   ]);
 
   const handleExportFull = useCallback(async () => {
-    if (!report) return;
+    if (!report || reportPending || error) return;
+    const exportScope = reportScope;
     setExporting(true);
     try {
       const customerRows: CustomerProductCustomerRow[] = [];
@@ -1002,10 +1039,12 @@ export default function CustomerProductReportPage() {
         const customerPage = await getCustomerProductReport({
           branchId: activeBranchId ?? undefined,
           range,
-          sort: "revenue_desc",
+          search: deferredSearch,
+          sort,
           offset: customerOffset,
           limit: 100,
         });
+        if (reportScopeRef.current !== exportScope) throw new Error("Phạm vi đã đổi. Vui lòng xuất lại.");
         customerRows.push(...customerPage.customers);
         if (
           customerPage.customers.length === 0 ||
@@ -1016,29 +1055,34 @@ export default function CustomerProductReportPage() {
         customerOffset += customerPage.customers.length;
       }
 
-      const productRows = await getCustomerProductExportRows({
+      const allProductRows = await getCustomerProductExportRows({
         branchId: activeBranchId ?? undefined,
         range,
       });
+      if (reportScopeRef.current !== exportScope) throw new Error("Phạm vi đã đổi. Vui lòng xuất lại.");
+      const customerKeys = new Set(customerRows.map(row => JSON.stringify([row.customerCode, row.customerName])));
+      const productRows = allProductRows.filter(row => customerKeys.has(JSON.stringify([row.customerCode, row.customerName])));
       const categoryMap = new Map<
         string,
-        { categoryName: string; quantity: number; revenue: number }
+        { categoryName: string; unit: string; quantity: number; revenue: number }
       >();
       for (const row of productRows) {
-        const current = categoryMap.get(row.categoryName) ?? {
+        const categoryKey = JSON.stringify([row.categoryName, row.unit]);
+        const current = categoryMap.get(categoryKey) ?? {
           categoryName: row.categoryName,
+          unit: row.unit,
           quantity: 0,
           revenue: 0,
         };
         current.quantity += row.quantity;
         current.revenue += row.revenue;
-        categoryMap.set(row.categoryName, current);
+        categoryMap.set(categoryKey, current);
       }
 
       const summary = report.summary;
       const sheets: ExcelSheet[] = [
         {
-          name: "Tổng quan",
+          name: "Tổng quan toàn kỳ",
           columns: [
             { label: "Chỉ số", key: "label", width: 32 },
             { label: "Giá trị", key: "value", width: 22, format: "number" },
@@ -1048,7 +1092,6 @@ export default function CustomerProductReportPage() {
             { label: "Khách hàng có mua", value: summary.customerCount, unit: "Khách hàng" },
             { label: "Đơn hàng", value: summary.orderCount, unit: "Đơn" },
             { label: "Mã hàng đã bán", value: summary.productCount, unit: "Mã hàng" },
-            { label: "Số lượng", value: summary.quantity, unit: "Sản phẩm" },
             { label: "Doanh thu mặt hàng", value: summary.revenue, unit: "VND" },
             { label: "Giá trị bình quân mỗi đơn", value: summary.averageOrderValue, unit: "VND" },
             { label: "Tỷ trọng 10 khách lớn nhất", value: summary.topTenShare, unit: "%" },
@@ -1061,7 +1104,6 @@ export default function CustomerProductReportPage() {
             { label: "Khách hàng", key: "customerName", width: 32 },
             { label: "Số đơn", key: "orderCount", width: 12, format: "number" },
             { label: "Số mã hàng", key: "productCount", width: 14, format: "number" },
-            { label: "Số lượng", key: "quantity", width: 14, format: "number" },
             { label: "Doanh thu mặt hàng", key: "revenue", width: 20, format: "currency" },
             { label: "Tỷ trọng", key: "revenueShare", width: 12, format: "percent" },
             { label: "Mặt hàng mua nhiều nhất", key: "topProduct", width: 32 },
@@ -1095,6 +1137,7 @@ export default function CustomerProductReportPage() {
           name: "Nhóm hàng",
           columns: [
             { label: "Nhóm hàng", key: "categoryName", width: 30 },
+            { label: "ĐVT", key: "unit", width: 12 },
             { label: "Số lượng", key: "quantity", width: 16, format: "number" },
             { label: "Doanh thu mặt hàng", key: "revenue", width: 22, format: "currency" },
           ],
@@ -1116,7 +1159,7 @@ export default function CustomerProductReportPage() {
           "Doanh thu mặt hàng lấy từ dòng hàng của hóa đơn hoàn thành.",
           "File đầy đủ không giới hạn theo số dòng đang hiển thị trên màn hình.",
         ],
-        sheets,
+        sheets: financialExportSheets(sheets, buildReportTitleRows({ title: "DOANH SỐ DÒNG HÀNG THEO KHÁCH", range, branchName: branchLabel })).map(sheet => ({ ...sheet, titleRows: [...(sheet.titleRows ?? []), `Tìm khách: ${deferredSearch || "Tất cả"}; Sắp xếp: ${sort === "orders_desc" ? "Nhiều đơn nhất" : sort === "quantity_desc" ? "Số lượng cao nhất" : sort === "name_asc" ? "Tên khách A-Z" : "Doanh số cao nhất"}`, "Tổng quan toàn kỳ; các bảng khách và mặt hàng theo tìm kiếm. Gồm nội bộ; chưa trừ chiết khấu hóa đơn/hàng trả."] })),
       });
       toast({ title: "Đã xuất báo cáo đầy đủ", variant: "success" });
     } catch (reason) {
@@ -1128,7 +1171,7 @@ export default function CustomerProductReportPage() {
     } finally {
       setExporting(false);
     }
-  }, [activeBranchId, branchLabel, range, report, toast]);
+  }, [activeBranchId, branchLabel, range, report, toast, reportPending, error, reportScope, deferredSearch, sort]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -1141,7 +1184,7 @@ export default function CustomerProductReportPage() {
         onCustomRangeChange={setCustomRange}
         onExportView={handleExportView}
         onExportFull={handleExportFull}
-        exportDisabled={exporting || loading || !report || (mode === "products" && (detailLoading || !detail))}
+        exportDisabled={exporting || reportPending || Boolean(error) || !report || (mode === "products" && (detailLoading || !detail || productSearch !== deferredProductSearch))}
       />
 
       <div className="min-h-0 flex-1 overflow-y-auto bg-surface-container-low/35 p-4 lg:p-6">
@@ -1387,13 +1430,18 @@ export default function CustomerProductReportPage() {
                 <SelectContent align="end">
                   <SelectItem value="revenue_desc">Doanh thu cao nhất</SelectItem>
                   <SelectItem value="orders_desc">Nhiều đơn nhất</SelectItem>
-                  <SelectItem value="quantity_desc">Số lượng cao nhất</SelectItem>
                   <SelectItem value="name_asc">Tên khách A–Z</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
-          {loading && !report ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3 text-xs text-muted-foreground">
+            <div className="space-y-1"><p>Doanh số dòng hàng · Theo ngày tạo hóa đơn · Chưa trừ chiết khấu hóa đơn/hàng trả · Gồm nội bộ · Chỉ khách có mã.</p><p>Chỉ số và nhóm hàng: toàn kỳ. Bảng khách: theo tìm kiếm.</p></div>
+            <Link className="inline-flex min-h-9 items-center gap-1 text-sm text-primary" href={managementReportLink("/phan-tich/sku-chi-tiet", activeBranchId, range) + (mode === "products" && selectedCustomerId ? `&customer=${encodeURIComponent(selectedCustomerId)}` : "")}>
+              Doanh thu và lãi gộp<Icon name="arrow_forward" size={16} />
+            </Link>
+          </div>
+          {reportPending && !report ? (
             <div className="flex min-h-80 items-center justify-center rounded-lg border border-border bg-background text-sm text-muted-foreground">
               <Icon name="progress_activity" size={24} className="mr-2 animate-spin" />
               Đang tổng hợp báo cáo...
@@ -1445,7 +1493,7 @@ export default function CustomerProductReportPage() {
                   valueColor="text-foreground"
                 />
                 <KpiCard
-                  label="Doanh thu mặt hàng"
+                  label="Doanh số dòng hàng"
                   value={formatCurrency(report.summary.revenue) + " ₫"}
                   icon="payments"
                   bg="bg-status-warning/10"
