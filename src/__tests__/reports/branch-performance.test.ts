@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { branchPerformanceRows, branchPerformanceTotals, branchPerformanceSheet, BRANCH_FIELDS, EMPTY_BRANCH_FILTER } from "@/lib/reports/branch-performance";
 import type { BranchPnLRow } from "@/lib/services/supabase/reports";
+import { filterExcelSheetColumns } from "@/lib/utils/excel-export";
 
 const branch = (id: string, revenue: number, profit: number, complete = true): BranchPnLRow => ({ branchId: id, branchName: id, branchType: "fnb", revenue, goodsRevenue: revenue, totalRevenue: revenue + 10, deliveryFee: 10, cogs: revenue - profit, grossProfit: profit, grossMargin: revenue ? profit / revenue * 100 : 0, opEx: 5, otherIncome: 1, netProfit: profit - 4, netMargin: revenue ? (profit - 4) / revenue * 100 : 0, cogsComplete: complete, missingCostLines: complete ? 0 : 2 });
 const sort = { id: "netProfit", direction: "asc" as const };
@@ -44,6 +45,9 @@ describe("branch performance management table", () => {
     const full = branchPerformanceSheet(rows, filter, sort, "full", ["Kỳ tháng 10"]);
     expect(full.tablePreferenceKey).toBeUndefined();
     expect(full.columns.map(column => column.key)).toEqual(BRANCH_FIELDS.map(field => field.key));
+    expect(full.columnGroups?.reduce((total, group) => total + group.span, 0)).toBe(full.columns.length);
+    const visible = filterExcelSheetColumns(full, ["goodsRevenue", "previousNetProfit"]);
+    expect(visible.columnGroups?.map(group => group.span)).toEqual([2, 11, 6]);
     expect(full.rows.map(row => row.branchId)).toEqual(["B", "A"]);
     expect(full.rows[0].cogs).toBeNull();
     expect(full.footer).toMatchObject({ goodsRevenue: 500, cogs: null, missingCostLines: 2 });

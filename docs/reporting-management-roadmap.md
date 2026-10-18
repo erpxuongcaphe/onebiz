@@ -55,3 +55,11 @@ Cap nhat: 2026-10-18. Khong sua so lieu kinh doanh de khop mau tham khao.
 - Giu chi nhanh chi co ky truoc, khong de mat phan doanh thu ngung phat sinh. Thieu gia von ky truoc thi khong ket luan chenhlech ket qua.
 - Ly Mang Ve duoc nguoi dung xac nhan khong tinh phi. Nhom hang doanh thu 0 co gia von duoc hien rieng theo so lieu, khong mac dinh la loi va khong an chi phi khoi tong. Khong hardcode ma SKU de bo qua canh bao.
 - Chua hoan tat: tong hop lai gop khach hang, truy nguyen chenh lech hoa don/dong hang, su dung von va nghiem thu lien bao cao.
+
+## Phan cap giao dien bao cao
+
+- Ket qua kinh doanh va SKU: dung dai tieu de co phan tach ro, khong boc tung phan trong card noi; tieu de cap 2 co ten vung doc bang ban phim.
+- Mau xanh nhe cho ket qua/doi chieu, trung tinh cho phan tich, vang chi khi co can cu can kiem tra. Du gia von khong hien nhu canh bao thieu gia von.
+- Nhom cot chi nhanh: danh tinh, ky dang xem, doi chieu ky truoc. Nhom cot SKU: mat hang, ban/tra, doi chieu doanh thu, gia von/lai gop, kiem soat.
+- Web va Excel dung chung nhom cot. An cot phai cap nhat dung so cot trong tung nhom; full van giu tat ca chi tieu va dong da loc/sort.
+- Dot nay chi doi cach trinh bay, khong thay du lieu, cong thuc, RPC, quyen hay luong van hanh.
