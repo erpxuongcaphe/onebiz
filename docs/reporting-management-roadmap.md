@@ -5,7 +5,7 @@ Cap nhat: 2026-10-18. Khong sua so lieu kinh doanh de khop mau tham khao.
 | Dot | Pham vi | Trang thai |
 | --- | --- | --- |
 | 1 | Dashboard, tong quan, chi tieu chung, bang chung, pham vi chi nhanh | Da phat hanh PR675/676 |
-| 2 | Ket qua kinh doanh: UX, ky doi chieu, realtime, gia von thieu, Excel | Dang trien khai |
+| 2 | Ket qua kinh doanh: UX, ky doi chieu, realtime, gia von thieu, Excel | Da phat hanh PR677; bo sung guard bien lai khi ky truoc khong co doanh thu |
 | 3 | Hieu qua ban hang: SKU, khach hang, chi nhanh, ban/tra/giam gia/gia von | Chua nghiem thu theo thiet ke moi |
 | 4 | Su dung von: ton kho, cong no, tien; tach so du va phat sinh | Chua trien khai thiet ke moi |
 | 5 | Nghiem thu lien bao cao: filter, sort, file, mobile, phan quyen | Nghiem thu tung dot; chua chot toan bo |
@@ -23,9 +23,10 @@ Cap nhat: 2026-10-18. Khong sua so lieu kinh doanh de khop mau tham khao.
 ## Nghiem thu dot 2
 
 - [x] Ket qua va viec can xem o dau trang, cau chu ngan.
-- [ ] So lieu khop dashboard o cung ky/pham vi, gom toan cong ty va F&B.
+- [x] So lieu khop dashboard o cung ky/pham vi, gom toan cong ty va F&B.
 - [x] Ky truoc bang 0 hien Phat sinh moi, khong tu ghi tang 100%.
 - [x] Doi chi nhanh/ky khong hien hoac xuat so lieu pham vi cu.
 - [x] Realtime coalescing, khong loai bo lien tuc ket qua dang tai.
 - [x] Excel giu phan le, pham vi, ky so sanh, tinh trang gia von.
-- [ ] Desktop/mobile, CI, build, PostgreSQL va production dat.
+- [x] Desktop/mobile, CI, build, PostgreSQL va production PR677 dat.
+- [ ] Guard bien lai khong co ky co so: cho CI va production ban bo sung.

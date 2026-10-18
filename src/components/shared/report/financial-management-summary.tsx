@@ -28,7 +28,7 @@ export function FinancialManagementSummary({ current, previous, branchId, range 
       <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-muted-foreground">
         <span>Đơn vị: đồng</span>
         <span>Biên lãi gộp: <strong className="tabular-nums text-foreground">{current.cogsComplete ? `${formatNumber(current.grossMargin)}%` : "Chưa đủ giá vốn"}</strong></span>
-        {complete && <span>So với kỳ trước: <strong className="tabular-nums text-foreground">{formatNumber(current.grossMargin - previous.grossMargin)} điểm %</strong></span>}
+        {complete && current.goodsRevenue > 0 && previous.goodsRevenue > 0 && <span>So với kỳ trước: <strong className="tabular-nums text-foreground">{formatNumber(current.grossMargin - previous.grossMargin)} điểm %</strong></span>}
         <span>Theo chứng từ đã ghi nhận. Lợi nhuận không phải dòng tiền.</span>
       </div>
       <h2 className="text-sm font-semibold">Biến động cần xem</h2>

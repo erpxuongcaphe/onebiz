@@ -1051,7 +1051,9 @@ export default function BaoCaoTaiChinhPage() {
                   const previousAvailable = !row.dependsOnCogs || previousCogsComplete;
                   const change = currentAvailable && previousAvailable
                     ? row.isPercent
-                      ? `${(row.cur - row.prev).toFixed(1)} điểm %`
+                      ? cur && prev && cur.goodsRevenue > 0 && prev.goodsRevenue > 0
+                        ? `${(row.cur - row.prev).toFixed(1)} điểm %`
+                        : "Chưa có cơ sở"
                       : pctChange(row.cur, row.prev)
                     : "—";
                   const isPositiveChange = row.negative
