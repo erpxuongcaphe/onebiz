@@ -12,6 +12,14 @@ export function sku(id: string, revenue: number, cost: number | null = 40, unit 
 }
 
 describe("SKU management evidence", () => {
+  it("separates zero-revenue packaging cost from loss alerts without removing cost", () => {
+    const rows = compareSkuPeriods([sku("cup", 0, 12), sku("sale", 20, 40), sku("unknown", 0, null)], []);
+    expect(skuReviewEvidence(rows)).toMatchObject({ lossCount: 1, lossAmount: -20, zeroRevenueCostCount: 1, zeroRevenueCostAmount: 12, missingCount: 1 });
+    expect(filterSkuPerformance(rows, "zeroRevenueCost").map(row => row.code)).toEqual(["cup"]);
+    expect(filterSkuPerformance(rows, "loss").map(row => row.code)).toEqual(["sale"]);
+    expect(skuFinancialTotals(rows).cogs).toBeNull();
+    expect(skuFinancialTotals(rows.slice(0, 2))).toMatchObject({ cogs: 52, grossProfit: -32 });
+  });
   it("keeps discontinued sales and matches product plus unit, not just code", () => {
     const rows = compareSkuPeriods([sku("tea", 100, 40, "Ly")], [sku("tea", 200, 80, "Chai"), sku("gone", 300)]);
     expect(rows).toHaveLength(3);

@@ -25,6 +25,16 @@ beforeEach(() => { window.history.replaceState(null, "", "/"); state.branch = "f
 afterEach(cleanup);
 
 describe("SKU management workflow", () => {
+  it("presents free packaging as cost context and retains it in the filtered full export", async () => {
+    state.fetch.mockImplementation((range: {from:string}) => Promise.resolve(result(range.from === "2026-10-01" ? [sku("Cup", 0, 12), sku("Tea", 50, 30)] : [])));
+    render(<SkuPage />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Xuất đầy đủ" })).toBeEnabled());
+    expect(screen.queryByRole("button", { name: /^Lãi gộp âm:/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Giá vốn hàng doanh thu 0: 12 · 1 SKU/ĐVT" }));
+    expect(screen.getByLabelText("Nghiệp vụ cần xem")).toHaveValue("zeroRevenueCost");
+    await act(async () => screen.getByRole("button", { name: "Xuất đầy đủ" }).click());
+    expect(state.exportExcel.mock.calls[0][0].sheets[0].rows).toEqual([expect.objectContaining({ code: "Cup", netRevenue: 0, cogs: 12, grossProfit: -12 })]);
+  });
   it("restores combined numeric filters and exports full columns without dropping the filter", async () => {
     window.history.replaceState(null, "", `/?skuMetrics=${encodeURIComponent(JSON.stringify([{ key: "netRevenue", state: "range", min: 50, max: null }]))}`);
     render(<SkuPage />);

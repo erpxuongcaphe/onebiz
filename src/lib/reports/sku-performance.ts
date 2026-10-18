@@ -1,7 +1,7 @@
 import type { SkuFinancialRow } from "@/lib/services/supabase/sku-financial-report";
 import { skuFinancialTotals } from "./sku-financial-view";
 
-export type SkuReviewFilter = "all" | "loss" | "missing" | "returns" | "decline";
+export type SkuReviewFilter = "all" | "loss" | "zeroRevenueCost" | "missing" | "returns" | "decline";
 export interface SkuPerformanceRow extends SkuFinancialRow {
   previousRevenue: number;
   revenueDifference: number;
@@ -31,10 +31,15 @@ export function compareSkuPeriods(current: SkuFinancialRow[], previous: SkuFinan
 }
 
 export function filterSkuPerformance(rows: SkuPerformanceRow[], filter: SkuReviewFilter) {
-  return rows.filter(row => filter === "all" || (filter === "loss" && row.grossProfit !== null && row.grossProfit < 0)
+  return rows.filter(row => filter === "all" || (filter === "loss" && row.grossProfit !== null && row.grossProfit < 0 && !isZeroRevenueCost(row))
+    || (filter === "zeroRevenueCost" && isZeroRevenueCost(row))
     || (filter === "missing" && (row.missingCostLines > 0 || row.cogs === null || row.previousMissingCostLines > 0 || row.previousGrossProfit === null))
     || (filter === "returns" && row.returnedQty > 0)
     || (filter === "decline" && row.revenueDifference < 0));
+}
+
+function isZeroRevenueCost(row: SkuPerformanceRow) {
+  return row.soldQty > 0 && row.salesAmount === 0 && row.returnAmount === 0 && row.netRevenue === 0 && row.cogs !== null && row.cogs > 0;
 }
 
 export function skuReviewEvidence(rows: SkuPerformanceRow[]) {
@@ -42,7 +47,9 @@ export function skuReviewEvidence(rows: SkuPerformanceRow[]) {
   const missing = filterSkuPerformance(rows, "missing");
   const decline = filterSkuPerformance(rows, "decline");
   const returns = filterSkuPerformance(rows, "returns");
+  const zeroRevenueCost = filterSkuPerformance(rows, "zeroRevenueCost");
   return { lossCount: loss.length, lossAmount: loss.reduce((sum, row) => sum + (row.grossProfit ?? 0), 0),
+    zeroRevenueCostCount: zeroRevenueCost.length, zeroRevenueCostAmount: zeroRevenueCost.reduce((sum, row) => sum + (row.cogs ?? 0), 0),
     missingCount: missing.length, missingLines: missing.reduce((sum, row) => sum + row.missingCostLines + row.previousMissingCostLines, 0),
     declineCount: decline.length, declineAmount: decline.reduce((sum, row) => sum + row.revenueDifference, 0),
     returnCount: returns.length, returnAmount: returns.reduce((sum, row) => sum + row.returnAmount, 0) };
