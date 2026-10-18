@@ -25,6 +25,21 @@ beforeEach(() => { window.history.replaceState(null, "", "/"); state.branch = "f
 afterEach(cleanup);
 
 describe("SKU management workflow", () => {
+  it("restores combined numeric filters and exports full columns without dropping the filter", async () => {
+    window.history.replaceState(null, "", `/?skuMetrics=${encodeURIComponent(JSON.stringify([{ key: "netRevenue", state: "range", min: 50, max: null }]))}`);
+    render(<SkuPage />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Xuất đầy đủ" })).toBeEnabled());
+    expect(screen.getAllByTestId("report-row").map(row => row.textContent)).toEqual(["B", "Trà"]);
+    await act(async () => screen.getByRole("button", { name: "Xuất đầy đủ" }).click());
+    const file = state.exportExcel.mock.calls[0][0];
+    expect(file.sheets[0].rows.map((row: {code:string}) => row.code)).toEqual(["B"]);
+    expect(file.sheets[0].columns).toHaveLength(23);
+    expect(file.sheets[0].tablePreferenceKey).toBeUndefined();
+    expect(file.sheets[0].titleRows.join(" ")).toContain("Doanh thu thuần: 50 đến Không giới hạn");
+    expect(file.sheets.some((sheet: {name:string}) => sheet.name === "Đối chiếu hóa đơn")).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Xóa bộ lọc" }));
+    expect(new URLSearchParams(window.location.search).has("skuMetrics")).toBe(false);
+  });
   it("keeps lost sales visible and exports the exact filtered sorted rows", async () => {
     render(<SkuPage />);
     await waitFor(() => expect(screen.getByRole("button", {name:"Xuất bảng"})).toBeEnabled());

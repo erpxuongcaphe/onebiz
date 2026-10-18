@@ -6,7 +6,7 @@ Cap nhat: 2026-10-18. Khong sua so lieu kinh doanh de khop mau tham khao.
 | --- | --- | --- |
 | 1 | Dashboard, tong quan, chi tieu chung, bang chung, pham vi chi nhanh | Da phat hanh PR675/676 |
 | 2 | Ket qua kinh doanh: UX, ky doi chieu, realtime, gia von thieu, Excel | Da phat hanh PR677/678, da nghiem thu production |
-| 3 | Hieu qua ban hang: SKU, khach hang, chi nhanh, ban/tra/giam gia/gia von | PR679 da phat hanh phan SKU/khach; dang bo sung doi chieu tong hoa don va dong hang |
+| 3 | Hieu qua ban hang: SKU, khach hang, chi nhanh, ban/tra/giam gia/gia von | PR679/680 da phat hanh SKU/khach va doi chieu; dang nghiem thu bang chi nhanh day du va loc chi tieu |
 | 4 | Su dung von: ton kho, cong no, tien; tach so du va phat sinh | Chua trien khai thiet ke moi |
 | 5 | Nghiem thu lien bao cao: filter, sort, file, mobile, phan quyen | Nghiem thu tung dot; chua chot toan bo |
 
@@ -39,3 +39,11 @@ Cap nhat: 2026-10-18. Khong sua so lieu kinh doanh de khop mau tham khao.
 - Bao cao khach hien co la doanh so dong hang, chua phai lai gop khach hang. Khong tu doi ten chi tieu thanh doanh thu thuan.
 - Chua chot: bang lai gop tat ca khach hang cung luc, phan tich dong gop chi nhanh nang cao va su dung von. Khong tao N truy van theo tung khach de gia lap tong hop.
 - Nghiem thu production thay tong hoa don va doanh thu dong hang co the chenh. Hien hai nguon va so chenh de doi chieu, khong tu bu/sua giao dich; nguyen nhan chua du bang chung thi giu trang thai chua phan loai.
+
+## Bo sung dieu khien day du dot 3
+
+- Chi nhanh: 14 cot tu nguon P&L hien co, loc ten/loai/ket qua va nhieu khoang chi tieu; sort tung cot, tong theo bo loc, ty trong tren toan pham vi, link xuong bao cao chi nhanh.
+- SKU: loc ket hop tat ca chi tieu so, gom ca ky truoc va so chenh; ho tro so am, so le va loc rieng chua du du lieu. Dieu kien SKU duoc giu tren URL.
+- Excel day du khong ap dung an cot; Excel theo man hinh dung tuy chon cot. Cung tap dong va thu tu da loc/sort, co dieu kien trong dau file. Khong gioi han o trang dang xem.
+- Khong them migration, khong thay cong thuc RPC, khong sua chung tu hay quyen.
+- Con lai: bang lai gop tong hop khach hang can nguon tong hop chuan; dong gop chi nhanh theo ky truoc; truy nguyen chenh lech tong hoa don/dong hang; dot su dung von va nghiem thu lien bao cao.

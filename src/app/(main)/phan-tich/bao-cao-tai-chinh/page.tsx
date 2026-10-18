@@ -23,6 +23,9 @@ import { useLiveDataRefresh } from "@/lib/hooks/use-live-data-refresh";
 import { formatCashBookDate } from "@/lib/cash-time";
 import { financialExportSheets } from "@/lib/reports/financial-export";
 import { BRANCH_TYPE_LABELS } from "@/lib/branch-type-labels";
+import { BranchPerformanceTable } from "@/components/shared/report/branch-performance-table";
+import { EMPTY_BRANCH_FILTER, branchPerformanceRows, branchPerformanceSheet, type BranchPerformanceFilter } from "@/lib/reports/branch-performance";
+import { metricFilterError } from "@/lib/reports/metric-filter";
 import { ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
 import {
@@ -196,6 +199,10 @@ export default function BaoCaoTaiChinhPage() {
     previous: ConsolidatedPnL;
   } | null>(null);
   const [branchPnL, setBranchPnL] = useState<BranchPnLRow[]>([]);
+  const [branchFilter, setBranchFilter] = useState<BranchPerformanceFilter>(EMPTY_BRANCH_FILTER);
+  const [branchSort, setBranchSort] = useState<{ id: string; direction: "asc" | "desc" }>({ id: "goodsRevenue", direction: "desc" });
+  const visibleBranches = useMemo(() => branchPerformanceRows(branchPnL, branchFilter, branchSort), [branchPnL, branchFilter, branchSort]);
+  const branchTypes = useMemo(() => [...new Set(branchPnL.map(row => row.branchType))].map(value => ({ value, label: BRANCH_TYPE_LABELS[value as keyof typeof BRANCH_TYPE_LABELS] ?? value })), [branchPnL]);
   const [cogsItems, setCogsItems] = useState<COGSItem[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [cogsSearch, setCogsSearch] = useState("");
@@ -328,9 +335,12 @@ export default function BaoCaoTaiChinhPage() {
   const currentCogsComplete = cur?.cogsComplete !== false;
   const previousCogsComplete = prev?.cogsComplete !== false;
 
-  // Export view — 1 sheet P&L summary
+  function branchSheet(mode: "view" | "full", titleRows: string[]): ExcelSheet {
+    return branchPerformanceSheet(visibleBranches, branchFilter, branchSort, mode, titleRows);
+  }
+
   async function handleExportView() {
-    if (!cur || !prev || loadedScope !== scopeKey || loading || loadError) {
+    if (!cur || !prev || loadedScope !== scopeKey || loading || loadError || metricFilterError(branchFilter.metrics)) {
       toast({
         title: "Chưa có dữ liệu để xuất",
         description: "Vui lòng chờ báo cáo tải xong.",
@@ -385,6 +395,7 @@ export default function BaoCaoTaiChinhPage() {
           ],
         },
       ];
+      if (branchId === "all" && branchPnL.length > 0) viewSheets.push(branchSheet("view", titleRows));
       if (reconciliation && (reconciliation.invoiceCount > 0 || reconciliation.returnCount > 0)) {
         viewSheets.push(buildSalesReturnReconciliationSheet(
           reconciliation,
@@ -420,7 +431,7 @@ export default function BaoCaoTaiChinhPage() {
   }
 
   async function handleExport() {
-    if (!cur || !prev || loadedScope !== scopeKey || loading || loadError) {
+    if (!cur || !prev || loadedScope !== scopeKey || loading || loadError || metricFilterError(branchFilter.metrics)) {
       toast({
         title: "Chưa có dữ liệu để xuất",
         description: "Vui lòng chờ báo cáo tải xong.",
@@ -495,34 +506,7 @@ export default function BaoCaoTaiChinhPage() {
         },
       ];
 
-      if (branchPnL.length > 0) {
-        sheets.push({
-          name: "2. Theo chi nhánh",
-          columns: [
-            { label: "Chi nhánh", key: "branch", width: 24 },
-            { label: "Loại", key: "type", width: 12 },
-            { label: "Doanh thu thuần", key: "revenue", width: 18, format: "currency" },
-            { label: "Giá vốn", key: "cogs", width: 18, format: "currency" },
-            { label: "Lãi gộp", key: "grossProfit", width: 18, format: "currency" },
-            { label: "Biên gộp", key: "grossMargin", width: 14, format: "percent" },
-            { label: "Chi phí vận hành", key: "opEx", width: 18, format: "currency" },
-            { label: "Thu nhập khác", key: "otherIncome", width: 18, format: "currency" },
-            { label: "Kết quả vận hành", key: "operatingResult", width: 20, format: "currency" },
-          ],
-          rows: branchPnL.map((branch) => ({
-            branch: branch.branchName,
-            type: BRANCH_TYPE_LABELS[branch.branchType as keyof typeof BRANCH_TYPE_LABELS] ?? branch.branchType,
-            revenue: branch.goodsRevenue,
-            cogs: branch.cogsComplete ? branch.cogs : null,
-            grossProfit: branch.cogsComplete ? branch.grossProfit : null,
-            grossMargin: branch.cogsComplete ? branch.grossMargin : null,
-            opEx: branch.opEx,
-            otherIncome: branch.otherIncome ?? 0,
-            operatingResult: branch.cogsComplete ? branch.netProfit : null,
-          })),
-        });
-      }
-
+      if (branchId === "all" && branchPnL.length > 0) sheets.push(branchSheet("full", titleRows));
       if (exportCogsItems.length > 0) {
         sheets.push({
           name: "3. Giá vốn theo SP",
@@ -650,7 +634,7 @@ export default function BaoCaoTaiChinhPage() {
         onCustomRangeChange={setCustomRange}
         onExportView={handleExportView}
         onExportFull={handleExport}
-        exportDisabled={exporting || loading}
+        exportDisabled={exporting || loading || metricFilterError(branchFilter.metrics)}
       />
 
       {branchId === "all" && (
@@ -830,131 +814,7 @@ export default function BaoCaoTaiChinhPage() {
             title="So sánh kết quả vận hành theo chi nhánh"
             subtitle="Chi nhánh gồm nội bộ; tổng hợp nhất đã loại trừ."
           >
-            <ReportTableFrame tablePreferenceKey="report.financial-results.branches">
-              <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-muted-foreground">
-                    <th className="text-left py-2 pr-3 font-medium">Chi nhánh</th>
-                    <th className="text-right py-2 pr-3 font-medium">Doanh thu thuần</th>
-                    <th className="text-right py-2 pr-3 font-medium">Giá vốn</th>
-                    <th className="text-right py-2 pr-3 font-medium">Lãi gộp</th>
-                    <th className="text-right py-2 pr-3 font-medium">Biên gộp</th>
-                    <th className="text-right py-2 pr-3 font-medium">Chi phí VH</th>
-                    <th className="text-right py-2 pr-3 font-medium">Thu nhập khác</th>
-                    <th className="text-right py-2 font-medium">Kết quả vận hành</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {branchPnL.map((b) => {
-                    // Map branch_type → Material Symbols icon name.
-                    const typeIconName =
-                      b.branchType === "factory"
-                        ? "factory"
-                        : b.branchType === "warehouse"
-                          ? "warehouse"
-                          : "storefront";
-                    const typeLabel = BRANCH_TYPE_LABELS[b.branchType as keyof typeof BRANCH_TYPE_LABELS] ?? b.branchType;
-                    return (
-                      <tr
-                        key={b.branchId}
-                        className="border-b last:border-0 hover:bg-surface-container-low"
-                      >
-                        <td className="py-3 pr-3">
-                          <div className="flex items-center gap-2">
-                            <Icon name={typeIconName} size={14} className="text-muted-foreground shrink-0" />
-                            <div className="min-w-0">
-                              <p className="font-medium truncate">{b.branchName}</p>
-                              <p className="text-xs text-muted-foreground uppercase tracking-wide">
-                                {typeLabel}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="py-3 pr-3 text-right font-medium text-primary">
-                          {formatCurrency(b.goodsRevenue)}
-                        </td>
-                        <td className="py-3 pr-3 text-right text-status-warning">
-                          {b.cogsComplete ? formatCurrency(b.cogs) : "Chưa đủ dữ liệu"}
-                        </td>
-                        <td className="py-3 pr-3 text-right font-medium text-status-success">
-                          {b.cogsComplete ? formatCurrency(b.grossProfit) : "—"}
-                        </td>
-                        <td className="py-3 pr-3 text-right text-xs">
-                          <span className="tabular-nums">
-                            {b.cogsComplete ? `${b.grossMargin}%` : "—"}
-                          </span>
-                        </td>
-                        <td className="py-3 pr-3 text-right text-muted-foreground">
-                          {formatCurrency(b.opEx)}
-                        </td>
-                        <td className="py-3 pr-3 text-right">{formatCurrency(b.otherIncome ?? 0)}</td>
-                        <td
-                          className={`py-3 text-right font-semibold ${
-                            b.netProfit >= 0 ? "text-status-success" : "text-status-error"
-                          }`}
-                        >
-                          {b.cogsComplete ? formatCurrency(b.netProfit) : "—"}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {/* Tổng cộng */}
-                  {(() => {
-                    const allBranchesComplete = branchPnL.every((branch) => branch.cogsComplete);
-                    const sum = branchPnL.reduce(
-                      (acc, b) => ({
-                        revenue: acc.revenue + b.goodsRevenue,
-                        cogs: acc.cogs + b.cogs,
-                        grossProfit: acc.grossProfit + b.grossProfit,
-                        opEx: acc.opEx + b.opEx,
-                        otherIncome: acc.otherIncome + (b.otherIncome ?? 0),
-                        netProfit: acc.netProfit + b.netProfit,
-                      }),
-                      { revenue: 0, cogs: 0, grossProfit: 0, opEx: 0, otherIncome: 0, netProfit: 0 }
-                    );
-                    const totalMargin =
-                      sum.revenue > 0
-                        ? Math.round((sum.grossProfit / sum.revenue) * 1000) / 10
-                        : 0;
-                    return (
-                      <tr className="bg-muted/40 font-semibold">
-                        <td className="py-3 pr-3">
-                          Tổng chi nhánh ({branchPnL.length})
-                        </td>
-                        <td className="py-3 pr-3 text-right text-primary">
-                          {formatCurrency(sum.revenue)}
-                        </td>
-                        <td className="py-3 pr-3 text-right text-status-warning">
-                          {allBranchesComplete ? formatCurrency(sum.cogs) : "Chưa đủ dữ liệu"}
-                        </td>
-                        <td className="py-3 pr-3 text-right text-status-success">
-                          {allBranchesComplete ? formatCurrency(sum.grossProfit) : "—"}
-                        </td>
-                        <td className="py-3 pr-3 text-right text-xs">
-                          {allBranchesComplete ? `${totalMargin}%` : "—"}
-                        </td>
-                        <td className="py-3 pr-3 text-right text-muted-foreground">
-                          {formatCurrency(sum.opEx)}
-                        </td>
-                        <td className="py-3 pr-3 text-right">{formatCurrency(sum.otherIncome)}</td>
-                        <td
-                          className={`py-3 text-right ${
-                            sum.netProfit >= 0 ? "text-status-success" : "text-status-error"
-                          }`}
-                        >
-                          {allBranchesComplete ? formatCurrency(sum.netProfit) : "—"}
-                        </td>
-                      </tr>
-                    );
-                  })()}
-                </tbody>
-              </table>
-              <p className="text-xs text-muted-foreground mt-2 italic">
-                Tổng chi nhánh gồm nội bộ, không phải tổng hợp nhất.
-              </p>
-              </div>
-            </ReportTableFrame>
+            <BranchPerformanceTable rows={visibleBranches} types={branchTypes} filter={branchFilter} onFilter={setBranchFilter} sort={branchSort} onSort={setBranchSort} range={range} />
           </ChartCard>
         )}
 

@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ReportDataTable, ReportPageHeader, type DataTableColumn } from "@/components/shared/report";
 import { SummaryCard } from "@/components/shared/summary-card";
+import { MetricFilters } from "@/components/shared/report/metric-filters";
+import { matchesMetricFilters, metricFilterError, metricFilterLabel, parseMetricFilters, type MetricFilter } from "@/lib/reports/metric-filter";
 import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useAuth, useBranchFilter, useToast } from "@/lib/contexts";
@@ -23,6 +25,7 @@ import { buildReportTitleRows, exportReportToExcel } from "@/lib/utils/excel-exp
 const KEY = "report.sku-financial.detail";
 const REVIEW_LABELS: Record<SkuReviewFilter, string> = { all: "Tất cả mặt hàng", loss: "Lãi gộp âm", missing: "Thiếu giá vốn", returns: "Có hàng trả", decline: "Doanh thu giảm" };
 const SORT_KEYS = ["code", "name", "category", "unit", "soldQty", "averageSalePrice", "salesAmount", "returnedQty", "returnAmount", "netQty", "netRevenue", "previousRevenue", "revenueDifference", "cogs", "grossProfit", "previousGrossProfit", "grossProfitDifference", "marginPercent", "orders", "customers", "missingCostLines", "previousMissingCostLines", "lastActivityAt"];
+const METRIC_KEYS = SORT_KEYS.filter(key => !["code", "name", "category", "unit", "lastActivityAt"].includes(key));
 const money = (value: number | null) => value === null ? "Chưa đủ giá vốn" : formatCurrency(value);
 const quantity = (value: number | null) => value === null ? "Nhiều ĐVT" : formatStockQuantity(value);
 
@@ -44,6 +47,7 @@ export default function SkuFinancialPage() {
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [reviewFilter, setReviewFilter] = useState<SkuReviewFilter>("all");
+  const [metricFilters, setMetricFilters] = useState<MetricFilter[]>([]);
   const [filtersReady, setFiltersReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState("");
@@ -67,6 +71,7 @@ export default function SkuFinancialPage() {
     const params = new URLSearchParams(window.location.search);
     setCustomer(params.get("customer") ?? ""); setSearch(params.get("skuSearch") ?? "");
     setCategory(params.get("skuCategory") ?? ""); setUnit(params.get("skuUnit") ?? "");
+    setMetricFilters(parseMetricFilters(params.get("skuMetrics"), METRIC_KEYS));
     const review = params.get("skuReview");
     if (review && ["all", "loss", "missing", "returns", "decline"].includes(review)) setReviewFilter(review as SkuReviewFilter);
     const key = params.get("skuSort");
@@ -76,11 +81,11 @@ export default function SkuFinancialPage() {
   useEffect(() => {
     if (!filtersReady) return;
     const url = new URL(window.location.href);
-    for (const [key, value] of Object.entries({ customer, skuSearch: search, skuCategory: category, skuUnit: unit, skuReview: reviewFilter === "all" ? "" : reviewFilter, skuSort: sort.id, skuDirection: sort.direction })) {
+    for (const [key, value] of Object.entries({ customer, skuSearch: search, skuCategory: category, skuUnit: unit, skuReview: reviewFilter === "all" ? "" : reviewFilter, skuSort: sort.id, skuDirection: sort.direction, skuMetrics: metricFilters.length ? JSON.stringify(metricFilters) : "" })) {
       if (value) url.searchParams.set(key, value); else url.searchParams.delete(key);
     }
     window.history.replaceState(window.history.state, "", url);
-  }, [filtersReady, customer, search, category, unit, reviewFilter, sort]);
+  }, [filtersReady, customer, search, category, unit, reviewFilter, sort, metricFilters]);
   useEffect(() => {
     const id = ++request.current;
     let cancelled = false;
@@ -108,7 +113,7 @@ export default function SkuFinancialPage() {
     return () => { cancelled = true; };
   }, [range, activeBranchId, customer, isReady, filtersReady, scope, comparison, revision]);
   const baseRows = useMemo(() => skuFinancialView(compareSkuPeriods(data.rows, previous.rows), { search, category, unit }, sort), [data.rows, previous.rows, search, category, unit, sort]);
-  const rows = useMemo(() => filterSkuPerformance(baseRows, reviewFilter), [baseRows, reviewFilter]);
+  const rows = useMemo(() => filterSkuPerformance(baseRows, reviewFilter).filter(row => matchesMetricFilters(row, metricFilters)), [baseRows, reviewFilter, metricFilters]);
   const totals = useMemo(() => skuFinancialTotals(rows), [rows]);
   const priorTotals = useMemo(() => skuFinancialTotals(rows.flatMap(row => row.previousRow ? [row.previousRow] : [])), [rows]);
   const evidence = useMemo(() => skuReviewEvidence(baseRows), [baseRows]);
@@ -119,9 +124,9 @@ export default function SkuFinancialPage() {
     { metric: "Chênh lệch", current: invoiceRevenue.current - skuFinancialTotals(data.rows).netRevenue, previous: invoiceRevenue.previous - skuFinancialTotals(previous.rows).netRevenue },
   ] : [], [invoiceRevenue, data.rows, previous.rows]);
   const revenueMismatch = reconciliationRows.some(row => row.metric === "Chênh lệch" && (Math.abs(row.current) >= 0.005 || Math.abs(row.previous) >= 0.005));
-  const unfiltered = !customer && !search && !category && !unit && reviewFilter === "all";
+  const unfiltered = !customer && !search && !category && !unit && reviewFilter === "all" && metricFilters.length === 0;
   const customers = useMemo(() => [...new Map([...data.customers, ...previous.customers].map(row => [row.id, row])).values()], [data.customers, previous.customers]);
-  const resetFilters = () => { setSearch(""); setCustomer(""); setCategory(""); setUnit(""); setReviewFilter("all"); };
+  const resetFilters = () => { setSearch(""); setCustomer(""); setCategory(""); setUnit(""); setReviewFilter("all"); setMetricFilters([]); };
   const options = (key: "category" | "unit") => [{ value: "all", label: key === "category" ? "Tất cả nhóm hàng" : "Tất cả ĐVT" },
     ...[...new Set([...data.rows, ...previous.rows].map(row => row[key]))].filter(Boolean).sort((a,b) => a.localeCompare(b,"vi")).map(value => ({ value, label: value }))];
   const columns: DataTableColumn<SkuPerformanceRow>[] = [
@@ -155,6 +160,7 @@ export default function SkuFinancialPage() {
     try {
       const titles = buildReportTitleRows({ title: "CHI TIẾT BÁN HÀNG VÀ LÃI GỘP SKU", range, branchName: branchLabel });
       titles.push(comparisonLabel);
+      titles.push(`Lọc chỉ tiêu: ${metricFilterLabel(metricFilters, columns.map(column => ({ key: String(column.key), label: column.label })))}`);
       titles.push(`Khách hàng: ${customer ? customers.find(row => row.id === customer)?.name ?? customer : "Tất cả"}; Nhóm: ${category || "Tất cả"}; ĐVT: ${unit || "Tất cả"}; Tìm: ${search || "Tất cả"}; Kiểm tra: ${REVIEW_LABELS[reviewFilter]}; Sắp xếp: ${columns.find(column => column.key === sort.id)?.label ?? sort.id} ${sort.direction === "asc" ? "tăng dần" : "giảm dần"}`);
       titles.push("Gồm nội bộ; không phải tổng hợp nhất. Mặt hàng chỉ bán kỳ trước vẫn được đối chiếu.");
       const reconciliationSheet = unfiltered ? [{ name: "Đối chiếu hóa đơn", titleRows: titles,
@@ -177,7 +183,7 @@ export default function SkuFinancialPage() {
   }
   return <div className="flex min-h-full flex-col">
     <ReportPageHeader title="Hiệu quả mặt hàng" subtitle={comparisonLabel} preset={preset} range={range} onPresetChange={setPreset} onCustomRangeChange={setCustomRange}
-      onExportView={() => exportRows("view")} onExportFull={() => exportRows("full")} exportDisabled={pending || exporting || Boolean(error) || !rows.length} />
+      onExportView={() => exportRows("view")} onExportFull={() => exportRows("full")} exportDisabled={pending || exporting || Boolean(error) || metricFilterError(metricFilters) || !rows.length} />
     <div className="space-y-4 p-4 lg:p-6">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <SummaryCard label="Tiền hàng bán" value={pending || error ? "—" : money(totals.salesAmount)} hint={pending || error ? "" : reportChange(totals.salesAmount, priorTotals.salesAmount)} />
@@ -196,9 +202,10 @@ export default function SkuFinancialPage() {
         <select aria-label="Nghiệp vụ cần xem" className="h-10 rounded border bg-background px-3 text-sm" value={reviewFilter} onChange={event => setReviewFilter(event.target.value as SkuReviewFilter)}>
           {Object.entries(REVIEW_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select>
-        {(search || customer || category || unit || reviewFilter !== "all") && <button type="button" onClick={resetFilters} className="inline-flex min-h-9 items-center gap-1 text-sm text-primary"><Icon name="filter_alt_off" size={18} />Xóa bộ lọc</button>}
+        {(search || customer || category || unit || reviewFilter !== "all" || metricFilters.length > 0) && <button type="button" onClick={resetFilters} className="inline-flex min-h-9 items-center gap-1 text-sm text-primary"><Icon name="filter_alt_off" size={18} />Xóa bộ lọc</button>}
         <Link href={managementReportLink("/phan-tich/bao-cao-tai-chinh", activeBranchId, range)} className="inline-flex min-h-9 items-center gap-1 text-sm text-primary">Kết quả kinh doanh<Icon name="arrow_forward" size={16} /></Link>
       </div>
+      <MetricFilters fields={columns.filter(column => !["code", "name", "category", "unit", "lastActivityAt"].includes(String(column.key))).map(column => ({ key: String(column.key), label: column.label }))} value={metricFilters} onChange={setMetricFilters} />
       <p className="text-xs leading-5 text-muted-foreground">Đơn vị: đồng · Gồm nội bộ · Sau chiết khấu, chưa gồm VAT/phí giao · Lãi gộp chưa trừ chi phí vận hành.</p>
       {!pending && !error && unfiltered && <section aria-label="Đối chiếu doanh thu" className="border-y py-3">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-semibold">Đối chiếu doanh thu</h2><Link className="inline-flex min-h-9 items-center gap-1 text-sm text-primary" href={managementReportLink("/phan-tich/ban-hang", activeBranchId, range) + "&detail=invoices"}>Xem hóa đơn<Icon name="arrow_forward" size={16} /></Link></div>
