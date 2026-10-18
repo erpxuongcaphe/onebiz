@@ -23,7 +23,7 @@ import { skuFinancialView, skuFinancialTotals } from "@/lib/reports/sku-financia
 import { buildReportTitleRows, exportReportToExcel } from "@/lib/utils/excel-export";
 
 const KEY = "report.sku-financial.detail";
-const REVIEW_LABELS: Record<SkuReviewFilter, string> = { all: "Tất cả mặt hàng", loss: "Lãi gộp âm", missing: "Thiếu giá vốn", returns: "Có hàng trả", decline: "Doanh thu giảm" };
+const REVIEW_LABELS: Record<SkuReviewFilter, string> = { all: "Tất cả mặt hàng", loss: "Lãi gộp âm · có doanh thu", zeroRevenueCost: "Hàng doanh thu 0 · có giá vốn", missing: "Thiếu giá vốn", returns: "Có hàng trả", decline: "Doanh thu giảm" };
 const SORT_KEYS = ["code", "name", "category", "unit", "soldQty", "averageSalePrice", "salesAmount", "returnedQty", "returnAmount", "netQty", "netRevenue", "previousRevenue", "revenueDifference", "cogs", "grossProfit", "previousGrossProfit", "grossProfitDifference", "marginPercent", "orders", "customers", "missingCostLines", "previousMissingCostLines", "lastActivityAt"];
 const METRIC_KEYS = SORT_KEYS.filter(key => !["code", "name", "category", "unit", "lastActivityAt"].includes(key));
 const money = (value: number | null) => value === null ? "Chưa đủ giá vốn" : formatCurrency(value);
@@ -73,7 +73,7 @@ export default function SkuFinancialPage() {
     setCategory(params.get("skuCategory") ?? ""); setUnit(params.get("skuUnit") ?? "");
     setMetricFilters(parseMetricFilters(params.get("skuMetrics"), METRIC_KEYS));
     const review = params.get("skuReview");
-    if (review && ["all", "loss", "missing", "returns", "decline"].includes(review)) setReviewFilter(review as SkuReviewFilter);
+    if (review && ["all", "loss", "zeroRevenueCost", "missing", "returns", "decline"].includes(review)) setReviewFilter(review as SkuReviewFilter);
     const key = params.get("skuSort");
     if (key && SORT_KEYS.includes(key)) setSort({ id: key, direction: params.get("skuDirection") === "desc" ? "desc" : "asc" });
     setFiltersReady(true);
@@ -222,11 +222,13 @@ export default function SkuFinancialPage() {
         <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
           {evidence.missingCount > 0 && <button type="button" className="min-h-9 text-status-warning underline" onClick={() => setReviewFilter("missing")}>Thiếu giá vốn: {evidence.missingLines} dòng hai kỳ · {evidence.missingCount} SKU/ĐVT</button>}
           {evidence.lossCount > 0 && <button type="button" className="min-h-9 text-destructive underline" onClick={() => setReviewFilter("loss")}>Lãi gộp âm: {evidence.lossCount} SKU/ĐVT · {money(evidence.lossAmount)}</button>}
+          {evidence.zeroRevenueCostCount > 0 && <button type="button" className="min-h-9 text-primary underline" onClick={() => setReviewFilter("zeroRevenueCost")}>Giá vốn hàng doanh thu 0: {money(evidence.zeroRevenueCostAmount)} · {evidence.zeroRevenueCostCount} SKU/ĐVT</button>}
           {evidence.declineCount > 0 && <button type="button" className="min-h-9 text-primary underline" onClick={() => setReviewFilter("decline")}>Doanh thu giảm: {evidence.declineCount} SKU/ĐVT · {money(evidence.declineAmount)}</button>}
           {evidence.returnCount > 0 && <button type="button" className="min-h-9 text-primary underline" onClick={() => setReviewFilter("returns")}>Hàng trả: {money(evidence.returnAmount)}</button>}
-          {!evidence.missingCount && !evidence.lossCount && !evidence.declineCount && !evidence.returnCount && <span>Chưa có biến động cần ưu tiên theo các tiêu chí đang xét.</span>}
+          {!evidence.missingCount && !evidence.lossCount && !evidence.declineCount && !evidence.returnCount && !evidence.zeroRevenueCostCount && <span>Chưa có biến động cần ưu tiên theo các tiêu chí đang xét.</span>}
         </div>
         <p className="mt-1 text-xs text-muted-foreground">Đối chiếu giá bán, chiết khấu, hàng trả và giá vốn trước khi điều chỉnh.</p>
+        {evidence.zeroRevenueCostCount > 0 && <p className="text-xs text-muted-foreground">Bao bì hoặc hàng tặng có thể không tính phí. Đánh giá cùng hóa đơn, không mặc định là lỗi.</p>}
       </section>}
       {pending || error ? <p role="status" className="py-8 text-center text-sm text-muted-foreground">{error ? "Chưa tải được dữ liệu." : "Đang tải..."}</p> : <ReportDataTable rows={rows} columns={columns} tablePreferenceKey={KEY} sortState={sort} onSortChange={setSort}
         getRowKey={row => `${row.productId}:${row.unit}`} subtotalLabel={`${rows.length} dòng SKU/ĐVT`} emptyState="Không có phát sinh phù hợp." />}

@@ -5,6 +5,19 @@ import type { BranchPnLRow } from "@/lib/services/supabase/reports";
 const branch = (id: string, revenue: number, profit: number, complete = true): BranchPnLRow => ({ branchId: id, branchName: id, branchType: "fnb", revenue, goodsRevenue: revenue, totalRevenue: revenue + 10, deliveryFee: 10, cogs: revenue - profit, grossProfit: profit, grossMargin: revenue ? profit / revenue * 100 : 0, opEx: 5, otherIncome: 1, netProfit: profit - 4, netMargin: revenue ? (profit - 4) / revenue * 100 : 0, cogsComplete: complete, missingCostLines: complete ? 0 : 2 });
 const sort = { id: "netProfit", direction: "asc" as const };
 describe("branch performance management table", () => {
+  it("compares both periods, retains prior-only branches and sums exact changes", () => {
+    const rows = branchPerformanceRows([branch("A", 150, 50)], EMPTY_BRANCH_FILTER, { id: "revenueDifference", direction: "asc" }, [branch("A", 100, 20), branch("closed", 70, 10)]);
+    expect(rows.map(row => row.branchId)).toEqual(["closed", "A"]);
+    expect(rows[0]).toMatchObject({ goodsRevenue: 0, previousGoodsRevenue: 70, revenueDifference: -70, netProfitDifference: -6 });
+    expect(rows[1]).toMatchObject({ previousCogs: 80, previousGrossProfit: 20, previousNetProfit: 16, netProfitDifference: 30 });
+    expect(branchPerformanceTotals(rows)).toMatchObject({ goodsRevenue: 150, previousGoodsRevenue: 170, revenueDifference: -20, netProfitDifference: 24 });
+    expect(branchPerformanceRows([branch("A", 150, 50)], { ...EMPTY_BRANCH_FILTER, status: "revenueDecline" }, sort, [branch("A", 100, 20), branch("closed", 70, 10)]).map(row => row.branchId)).toEqual(["closed"]);
+  });
+  it("keeps incomplete prior profit unknown and filterable rather than reporting a fabricated gain", () => {
+    const rows = branchPerformanceRows([branch("A", 200, 70)], { ...EMPTY_BRANCH_FILTER, metrics: [{ key: "previousNetProfit", state: "missing", min: null, max: null }] }, sort, [branch("A", 100, 20, false)]);
+    expect(rows[0]).toMatchObject({ previousGoodsRevenue: 100, revenueDifference: 100, previousCogs: null, previousNetProfit: null, netProfitDifference: null, previousMissingCostLines: 2 });
+    expect(branchPerformanceTotals(rows).netProfitDifference).toBeNull();
+  });
   it("keeps every branch and every metric, with missing cost unknown", () => {
     const rows = branchPerformanceRows([branch("A", 100, 20), branch("B", 0, -10), branch("C", 100, 99, false)], EMPTY_BRANCH_FILTER, sort);
     expect(rows.map(row => row.branchId)).toEqual(["B", "A", "C"]);

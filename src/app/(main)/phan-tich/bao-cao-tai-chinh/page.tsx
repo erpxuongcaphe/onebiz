@@ -199,10 +199,11 @@ export default function BaoCaoTaiChinhPage() {
     previous: ConsolidatedPnL;
   } | null>(null);
   const [branchPnL, setBranchPnL] = useState<BranchPnLRow[]>([]);
+  const [previousBranchPnL, setPreviousBranchPnL] = useState<BranchPnLRow[]>([]);
   const [branchFilter, setBranchFilter] = useState<BranchPerformanceFilter>(EMPTY_BRANCH_FILTER);
   const [branchSort, setBranchSort] = useState<{ id: string; direction: "asc" | "desc" }>({ id: "goodsRevenue", direction: "desc" });
-  const visibleBranches = useMemo(() => branchPerformanceRows(branchPnL, branchFilter, branchSort), [branchPnL, branchFilter, branchSort]);
-  const branchTypes = useMemo(() => [...new Set(branchPnL.map(row => row.branchType))].map(value => ({ value, label: BRANCH_TYPE_LABELS[value as keyof typeof BRANCH_TYPE_LABELS] ?? value })), [branchPnL]);
+  const visibleBranches = useMemo(() => branchPerformanceRows(branchPnL, branchFilter, branchSort, previousBranchPnL), [branchPnL, previousBranchPnL, branchFilter, branchSort]);
+  const branchTypes = useMemo(() => [...new Set([...branchPnL, ...previousBranchPnL].map(row => row.branchType))].map(value => ({ value, label: BRANCH_TYPE_LABELS[value as keyof typeof BRANCH_TYPE_LABELS] ?? value })), [branchPnL, previousBranchPnL]);
   const [cogsItems, setCogsItems] = useState<COGSItem[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [cogsSearch, setCogsSearch] = useState("");
@@ -241,7 +242,9 @@ export default function BaoCaoTaiChinhPage() {
       // Ở chế độ "Tất cả" mới load 2 report nội bộ; khi chọn 1 branch cụ thể
       // các số liệu consolidated/so sánh branch không có ý nghĩa → skip.
       const fetchConsolidated = !activeBranchId;
-      const [pnlRes, detailsRes, consolidatedRes, branchPnLRes] =
+      const previousRange = managementComparisonRange(range);
+      if (!previousRange) throw new Error("Khoảng thời gian không hợp lệ");
+      const [pnlRes, detailsRes, consolidatedRes, branchPnLRes, previousBranchPnLRes] =
         await Promise.all([
           getProfitAndLoss(bid, range),
           getFinancialAnalysisDetails(
@@ -256,6 +259,9 @@ export default function BaoCaoTaiChinhPage() {
           fetchConsolidated
             ? getBranchPnLComparison(range)
             : Promise.resolve([] as BranchPnLRow[]),
+          fetchConsolidated
+            ? getBranchPnLComparison(previousRange)
+            : Promise.resolve([] as BranchPnLRow[]),
         ]);
       if (requestId !== requestIdRef.current || scopeRef.current !== scopeKey) return;
       if (fetchConsolidated && ceoView && !consolidatedRes) throw new Error("Chưa tải được số hợp nhất. Vui lòng thử lại.");
@@ -269,6 +275,7 @@ export default function BaoCaoTaiChinhPage() {
       setDso(detailsRes.dso);
       setConsolidated(consolidatedRes);
       setBranchPnL(branchPnLRes);
+      setPreviousBranchPnL(previousBranchPnLRes);
       setLoadedScope(scopeKey);
       loadedScopeRef.current = scopeKey;
       setUpdatedAt(new Date().toISOString());

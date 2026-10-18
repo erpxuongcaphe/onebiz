@@ -6,7 +6,7 @@ Cap nhat: 2026-10-18. Khong sua so lieu kinh doanh de khop mau tham khao.
 | --- | --- | --- |
 | 1 | Dashboard, tong quan, chi tieu chung, bang chung, pham vi chi nhanh | Da phat hanh PR675/676 |
 | 2 | Ket qua kinh doanh: UX, ky doi chieu, realtime, gia von thieu, Excel | Da phat hanh PR677/678, da nghiem thu production |
-| 3 | Hieu qua ban hang: SKU, khach hang, chi nhanh, ban/tra/giam gia/gia von | PR679/680 da phat hanh SKU/khach va doi chieu; dang nghiem thu bang chi nhanh day du va loc chi tieu |
+| 3 | Hieu qua ban hang: SKU, khach hang, chi nhanh, ban/tra/giam gia/gia von | PR679/680/683/684 da phat hanh; dang bo sung doi chieu chi nhanh hai ky va ngu canh hang khong thu phi |
 | 4 | Su dung von: ton kho, cong no, tien; tach so du va phat sinh | Chua trien khai thiet ke moi |
 | 5 | Nghiem thu lien bao cao: filter, sort, file, mobile, phan quyen | Nghiem thu tung dot; chua chot toan bo |
 
@@ -47,3 +47,11 @@ Cap nhat: 2026-10-18. Khong sua so lieu kinh doanh de khop mau tham khao.
 - Excel day du khong ap dung an cot; Excel theo man hinh dung tuy chon cot. Cung tap dong va thu tu da loc/sort, co dieu kien trong dau file. Khong gioi han o trang dang xem.
 - Khong them migration, khong thay cong thuc RPC, khong sua chung tu hay quyen.
 - Con lai: bang lai gop tong hop khach hang can nguon tong hop chuan; dong gop chi nhanh theo ky truoc; truy nguyen chenh lech tong hoa don/dong hang; dot su dung von va nghiem thu lien bao cao.
+
+## Doi chieu hai ky va ngu canh chi phi
+
+- Lay P&L chi nhanh ky truoc qua RPC doc hien co, cung khoang so ngay va quyen truy cap; khong tao truy van theo tung chi nhanh.
+- Them doanh thu, gia von, lai gop, ket qua va so dong thieu gia von ky truoc; chenhlech doanh thu/ket qua duoc loc, sort va xuat Excel cung tap dong. Tong hai ky cung tap chi nhanh da loc.
+- Giu chi nhanh chi co ky truoc, khong de mat phan doanh thu ngung phat sinh. Thieu gia von ky truoc thi khong ket luan chenhlech ket qua.
+- Ly Mang Ve duoc nguoi dung xac nhan khong tinh phi. Nhom hang doanh thu 0 co gia von duoc hien rieng theo so lieu, khong mac dinh la loi va khong an chi phi khoi tong. Khong hardcode ma SKU de bo qua canh bao.
+- Chua hoan tat: tong hop lai gop khach hang, truy nguyen chenh lech hoa don/dong hang, su dung von va nghiem thu lien bao cao.
