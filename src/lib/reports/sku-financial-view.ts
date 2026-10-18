@@ -1,9 +1,9 @@
 import type { SkuFinancialRow } from "@/lib/services/supabase/sku-financial-report";
 import { sortReportRows } from "./table-sort";
-export function skuFinancialView(rows: SkuFinancialRow[], filters: { search: string; category: string; unit: string }, sort: { id: string; direction: "asc" | "desc" }) {
+export function skuFinancialView<T extends SkuFinancialRow>(rows: T[], filters: { search: string; category: string; unit: string }, sort: { id: string; direction: "asc" | "desc" }) {
   const query = filters.search.trim().toLocaleLowerCase("vi");
   return sortReportRows(rows.filter(row => (!filters.category || row.category === filters.category) && (!filters.unit || row.unit === filters.unit) &&
-    (!query || [row.code,row.name,row.category].some(value => value.toLocaleLowerCase("vi").includes(query)))), row => row[sort.id as keyof SkuFinancialRow], sort.direction);
+    (!query || [row.code,row.name,row.category].some(value => value.toLocaleLowerCase("vi").includes(query)))), row => row[sort.id as keyof T], sort.direction);
 }
 export function skuFinancialTotals(rows: SkuFinancialRow[]) {
   const netRevenue = rows.reduce((sum,row) => sum+row.netRevenue,0);
