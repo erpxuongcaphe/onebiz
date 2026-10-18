@@ -2,7 +2,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SkuFinancialResult, SkuFinancialRow } from "@/lib/services/supabase/sku-financial-report";
 
-const state = vi.hoisted(() => ({ branch: "fnb", range: { from: "2026-10-01", to: "2026-10-18" }, fetch: vi.fn(), exportExcel: vi.fn(), toast: vi.fn(), refresh: undefined as (() => void) | undefined }));
+const state = vi.hoisted(() => ({ branch: "fnb", range: { from: "2026-10-01", to: "2026-10-18" }, fetch: vi.fn(), invoice: vi.fn(), exportExcel: vi.fn(), toast: vi.fn(), refresh: undefined as (() => void) | undefined }));
+vi.mock("@/lib/services/supabase/reports", () => ({ getProfitAndLoss: state.invoice }));
 vi.mock("@/lib/contexts", () => ({ useAuth: () => ({ tenant: { id: "onebiz" } }), useBranchFilter: () => ({ activeBranchId: state.branch, branchLabel: state.branch, isReady: true }), useToast: () => ({ toast: state.toast }) }));
 vi.mock("@/lib/hooks/use-report-state", () => ({ useReportState: () => ({ preset: "custom", range: state.range, setPreset: vi.fn(), setCustomRange: vi.fn() }) }));
 vi.mock("@/lib/hooks/use-live-data-refresh", () => ({ useLiveDataRefresh: (refresh: () => void) => { state.refresh = refresh; } }));
@@ -20,7 +21,7 @@ function sku(id: string, revenue: number, cost: number | null = 10): SkuFinancia
 }
 const result = (rows: SkuFinancialRow[]): SkuFinancialResult => ({ rows, customers: [{ id: "c1", code: "KH01", name: "Khách 1" }] });
 function deferred<T>() { let resolve!: (value:T) => void; const promise = new Promise<T>(done => { resolve=done; }); return {promise,resolve}; }
-beforeEach(() => { window.history.replaceState(null, "", "/"); state.branch = "fnb"; state.fetch.mockReset().mockImplementation((range: {from:string}) => Promise.resolve(result(range.from === "2026-10-01" ? [sku("A", 20), sku("B", 100)] : [sku("A", 50), sku("C", 70)]))); state.exportExcel.mockReset().mockResolvedValue(undefined); });
+beforeEach(() => { window.history.replaceState(null, "", "/"); state.branch = "fnb"; state.invoice.mockReset().mockResolvedValue({ current: { goodsRevenue: 121 }, previous: { goodsRevenue: 120 } }); state.fetch.mockReset().mockImplementation((range: {from:string}) => Promise.resolve(result(range.from === "2026-10-01" ? [sku("A", 20), sku("B", 100)] : [sku("A", 50), sku("C", 70)]))); state.exportExcel.mockReset().mockResolvedValue(undefined); });
 afterEach(cleanup);
 
 describe("SKU management workflow", () => {
@@ -77,6 +78,27 @@ describe("SKU management workflow", () => {
     await act(async()=>first.resolve(result([sku("COST",100,null)])));
     await waitFor(()=>expect(state.fetch).toHaveBeenCalledTimes(4));
     expect(state.fetch.mock.calls.every(call=>call[2]==="c1")).toBe(true);
+    expect(state.invoice).not.toHaveBeenCalled();
     expect(screen.getByLabelText("Nghiệp vụ cần xem")).toHaveValue("missing");
+  });
+
+  it("exports the unexplained difference without changing either source", async () => {
+    render(<SkuPage />);
+    await waitFor(() => expect(screen.getByRole("button", {name:"Xuất đầy đủ"})).toBeEnabled());
+    expect(screen.getByText(/Có chênh lệch chưa phân loại/)).toBeInTheDocument();
+    await act(async () => screen.getByRole("button", {name:"Xuất đầy đủ"}).click());
+    const sheets = state.exportExcel.mock.calls[0][0].sheets;
+    expect(sheets.find((sheet:{name:string})=>sheet.name==="Đối chiếu hóa đơn").rows).toContainEqual({metric:"Chênh lệch",current:1,previous:0});
+    expect(sheets[0].footer.netRevenue).toBe(120);
+  });
+
+  it("keeps invoice reconciliation unavailable rather than zero when access fails", async () => {
+    state.invoice.mockRejectedValue(new Error("Không có quyền"));
+    render(<SkuPage />);
+    await waitFor(() => expect(screen.getByRole("button", {name:"Xuất đầy đủ"})).toBeEnabled());
+    expect(screen.getByText("Chưa tải được tổng hóa đơn để đối chiếu.")).toBeInTheDocument();
+    await act(async () => screen.getByRole("button", {name:"Xuất đầy đủ"}).click());
+    const sheets = state.exportExcel.mock.calls[0][0].sheets;
+    expect(sheets.find((sheet:{name:string})=>sheet.name==="Đối chiếu hóa đơn").rows).toEqual([{metric:"Chưa đối chiếu được",current:null,previous:null}]);
   });
 });

@@ -13,6 +13,7 @@ import { compareSkuPeriods, filterSkuPerformance, skuCategoryPerformance, skuRev
 import { formatCashBookDate } from "@/lib/cash-time";
 import { Icon } from "@/components/ui/icon";
 import { sortReportRows } from "@/lib/reports/table-sort";
+import { getProfitAndLoss } from "@/lib/services/supabase/reports";
 import { useReportState } from "@/lib/hooks/use-report-state";
 import { formatCurrency, formatStockQuantity, formatShortDate } from "@/lib/format";
 import { getSkuFinancialReport, type SkuFinancialResult } from "@/lib/services/supabase/sku-financial-report";
@@ -32,6 +33,8 @@ export default function SkuFinancialPage() {
   const { preset, range, setPreset, setCustomRange } = useReportState({ defaultPreset: "thisMonth", defaultViewMode: "table", forceTable: true });
   const [data, setData] = useState<SkuFinancialResult>({ rows: [], customers: [] });
   const [previous, setPrevious] = useState<SkuFinancialResult>({ rows: [], customers: [] });
+  const [invoiceRevenue, setInvoiceRevenue] = useState<{ current: number; previous: number } | null>(null);
+  const [reconciliationError, setReconciliationError] = useState<string | null>(null);
   const [customer, setCustomer] = useState("");
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
@@ -86,10 +89,12 @@ export default function SkuFinancialPage() {
     setLoading(loadedScopeRef.current !== scope);
     setError(null);
     Promise.all([getSkuFinancialReport(range, activeBranchId, customer),
-      comparison ? getSkuFinancialReport(comparison, activeBranchId, customer) : Promise.reject(new Error("Khoảng thời gian không hợp lệ"))])
-      .then(([result, prior]) => {
+      comparison ? getSkuFinancialReport(comparison, activeBranchId, customer) : Promise.reject(new Error("Khoảng thời gian không hợp lệ")),
+      !customer ? getProfitAndLoss(activeBranchId, range).then(value => ({ data: { current: value.current.goodsRevenue, previous: value.previous.goodsRevenue }, error: null })).catch((reason: unknown) => ({ data: null, error: reason instanceof Error ? reason.message : "Chưa tải được tổng hóa đơn" })) : Promise.resolve({ data: null, error: null })])
+      .then(([result, prior, invoices]) => {
         if (cancelled || id !== request.current || scopeRef.current !== scope) return;
         setData(result); setPrevious(prior); setLoadedScope(scope); loadedScopeRef.current = scope;
+        setInvoiceRevenue(invoices.data); setReconciliationError(invoices.error);
         setUpdatedAt(new Date().toISOString());
       })
       .catch(reason => { if (!cancelled && id === request.current && scopeRef.current === scope) setError(reason instanceof Error ? reason.message : "Không tải được báo cáo SKU."); })
@@ -108,6 +113,13 @@ export default function SkuFinancialPage() {
   const priorTotals = useMemo(() => skuFinancialTotals(rows.flatMap(row => row.previousRow ? [row.previousRow] : [])), [rows]);
   const evidence = useMemo(() => skuReviewEvidence(baseRows), [baseRows]);
   const categories = useMemo(() => sortReportRows(skuCategoryPerformance(rows), row => row[categorySort.id as keyof typeof row], categorySort.direction), [rows, categorySort]);
+  const reconciliationRows = useMemo(() => invoiceRevenue ? [
+    { metric: "Tổng hàng hóa trên hóa đơn", current: invoiceRevenue.current, previous: invoiceRevenue.previous },
+    { metric: "Doanh thu dòng hàng trước VAT", current: skuFinancialTotals(data.rows).netRevenue, previous: skuFinancialTotals(previous.rows).netRevenue },
+    { metric: "Chênh lệch", current: invoiceRevenue.current - skuFinancialTotals(data.rows).netRevenue, previous: invoiceRevenue.previous - skuFinancialTotals(previous.rows).netRevenue },
+  ] : [], [invoiceRevenue, data.rows, previous.rows]);
+  const revenueMismatch = reconciliationRows.some(row => row.metric === "Chênh lệch" && (Math.abs(row.current) >= 0.005 || Math.abs(row.previous) >= 0.005));
+  const unfiltered = !customer && !search && !category && !unit && reviewFilter === "all";
   const customers = useMemo(() => [...new Map([...data.customers, ...previous.customers].map(row => [row.id, row])).values()], [data.customers, previous.customers]);
   const resetFilters = () => { setSearch(""); setCustomer(""); setCategory(""); setUnit(""); setReviewFilter("all"); };
   const options = (key: "category" | "unit") => [{ value: "all", label: key === "category" ? "Tất cả nhóm hàng" : "Tất cả ĐVT" },
@@ -145,6 +157,10 @@ export default function SkuFinancialPage() {
       titles.push(comparisonLabel);
       titles.push(`Khách hàng: ${customer ? customers.find(row => row.id === customer)?.name ?? customer : "Tất cả"}; Nhóm: ${category || "Tất cả"}; ĐVT: ${unit || "Tất cả"}; Tìm: ${search || "Tất cả"}; Kiểm tra: ${REVIEW_LABELS[reviewFilter]}; Sắp xếp: ${columns.find(column => column.key === sort.id)?.label ?? sort.id} ${sort.direction === "asc" ? "tăng dần" : "giảm dần"}`);
       titles.push("Gồm nội bộ; không phải tổng hợp nhất. Mặt hàng chỉ bán kỳ trước vẫn được đối chiếu.");
+      const reconciliationSheet = unfiltered ? [{ name: "Đối chiếu hóa đơn", titleRows: titles,
+        columns: [{ key: "metric", label: "Chỉ tiêu", width: 38 }, { key: "current", label: "Kỳ này (đ)", format: "number" as const, decimalPlaces: 2, width: 24 }, { key: "previous", label: "Kỳ trước (đ)", format: "number" as const, decimalPlaces: 2, width: 24 }],
+        rows: reconciliationError ? [{ metric: "Chưa đối chiếu được", current: null, previous: null }] : reconciliationRows,
+      }] : [];
       titles.push("Tiền hàng sau chiết khấu, không gồm VAT/phí giao hàng. Chiết khấu hóa đơn phân bổ theo tiền hàng; trả hàng ghi nhận theo ngày phiếu trả. Giá vốn theo snapshot gốc, ô trống không phải 0.");
       await exportReportToExcel({ kind: "sku-chi-tiet", mode, range, branchName: branchLabel, sheets: [{ name: "Chi tiết SKU", titleRows: titles, autoFilter: true,
         tablePreferenceKey: mode === "view" ? KEY : undefined,
@@ -154,7 +170,7 @@ export default function SkuFinancialPage() {
         rows: rows.map(row => Object.fromEntries(columns.map(column => [column.key, row[column.key as keyof SkuPerformanceRow]]))), footer: { code: "TỔNG", ...totals, previousRevenue: priorTotals.netRevenue, revenueDifference: totals.netRevenue - priorTotals.netRevenue, previousGrossProfit: priorTotals.grossProfit, grossProfitDifference: totals.grossProfit === null || priorTotals.grossProfit === null ? null : totals.grossProfit - priorTotals.grossProfit, missingCostLines: totals.missing, previousMissingCostLines: priorTotals.missing, soldQty: totals.soldQty ?? "Nhiều ĐVT", returnedQty: totals.returnedQty ?? "Nhiều ĐVT", netQty: totals.netQty ?? "Nhiều ĐVT" },
       }, ...(mode === "full" ? [{ name: "Nhóm hàng", titleRows: titles, autoFilter: true,
         columns: [ { key: "category", label: "Nhóm hàng", width: 30 }, ...[{ key: "skuUnits", label: "SKU/ĐVT" }, { key: "netRevenue", label: "Doanh thu thuần" }, { key: "cogs", label: "Giá vốn" }, { key: "grossProfit", label: "Lãi gộp" }, { key: "margin", label: "Biên lãi (%)" }].map(column => ({ ...column, width: 24, format: "number" as const, decimalPlaces: 4 })) ], rows: categories,
-      }] : [])] });
+      }] : []), ...reconciliationSheet] });
       toast({ title: "Đã xuất báo cáo SKU", variant: "success" });
     } catch (error) { toast({ title: "Không xuất được Excel", description: error instanceof Error ? error.message : "Vui lòng thử lại", variant: "error" }); }
     finally { setExporting(false); }
@@ -184,6 +200,15 @@ export default function SkuFinancialPage() {
         <Link href={managementReportLink("/phan-tich/bao-cao-tai-chinh", activeBranchId, range)} className="inline-flex min-h-9 items-center gap-1 text-sm text-primary">Kết quả kinh doanh<Icon name="arrow_forward" size={16} /></Link>
       </div>
       <p className="text-xs leading-5 text-muted-foreground">Đơn vị: đồng · Gồm nội bộ · Sau chiết khấu, chưa gồm VAT/phí giao · Lãi gộp chưa trừ chi phí vận hành.</p>
+      {!pending && !error && unfiltered && <section aria-label="Đối chiếu doanh thu" className="border-y py-3">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-semibold">Đối chiếu doanh thu</h2><Link className="inline-flex min-h-9 items-center gap-1 text-sm text-primary" href={managementReportLink("/phan-tich/ban-hang", activeBranchId, range) + "&detail=invoices"}>Xem hóa đơn<Icon name="arrow_forward" size={16} /></Link></div>
+        {reconciliationError ? <p role="status" className="text-sm text-status-warning">Chưa tải được tổng hóa đơn để đối chiếu.</p> : <ReportDataTable tablePreferenceKey="report.sku-financial.reconciliation" showDisplayOptions={false} rows={reconciliationRows} getRowKey={row => row.metric} columns={[
+          { key: "metric", label: "Chỉ tiêu", sticky: true, sortable: false },
+          { key: "current", label: "Kỳ này", align: "right", sortable: false, cell: row => money(row.current) },
+          { key: "previous", label: "Kỳ trước", align: "right", sortable: false, cell: row => money(row.previous) },
+        ]} />}
+        {!reconciliationError && <p role={revenueMismatch ? "status" : undefined} className={`mt-2 text-xs ${revenueMismatch ? "text-status-warning" : "text-muted-foreground"}`}>{revenueMismatch ? "Có chênh lệch chưa phân loại. Kiểm tra hóa đơn và dòng hàng; không tự bù số." : "Hai nguồn khớp theo số liệu đã tải."} Cùng phạm vi, gồm nội bộ.</p>}
+      </section>}
       {error && <div role="alert" className="border-l-2 border-destructive p-3 text-sm"><strong>Chưa tải được báo cáo.</strong> {error}<button type="button" onClick={refresh} className="ml-3 text-primary underline">Thử lại</button></div>}
       {!pending && !error && <section aria-label="Việc cần xem" className="border-y py-3">
         <h2 className="mb-2 text-sm font-semibold">Việc cần xem</h2>
