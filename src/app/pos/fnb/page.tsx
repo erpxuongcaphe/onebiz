@@ -11,6 +11,8 @@ import { FnbBranchPrintControl } from "@/components/shared/fnb-branch-print-cont
 import { getProductCategoriesAsync } from "@/lib/services/supabase/products";
 import { isFnbMenuSaleItem, matchesFnbMenuSearch } from "@/lib/fnb-menu-search";
 import { FnbMenuOrderDialog } from "./components/fnb-menu-order-dialog";
+import { rankMenuRows, visibleMenuRows } from "@/lib/fnb-pos-layout";
+import { useFnbPosLayout } from "@/lib/hooks/use-fnb-pos-layout";
 import { readFnbMenuOrderRevision } from "@/lib/services/supabase/fnb-menu-order";
 import { selectFnbPromotionChoice } from "@/lib/fnb-promotion-choice";
 import { getVariantsByProduct, getVariantsByProductIds } from "@/lib/services/supabase/variants";
@@ -344,6 +346,7 @@ function FnbPosPageInner() {
   const branchId = currentBranch?.id;
   useEffect(() => setMenuSearch(""), [branchId]);
   const tenantId = tenant?.id ?? "";
+  const branchLayout = useFnbPosLayout(tenantId, branchId, networkStatus.isOnline);
   const isBlockingLoad = authLoading || (!!branchId && loading);
 
   // CEO 13/05: Auto-switch nếu user đang ở branch non-store (kho tổng/xưởng/
@@ -1085,13 +1088,14 @@ function FnbPosPageInner() {
   </label>;
 
   // ── Filtered products (Sprint UI-4: thêm sub-filter brand) ──
+  const orderedCategories = useMemo(() => rankMenuRows(categories, branchLayout.layout.categoryIds), [categories, branchLayout.layout.categoryIds]);
   const orderedMenuProducts = useMemo(() => {
-    const categoryRank = new Map(categories.map((category, index) => [category.id, index]));
+    const categoryRank = new Map(orderedCategories.map((category, index) => [category.id, index]));
     const sorted = [...productsWithTier].sort((a, b) =>
-      (categoryRank.get(a.category_id ?? "") ?? categories.length) - (categoryRank.get(b.category_id ?? "") ?? categories.length) ||
+      (categoryRank.get(a.category_id ?? "") ?? orderedCategories.length) - (categoryRank.get(b.category_id ?? "") ?? orderedCategories.length) ||
       (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name, "vi") || a.id.localeCompare(b.id));
-    return sorted;
-  }, [productsWithTier, categories]);
+    return visibleMenuRows(sorted, branchLayout.layout).sort((a, b) => (categoryRank.get(a.category_id ?? "") ?? orderedCategories.length) - (categoryRank.get(b.category_id ?? "") ?? orderedCategories.length));
+  }, [productsWithTier, orderedCategories, branchLayout.layout]);
   const productsInCategory = useMemo(() => activeCategoryId ? orderedMenuProducts.filter(p => p.category_id === activeCategoryId) : orderedMenuProducts, [orderedMenuProducts, activeCategoryId]);
 
   const filteredProducts = useMemo(() => {
@@ -1148,17 +1152,17 @@ function FnbPosPageInner() {
   //    biến mất khỏi cột trong khi khu món vẫn đang lọc theo nhóm đó.
   const categoriesWithCount = useMemo<FnbCategoryWithCount[]>(() => {
     const counts = new Map<string, number>();
-    for (const p of productsWithTier) {
+    for (const p of orderedMenuProducts) {
       if (p.category_id) {
         counts.set(p.category_id, (counts.get(p.category_id) ?? 0) + 1);
       }
     }
-    const withCount = categories.map((c) => ({
+    const withCount = orderedCategories.map((c) => ({
       ...c,
       count: counts.get(c.id) ?? 0,
     }));
     return locNhomRong(withCount, catalogStatus, activeCategoryId);
-  }, [categories, productsWithTier, catalogStatus, activeCategoryId]);
+  }, [orderedCategories, orderedMenuProducts, catalogStatus, activeCategoryId]);
 
   // ── Variant cache (in-memory, per session) — tránh refetch khi user mở lại dialog cùng SP.
   //    Warm từ IndexedDB on mount (effect bên dưới) → dialog mở instant NGAY CẢ
@@ -3743,7 +3747,7 @@ function FnbPosPageInner() {
             <div className="hidden xl:block">
               <FnbCategorySidebar
                 categories={categoriesWithCount}
-                totalCount={productsWithTier.length}
+                totalCount={orderedMenuProducts.length}
                 activeCategoryId={activeCategoryId}
                 onSelect={setActiveCategoryId}
               />
@@ -3751,7 +3755,7 @@ function FnbPosPageInner() {
             <div className="hidden md:block xl:hidden">
               <FnbCategorySidebar
                 categories={categoriesWithCount}
-                totalCount={productsWithTier.length}
+                totalCount={orderedMenuProducts.length}
                 activeCategoryId={activeCategoryId}
                 onSelect={setActiveCategoryId}
                 compact
@@ -3800,7 +3804,7 @@ function FnbPosPageInner() {
               <div className="md:hidden">
                 <FnbCategoryGrid
                   categories={categoriesWithCount}
-                  totalCount={productsWithTier.length}
+                  totalCount={orderedMenuProducts.length}
                   activeCategoryId={activeCategoryId}
                   onSelect={setActiveCategoryId}
                 />
@@ -3819,6 +3823,7 @@ function FnbPosPageInner() {
                    có scroll riêng) tự quản scroll thay vì wrapper — tránh
                    double scroll container. */}
               <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border bg-blue-50/70 dark:bg-card px-2 py-1">
+                {branchLayout.error && <span role="status" title={branchLayout.error} aria-label={branchLayout.error} className="text-amber-600"><Icon name="sync_problem" size={18} /></span>}
                 <span className="min-w-0 truncate text-base font-semibold">{menuSearch.trim() ? "Kết quả tìm" : activeCategoryName ?? "Thực đơn"} <span className="ml-1 text-sm font-normal text-muted-foreground">{filteredProducts.length} món</span></span>
                 <div className="order-last flex h-11 min-w-0 basis-full items-center gap-2 rounded-md border border-border bg-background px-2 sm:order-none sm:basis-0 sm:flex-1 sm:max-w-md">
                   <Icon name="search" size={18} className="shrink-0 text-primary" />
@@ -3827,7 +3832,7 @@ function FnbPosPageInner() {
                   <button type="button" aria-label="Tìm món nhanh (F3)" onClick={() => setSearchModalOpen(true)} className="hidden h-10 shrink-0 px-1 text-xs text-primary sm:block">F3</button>
                 </div>
                 <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Cách hiển thị món">
-                  {hasPermission(PERMISSIONS.PRODUCTS_EDIT) && <button type="button" disabled={!networkStatus.isOnline} onClick={() => setMenuOrderOpen(true)} aria-label="Sắp xếp thực đơn" title="Sắp xếp thực đơn" className="flex h-11 w-11 items-center justify-center rounded-lg text-primary hover:bg-primary/10 disabled:opacity-40"><Icon name="swap_vert" size={22} /></button>}
+                  {hasPermission(PERMISSIONS.PRODUCTS_EDIT) && <button type="button" disabled={!networkStatus.isOnline} onClick={() => setMenuOrderOpen(true)} aria-label="Chỉnh thực đơn" title="Chỉnh thực đơn" className="flex h-11 w-11 items-center justify-center rounded-lg text-primary hover:bg-primary/10 disabled:opacity-40"><Icon name="edit" size={22} /></button>}
                   <button type="button" aria-pressed={productDisplayMode === "compact"} onClick={() => setProductDisplayMode("compact")} className={cn("min-h-11 rounded-lg px-2 text-sm font-semibold", productDisplayMode === "compact" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted")}>Gọn</button>
                   <button type="button" aria-pressed={productDisplayMode === "photos"} onClick={() => setProductDisplayMode("photos")} className={cn("min-h-11 rounded-lg px-2 text-sm font-semibold", productDisplayMode === "photos" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted")}>Có ảnh</button>
                 </div>
@@ -3844,15 +3849,9 @@ function FnbPosPageInner() {
           )}
         </div>
 
-        {menuOrderOpen && hasPermission(PERMISSIONS.PRODUCTS_EDIT) && <FnbMenuOrderDialog onClose={() => setMenuOrderOpen(false)} onSaved={async next => {
-          const categoryRanks = new Map(next.categories.map((row, index) => [row.id, index]));
-          const productRanks = new Map<string, number>();
-          const groupCounts = new Map<string, number>();
-          next.products.forEach(row => { const group = row.category_id ?? ""; const rank = (groupCounts.get(group) ?? 0) + 1; groupCounts.set(group, rank); productRanks.set(row.id, rank); });
-          setCategories(current => current.map(row => ({ ...row, sort_order: categoryRanks.get(row.id) ?? row.sort_order })).sort((a, b) => (a.sort_order ?? Infinity) - (b.sort_order ?? Infinity)));
-          setProducts(current => current.map(row => ({ ...row, sort_order: productRanks.get(row.id) ?? row.sort_order })));
-          await invalidateMenuCache(tenantId).catch(() => undefined);
-          toast({ title: "Đã lưu thứ tự thực đơn", description: "POS này đã cập nhật. Máy khác nhận thứ tự mới khi tải lại thực đơn.", variant: "success" });
+        {menuOrderOpen && branchId && hasPermission(PERMISSIONS.PRODUCTS_EDIT) && <FnbMenuOrderDialog key={branchId} branchId={branchId} branchName={currentBranch?.name ?? "Chi nhánh"} onClose={() => setMenuOrderOpen(false)} onSaved={next => {
+          branchLayout.accept(next);
+          toast({ title: "Đã lưu bố trí chi nhánh", description: "Máy khác cập nhật trong 30 giây hoặc khi quay lại POS.", variant: "success" });
         }} />}
         {/* Selecting a table returns to its order; keep the plan full width. */}
         {!showFloorPlan && <FnbCart

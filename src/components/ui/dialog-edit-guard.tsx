@@ -33,7 +33,7 @@ const EditGuardContext = React.createContext<EditGuard | null>(null);
 export const useDialogEditGuard = () => React.useContext(EditGuardContext);
 
 export function GuardedDialogRoot({ open, defaultOpen, onOpenChange, children,
-  protectUnsavedChanges = true, hasUnsavedChanges = false, ...props }: Primitive.Root.Props & { protectUnsavedChanges?: boolean; hasUnsavedChanges?: boolean }) {
+  protectUnsavedChanges = true, hasUnsavedChanges = false, trackFormChanges = true, ...props }: Primitive.Root.Props & { protectUnsavedChanges?: boolean; hasUnsavedChanges?: boolean; trackFormChanges?: boolean }) {
   const [internalOpen, setInternalOpen] = React.useState(defaultOpen ?? false);
   const [pending, setPending] = React.useState<(() => void) | null>(null);
   const isOpen = open ?? internalOpen;
@@ -52,7 +52,7 @@ export function GuardedDialogRoot({ open, defaultOpen, onOpenChange, children,
     if (!touched.current) { baseline.current = snapshot(popup.current); touched.current = true; }
   }, []);
   const changed = React.useCallback(() => { touched.current = true; }, []);
-  const dirty = React.useCallback(() => protectUnsavedChanges && !!popup.current?.isConnected && (hasUnsavedChanges || (touched.current && snapshot(popup.current) !== baseline.current)), [protectUnsavedChanges, hasUnsavedChanges]);
+  const dirty = React.useCallback(() => protectUnsavedChanges && !!popup.current?.isConnected && (hasUnsavedChanges || (trackFormChanges && touched.current && snapshot(popup.current) !== baseline.current)), [protectUnsavedChanges, hasUnsavedChanges, trackFormChanges]);
   useUnsavedWork(() => isOpen && dirty());
   const requestClose = React.useCallback((finish: () => void) => {
     if (approved.current || !dirty()) { finish(); return; }

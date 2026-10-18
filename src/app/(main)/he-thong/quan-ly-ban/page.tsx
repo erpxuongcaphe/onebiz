@@ -41,13 +41,10 @@ import {
   renameZone,
   deleteZone,
 } from "@/lib/services/supabase/fnb-tables";
-import {
-  getBranchSettings,
-  updateBranchSettings,
-} from "@/lib/services/supabase/branches";
+
 import type { RestaurantTable } from "@/lib/types/fnb";
 import { Icon } from "@/components/ui/icon";
-import { FloorPlanEditor } from "./floor-plan-editor";
+import { getFloorPlanZones } from "@/lib/services/supabase/floor-plan";
 import { PermissionPage } from "@/components/shared/permission-page";
 import { PERMISSIONS } from "@/lib/permissions";
 import { LoadErrorState } from "@/components/shared/load-error-state";
@@ -164,24 +161,15 @@ function QuanLyBanPage() {
 
   useEffect(() => { loadTables(); }, [loadTables]);
 
-  // Sprint E: Load zone order từ branch settings (mỗi branch tự lưu order riêng).
+  // Canonical zone order is shared with POS and the floor-plan editor.
   useEffect(() => {
+    setZoneOrder([]);
     if (!activeBranchId) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const settings = await getBranchSettings(activeBranchId);
-        if (!cancelled && settings.posZoneOrder) {
-          setZoneOrder(settings.posZoneOrder);
-        }
-      } catch {
-        // Silent — fallback empty (alpha order)
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [activeBranchId]);
+    let active = true;
+    getFloorPlanZones(activeBranchId).then(rows => { if (active) setZoneOrder(rows.map(row => row.name)); })
+      .catch(() => { if (active) toast({ title: "Chưa tải được thứ tự sơ đồ", variant: "warning" }); });
+    return () => { active = false; };
+  }, [activeBranchId, toast]);
 
   // Sprint E: Sắp xếp zones theo zoneOrder. Zone không có trong order →
   // append cuối theo alpha.
@@ -226,33 +214,6 @@ function QuanLyBanPage() {
   const tongSoBan = useMemo(
     () => zones.reduce((s, z) => s + z.tables.length, 0),
     [zones],
-  );
-
-  // Sprint E: Move zone trong order (up/down). Save vào branch settings.
-  const moveZone = useCallback(
-    async (zoneName: string, direction: "up" | "down") => {
-      if (!activeBranchId) return;
-      const currentNames = orderedZones.map((z) => z.name);
-      const idx = currentNames.indexOf(zoneName);
-      if (idx === -1) return;
-      const swapIdx = direction === "up" ? idx - 1 : idx + 1;
-      if (swapIdx < 0 || swapIdx >= currentNames.length) return;
-      const next = [...currentNames];
-      [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
-      setZoneOrder(next); // optimistic
-      try {
-        await updateBranchSettings(activeBranchId, { posZoneOrder: next });
-      } catch (err) {
-        // Rollback nếu fail
-        setZoneOrder(currentNames);
-        toast({
-          title: "Đổi thứ tự khu vực thất bại",
-          description: err instanceof Error ? err.message : "Vui lòng thử lại",
-          variant: "error",
-        });
-      }
-    },
-    [activeBranchId, orderedZones, toast],
   );
 
   // ── Stats ──
@@ -601,95 +562,8 @@ function QuanLyBanPage() {
         </Card>
       </div>
 
-      {/* ── Sprint C: Layout view (drag-drop sơ đồ bàn) ── */}
-      {viewMode === "layout" && zones.length > 0 && (
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <CardTitle className="text-base">Sơ đồ bàn</CardTitle>
-                <Badge variant="secondary" className="text-xs">
-                  Kéo bàn để sắp xếp theo ý
-                </Badge>
-              </div>
-              {/* Sprint E: Zone tabs với ↑↓ reorder per-branch */}
-              <div className="flex items-center gap-1 flex-wrap">
-                {orderedZones.map((z, idx) => {
-                  const isFirst = idx === 0;
-                  const isLast = idx === orderedZones.length - 1;
-                  const isActive = layoutZone === z.name;
-                  return (
-                    <div
-                      key={z.name}
-                      className={cn(
-                        "flex items-center rounded-lg overflow-hidden transition-colors",
-                        isActive
-                          ? "bg-primary text-on-primary"
-                          : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high",
-                      )}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => setLayoutZone(z.name)}
-                        className="px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5"
-                      >
-                        {z.name}
-                        <span
-                          className={cn(
-                            "px-1.5 py-0 rounded text-xs tabular-nums",
-                            isActive
-                              ? "bg-on-primary/20"
-                              : "bg-surface-container-lowest",
-                          )}
-                        >
-                          {z.tables.length}
-                        </span>
-                      </button>
-                      {/* ↑↓ reorder — chỉ hiển thị khi >1 zone */}
-                      {orderedZones.length > 1 && (
-                        <div className="flex border-l border-current/20">
-                          <button
-                            type="button"
-                            disabled={isFirst}
-                            onClick={() => moveZone(z.name, "up")}
-                            className={cn(
-                              "px-1.5 py-1.5 hover:bg-current/10 disabled:opacity-30 disabled:cursor-not-allowed",
-                            )}
-                            title="Đẩy khu vực lên trước"
-                          >
-                            <Icon name="chevron_left" size={12} />
-                          </button>
-                          <button
-                            type="button"
-                            disabled={isLast}
-                            onClick={() => moveZone(z.name, "down")}
-                            className={cn(
-                              "px-1.5 py-1.5 hover:bg-current/10 disabled:opacity-30 disabled:cursor-not-allowed border-l border-current/20",
-                            )}
-                            title="Đẩy khu vực ra sau"
-                          >
-                            <Icon name="chevron_right" size={12} />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <FloorPlanEditor
-              tables={
-                orderedZones.find((z) => z.name === layoutZone)?.tables ?? []
-              }
-              onSaved={loadTables}
-            />
-          </CardContent>
-        </Card>
-      )}
+      {viewMode === "layout" && <div className="flex items-center justify-between gap-3 rounded-lg border bg-card p-4"><div><p className="font-medium">Bố trí bàn và thứ tự khu vực</p><p className="text-sm text-muted-foreground">Dùng chung sơ đồ với POS của chi nhánh đang chọn.</p></div><a href="/he-thong/so-do-ban" title="Mở trình chỉnh sơ đồ" aria-label="Mở trình chỉnh sơ đồ" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground"><Icon name="edit" /></a></div>}
 
-      {/* ── Ô tìm bàn (chỉ ở chế độ danh sách, khi đã có bàn) ── */}
       {viewMode === "list" && zones.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative min-w-56 flex-1 sm:max-w-sm">
