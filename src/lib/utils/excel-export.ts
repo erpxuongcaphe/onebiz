@@ -542,6 +542,7 @@ const REPORT_KIND_LABELS: Record<ReportKind, string> = {
   "khach-hang": "Báo cáo khách hàng",
   "khach-san-pham": "Báo cáo khách hàng theo sản phẩm",
   "sku-chi-tiet": "Chi tiết bán hàng và lãi gộp SKU",
+  "hieu-qua-khach-hang": "Hiệu quả khách hàng",
   "customer-cohort": "Báo cáo khách hàng quay lại",
   rfm: "Báo cáo phân khúc khách hàng RFM",
   "xuat-nhap-ton": "Báo cáo xuất nhập tồn",
