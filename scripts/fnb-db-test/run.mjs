@@ -10,7 +10,8 @@ const sources = [
   ['00011_atomic_stock_rpcs.sql', 'increment_product_stock'],
   ['00156_branch_stock_null_variant_guard.sql', 'upsert_branch_stock'],
   ['00147_variant_aware_bom_lookup.sql', 'get_active_bom_for_branch'],
-  ['00142_block_expired_lots_fifo.sql', 'allocate_lots_fifo'],
+  ['00527_lot_expiry_time.sql', '_lot_expiry_moment_00527'],
+  ['00563_fnb_stock_boundary_and_lot_allocation.sql', 'allocate_lots_fifo'],
   ['00544_fnb_explicit_sweetness_only.sql', 'consume_bom_for_sale'],
 ];
 const definitions = sources.map(([file, name]) => {
@@ -30,6 +31,7 @@ const definitions = sources.map(([file, name]) => {
   return tail.slice(0, end + delimiter[1].length + 1);
 });
 const sql = [readFileSync(new URL('./schema.sql', import.meta.url), 'utf8'),
+  'alter table product_lots add column expiry_at timestamptz;',
   'create function _allow_negative_sale_00473(uuid,uuid) returns boolean language sql as $$ select false $$;', ...definitions,
   readFileSync(new URL('./cases.sql', import.meta.url), 'utf8')].join('\n');
 const result = spawnSync('psql', ['-X', '-v', 'ON_ERROR_STOP=1', '-h', '127.0.0.1', '-p', '55432',
