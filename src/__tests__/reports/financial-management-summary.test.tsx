@@ -14,6 +14,7 @@ describe("financial management summary", () => {
     expect(screen.getByText("Doanh thu thuần")).toBeInTheDocument();
     expect(screen.getAllByText("Phát sinh mới")).toHaveLength(3);
     expect(screen.queryByText("+100%")).not.toBeInTheDocument();
+    expect(screen.queryByText(/điểm %/)).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Kết quả kinh doanh" })).toHaveAttribute("href", expect.stringContaining("branch=fnb&preset=custom&from=2026-10-01&to=2026-10-18"));
   });
 
@@ -22,6 +23,11 @@ describe("financial management summary", () => {
     expect(screen.getAllByText("Chưa đủ giá vốn").length).toBeGreaterThan(1);
     expect(screen.queryByText("599.71")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Đối chiếu giá vốn" })).toHaveAttribute("href", expect.stringContaining("branch=all"));
+  });
+
+  it("compares margin in percentage points when both periods have revenue", () => {
+    render(<FinancialManagementSummary current={period} previous={{ ...period, grossMargin: 49.971 }} range={range} />);
+    expect(screen.getByText("10 điểm %")).toBeInTheDocument();
   });
 
   it("preserves amounts, null costs, percentages, filters and precision in export", () => {
