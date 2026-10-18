@@ -1135,6 +1135,7 @@ export default function KhachHangPage() {
               variant: "success",
             });
             fetchData();
+            setOtpTargetCustomer(null);
           } catch (err) {
             toast({
               title: "Lỗi xoá khách hàng",
@@ -1142,8 +1143,7 @@ export default function KhachHangPage() {
                 err instanceof Error ? err.message : "Vui lòng thử lại",
               variant: "error",
             });
-          } finally {
-            setOtpTargetCustomer(null);
+            throw err;
           }
         }}
       />

@@ -5,6 +5,7 @@ vi.mock("@/lib/contexts", () => ({ useAuth: () => ({ user: mocks.user, isLoading
 vi.mock("next/navigation", () => ({ usePathname: () => "/pos/fnb" }));
 vi.mock("@/lib/services/supabase/pos-pin", () => ({ changeMyPosPin: mocks.change }));
 vi.mock("@/lib/services/supabase/fnb-cancel-requests", () => ({ pendingFnbCancellations: mocks.pending }));
+vi.mock("@/lib/services/supabase/manager-approval", () => ({ pendingManagerApprovals: vi.fn().mockResolvedValue([{ id: "discount1" }]) }));
 import { PosPinOnboarding } from "@/components/shared/pos-pin-onboarding";
 import { MyPosPin, readMyPinStatus } from "@/components/shared/my-pos-pin";
 import { OtpQuickAccess } from "@/components/shared/otp-quick-access";
@@ -51,6 +52,6 @@ describe("PIN setup and mobile OTP shortcut", () => {
   it("rejects a status response for a different account", async () => { mocks.fetch.mockResolvedValue({ ok: true, json: async () => ({ userId: "other", hasPin: false }) }); render(<MyPosPin hasPin={false} onSaved={vi.fn()} />); fireEvent.change(screen.getByLabelText("PIN mới (6 chữ số)"), { target: { value: "123456" } }); fireEvent.change(screen.getByLabelText("Nhập lại PIN mới"), { target: { value: "123456" } }); fireEvent.click(screen.getByRole("button", { name: "Tạo PIN và tiếp tục" })); expect(await screen.findByRole("alert")).toHaveTextContent("Tài khoản vừa thay đổi"); expect(mocks.change).not.toHaveBeenCalled(); });
   it("rejects malformed status rather than treating it as no PIN", async () => { mocks.fetch.mockResolvedValue({ ok: true, json: async () => ({ userId: "self" }) }); await expect(readMyPinStatus()).rejects.toThrow(); });
   it("hides OTP entry for someone without issuance permission", () => { render(<OtpQuickAccess />); expect(screen.queryByRole("link")).not.toBeInTheDocument(); expect(mocks.pending).not.toHaveBeenCalled(); });
-  it("opens the existing OTP route in one tap with authorized pending count", async () => { mocks.permissions.add("system.issue_otp"); mocks.permissions.add("pos_fnb.cancel_unpaid_order"); render(<OtpQuickAccess />); const link = await screen.findByRole("link", { name: "Cấp OTP, 2 yêu cầu hủy chờ duyệt" }); expect(link).toHaveAttribute("href", "/cap-otp"); expect(link).not.toHaveClass("hidden"); });
-  it("does not query cancellation requests for an issuer with only other action permissions", async () => { mocks.permissions.add("system.issue_otp"); render(<OtpQuickAccess />); await act(async () => {}); expect(screen.getByRole("link", { name: "Cấp OTP" })).toBeVisible(); expect(mocks.pending).not.toHaveBeenCalled(); });
+  it("opens the existing OTP route in one tap with authorized pending count", async () => { mocks.permissions.add("system.issue_otp"); mocks.permissions.add("pos_fnb.cancel_unpaid_order"); render(<OtpQuickAccess />); const link = await screen.findByRole("link", { name: "Cấp OTP, 3 yêu cầu chờ duyệt" }); expect(link).toHaveAttribute("href", "/cap-otp"); expect(link).not.toHaveClass("hidden"); });
+  it("does not query cancellation requests for an issuer with only other action permissions", async () => { mocks.permissions.add("system.issue_otp"); render(<OtpQuickAccess />); await act(async () => {}); expect(screen.getByRole("link", { name: /^Cấp OTP/ })).toBeVisible(); expect(mocks.pending).not.toHaveBeenCalled(); });
 });

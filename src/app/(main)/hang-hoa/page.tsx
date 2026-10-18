@@ -1057,11 +1057,11 @@ export default function HangHoaPage() {
         duration: 8000,
       });
       await fetchData();
+      setOtpTargetProduct(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Vui lòng thử lại sau.";
       toast({ variant: "error", title: "Ngừng kinh doanh thất bại", description: message });
-    } finally {
-      setOtpTargetProduct(null);
+      throw err;
     }
   }, [otpTargetProduct, toast, fetchData]);
 

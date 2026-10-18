@@ -40,8 +40,8 @@ describe("F&B payment benefit authority", () => {
     expect(page).not.toContain("pos.setOrderDiscount(best.discountAmount)");
     expect(page).not.toContain("pos.setOrderDiscount(result.discount)");
     expect(page).toContain("const paymentManualDiscountAmount = pos.orderDiscountAmount");
-    expect(page).toContain("const paymentPromotionId = appliedPromotion?.promotion.id ?? null");
-    expect(page).toContain("const paymentCouponCode = couponApplied?.code ?? null");
+    expect(page).toContain("const paymentPromotionId = paymentManualDiscountAmount + (tab?.persistedOrderDiscountAmount ?? 0) >= paymentSubtotal ? null : appliedPromotion?.promotion.id ?? null");
+    expect(page).toContain("const paymentCouponCode = paymentManualDiscountAmount + (tab?.persistedOrderDiscountAmount ?? 0) >= paymentSubtotal ? null : couponApplied?.code ?? null");
     expect(page).toContain("manualDiscountAmount:");
     expect(page).toContain("promotionId: paymentPromotionId");
     expect(page).toContain("couponCode: paymentCouponCode");

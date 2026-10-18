@@ -167,7 +167,9 @@ export function FnbPaymentDialog({
     discountAmount - persistedOrderDiscountAmount - manualDiscountAmount - promotionDiscountAmount - couponDiscountAmount,
   );
   // Allow confirm if: free order OR fully paid OR user explicitly ticked "Ghi nợ"
+  const discountConflict = discountAmount > subtotal;
   const canConfirm =
+    !discountConflict &&
     (isFreeOrder || (mixedHasAnyAmount && totalPaid > 0 && (isFullyPaid || allowDebt))) &&
     !customerConfirmationRequired && configReady && visibleMethods.includes(method) &&
     (method === "cash" || nonCashAmount <= total);
@@ -283,7 +285,8 @@ export function FnbPaymentDialog({
             </div>
           </div>
 
-          {isFreeOrder && (
+          {discountConflict && <p role="alert" className="text-sm text-status-error">Tổng giảm giá vượt tiền món. Bỏ bớt ưu đãi hoặc điều chỉnh mức giảm trước khi thanh toán.</p>}
+          {isFreeOrder && !discountConflict && (
             <div className="rounded-lg border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-xs text-status-warning flex items-start gap-2">
               <Icon name="redeem" size={16} className="mt-0.5 shrink-0" />
               <span>

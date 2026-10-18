@@ -130,6 +130,7 @@ const CreateCustomerDialog = dynamic(
 );
 // Sprint B.6 (CEO 12/05): bỏ SupervisorPinDialog (1 PIN chung) →
 // dùng OtpApprovalDialog (OTP per-user TTL 2 phút)
+import { retailDiscountContext } from "@/lib/manager-discount-context";
 import { OtpApprovalDialog } from "@/components/shared/dialogs/otp-approval-dialog";
 import { OTP_ACTION_CODES } from "@/lib/services/supabase/manager-otp";
 import { getCustomers } from "@/lib/services/supabase/customers";
@@ -434,6 +435,10 @@ function PosPageInner() {
   // Supervisor PIN gate — mở khi giảm giá vượt ngưỡng + PIN đã cấu hình
   // Sprint B.6: thay supervisorPinOpen bằng discountOtpOpen (per-user OTP)
   const [discountOtpOpen, setDiscountOtpOpen] = useState(false);
+  const [discountSource, setDiscountSource] = useState<
+    "manual" | "coupon" | "auto" | "promotion" | "redeem" | null
+  >(null);
+  const [discountRequestMeta, setDiscountRequestMeta] = useState<Record<string, unknown> | null>(null);
   const pendingApprovalRef = useRef<(() => void) | null>(null);
   // Confirm dialog — dùng chung cho xóa giỏ hàng và huỷ sửa nháp.
   // Dạng "one-shot": mở dialog, lưu hành động vào pendingAction, user xác nhận → chạy.
@@ -1115,6 +1120,7 @@ function PosPageInner() {
       }
 
       // Bất kỳ giảm giá manual > 0 → mở OTP dialog
+      setDiscountRequestMeta(retailDiscountContext(currentBranch?.id, clientSessionId, state.lines, d, undefined, state.sellingMode === "internal", true, state.loadedDraftId));
       pendingApprovalRef.current = () => {
         state.setOrderDiscount(d);
         // P4: tag source='manual' để auto-promotion KHÔNG ghi đè.
@@ -1122,7 +1128,7 @@ function PosPageInner() {
       };
       setDiscountOtpOpen(true);
     },
-    [state]
+    [state, currentBranch?.id, clientSessionId]
   );
 
   const handleLineDiscountChange = useCallback(
@@ -1131,12 +1137,13 @@ function PosPageInner() {
         state.updateLineDiscount(lineId, discount);
         return;
       }
+      setDiscountRequestMeta(retailDiscountContext(currentBranch?.id, clientSessionId, state.lines, state.orderDiscount, { id: lineId, discount }, state.sellingMode === "internal", (state.sellingMode === "internal" || discountSource === "manual" || (discountSource === null && state.orderDiscountAmount > 0)), state.loadedDraftId));
       pendingApprovalRef.current = () => {
         state.updateLineDiscount(lineId, discount);
       };
       setDiscountOtpOpen(true);
     },
-    [state],
+    [state, currentBranch?.id, clientSessionId, discountSource],
   );
 
   // ── Áp mã giảm giá (coupon/voucher) ──
@@ -1518,9 +1525,7 @@ function PosPageInner() {
   //   - 'redeem': đổi điểm loyalty
   //   - null: orderDiscount=0 (clean state)
   // Auto-promotion effect SKIP overwrite khi source = 'manual' | 'coupon'.
-  const [discountSource, setDiscountSource] = useState<
-    "manual" | "coupon" | "auto" | "promotion" | "redeem" | null
-  >(null);
+
 
   // Check tenant-wide setting "Tự động áp dụng KM tốt nhất" → cache trong state.
   // Resolver tự đọc settings nên ở đây không cần lưu — engine respect setting.
@@ -4253,11 +4258,13 @@ function PosPageInner() {
           audit log đầy đủ cashier + manager đã duyệt. */}
       <OtpApprovalDialog
         open={discountOtpOpen}
-        onOpenChange={setDiscountOtpOpen}
+        onOpenChange={open => { setDiscountOtpOpen(open); if (!open) { setDiscountRequestMeta(null); pendingApprovalRef.current = null; } }}
+        targetMeta={discountRequestMeta ?? retailDiscountContext(currentBranch?.id, clientSessionId, state.lines, state.orderDiscount, undefined, state.sellingMode === "internal", (state.sellingMode === "internal" || discountSource === "manual" || (discountSource === null && state.orderDiscountAmount > 0)), state.loadedDraftId)}
         actionCode={OTP_ACTION_CODES.POS_RETAIL_DISCOUNT_OVERRIDE}
         requireReason
         contextLabel="Cashier yêu cầu giảm giá thủ công cho bill này"
         onApproved={(verified, reason) => {
+          if (discountRequestMeta && (discountRequestMeta.session_id !== clientSessionId || discountRequestMeta.branch_id !== currentBranch?.id)) throw new Error('Bill hoặc chi nhánh đã thay đổi. Gửi lại yêu cầu.');
           pendingApprovalRef.current?.();
           pendingApprovalRef.current = null;
           // Day 3 16/05: lưu OTP context để recordDiscountAudit gắn vào audit log

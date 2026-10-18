@@ -60,6 +60,7 @@ import {
   unassignDeliveryStaff as unassignDeliveryStaffService,
   setDeliveryDistanceTier as setDeliveryDistanceTierService,
 } from "@/lib/services/supabase/kitchen-orders";
+import { fnbDiscountContext } from "@/lib/manager-discount-context";
 import { OtpApprovalDialog } from "@/components/shared/dialogs/otp-approval-dialog";
 import { OTP_ACTION_CODES } from "@/lib/services/supabase/manager-otp";
 import {
@@ -315,6 +316,8 @@ function FnbPosPageInner() {
   const [pinHandoverOpen, setPinHandoverOpen] = useState(false);
   // CEO 13/05: discount manual OTP dialog (BẤT KỲ giảm giá manual nào)
   const [discountOtpOpen, setDiscountOtpOpen] = useState(false);
+  const [discountRequestMeta, setDiscountRequestMeta] = useState<Record<string, unknown> | null>(null);
+  const pendingDiscountTab = useRef<string | null>(null);
   const pendingDiscountRef = useRef<(() => void) | null>(null);
 
   // CEO 13/05 (Fabi/iPos): platform price override map.
@@ -2459,8 +2462,8 @@ function FnbPosPageInner() {
       const paymentSubtotal = pos.subtotal;
       const paymentLines = pos.allLines;
       const paymentManualDiscountAmount = pos.orderDiscountAmount;
-      const paymentPromotionId = appliedPromotion?.promotion.id ?? null;
-      const paymentCouponCode = couponApplied?.code ?? null;
+      const paymentPromotionId = paymentManualDiscountAmount + (tab?.persistedOrderDiscountAmount ?? 0) >= paymentSubtotal ? null : appliedPromotion?.promotion.id ?? null;
+      const paymentCouponCode = paymentManualDiscountAmount + (tab?.persistedOrderDiscountAmount ?? 0) >= paymentSubtotal ? null : couponApplied?.code ?? null;
       let checkoutStarted = false;
       // CEO 29/05/2026: lấy kitchenOrderId TRỰC TIẾP từ giá trị handleSendToKitchen
       // trả về — KHÔNG đọc lại pos.activeTab (closure cũ chưa cập nhật state sau
@@ -3277,10 +3280,12 @@ function FnbPosPageInner() {
       }
       // Manual > 0 → queue + mở OTP dialog
       const activeTabId = pos.activeTabId;
+      setDiscountRequestMeta(fnbDiscountContext(branchId, activeTabId, pos.activeTab?.label ?? 'Bill', pos.activeTab?.kitchenOrderId, pos.allLines, pos.subtotal, d, pos.activeTab?.persistedOrderDiscountAmount ?? 0));
+      pendingDiscountTab.current = activeTabId;
       pendingDiscountRef.current = () => pos.setOrderDiscount(activeTabId, d);
       setDiscountOtpOpen(true);
     },
-    [pos]
+    [pos, branchId]
   );
 
   // ── Open split bill dialog ──
@@ -4344,12 +4349,14 @@ function FnbPosPageInner() {
         open={discountOtpOpen}
         onOpenChange={(o) => {
           setDiscountOtpOpen(o);
-          if (!o) pendingDiscountRef.current = null;
+          if (!o) { pendingDiscountRef.current = null; pendingDiscountTab.current = null; setDiscountRequestMeta(null); }
         }}
         actionCode={OTP_ACTION_CODES.FNB_DISCOUNT_OVERRIDE}
+        targetMeta={discountRequestMeta ?? undefined}
         requireReason
         contextLabel={`Cashier yêu cầu giảm giá thủ công cho đơn ${pos.activeTab?.label ?? ""}`}
         onApproved={(verified, reason) => {
+          if (!pendingDiscountTab.current || pendingDiscountTab.current !== pos.activeTabId || discountRequestMeta?.branch_id !== branchId) throw new Error('Bill hoặc chi nhánh đã thay đổi. Mở lại bill cần giảm giá.');
           pendingDiscountRef.current?.();
           pendingDiscountRef.current = null;
           // Lưu otpId + reason vào activeTab để khi checkout sẽ ghi audit

@@ -59,6 +59,9 @@ import {
   getPurchaseOrdersForSupplier,
   getPurchaseOrderStatusMeta,
 } from "@/lib/services";
+import { OtpApprovalDialog } from "@/components/shared/dialogs/otp-approval-dialog";
+import { useAuth } from "@/lib/contexts/auth-context";
+import { PERMISSIONS } from "@/lib/permissions/constants";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import type { Supplier, PurchaseOrder } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
@@ -391,6 +394,9 @@ function SupplierDetail({
 /*  Page                                                               */
 /* ------------------------------------------------------------------ */
 export default function NhaCungCapPage() {
+  const { hasPermission } = useAuth();
+  const canDeleteSupplier = hasPermission(PERMISSIONS.SUPPLIERS_DELETE);
+  const [otpSupplier, setOtpSupplier] = useState<Supplier | null>(null);
   const { toast } = useToast();
   const [data, setData] = useState<Supplier[]>([]);
   const [total, setTotal] = useState(0);
@@ -955,11 +961,12 @@ export default function NhaCungCapPage() {
         }}
         title="Xóa nhà cung cấp"
         description={`Xóa nhà cung cấp ${deletingSupplier?.code} — ${deletingSupplier?.name}?`}
-        confirmLabel="Xóa"
+        confirmLabel={canDeleteSupplier ? "Xóa" : "Xin duyệt"}
         variant="destructive"
         loading={deleteLoading}
         onConfirm={async () => {
           if (!deletingSupplier) return;
+          if (!canDeleteSupplier) { setOtpSupplier(deletingSupplier); setDeletingSupplier(null); return; }
           setDeleteLoading(true);
           try {
             await deleteSupplier(deletingSupplier.id);
@@ -982,6 +989,10 @@ export default function NhaCungCapPage() {
           }
         }}
       />
+
+      <OtpApprovalDialog open={Boolean(otpSupplier)} onOpenChange={open => { if (!open) setOtpSupplier(null); }} actionCode="crm.delete_supplier"
+        targetMeta={otpSupplier ? { entity_id: otpSupplier.id } : undefined} contextLabel={otpSupplier ? `Xóa NCC ${otpSupplier.code} · ${otpSupplier.name}` : undefined}
+        onApproved={async verified => { if (!otpSupplier) return; await deleteSupplier(otpSupplier.id, verified.otpId); setOtpSupplier(null); await fetchData(); toast({ title: 'Đã xóa nhà cung cấp', variant: 'success' }); }} />
 
       <ImportExcelDialog
         open={importOpen}
