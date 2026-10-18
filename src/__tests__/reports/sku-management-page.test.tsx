@@ -44,6 +44,7 @@ describe("SKU management workflow", () => {
     const file = state.exportExcel.mock.calls[0][0];
     expect(file.sheets[0].rows.map((row: {code:string}) => row.code)).toEqual(["B"]);
     expect(file.sheets[0].columns).toHaveLength(23);
+    expect(file.sheets[0].columnGroups.map((group: {span:number}) => group.span)).toEqual([4, 7, 2, 5, 5]);
     expect(file.sheets[0].tablePreferenceKey).toBeUndefined();
     expect(file.sheets[0].titleRows.join(" ")).toContain("Doanh thu thuần: 50 đến Không giới hạn");
     expect(file.sheets.some((sheet: {name:string}) => sheet.name === "Đối chiếu hóa đơn")).toBe(false);

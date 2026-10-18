@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
 import { formatCurrency, formatStockQuantity } from "@/lib/format";
 import { managementReportLink } from "@/lib/reports/management-review";
-import { BRANCH_FIELDS, BRANCH_METRICS, BRANCH_STATUS_LABELS, EMPTY_BRANCH_FILTER, branchPerformanceTotals, type BranchPerformanceFilter, type BranchPerformanceRow } from "@/lib/reports/branch-performance";
+import { BRANCH_FIELDS, BRANCH_METRICS, BRANCH_STATUS_LABELS, BRANCH_COLUMN_GROUPS, EMPTY_BRANCH_FILTER, branchPerformanceTotals, type BranchPerformanceFilter, type BranchPerformanceRow } from "@/lib/reports/branch-performance";
 import { MetricFilters } from "./metric-filters";
 import { ReportDataTable, type DataTableColumn } from "./report-data-table";
 
@@ -30,7 +30,7 @@ export function BranchPerformanceTable({ rows, types, filter, onFilter, sort, on
     </div>
     <MetricFilters fields={BRANCH_METRICS} value={filter.metrics} onChange={metrics => onFilter({ ...filter, metrics })} />
     {(filter.search || filter.type || filter.status !== "all" || filter.metrics.length > 0) && <button type="button" className="min-h-9 text-sm text-primary" onClick={() => onFilter(EMPTY_BRANCH_FILTER)}>Xóa bộ lọc chi nhánh</button>}
-    <ReportDataTable rows={rows} columns={columns} getRowKey={row => row.branchId} sortState={sort} onSortChange={onSort} tablePreferenceKey="report.financial-results.branches" subtotalLabel={`${rows.length} chi nhánh`} emptyState="Không có chi nhánh phù hợp." />
+    <ReportDataTable rows={rows} columns={columns} columnGroups={BRANCH_COLUMN_GROUPS} className="[&_thead_tr:first-child_th]:text-left [&_thead_tr:first-child_th]:border-r" getRowKey={row => row.branchId} sortState={sort} onSortChange={onSort} tablePreferenceKey="report.financial-results.branches" subtotalLabel={`${rows.length} chi nhánh`} emptyState="Không có chi nhánh phù hợp." />
     <p className="text-xs leading-5 text-muted-foreground">Tổng bảng theo bộ lọc, gồm nội bộ; không phải tổng hợp nhất. Tỷ trọng trên doanh thu tất cả chi nhánh trong phạm vi. Chưa đủ giá vốn không tính là 0.</p>
   </div>;
 }

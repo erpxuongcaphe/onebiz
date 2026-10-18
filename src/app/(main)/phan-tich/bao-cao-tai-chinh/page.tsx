@@ -16,7 +16,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { ChartCard } from "../_components";
+import { ReportSection } from "@/components/shared/report/report-section";
 import { FinancialManagementSummary } from "@/components/shared/report/financial-management-summary";
 import { managementComparisonRange, managementReportLink, reportChange } from "@/lib/reports/management-review";
 import { useLiveDataRefresh } from "@/lib/hooks/use-live-data-refresh";
@@ -698,11 +698,11 @@ export default function BaoCaoTaiChinhPage() {
         )}
 
         {!useConsolidated && pnl && (
-          <div className="border-l-2 border-status-warning bg-status-warning/5 px-3 py-2 flex items-start gap-2">
+          <div className={`border-l-2 px-3 py-2 flex items-start gap-2 ${currentCogsComplete ? "border-border bg-muted/30" : "border-status-warning bg-status-warning/5"}`}>
             <Icon
               name="info"
               size={18}
-              className="text-status-warning shrink-0 mt-0.5"
+              className={`shrink-0 mt-0.5 ${currentCogsComplete ? "text-muted-foreground" : "text-status-warning"}`}
             />
             <p className="text-xs text-muted-foreground">
               <strong className="text-foreground">Cơ sở giá vốn:</strong>{" "}
@@ -714,16 +714,7 @@ export default function BaoCaoTaiChinhPage() {
 
         {reconciliation &&
           (reconciliation.invoiceCount > 0 || reconciliation.returnCount > 0) && (
-            <section aria-labelledby="sales-return-reconciliation-title" className="border-y py-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <h2 id="sales-return-reconciliation-title" className="text-sm font-semibold">
-                    Đối soát bán và trả hàng
-                  </h2>
-                  <p className="text-xs text-muted-foreground">
-                    Hóa đơn theo ngày phát hành; phiếu trả theo ngày lập
-                  </p>
-                </div>
+            <ReportSection title="Đối soát bán và trả hàng" subtitle="Hóa đơn theo ngày phát hành; phiếu trả theo ngày lập" tone="primary" actions={
                 <div className="flex flex-wrap items-center gap-2">
                   <Link
                     href={buildSalesInvoiceRangeLink(
@@ -748,7 +739,7 @@ export default function BaoCaoTaiChinhPage() {
                     Xem dòng trả
                   </Link>
                 </div>
-              </div>
+            }>
               <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 xl:grid-cols-6">
                 <div>
                   <p className="text-xs text-muted-foreground">
@@ -806,7 +797,7 @@ export default function BaoCaoTaiChinhPage() {
                   Phí giao hàng thu hộ {formatCurrency(reconciliation.deliveryFee)} được tách khỏi doanh thu hàng hóa.
                 </p>
               )}
-            </section>
+            </ReportSection>
           )}
 
         {(cur?.legacyCashExpense ?? 0) > 0 && <div className="border-l-2 border-status-warning bg-status-warning/5 p-3 text-sm">
@@ -817,17 +808,19 @@ export default function BaoCaoTaiChinhPage() {
 
         {/* So sánh P&L các chi nhánh — chỉ hiển thị ở view "Tất cả" */}
         {branchId === "all" && branchPnL.length > 0 && (
-          <ChartCard
+          <ReportSection
             title="So sánh kết quả vận hành theo chi nhánh"
+            tone="primary"
             subtitle="Chi nhánh gồm nội bộ; tổng hợp nhất đã loại trừ."
           >
             <BranchPerformanceTable rows={visibleBranches} types={branchTypes} filter={branchFilter} onFilter={setBranchFilter} sort={branchSort} onSort={setBranchSort} range={range} />
-          </ChartCard>
+          </ReportSection>
         )}
 
         {/* P&L Table */}
-        <ChartCard
+        <ReportSection
           title="Bảng kết quả vận hành"
+          tone="primary"
           subtitle={comparisonLabel}
         >
           <ReportTableFrame tablePreferenceKey="report.financial-results.comparison">
@@ -976,12 +969,12 @@ export default function BaoCaoTaiChinhPage() {
               Mở báo cáo Trả hàng
             </a>
           </p>
-        </ChartCard>
+        </ReportSection>
 
         {/* Gross Margin Trend + COGS Breakdown */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Gross Margin Trend */}
-          <ChartCard
+          <ReportSection
             title="Xu hướng biên lợi nhuận gộp"
             subtitle={`${
               trendGranularity === "day"
@@ -1102,10 +1095,10 @@ export default function BaoCaoTaiChinhPage() {
               </ReportTableFrame>
               </div>
             )}
-          </ChartCard>
+          </ReportSection>
 
           {/* COGS Breakdown Bar Chart */}
-          <ChartCard
+          <ReportSection
             title="Top sản phẩm theo giá vốn"
             subtitle={selectedPeriodLabel}
           >
@@ -1169,12 +1162,12 @@ export default function BaoCaoTaiChinhPage() {
                 </ResponsiveContainer>
               </div>
             )}
-          </ChartCard>
+          </ReportSection>
         </div>
 
         {/* Operational KPIs: Inventory Turnover + DSO */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <ChartCard
+          <ReportSection
             title="Vòng quay hàng tồn kho"
             subtitle={selectedPeriodLabel}
           >
@@ -1222,9 +1215,9 @@ export default function BaoCaoTaiChinhPage() {
                 </span>
               </div>
             </div>
-          </ChartCard>
+          </ReportSection>
 
-          <ChartCard
+          <ReportSection
             title="Số ngày thu tiền trung bình"
             subtitle={selectedPeriodLabel}
           >
@@ -1270,12 +1263,12 @@ export default function BaoCaoTaiChinhPage() {
                 </span>
               </div>
             </div>
-          </ChartCard>
+          </ReportSection>
         </div>
 
         {/* COGS Detail Table */}
         {cogsItems.length > 0 && (
-          <ChartCard
+          <ReportSection
             title="Chi tiết giá vốn theo sản phẩm"
             subtitle={`${selectedPeriodLabel} · ${formatNumber(visibleCogs.length)} kết quả lọc / ${formatNumber(cogsTotalCount)} mặt hàng`}
           >
@@ -1357,7 +1350,7 @@ export default function BaoCaoTaiChinhPage() {
               </div>
             </ReportTableFrame>
             {cogsPageCount > 1 && <div className="mt-3 flex items-center justify-end gap-3 text-sm"><button type="button" disabled={currentCogsPage === 0} className="disabled:opacity-40" onClick={() => setCogsPage(currentCogsPage - 1)}>Trước</button><span>{currentCogsPage + 1}/{cogsPageCount}</span><button type="button" disabled={currentCogsPage + 1 === cogsPageCount} className="disabled:opacity-40" onClick={() => setCogsPage(currentCogsPage + 1)}>Sau</button></div>}
-          </ChartCard>
+          </ReportSection>
         )}
       </div>
     </div>

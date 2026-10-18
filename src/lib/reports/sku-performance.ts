@@ -2,6 +2,7 @@ import type { SkuFinancialRow } from "@/lib/services/supabase/sku-financial-repo
 import { skuFinancialTotals } from "./sku-financial-view";
 
 export type SkuReviewFilter = "all" | "loss" | "zeroRevenueCost" | "missing" | "returns" | "decline";
+export const SKU_COLUMN_GROUPS = [{ label: "Mặt hàng", span: 4 }, { label: "Bán và trả", span: 7 }, { label: "Đối chiếu doanh thu", span: 2 }, { label: "Giá vốn và lãi gộp", span: 5 }, { label: "Kiểm soát", span: 5 }];
 export interface SkuPerformanceRow extends SkuFinancialRow {
   previousRevenue: number;
   revenueDifference: number;

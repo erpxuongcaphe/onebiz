@@ -18,6 +18,7 @@ export const BRANCH_FIELDS = [
   { key: "previousMissingCostLines", label: "Thiếu giá vốn kỳ trước" },
 ];
 export const BRANCH_METRICS = BRANCH_FIELDS.slice(2);
+export const BRANCH_COLUMN_GROUPS = [{ label: "Chi nhánh", span: 2 }, { label: "Kỳ đang xem", span: 12 }, { label: "Đối chiếu kỳ trước", span: 7 }];
 export const BRANCH_STATUS_LABELS = { all: "Tất cả kết quả", loss: "Lỗ vận hành", profit: "Không lỗ vận hành", missing: "Thiếu giá vốn", missingPrior: "Thiếu giá vốn kỳ trước", revenueDecline: "Doanh thu giảm", resultDecline: "Kết quả vận hành giảm" };
 export interface BranchPerformanceRow extends Omit<BranchPnLRow, "cogs" | "grossProfit" | "grossMargin" | "netProfit" | "netMargin"> {
   typeLabel: string;
@@ -102,6 +103,7 @@ export function branchPerformanceTotals(rows: BranchPerformanceRow[]) {
 export function branchPerformanceSheet(rows: BranchPerformanceRow[], filter: BranchPerformanceFilter, sort: { id: string; direction: "asc" | "desc" }, mode: "view" | "full", titleRows: string[]): ExcelSheet {
   const typeLabel = BRANCH_TYPE_LABELS[filter.type as keyof typeof BRANCH_TYPE_LABELS] ?? filter.type;
   return { name: "2. Theo chi nhánh", autoFilter: true,
+    columnGroups: BRANCH_COLUMN_GROUPS,
     tablePreferenceKey: mode === "view" ? "report.financial-results.branches" : undefined,
     titleRows: [...titleRows, "Chi nhánh gồm nội bộ; không phải tổng hợp nhất. Tỷ trọng trên doanh thu tất cả chi nhánh trong phạm vi.",
       `Lọc chi nhánh: ${filter.search || "Tất cả"}; Loại: ${typeLabel || "Tất cả"}; Kết quả: ${BRANCH_STATUS_LABELS[filter.status]}`,

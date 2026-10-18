@@ -5,13 +5,14 @@ import Link from "next/link";
 import { ReportDataTable, ReportPageHeader, type DataTableColumn } from "@/components/shared/report";
 import { SummaryCard } from "@/components/shared/summary-card";
 import { MetricFilters } from "@/components/shared/report/metric-filters";
+import { ReportSection } from "@/components/shared/report/report-section";
 import { matchesMetricFilters, metricFilterError, metricFilterLabel, parseMetricFilters, type MetricFilter } from "@/lib/reports/metric-filter";
 import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useAuth, useBranchFilter, useToast } from "@/lib/contexts";
 import { useLiveDataRefresh } from "@/lib/hooks/use-live-data-refresh";
 import { managementComparisonRange, managementReportLink, reportChange } from "@/lib/reports/management-review";
-import { compareSkuPeriods, filterSkuPerformance, skuCategoryPerformance, skuReviewEvidence, type SkuPerformanceRow, type SkuReviewFilter } from "@/lib/reports/sku-performance";
+import { compareSkuPeriods, filterSkuPerformance, skuCategoryPerformance, skuReviewEvidence, SKU_COLUMN_GROUPS, type SkuPerformanceRow, type SkuReviewFilter } from "@/lib/reports/sku-performance";
 import { formatCashBookDate } from "@/lib/cash-time";
 import { Icon } from "@/components/ui/icon";
 import { sortReportRows } from "@/lib/reports/table-sort";
@@ -169,6 +170,7 @@ export default function SkuFinancialPage() {
       }] : [];
       titles.push("Tiền hàng sau chiết khấu, không gồm VAT/phí giao hàng. Chiết khấu hóa đơn phân bổ theo tiền hàng; trả hàng ghi nhận theo ngày phiếu trả. Giá vốn theo snapshot gốc, ô trống không phải 0.");
       await exportReportToExcel({ kind: "sku-chi-tiet", mode, range, branchName: branchLabel, sheets: [{ name: "Chi tiết SKU", titleRows: titles, autoFilter: true,
+        columnGroups: SKU_COLUMN_GROUPS,
         tablePreferenceKey: mode === "view" ? KEY : undefined,
         columns: columns.map(column => ({ key: String(column.key), label: column.label, width: column.key === "name" ? 36 : 24,
           hideable: column.hideable, decimalPlaces: 4,
@@ -207,20 +209,18 @@ export default function SkuFinancialPage() {
       </div>
       <MetricFilters fields={columns.filter(column => !["code", "name", "category", "unit", "lastActivityAt"].includes(String(column.key))).map(column => ({ key: String(column.key), label: column.label }))} value={metricFilters} onChange={setMetricFilters} />
       <p className="text-xs leading-5 text-muted-foreground">Đơn vị: đồng · Gồm nội bộ · Sau chiết khấu, chưa gồm VAT/phí giao · Lãi gộp chưa trừ chi phí vận hành.</p>
-      {!pending && !error && unfiltered && <section aria-label="Đối chiếu doanh thu" className="border-y py-3">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-semibold">Đối chiếu doanh thu</h2><Link className="inline-flex min-h-9 items-center gap-1 text-sm text-primary" href={managementReportLink("/phan-tich/ban-hang", activeBranchId, range) + "&detail=invoices"}>Xem hóa đơn<Icon name="arrow_forward" size={16} /></Link></div>
+      {!pending && !error && unfiltered && <ReportSection title="Đối chiếu doanh thu" tone="primary" actions={<Link className="inline-flex min-h-9 items-center gap-1 text-sm text-primary" href={managementReportLink("/phan-tich/ban-hang", activeBranchId, range) + "&detail=invoices"}>Xem hóa đơn<Icon name="arrow_forward" size={16} /></Link>}>
         {reconciliationError ? <p role="status" className="text-sm text-status-warning">Chưa tải được tổng hóa đơn để đối chiếu.</p> : <ReportDataTable tablePreferenceKey="report.sku-financial.reconciliation" showDisplayOptions={false} rows={reconciliationRows} getRowKey={row => row.metric} columns={[
           { key: "metric", label: "Chỉ tiêu", sticky: true, sortable: false },
           { key: "current", label: "Kỳ này", align: "right", sortable: false, cell: row => money(row.current) },
           { key: "previous", label: "Kỳ trước", align: "right", sortable: false, cell: row => money(row.previous) },
         ]} />}
-        {!reconciliationError && <p role={revenueMismatch ? "status" : undefined} className={`mt-2 text-xs ${revenueMismatch ? "text-status-warning" : "text-muted-foreground"}`}>{revenueMismatch ? "Có chênh lệch chưa phân loại. Kiểm tra hóa đơn và dòng hàng; không tự bù số." : "Hai nguồn khớp theo số liệu đã tải."} Cùng phạm vi, gồm nội bộ.</p>}
-      </section>}
+        {!reconciliationError && <p role={revenueMismatch ? "status" : undefined} className={`mt-2 text-xs leading-5 ${revenueMismatch ? "border-l-2 border-status-warning pl-2 text-foreground" : "text-muted-foreground"}`}>{revenueMismatch ? "Có chênh lệch chưa phân loại. Kiểm tra hóa đơn và dòng hàng; không tự bù số." : "Hai nguồn khớp theo số liệu đã tải."} Cùng phạm vi, gồm nội bộ.</p>}
+      </ReportSection>}
       {error && <div role="alert" className="border-l-2 border-destructive p-3 text-sm"><strong>Chưa tải được báo cáo.</strong> {error}<button type="button" onClick={refresh} className="ml-3 text-primary underline">Thử lại</button></div>}
-      {!pending && !error && <section aria-label="Việc cần xem" className="border-y py-3">
-        <h2 className="mb-2 text-sm font-semibold">Việc cần xem</h2>
+      {!pending && !error && <ReportSection title="Việc cần xem" tone={evidence.missingCount || evidence.lossCount ? "review" : "neutral"}>
         <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-          {evidence.missingCount > 0 && <button type="button" className="min-h-9 text-status-warning underline" onClick={() => setReviewFilter("missing")}>Thiếu giá vốn: {evidence.missingLines} dòng hai kỳ · {evidence.missingCount} SKU/ĐVT</button>}
+          {evidence.missingCount > 0 && <button type="button" className="min-h-9 text-foreground underline decoration-status-warning underline-offset-4" onClick={() => setReviewFilter("missing")}>Thiếu giá vốn: {evidence.missingLines} dòng hai kỳ · {evidence.missingCount} SKU/ĐVT</button>}
           {evidence.lossCount > 0 && <button type="button" className="min-h-9 text-destructive underline" onClick={() => setReviewFilter("loss")}>Lãi gộp âm: {evidence.lossCount} SKU/ĐVT · {money(evidence.lossAmount)}</button>}
           {evidence.zeroRevenueCostCount > 0 && <button type="button" className="min-h-9 text-primary underline" onClick={() => setReviewFilter("zeroRevenueCost")}>Giá vốn hàng doanh thu 0: {money(evidence.zeroRevenueCostAmount)} · {evidence.zeroRevenueCostCount} SKU/ĐVT</button>}
           {evidence.declineCount > 0 && <button type="button" className="min-h-9 text-primary underline" onClick={() => setReviewFilter("decline")}>Doanh thu giảm: {evidence.declineCount} SKU/ĐVT · {money(evidence.declineAmount)}</button>}
@@ -229,10 +229,10 @@ export default function SkuFinancialPage() {
         </div>
         <p className="mt-1 text-xs text-muted-foreground">Đối chiếu giá bán, chiết khấu, hàng trả và giá vốn trước khi điều chỉnh.</p>
         {evidence.zeroRevenueCostCount > 0 && <p className="text-xs text-muted-foreground">Bao bì hoặc hàng tặng có thể không tính phí. Đánh giá cùng hóa đơn, không mặc định là lỗi.</p>}
-      </section>}
-      {pending || error ? <p role="status" className="py-8 text-center text-sm text-muted-foreground">{error ? "Chưa tải được dữ liệu." : "Đang tải..."}</p> : <ReportDataTable rows={rows} columns={columns} tablePreferenceKey={KEY} sortState={sort} onSortChange={setSort}
-        getRowKey={row => `${row.productId}:${row.unit}`} subtotalLabel={`${rows.length} dòng SKU/ĐVT`} emptyState="Không có phát sinh phù hợp." />}
-      {!pending && !error && <details className="border-t py-3"><summary className="cursor-pointer text-sm font-semibold">Đóng góp nhóm hàng</summary>
+      </ReportSection>}
+      {pending || error ? <p role="status" className="py-8 text-center text-sm text-muted-foreground">{error ? "Chưa tải được dữ liệu." : "Đang tải..."}</p> : <ReportSection title="Chi tiết mặt hàng" subtitle={`${rows.length} dòng SKU/ĐVT · Theo bộ lọc`}><ReportDataTable rows={rows} columns={columns} columnGroups={SKU_COLUMN_GROUPS} className="[&_thead_tr:first-child_th]:text-left [&_thead_tr:first-child_th]:border-r" tablePreferenceKey={KEY} sortState={sort} onSortChange={setSort}
+        getRowKey={row => `${row.productId}:${row.unit}`} subtotalLabel={`${rows.length} dòng SKU/ĐVT`} emptyState="Không có phát sinh phù hợp." /></ReportSection>}
+      {!pending && !error && <details className="border-t"><summary className="cursor-pointer border-l-4 border-border bg-muted/50 px-3 py-3 text-base font-semibold">Đóng góp nhóm hàng</summary>
         <ReportDataTable rows={categories} tablePreferenceKey="report.sku-financial.categories" sortState={categorySort} onSortChange={setCategorySort} getRowKey={row => row.category} showDisplayOptions={false} columns={[
           { key: "category", label: "Nhóm hàng", sticky: true }, { key: "skuUnits", label: "SKU/ĐVT", align: "right" },
           { key: "netRevenue", label: "Doanh thu thuần", align: "right", cell: row => money(row.netRevenue) },

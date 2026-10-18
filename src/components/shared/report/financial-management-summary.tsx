@@ -31,7 +31,7 @@ export function FinancialManagementSummary({ current, previous, branchId, range 
         {complete && current.goodsRevenue > 0 && previous.goodsRevenue > 0 && <span>So với kỳ trước: <strong className="tabular-nums text-foreground">{formatNumber(current.grossMargin - previous.grossMargin)} điểm %</strong></span>}
         <span>Theo chứng từ đã ghi nhận. Lợi nhuận không phải dòng tiền.</span>
       </div>
-      <h2 className="text-sm font-semibold">Biến động cần xem</h2>
+      <h2 className="border-l-4 border-border bg-muted/50 px-3 py-3 text-base font-semibold">Biến động cần xem</h2>
       <div className="grid gap-4 lg:grid-cols-2">
         {managementObservations(current, previous).map(item => (
           <article key={item.id} className="flex min-w-0 gap-2 border-l-2 border-border pl-3">
