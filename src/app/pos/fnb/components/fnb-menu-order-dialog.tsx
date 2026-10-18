@@ -64,7 +64,7 @@ export function FnbMenuOrderDialog({ branchId, branchName, onClose, onSaved }: {
   return <Dialog open trackFormChanges={false} hasUnsavedChanges={dirty} onOpenChange={open => { if (!open && !saving) onClose(); }}>
     <DialogContent showCloseButton={false} className="flex max-h-[92dvh] flex-col gap-2 p-3 sm:max-w-2xl sm:p-4">
       <div className="flex items-center gap-1">
-        <div className="min-w-0 flex-1"><DialogTitle className="text-base">Chỉnh thực đơn</DialogTitle><DialogDescription className="truncate text-xs">{branchName} · Chỉ áp dụng tại chi nhánh này</DialogDescription></div>
+        <div className="min-w-0 flex-1"><DialogTitle className="flex items-center gap-2 text-base"><Icon name="lock_open" size={18} />Chỉnh thực đơn</DialogTitle><DialogDescription className="truncate text-xs">{branchName} · Chỉ áp dụng tại chi nhánh này</DialogDescription></div>
         <button type="button" disabled={!draft || saving} title="Lấy thứ tự mẫu dùng chung" aria-label="Lấy thứ tự mẫu dùng chung" className={iconClass}
           onClick={() => { if (draft) { setDraft({ ...draft, categoryIds: catalog.categories.map(row => row.id), productIds: catalog.products.map(row => row.id), hiddenIds: [] }); setAnnouncement("Đã lấy bố trí mẫu. Bấm lưu để áp dụng tại chi nhánh này."); } }}><Icon name="content_copy" /></button>
         <button type="button" data-dialog-close disabled={saving} onClick={onClose} title="Hủy" aria-label="Hủy" className={iconClass}><Icon name="close" /></button>
