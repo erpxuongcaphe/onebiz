@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
 import { formatCurrency, formatStockQuantity } from "@/lib/format";
@@ -19,7 +18,8 @@ export function BranchPerformanceTable({ rows, types, filter, onFilter, sort, on
   const numeric = (key: string, value: unknown) => value === null ? "—" : ["grossMargin", "netMargin", "revenueShare", "missingCostLines"].includes(key) ? formatStockQuantity(Number(value)) : formatCurrency(Number(value));
   const columns: DataTableColumn<BranchPerformanceRow>[] = BRANCH_FIELDS.map((field, index) => ({ ...field,
     sticky: index === 0, hideable: index !== 0, width: index === 0 ? "250px" : "180px", align: index < 2 ? "left" : "right",
-    cell: row => index === 0 ? <Link className="inline-flex min-h-9 items-center gap-1 text-primary" href={managementReportLink("/phan-tich/bao-cao-tai-chinh", row.branchId, range)}>{row.branchName}<Icon name="arrow_forward" size={16} /></Link> : index === 1 ? row.typeLabel : numeric(field.key, row[field.key as keyof BranchPerformanceRow]),
+    // Scope is initialized on mount; same-route soft navigation would retain the old branch.
+    cell: row => index === 0 ? <a className="inline-flex min-h-9 items-center gap-1 text-primary" href={managementReportLink("/phan-tich/bao-cao-tai-chinh", row.branchId, range)}>{row.branchName}<Icon name="arrow_forward" size={16} /></a> : index === 1 ? row.typeLabel : numeric(field.key, row[field.key as keyof BranchPerformanceRow]),
     subtotalCell: index > 1 ? numeric(field.key, totals[field.key as keyof typeof totals]) : undefined,
   }));
   return <div className="space-y-3">
