@@ -4,11 +4,11 @@ import type { ReactNode } from "react";
 
 const state = vi.hoisted(() => ({
   branchId: "branch-a", refresh: undefined as (() => void) | undefined,
-  getOverviewKpis: vi.fn(), exportReportToExcel: vi.fn(), range: { from: "2026-09-01", to: "2026-09-30" },
+  getOverviewKpis: vi.fn(), getCashFlowDetailed: vi.fn(), exportReportToExcel: vi.fn(), denied: new Set<string>(), range: { from: "2026-09-01", to: "2026-09-30" },
 }));
 vi.mock("@/lib/contexts", () => ({
   useBranchFilter: () => ({ activeBranchId: state.branchId, branchLabel: state.branchId, isReady: true }),
-  useAuth: () => ({ tenant: { id: "tenant-1", name: "OneBiz" }, hasPermission: () => true }),
+  useAuth: () => ({ tenant: { id: "tenant-1", name: "OneBiz" }, hasPermission: (key: string) => !state.denied.has(key) }),
   useToast: () => ({ toast: vi.fn() }),
 }));
 vi.mock("@/lib/hooks/use-report-state", () => ({
@@ -22,6 +22,7 @@ vi.mock("@/lib/services", () => ({
   getSalesReportDailyRows: async () => [],
   getRevenueByCategory: async () => [],
   getTopProductsByRevenue: async () => [],
+  getCashFlowDetailed: state.getCashFlowDetailed,
 }));
 vi.mock("@/lib/services/supabase/reports", () => ({ getBranchPnLComparison: async () => [] }));
 vi.mock("@/components/shared/report", () => ({
@@ -44,7 +45,7 @@ function deferred<T>() {
   const promise = new Promise<T>(done => { resolve = done; });
   return { promise, resolve };
 }
-beforeEach(() => { state.branchId = "branch-a"; state.getOverviewKpis.mockReset(); state.exportReportToExcel.mockReset().mockResolvedValue(undefined); });
+beforeEach(() => { state.branchId = "branch-a"; state.denied = new Set(); state.getOverviewKpis.mockReset(); state.getCashFlowDetailed.mockReset().mockResolvedValue([]); state.exportReportToExcel.mockReset().mockResolvedValue(undefined); });
 afterEach(cleanup);
 
 describe("overview refresh safety", () => {
@@ -74,14 +75,40 @@ describe("overview refresh safety", () => {
   });
 
   it("exports the gross-profit KPI shown on screen and the same financial bridge", async () => {
-    state.getOverviewKpis.mockResolvedValue(result(444444));
+    state.getOverviewKpis.mockResolvedValue(result(444444.29));
     render(<Overview />);
     await waitFor(() => expect(screen.getByRole("button", { name: "Xuất bảng" })).toBeEnabled());
     await act(async () => { screen.getByRole("button", { name: "Xuất bảng" }).click(); });
     const exported = state.exportReportToExcel.mock.calls[0][0];
     expect(exported.range).toEqual(state.range);
     expect(exported.branchName).toBe("branch-a");
-    expect(exported.sheets[0].rows.find((row: { metric: string }) => row.metric === "Lãi gộp")).toMatchObject({ value: 444444 });
-    expect(exported.sheets[1].rows.find((row: { metric: string }) => row.metric === "Lãi gộp")).toMatchObject({ current: 444444 });
+    expect(exported.sheets[0].rows.find((row: { metric: string }) => row.metric === "Lãi gộp")).toMatchObject({ value: 444444.29 });
+    expect(exported.sheets[1].rows.find((row: { metric: string }) => row.metric === "Lãi gộp")).toMatchObject({ current: 444444.29 });
+    expect(exported.sheets[1].columns.find((column: { key: string }) => column.key === "current")).toMatchObject({ format: "number", decimalPlaces: 2 });
+    expect(exported.sheets[1].titleRows.join(" ")).toContain("02/08/2026");
+    expect(exported.sheets[1].titleRows.join(" ")).toContain("31/08/2026");
+  });
+
+  it("does not query or export cash without cash-book permission", async () => {
+    state.denied.add("finance.view_cash_book");
+    state.getOverviewKpis.mockResolvedValue(result(444444));
+    render(<Overview />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Xuất bảng" })).toBeEnabled());
+    expect(state.getCashFlowDetailed).not.toHaveBeenCalled();
+    expect(screen.queryByRole("region", { name: "Thu chi trong kỳ" })).not.toBeInTheDocument();
+    await act(async () => { screen.getByRole("button", { name: "Xuất bảng" }).click(); });
+    expect(state.exportReportToExcel.mock.calls[0][0].sheets.some((sheet: { name: string }) => sheet.name === "Thu chi")).toBe(false);
+  });
+
+  it("exports cash independently of profit permission", async () => {
+    state.denied.add("reports.view_profit");
+    state.getOverviewKpis.mockResolvedValue(result(444444));
+    state.getCashFlowDetailed.mockResolvedValue([{ totalReceipt: 700, totalPayment: 300 }]);
+    render(<Overview />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Xuất bảng" })).toBeEnabled());
+    await act(async () => { screen.getByRole("button", { name: "Xuất bảng" }).click(); });
+    const sheets = state.exportReportToExcel.mock.calls[0][0].sheets;
+    expect(sheets.some((sheet: { name: string }) => sheet.name === "Ket qua kinh doanh")).toBe(false);
+    expect(sheets.find((sheet: { name: string }) => sheet.name === "Thu chi").rows).toContainEqual({ metric: "Tổng thu", value: 700 });
   });
 });

@@ -54,6 +54,9 @@ import { useLiveDataRefresh } from "@/lib/hooks/use-live-data-refresh";
 import { fnbOpenOrderLabel } from "@/lib/fnb-open-orders";
 import { PERMISSIONS } from "@/lib/permissions";
 import { Icon } from "@/components/ui/icon";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { useReportScope } from "@/lib/hooks/use-report-scope";
+import { reportChange } from "@/lib/reports/management-review";
 
 type ChartView = "day" | "hour" | "weekday";
 
@@ -68,10 +71,7 @@ const ENTITY_ICONS: Record<string, string> = {
 
 // Custom tooltips — Stitch style: rounded-xl + ambient-shadow, surface-container-lowest bg.
 function calcChange(current: number, previous: number): { text: string; positive: boolean } {
-  if (previous === 0) return { text: current > 0 ? "+100%" : "0%", positive: current >= 0 };
-  const pct = ((current - previous) / previous) * 100;
-  const sign = pct >= 0 ? "+" : "";
-  return { text: `${sign}${pct.toFixed(1)}%`, positive: pct >= 0 };
+  return { text: reportChange(current, previous), positive: current >= previous };
 }
 
 function calcDiff(current: number, previous: number): { text: string; positive: boolean } {
@@ -80,12 +80,45 @@ function calcDiff(current: number, previous: number): { text: string; positive: 
   return { text: `${sign}${diff}`, positive: diff >= 0 };
 }
 
-export default function TongQuanPage() {
+const BusinessOverview = dynamic(() => import("./_business-overview"), {
+  loading: () => <div role="status" className="p-4 text-sm text-muted-foreground">Đang tải tổng quan...</div>,
+});
+
+export default function DashboardPage() {
+  const { isReady } = useBranchFilter();
+  const { isReady: scopeReady } = useReportScope();
+  const { hasPermission } = useAuth();
+  const [selectedView, setSelectedView] = useState<"business" | "operations" | null>(null);
+  const canViewBusiness = hasPermission("reports.analytics")
+    && hasPermission("reports.view_detail") && hasPermission("reports.view_profit");
+  const view = canViewBusiness ? selectedView ?? "business" : "operations";
+
+  if (!isReady || !scopeReady) return <div role="status" className="p-4 text-sm text-muted-foreground">Đang tải tổng quan...</div>;
+  if (!canViewBusiness) return <OperationalDashboard />;
+
+  return (
+    <Tabs value={view} onValueChange={value => {
+      if (value === "business" || value === "operations") setSelectedView(value);
+    }} className="h-full min-h-0 gap-0">
+      <div className="shrink-0 border-b border-border px-4 py-2">
+        <TabsList aria-label="Góc nhìn quản trị">
+          <TabsTrigger value="business"><Icon name="monitoring" size={17} />Kinh doanh</TabsTrigger>
+          <TabsTrigger value="operations"><Icon name="point_of_sale" size={17} />Vận hành</TabsTrigger>
+        </TabsList>
+      </div>
+      <TabsContent value="business" className="min-h-0 overflow-auto">{view === "business" && <BusinessOverview />}</TabsContent>
+      <TabsContent value="operations" className="min-h-0 overflow-auto">{view === "operations" && <OperationalDashboard />}</TabsContent>
+    </Tabs>
+  );
+}
+
+function OperationalDashboard() {
   // PERF F9+F12: isReady = AuthContext load xong → safe để fire data fetch
   // mà không lo activeBranchId đổi từ undefined → branch_id sau đó (gây
   // double-fire mỗi service).
   const { activeBranchId, isReady } = useBranchFilter();
   const { user, tenant, hasPermission, branches } = useAuth();
+  const scopeKey = `${tenant?.id}:${activeBranchId ?? "all"}`;
   const selectedBranch = branches.find(branch => branch.id === activeBranchId);
   const canViewFnbOrders = hasPermission(PERMISSIONS.POS_FNB_VIEW_ORDERS) && (!activeBranchId || selectedBranch?.branchType === "store");
   const openOrders = useFnbOpenOrders(tenant?.id, activeBranchId, isReady && canViewFnbOrders);
@@ -98,7 +131,12 @@ export default function TongQuanPage() {
   const [dashboardUpdatedAt, setDashboardUpdatedAt] = useState<Date | null>(null);
 
   // Data state
-  const [kpis, setKpis] = useState<DashboardKpis | null>(null);
+  const [kpiData, setKpis] = useState<DashboardKpis | null>(null);
+  const [kpiScope, setKpiScope] = useState("");
+  const [kpiError, setKpiError] = useState<string | null>(null);
+  const [secondaryScope, setSecondaryScope] = useState("");
+  const [secondaryError, setSecondaryError] = useState<string | null>(null);
+  const kpis = kpiScope === scopeKey ? kpiData : null;
   const [revenueDay, setRevenueDay] = useState<ChartPoint[]>([]);
   const [revenueHour, setRevenueHour] = useState<ChartPoint[]>([]);
   const [revenueWeekday, setRevenueWeekday] = useState<ChartPoint[]>([]);
@@ -109,28 +147,34 @@ export default function TongQuanPage() {
   const [financialAlerts, setFinancialAlerts] = useState<FinancialAlert[]>([]);
 
   // Phase 1 — daily operational KPIs; analytical inventory reports load on their own page.
-  const dashboardScopeRef = useRef(activeBranchId);
-  dashboardScopeRef.current = activeBranchId;
+  const dashboardScopeRef = useRef(scopeKey);
+  dashboardScopeRef.current = scopeKey;
   const phase1Request = useRef(0);
   const phase2Request = useRef(0);
   const fetchPhase1 = useCallback(async () => {
     const request = ++phase1Request.current;
     setKpiLoading(true);
+    setKpiError(null);
     try {
       const kpiRes = await getDashboardKpis(activeBranchId);
-      if (request !== phase1Request.current || dashboardScopeRef.current !== activeBranchId) return;
+      if (request !== phase1Request.current || dashboardScopeRef.current !== scopeKey) return;
       setKpis(kpiRes);
+      setKpiScope(scopeKey);
       setDashboardUpdatedAt(new Date());
     } catch {
-      // Silently fail — show empty state
+      if (request === phase1Request.current && dashboardScopeRef.current === scopeKey) {
+        setKpiError("Chưa tải được số liệu vận hành.");
+        setKpis(null);
+      }
     } finally {
-      if (request === phase1Request.current && dashboardScopeRef.current === activeBranchId) setKpiLoading(false);
+      if (request === phase1Request.current && dashboardScopeRef.current === scopeKey) setKpiLoading(false);
     }
-  }, [activeBranchId]);
+  }, [activeBranchId, scopeKey]);
 
   // Phase 2 — charts + secondary widgets (không block KPI hiển thị)
   const fetchPhase2 = useCallback(async () => {
     const request = ++phase2Request.current;
+    setSecondaryError(null);
     try {
       const [dayRes, hourRes, weekdayRes, ordersRes, topRes, lowRes, actRes, alertRes] =
         await Promise.all([
@@ -143,7 +187,7 @@ export default function TongQuanPage() {
           getRecentActivities(8),
           getFinancialAlerts(activeBranchId).catch(() => [] as FinancialAlert[]),
         ]);
-      if (request !== phase2Request.current || dashboardScopeRef.current !== activeBranchId) return;
+      if (request !== phase2Request.current || dashboardScopeRef.current !== scopeKey) return;
       setRevenueDay(dayRes);
       setRevenueHour(hourRes);
       setRevenueWeekday(weekdayRes);
@@ -152,10 +196,13 @@ export default function TongQuanPage() {
       setLowStock(lowRes);
       setActivities(actRes);
       setFinancialAlerts(alertRes);
+      setSecondaryScope(scopeKey);
     } catch {
-      // Silently fail — show empty state
+      if (request === phase2Request.current && dashboardScopeRef.current === scopeKey) {
+        setSecondaryError("Chưa tải được biểu đồ và cảnh báo.");
+      }
     }
-  }, [activeBranchId]);
+  }, [activeBranchId, scopeKey]);
 
   // PERF F9+F12: chờ isReady (AuthContext xong) rồi mới fetch.
   useEffect(() => {
@@ -190,7 +237,7 @@ export default function TongQuanPage() {
           value: kpis.todayCollected,
           icon: "trending_up",
           ...calcChange(kpis.todayCollected, kpis.yesterdayCollected),
-          changeLabel: "vs hôm qua",
+          changeLabel: "so với hôm qua",
           isCurrency: true,
           isCollection: true,
         },
@@ -199,7 +246,7 @@ export default function TongQuanPage() {
           value: kpis.todayRevenue,
           icon: "receipt_long",
           ...calcChange(kpis.todayRevenue, kpis.yesterdayRevenue),
-          changeLabel: "vs hôm qua",
+          changeLabel: "so với hôm qua",
           isCurrency: true,
         },
         {
@@ -207,7 +254,7 @@ export default function TongQuanPage() {
           value: kpis.todayOrders,
           icon: "shopping_cart",
           ...calcDiff(kpis.todayOrders, kpis.yesterdayOrders),
-          changeLabel: "vs hôm qua",
+          changeLabel: "so với hôm qua",
           isCurrency: false,
         },
         {
@@ -215,7 +262,7 @@ export default function TongQuanPage() {
           value: kpis.todayProfit,
           icon: "attach_money",
           ...calcChange(kpis.todayProfit, kpis.yesterdayProfit),
-          changeLabel: "vs hôm qua",
+          changeLabel: "so với hôm qua",
           isCurrency: true,
         },
       ]
@@ -256,7 +303,7 @@ export default function TongQuanPage() {
       {/* Daily operational indicators, scoped by the selected branch. */}
       <div className={cn("grid grid-cols-1 sm:grid-cols-2 gap-3", canViewFnbOrders ? "lg:grid-cols-3 2xl:grid-cols-5" : "xl:grid-cols-4")}>
         {/* Preserve the same card count while loading. */}
-        {kpiLoading && !kpis &&
+        {(kpiLoading || kpiScope !== scopeKey) && !kpis && !kpiError &&
           Array.from({ length: canViewFnbOrders ? 5 : 4 }).map((_, i) => (
             <Card
               key={`skel-${i}`}
@@ -306,18 +353,18 @@ export default function TongQuanPage() {
                 </span>
                 <span className="text-xs text-muted-foreground">{kpi.changeLabel}</span>
               </div>
-              {kpi.label === "Doanh thu hôm nay" && <p className="mt-2 text-xs text-muted-foreground">Hóa đơn hoàn tất hôm nay, sau giảm giá; gồm phí giao nếu có. Chưa trừ phiếu trả hàng, có thể còn công nợ.</p>}
+              {kpi.label === "Doanh thu hôm nay" && <p className="mt-2 text-xs text-muted-foreground">Hóa đơn hoàn tất, gồm phí giao; chưa trừ hàng trả.</p>}
               {kpi.label === "Doanh thu hôm nay" && kpis && (
                 <div className="mt-2 space-y-1 text-xs text-muted-foreground">
                   <p>Giảm giá bill {formatCurrency(kpis.todayDiscounts)}</p>
                   {kpis.todayDeliveryFee > 0 && <p>Phí giao {formatCurrency(kpis.todayDeliveryFee)}</p>}
                 </div>
               )}
-              {kpi.label === "Đơn hoàn tất" && <p className="mt-2 text-xs text-muted-foreground">Hóa đơn hoàn tất trong ngày; không gồm đơn đang mở hoặc đã hủy.</p>}
-              {kpi.label === "Chênh lệch thu − chi" && <p className="mt-2 text-xs text-muted-foreground">Theo ngày ghi sổ, gồm các phiếu thu/chi còn hiệu lực. Chưa phải lợi nhuận sau giá vốn.</p>}
+              {kpi.label === "Đơn hoàn tất" && <p className="mt-2 text-xs text-muted-foreground">Không gồm đơn mở và đơn hủy.</p>}
+              {kpi.label === "Chênh lệch thu − chi" && <p className="mt-2 text-xs text-muted-foreground">Theo ngày phiếu; không phải lợi nhuận.</p>}
               {"isCollection" in kpi && kpi.isCollection && kpis && (
                 <div className="mt-2 space-y-1.5 border-t border-border/60 pt-2">
-                  <p className="text-xs text-muted-foreground">Tiền bán hàng đã thu − hoàn khách, theo ngày ghi sổ. Không trừ giảm giá lần nữa.</p>
+                  <p className="text-xs text-muted-foreground">Thu bán hàng, sau hoàn khách.</p>
                   <div className="grid grid-cols-2 gap-1 text-xs leading-tight">
                     <div className="rounded-md bg-surface-container px-1.5 py-1">
                       <span className="block text-muted-foreground">Tiền mặt</span>
@@ -344,6 +391,9 @@ export default function TongQuanPage() {
           </div>
         ))}
       </div>
+
+      {kpiError && <div role="alert" className="flex flex-wrap items-center gap-3 border-l-4 border-status-error p-3 text-sm"><span>{kpiError}</span><button type="button" onClick={fetchPhase1} className="inline-flex min-h-9 items-center gap-1 text-primary"><Icon name="refresh" size={16} />Thử lại</button></div>}
+      {secondaryError ? <div role="alert" className="flex flex-wrap items-center gap-3 border-l-4 border-status-error p-3 text-sm"><span>{secondaryError}</span><button type="button" onClick={fetchPhase2} className="inline-flex min-h-9 items-center gap-1 text-primary"><Icon name="refresh" size={16} />Thử lại</button></div> : secondaryScope !== scopeKey ? <p role="status" className="p-3 text-sm text-muted-foreground">Đang tải chi tiết vận hành...</p> : <>
 
       {/* Charts row — lazy loaded để giảm initial bundle (~150KB recharts). */}
       <DashboardCharts
@@ -521,6 +571,7 @@ export default function TongQuanPage() {
           </CardContent>
         </Card>
       </div>
+      </>}
     </div>
   );
 }

@@ -24,12 +24,12 @@ describe("management review interface", () => {
     expect(screen.getByLabelText("Bằng chứng biến động")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Thu gọn" })).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByRole("link", { name: /Dòng tiền/ })).toHaveAttribute("href", "/phan-tich/luong-tien?branch=branch-1&preset=custom&from=2026-09-01&to=2026-09-30&view=table");
-    expect(screen.queryByText("Đóng góp từng chi nhánh")).not.toBeInTheDocument();
+    expect(screen.queryByText("Đóng góp chi nhánh")).not.toBeInTheDocument();
   });
 
   it("shows incomplete-cost warning and branch failures without zero substitution", () => {
     render(<ManagementReview {...props} current={{ ...pnl, cogsComplete: false, missingCostLines: 3 }} branchError="Không thể tải chi nhánh" />);
-    expect(screen.getByText("Chưa đủ cơ sở kết luận lợi nhuận")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Chưa đủ giá vốn" })).toBeInTheDocument();
     expect(screen.getAllByText("Chưa đủ giá vốn").length).toBeGreaterThan(0);
     expect(screen.getByRole("alert")).toHaveTextContent("Không thể tải chi nhánh");
   });
