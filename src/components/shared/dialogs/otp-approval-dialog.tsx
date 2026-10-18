@@ -16,7 +16,7 @@
  *   - Có thể tích hợp Zalo OA / SMS cho iOS user về sau
  */
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useId } from "react";
 import {
   Dialog,
   DialogContent,
@@ -29,6 +29,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
+import { formatCurrency } from "@/lib/format";
+import { requestManagerApproval, getManagerApproval } from "@/lib/services/supabase/manager-approval";
 import { verifyAndUseManagerOtp, type VerifiedOtp, type OtpActionCode, OTP_ACTION_LABELS } from "@/lib/services/supabase/manager-otp";
 
 interface OtpApprovalDialogProps {
@@ -55,6 +57,7 @@ export function OtpApprovalDialog({
   requireReason = false,
   onApproved,
 }: OtpApprovalDialogProps) {
+  const reasonInputId = useId();
   const [digits, setDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const [reason, setReason] = useState("");
   const [verifying, setVerifying] = useState(false);
@@ -75,9 +78,28 @@ export function OtpApprovalDialog({
     }
   }, [open]);
 
+  const managed = ['fnb.discount_override','pos_retail.discount_override','fnb.void_paid_bill','crm.delete_customer','crm.delete_supplier','products.delete'].includes(actionCode);
+  const [request, setRequest] = useState<{ id: string; status: string; reject_reason?: string } | null>(null);
+  const [sending, setSending] = useState(false);
+  const [verifiedApproval, setVerifiedApproval] = useState<VerifiedOtp | null>(null);
+  useEffect(() => { if (open) { setRequest(null); setVerifiedApproval(null); } }, [open]);
+  useEffect(() => {
+    if (!open || !request?.id || verifiedApproval) return;
+    let alive = true;
+    const load = async () => { if (document.visibilityState === 'hidden') return; try { const r = await getManagerApproval(request.id); if (alive) setRequest(r); } catch (e) { if (alive) setError(e instanceof Error ? e.message : 'Không tải được trạng thái duyệt.'); } };
+    const timer = setInterval(() => void load(), 5000);
+    return () => { alive = false; clearInterval(timer); };
+  }, [open, request?.id, verifiedApproval]);
+  const sendRequest = async () => {
+    if (verifyLock.current || reason.trim().length < 5) return;
+    verifyLock.current = true; setSending(true); setError(null);
+    try { const r = await requestManagerApproval(actionCode, { ...targetMeta, label: targetMeta?.label ?? contextLabel }, reason.trim()); setRequest({ id: r.id, status: 'pending' }); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Chưa gửi được yêu cầu.'); }
+    finally { verifyLock.current = false; setSending(false); }
+  };
   const code = digits.join("");
-  const codeReady = code.length === 6;
-  const reasonValid = !requireReason || reason.trim().length >= 5;
+  const codeReady = (code.length === 6 || Boolean(verifiedApproval)) && (!managed || Boolean(request && !["rejected", "expired"].includes(request.status)));
+  const reasonValid = !(requireReason || managed) || reason.trim().length >= 5;
 
   const handleVerify = useCallback(async () => {
     if (!codeReady || !reasonValid || verifyLock.current) return;
@@ -86,15 +108,17 @@ export function OtpApprovalDialog({
     setError(null);
     let otpVerified = false;
     try {
-      const verified = await verifyAndUseManagerOtp({
+      const verified = verifiedApproval ?? await verifyAndUseManagerOtp({
         code,
         actionCode,
         targetMeta: {
           ...targetMeta,
+          ...(request ? { approval_request_id: request.id } : {}),
           reason: reason.trim() || undefined,
         },
       });
       otpVerified = true;
+      setVerifiedApproval(verified);
       await onApproved(verified, reason.trim());
       onOpenChange(false);
     } catch (err) {
@@ -124,6 +148,8 @@ export function OtpApprovalDialog({
     verifying,
     actionCode,
     targetMeta,
+    request,
+    verifiedApproval,
     reason,
     attempts,
     onApproved,
@@ -173,7 +199,7 @@ export function OtpApprovalDialog({
     OTP_ACTION_LABELS[actionCode as OtpActionCode] ?? actionCode;
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!verifyLock.current) onOpenChange(next); }}>
+    <Dialog open={open} trackFormChanges={false} hasUnsavedChanges={!request && !verifiedApproval && reason.trim().length > 0} onOpenChange={(next) => { if (!verifyLock.current) onOpenChange(next); }}>
       <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -189,6 +215,7 @@ export function OtpApprovalDialog({
         </DialogHeader>
 
         <DialogBody className="space-y-3 py-2">
+          {managed && typeof targetMeta?.amount === "number" && <div className="flex items-center justify-between gap-3 rounded-md bg-primary/5 px-3 py-2 text-sm tabular-nums"><span>Giảm đề nghị</span><strong>{formatCurrency(targetMeta.amount)} đ</strong></div>}
           {/* Hướng dẫn */}
           <div className="bg-status-warning/5 border border-status-warning/20 rounded-lg p-3 text-xs text-muted-foreground">
             <div className="flex items-start gap-2">
@@ -200,13 +227,41 @@ export function OtpApprovalDialog({
               <div>
                 Gọi điện hoặc nhắn Zalo cho quản lý phụ trách. Quản lý vào{" "}
                 <span className="font-medium text-foreground">
-                  onebiz.com.vn/manager
+                  onebiz.com.vn/cap-otp
                 </span>{" "}
                 → bấm <span className="font-medium">Cấp OTP</span> → đọc mã 6 số (hiệu lực 2 phút).
               </div>
             </div>
           </div>
 
+          {/* Lý do (tuỳ chọn) */}
+          {(requireReason || managed) && (
+            <div>
+              <label htmlFor={reasonInputId} className="text-xs font-medium text-muted-foreground block mb-1">
+                Lý do <span className="text-status-error">*</span>
+              </label>
+              <textarea id={reasonInputId}
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="VD: Khách đổi ý, đặt nhầm món, khách bỏ về..."
+                rows={2}
+                disabled={verifying || sending || Boolean(request)}
+                className="w-full text-sm border border-border rounded-md px-3 py-2 bg-surface focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none"
+              />
+              {!reasonValid && reason.length > 0 && (
+                <p className="text-xs text-status-error mt-1">
+                  Lý do tối thiểu 5 ký tự.
+                </p>
+              )}
+            </div>
+          )}
+
+          {managed && <div className="rounded-md border bg-surface-container-low p-3 space-y-2">
+            {request ? <p role="status" className="text-sm">{request.status === 'rejected' ? `Đã từ chối: ${request.reject_reason ?? ''}` : request.status === 'expired' ? 'Yêu cầu hết hạn. Đóng và gửi lại.' : verifiedApproval ? 'Mã đã xác thực. Đang chờ hoàn tất thao tác.' : request.status === 'issued' ? 'Quản lý đã cấp mã. Nhập OTP bên dưới.' : 'Đã gửi yêu cầu đến quản lý có quyền.'}</p>
+              : <p className="text-xs text-muted-foreground">Nhập lý do và gửi yêu cầu trước khi nhận mã từ quản lý.</p>}
+            {request && ['expired','rejected'].includes(request.status) && <Button size="sm" variant="outline" onClick={() => { setRequest(null); setVerifiedApproval(null); setDigits(['','','','','','']); setError(null); }}>Yêu cầu mới</Button>}
+            {!request && <Button className="w-full min-h-11" disabled={sending || reason.trim().length < 5} onClick={() => void sendRequest()}>{sending ? 'Đang gửi…' : 'Gửi yêu cầu duyệt'}</Button>}
+          </div>}
           {/* 6 ô digit */}
           <div className="flex justify-center gap-1.5 sm:gap-2">
             {digits.map((d, i) => (
@@ -221,7 +276,7 @@ export function OtpApprovalDialog({
                 maxLength={1}
                 aria-label={`Chữ số OTP ${i + 1}`}
                 value={d}
-                disabled={verifying}
+                disabled={verifying || sending || (managed && !request)}
                 onChange={(e) => handleDigitChange(i, e.target.value)}
                 onKeyDown={(e) => handleKeyDown(i, e)}
                 onPaste={handlePaste}
@@ -236,28 +291,6 @@ export function OtpApprovalDialog({
               />
             ))}
           </div>
-
-          {/* Lý do (tuỳ chọn) */}
-          {requireReason && (
-            <div>
-              <label className="text-xs font-medium text-muted-foreground block mb-1">
-                Lý do <span className="text-status-error">*</span>
-              </label>
-              <textarea
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                placeholder="VD: Khách đổi ý, đặt nhầm món, khách bỏ về..."
-                rows={2}
-                disabled={verifying}
-                className="w-full text-sm border border-border rounded-md px-3 py-2 bg-surface focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none"
-              />
-              {!reasonValid && reason.length > 0 && (
-                <p className="text-xs text-status-error mt-1">
-                  Lý do tối thiểu 5 ký tự.
-                </p>
-              )}
-            </div>
-          )}
 
           {/* Error */}
           {error && (
@@ -276,16 +309,16 @@ export function OtpApprovalDialog({
         </DialogBody>
 
         <DialogFooter>
-          <Button
+          <Button className="min-h-11"
             variant="outline"
             onClick={() => onOpenChange(false)}
-            disabled={verifying}
+            disabled={verifying || sending}
           >
             Huỷ
           </Button>
-          <Button
+          <Button className="min-h-11"
             onClick={handleVerify}
-            disabled={!codeReady || !reasonValid || verifying}
+            disabled={!codeReady || !reasonValid || verifying || sending}
           >
             {verifying ? (
               <>

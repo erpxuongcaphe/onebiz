@@ -10,6 +10,7 @@ vi.mock("@/lib/services/supabase/manager-otp", () => ({
   verifyAndUseManagerOtp: mocks.verify, OTP_ACTION_CODES: { FNB_VOID_PAID_BILL: "fnb.void_paid_bill" },
   OTP_ACTION_LABELS: { "fnb.void_paid_bill": "Hủy phiếu đã thanh toán" },
 }));
+vi.mock("@/lib/services/supabase/manager-approval", () => ({ requestManagerApproval: vi.fn().mockResolvedValue({ id: "approval1" }), getManagerApproval: vi.fn().mockResolvedValue({ id: "approval1", status: "issued" }) }));
 vi.mock("@/lib/print-fnb", () => ({ printFnbReceipt: vi.fn() }));
 vi.mock("@/lib/print-fnb-template", () => ({ printFnbBillWithTemplate: vi.fn() }));
 const invoice = { id: "i1", code: "HD000001", kitchenOrderId: "k1", kitchenOrderNumber: "KB000010",
@@ -25,6 +26,8 @@ describe("paid FNB void result", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Xin duyệt" }));
     fireEvent.paste(screen.getByRole("textbox", { name: "Chữ số OTP 1" }), { clipboardData: { getData: () => "123456" } });
     fireEvent.change(screen.getByPlaceholderText("VD: Khách đổi ý, đặt nhầm món, khách bỏ về..."), { target: { value: "Thu nhầm phiếu" } });
+    fireEvent.click(screen.getByRole("button", { name: "Gửi yêu cầu duyệt" }));
+    await screen.findByRole("status");
     fireEvent.click(screen.getByRole("button", { name: "Xác nhận" }));
     await waitFor(() => expect(mocks.voidInvoice).toHaveBeenCalledOnce());
     expect(await screen.findByRole("alert")).toHaveTextContent("OTP đã xác nhận nhưng thao tác chưa hoàn tất");

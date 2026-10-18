@@ -37,8 +37,9 @@ export function getFnbBenefitDisplay({
 }: FnbBenefitDisplayInput): FnbBenefitDisplay {
   const manual = nonNegative(manualDiscountAmount);
   const persisted = nonNegative(persistedOrderDiscountAmount);
-  const promotion = nonNegative(promotionDiscountAmount);
-  const coupon = nonNegative(couponDiscountAmount);
+  const complimentary = nonNegative(totalAfterManualDiscount) <= persisted && manual > 0;
+  const promotion = complimentary ? 0 : nonNegative(promotionDiscountAmount);
+  const coupon = complimentary ? 0 : nonNegative(couponDiscountAmount);
   const automatic = promotion + coupon;
 
   return {

@@ -697,9 +697,10 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
   const orderDiscountAmount = (() => {
     const disc = activeTab?.orderDiscount;
     if (!disc || disc.value <= 0) return 0;
-    if (disc.mode === "amount") return Math.min(disc.value, subtotal);
+    const discountable = Math.max(0, subtotal - (activeTab?.persistedOrderDiscountAmount ?? 0));
+    if (disc.mode === "amount") return Math.min(disc.value, discountable);
     // percent
-    return Math.round((subtotal * Math.min(disc.value, 100)) / 100);
+    return Math.round((discountable * Math.min(disc.value, 100)) / 100);
   })();
 
   const total = Math.max(subtotal - orderDiscountAmount, 0);

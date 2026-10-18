@@ -447,13 +447,13 @@ export async function updateSupplier(
  *   - SUPPLIER_HAS_PRODUCTS: còn SP gắn NCC mặc định
  *   - SUPPLIER_HAS_RETURNS: còn phiếu trả hàng
  */
-export async function deleteSupplier(id: string): Promise<void> {
+export async function deleteSupplier(id: string, otpId?: string): Promise<void> {
   const supabase = getClient();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase.rpc as any)(
-    "delete_supplier_atomic",
-    { p_supplier_id: id },
+    otpId ? "delete_supplier_with_approval_00566" : "delete_supplier_atomic",
+    otpId ? { p_supplier_id: id, p_otp_id: otpId } : { p_supplier_id: id },
   );
 
   if (error) {

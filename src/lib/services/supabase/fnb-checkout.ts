@@ -155,6 +155,12 @@ const FNB_PAYMENT_ERROR_MESSAGES: ReadonlyArray<{
     message: "Anh/chị không có quyền thanh toán đơn này.",
   },
   {
+    codes: ["APPROVAL_AMOUNT_CHANGED", "APPROVAL_ITEMS_CHANGED", "APPROVAL_TARGET_CHANGED"],
+    message: "Bill hoặc mức giảm đã thay đổi so với nội dung được duyệt. Gửi lại yêu cầu cho bill hiện tại.",
+  },
+  { codes: ["APPROVAL_EXPIRED"], message: "Yêu cầu duyệt đã hết hạn. Vui lòng xin duyệt lại." },
+  { codes: ["APPROVAL_SCOPE_DENIED", "APPROVAL_APPROVER_SCOPE_DENIED"], message: "Duyệt không đúng bill, người thực hiện hoặc phạm vi chi nhánh. Kiểm tra yêu cầu với quản lý." },
+  {
     codes: ["FNB_MANUAL_DISCOUNT_INVALID", "FNB_MANUAL_DISCOUNT_EXCEEDS_ORDER"],
     message: "Giảm giá thủ công không hợp lệ.",
   },

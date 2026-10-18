@@ -171,6 +171,9 @@ export function filterApplicablePromotions(
   const subtotal = calculateSubtotal(ctx.items);
 
   return promotions.filter((promo) => {
+    // FnB has no atomic gifted-SKU issue/stock flow yet; never offer a
+    // program which checkout correctly rejects. Retail keeps its own support.
+    if (ctx.channel === "fnb" && promo.type === "gift") return false;
     // 1. channel match
     if (promo.channel !== "both" && promo.channel !== ctx.channel) return false;
 
