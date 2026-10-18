@@ -44,6 +44,7 @@ import {
 import { cn } from "@/lib/utils";
 import { TableIdentityEditor } from "./table-identity-editor";
 import { getTableLabel } from "@/lib/fnb/table-label";
+import { reorderFloorPlanZones } from "@/lib/services/supabase/floor-plan";
 
 // Lazy load Konva canvas (tránh SSR + giảm bundle)
 const FloorPlanCanvas = dynamic(
@@ -326,6 +327,21 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
     pushUndo("layout-change");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tables.length, decorations.length]);
+
+  const [orderingZone, setOrderingZone] = useState(false);
+  const moveZone = async (zone: FloorPlanZone, direction: -1 | 1) => {
+    if (orderingZone) return;
+    const floorZones = zones.filter(row => row.floorLevel === zone.floorLevel);
+    const index = floorZones.findIndex(row => row.id === zone.id), neighbor = index + direction;
+    if (index < 0 || neighbor < 0 || neighbor >= floorZones.length) return;
+    const next = [...floorZones]; [next[index], next[neighbor]] = [next[neighbor], next[index]];
+    setOrderingZone(true);
+    try {
+      await trackSave(() => reorderFloorPlanZones(branchId, zone.floorLevel, floorZones.map(row => row.id), next.map(row => row.id)));
+      const fresh = await getFloorPlanZones(branchId); setZones(fresh);
+    } catch (err) { toast({ title: "Chưa đổi thứ tự khu vực", description: err instanceof Error ? err.message : "Vui lòng thử lại", variant: "error" }); }
+    finally { setOrderingZone(false); }
+  };
 
   // ─── Thêm zone mới ───
   const handleAddZone = async () => {
@@ -628,9 +644,10 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
               </span>
               {zones
                 .filter((z) => z.floorLevel === floor)
-                .map((z) => (
+                .map((z, index, floorZones) => (
+                  <div key={z.id} className="flex shrink-0 items-center">
                   <button
-                    key={z.id}
+                    type="button"
                     onClick={() => {
                       setActiveZoneId(z.id);
                       setSelectedTableId(null);
@@ -645,6 +662,8 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
                   >
                     {z.name}
                   </button>
+                  {activeZoneId === z.id && floorZones.length > 1 && ([-1, 1] as const).map(direction => <button type="button" key={direction} disabled={orderingZone || (direction < 0 ? index === 0 : index === floorZones.length - 1)} title={direction < 0 ? "Đưa khu vực lên trước" : "Đưa khu vực ra sau"} aria-label={`${direction < 0 ? "Đưa lên" : "Đưa xuống"}: ${z.name}`} onClick={() => void moveZone(z, direction)} className="flex h-11 w-11 items-center justify-center rounded-lg text-primary hover:bg-primary/10 disabled:opacity-30"><Icon name={direction < 0 ? "chevron_left" : "chevron_right"} size={20} /></button>)}
+                  </div>
                 ))}
             </div>
           ))}

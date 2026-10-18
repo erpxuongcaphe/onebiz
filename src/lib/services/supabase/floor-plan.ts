@@ -72,7 +72,8 @@ export async function getFloorPlanZones(
     .eq("branch_id", branchId)
     .eq("is_active", true)
     .order("floor_level", { ascending: true })
-    .order("sort_order", { ascending: true });
+    .order("sort_order", { ascending: true })
+    .order("id", { ascending: true });
   if (error) handleError(error, "getZonesByBranch");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map(mapZone) as FloorPlanZone[];
@@ -244,4 +245,15 @@ function mapZone(row: any): FloorPlanZone {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+/** All zone order changes are atomic and use the same rows as POS. */
+export async function reorderFloorPlanZones(branchId: string, floor: number, original: string[], ids: string[]): Promise<void> {
+  const client = getClient();
+  const rpc = client.rpc.bind(client) as unknown as (name: string, args: Record<string, unknown>) => PromiseLike<{ error: { message: string } | null }>;
+  const { error } = await rpc("reorder_fnb_floor_zones_atomic", { p_branch_id: branchId, p_floor: floor, p_original: original, p_ids: ids });
+  if (error) {
+    if (error.message.includes("FLOOR_ORDER_CONFLICT")) throw new Error("Khu vực vừa được thay đổi. Tải lại sơ đồ trước khi sắp xếp.");
+    throw error;
+  }
 }

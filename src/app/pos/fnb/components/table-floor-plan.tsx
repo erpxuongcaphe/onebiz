@@ -118,39 +118,26 @@ export function TableFloorPlan({
     onMergeTable?.(original);
   };
 
-  // Load zones (fallback gracefully nếu chưa setup)
+  const [layoutRefresh, setLayoutRefresh] = useState(0);
+  useEffect(() => {
+    const refresh = () => { if (document.visibilityState !== "hidden") setLayoutRefresh(value => value + 1); };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    const timer = window.setInterval(refresh, 30000);
+    return () => { window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", refresh); clearInterval(timer); };
+  }, []);
+  useEffect(() => { setActiveZoneId(null); setZones([]); setActionTable(null); setTableSearch(""); setOffsiteArea(false); setStatusFilter("all"); }, [currentBranch?.id]);
   useEffect(() => {
     if (!currentBranch?.id) return;
-    let cancelled = false;
-    setActiveZoneId(null);
-    setZones([]);
-    setActionTable(null);
-    setTableSearch("");
-    setOffsiteArea(false);
-    setStatusFilter("all");
-    getFloorPlanZones(currentBranch.id)
-      .then((zs) => {
-        if (cancelled) return;
-        setZones(zs);
-        setActiveZoneId(zs[0]?.id ?? null);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        console.error("[FloorPlan] load zones failed:", err);
-        // Fallback grid view (không có sơ đồ trực quan)
-        setZones([]);
-        toast({
-          title: "Không tải được khu vực sơ đồ",
-          description:
-            err instanceof Error ? err.message : "Hiển thị grid thay thế",
-          variant: "warning",
-        });
-      });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentBranch?.id]);
+    let active = true;
+    getFloorPlanZones(currentBranch.id).then(rows => {
+      if (!active) return;
+      setZones(rows); setActiveZoneId(current => rows.some(row => row.id === current) ? current : rows[0]?.id ?? null);
+    }).catch((err: unknown) => {
+      if (active) toast({ title: "Chưa tải được bố trí mới", description: err instanceof Error ? err.message : "Đang giữ sơ đồ đã tải", variant: "warning" });
+    });
+    return () => { active = false; };
+  }, [currentBranch?.id, layoutRefresh, toast]);
 
   // Build map từ tables prop (đã có status + currentOrderId) sang CanvasTable
   useEffect(() => {
@@ -222,7 +209,7 @@ export function TableFloorPlan({
     return () => {
       cancelled = true;
     };
-  }, [activeZoneId, tables, orderTimestamps, toast]);
+  }, [activeZoneId, tables, orderTimestamps, toast, layoutRefresh]);
 
   const activeZone = useMemo(
     () => zones.find((z) => z.id === activeZoneId) ?? null,

@@ -1,39 +1,48 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ load: vi.fn(), save: vi.fn() }));
-vi.mock("@/lib/services/supabase/fnb-menu-order", async importOriginal => ({ ...await importOriginal<typeof import("@/lib/services/supabase/fnb-menu-order")>(), loadFnbMenuOrder: mocks.load, saveFnbMenuOrder: mocks.save }));
+vi.mock("@/lib/services/supabase/fnb-pos-layout", () => ({ loadFnbLayoutEditor: mocks.load, saveFnbPosLayout: mocks.save }));
 import { FnbMenuOrderDialog } from "@/app/pos/fnb/components/fnb-menu-order-dialog";
-const original = { categories: [{ id: "coffee", name: "Cà phê", sort_order: 0 }, { id: "tea", name: "Trà", sort_order: 0 }], products: [{ id: "a", name: "Americano", category_id: "coffee", sort_order: 0 }, { id: "b", name: "Bạc sỉu", category_id: "coffee", sort_order: 0 }] };
-describe("menu ordering dialog", () => {
-  beforeEach(() => { mocks.load.mockReset().mockResolvedValue(original); mocks.save.mockReset().mockResolvedValue(undefined); });
-  it("lets a manager preview changes and cancel without writing", async () => {
-    const close = vi.fn();
-    render(<FnbMenuOrderDialog onClose={close} onSaved={vi.fn()} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Đưa xuống: Cà phê" }));
-    expect(screen.getByRole("button", { name: "Lưu thứ tự" })).toBeEnabled();
-    fireEvent.click(screen.getByRole("button", { name: "Hủy" }));
-    expect(close).not.toHaveBeenCalled();
-    fireEvent.click(await screen.findByRole("button", { name: "Bỏ thay đổi và đóng" }));
-    await waitFor(() => expect(close).toHaveBeenCalledOnce()); expect(mocks.save).not.toHaveBeenCalled();
-  });
-  it("retains edits and shows the server error when saving fails", async () => {
-    mocks.save.mockRejectedValue(new Error("Thực đơn đã được người khác sửa"));
-    const close = vi.fn(), saved = vi.fn();
-    render(<FnbMenuOrderDialog onClose={close} onSaved={saved} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Đưa xuống: Cà phê" }));
-    fireEvent.click(screen.getByRole("button", { name: "Lưu thứ tự" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("người khác sửa");
-    expect(close).not.toHaveBeenCalled(); expect(saved).not.toHaveBeenCalled();
-  });
-  it("updates POS only after successful persistence", async () => {
-    const close = vi.fn(), saved = vi.fn().mockResolvedValue(undefined);
-    render(<FnbMenuOrderDialog onClose={close} onSaved={saved} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Món trong danh mục" }));
+const layout = { revision: 0, categoryIds: [], productIds: [], hiddenIds: [] };
+const data = { layout, categories: [{ id: "coffee", name: "Cà phê", sort_order: 0 }, { id: "tea", name: "Trà", sort_order: 0 }], products: [{ id: "a", name: "Americano", category_id: "coffee", sort_order: 0 }, { id: "b", name: "Bạc sỉu", category_id: "coffee", sort_order: 0 }] };
+const props = () => ({ branchId: "xtb", branchName: "Xưởng Tư Búa", onClose: vi.fn(), onSaved: vi.fn() });
+describe("branch menu editor", () => {
+  beforeEach(() => { mocks.load.mockReset().mockResolvedValue(data); mocks.save.mockReset().mockImplementation(async (_branch, _original, next) => ({ ...next, revision: 1 })); });
+  it("does not mark tab/category navigation as an edit or write on cancel", async () => {
+    const p = props(); render(<FnbMenuOrderDialog {...p} />);
     await screen.findByRole("button", { name: "Đưa xuống: Americano" });
-    fireEvent.click(screen.getByRole("button", { name: "Đưa xuống: Americano" }));
-    fireEvent.click(screen.getByRole("button", { name: "Lưu thứ tự" }));
-    await waitFor(() => expect(close).toHaveBeenCalledOnce());
-    expect(mocks.save.mock.calls[0][0]).toEqual(original);
-    expect(saved.mock.calls[0][0].products.map((row: { id: string }) => row.id)).toEqual(["b", "a"]);
+    expect(screen.getByRole("button", { name: "Lưu bố trí" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Danh mục" }));
+    expect(screen.getByRole("button", { name: "Lưu bố trí" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Hủy" }));
+    await waitFor(() => expect(p.onClose).toHaveBeenCalled()); expect(mocks.save).not.toHaveBeenCalled();
+  });
+  it("saves only the chosen branch, not the shared catalog", async () => {
+    const p = props(); render(<FnbMenuOrderDialog {...p} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Đưa xuống: Americano" }));
+    fireEvent.click(screen.getByRole("button", { name: "Lưu bố trí" }));
+    await waitFor(() => expect(p.onSaved).toHaveBeenCalled());
+    expect(mocks.save.mock.calls[0][0]).toBe("xtb");
+    expect(mocks.save.mock.calls[0][2].productIds).toEqual(["b", "a"]);
+    expect(p.onSaved.mock.calls[0][0].revision).toBe(1);
+  });
+  it("removes and restores a tile in the draft without deleting the product", async () => {
+    render(<FnbMenuOrderDialog {...props()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Bỏ khỏi bố trí: Americano" }));
+    expect(screen.queryByRole("button", { name: "Bỏ khỏi bố trí: Americano" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Thêm món vào bố trí" }));
+    fireEvent.click(screen.getByRole("button", { name: "Thêm vào bố trí: Americano" }));
+    fireEvent.click(screen.getByRole("button", { name: "Về danh sách món" }));
+    expect(screen.getByRole("button", { name: "Bỏ khỏi bố trí: Americano" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Lưu bố trí" })).toBeDisabled();
+    expect(mocks.save).not.toHaveBeenCalled();
+  });
+  it("retains draft when a concurrent save is rejected", async () => {
+    mocks.save.mockRejectedValue(new Error("Người khác vừa sửa bố trí"));
+    const p = props(); render(<FnbMenuOrderDialog {...p} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Đưa xuống: Americano" }));
+    fireEvent.click(screen.getByRole("button", { name: "Lưu bố trí" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Người khác");
+    expect(p.onClose).not.toHaveBeenCalled(); expect(p.onSaved).not.toHaveBeenCalled();
   });
 });
