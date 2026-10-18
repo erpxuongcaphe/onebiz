@@ -112,6 +112,7 @@ export const REPORT_WORKFLOWS: ReportWorkflow[] = [
     icon: "groups",
     reportPaths: [
       "/phan-tich/khach-san-pham",
+      "/phan-tich/hieu-qua-khach-hang",
       "/phan-tich/customer-cohort",
       "/phan-tich/rfm",
       "/phan-tich/cong-no-aging",
@@ -172,6 +173,17 @@ const PROFIT_PERMISSIONS = [
 ];
 
 export const REPORT_CATALOG: ReportCatalogItem[] = [
+  {
+    href: "/phan-tich/hieu-qua-khach-hang",
+    title: "Hiệu quả khách hàng",
+    shortTitle: "Hiệu quả khách hàng",
+    description: "Doanh thu thuần, hàng trả, giá vốn lịch sử và lãi gộp từng khách; đối chiếu kỳ trước và mở xuống SKU.",
+    category: "sales",
+    icon: "groups",
+    keywords: ["khách hàng", "doanh thu", "lãi gộp", "giá vốn", "hiệu quả"],
+    permissions: [PERMISSIONS.REPORTS_ANALYTICS, PERMISSIONS.REPORTS_VIEW_DETAIL],
+    permissionMode: "all",
+  },
   {
     href: "/phan-tich/sku-chi-tiet",
     title: "Chi tiết bán hàng và lãi gộp SKU",

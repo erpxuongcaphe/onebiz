@@ -76,6 +76,7 @@ export type ReportKind =
   | "khach-hang"
   | "khach-san-pham"
   | "sku-chi-tiet"
+  | "hieu-qua-khach-hang"
   | "customer-cohort"
   | "rfm"
   | "xuat-nhap-ton"
