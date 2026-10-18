@@ -81,6 +81,6 @@ describe("financial analysis details", () => {
     expect(page).toContain("phiếu trả được xác nhận trong kỳ");
     expect(page).toContain("Đối soát bán và trả hàng");
     expect(page).toContain("Hoàn nhập do trả");
-    expect(page).toContain('href="/phan-tich/tra-hang"');
+    expect(page).toContain('managementReportLink("/phan-tich/tra-hang", activeBranchId, range)');
   });
 });
