@@ -42,7 +42,7 @@ const returnWriter = readFileSync(
   "utf8",
 );
 const overviewPage = readFileSync(
-  "src/app/(main)/phan-tich/page.tsx",
+  "src/app/(main)/_business-overview.tsx",
   "utf8",
 );
 

@@ -5,7 +5,7 @@ import { REPORT_CATALOG } from "@/lib/reports/catalog";
 
 function reportPagePath(href: string): string {
   return href === "/phan-tich"
-    ? "src/app/(main)/phan-tich/page.tsx"
+    ? "src/app/(main)/_business-overview.tsx"
     : `src/app/(main)${href}/page.tsx`;
 }
 

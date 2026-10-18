@@ -65,22 +65,22 @@ export function ManagementReview({
         </Link>
       ),
     },
-    { key: "goodsRevenue", label: "Doanh thu hàng hóa", align: "right", cell: row => currency(row.goodsRevenue) },
+    { key: "goodsRevenue", label: "Doanh thu thuần", align: "right", cell: row => currency(row.goodsRevenue) },
     { key: "cogs", label: "Giá vốn", align: "right", sortValue: row => row.cogsComplete ? row.cogs : null, cell: row => currency(row.cogsComplete ? row.cogs : null) },
     { key: "grossProfit", label: "Lãi gộp", align: "right", sortValue: row => row.cogsComplete ? row.grossProfit : null, cell: row => currency(row.cogsComplete ? row.grossProfit : null) },
     { key: "otherIncome", label: "Thu nhập khác", align: "right", cell: row => currency(row.otherIncome ?? 0) },
     { key: "opEx", label: "Chi phí vận hành", align: "right", cell: row => currency(row.opEx) },
-    { key: "netProfit", label: "Kết quả đã ghi nhận", align: "right", sortValue: row => row.cogsComplete ? row.netProfit : null, cell: row => currency(row.cogsComplete ? row.netProfit : null) },
+    { key: "netProfit", label: "Kết quả vận hành", align: "right", sortValue: row => row.cogsComplete ? row.netProfit : null, cell: row => currency(row.cogsComplete ? row.netProfit : null) },
   ];
 
   return (
     <section className="space-y-5 border-y border-border py-5" aria-label="Đối chiếu quản trị">
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-        <span>{branchId ? "Kết quả theo chi nhánh · có giao dịch nội bộ nếu phát sinh" : "Tổng quản trị hệ thống · loại giao dịch được đánh dấu nội bộ"}</span>
+        <span>{branchId ? "Chi nhánh · gồm nội bộ" : "Toàn công ty · loại nội bộ"}</span>
         <span>Cập nhật {new Date(updatedAt).toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}</span>
       </div>
       {!branchId && current.internalRevenue !== undefined && (
-        <p className="text-sm">Doanh thu nội bộ đã loại khỏi tổng: <strong className="tabular-nums">{currency(current.internalRevenue)}</strong></p>
+        <p className="text-sm">Doanh thu nội bộ loại trừ: <strong className="tabular-nums">{currency(current.internalRevenue)}</strong></p>
       )}
       <nav className="flex flex-wrap gap-2" aria-label="Báo cáo liên quan cùng phạm vi">
         {relatedReports.map(item => (
@@ -92,7 +92,7 @@ export function ManagementReview({
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <div className="min-w-0">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-base font-semibold">Kết quả và biến động</h2>
+            <h2 className="text-base font-semibold">Biến động cần xem</h2>
             <button type="button" onClick={() => setShowEvidence(value => !value)} aria-expanded={showEvidence} className="inline-flex min-h-9 items-center gap-1 text-sm text-primary">
               <Icon name={showEvidence ? "expand_less" : "expand_more"} size={18} />{showEvidence ? "Thu gọn" : "Xem bằng chứng"}
             </button>
@@ -113,9 +113,9 @@ export function ManagementReview({
           </div>
         </div>
         <div className="min-w-0">
-          <h2 className="mb-3 text-base font-semibold">Từ bán hàng đến kết quả kinh doanh</h2>
+          <h2 className="mb-3 text-base font-semibold">Kết quả kinh doanh</h2>
           <ReportDataTable columns={financialColumns} rows={rows} getRowKey={row => row.metric} showDisplayOptions={false} tablePreferenceKey="report.management.financial-bridge" />
-          <p className="mt-2 text-xs leading-5 text-muted-foreground">Cùng nguồn với báo cáo kết quả kinh doanh. Lợi nhuận không phải số dư tiền; chi phí theo nơi ghi nhận, chưa tự phân bổ giả định.</p>
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">Theo chứng từ đã ghi nhận. Lợi nhuận không phải dòng tiền.</p>
         </div>
       </div>
       {showEvidence && (
@@ -125,13 +125,13 @@ export function ManagementReview({
       )}
       {!branchId && (
         <div className="min-w-0">
-          <h2 className="mb-3 text-base font-semibold">Đóng góp từng chi nhánh</h2>
+          <h2 className="mb-3 text-base font-semibold">Đóng góp chi nhánh</h2>
           {branchError ? <p role="alert" className="text-sm text-status-error">{branchError}</p> : branches && (
             <ReportDataTable columns={branchColumns} rows={branches} getRowKey={row => row.branchId}
               tablePreferenceKey="report.management.branches" showDisplayOptions={false}
               sortState={branchSort} onSortChange={onBranchSort} />
           )}
-          <p className="mt-2 text-xs leading-5 text-muted-foreground">Bảng chi nhánh gồm phát sinh nội bộ. Chênh với tổng quản trị cần đối chiếu tại báo cáo kết quả kinh doanh, không mặc định là sai số.</p>
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">Chi nhánh gồm nội bộ; tổng công ty đã loại trừ.</p>
         </div>
       )}
     </section>

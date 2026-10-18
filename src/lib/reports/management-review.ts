@@ -1,5 +1,18 @@
 import type { BranchPnLRow, ProfitAndLoss } from "@/lib/services/supabase/reports";
 import { sortReportRows } from "./table-sort";
+import { toCreatedAtRangeWindow } from "@/lib/utils/list-date-preset-range";
+import { cashBookDate } from "@/lib/cash-time";
+
+export function managementComparisonRange(range: { from: string; to: string }) {
+  const window = toCreatedAtRangeWindow(range);
+  if (!window) return null;
+  const start = Date.parse(window.start);
+  const duration = Date.parse(window.end) - start;
+  return {
+    from: cashBookDate(new Date(start - duration).toISOString()),
+    to: cashBookDate(new Date(start - 1).toISOString()),
+  };
+}
 
 export function sortManagementBranches(rows: BranchPnLRow[], sort: { id: string; direction: "asc" | "desc" } | null): BranchPnLRow[] {
   if (!sort) return rows;
@@ -10,10 +23,10 @@ export function sortManagementBranches(rows: BranchPnLRow[], sort: { id: string;
 }
 
 export function reportChange(current: number, previous: number): string {
-  if (!Number.isFinite(current) || !Number.isFinite(previous)) return "Chưa đủ dữ liệu so sánh";
-  if (previous === 0) return current === 0 ? "Không phát sinh ở cả hai kỳ" : "Phát sinh mới · kỳ trước bằng 0";
+  if (!Number.isFinite(current) || !Number.isFinite(previous)) return "Chưa đủ dữ liệu";
+  if (previous === 0) return current === 0 ? "Không phát sinh" : "Phát sinh mới";
   const percent = ((current - previous) / Math.abs(previous)) * 100;
-  return `${percent > 0 ? "+" : ""}${percent.toFixed(1)}% so với kỳ trước`;
+  return `${percent > 0 ? "+" : ""}${percent.toFixed(1)}%`;
 }
 
 export function managementReportLink(path: string, branchId: string | undefined, range: { from: string; to: string }): string {
@@ -33,28 +46,28 @@ export interface ManagementObservation {
 export function managementObservations(current: ProfitAndLoss, previous: ProfitAndLoss): ManagementObservation[] {
   const results: ManagementObservation[] = [];
   if (!current.cogsComplete || !previous.cogsComplete) {
-    results.push({ id: "cost-incomplete", title: "Chưa đủ cơ sở kết luận lợi nhuận", detail: `Kỳ hiện tại thiếu giá vốn ${current.missingCostLines} dòng; kỳ trước ${previous.missingCostLines} dòng. Không thay bằng giá hiện tại hoặc coi phần thiếu bằng 0.`, action: "Kiểm tra giá vốn", path: "/phan-tich/bao-cao-tai-chinh", severity: "warning" });
+    results.push({ id: "cost-incomplete", title: "Chưa đủ giá vốn", detail: `Thiếu giá vốn: kỳ này ${current.missingCostLines} dòng, kỳ trước ${previous.missingCostLines} dòng.`, action: "Đối chiếu giá vốn", path: "/phan-tich/bao-cao-tai-chinh", severity: "warning" });
   } else if (current.goodsRevenue > previous.goodsRevenue && current.grossProfit < previous.grossProfit) {
-    results.push({ id: "margin-pressure", title: "Doanh thu tăng nhưng lãi gộp giảm", detail: "Giá vốn tăng nhiều hơn phần doanh thu tăng. Cần đối chiếu giá thực bán, giảm giá, cơ cấu SKU và giá vốn lịch sử trước khi kết luận nguyên nhân.", action: "Xem hiệu quả SKU", path: "/phan-tich/sku-chi-tiet", severity: "warning" });
+    results.push({ id: "margin-pressure", title: "Doanh thu tăng, lãi gộp giảm", detail: "Kiểm tra giá bán, chiết khấu, cơ cấu mặt hàng và giá vốn.", action: "Hiệu quả mặt hàng", path: "/phan-tich/sku-chi-tiet", severity: "warning" });
   } else if (current.goodsRevenue < previous.goodsRevenue) {
-    results.push({ id: "sales-decline", title: "Doanh thu hàng hóa giảm so với kỳ trước", detail: "Đối chiếu số hóa đơn, giá trị đơn, hàng trả và đóng góp từng mặt hàng trên cùng phạm vi ngày.", action: "Đối chiếu bán hàng", path: "/phan-tich/ban-hang", severity: "info" });
+    results.push({ id: "sales-decline", title: "Doanh thu giảm", detail: "Đối chiếu số hóa đơn, giá trị đơn và hàng trả.", action: "Chi tiết bán hàng", path: "/phan-tich/ban-hang", severity: "info" });
   }
   if (current.operatingExpense > previous.operatingExpense) {
-    results.push({ id: "expense-increase", title: "Chi phí vận hành tăng", detail: "So sánh các khoản đã ghi nhận theo ngày phát sinh và chi nhánh chịu chi phí; không đồng nhất chi phí với tiền đã chi.", action: "Xem khoản thu nhập, chi phí", path: "/tai-chinh/thu-nhap-chi-phi", severity: "info" });
+    results.push({ id: "expense-increase", title: "Chi phí vận hành tăng", detail: "Đối chiếu khoản mục, ngày ghi nhận và chi nhánh.", action: "Chi tiết chi phí", path: "/tai-chinh/thu-nhap-chi-phi", severity: "info" });
   }
   if (results.length === 0) {
-    results.push({ id: "review-period", title: "Đối chiếu kết quả trước khi chốt kỳ", detail: "Kết quả phản ánh chứng từ đã ghi nhận; chưa xác nhận mọi chi phí vận hành đã được nhập đầy đủ.", action: "Mở kết quả kinh doanh", path: "/phan-tich/bao-cao-tai-chinh", severity: "info" });
+    results.push({ id: "review-period", title: "Đối chiếu cuối kỳ", detail: "Kiểm tra chi phí đã ghi nhận trước khi chốt kỳ.", action: "Kết quả kinh doanh", path: "/phan-tich/bao-cao-tai-chinh", severity: "info" });
   }
   return results;
 }
 
 export function managementFinancialRows(current: ProfitAndLoss, previous: ProfitAndLoss) {
   return [
-    { metric: "Doanh thu thuần hàng hóa", current: current.goodsRevenue, previous: previous.goodsRevenue },
-    { metric: "Giá vốn lịch sử", current: current.cogsComplete ? current.cogs : null, previous: previous.cogsComplete ? previous.cogs : null },
+    { metric: "Doanh thu thuần", current: current.goodsRevenue, previous: previous.goodsRevenue },
+    { metric: "Giá vốn", current: current.cogsComplete ? current.cogs : null, previous: previous.cogsComplete ? previous.cogs : null },
     { metric: "Lãi gộp", current: current.cogsComplete ? current.grossProfit : null, previous: previous.cogsComplete ? previous.grossProfit : null },
     { metric: "Thu nhập khác", current: current.otherIncome ?? 0, previous: previous.otherIncome ?? 0 },
-    { metric: "Chi phí vận hành đã ghi nhận", current: current.operatingExpense, previous: previous.operatingExpense },
-    { metric: "Kết quả sau chi phí đã ghi nhận", current: current.cogsComplete ? current.netProfit : null, previous: previous.cogsComplete ? previous.netProfit : null },
+    { metric: "Chi phí vận hành", current: current.operatingExpense, previous: previous.operatingExpense },
+    { metric: "Kết quả vận hành", current: current.cogsComplete ? current.netProfit : null, previous: previous.cogsComplete ? previous.netProfit : null },
   ].map(row => ({ ...row, difference: row.current === null || row.previous === null ? null : row.current - row.previous }));
 }
