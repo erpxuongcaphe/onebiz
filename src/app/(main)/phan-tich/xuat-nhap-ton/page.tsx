@@ -14,7 +14,13 @@
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
-import { useBranchFilter, useToast } from "@/lib/contexts";
+import { useAuth, useBranchFilter, useToast } from "@/lib/contexts";
+import { useLiveDataRefresh } from "@/lib/hooks/use-live-data-refresh";
+import { InventoryCapitalReview } from "@/components/shared/report/inventory-capital-review";
+import { ReportSection } from "@/components/shared/report/report-section";
+import { MetricFilters } from "@/components/shared/report/metric-filters";
+import { matchesMetricFilters, metricFilterError, metricFilterLabel, type MetricFilter } from "@/lib/reports/metric-filter";
+import { matchesInventoryReview, inventoryCapitalCategories, inventoryReviewExportRows, INVENTORY_METRIC_FIELDS, INVENTORY_REVIEW_LABELS, type InventoryReview } from "@/lib/reports/inventory-capital";
 import { Icon } from "@/components/ui/icon";
 import { formatStockQuantity as formatNumber, formatCurrency, formatDate } from "@/lib/format";
 import {
@@ -54,6 +60,7 @@ const SUB_MODES: { key: SubMode; label: string; icon: string }[] = [
 export default function XuatNhapTonPage() {
   const { activeBranchId, isReady, branches } = useBranchFilter();
   const { toast } = useToast();
+  const { tenant } = useAuth();
 
   const {
     preset,
@@ -75,8 +82,17 @@ export default function XuatNhapTonPage() {
   const [data, setData] = useState<XntReportResult | null>(null);
   const uom = useProductUom((data?.rows ?? []).map(row => row.productId));
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [loadedScope, setLoadedScope] = useState("");
+  const [review, setReview] = useState<InventoryReview>("all");
+  const [categorySort, setCategorySort] = useState<{ id: string; direction: "asc" | "desc" }>({ id: "closingValue", direction: "desc" });
+  const [metricFilters, setMetricFilters] = useState<MetricFilter[]>([]);
   const [exporting, setExporting] = useState(false);
   const requestIdRef = useRef(0);
+  const scope = `${tenant?.id}:${activeBranchId ?? "all"}:${range.from}:${range.to}:${debouncedSearch}`;
+  const scopeRef = useRef(scope);
+  scopeRef.current = scope;
+  const pending = loading || !isReady || loadedScope !== scope || search.trim() !== debouncedSearch;
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -88,18 +104,21 @@ export default function XuatNhapTonPage() {
   const fetchData = useCallback(async () => {
     const requestId = ++requestIdRef.current;
     setLoading(true);
+    setError("");
     try {
       const result = await getXntReport({
         range,
         branchId: activeBranchId ?? undefined,
         search: debouncedSearch || undefined,
       });
-      if (requestId !== requestIdRef.current) return;
+      if (requestId !== requestIdRef.current || scopeRef.current !== scope) return;
       setData(result);
+      setLoadedScope(scope);
     } catch (err) {
-      if (requestId !== requestIdRef.current) return;
+      if (requestId !== requestIdRef.current || scopeRef.current !== scope) return;
       console.error("Failed to fetch XNT report:", err);
       setData(null);
+      setError(err instanceof Error ? err.message : "Không tải được báo cáo.");
       toast({
         title: "Lỗi tải báo cáo Xuất - Nhập - Tồn",
         description: err instanceof Error ? err.message : "Vui lòng thử lại",
@@ -108,27 +127,30 @@ export default function XuatNhapTonPage() {
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [range, activeBranchId, debouncedSearch, toast]);
+  }, [range, activeBranchId, debouncedSearch, toast, scope]);
 
   useEffect(() => {
     if (!isReady) return;
     fetchData();
+    return () => { requestIdRef.current += 1; };
   }, [fetchData, isReady]);
+  useLiveDataRefresh(fetchData, tenant?.id, activeBranchId, ["dashboard_live_signals"], isReady);
 
   const branchName =
     branches.find((b) => b.id === activeBranchId)?.name ?? "Tất cả chi nhánh";
   const visibleRows = useMemo(
     () => {
-      const filtered = filterXntRows(data?.rows ?? [], rowFilter, { categoryName: categoryFilter, unit: unitFilter }).map(withXntUnitValues);
+      const filtered = filterXntRows(data?.rows ?? [], rowFilter, { categoryName: categoryFilter, unit: unitFilter }).map(withXntUnitValues)
+        .filter(row => matchesInventoryReview(row, review) && matchesMetricFilters(row, metricFilters));
       return sortState ? sortReportRows(filtered, (row) => row[sortState.id as keyof XntValuedRow], sortState.direction) : sortReportRows(filtered, (row) => row.code, "asc");
     },
-    [data?.rows, rowFilter, sortState, categoryFilter, unitFilter],
+    [data?.rows, rowFilter, sortState, categoryFilter, unitFilter, review, metricFilters],
   );
-  const unitExportColumns = [
+  const unitExportColumns = useMemo(() => [
     { label: "ĐVT quy đổi hiện tại", key: "convertedUnit", width: 18 },
     { label: "1 ĐVT kho tương đương", key: "convertedFactor", width: 20, format: "number" as const, decimalPlaces: 4 },
     { label: "Tồn cuối quy đổi hiện tại", key: "convertedClosingQty", width: 22, format: "number" as const, decimalPlaces: 4 },
-  ];
+  ], []);
   const unitExportValues = useCallback((row: XntRow) => {
     const conversions = uom.map.get(row.productId) ?? [];
     const convertedUnit = preferredWeighingUnit(row.unit,conversions);
@@ -153,6 +175,7 @@ export default function XuatNhapTonPage() {
   // ========================================================
   const handleExportView = useCallback(async () => {
     if (exporting) return;
+    if (pending || error || metricFilterError(metricFilters)) return;
     if (!data) return;
     setExporting(true);
     try {
@@ -168,6 +191,7 @@ export default function XuatNhapTonPage() {
     });
     titleRows.push(HISTORICAL_VALUE_NOTE);
     titleRows.push("Cột quy đổi dùng cấu hình hiện tại để đối chiếu; số lượng/giá trị chứng từ gốc giữ nguyên.");
+    titleRows.push(`Kiểm tra: ${INVENTORY_REVIEW_LABELS[review]}; ${metricFilterLabel(metricFilters, INVENTORY_METRIC_FIELDS)}`);
     titleRows.push(`Nhóm hàng: ${categoryFilter === undefined ? "Tất cả" : categoryFilter || "Chưa phân nhóm"}; ĐVT: ${unitFilter ?? "Tất cả"}; Tìm kiếm: ${debouncedSearch || "Tất cả"}`);
 
     if (subMode === "summary") {
@@ -288,13 +312,14 @@ export default function XuatNhapTonPage() {
     } finally {
       setExporting(false);
     }
-  }, [data, range, branchName, subMode, visibleRows, visibleSubtotal, quantityTotals, movementValueTotals, categoryFilter, unitFilter, debouncedSearch, exporting, toast, unitExportValues]);
+  }, [data, range, branchName, subMode, visibleRows, visibleSubtotal, quantityTotals, movementValueTotals, categoryFilter, unitFilter, debouncedSearch, exporting, toast, unitExportValues, pending, error, metricFilters, review, unitExportColumns]);
 
   // ========================================================
   // Excel export — full mode (multi-sheet kế toán pivot)
   // ========================================================
   const handleExportFull = useCallback(async () => {
     if (exporting) return;
+    if (pending || error || metricFilterError(metricFilters)) return;
     if (!data) return;
     setExporting(true);
     try {
@@ -306,6 +331,7 @@ export default function XuatNhapTonPage() {
       generatedAt: new Date(),
     });
     titleRows.push(HISTORICAL_VALUE_NOTE);
+    titleRows.push(`Kiểm tra: ${INVENTORY_REVIEW_LABELS[review]}; ${metricFilterLabel(metricFilters, INVENTORY_METRIC_FIELDS)}`);
 
     await exportReportToExcel({
       kind: "xuat-nhap-ton",
@@ -314,6 +340,21 @@ export default function XuatNhapTonPage() {
       branchName,
       disclaimer: HISTORICAL_VALUE_NOTE,
       sheets: [
+        { name: "Vốn tồn theo nhóm", titleRows, autoFilter: true, columns: [
+          { key: "category", label: "Nhóm hàng", width: 32 },
+          { key: "products", label: "Mặt hàng", format: "number", width: 16 },
+          { key: "closingValue", label: "Giá trị tồn cuối kỳ", format: "currency", width: 24 },
+          { key: "knownClosingValue", label: "Giá trị đã xác định", format: "currency", width: 24 },
+          { key: "missing", label: "Thiếu giá trị", format: "number", width: 18 },
+          { key: "negative", label: "Tồn âm", format: "number", width: 16 },
+          { key: "noOut", label: "Còn tồn, chưa xuất", format: "number", width: 24 },
+        ], rows: inventoryCapitalCategories(visibleRows, categorySort) },
+        { name: "Kiểm soát vốn tồn", titleRows, autoFilter: true, columns: [
+          { key: "code", label: "Mã hàng", width: 20 }, { key: "name", label: "Mặt hàng", width: 36 }, { key: "category", label: "Nhóm hàng", width: 24 }, { key: "unit", label: "ĐVT", width: 12 },
+          { key: "closingQty", label: "Tồn cuối", format: "number", decimalPlaces: 4, width: 20 }, { key: "closingValue", label: "Giá trị cuối kỳ", format: "currency", width: 24 },
+          { key: "negative", label: "Tồn âm", width: 16 }, { key: "missing", label: "Thiếu giá trị", width: 18 }, { key: "noOut", label: "Còn tồn, chưa xuất", width: 24 },
+          { key: "quantityDifference", label: "Lệch cân đối SL", format: "number", decimalPlaces: 4, width: 22 }, { key: "valueDifference", label: "Lệch cân đối giá trị", format: "currency", width: 24 },
+        ], rows: inventoryReviewExportRows(visibleRows) },
         // Sheet 1 — Tổng hợp 9 cột
         {
           name: "1. Tổng hợp",
@@ -439,7 +480,7 @@ export default function XuatNhapTonPage() {
     } finally {
       setExporting(false);
     }
-  }, [data, range, branchName, visibleRows, visibleSubtotal, quantityTotals, movementValueTotals, categoryFilter, unitFilter, units, debouncedSearch, rowFilter, sortState, exporting, toast, unitExportValues]);
+  }, [data, range, branchName, visibleRows, visibleSubtotal, quantityTotals, movementValueTotals, categoryFilter, unitFilter, units, debouncedSearch, rowFilter, sortState, exporting, toast, unitExportValues, pending, error, metricFilters, review, unitExportColumns, categorySort]);
 
   // ========================================================
   // Render: column definitions
@@ -626,7 +667,7 @@ export default function XuatNhapTonPage() {
           : "Chưa có dữ liệu trong kỳ này.";
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] overflow-hidden">
+    <div className="flex min-h-full flex-col">
       <ReportPageHeader
         title="Báo cáo Xuất - Nhập - Tồn"
         subtitle={
@@ -640,12 +681,12 @@ export default function XuatNhapTonPage() {
         onCustomRangeChange={setCustomRange}
         onExportView={handleExportView}
         onExportFull={handleExportFull}
-        exportDisabled={loading || exporting || !data}
+        exportDisabled={pending || exporting || !data || Boolean(error) || metricFilterError(metricFilters)}
       />
 
       <div className="border-b border-border px-4 py-2 text-xs text-muted-foreground lg:px-6">
         <p>{HISTORICAL_VALUE_NOTE} Đơn giá BQ = thành tiền / số lượng; không cộng đơn giá. Bấm mã hàng để đối chiếu phát sinh.</p>
-        {!loading && incompleteVisibleCount > 0 && (
+        {!pending && incompleteVisibleCount > 0 && (
           <p className="mt-1 font-medium text-status-warning" role="status">
             {incompleteVisibleCount} mặt hàng chưa đủ căn cứ định giá tồn; giá trị từng cột thiếu dữ liệu được để trống để tránh cộng sai.
           </p>
@@ -731,14 +772,19 @@ export default function XuatNhapTonPage() {
           <option value="all">Tất cả ĐVT</option>
           {units.map((unit) => <option key={unit} value={`unit:${unit}`}>{unit || "Chưa có ĐVT"}</option>)}
         </select>
+        <select aria-label="Kiểm tra vốn tồn kho" value={review} onChange={event => setReview(event.target.value as InventoryReview)} className="h-8 max-w-full rounded-md border bg-background px-2 text-xs">
+          {Object.entries(INVENTORY_REVIEW_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+        </select>
+        {(search || categoryFilter !== undefined || unitFilter !== undefined || review !== "all" || metricFilters.length > 0 || rowFilter !== "activity") && <button type="button" className="inline-flex min-h-9 items-center gap-1 text-sm text-primary" onClick={() => { setSearch(""); setCategoryFilter(undefined); setUnitFilter(undefined); setReview("all"); setMetricFilters([]); setRowFilter("activity"); }}><Icon name="filter_alt_off" size={18} />Xóa bộ lọc</button>}
         <span className="shrink-0 text-xs tabular-nums text-muted-foreground" aria-live="polite">
-          {visibleRows.length}/{data?.rows.length ?? 0} mặt hàng
+          {pending ? "Đang tải…" : `${visibleRows.length}/${data?.rows.length ?? 0} mặt hàng`}
         </span>
       </div>
 
       {/* Body */}
-      <div className="flex-1 overflow-auto p-4 lg:p-6">
-        {loading ? (
+      <div className="flex-1 space-y-4 p-4 lg:p-6">
+        <MetricFilters fields={INVENTORY_METRIC_FIELDS} value={metricFilters} onChange={setMetricFilters} />
+        {pending ? (
           <div className="flex flex-col items-center justify-center py-16">
             <Icon
               name="progress_activity"
@@ -751,14 +797,18 @@ export default function XuatNhapTonPage() {
           </div>
         ) : !data ? (
           <div className="text-center py-16 text-sm text-muted-foreground">
-            Không có dữ liệu
+            <p>{error ? `Chưa tải được báo cáo. ${error}` : "Không có dữ liệu"}</p>
+            {error && <button type="button" className="mt-2 text-primary underline" onClick={fetchData}>Thử lại</button>}
           </div>
         ) : (
-          <div className="bg-surface-container-lowest rounded-lg ambient-shadow">
+          <div className="space-y-4">
+            <InventoryCapitalReview rows={visibleRows} onReview={setReview} categorySort={categorySort} onCategorySort={setCategorySort} />
+            <ReportSection title={subMode === "summary" ? "Chi tiết xuất nhập tồn" : "Chi tiết từng loại nhập xuất"} tone="primary">
             {subMode === "summary" ? (
               <ReportDataTable
                 columns={summaryColumns}
                 columnGroups={XNT_SUMMARY_COLUMN_GROUPS}
+                className="[&_thead_tr:first-child_th]:border-r [&_thead_tr:first-child_th]:text-left"
                 tablePreferenceKey="report.xuat-nhap-ton.summary"
                 rows={visibleRows}
                 sortState={sortState}
@@ -774,6 +824,7 @@ export default function XuatNhapTonPage() {
                 columns={detailColumnsWithTotals}
                 tablePreferenceKey="report.xuat-nhap-ton.detail"
                 columnGroups={detailColumnGroups}
+                className="[&_thead_tr:first-child_th]:border-r [&_thead_tr:first-child_th]:text-left"
                 rows={visibleRows}
                 sortState={sortState}
                 onSortChange={setSortState}
@@ -784,6 +835,7 @@ export default function XuatNhapTonPage() {
                 emptyState={emptyState}
               />
             )}
+            </ReportSection>
           </div>
         )}
       </div>
