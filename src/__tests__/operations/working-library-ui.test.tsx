@@ -20,14 +20,15 @@ beforeEach(()=>{libraries=[];vi.stubGlobal('fetch',fetchMock);fetchMock.mockImpl
 });});
 afterEach(()=>{cleanup();vi.unstubAllGlobals();vi.resetAllMocks();});
 describe('company working library and branch setup UX',()=>{
- it('explains and focuses the missing reason while keeping unsaved work intact',async()=>{
+ it('asks for a reason beside the changed name instead of a global save field',async()=>{
   libraries=[{...lib,rows:lib.rows.slice(0,1)}];render(<WorkingLibrary workspace={workspace} onApplied={vi.fn()}/>);
   fireEvent.click(await screen.findByRole('button',{name:'Sửa nội dung'}));
   await waitFor(()=>expect(screen.getByLabelText('Tên bộ tiêu chí')).toHaveFocus());
   fireEvent.change(screen.getByLabelText('Tên bộ tiêu chí'),{target:{value:'Nội dung CEO đang chỉnh'}});
   fireEvent.click(screen.getByRole('button',{name:'Lưu bộ tiêu chí chung'}));
-  expect(await screen.findByRole('alert')).toHaveTextContent('Lý do lưu / thay đổi cần từ 5 đến 1,000 ký tự');
-  const reason=screen.getByLabelText('Lý do lưu / thay đổi',{exact:true});
+  expect(await screen.findByRole('alert')).toHaveTextContent('bổ sung lý do tại tên bộ tiêu chí');
+  expect(screen.queryByLabelText('Lý do lưu / thay đổi',{exact:true})).toBeNull();
+  const reason=screen.getByLabelText('Lý do đổi tên bộ tiêu chí',{exact:true});
   expect(reason).toHaveAttribute('aria-invalid','true');
   await waitFor(()=>expect(reason).toHaveFocus());
   expect(screen.getByLabelText('Tên bộ tiêu chí')).toHaveValue('Nội dung CEO đang chỉnh');
@@ -35,6 +36,84 @@ describe('company working library and branch setup UX',()=>{
   fireEvent.change(reason,{target:{value:'Cập nhật lịch thực hiện công việc'}});
   fireEvent.click(screen.getByRole('button',{name:'Lưu bộ tiêu chí chung'}));
   await waitFor(()=>expect(fetchMock.mock.calls.filter(([,init])=>init?.method==='POST')).toHaveLength(1));
+ });
+ it('shows the reason only inside the changed criterion and preserves other criteria',async()=>{
+  libraries=[{...lib,rows:lib.rows.slice(31,33)}];render(<WorkingLibrary workspace={workspace} onApplied={vi.fn()}/>);
+  fireEvent.click(await screen.findByRole('button',{name:'Sửa nội dung'}));
+  await waitFor(()=>expect(screen.getByLabelText('Tên bộ tiêu chí')).toHaveFocus());
+  expect(screen.queryByLabelText(/Lý do sửa mục/)).toBeNull();
+  const row=screen.getByRole('group',{name:'Mục 33'});
+  fireEvent.change(within(row).getByLabelText('Tiêu chí đánh giá'),{target:{value:'Yêu cầu kiểm kho CEO vừa sửa'}});
+  const reason=within(row).getByLabelText('Lý do sửa mục 33',{exact:true});
+  expect(screen.queryByLabelText('Lý do sửa mục 32',{exact:true})).toBeNull();
+  fireEvent.change(screen.getByLabelText('Tìm tiêu chí trong bộ chung'),{target:{value:'Đồng phục'}});
+  fireEvent.click(screen.getByRole('button',{name:'Lưu bộ tiêu chí chung'}));
+  expect(await screen.findByRole('alert')).toHaveTextContent('sửa mục 33');
+  await waitFor(()=>expect(reason).toHaveFocus());
+  expect(within(row).getByLabelText('Tiêu chí đánh giá')).toHaveValue('Yêu cầu kiểm kho CEO vừa sửa');
+  fireEvent.change(reason,{target:{value:'Bổ sung cách kiểm tra thực tế'}});
+  fireEvent.click(screen.getByRole('button',{name:'Lưu bộ tiêu chí chung'}));
+  await waitFor(()=>expect(fetchMock.mock.calls.filter(([,init])=>init?.method==='POST')).toHaveLength(1));
+  const body=JSON.parse(fetchMock.mock.calls.find(([,init])=>init?.method==='POST')![1].body);
+  expect(body.reason).toBe('Sửa mục 33: Bổ sung cách kiểm tra thực tế');
+  expect(body.rows[0]).toEqual(lib.rows[31]);expect(body.rows[1].requirement).toBe('Yêu cầu kiểm kho CEO vừa sửa');
+ });
+ it('requires reasons at deleted rows and supports undo before saving',async()=>{
+  libraries=[{...lib,rows:lib.rows.slice(0,2)}];render(<WorkingLibrary workspace={workspace} onApplied={vi.fn()}/>);
+  fireEvent.click(await screen.findByRole('button',{name:'Sửa nội dung'}));
+  await waitFor(()=>expect(screen.getByLabelText('Tên bộ tiêu chí')).toHaveFocus());
+  fireEvent.click(screen.getByRole('button',{name:/Xóa tiêu chí 1:/}));
+  expect(screen.getByLabelText('Lý do xóa mục 1',{exact:true})).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'Hoàn tác xóa'}));
+  expect(screen.queryByLabelText('Lý do xóa mục 1',{exact:true})).toBeNull();
+  fireEvent.click(screen.getByRole('button',{name:/Xóa tiêu chí 1:/}));
+  fireEvent.change(screen.getByLabelText('Lý do xóa mục 1',{exact:true}),{target:{value:'Không còn áp dụng yêu cầu này'}});
+  fireEvent.click(screen.getByRole('button',{name:'Lưu bộ tiêu chí chung'}));
+  await waitFor(()=>expect(fetchMock.mock.calls.some(([,init])=>init?.method==='POST')).toBe(true));
+  const body=JSON.parse(fetchMock.mock.calls.find(([,init])=>init?.method==='POST')![1].body);
+  expect(body.rows).toEqual([lib.rows[1]]);expect(body.reason).toContain('Xóa mục 1: Không còn áp dụng yêu cầu này');
+ });
+ it('does not create a new version when the editor has no changes',async()=>{
+  libraries=[{...lib,rows:lib.rows.slice(0,1)}];render(<WorkingLibrary workspace={workspace} onApplied={vi.fn()}/>);
+  fireEvent.click(await screen.findByRole('button',{name:'Sửa nội dung'}));
+  fireEvent.click(screen.getByRole('button',{name:'Lưu bộ tiêu chí chung'}));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Chưa có thay đổi để lưu');
+  expect(fetchMock.mock.calls.every(([,init])=>init?.method!=='POST')).toBe(true);
+ });
+ it('requires every changed row reason and never truncates a journal over its existing limit',async()=>{
+  libraries=[{...lib,rows:lib.rows.slice(0,2)}];render(<WorkingLibrary workspace={workspace} onApplied={vi.fn()}/>);
+  fireEvent.click(await screen.findByRole('button',{name:'Sửa nội dung'}));
+  await waitFor(()=>expect(screen.getByLabelText('Tên bộ tiêu chí')).toHaveFocus());
+  for(const row of screen.getAllByLabelText('Tiêu chí đánh giá'))fireEvent.change(row,{target:{value:'Yêu cầu mới đã được xác nhận'}});
+  fireEvent.change(screen.getByLabelText('Lý do sửa mục 1',{exact:true}),{target:{value:'Làm rõ yêu cầu kiểm tra'}});
+  fireEvent.change(screen.getByLabelText('Lý do sửa mục 2',{exact:true}),{target:{value:'     '}});
+  fireEvent.click(screen.getByRole('button',{name:'Lưu bộ tiêu chí chung'}));
+  expect(await screen.findByRole('alert')).toHaveTextContent('sửa mục 2');
+  expect(fetchMock.mock.calls.every(([,init])=>init?.method!=='POST')).toBe(true);
+  fireEvent.change(screen.getByLabelText('Lý do sửa mục 2',{exact:true}),{target:{value:'x'.repeat(1000)}});
+  fireEvent.click(screen.getByRole('button',{name:'Lưu bộ tiêu chí chung'}));
+  expect(await screen.findByRole('alert')).toHaveTextContent('vượt giới hạn 1,000');
+  expect(screen.getByLabelText('Lý do sửa mục 2',{exact:true})).toHaveValue('x'.repeat(1000));
+  expect(fetchMock.mock.calls.every(([,init])=>init?.method!=='POST')).toBe(true);
+  fireEvent.change(screen.getByLabelText('Lý do sửa mục 2',{exact:true}),{target:{value:'Cập nhật chuẩn phục vụ'}});
+  fireEvent.click(screen.getByRole('button',{name:'Lưu bộ tiêu chí chung'}));
+  await waitFor(()=>expect(fetchMock.mock.calls.some(([,init])=>init?.method==='POST')).toBe(true));
+  const body=JSON.parse(fetchMock.mock.calls.find(([,init])=>init?.method==='POST')![1].body);
+  expect(body.reason).toBe('Sửa mục 1: Làm rõ yêu cầu kiểm tra\nSửa mục 2: Cập nhật chuẩn phục vụ');
+ });
+ it('keeps changed content and its inline reason after a server failure',async()=>{
+  libraries=[{...lib,rows:lib.rows.slice(0,1)}];
+  const savedFetch=fetchMock.getMockImplementation()!;
+  fetchMock.mockImplementation((url:string,init?:RequestInit)=>init?.method==='POST'?Promise.resolve({ok:false,json:async()=>({error:'Máy chủ chưa lưu. Giữ nguyên nội dung.'})}):savedFetch(url,init));
+  render(<WorkingLibrary workspace={workspace} onApplied={vi.fn()}/>);
+  fireEvent.click(await screen.findByRole('button',{name:'Sửa nội dung'}));
+  await waitFor(()=>expect(screen.getByLabelText('Tên bộ tiêu chí')).toHaveFocus());
+  fireEvent.change(screen.getByLabelText('Tiêu chí đánh giá'),{target:{value:'CEO đang chỉnh nội dung'}});
+  fireEvent.change(screen.getByLabelText('Lý do sửa mục 1',{exact:true}),{target:{value:'Làm rõ tiêu chuẩn'}});
+  fireEvent.click(screen.getByRole('button',{name:'Lưu bộ tiêu chí chung'}));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Máy chủ chưa lưu');
+  expect(screen.getByLabelText('Tiêu chí đánh giá')).toHaveValue('CEO đang chỉnh nội dung');
+  expect(screen.getByLabelText('Lý do sửa mục 1',{exact:true})).toHaveValue('Làm rõ tiêu chuẩn');
  });
  it('shows independent work schedules instead of a shared weekly selector',async()=>{
   libraries=[lib];render(<WorkingLibrary workspace={workspace} onApplied={vi.fn()}/>);

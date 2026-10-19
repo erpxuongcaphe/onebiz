@@ -69,6 +69,8 @@ import { StandardLifecycle } from "./standard-lifecycle";
 import { ScheduleReview } from "./schedule-review";
 import { scheduleState, scheduleStateLabels } from "@/lib/operations/schedule-lifecycle";
 import { filterPeople } from "@/lib/operations/people-filters";
+import type { QualityWorkspace as QualityData } from "@/lib/operations/quality-contracts";
+import { settingsStandards, standardCategoryOptions } from "@/lib/operations/settings-standards";
 
 const tabs = [
   { key: "overview", label: "Tổng quan", icon: "dashboard" },
@@ -549,7 +551,7 @@ export default function OperationsWorkspace() {
           {loading && !data && <Empty label="Đang tải dữ liệu…" />}
           {data && (
             <>
-              {!legacy && <QualityWorkspace key={`${branch}:${tab}:${qualityNavigation}`} workspace={data} onConfigurationRefresh={() => void load()} branch={branch || data.todos[0]?.branch_id || ""} period={period} assessmentPeriod={assessmentPeriod} onAssessmentPeriodChange={setAssessmentPeriod} focus={qualityFocus} onNavigate={navigateQuality} configuration={<SettingsView data={data} error={error} canConfigure={can("approve_policy")} canPropose={canProposeStandard(data, branch)} canManageMembers={can("manage_members")} busy={busy} onEdit={setEditor} onSave={send} onScheduleChanged={() => void load()} includeRewardPolicies={false} />} initialView={tab === "overview" ? "overview" : tab === "todo" ? "issues" : tab === "qc" ? "qc" : tab === "kpi" ? "report" : tab === "settings" ? "settings" : "work"} onLegacySettings={() => requestPageLeave(() => {setLegacy(true);setTab("settings");})} />}
+              {!legacy && <QualityWorkspace key={`${branch}:${tab}:${qualityNavigation}`} workspace={data} onConfigurationRefresh={() => void load()} branch={branch || data.todos[0]?.branch_id || ""} period={period} assessmentPeriod={assessmentPeriod} onAssessmentPeriodChange={setAssessmentPeriod} focus={qualityFocus} onNavigate={navigateQuality} configuration={qualityData => <SettingsView data={data} qualityData={qualityData} error={error} canConfigure={can("approve_policy")} canPropose={canProposeStandard(data, branch)} canManageMembers={can("manage_members")} busy={busy} onEdit={setEditor} onSave={send} onScheduleChanged={() => void load()} includeRewardPolicies={false} />} initialView={tab === "overview" ? "overview" : tab === "todo" ? "issues" : tab === "qc" ? "qc" : tab === "kpi" ? "report" : tab === "settings" ? "settings" : "work"} onLegacySettings={() => requestPageLeave(() => {setLegacy(true);setTab("settings");})} />}
               {legacy && <>
               <div className={styles.notice}>Cấu hình và lịch sử Hub hiện có <button onClick={() => requestPageLeave(() => {setLegacy(false);setTab("work");})}>Về Hub mới</button></div>
               <div className={styles.metrics}>
@@ -1067,8 +1069,9 @@ function actionLabel(action: string) {
   );
 }
 
-function SettingsView({
+export function SettingsView({
   data,
+  qualityData,
   error,
   canConfigure,
   canPropose,
@@ -1080,6 +1083,7 @@ function SettingsView({
   includeRewardPolicies = true,
 }: {
   data: Workspace;
+  qualityData?: Pick<QualityData, "assignments" | "catalog" | "groups">;
   error?: string;
   canConfigure: boolean;
   canPropose: boolean;
@@ -1099,7 +1103,8 @@ function SettingsView({
   const matches = (item: Parameters<typeof matchesConfiguration>[0]) => {
     try { return matchesConfiguration(item, filters, search, data.period); } catch { return false; }
   };
-  const standards = data.standards.filter(matches);
+  const configuredStandards = settingsStandards(data.standards, qualityData);
+  const standards = configuredStandards.filter(matches);
   const policies = data.policies.filter(matches);
   const members = data.members.filter(member => matches({ ...member, title: name(member.user_id) }));
   return (
@@ -1137,7 +1142,7 @@ function SettingsView({
         <label className={styles.field}><span>Danh mục thiết lập</span><select aria-label="Danh mục thiết lập" value={target} onChange={event => { setTarget(event.target.value as typeof target); setFilters(initialFilters("settings")); setSearch(""); }}><option value="standards">Standard Working</option>{includeRewardPolicies && <option value="policies">Chính sách thưởng</option>}<option value="members">Phân công chi nhánh</option></select></label>
         <label className={styles.field}><span>Tìm trong thiết lập</span><input aria-label="Tìm trong thiết lập" type="search" maxLength={200} value={search} onChange={event => setSearch(event.target.value)} placeholder={target === "members" ? "Tên tài khoản" : "Tên mẫu hoặc chính sách"} /></label>
       </div>
-      <OperationsFilterBar kind="settings" settingsTarget={target} value={filters} onChange={setFilters} people={filterPeople(data)} period={data.period} />
+      <OperationsFilterBar kind="settings" settingsTarget={target} value={filters} onChange={setFilters} people={filterPeople({ ...data, standards: configuredStandards })} period={data.period} standardCategories={standardCategoryOptions(configuredStandards)} />
       {target === "standards" && <>
       <h2 className={styles.sectionTitle}>Standard Working · {formatNumber(standards.length)}</h2>
       <div className={styles.list}>
@@ -1146,10 +1151,11 @@ function SettingsView({
             <div>
               <h2>{s.title}</h2>
               <p>
-                {name(s.assignee_id)} ·{" "}
+                {s.manager_ids.map(name).join(", ") || "Chưa phân công"} ·{" "}
                 {frequencyLabels[s.frequency as Frequency]}{" "}
                 · {s.criteria.length} tiêu chí
               </p>
+              <p>{s.categoryLabel}</p>
               <p>Từ {formatShortDate(`${s.effective_from}T00:00:00+07:00`)}{(s.stop_after || s.effective_until) && ` · Ngày cuối ${formatShortDate(`${s.stop_after || s.effective_until}T00:00:00+07:00`)}`}</p>
             </div>
             <Badge value={s.status === "pending" ? "pending_approval" : scheduleState(s, today(), data.standards)} />
@@ -1580,7 +1586,8 @@ function EditorForm({
             <h3>{editor.standard!.title}</h3>
             <p>{editor.standard!.description}</p>
             <dl className={styles.standardDetails}>
-              <div><dt>Quản lý phụ trách</dt><dd>{data.people.find(person => person.id === editor.standard!.assignee_id)?.name ?? "Tài khoản OneBiz"}</dd></div>
+              <div><dt>Quản lý phụ trách</dt><dd>{(editor.standard!.manager_ids ?? [editor.standard!.assignee_id]).map(id => data.people.find(person => person.id === id)?.name ?? "Tài khoản OneBiz").join(", ") || "Chưa phân công"}</dd></div>
+              {editor.standard!.categoryLabel && <div><dt>Phân loại</dt><dd>{editor.standard!.categoryLabel}</dd></div>}
               <div><dt>Phiên bản</dt><dd>{formatNumber(editor.standard!.revision)}</dd></div>
               <div><dt>Phạm vi</dt><dd>{editor.standard!.scope === "branch" ? "Đặc thù chi nhánh" : "Công việc chung"}</dd></div>
               <div><dt>Lịch thực hiện</dt><dd>{scheduleSummary(editor.standard!.frequency,editor.standard!.day_number,editor.standard!.month_number??1)}</dd></div>

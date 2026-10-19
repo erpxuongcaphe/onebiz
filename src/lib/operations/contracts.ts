@@ -90,6 +90,8 @@ export interface Run {
   version: number;
 }
 export interface Standard {
+  manager_ids?: string[];
+  categoryLabel?: string;
   id: string;
   workbook_batch_id?: string | null;
   branch_id: string;
