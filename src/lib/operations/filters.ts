@@ -68,10 +68,11 @@ export const filteredPageSchema = z.object({
     ctx.addIssue({ code: "custom", message: "Bộ lọc không áp dụng cho To-do." });
 });
 
-export function matchesConfiguration(item: { title?: string; assignee_id?: string; user_id?: string; status?: string; state?: string; effective_from?: string; frequency?: string; scope?: string; member_role?: string; active?: boolean }, filters: OperationsFilters, search: string, period: string) {
+export function matchesConfiguration(item: { title?: string; assignee_id?: string; manager_ids?: string[]; category?: string; user_id?: string; status?: string; state?: string; effective_from?: string; frequency?: string; scope?: string; member_role?: string; active?: boolean }, filters: OperationsFilters, search: string, period: string) {
   const dates = filterDates(filters, period);
   return (!search || (item.title ?? "").toLocaleLowerCase("vi").includes(search.trim().toLocaleLowerCase("vi"))) &&
-    (!filters.assignee || (item.assignee_id ?? item.user_id) === filters.assignee) &&
+    (!filters.assignee || (item.manager_ids ?? [item.assignee_id ?? item.user_id]).includes(filters.assignee)) &&
+    (!filters.category || item.category === filters.category) &&
     (!filters.state || (item.status ?? item.state) === filters.state) &&
     (!filters.frequency || item.frequency === filters.frequency) && (!filters.scope || item.scope === filters.scope) &&
     (!filters.role || item.member_role === filters.role) && (!filters.active || item.active === (filters.active === "true")) &&

@@ -10,9 +10,10 @@ import styles from "./workspace.module.css";
 import { UserPicker } from "./user-picker";
 import { frequencyLabels } from "@/lib/operations/recurrence";
 
-export function OperationsFilterBar({ kind, value, onChange, people, standards = [], period, settingsTarget = "standards" }: {
+export function OperationsFilterBar({ kind, value, onChange, people, standards = [], period, settingsTarget = "standards", standardCategories = {} }: {
   kind: FilterKind; value: OperationsFilters; onChange: (value: OperationsFilters) => void;
   people: Person[]; standards?: Standard[]; period: string; settingsTarget?: "standards" | "policies" | "members";
+  standardCategories?: Record<string, string>;
 }) {
   const id = useId();
   const set = (key: keyof OperationsFilters, selected: string) => onChange({ ...value, [key]: selected });
@@ -27,6 +28,7 @@ export function OperationsFilterBar({ kind, value, onChange, people, standards =
       {!(kind === "settings" && settingsTarget === "members") && select("state", "Trạng thái", kind === "settings" ? (settingsTarget === "standards" ? { draft: states.draft, pending: states.pending_approval, changes_requested: states.changes_requested, approved: states.approved, retired: states.retired } : { draft: states.draft, approved: states.approved }) : kind === "todo" ? { pending: states.pending, in_progress: states.in_progress, waiting: states.waiting, done: states.done, canceled: states.canceled } : { pending: states.pending, transferred: states.transferred, done: states.done })}
       {!(kind === "settings" && settingsTarget === "policies") && <UserPicker label={settingsTarget === "members" && kind === "settings" ? "Tài khoản" : "Người chịu trách nhiệm"} value={value.assignee} onChange={(id) => set("assignee",id)} options={people}/>}
       {!(kind === "settings" && settingsTarget === "members") && <>
+        {kind === "settings" && settingsTarget === "standards" && select("category", "Phân loại", standardCategories)}
         {kind !== "settings" && select("dateField", "Lọc theo ngày", kind === "todo" ? { created: "Ngày tạo", due: "Deadline hiện tại", completed: "Ngày hoàn thành", follow_up: "Ngày theo dõi lại" } : { due: "Hạn công việc", completed: "Ngày đạt", verified: "Ngày xác minh" }, "Chọn loại ngày")}
         <label className={styles.field} htmlFor={`${id}-preset`}><span>{kind === "settings" ? "Ngày áp dụng" : "Khoảng thời gian"}</span><select aria-label={kind === "settings" ? "Ngày áp dụng" : "Khoảng thời gian"} id={`${id}-preset`} value={value.preset} onChange={event => set("preset", event.target.value)}>{Object.entries(datePresets).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
         {value.preset === "custom" && <>{(["from", "to"] as const).map(key => <label key={key} className={styles.field} htmlFor={`${id}-${key}`}><span>{key === "from" ? "Từ ngày" : "Đến ngày"}</span><Input aria-label={key === "from" ? "Từ ngày" : "Đến ngày"} id={`${id}-${key}`} type="date" value={value[key]} onChange={event => set(key, event.target.value)} /></label>)}</>}

@@ -12,6 +12,7 @@ import { RecurrenceFields } from "./recurrence-fields";
 import { frequencyLabels } from "@/lib/operations/recurrence";
 import { vnToday } from "./quality-fields";
 import { missingWorkSchedules, workScheduleSummary } from "@/lib/operations/work-schedule";
+import { libraryChanges, libraryChangeReason, reconcileLibraryImport } from "@/lib/operations/library-change-reasons";
 import s from "./quality.module.css";
 import w from "./working-library.module.css";
 
@@ -48,8 +49,10 @@ export function WorkingLibrary({ workspace, onApplied }: { workspace:Workspace; 
   const [bulkSchedule,setBulkSchedule]=useState({effectiveFrom:'',dueTime:''});
   const [checkSchedule,setCheckSchedule]=useState(false);
   const lock=useRef(false);
-  const reasonInput=useRef<HTMLTextAreaElement>(null);
-  const [reasonInvalid,setReasonInvalid]=useState(false);
+  const reasonInputs=useRef<Record<string,HTMLTextAreaElement|null>>({});
+  const [changeReasons,setChangeReasons]=useState<Record<string,string>>({});
+  const [invalidReasons,setInvalidReasons]=useState<string[]>([]);
+  const [removedRows,setRemovedRows]=useState<number[]>([]);
   const request=useRef<{signature:string;id:string}|null>(null);
   const load=useCallback(async(signal?:AbortSignal)=>{
     setLoading(true);
@@ -66,8 +69,11 @@ export function WorkingLibrary({ workspace, onApplied }: { workspace:Workspace; 
   const existing=editor?applications.filter(a=>a.library_id===editor.library?.id):[];
   const eligible=branches.filter(b=>!existing.some(a=>a.branch_id===b.id));
   const close=()=>{if(!busy){setEditor(null);setConfirmApply(false);setApplyPayload(null);}};
+  const activeRows=rows.filter((_,index)=>!removedRows.includes(index));
+  const changes=editor?.kind==='edit'&&editor.library?libraryChanges(editor.library,rows,removedRows,title,notes):[];
+  const auditReason=libraryChangeReason(changes,changeReasons);
   function edit(library:Library|null,ceo=false){
-    setError('');setMessage('');setFileErrors([]);setFilter('');setSelected([]);setReasonInvalid(false);request.current=null;
+    setError('');setMessage('');setFileErrors([]);setFilter('');setSelected([]);setChangeReasons({});setInvalidReasons([]);setRemovedRows([]);reasonInputs.current={};request.current=null;
     setTitle(library?.title??(ceo?'Standard Working và QC · Bộ tiêu chí CEO':''));
     setRows(library?.rows.map(r=>({...r}))??(ceo?ceoWorkingRows.map(r=>({...r})):[emptyRow(1)]));
     setNotes(library?.notes??(ceo?ceoWorkingNotes:''));setSourceKey(library?.source_key??(ceo?'ceo-working-20261014':null));
@@ -83,6 +89,9 @@ export function WorkingLibrary({ workspace, onApplied }: { workspace:Workspace; 
   function focusMissing(form:HTMLFormElement){
     requestAnimationFrame(()=>{const field=form.querySelector<HTMLElement>('[data-field-error="true"]');field?.scrollIntoView?.({block:'center',behavior:'smooth'});field?.querySelector<HTMLElement>('input:not([type="hidden"]),select,button')?.focus({preventScroll:true});});
   }
+  function focusReason(key:string){
+    requestAnimationFrame(()=>{const input=reasonInputs.current[key];const details=input?.closest('details');if(details)details.open=true;input?.scrollIntoView?.({block:'center',behavior:'smooth'});input?.focus({preventScroll:true});});
+  }
   async function send(payload:Record<string,unknown>){
     if(lock.current)return;
     const signature=JSON.stringify(payload);
@@ -91,8 +100,8 @@ export function WorkingLibrary({ workspace, onApplied }: { workspace:Workspace; 
     if(!parsed.success){
       const labels:Record<string,string>={title:'Tên bộ tiêu chí',reason:'Lý do',rows:'STT hoặc nội dung tiêu chí',number:'STT',group:'Nhóm',requirement:'Tiêu chí đánh giá',frequency:'Tần suất',points:'Điểm cộng / trừ',notes:'Ghi chú'};
       const reasonIssue=parsed.error.issues.some(issue=>issue.path[0]==='reason');
-      if(reasonIssue){setReasonInvalid(true);requestAnimationFrame(()=>{reasonInput.current?.scrollIntoView?.({block:'center',behavior:'smooth'});reasonInput.current?.focus({preventScroll:true});});}
-      const details=parsed.error.issues.slice(0,8).map(issue=>issue.path[0]==='reason'?'Lý do lưu / thay đổi cần từ 5 đến 1,000 ký tự, không chỉ có khoảng trắng':issue.path[0]==='rows'&&typeof issue.path[1]==='number'?`Mục ${rows[issue.path[1]]?.number??issue.path[1]+1}: ${labels[String(issue.path[2])]??'nội dung'} chưa hợp lệ`:labels[String(issue.path[0])]??'Cấu hình chi nhánh');
+      if(reasonIssue){requestAnimationFrame(()=>{const input=Object.values(reasonInputs.current).find(Boolean);input?.scrollIntoView?.({block:'center',behavior:'smooth'});input?.focus({preventScroll:true});});}
+      const details=parsed.error.issues.slice(0,8).map(issue=>issue.path[0]==='reason'?'Lý do lưu / thay đổi cần từ 5 đến 1,000 ký tự, không chỉ có khoảng trắng':issue.path[0]==='rows'&&typeof issue.path[1]==='number'?`Mục ${activeRows[issue.path[1]]?.number??issue.path[1]+1}: ${labels[String(issue.path[2])]??'nội dung'} chưa hợp lệ`:labels[String(issue.path[0])]??'Cấu hình chi nhánh');
       setFilter('');setError(`Chưa lưu: ${[...new Set(details)].join('; ')}. Kiểm tra lại các trường này.`);return;
     }
     lock.current=true;setBusy(true);setError('');
@@ -116,14 +125,15 @@ export function WorkingLibrary({ workspace, onApplied }: { workspace:Workspace; 
       if(range.e.r>1000||range.e.c>30)throw Error('File có vùng dữ liệu quá lớn. Dùng mẫu công việc.');
       if(Object.entries(sheet).some(([key,v])=>!key.startsWith('!')&&v?.f))throw Error('Các ô nhập phải là giá trị, không dùng công thức Excel.');
       const parsed=parseWorkingWorkbook(x.utils.sheet_to_json<unknown[]>(sheet,{header:1,raw:true,defval:'',range:{s:{r:0,c:0},e:range.e}}));
-      setRows(parsed.rows);setNotes(parsed.notes);setFileErrors(parsed.errors.map(e=>`Dòng ${e.row}, cột ${e.column}: ${e.reason}`));
+      const draft=editor?.kind==='edit'&&editor.library?reconcileLibraryImport(editor.library.rows,parsed.rows):{rows:parsed.rows,removed:[]};
+      setRows(draft.rows);setRemovedRows(draft.removed);setNotes(parsed.notes);setChangeReasons({});setInvalidReasons([]);setFileErrors(parsed.errors.map(e=>`Dòng ${e.row}, cột ${e.column}: ${e.reason}`));
     }catch(e){setFileErrors([e instanceof Error?e.message:'Chưa đọc được file.']);}
     finally{setBusy(false);}
   }
   async function download(){
     try{
       const x=await import('xlsx');const book=x.utils.book_new();
-      const source=editor?.kind==='edit'?rows:ceoWorkingRows;
+      const source=editor?.kind==='edit'?activeRows:ceoWorkingRows;
       const sheet=x.utils.aoa_to_sheet([[...workingHeaders,'Ngày lặp','Tháng lặp'],...source.map(r=>[r.number,r.group,r.title,r.requirement,r.scope,r.frequency,r.points,r.dayNumber??'',r.monthNumber??''])]);
       sheet['!cols']=[8,30,36,100,20,18,12,14,14].map(wch=>({wch}));x.utils.book_append_sheet(book,sheet,'Cong viec');
       const guide=x.utils.aoa_to_sheet([
@@ -142,11 +152,26 @@ export function WorkingLibrary({ workspace, onApplied }: { workspace:Workspace; 
     }catch{setError('Chưa tải được mẫu. Hãy thử lại.');}
   }
   function update(index:number,patch:Partial<WorkingRow>){setRows(old=>old.map((row,at)=>at===index?{...row,...patch}:row));}
+  function reasonField(key:string,label:string){
+    const invalid=invalidReasons.includes(key);
+    return <label className={w.changeReason}>Lý do {label.toLocaleLowerCase('vi')} *<textarea ref={element=>{reasonInputs.current[key]=element;}} aria-label={`Lý do ${label.toLocaleLowerCase('vi')}`} aria-invalid={invalid} aria-describedby={`reason-hint-${key}`} required minLength={5} maxLength={1000} rows={2} value={changeReasons[key]??''} placeholder="Nêu ngắn gọn vì sao cần thay đổi" onChange={event=>{setChangeReasons(old=>({...old,[key]:event.target.value}));setInvalidReasons(old=>old.filter(value=>value!==key));}}/><small id={`reason-hint-${key}`} className={invalid?w.fieldError:w.status}>{invalid?'Nhập lý do từ 5 đến 1,000 ký tự, không chỉ có khoảng trắng.':'Ghi vào nhật ký cùng nội dung trước và sau khi lưu.'}</small></label>;
+  }
   function submit(event:FormEvent<HTMLFormElement>){
     event.preventDefault();if(busy||!editor)return;setError('');const form=new FormData(event.currentTarget);
     if(editor.kind==='edit'){
       if(fileErrors.length){setError('File còn lỗi. Chọn lại file đã sửa trước khi lưu.');return;}
-      void send({action:'save',id:editor.library?.id??null,version:editor.library?.version??null,title,rows,notes,sourceKey,reason:String(form.get('reason')??'')});
+      if(editor.library){
+        if(!changes.length){setError('Chưa có thay đổi để lưu.');return;}
+        const missing=changes.filter(change=>(changeReasons[change.key]??'').trim().length<5);
+        if(missing.length){
+          setInvalidReasons(missing.map(change=>change.key));
+          const row=missing[0].rowIndex===undefined?null:rows[missing[0].rowIndex];
+          if(row&&filter&&!`${row.group} ${row.title} ${row.requirement}`.toLocaleLowerCase().includes(filter.toLocaleLowerCase()))setFilter('');
+          setError(`Chưa lưu: bổ sung lý do tại ${missing.map(change=>change.label.toLocaleLowerCase('vi')).join(', ')}.`);focusReason(missing[0].key);return;
+        }
+        if(auditReason.length>1000){setError(`Nhật ký lần lưu này có ${formatNumber(auditReason.length)} ký tự, vượt giới hạn 1,000. Rút gọn các lý do ngay tại dòng đã sửa; nội dung đang nhập được giữ nguyên, không cắt mất lý do.`);return;}
+      }
+      void send({action:'save',id:editor.library?.id??null,version:editor.library?.version??null,title,rows:activeRows,notes,sourceKey,reason:editor.library?auditReason:'Khởi tạo bộ tiêu chí chung'});
     }else if(editor.kind==='archive'||editor.kind==='restore')void send({action:editor.kind,id:editor.library.id,version:editor.library.version,reason:String(form.get('reason')??'')});
     else{
       const incomplete=missingWorkSchedules(editor.library.rows);
@@ -178,19 +203,20 @@ export function WorkingLibrary({ workspace, onApplied }: { workspace:Workspace; 
         {editor?.kind==='edit'&&<fieldset disabled={busy} style={{border:0,padding:0,margin:0,minWidth:0}}>
           <p className={w.notice}>Lưu bộ chung chưa tạo việc, chưa phân công, chưa chấm điểm. Các chi nhánh đang dùng giữ nguyên phiên bản đã áp dụng.</p>
           <label>Tên bộ tiêu chí<input required maxLength={200} value={title} onChange={e=>setTitle(e.target.value)}/></label>
-          <label>Lý do lưu / thay đổi *<textarea ref={reasonInput} name="reason" required minLength={5} maxLength={1000} rows={2} aria-label="Lý do lưu / thay đổi" aria-invalid={reasonInvalid} aria-describedby="library-reason-hint" placeholder="Ví dụ: Cập nhật lịch thực hiện từng công việc" defaultValue={editor.library?'':'Lưu bộ tiêu chí chung để cấu hình áp dụng theo chi nhánh'} onChange={()=>setReasonInvalid(false)}/><small id="library-reason-hint" className={reasonInvalid?w.fieldError:w.status}>Bắt buộc từ 5 đến 1,000 ký tự để ghi nhật ký thay đổi.</small></label>
+          {changes.some(change=>change.key==='title')&&reasonField('title','đổi tên bộ tiêu chí')}
           <div className={s.actions}><label>Nhập nội dung từ Excel<input type="file" accept=".xlsx" onChange={e=>void read(e.target.files?.[0])}/></label><button type="button" onClick={()=>void download()}><Icon name="download" size={16}/>Tải nội dung và hướng dẫn</button></div>
           {!!fileErrors.length&&<ul role="alert" className={s.alert}>{fileErrors.map((e,i)=><li key={i}>{e}</li>)}</ul>}
-          <div className={w.summary}><strong>{formatNumber(rows.length)} mục · {formatNumber(new Set(rows.filter(r=>r.group.trim()).map(r=>r.group.trim())).size)} nhóm</strong>{Object.entries(frequencyLabels).filter(([key])=>rows.some(r=>r.frequency===key)).map(([key,label])=><span key={key}>{formatNumber(rows.filter(r=>r.frequency===key).length)} {label.toLocaleLowerCase('vi')}</span>)}</div>
+          <div className={w.summary}><strong>{formatNumber(activeRows.length)} mục · {formatNumber(new Set(activeRows.filter(r=>r.group.trim()).map(r=>r.group.trim())).size)} nhóm</strong>{Object.entries(frequencyLabels).filter(([key])=>activeRows.some(r=>r.frequency===key)).map(([key,label])=><span key={key}>{formatNumber(activeRows.filter(r=>r.frequency===key).length)} {label.toLocaleLowerCase('vi')}</span>)}</div>
           <div className={s.actions}><input aria-label="Tìm tiêu chí trong bộ chung" placeholder="Tìm nhóm, công việc, yêu cầu…" value={filter} onChange={e=>setFilter(e.target.value)}/><button type="button" onClick={()=>{setFilter('');setRows(old=>[...old,emptyRow(Math.max(0,...old.map(r=>r.number))+1)]);}}><Icon name="add" size={16}/>Thêm tiêu chí</button></div>
-          {rows.map((row,index)=><fieldset key={index} className={w.row} hidden={!!filter&&!`${row.group} ${row.title} ${row.requirement}`.toLocaleLowerCase().includes(filter.toLocaleLowerCase())}><legend>Mục {row.number}</legend>
+          {rows.map((row,index)=>removedRows.includes(index)?editor.library?.rows[index]?<fieldset key={index} className={`${w.row} ${w.removedRow}`} hidden={!!filter&&!`${row.group} ${row.title} ${row.requirement}`.toLocaleLowerCase().includes(filter.toLocaleLowerCase())}><legend>Đã bỏ mục {editor.library.rows[index].number}</legend><p>{editor.library.rows[index].title}</p>{reasonField(`row-${index}`,`xóa mục ${editor.library.rows[index].number}`)}<button type="button" onClick={()=>setRemovedRows(old=>old.filter(at=>at!==index))}><Icon name="undo" size={16}/>Hoàn tác xóa</button></fieldset>:null:<fieldset key={index} className={w.row} hidden={!!filter&&!`${row.group} ${row.title} ${row.requirement}`.toLocaleLowerCase().includes(filter.toLocaleLowerCase())}><legend>Mục {row.number}{changes.some(change=>change.rowIndex===index)&&<span className={w.changedBadge}>{editor.library?.rows[index]?'Đã sửa':'Mới thêm'}</span>}</legend>
             <div className={w.grid}><label>STT<input type="number" min={1} max={9999} required value={row.number} onChange={e=>update(index,{number:Number(e.target.value)})}/></label><label>Nhóm<input required maxLength={120} value={row.group} onChange={e=>update(index,{group:e.target.value})}/></label><label>Công việc<input required maxLength={200} value={row.title} onChange={e=>update(index,{title:e.target.value})}/></label></div>
             <label>Tiêu chí đánh giá<textarea required maxLength={300} value={row.requirement} onChange={e=>update(index,{requirement:e.target.value})}/></label>
             <div className={w.recurrence}><strong>Lịch riêng của công việc</strong><RecurrenceFields frequency={row.frequency} allowUnselectedDay dayNumber={row.dayNumber??(row.frequency==='weekly'?0:1)} monthNumber={row.monthNumber??1} onChange={frequency=>update(index,{frequency:frequency==='event'?'once':frequency,dayNumber:frequency==='weekly'?undefined:1,monthNumber:frequency==='quarterly'||frequency==='yearly'?1:undefined})} onDayChange={dayNumber=>update(index,{dayNumber:dayNumber||undefined})} onMonthChange={monthNumber=>update(index,{monthNumber})}/><small className={missingWorkSchedules([row]).length?w.fieldError:w.status}>{workScheduleSummary(row)}</small></div>
             <div className={w.grid}><label>Điểm cộng / trừ<input type="number" step="0.01" min={-1000} max={1000} required value={Number.isFinite(row.points)?row.points:''} onChange={e=>update(index,{points:e.target.value===''?NaN:Number(e.target.value)})}/></label><label className={w.check}><input type="checkbox" checked={row.critical} onChange={e=>update(index,{critical:e.target.checked})}/>Vi phạm loại thưởng</label></div>
-            <button type="button" aria-label={`Xóa tiêu chí ${row.number}: ${row.title||'chưa đặt tên'}`} onClick={()=>setRows(old=>old.filter((_,at)=>at!==index))}><Icon name="delete" size={16}/>Xóa khỏi bộ chung</button>
+            {changes.some(change=>change.rowIndex===index)&&reasonField(`row-${index}`,`${editor.library?.rows[index]?'sửa':'thêm'} mục ${row.number}`)}
+            <button type="button" aria-label={`Xóa tiêu chí ${row.number}: ${row.title||'chưa đặt tên'}`} onClick={()=>setRemovedRows(old=>[...old,index])}><Icon name="delete" size={16}/>Xóa khỏi bộ chung</button>
           </fieldset>)}
-          <details><summary>Ghi chú nguồn và chính sách</summary><textarea aria-label="Ghi chú bộ chung" maxLength={10000} value={notes} onChange={e=>setNotes(e.target.value)}/><p>Ghi chú không tự tạo chính sách hoặc tính thưởng. Nếu cần xác nhận kế toán cho chỉ số định lượng, cấu hình tiêu chí đo tại phiên bản công việc của chi nhánh.</p></details>
+          <details><summary>Ghi chú nguồn và chính sách</summary><textarea aria-label="Ghi chú bộ chung" maxLength={10000} value={notes} onChange={e=>setNotes(e.target.value)}/>{changes.some(change=>change.key==='notes')&&reasonField('notes','sửa ghi chú bộ tiêu chí')}<p>Ghi chú không tự tạo chính sách hoặc tính thưởng. Nếu cần xác nhận kế toán cho chỉ số định lượng, cấu hình tiêu chí đo tại phiên bản công việc của chi nhánh.</p></details>
         </fieldset>}
         {editor?.kind==='archive'&&<><p>Ẩn <strong>{editor.library.title}</strong> khỏi danh sách dùng mới. Không xóa công việc, điểm hoặc lịch sử đã áp dụng tại chi nhánh.</p><label>Lý do<textarea name="reason" required minLength={5} maxLength={1000}/></label></>}
         {editor?.kind==='restore'&&<><p>Khôi phục <strong>{editor.library.title}</strong> để dùng lại bộ chung. Không tự áp dụng lại hay đổi lịch sử chi nhánh.</p><label>Lý do<textarea name="reason" required minLength={5} maxLength={1000}/></label></>}

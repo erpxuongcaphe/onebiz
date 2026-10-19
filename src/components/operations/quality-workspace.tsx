@@ -145,7 +145,7 @@ export function QualityWorkspace({
   period: string;
   assessmentPeriod?: string;
   onAssessmentPeriodChange?: (period: string) => void;
-  configuration?: ReactNode;
+  configuration?: ReactNode | ((data: QualityData) => ReactNode);
   focus?: QualityFocus;
   onNavigate?: (view: QualityDestination, focus?: QualityFocus) => void;
   onLegacySettings: () => void;
@@ -1114,7 +1114,7 @@ export function QualityWorkspace({
           {view === "settings" && (
             <>
               {workspace.isCeo && data.can.manage && <><WorkingLibrary workspace={workspace} onApplied={() => { if (onConfigurationRefresh) onConfigurationRefresh(); else setRevision((current) => current + 1); }}/><details className={s.section}><summary>Các bộ nhập theo chi nhánh trước đây</summary><WorkingImport workspace={workspace} onImported={() => { if (onConfigurationRefresh) onConfigurationRefresh(); else setRevision((current) => current + 1); }}/></details></>}
-              {configuration && <section className={s.section}><h3>Công việc và quyền chi nhánh</h3>{configuration}</section>}
+              {configuration && <section className={s.section}><h3>Công việc và quyền chi nhánh</h3>{typeof configuration === "function" ? configuration(data) : configuration}</section>}
               <section className={s.section}><OperationsHistoryPanel branch={branch} period={period}/></section>
               <section className={s.section}>
                 <h3>Phân công và phòng ban</h3>

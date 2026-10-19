@@ -16,6 +16,10 @@
 .grid { display:grid; align-items:start; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
 .row { border:1px solid #dce2eb; border-radius:6px; padding:14px; min-width:0; margin:12px 0; }
 .row legend { color:#174397; font-weight:600; }
+.changedBadge { margin-left:10px; font-size:12px; font-weight:500; color:#146447; }
+.changeReason { margin-block:12px; padding-top:12px; border-top:1px solid #dce2eb; scroll-margin-block:20px; }
+.changeReason textarea { width:100%; min-width:0; }
+.removedRow { border-color:#d58c9c; background:#fff8f9; }
 .row[hidden] { display:none; }
 .check { display:flex !important; align-items:center; gap:8px; min-height:38px; }
 .rowHeader { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; }

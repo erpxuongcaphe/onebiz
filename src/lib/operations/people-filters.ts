@@ -5,6 +5,8 @@ import type { QualityWorkspace } from "./quality-contracts";
 // role is withdrawn. Assignment controls use the database permission RPC instead.
 export function filterPeople(workspace: Workspace, quality?: QualityWorkspace | null) {
   const ids = new Set(workspace.members.map((member) => member.user_id));
+  for (const standard of workspace.standards) (standard.manager_ids ?? [standard.assignee_id]).forEach(id => ids.add(id));
+  for (const assignment of quality?.assignments ?? []) assignment.manager_ids.forEach(id => ids.add(id));
   for (const run of workspace.runs) ids.add(run.assignee_id);
   for (const todo of workspace.todos) { ids.add(todo.assignee_id); todo.collaborators.forEach((id) => ids.add(id)); }
   for (const department of quality?.departments ?? []) department.members.forEach((id) => ids.add(id));
