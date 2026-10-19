@@ -1,13 +1,13 @@
 # Ke hoach bao cao quan tri
 
-Cap nhat: 2026-10-18. Khong sua so lieu kinh doanh de khop mau tham khao.
+Cap nhat: 2026-10-19. Khong sua so lieu kinh doanh de khop mau tham khao.
 
 | Dot | Pham vi | Trang thai |
 | --- | --- | --- |
 | 1 | Dashboard, tong quan, chi tieu chung, bang chung, pham vi chi nhanh | Da phat hanh PR675/676 |
 | 2 | Ket qua kinh doanh: UX, ky doi chieu, realtime, gia von thieu, Excel | Da phat hanh PR677/678, da nghiem thu production |
-| 3 | Hieu qua ban hang: SKU, khach hang, chi nhanh, ban/tra/giam gia/gia von | PR679/680/683/684 da phat hanh; dang bo sung doi chieu chi nhanh hai ky va ngu canh hang khong thu phi |
-| 4 | Su dung von: ton kho, cong no, tien; tach so du va phat sinh | Chua trien khai thiet ke moi |
+| 3 | Hieu qua ban hang: SKU, khach hang, chi nhanh, ban/tra/giam gia/gia von | Da phat hanh den PR687; da co lai gop khach hang va doi chieu hai ky; chenh 1.000d hoa don/dong hang van hien de doi chieu |
+| 4 | Su dung von: ton kho, cong no, tien; tach so du va phat sinh | Ton kho PR689 va cong no PR690 da phat hanh; con dong tien va ket noi dashboard |
 | 5 | Nghiem thu lien bao cao: filter, sort, file, mobile, phan quyen | Nghiem thu tung dot; chua chot toan bo |
 
 ## Nguyen tac
@@ -19,6 +19,15 @@ Cap nhat: 2026-10-18. Khong sua so lieu kinh doanh de khop mau tham khao.
 - Nhan dinh phai co can cu va link dung pham vi; khong tu ket luan nguyen nhan.
 - Khong sua kho/BOM, POS, Hub hay giao dich that trong dot bao cao.
 - Chi danh dau da phat hanh sau CI va kiem tra production. Khong goi ca ke hoach la xong khi con dot chua nghiem thu.
+
+## Trang thai hien tai dot 4
+
+- Ton kho: gia tri lich su, ton am, thieu gia tri, chua xuat trong ky va can doi nhap/xuat/ton; khong goi chua xuat la ton chet. Nguon tuoi ton cu chua du de ket luan tuoi lo hang.
+- Cong no: cung nguon voi trang Cong no; tach no chung tu, tien ung, so du rong va tuoi. 16 cot, loc/sort va Excel cung tap dong; full gom ca phai thu/phai tra va khong an cot.
+- Production PR690: phai thu 7.563.880d; phai tra 4.630.944d; ung NCC 4.457.009d. Trung Kien hien 630.000d no tren 1 phieu, rieng ung 4.457.009d; khong tu can tru.
+- Phat hien khi nghiem thu: cua so chi tiet cu tinh tuoi theo du 24 gio thay vi ngay Viet Nam. Bo sung helper ngay lich; khong doi ngay goc, thu tu FIFO hay tien tren phieu.
+- Can lam tiep: dong tien theo quy/tai khoan, doi chieu ghi nhan voi thu/chi; tong hop bang chung va buoc tiep theo tren dashboard; nghiem thu lien bao cao/quyen/mobile/Excel.
+- Cong no hien la so du hien tai, chua phai anh chup so du lich su theo ngay ket thuc ky. Cac muc chua hoan tat trong nhung ghi chu dot 3 ben duoi la lich su ke hoach; bang trang thai tren la moc moi nhat.
 
 ## Nghiem thu dot 2
 
