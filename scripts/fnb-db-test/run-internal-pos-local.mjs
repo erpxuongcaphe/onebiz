@@ -105,7 +105,7 @@ try {
  await db.exec('drop function public._allow_negative_sale_00473(uuid,uuid)');
  await db.exec(policySource.match(/create function public\._allow_negative_sale_00473\([\s\S]*?\n\$\$;/)[0]);
  const stockPolicyBefore=(await db.query('select * from branch_stock order by branch_id,product_id')).rows;
- await db.exec(fs.readFileSync('supabase/migrations/00569_internal_pos_branch_stock_policy.sql','utf8'));
+ await db.exec(fs.readFileSync('supabase/migrations/00569_internal_pos_branch_stock_policy.sql','utf8').replace(/\r?\n/g,'\r\n'));
  assert.deepEqual((await db.query('select * from branch_stock order by branch_id,product_id')).rows,stockPolicyBefore);
  // Direct-stock fixture: the source policy must not be confused with the outlet's.
  await db.exec(`update products set has_bom=false where id='${context.product}';

@@ -15,6 +15,8 @@ declare
    and m.type='out' and b.quantity<0
  ) then raise exception 'INTERNAL_POS_INSUFFICIENT_STOCK'; end if;$new$;
 begin
+  old_check := replace(old_check, E'\r\n', E'\n');
+  new_check := replace(new_check, E'\r\n', E'\n');
   definition := replace(pg_get_functiondef('public.checkout_internal_pos_v2(jsonb)'::regprocedure), E'\r\n', E'\n');
   -- Keep subsequent approval, payment and receipt changes in the deployed function.
   if (length(definition)-length(replace(definition,old_check,'')))/length(old_check) <> 1 then
