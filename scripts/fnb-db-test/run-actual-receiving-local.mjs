@@ -81,8 +81,11 @@ try {
     await db.exec(reportSource.slice(start,end+4));
   }
   await db.exec(fs.readFileSync('supabase/migrations/00439_management_finance_pnl_recognition.sql','utf8'));
-  await db.exec(`create table operational_uom_requests(reference_type text,request_id uuid,tenant_id uuid,branch_id uuid,reference_id uuid,payload jsonb,snapshots jsonb,result jsonb,created_by uuid,created_at timestamptz default now());`);
   const uomSource=fs.readFileSync('supabase/migrations/00515_operational_uom_snapshots.sql','utf8');
+  const uomTableStart=uomSource.indexOf('create table if not exists public.operational_uom_requests (');
+  const uomTableEnd=uomSource.indexOf('\ncreate index',uomTableStart);
+  assert.ok(uomTableStart>=0 && uomTableEnd>uomTableStart,'real operational unit snapshot table found');
+  await db.exec(uomSource.slice(uomTableStart,uomTableEnd));
   const uomStart=uomSource.indexOf('create or replace function public.receive_internal_sale_with_uom(');
   const uomEnd=uomSource.indexOf('end;$$;',uomStart);
   await db.exec(uomSource.slice(uomStart,uomEnd+'end;$$;'.length));
