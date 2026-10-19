@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { getKitchenOrderById } from '@/lib/services/supabase/kitchen-orders';
-import { requestFnbCancellation, executeFnbCancellation, type CancelRequest } from '@/lib/services/supabase/fnb-cancel-requests';
+import { requestFnbCancellation, executeFnbCancellation, verifyAndExecuteFnbCancellation, type CancelRequest } from '@/lib/services/supabase/fnb-cancel-requests';
 import { OTP_ACTION_CODES } from '@/lib/services/supabase/manager-otp';
 import { OtpApprovalDialog } from '@/components/shared/dialogs/otp-approval-dialog';
 import { findCancellationItem } from '@/lib/fnb-cancellation-line';
@@ -39,11 +39,10 @@ export function CancelSentItemsDialog({ open, onOpenChange, orderId, label, init
     return () => { alive = false; };
   }, [open, orderId, initialItemId, initialLine, loadRevision]);
   const selected = items.filter(i => (quantities[i.id] ?? 0) > 0).map(i => ({ id: i.id, quantity: quantities[i.id] }));
+  const cancelsWholeBill = wholeBill || (items.length > 0 && items.every(i => quantities[i.id] === i.quantity));
   const valid = !loading && items.length > 0 && reason.trim().length >= 3
     && (wholeBill || (selected.length > 0 && selected.every(i => Number.isInteger(i.quantity) && i.quantity <= (items.find(x => x.id === i.id)?.quantity ?? 0))));
-  const complete = async (r: CancelRequest, otpId?: string) => {
-    const result = await executeFnbCancellation(r.id, otpId, shiftId);
-    if (result.success !== true) throw new Error('Hủy chưa hoàn tất. Vui lòng tải lại bill.');
+  const finish = async (r: CancelRequest) => {
     await onCompleted(r.whole_bill, r.order_id);
     setRequest(null); onOpenChange(false);
   };
@@ -51,8 +50,12 @@ export function CancelSentItemsDialog({ open, onOpenChange, orderId, label, init
     if (!valid || !orderId || lock.current) return;
     lock.current = true; setBusy(true); setError('');
     try {
-      const r = await requestFnbCancellation(orderId, selected, reason.trim(), wholeBill);
-      if (canCancel) await complete(r); else setRequest(r);
+      const r = await requestFnbCancellation(orderId, selected, reason.trim(), cancelsWholeBill);
+      if (canCancel) {
+        const result = await executeFnbCancellation(r.id, undefined, shiftId);
+        if (result.success !== true) throw new Error('Hủy chưa hoàn tất. Vui lòng tải lại bill.');
+        await finish(r);
+      } else setRequest(r);
     } catch (e) { setError(e instanceof Error ? e.message : 'Không gửi được yêu cầu hủy.'); }
     finally { lock.current = false; setBusy(false); }
   };
@@ -69,15 +72,20 @@ export function CancelSentItemsDialog({ open, onOpenChange, orderId, label, init
           </div>)}
           <label className="block text-sm font-semibold">Lý do hủy<Input maxLength={500} value={reason} onChange={e => setReason(e.target.value)} placeholder="Khách đổi món, nhập nhầm…" /></label>
           <p className="text-sm text-muted-foreground">Báo bếp dừng các món được hủy nếu đã bắt đầu làm.</p>
+          {!wholeBill && cancelsWholeBill && <p role="status" className="text-sm font-medium text-status-warning">Bạn đang hủy toàn bộ món còn lại. Bill sẽ được hủy trong lần xác nhận này; không cần thao tác lại.</p>}
           {error && <div role="alert" className="text-sm text-status-error"><p>{error}</p>{items.length === 0 && <Button variant="outline" size="sm" onClick={() => setLoadRevision(v => v + 1)}>Tải lại bill</Button>}</div>}
         </DialogBody>
         <DialogFooter><Button variant="outline" disabled={busy} onClick={() => onOpenChange(false)}>Đóng</Button><Button disabled={busy || !valid} onClick={() => void submit()}>{busy ? 'Đang xử lý…' : canCancel ? 'Xác nhận hủy' : 'Gửi yêu cầu · nhập OTP'}</Button></DialogFooter>
       </DialogContent>
     </Dialog>
     <OtpApprovalDialog open={Boolean(request)} onOpenChange={o => { if (!o) { setRequest(null); onOpenChange(false); } }}
-      actionCode={wholeBill ? OTP_ACTION_CODES.FNB_CANCEL_UNPAID_BILL : OTP_ACTION_CODES.FNB_CANCEL_UNPAID_ITEM}
+      actionCode={request?.whole_bill ? OTP_ACTION_CODES.FNB_CANCEL_UNPAID_BILL : OTP_ACTION_CODES.FNB_CANCEL_UNPAID_ITEM}
       targetMeta={request ? { entity_id: request.order_id, kitchen_order_id: request.order_id, request_id: request.id } : undefined}
-      contextLabel={`${label} · ${wholeBill ? 'Hủy toàn bill' : 'Hủy món'} · ${reason}. Quản lý mở Cấp OTP → Yêu cầu chờ duyệt.`}
-      onApproved={async v => { if (request) await complete(request, v.otpId); }} />
+      contextLabel={`${label} · ${request?.whole_bill ? 'Hủy toàn bill' : 'Hủy món'} · ${reason}. Quản lý mở Cấp OTP → Yêu cầu chờ duyệt.`}
+      verifyOtp={async input => {
+        if (!request) throw new Error('Chưa có yêu cầu hủy.');
+        return verifyAndExecuteFnbCancellation(request.id, input.code, shiftId);
+      }}
+      onApproved={async () => { if (request) await finish(request); }} />
   </>;
 }
