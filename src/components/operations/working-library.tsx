@@ -9,20 +9,20 @@ import { libraryCommandSchema, type WorkingLibrary as Library, type LibraryAppli
 import { UserPicker } from "./user-picker";
 import { ScheduleDateInput, ScheduleTimeInput } from "./schedule-input";
 import { RecurrenceFields } from "./recurrence-fields";
-import { frequencyLabels, scheduleSummary } from "@/lib/operations/recurrence";
+import { frequencyLabels } from "@/lib/operations/recurrence";
 import { vnToday } from "./quality-fields";
+import { missingWorkSchedules, workScheduleSummary } from "@/lib/operations/work-schedule";
 import s from "./quality.module.css";
 import w from "./working-library.module.css";
 
 type Editor = { kind:"edit"; library:Library|null } | { kind:"apply"|"archive"|"restore"; library:Library };
-type BranchDraft = { assigneeIds:string[]; names:Record<string,string>; effectiveFrom:string; dueTime:string; weeklyDay:string; hasEndDate:boolean; effectiveUntil:string };
+type BranchDraft = { assigneeIds:string[]; names:Record<string,string>; effectiveFrom:string; dueTime:string; hasEndDate:boolean; effectiveUntil:string };
 type ApplyPayload = {action:"apply";id:string;version:number;assignments:{branchId:string;assigneeIds:string[];effectiveFrom:string;dueTime:string;weeklyDay:number;effectiveUntil?:string}[]};
-const emptyDraft = ():BranchDraft => ({assigneeIds:[],names:{},effectiveFrom:'',dueTime:'',weeklyDay:'',hasEndDate:false,effectiveUntil:''});
-type ScheduleField = 'manager'|'date'|'time'|'weekday'|'until';
-const scheduleLabels:Record<ScheduleField,string> = {manager:'Chọn quản lý phụ trách.',date:'Chọn ngày bắt đầu từ hôm nay.',time:'Nhập giờ hạn từ 00:00 đến 23:59.',weekday:'Chọn thứ thực hiện việc hằng tuần.',until:'Chọn ngày kết thúc từ ngày bắt đầu.'};
-const needsWeeklyDay=(rows:WorkingRow[])=>rows.some(r=>r.frequency==='weekly'&&!r.dayNumber);
-function missingSchedule(draft:BranchDraft,hasWeekly:boolean):ScheduleField[]{
-  return [!draft.assigneeIds.length?'manager':null,!draft.effectiveFrom||draft.effectiveFrom<vnToday()?'date':null,!/^([01]\d|2[0-3]):[0-5]\d$/.test(draft.dueTime)?'time':null,hasWeekly&&!draft.weeklyDay?'weekday':null,draft.hasEndDate&&(!draft.effectiveUntil||draft.effectiveUntil<draft.effectiveFrom)?'until':null].filter((key):key is ScheduleField=>key!==null);
+const emptyDraft = ():BranchDraft => ({assigneeIds:[],names:{},effectiveFrom:'',dueTime:'',hasEndDate:false,effectiveUntil:''});
+type ScheduleField = 'manager'|'date'|'time'|'until';
+const scheduleLabels:Record<ScheduleField,string> = {manager:'Chọn quản lý phụ trách.',date:'Chọn ngày bắt đầu từ hôm nay.',time:'Nhập giờ hạn từ 00:00 đến 23:59.',until:'Chọn ngày kết thúc từ ngày bắt đầu.'};
+function missingSchedule(draft:BranchDraft):ScheduleField[]{
+  return [!draft.assigneeIds.length?'manager':null,!draft.effectiveFrom||draft.effectiveFrom<vnToday()?'date':null,!/^([01]\d|2[0-3]):[0-5]\d$/.test(draft.dueTime)?'time':null,draft.hasEndDate&&(!draft.effectiveUntil||draft.effectiveUntil<draft.effectiveFrom)?'until':null].filter((key):key is ScheduleField=>key!==null);
 }
 const emptyRow = (number:number):WorkingRow => ({number,group:"",title:"",requirement:"",scope:"Chung",frequency:"once",points:-5,critical:false,accountingRequired:false});
 export function WorkingLibrary({ workspace, onApplied }: { workspace:Workspace; onApplied:()=>void }) {
@@ -45,9 +45,11 @@ export function WorkingLibrary({ workspace, onApplied }: { workspace:Workspace; 
   const [confirmApply,setConfirmApply]=useState(false);
   const [applyPayload,setApplyPayload]=useState<ApplyPayload|null>(null);
   const [branchDrafts,setBranchDrafts]=useState<Record<string,BranchDraft>>({});
-  const [bulkSchedule,setBulkSchedule]=useState({effectiveFrom:'',dueTime:'',weeklyDay:''});
+  const [bulkSchedule,setBulkSchedule]=useState({effectiveFrom:'',dueTime:''});
   const [checkSchedule,setCheckSchedule]=useState(false);
   const lock=useRef(false);
+  const reasonInput=useRef<HTMLTextAreaElement>(null);
+  const [reasonInvalid,setReasonInvalid]=useState(false);
   const request=useRef<{signature:string;id:string}|null>(null);
   const load=useCallback(async(signal?:AbortSignal)=>{
     setLoading(true);
@@ -65,13 +67,13 @@ export function WorkingLibrary({ workspace, onApplied }: { workspace:Workspace; 
   const eligible=branches.filter(b=>!existing.some(a=>a.branch_id===b.id));
   const close=()=>{if(!busy){setEditor(null);setConfirmApply(false);setApplyPayload(null);}};
   function edit(library:Library|null,ceo=false){
-    setError('');setMessage('');setFileErrors([]);setFilter('');setSelected([]);request.current=null;
+    setError('');setMessage('');setFileErrors([]);setFilter('');setSelected([]);setReasonInvalid(false);request.current=null;
     setTitle(library?.title??(ceo?'Standard Working và QC · Bộ tiêu chí CEO':''));
     setRows(library?.rows.map(r=>({...r}))??(ceo?ceoWorkingRows.map(r=>({...r})):[emptyRow(1)]));
     setNotes(library?.notes??(ceo?ceoWorkingNotes:''));setSourceKey(library?.source_key??(ceo?'ceo-working-20261014':null));
     setEditor({kind:'edit',library});
   }
-  function openApply(library:Library){setError('');setMessage('');setSelected([]);setBranchDrafts({});setBulkSchedule({effectiveFrom:'',dueTime:'',weeklyDay:''});setCheckSchedule(false);setConfirmApply(false);setApplyPayload(null);request.current=null;setEditor({kind:'apply',library});}
+  function openApply(library:Library){setError('');setMessage('');setSelected([]);setBranchDrafts({});setBulkSchedule({effectiveFrom:'',dueTime:''});setCheckSchedule(false);setConfirmApply(false);setApplyPayload(null);request.current=null;setEditor({kind:'apply',library});}
   function branchDraft(id:string):BranchDraft{return branchDrafts[id]??emptyDraft();}
   function updateBranch(id:string,patch:Partial<BranchDraft>){setError('');setBranchDrafts(old=>({...old,[id]:{...(old[id]??emptyDraft()),...patch}}));}
   function fillSchedule(){
@@ -88,7 +90,9 @@ export function WorkingLibrary({ workspace, onApplied }: { workspace:Workspace; 
     const parsed=libraryCommandSchema.safeParse({...payload,requestId:request.current.id});
     if(!parsed.success){
       const labels:Record<string,string>={title:'Tên bộ tiêu chí',reason:'Lý do',rows:'STT hoặc nội dung tiêu chí',number:'STT',group:'Nhóm',requirement:'Tiêu chí đánh giá',frequency:'Tần suất',points:'Điểm cộng / trừ',notes:'Ghi chú'};
-      const details=parsed.error.issues.slice(0,8).map(issue=>issue.path[0]==='rows'&&typeof issue.path[1]==='number'?`Mục ${rows[issue.path[1]]?.number??issue.path[1]+1}: ${labels[String(issue.path[2])]??'nội dung'} chưa hợp lệ`:labels[String(issue.path[0])]??'Cấu hình chi nhánh');
+      const reasonIssue=parsed.error.issues.some(issue=>issue.path[0]==='reason');
+      if(reasonIssue){setReasonInvalid(true);requestAnimationFrame(()=>{reasonInput.current?.scrollIntoView?.({block:'center',behavior:'smooth'});reasonInput.current?.focus({preventScroll:true});});}
+      const details=parsed.error.issues.slice(0,8).map(issue=>issue.path[0]==='reason'?'Lý do lưu / thay đổi cần từ 5 đến 1,000 ký tự, không chỉ có khoảng trắng':issue.path[0]==='rows'&&typeof issue.path[1]==='number'?`Mục ${rows[issue.path[1]]?.number??issue.path[1]+1}: ${labels[String(issue.path[2])]??'nội dung'} chưa hợp lệ`:labels[String(issue.path[0])]??'Cấu hình chi nhánh');
       setFilter('');setError(`Chưa lưu: ${[...new Set(details)].join('; ')}. Kiểm tra lại các trường này.`);return;
     }
     lock.current=true;setBusy(true);setError('');
@@ -127,7 +131,7 @@ export function WorkingLibrary({ workspace, onApplied }: { workspace:Workspace; 
         ['1','Bộ chung chỉ lưu nội dung. Chưa chọn chi nhánh, người hoặc lịch thì chưa sinh công việc/chấm điểm.'],
         ['2','Giữ 7 tiêu đề gốc và 2 cột lịch bổ sung: Ngày lặp, Tháng lặp. File cũ 7 cột vẫn nhập được. STT duy nhất, ổn định, không đánh lại số mục cũ.'],
         ['3','Frequency: once/daily/weekly/monthly/quarterly/yearly hoặc Một lần, Hằng ngày/tuần/tháng/quý/năm. Ngày lặp: thứ 1–7 cho tuần; ngày 1–31 cho tháng/quý/năm. Tháng lặp: 1–3 trong quý hoặc 1–12 trong năm.'],
-        ['4','Tháng không có ngày đã chọn sẽ dùng ngày cuối tháng. Lịch tuần chưa ghi Ngày lặp sẽ theo thứ được chọn khi áp dụng chi nhánh. Điểm dùng số US, không dùng công thức. Tiêu chí tối đa 300 ký tự.'],
+        ['4','Mỗi công việc có lịch riêng. Hằng tuần phải điền Ngày lặp 1–7 tại chính dòng đó; để trống thì bổ sung trong mục tương ứng trên Hub trước khi áp dụng. Không có thứ lặp chung. Tháng ngắn dùng ngày cuối tháng. Điểm dùng số US; không dùng công thức.'],
         ['5','Lên Hub: chọn hoặc tạo bộ chung, chọn file, xem trước rồi lưu. Lỗi hiển thị dòng và cột.'],
         ['6','Chọn Áp dụng cho chi nhánh; chọn chi nhánh, quản lý đúng quyền, ngày bắt đầu và giờ hạn; kiểm tra trước khi xác nhận. Có thể chọn ngày kết thúc lặp. Việc một lần chỉ có một hạn hoàn thành.'],
         ['7','Sửa bộ chung không tự ghi đè công việc đã áp dụng. Tại chi nhánh đã dùng, chọn Sửa công việc / lịch hoặc Kết thúc lặp; kiểm tra ảnh hưởng trước khi xác nhận.'],
@@ -145,10 +149,12 @@ export function WorkingLibrary({ workspace, onApplied }: { workspace:Workspace; 
       void send({action:'save',id:editor.library?.id??null,version:editor.library?.version??null,title,rows,notes,sourceKey,reason:String(form.get('reason')??'')});
     }else if(editor.kind==='archive'||editor.kind==='restore')void send({action:editor.kind,id:editor.library.id,version:editor.library.version,reason:String(form.get('reason')??'')});
     else{
-      const hasWeekly=needsWeeklyDay(editor.library.rows);
-      const payload:ApplyPayload={action:'apply',id:editor.library.id,version:editor.library.version,assignments:selected.map(branchId=>({branchId,assigneeIds:form.getAll(`user-${branchId}`).map(String),effectiveFrom:String(form.get(`date-${branchId}`)??''),dueTime:String(form.get(`time-${branchId}`)??''),weeklyDay:hasWeekly?Number(form.get(`day-${branchId}`)):1,...(branchDraft(branchId).hasEndDate?{effectiveUntil:branchDraft(branchId).effectiveUntil}:{})}))};
+      const incomplete=missingWorkSchedules(editor.library.rows);
+      if(incomplete.length){setError(`Chọn lịch riêng tại ${incomplete.map(row=>`mục ${row.number}: ${row.title}`).join('; ')} trước khi áp dụng.`);return;}
+      // Legacy RPC requires this field; explicit per-work days always take precedence.
+      const payload:ApplyPayload={action:'apply',id:editor.library.id,version:editor.library.version,assignments:selected.map(branchId=>({branchId,assigneeIds:form.getAll(`user-${branchId}`).map(String),effectiveFrom:String(form.get(`date-${branchId}`)??''),dueTime:String(form.get(`time-${branchId}`)??''),weeklyDay:1,...(branchDraft(branchId).hasEndDate?{effectiveUntil:branchDraft(branchId).effectiveUntil}:{})}))};
       setCheckSchedule(true);
-      const missing=selected.filter(id=>missingSchedule(branchDraft(id),hasWeekly).length);
+      const missing=selected.filter(id=>missingSchedule(branchDraft(id)).length);
       if(!libraryCommandSchema.safeParse({...payload,requestId:crypto.randomUUID()}).success||missing.length){setError(missing.length?`Chưa lưu. Bổ sung thông tin tại ${missing.map(id=>branches.find(b=>b.id===id)?.name??'chi nhánh').join(', ')}. Các ô cần điền đã được đánh dấu.`:'Chọn chi nhánh và điền đủ người, ngày, giờ.');focusMissing(event.currentTarget);return;}
       setApplyPayload(payload);setConfirmApply(true);
     }
@@ -172,6 +178,7 @@ export function WorkingLibrary({ workspace, onApplied }: { workspace:Workspace; 
         {editor?.kind==='edit'&&<fieldset disabled={busy} style={{border:0,padding:0,margin:0,minWidth:0}}>
           <p className={w.notice}>Lưu bộ chung chưa tạo việc, chưa phân công, chưa chấm điểm. Các chi nhánh đang dùng giữ nguyên phiên bản đã áp dụng.</p>
           <label>Tên bộ tiêu chí<input required maxLength={200} value={title} onChange={e=>setTitle(e.target.value)}/></label>
+          <label>Lý do lưu / thay đổi *<textarea ref={reasonInput} name="reason" required minLength={5} maxLength={1000} rows={2} aria-label="Lý do lưu / thay đổi" aria-invalid={reasonInvalid} aria-describedby="library-reason-hint" placeholder="Ví dụ: Cập nhật lịch thực hiện từng công việc" defaultValue={editor.library?'':'Lưu bộ tiêu chí chung để cấu hình áp dụng theo chi nhánh'} onChange={()=>setReasonInvalid(false)}/><small id="library-reason-hint" className={reasonInvalid?w.fieldError:w.status}>Bắt buộc từ 5 đến 1,000 ký tự để ghi nhật ký thay đổi.</small></label>
           <div className={s.actions}><label>Nhập nội dung từ Excel<input type="file" accept=".xlsx" onChange={e=>void read(e.target.files?.[0])}/></label><button type="button" onClick={()=>void download()}><Icon name="download" size={16}/>Tải nội dung và hướng dẫn</button></div>
           {!!fileErrors.length&&<ul role="alert" className={s.alert}>{fileErrors.map((e,i)=><li key={i}>{e}</li>)}</ul>}
           <div className={w.summary}><strong>{formatNumber(rows.length)} mục · {formatNumber(new Set(rows.filter(r=>r.group.trim()).map(r=>r.group.trim())).size)} nhóm</strong>{Object.entries(frequencyLabels).filter(([key])=>rows.some(r=>r.frequency===key)).map(([key,label])=><span key={key}>{formatNumber(rows.filter(r=>r.frequency===key).length)} {label.toLocaleLowerCase('vi')}</span>)}</div>
@@ -179,36 +186,35 @@ export function WorkingLibrary({ workspace, onApplied }: { workspace:Workspace; 
           {rows.map((row,index)=><fieldset key={index} className={w.row} hidden={!!filter&&!`${row.group} ${row.title} ${row.requirement}`.toLocaleLowerCase().includes(filter.toLocaleLowerCase())}><legend>Mục {row.number}</legend>
             <div className={w.grid}><label>STT<input type="number" min={1} max={9999} required value={row.number} onChange={e=>update(index,{number:Number(e.target.value)})}/></label><label>Nhóm<input required maxLength={120} value={row.group} onChange={e=>update(index,{group:e.target.value})}/></label><label>Công việc<input required maxLength={200} value={row.title} onChange={e=>update(index,{title:e.target.value})}/></label></div>
             <label>Tiêu chí đánh giá<textarea required maxLength={300} value={row.requirement} onChange={e=>update(index,{requirement:e.target.value})}/></label>
-            <div className={w.recurrence}><RecurrenceFields frequency={row.frequency} weeklyFallback dayNumber={row.dayNumber??(row.frequency==='weekly'?0:1)} monthNumber={row.monthNumber??1} onChange={frequency=>update(index,{frequency:frequency==='event'?'once':frequency,dayNumber:frequency==='weekly'?undefined:1,monthNumber:frequency==='quarterly'||frequency==='yearly'?1:undefined})} onDayChange={dayNumber=>update(index,{dayNumber:dayNumber||undefined})} onMonthChange={monthNumber=>update(index,{monthNumber})}/></div>
+            <div className={w.recurrence}><strong>Lịch riêng của công việc</strong><RecurrenceFields frequency={row.frequency} allowUnselectedDay dayNumber={row.dayNumber??(row.frequency==='weekly'?0:1)} monthNumber={row.monthNumber??1} onChange={frequency=>update(index,{frequency:frequency==='event'?'once':frequency,dayNumber:frequency==='weekly'?undefined:1,monthNumber:frequency==='quarterly'||frequency==='yearly'?1:undefined})} onDayChange={dayNumber=>update(index,{dayNumber:dayNumber||undefined})} onMonthChange={monthNumber=>update(index,{monthNumber})}/><small className={missingWorkSchedules([row]).length?w.fieldError:w.status}>{workScheduleSummary(row)}</small></div>
             <div className={w.grid}><label>Điểm cộng / trừ<input type="number" step="0.01" min={-1000} max={1000} required value={Number.isFinite(row.points)?row.points:''} onChange={e=>update(index,{points:e.target.value===''?NaN:Number(e.target.value)})}/></label><label className={w.check}><input type="checkbox" checked={row.critical} onChange={e=>update(index,{critical:e.target.checked})}/>Vi phạm loại thưởng</label></div>
             <button type="button" aria-label={`Xóa tiêu chí ${row.number}: ${row.title||'chưa đặt tên'}`} onClick={()=>setRows(old=>old.filter((_,at)=>at!==index))}><Icon name="delete" size={16}/>Xóa khỏi bộ chung</button>
           </fieldset>)}
           <details><summary>Ghi chú nguồn và chính sách</summary><textarea aria-label="Ghi chú bộ chung" maxLength={10000} value={notes} onChange={e=>setNotes(e.target.value)}/><p>Ghi chú không tự tạo chính sách hoặc tính thưởng. Nếu cần xác nhận kế toán cho chỉ số định lượng, cấu hình tiêu chí đo tại phiên bản công việc của chi nhánh.</p></details>
-          <label>Lý do lưu / thay đổi<textarea name="reason" required minLength={5} maxLength={1000} defaultValue={editor.library?'':'Lưu bộ tiêu chí chung để cấu hình áp dụng theo chi nhánh'}/></label>
         </fieldset>}
         {editor?.kind==='archive'&&<><p>Ẩn <strong>{editor.library.title}</strong> khỏi danh sách dùng mới. Không xóa công việc, điểm hoặc lịch sử đã áp dụng tại chi nhánh.</p><label>Lý do<textarea name="reason" required minLength={5} maxLength={1000}/></label></>}
         {editor?.kind==='restore'&&<><p>Khôi phục <strong>{editor.library.title}</strong> để dùng lại bộ chung. Không tự áp dụng lại hay đổi lịch sử chi nhánh.</p><label>Lý do<textarea name="reason" required minLength={5} maxLength={1000}/></label></>}
         {editor?.kind==='apply'&&<>
           <h3>{editor.library.title} · phiên bản {formatNumber(editor.library.version)}</h3><p>{formatNumber(editor.library.rows.length)} tiêu chí. Chỉ các chi nhánh được chọn và đủ cấu hình mới được áp dụng sau khi xác nhận.</p>
+          {!!missingWorkSchedules(editor.library.rows).length&&<div role="alert" className={w.notice}><p>Chưa thể áp dụng. Chọn thứ riêng cho {missingWorkSchedules(editor.library.rows).map(row=>`mục ${row.number}: ${row.title}`).join('; ')}. Không tự dùng một thứ cho cả bộ.</p><button type="button" onClick={()=>edit(editor.library)}>Bổ sung lịch từng công việc</button></div>}
+          <details className={w.workSchedules}><summary>Lịch riêng của {editor.library.rows.length} công việc</summary><div className={w.scheduleList}>{editor.library.rows.map(row=><div key={row.number}><span>{row.number}. {row.title}</span><strong className={missingWorkSchedules([row]).length?w.fieldError:undefined}>{workScheduleSummary(row)}</strong></div>)}</div></details>
           <p className={w.notice}>Chi nhánh đã áp dụng giữ nguyên công việc và lịch sử. Muốn thay đổi tại chi nhánh đó, dùng “Sửa công việc / lịch” hoặc “Kết thúc lặp” trong Standard Working.</p>
-          <label className={w.check}><input type="checkbox" checked={eligible.length>0&&selected.length===eligible.length} disabled={!eligible.length||busy} onChange={e=>setSelected(e.target.checked?eligible.map(b=>b.id):[])}/>Chọn tất cả chi nhánh chưa áp dụng trong phạm vi được phép</label>
+          <label className={w.check}><input type="checkbox" checked={eligible.length>0&&selected.length===eligible.length} disabled={!eligible.length||busy||!!missingWorkSchedules(editor.library.rows).length} onChange={e=>setSelected(e.target.checked?eligible.map(b=>b.id):[])}/>Chọn tất cả chi nhánh chưa áp dụng trong phạm vi được phép</label>
           {!!selected.length&&<div className={w.selectedBranches} aria-label="Chi nhánh đang chọn">{selected.map(id=><span key={id}>{branches.find(b=>b.id===id)?.name}<button type="button" disabled={busy} title={`Bỏ chọn ${branches.find(b=>b.id===id)?.name}`} aria-label={`Bỏ chọn chi nhánh ${branches.find(b=>b.id===id)?.name}`} onClick={()=>{setSelected(old=>old.filter(v=>v!==id));setError('');}}><span aria-hidden="true">×</span></button></span>)}</div>}
-          {selected.length>1&&<details className={w.commonSchedule}><summary>Điền cùng lịch cho {selected.length} chi nhánh</summary><div className={w.grid}><label>Ngày bắt đầu chung<ScheduleDateInput min={vnToday()} value={bulkSchedule.effectiveFrom} onValueChange={value=>setBulkSchedule(old=>({...old,effectiveFrom:value}))}/></label><label>Giờ hạn chung (24 giờ)<ScheduleTimeInput value={bulkSchedule.dueTime} onValueChange={value=>setBulkSchedule(old=>({...old,dueTime:value}))}/></label>{needsWeeklyDay(editor.library.rows)&&<label>Lặp hằng tuần vào (lịch chung)<select value={bulkSchedule.weeklyDay} onChange={e=>setBulkSchedule(old=>({...old,weeklyDay:e.target.value}))}><option value="">Chọn thứ</option>{['Thứ hai','Thứ ba','Thứ tư','Thứ năm','Thứ sáu','Thứ bảy','Chủ nhật'].map((day,i)=><option key={day} value={i+1}>{day}</option>)}</select></label>}</div><button type="button" disabled={busy||!bulkSchedule.effectiveFrom||!bulkSchedule.dueTime||(needsWeeklyDay(editor.library.rows)&&!bulkSchedule.weeklyDay)} onClick={fillSchedule}>Điền lịch cho {selected.length} chi nhánh đã chọn</button></details>}
-          {branches.map(branch=>{const applied=existing.find(a=>a.branch_id===branch.id);const picked=selected.includes(branch.id);const draft=branchDraft(branch.id);const hasWeekly=needsWeeklyDay(editor.library.rows);const missing=missingSchedule(draft,hasWeekly);const ready=!missing.length;const invalid=(field:ScheduleField)=>checkSchedule&&missing.includes(field);const fieldError=(field:ScheduleField)=>invalid(field)?<small id={`${branch.id}-${field}-error`} className={w.fieldError}>{scheduleLabels[field]}</small>:null;return <section aria-label={branch.name} key={branch.id} className={`${w.branch} ${picked?w.selected:''}`}><div className={w.rowHeader}><label className={w.check}><input type="checkbox" checked={picked} disabled={!!applied||busy} onChange={e=>{setSelected(old=>e.target.checked?[...old,branch.id]:old.filter(id=>id!==branch.id));setError('');}}/><strong>{branch.name}</strong></label><span className={ready?w.ready:w.status}>{applied?`Đã áp dụng · phiên bản ${applied.library_version}`:picked?ready?'Đủ thông tin':'Cần điền người và lịch':'Chưa áp dụng'}</span></div>
+          {selected.length>1&&<details className={w.commonSchedule}><summary>Điền nhanh ngày bắt đầu và giờ hạn cho {selected.length} chi nhánh</summary><div className={w.grid}><label>Ngày bắt đầu chung<ScheduleDateInput min={vnToday()} value={bulkSchedule.effectiveFrom} onValueChange={value=>setBulkSchedule(old=>({...old,effectiveFrom:value}))}/></label><label>Giờ hạn chung (24 giờ)<ScheduleTimeInput value={bulkSchedule.dueTime} onValueChange={value=>setBulkSchedule(old=>({...old,dueTime:value}))}/></label></div><button type="button" disabled={busy||!bulkSchedule.effectiveFrom||!bulkSchedule.dueTime} onClick={fillSchedule}>Điền cho {selected.length} chi nhánh đã chọn</button></details>}
+          {branches.map(branch=>{const applied=existing.find(a=>a.branch_id===branch.id);const picked=selected.includes(branch.id);const draft=branchDraft(branch.id);const missing=missingSchedule(draft);const ready=!missing.length;const invalid=(field:ScheduleField)=>checkSchedule&&missing.includes(field);const fieldError=(field:ScheduleField)=>invalid(field)?<small id={`${branch.id}-${field}-error`} className={w.fieldError}>{scheduleLabels[field]}</small>:null;return <section aria-label={branch.name} key={branch.id} className={`${w.branch} ${picked?w.selected:''}`}><div className={w.rowHeader}><label className={w.check}><input type="checkbox" checked={picked} disabled={!!applied||busy||!!missingWorkSchedules(editor.library.rows).length} onChange={e=>{setSelected(old=>e.target.checked?[...old,branch.id]:old.filter(id=>id!==branch.id));setError('');}}/><strong>{branch.name}</strong></label><span className={ready?w.ready:w.status}>{applied?`Đã áp dụng · phiên bản ${applied.library_version}`:picked?ready?'Đủ thông tin':'Cần điền người và lịch':'Chưa áp dụng'}</span></div>
             {applied&&<p className={w.status}>Bắt đầu {formatShortDate(`${applied.settings.effectiveFrom}T00:00:00+07:00`)} · hạn {applied.settings.dueTime}. Không tự thay thế khi sửa bộ chung.</p>}
             {picked&&<>
               <div className={w.branchFields}>
                 <div data-field-error={invalid('manager')}><UserPicker branch={branch.id} purpose="manager" name={`user-${branch.id}`} label="Quản lý phụ trách" multiple required disabled={busy} value={draft.assigneeIds} onValuesChange={(assigneeIds,people)=>updateBranch(branch.id,{assigneeIds,names:Object.fromEntries(people.map(p=>[p.id,p.name]))})}/>{fieldError('manager')}</div>
                 <label data-field-error={invalid('date')}>Ngày bắt đầu<ScheduleDateInput aria-label="Ngày bắt đầu" name={`date-${branch.id}`} min={vnToday()} required disabled={busy} value={draft.effectiveFrom} aria-invalid={invalid('date')} aria-describedby={invalid('date')?`${branch.id}-date-error`:undefined} onValueChange={value=>updateBranch(branch.id,{effectiveFrom:value})}/>{fieldError('date')}</label>
                 <label data-field-error={invalid('time')}>Giờ đến hạn (24 giờ)<ScheduleTimeInput aria-label="Giờ đến hạn (24 giờ)" name={`time-${branch.id}`} required disabled={busy} value={draft.dueTime} aria-invalid={invalid('time')} aria-describedby={invalid('time')?`${branch.id}-time-error`:undefined} onValueChange={value=>updateBranch(branch.id,{dueTime:value})}/>{fieldError('time')}</label>
-                {hasWeekly&&<label data-field-error={invalid('weekday')}>Lặp hằng tuần vào<select aria-label="Lặp hằng tuần vào" name={`day-${branch.id}`} required disabled={busy} value={draft.weeklyDay} aria-invalid={invalid('weekday')} aria-describedby={invalid('weekday')?`${branch.id}-weekday-error`:undefined} onChange={e=>updateBranch(branch.id,{weeklyDay:e.target.value})}><option value="">Chọn thứ</option>{['Thứ hai','Thứ ba','Thứ tư','Thứ năm','Thứ sáu','Thứ bảy','Chủ nhật'].map((day,i)=><option key={day} value={i+1}>{day}</option>)}</select>{fieldError('weekday')}</label>}
               </div>
-              {hasWeekly&&<p className={w.status}>Thứ đã chọn chỉ áp dụng cho việc hằng tuần; việc hằng ngày giữ nguyên. Có thể đổi lịch từng việc tại Standard Working → Sửa công việc / lịch.</p>}
+              <p className={w.status}>Chu kỳ và thứ/ngày lấy riêng từ từng công việc ở trên. Ngày bắt đầu và giờ hạn không đổi chu kỳ của cả bộ.</p>
               {editor.library.rows.some(r=>r.frequency!=='once')&&<div className={w.endSchedule} data-field-error={invalid('until')}>
                 <label className={w.check}><input type="checkbox" checked={draft.hasEndDate} disabled={busy} onChange={e=>updateBranch(branch.id,{hasEndDate:e.target.checked})}/>Kết thúc lịch lặp vào ngày</label>
                 {draft.hasEndDate&&<><ScheduleDateInput aria-label="Ngày kết thúc lặp" min={draft.effectiveFrom||vnToday()} value={draft.effectiveUntil} disabled={busy} aria-invalid={invalid('until')} onValueChange={effectiveUntil=>updateBranch(branch.id,{effectiveUntil})}/>{fieldError('until')}</>}
               </div>}
-              <details className={w.schedulePreview}><summary>Lịch của {editor.library.rows.length} công việc</summary><div className={w.scheduleList}>{editor.library.rows.map(row=><div key={row.number}><span>{row.number}. {row.title}</span><strong>{scheduleSummary(row.frequency,row.dayNumber??(row.frequency==='weekly'?Number(draft.weeklyDay)||1:1),row.monthNumber??1)}</strong></div>)}</div></details>
             </>}
           </section>;})}
           {!branches.length&&<p className={w.empty}>Chưa có chi nhánh trong phạm vi được phép cấu hình.</p>}
@@ -227,9 +233,10 @@ export function WorkingLibrary({ workspace, onApplied }: { workspace:Workspace; 
               <td data-label="Quản lý"><div>{a.assigneeIds.map(id=><div key={id}>{branchDraft(a.branchId).names[id]??workspace.people.find(p=>p.id===id)?.name??'Cần kiểm tra lại tên'}</div>)}</div></td>
               <td data-label="Bắt đầu"><span>{formatShortDate(`${a.effectiveFrom}T00:00:00+07:00`)}</span></td>
               <td data-label="Giờ hạn"><span>{a.dueTime}</span></td>
-              <td data-label="Lịch thực hiện"><div>{[...new Set(editor?.library?.rows.map(row=>scheduleSummary(row.frequency,row.dayNumber??(row.frequency==='weekly'?a.weeklyDay:1),row.monthNumber??1)))].map(text=><div key={text}>{text}</div>)}{a.effectiveUntil&&<div>Đến {formatShortDate(`${a.effectiveUntil}T00:00:00+07:00`)}</div>}</div></td>
+              <td data-label="Lịch thực hiện"><span>Theo từng công việc bên dưới</span>{a.effectiveUntil&&<div>Đến {formatShortDate(`${a.effectiveUntil}T00:00:00+07:00`)}</div>}</td>
             </tr>)}</tbody>
           </table></div>
+          <details className={w.workSchedules}><summary>Kiểm tra lịch của từng công việc sẽ áp dụng</summary><div className={w.scheduleList}>{editor?.library?.rows.map(row=><div key={row.number}><span>{row.number}. {row.title}</span><strong>{workScheduleSummary(row)}</strong></div>)}</div></details>
           <p>Chi nhánh không được chọn giữ nguyên. Không ghi một phần nếu một chi nhánh không hợp lệ.</p>
           {error&&<p role="alert" className={s.alert}>{error}</p>}
         </div>

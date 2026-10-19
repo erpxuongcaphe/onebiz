@@ -8,7 +8,7 @@ import { ceoWorkingRows } from '@/lib/operations/workbook-import';
 const id='11111111-1111-4111-8111-111111111111';
 const command=()=>({action:'save',requestId:crypto.randomUUID(),id:null,version:null,title:'Bộ CEO',rows:ceoWorkingRows,notes:'',sourceKey:'ceo-working-20261014',reason:'Lưu bộ tiêu chí CEO'});
 const post=(body:unknown,origin='http://localhost:3000')=>new NextRequest('http://localhost:3000/api/operations/library',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify(body)});
-beforeEach(()=>{vi.resetAllMocks();mocks.getUser.mockResolvedValue({data:{user:{id}},error:null});mocks.rpc.mockResolvedValue({data:{libraries:[],applications:[]},error:null});});
+beforeEach(()=>{vi.resetAllMocks();mocks.getUser.mockResolvedValue({data:{user:{id}},error:null});mocks.rpc.mockResolvedValue({data:{libraries:[{id,version:1,archived:false,rows:ceoWorkingRows.map(row=>({...row,...(row.frequency==='weekly'?{dayNumber:row.number===32?1:5}:{})}))}],applications:[]},error:null});});
 describe('shared working library API',()=>{
  it('blocks new schedules without the database capability and does not attempt a write',async()=>{
   const body={...command(),rows:[{...ceoWorkingRows[0],frequency:'quarterly',dayNumber:31,monthNumber:2}]};
@@ -47,8 +47,18 @@ describe('shared working library API',()=>{
  it('does not fall back to the single-manager RPC when migration is missing',async()=>{
   mocks.rpc.mockResolvedValue({data:null,error:{code:'PGRST202',message:'function missing'}});
   const response=await POST(post({action:'apply',requestId:id,id,version:1,assignments:[{branchId:id,assigneeIds:[id],effectiveFrom:'2026-10-20',dueTime:'17:30',weeklyDay:1}]}));
-  expect(response.status).toBe(503);expect((await response.json()).error).toContain('giữ nguyên');expect(mocks.rpc).toHaveBeenCalledOnce();
+  expect(response.status).toBe(503);expect((await response.json()).error).toContain('Chưa ghi dữ liệu');expect(mocks.rpc).toHaveBeenCalledOnce();
  });
  it.each(['OPS_LIBRARY_STALE','OPS_LIBRARY_EXISTS','OPS_LIBRARY_APPLIED','OPS_WORKBOOK_DUPLICATE'])('shows a conflict without retrying %s',async(message)=>{mocks.rpc.mockResolvedValue({data:null,error:{message}});expect((await POST(post(command()))).status).toBe(409);expect(mocks.rpc).toHaveBeenCalledOnce();});
  it('requires a reason before archiving, and never issues delete directly',async()=>{expect((await POST(post({action:'archive',requestId:id,id,version:1,reason:''}))).status).toBe(400);expect(mocks.rpc).not.toHaveBeenCalled();});
+ it('does not let a forged shared weekday fill incomplete work schedules',async()=>{
+  mocks.rpc.mockResolvedValue({data:{libraries:[{id,version:1,rows:ceoWorkingRows,archived:false}]},error:null});
+  const response=await POST(post({action:'apply',requestId:crypto.randomUUID(),id,version:1,assignments:[{branchId:id,assigneeId:id,effectiveFrom:'2026-10-20',dueTime:'17:30',weeklyDay:7}]}));
+  expect(response.status).toBe(409);expect((await response.json()).error).toContain('mục 32');
+  expect(mocks.rpc).toHaveBeenCalledOnce();expect(mocks.rpc).toHaveBeenCalledWith('ops_working_library_read',{});
+ });
+ it('rejects a changed library version before a write',async()=>{
+  const response=await POST(post({action:'apply',requestId:crypto.randomUUID(),id,version:2,assignments:[{branchId:id,assigneeId:id,effectiveFrom:'2026-10-20',dueTime:'17:30',weeklyDay:1}]}));
+  expect(response.status).toBe(409);expect(mocks.rpc).toHaveBeenCalledOnce();
+ });
 });

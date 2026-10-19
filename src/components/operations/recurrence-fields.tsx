@@ -12,10 +12,10 @@ type Props = {
   onDayChange?: (day: number) => void;
   onMonthChange?: (month: number) => void;
   disabled?: boolean;
-  weeklyFallback?: boolean;
+  allowUnselectedDay?: boolean;
   name?: string;
 };
-export function RecurrenceFields({frequency,onChange,dayNumber=1,monthNumber=1,onDayChange,onMonthChange,disabled,weeklyFallback,name}: Props) {
+export function RecurrenceFields({frequency,onChange,dayNumber=1,monthNumber=1,onDayChange,onMonthChange,disabled,allowUnselectedDay,name}: Props) {
   const id=useId();
   const repeating=frequency!=="once"&&frequency!=="event";
   return <fieldset className={s.root} disabled={disabled} aria-label="Lịch thực hiện">
@@ -29,7 +29,7 @@ export function RecurrenceFields({frequency,onChange,dayNumber=1,monthNumber=1,o
         {scheduleFrequencies.filter(f=>f!=="once").map(f=><option key={f} value={f}>{frequencyLabels[f]}</option>)}
       </select></label>
       {frequency==='weekly'&&onDayChange&&<label htmlFor={`${id}-day`}>Thực hiện vào<select id={`${id}-day`} name={name?'dayNumber':undefined} value={dayNumber} onChange={e=>onDayChange(Number(e.target.value))}>
-        {weeklyFallback&&<option value={0}>Theo lịch chi nhánh</option>}
+        {allowUnselectedDay&&<option value={0}>Chọn thứ cho công việc này</option>}
         {['Thứ Hai','Thứ Ba','Thứ Tư','Thứ Năm','Thứ Sáu','Thứ Bảy','Chủ nhật'].map((day,i)=><option key={day} value={i+1}>{day}</option>)}
       </select></label>}
       {['monthly','quarterly','yearly'].includes(frequency)&&onDayChange&&<label htmlFor={`${id}-day`}>Ngày trong tháng<select id={`${id}-day`} name={name?'dayNumber':undefined} value={dayNumber} onChange={e=>onDayChange(Number(e.target.value))}>

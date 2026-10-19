@@ -1648,12 +1648,13 @@ function EditorForm({
                   <div className={styles.field}>{managerSelect}</div>
                 )}
                 <div className={styles.scheduleSection}>
+                  <strong>Lịch riêng của công việc này</strong>
                   <RecurrenceFields name="frequency" frequency={frequency} onChange={value=>{setFrequency(value);if(value==='weekly'&&scheduleDay>7)setScheduleDay(1);if(value==='quarterly'&&scheduleMonth>3)setScheduleMonth(1);}} dayNumber={scheduleDay} monthNumber={scheduleMonth} onDayChange={setScheduleDay} onMonthChange={setScheduleMonth}/>
                   {frequency!=='once'&&frequency!=='event'&&<>
                     <label className={styles.endSchedule}><input type="checkbox" checked={hasEndDate} onChange={e=>setHasEndDate(e.target.checked)}/>Kết thúc lặp vào ngày</label>
                     {hasEndDate&&<ScheduleDateInput name="effectiveUntil" aria-label="Ngày kết thúc lặp" required min={today()} value={scheduleUntil} onValueChange={setScheduleUntil}/>}
                   </>}
-                  <p>{scheduleSummary(frequency,scheduleDay,scheduleMonth)}</p>
+                  <p>{scheduleSummary(frequency,scheduleDay,scheduleMonth)} · Không thay lịch các công việc khác.</p>
                 </div>
                 <Field
                   label={

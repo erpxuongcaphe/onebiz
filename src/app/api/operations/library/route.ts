@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { isOperationsSameOrigin } from "@/lib/operations/same-origin";
-import { libraryCommandSchema } from "@/lib/operations/working-library";
+import { libraryCommandSchema, libraryRowsSchema, type WorkingLibrary } from "@/lib/operations/working-library";
+import { missingWorkSchedules } from "@/lib/operations/work-schedule";
 
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "private, no-store" };
@@ -28,6 +29,16 @@ export async function POST(request: NextRequest) {
   const session = await client.auth.getUser();
   if (session.error || !session.data.user) return failure("Vui lòng đăng nhập lại.", 401);
   const { action, requestId, ...payload } = parsed.data;
+  if(action==='apply'){
+    const current=await (client as unknown as Rpc).rpc('ops_working_library_read',{});
+    if(current.error) return failure('Chưa đọc được bộ tiêu chí hoặc bạn không còn quyền áp dụng. Chưa ghi dữ liệu.',current.error.code==='42501'?403:503);
+    const library=(current.data as {libraries?:WorkingLibrary[]}|null)?.libraries?.find(l=>l.id===payload.id);
+    if(!library||library.archived||library.version!==payload.version) return failure('Bộ tiêu chí vừa thay đổi. Tải lại và kiểm tra trước khi áp dụng.',409);
+    const rows=libraryRowsSchema.safeParse(library.rows);
+    if(!rows.success) return failure('Bộ tiêu chí có nội dung hoặc lịch chưa hợp lệ. Mở Sửa nội dung để kiểm tra; chưa ghi dữ liệu.',409);
+    const incomplete=missingWorkSchedules(rows.data);
+    if(incomplete.length) return failure(`Chọn lịch riêng cho ${incomplete.map(r=>`mục ${r.number}: ${r.title}`).join('; ')} trong bộ tiêu chí chung trước khi áp dụng. Chưa ghi dữ liệu.`,409);
+  }
   const needsRecurrence = action === 'save' && 'rows' in payload && payload.rows.some(row=>!['daily','weekly'].includes(row.frequency)||row.dayNumber!==undefined||row.monthNumber!==undefined)
     || action==='apply'&&'assignments' in payload&&payload.assignments.some(a=>a.effectiveUntil);
   if(needsRecurrence){
