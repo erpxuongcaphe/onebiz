@@ -1,426 +1,184 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useBranchFilter, useToast } from "@/lib/contexts";
-import { Icon } from "@/components/ui/icon";
-import { formatCurrency, formatDateInputValue, formatNumber } from "@/lib/format";
-import {
-  ReportPageHeader,
-  ReportDataTable,
-  type DataTableColumn,
-} from "@/components/shared/report";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { useAuth, useBranchFilter, useToast } from "@/lib/contexts";
+import { formatCurrency, formatNumber } from "@/lib/format";
+import { cashDateTimeInput, formatCashBookDate } from "@/lib/cash-time";
+import { ReportPageHeader, ReportDataTable, type DataTableColumn } from "@/components/shared/report";
+import { ReportSection } from "@/components/shared/report/report-section";
+import { MetricFilters } from "@/components/shared/report/metric-filters";
+import { DebtDetailDialog } from "@/components/shared/dialogs/debt-detail-dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
 import { useReportState } from "@/lib/hooks/use-report-state";
-import {
-  exportReportToExcel,
-  buildInfoSheet,
-  type ExcelSheet,
-} from "@/lib/utils/excel-export";
-import {
-  getPayableAgingReport,
-  getReceivableAgingReport,
-  type PayableAgingRow,
-  type ReceivableAgingRow,
-} from "@/lib/services";
-import { KpiCard } from "../_components/kpi-card";
-
-interface AgingDisplayRow {
-  id: string;
-  name: string;
-  documentCount: number;
-  outstanding: number;
-  bucket0_30: number;
-  bucket31_60: number;
-  bucket61_90: number;
-  bucket91Plus: number;
-  oldestDays: number;
-}
+import { useLiveDataRefresh } from "@/lib/hooks/use-live-data-refresh";
+import { getDebtWorkspace, type DebtWorkspace } from "@/lib/services/supabase/debt-workspace";
+import { DEBT_FIELDS, DEBT_GROUPS, DEBT_METRIC_FIELDS, DEBT_REVIEW_LABELS, debtCapitalRows, debtCapitalTotals, debtCapitalView, type DebtCapitalRow, type DebtReview } from "@/lib/reports/debt-capital";
+import { metricFilterError, metricFilterLabel, parseMetricFilters, type MetricFilter } from "@/lib/reports/metric-filter";
+import { exportReportToExcel, type ExcelSheet } from "@/lib/utils/excel-export";
 
 type AgingMode = "receivable" | "payable";
-type BucketFilter = "all" | "0-30" | "31-60" | "61-90" | "91+";
-
-function toReceivableRow(row: ReceivableAgingRow): AgingDisplayRow {
-  return {
-    id: row.customerId,
-    name: row.customerName,
-    documentCount: row.invoiceCount,
-    outstanding: row.outstanding,
-    bucket0_30: row.bucket0_30,
-    bucket31_60: row.bucket31_60,
-    bucket61_90: row.bucket61_90,
-    bucket91Plus: row.bucket91Plus,
-    oldestDays: row.oldestDays,
-  };
-}
-
-function toPayableRow(row: PayableAgingRow): AgingDisplayRow {
-  return {
-    id: row.supplierId,
-    name: row.supplierName,
-    documentCount: row.documentCount,
-    outstanding: row.outstanding,
-    bucket0_30: row.bucket0_30,
-    bucket31_60: row.bucket31_60,
-    bucket61_90: row.bucket61_90,
-    bucket91Plus: row.bucket91Plus,
-    oldestDays: row.oldestDays,
-  };
-}
-
-function summarize(rows: AgingDisplayRow[]) {
-  return {
-    total: rows.reduce((sum, row) => sum + row.outstanding, 0),
-    b0_30: rows.reduce((sum, row) => sum + row.bucket0_30, 0),
-    b31_60: rows.reduce((sum, row) => sum + row.bucket31_60, 0),
-    b61_90: rows.reduce((sum, row) => sum + row.bucket61_90, 0),
-    b91Plus: rows.reduce((sum, row) => sum + row.bucket91Plus, 0),
-  };
-}
-
-function buildSummarySheet(
-  name: string,
-  title: string,
-  rows: AgingDisplayRow[],
-): ExcelSheet {
-  const totals = summarize(rows);
-  return {
-    name,
-    titleRows: [title],
-    columns: [
-      { label: "Nhóm tuổi", key: "bucket", width: 24 },
-      { label: "Số tiền", key: "amount", width: 18, format: "currency" },
-      { label: "Tỷ lệ", key: "percent", width: 12 },
-    ],
-    rows: [
-      { bucket: "0–30 ngày", amount: totals.b0_30 },
-      { bucket: "31–60 ngày", amount: totals.b31_60 },
-      { bucket: "61–90 ngày", amount: totals.b61_90 },
-      { bucket: "Trên 90 ngày", amount: totals.b91Plus },
-    ].map((row) => ({
-      ...row,
-      percent:
-        totals.total > 0
-          ? ((Number(row.amount) / totals.total) * 100).toFixed(1) + "%"
-          : "0%",
-    })),
-    footer: { bucket: "TỔNG", amount: totals.total, percent: "100%" },
-  };
-}
-
-function buildDetailSheet(
-  name: string,
-  title: string,
-  entityLabel: string,
-  documentLabel: string,
-  rows: AgingDisplayRow[],
-): ExcelSheet {
-  const totals = summarize(rows);
-  return {
-    name,
-    titleRows: [title],
-    columns: [
-      { label: entityLabel, key: "entity", width: 30 },
-      { label: documentLabel, key: "documents", width: 12, format: "number" },
-      { label: "Tổng nợ", key: "total", width: 18, format: "currency" },
-      { label: "0–30 ngày", key: "b0_30", width: 16, format: "currency" },
-      { label: "31–60 ngày", key: "b31_60", width: 16, format: "currency" },
-      { label: "61–90 ngày", key: "b61_90", width: 16, format: "currency" },
-      { label: "Trên 90 ngày", key: "b91Plus", width: 16, format: "currency" },
-      { label: "Lâu nhất (ngày)", key: "oldest", width: 14, format: "number" },
-    ],
-    rows: rows.map((row) => ({
-      entity: row.name,
-      documents: row.documentCount,
-      total: row.outstanding,
-      b0_30: row.bucket0_30,
-      b31_60: row.bucket31_60,
-      b61_90: row.bucket61_90,
-      b91Plus: row.bucket91Plus,
-      oldest: row.oldestDays,
-    })),
-    footer: {
-      entity: String(rows.length) + " đối tượng",
-      documents: rows.reduce((sum, row) => sum + row.documentCount, 0),
-      total: totals.total,
-      b0_30: totals.b0_30,
-      b31_60: totals.b31_60,
-      b61_90: totals.b61_90,
-      b91Plus: totals.b91Plus,
-      oldest: "",
-    },
-    withSignature: true,
-  };
-}
+const BASIS = "Số dư hiện tại. Nợ và tiền ứng tách riêng; số dư ròng = nợ − ứng, chưa tự cấn. Tuổi tính từ ngày chứng từ, không phải số ngày quá hạn.";
+const money = (value: number | null) => value === null ? "Chưa đủ dữ liệu" : formatCurrency(value);
+const metricKeys = DEBT_METRIC_FIELDS.map(field => field.key as string);
 
 export default function DebtAgingReportPage() {
+  const { tenant, hasPermission } = useAuth();
   const { toast } = useToast();
   const { activeBranchId, branchLabel, isReady } = useBranchFilter();
-  const { preset, range, setPreset, setCustomRange } = useReportState({
-    defaultViewMode: "table",
-    forceTable: true,
-  });
+  const { preset, range, setPreset, setCustomRange } = useReportState({ defaultViewMode: "table", forceTable: true });
   const [mode, setMode] = useState<AgingMode>("receivable");
-  const [receivableRows, setReceivableRows] = useState<AgingDisplayRow[]>([]);
-  const [payableRows, setPayableRows] = useState<AgingDisplayRow[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [filter, setFilter] = useState<BucketFilter>("all");
+  const [data, setData] = useState<DebtWorkspace | null>(null);
+  const [search, setSearch] = useState("");
+  const [review, setReview] = useState<DebtReview>("all");
+  const [metrics, setMetrics] = useState<MetricFilter[]>([]);
+  const [sort, setSort] = useState<{ id: string; direction: "asc" | "desc" }>({ id: "debt", direction: "desc" });
+  const [ready, setReady] = useState(false);
+  const [loadedScope, setLoadedScope] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [revision, setRevision] = useState(0);
+  const [exporting, setExporting] = useState(false);
+  const [detail, setDetail] = useState<DebtCapitalRow | null>(null);
+  const scope = `${tenant?.id}:${activeBranchId ?? "all"}`;
+  const scopeRef = useRef(scope);
+  scopeRef.current = scope;
+  const flight = useRef<{ scope: string; pending: boolean; queued: boolean }>({ scope: "", pending: false, queued: false });
+  const refresh = useCallback(() => {
+    if (flight.current.scope === scope && flight.current.pending) flight.current.queued = true;
+    else setRevision(value => value + 1);
+  }, [scope]);
+  useLiveDataRefresh(refresh, tenant?.id, activeBranchId ?? undefined, ["dashboard_live_signals"], isReady && ready);
 
   useEffect(() => {
-    if (!isReady) return;
-    let active = true;
-    setLoading(true);
-    Promise.all([
-      getReceivableAgingReport({ branchId: activeBranchId ?? null }),
-      getPayableAgingReport({ branchId: activeBranchId ?? null }),
-    ])
-      .then(([receivable, payable]) => {
-        if (!active) return;
-        setReceivableRows(receivable.rows.map(toReceivableRow));
-        setPayableRows(payable.rows.map(toPayableRow));
-      })
-      .catch((error) => {
-        if (!active) return;
-        setReceivableRows([]);
-        setPayableRows([]);
-        toast({
-          title: "Không tải được báo cáo tuổi nợ",
-          description: error instanceof Error ? error.message : "Lỗi không xác định",
-          variant: "error",
-        });
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [activeBranchId, isReady, toast]);
-
-  const rows = mode === "receivable" ? receivableRows : payableRows;
-  const totals = useMemo(() => summarize(rows), [rows]);
-  const receivableTotal = useMemo(() => summarize(receivableRows).total, [receivableRows]);
-  const payableTotal = useMemo(() => summarize(payableRows).total, [payableRows]);
-
-  const filteredRows = useMemo(() => {
-    if (filter === "all") return rows;
-    if (filter === "0-30") return rows.filter((row) => row.bucket0_30 > 0);
-    if (filter === "31-60") return rows.filter((row) => row.bucket31_60 > 0);
-    if (filter === "61-90") return rows.filter((row) => row.bucket61_90 > 0);
-    return rows.filter((row) => row.bucket91Plus > 0);
-  }, [filter, rows]);
-
-  const columns = useMemo<DataTableColumn<AgingDisplayRow>[]>(() => [
-    {
-      label: mode === "receivable" ? "Khách hàng" : "Nhà cung cấp",
-      key: "name",
-      width: "240px",
-      sticky: true,
-      hideable: false,
-    },
-    {
-      label: mode === "receivable" ? "Số hóa đơn" : "Số phiếu nhập",
-      key: "documentCount",
-      align: "right",
-      cell: (row) => formatNumber(row.documentCount),
-    },
-    {
-      label: "Tổng nợ",
-      key: "outstanding",
-      align: "right",
-      cell: (row) => (
-        <span className="font-semibold text-primary tabular-nums">
-          {formatCurrency(row.outstanding)}
-        </span>
-      ),
-    },
-    {
-      label: "0–30 ngày",
-      key: "bucket0_30",
-      align: "right",
-      cell: (row) => row.bucket0_30 > 0 ? formatCurrency(row.bucket0_30) : "—",
-    },
-    {
-      label: "31–60 ngày",
-      key: "bucket31_60",
-      align: "right",
-      cell: (row) => row.bucket31_60 > 0 ? formatCurrency(row.bucket31_60) : "—",
-    },
-    {
-      label: "61–90 ngày",
-      key: "bucket61_90",
-      align: "right",
-      cell: (row) => row.bucket61_90 > 0 ? formatCurrency(row.bucket61_90) : "—",
-    },
-    {
-      label: "Trên 90 ngày",
-      key: "bucket91Plus",
-      align: "right",
-      cell: (row) => (
-        <span className={row.bucket91Plus > 0 ? "font-semibold text-status-error" : ""}>
-          {row.bucket91Plus > 0 ? formatCurrency(row.bucket91Plus) : "—"}
-        </span>
-      ),
-    },
-    {
-      label: "Lâu nhất",
-      key: "oldestDays",
-      align: "right",
-      cell: (row) => formatNumber(row.oldestDays) + " ngày",
-    },
-  ], [mode]);
-
-  const handleExport = useCallback(() => {
-    if (receivableRows.length === 0 && payableRows.length === 0) {
-      toast({ title: "Không có dữ liệu để xuất", variant: "warning" });
-      return;
+    const query = new URLSearchParams(window.location.search);
+    if (query.get("debtMode") === "payable") setMode("payable");
+    setSearch(query.get("debtSearch") ?? "");
+    const savedReview = query.get("debtReview");
+    if (savedReview && savedReview in DEBT_REVIEW_LABELS) setReview(savedReview as DebtReview);
+    const savedSort = query.get("debtSort");
+    if (DEBT_FIELDS.some(field => field.key === savedSort)) setSort({ id: savedSort!, direction: query.get("debtDirection") === "asc" ? "asc" : "desc" });
+    setMetrics(parseMetricFilters(query.get("debtMetrics"), metricKeys));
+    setReady(true);
+  }, []);
+  useEffect(() => {
+    if (!ready) return;
+    const url = new URL(window.location.href);
+    for (const [key, value] of Object.entries({ debtMode: mode, debtSearch: search, debtReview: review, debtSort: sort.id, debtDirection: sort.direction, debtMetrics: metrics.length ? JSON.stringify(metrics) : "" })) {
+      if (value) url.searchParams.set(key, value); else url.searchParams.delete(key);
     }
-    const today = formatDateInputValue(new Date());
-    const sheets: ExcelSheet[] = [
-      buildInfoSheet({
-        title: "BÁO CÁO TUỔI NỢ",
-        description: "Tách riêng công nợ phải thu khách hàng và phải trả nhà cung cấp",
-        range: { from: today, to: today },
-        branchName: branchLabel,
-        tenantName: "OneBiz",
-        generatedAt: new Date(),
-        disclaimer: "Số liệu được phân nhóm theo tuổi của từng chứng từ còn dư nợ.",
-      }),
-      buildSummarySheet("Tổng quan phải thu", "TUỔI NỢ PHẢI THU", receivableRows),
-      buildDetailSheet(
-        "Chi tiết phải thu",
-        "CHI TIẾT PHẢI THU KHÁCH HÀNG",
-        "Khách hàng",
-        "Số hóa đơn",
-        receivableRows,
-      ),
-      buildSummarySheet("Tổng quan phải trả", "TUỔI NỢ PHẢI TRẢ", payableRows),
-      buildDetailSheet(
-        "Chi tiết phải trả",
-        "CHI TIẾT PHẢI TRẢ NHÀ CUNG CẤP",
-        "Nhà cung cấp",
-        "Số phiếu nhập",
-        payableRows,
-      ),
-    ];
-    exportReportToExcel({
-      kind: "cong-no-aging",
-      mode: "full",
-      range: { from: today, to: today },
-      tenantName: "OneBiz",
-      sheets,
+    window.history.replaceState(null, "", url);
+  }, [ready, mode, search, review, sort, metrics]);
+  useEffect(() => { setDetail(null); }, [scope, mode]);
+  useEffect(() => {
+    if (!isReady || !ready || !tenant?.id) return;
+    let active = true;
+    const request = { scope, pending: true, queued: false };
+    flight.current = request;
+    getDebtWorkspace(activeBranchId, { requireBalanceSummary: true }).then(result => {
+      if (!active || scopeRef.current !== scope) return;
+      setData(result); setLoadedScope(scope); setError(null);
+    }).catch(reason => {
+      if (!active || scopeRef.current !== scope) return;
+      setError(reason instanceof Error ? reason.message : "Không tải được công nợ"); setLoadedScope(scope);
+    }).finally(() => {
+      request.pending = false;
+      if (active && request.queued) setRevision(value => value + 1);
     });
-    toast({
-      title: "Đã xuất báo cáo tuổi nợ",
-      description: "File gồm các trang riêng cho phải thu và phải trả.",
-      variant: "success",
-    });
-  }, [branchLabel, payableRows, receivableRows, toast]);
+    return () => { active = false; };
+  }, [activeBranchId, scope, isReady, ready, revision, tenant?.id]);
 
-  const modeLabel = mode === "receivable" ? "khách hàng" : "nhà cung cấp";
+  const pending = !isReady || !ready || loadedScope !== scope;
+  const unavailable = pending || Boolean(error);
+  const receivables = useMemo(() => debtCapitalRows(data?.receivables ?? []), [data]);
+  const payables = useMemo(() => debtCapitalRows(data?.payables ?? []), [data]);
+  const filters = useMemo(() => ({ search, review, metrics }), [search, review, metrics]);
+  const filteredReceivables = useMemo(() => debtCapitalView(receivables, filters, sort), [receivables, filters, sort]);
+  const filteredPayables = useMemo(() => debtCapitalView(payables, filters, sort), [payables, filters, sort]);
+  const rows = mode === "receivable" ? filteredReceivables : filteredPayables;
+  const totals = debtCapitalTotals(rows);
+  const canDrill = hasPermission(mode === "receivable" ? "customers.view_debt" : "suppliers.view_debt");
+  const columns: DataTableColumn<DebtCapitalRow>[] = DEBT_FIELDS.map(field => ({
+    key: field.key, label: field.label, sortable: true,
+    sticky: field.key === "code", hideable: field.key !== "code",
+    width: field.key === "name" ? "240px" : "160px",
+    align: metricKeys.includes(field.key) ? "right" : "left",
+    cell: row => {
+      if (field.key === "code") return canDrill && /^[0-9a-f-]{36}$/i.test(row.id)
+        ? <button type="button" className="min-h-9 text-left font-medium text-primary underline-offset-2 hover:underline" onClick={() => setDetail(row)} aria-label={`Xem chứng từ ${row.code}`}>{row.code}</button> : row.code;
+      if (field.key === "oldestDocumentDate") return row.oldestDocumentDate ? formatCashBookDate(row.oldestDocumentDate) : "—";
+      if (field.key === "ageDays") return row.documentCount > 0 ? formatNumber(row.ageDays) : "—";
+      if (field.key === "documentCount") return formatNumber(row.documentCount);
+      if (metricKeys.includes(field.key)) return <span className="tabular-nums">{money(row[field.key] as number | null)}</span>;
+      return row[field.key] ?? "—";
+    },
+    subtotalCell: field.key === "code" ? "TỔNG" : field.key in totals ? money(totals[field.key as keyof typeof totals]) : undefined,
+  }));
+  const snapshot = data ? cashDateTimeInput(new Date(data.generatedAt)).slice(0, 10) : "";
+  const handleExport = async (exportMode: "view" | "full") => {
+    if (unavailable || exporting || metricFilterError(metrics) || !data) return;
+    setExporting(true);
+    try {
+      const titleRows = ["CÔNG NỢ VÀ TUỔI CHỨNG TỪ", `${branchLabel} · Số dư hiện tại ${snapshot}`, BASIS,
+        `Tìm: ${search || "Tất cả"} · ${DEBT_REVIEW_LABELS[review]}`,
+        `Chỉ tiêu: ${metricFilterLabel(metrics, DEBT_METRIC_FIELDS)}`,
+        `Sắp xếp: ${DEBT_FIELDS.find(field => field.key === sort.id)?.label} ${sort.direction === "asc" ? "tăng dần" : "giảm dần"}`];
+      const detailSheet = (side: AgingMode, entries: DebtCapitalRow[]): ExcelSheet => ({
+        name: side === "receivable" ? "Chi tiết phải thu" : "Chi tiết phải trả", titleRows,
+        ...(exportMode === "view" ? { tablePreferenceKey: `report.debt-aging.${side}` } : {}),
+        columns: DEBT_FIELDS.map(field => ({ key: field.key, label: field.label, hideable: field.key !== "code", width: field.key === "name" ? 32 : 22,
+          format: metricKeys.includes(field.key) ? "number" : "text", decimalPlaces: field.key === "documentCount" || field.key === "ageDays" ? 0 : 2 })),
+        rows: entries.map(row => Object.fromEntries(DEBT_FIELDS.map(field => [field.key, field.key === "oldestDocumentDate" ? (row.oldestDocumentDate ? formatCashBookDate(row.oldestDocumentDate) : "") : field.key === "ageDays" && row.documentCount === 0 ? null : row[field.key]]))),
+        footer: { code: "TỔNG", ...debtCapitalTotals(entries) },
+      });
+      const summarySheet = (side: AgingMode, entries: DebtCapitalRow[]): ExcelSheet => ({
+        name: side === "receivable" ? "Tổng quan phải thu" : "Tổng quan phải trả", titleRows,
+        columns: [{ key: "label", label: "Chỉ tiêu", width: 35 }, { key: "amount", label: "Giá trị", format: "number", decimalPlaces: 2, width: 24 }],
+        rows: Object.entries(debtCapitalTotals(entries)).map(([key, amount]) => ({ label: DEBT_FIELDS.find(field => field.key === key)?.label ?? key, amount })),
+      });
+      await exportReportToExcel({ kind: "cong-no-aging", mode: exportMode, range: { from: snapshot, to: snapshot }, tenantName: tenant?.name ?? "OneBiz",
+        sheets: exportMode === "view" ? [detailSheet(mode, rows)] : [summarySheet("receivable", filteredReceivables), detailSheet("receivable", filteredReceivables), summarySheet("payable", filteredPayables), detailSheet("payable", filteredPayables)] });
+      toast({ title: "Đã xuất báo cáo công nợ", variant: "success" });
+    } catch (reason) { toast({ title: "Không xuất được báo cáo", description: reason instanceof Error ? reason.message : "Vui lòng thử lại", variant: "error" }); }
+    finally { setExporting(false); }
+  };
 
-  return (
-    <div className="p-3 md:p-5 space-y-4">
-      <ReportPageHeader
-        title="Tuổi nợ"
-        subtitle="Theo dõi riêng phải thu khách hàng và phải trả nhà cung cấp theo từng chứng từ"
-        preset={preset}
-        range={range}
-        onPresetChange={setPreset}
-        onCustomRangeChange={setCustomRange}
-        onExportFull={handleExport}
-        exportDisabled={loading || (receivableRows.length === 0 && payableRows.length === 0)}
-        hideDateRange
-      />
-
-      <Tabs
-        value={mode}
-        onValueChange={(value) => {
-          setMode(value as AgingMode);
-          setFilter("all");
-        }}
-      >
-        <TabsList className="h-auto w-full max-w-xl rounded-lg p-1">
-          <TabsTrigger value="receivable" className="min-h-12 rounded-md px-4">
-            <span className="text-left">
-              <span className="block text-xs">Phải thu khách hàng</span>
-              <span className="block font-semibold tabular-nums">
-                {formatCurrency(receivableTotal)} đ
-              </span>
-            </span>
-          </TabsTrigger>
-          <TabsTrigger value="payable" className="min-h-12 rounded-md px-4">
-            <span className="text-left">
-              <span className="block text-xs">Phải trả nhà cung cấp</span>
-              <span className="block font-semibold tabular-nums">
-                {formatCurrency(payableTotal)} đ
-              </span>
-            </span>
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
-
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        <KpiCard
-          label={mode === "receivable" ? "Tổng phải thu" : "Tổng phải trả"}
-          value={formatCurrency(totals.total) + " đ"}
-          change={String(rows.length) + " " + modeLabel}
-          positive={totals.b91Plus === 0}
-          icon={mode === "receivable" ? "payments" : "receipt_long"}
-          bg="bg-primary-fixed"
-          iconColor="text-primary"
-          valueColor="text-primary"
-        />
-        <KpiCard label="0–30 ngày" value={formatCurrency(totals.b0_30) + " đ"} icon="check_circle" bg="bg-status-success/10" iconColor="text-status-success" valueColor="text-status-success" />
-        <KpiCard label="31–60 ngày" value={formatCurrency(totals.b31_60) + " đ"} icon="schedule" bg="bg-status-warning/10" iconColor="text-status-warning" valueColor="text-status-warning" />
-        <KpiCard label="61–90 ngày" value={formatCurrency(totals.b61_90) + " đ"} icon="warning" bg="bg-status-warning/10" iconColor="text-status-warning" valueColor="text-status-warning" />
-        <KpiCard label="Trên 90 ngày" value={formatCurrency(totals.b91Plus) + " đ"} icon="error" bg="bg-status-error/10" iconColor="text-status-error" valueColor="text-status-error" />
-      </div>
-
-      <div className="flex flex-wrap gap-2" role="group" aria-label="Lọc theo tuổi nợ">
-        {([
-          ["all", "Tất cả (" + rows.length + ")"],
-          ["0-30", "0–30 ngày"],
-          ["31-60", "31–60 ngày"],
-          ["61-90", "61–90 ngày"],
-          ["91+", "Trên 90 ngày"],
-        ] as Array<[BucketFilter, string]>).map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setFilter(key)}
-            aria-pressed={filter === key}
-            className={
-              "h-8 rounded-md px-3 text-xs font-medium transition-colors " +
-              (filter === key
-                ? "bg-primary text-on-primary"
-                : "bg-surface-container-low text-foreground hover:bg-surface-container")
-            }
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      <ReportDataTable
-        tablePreferenceKey={"report.debt-aging." + mode}
-        columns={columns}
-        rows={filteredRows}
-        getRowKey={(row) => row.id}
-        subtotalLabel={
-          loading
-            ? "Đang tải..."
-            : filteredRows.length === 0
-              ? "Không có công nợ"
-              : String(filteredRows.length) + " " + modeLabel + " — Tổng: " +
-                formatCurrency(filteredRows.reduce((sum, row) => sum + row.outstanding, 0)) + " đ"
-        }
-        emptyState={
-          <div className="py-12 text-center text-muted-foreground">
-            <Icon name="check_circle" size={40} className="mb-2 opacity-50" />
-            <p>Không có công nợ trong nhóm này</p>
-          </div>
-        }
-      />
+  return <div className="min-w-0 space-y-4 p-3 md:p-5">
+    <ReportPageHeader title="Công nợ và tuổi chứng từ" subtitle="Số dư hiện tại · Cùng nguồn trang Công nợ" preset={preset} range={range} onPresetChange={setPreset} onCustomRangeChange={setCustomRange}
+      onExportView={() => handleExport("view")} onExportFull={() => handleExport("full")} exportDisabled={unavailable || exporting || metricFilterError(metrics)} hideDateRange />
+    <Tabs value={mode} onValueChange={value => setMode(value as AgingMode)}>
+      <TabsList className="grid h-auto w-full max-w-2xl grid-cols-2 p-1">
+        {(["receivable", "payable"] as const).map(side => <TabsTrigger key={side} value={side} className="min-h-12 min-w-0 whitespace-normal px-2 text-left">
+          <span><span className="block text-xs">{side === "receivable" ? "Phải thu khách hàng" : "Phải trả nhà cung cấp"}</span><span className="block font-semibold tabular-nums">{unavailable ? "—" : money(debtCapitalTotals(side === "receivable" ? receivables : payables).debt) + " đ"}</span></span>
+        </TabsTrigger>)}
+      </TabsList>
+    </Tabs>
+    <div className="flex flex-wrap items-center gap-2">
+      <Input aria-label="Tìm đối tác" placeholder="Mã, tên, điện thoại" value={search} onChange={event => setSearch(event.target.value)} className="w-full sm:w-72" />
+      <select aria-label="Nhóm kiểm tra công nợ" value={review} onChange={event => setReview(event.target.value as DebtReview)} className="h-10 max-w-full rounded border bg-background px-2 text-sm">{Object.entries(DEBT_REVIEW_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>
+      <button type="button" className="min-h-10 px-2 text-sm text-primary" onClick={() => { setSearch(""); setReview("all"); setMetrics([]); }}>Xóa bộ lọc</button>
+      <Link href="/tai-chinh/cong-no" className="min-h-10 px-2 py-2 text-sm text-primary">Mở công nợ</Link>
     </div>
-  );
+    <MetricFilters fields={DEBT_METRIC_FIELDS} value={metrics} onChange={setMetrics} />
+    <p className="text-xs leading-5 text-muted-foreground">{BASIS}</p>
+    {pending ? <p role="status" className="py-12 text-center">Đang tải công nợ...</p> : error ? <div role="alert" className="border-y border-destructive/40 py-6 text-destructive"><p>{error}</p><button type="button" className="mt-2 min-h-10 underline" onClick={refresh}>Thử lại</button></div> : <>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {[{ label: "Nợ chứng từ", value: totals.debt }, { label: mode === "receivable" ? "Khách trả trước còn dư" : "Ứng NCC còn dư", value: totals.advance }, { label: "Có thể đối chiếu cấn", value: totals.availableOffset }, { label: "Nợ trên 90 ngày", value: totals.bucket91Plus }].map(item => <div key={item.label} className="min-w-0 border-l-2 border-primary/30 py-2 pl-3"><p className="text-xs text-muted-foreground">{item.label}</p><p className="break-words text-lg font-semibold tabular-nums">{money(item.value)} đ</p><p className="text-xs text-muted-foreground">Theo bộ lọc · {rows.length} đối tác</p></div>)}
+      </div>
+      <ReportSection title="Cần đối chiếu" tone="review" subtitle="Không tự cấn tiền ứng hoặc ghi nhận thêm thu chi.">
+        <div className="grid gap-4 divide-y md:grid-cols-3 md:divide-x md:divide-y-0">
+          {([{ key: "both", label: "Nợ và tiền ứng", note: "Đối chiếu nguồn ứng với chứng từ cùng đối tác trước khi cấn." }, { key: "older90", label: "Nợ trên 90 ngày", note: mode === "receivable" ? "Rà soát chứng từ và lập lịch thu tiền." : "Đối chiếu nhà cung cấp và lập lịch thanh toán." }, { key: "gap", label: "Lệch phân tuổi", note: "Kiểm tra nguồn và nhóm tuổi; không tự phân bổ chênh lệch." }] as const).map(item => {
+            const count = debtCapitalView(mode === "receivable" ? receivables : payables, { search, metrics, review: item.key }, null).length;
+            return <div key={item.key} className="min-w-0 px-3 py-2"><p className="font-medium">{item.label} · {formatNumber(count)}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{item.note}</p><button type="button" disabled={!count} className="mt-1 min-h-10 text-sm text-primary disabled:opacity-40" onClick={() => setReview(item.key)}>Xem đối tác</button></div>;
+          })}
+        </div>
+      </ReportSection>
+      <ReportSection title={mode === "receivable" ? "Chi tiết phải thu" : "Chi tiết phải trả"} tone="primary" subtitle="Số dư ròng âm là tiền ứng lớn hơn nợ; chứng từ chưa cấn vẫn hiển thị.">
+        <ReportDataTable tablePreferenceKey={`report.debt-aging.${mode}`} columns={columns} columnGroups={DEBT_GROUPS} rows={rows} getRowKey={row => row.id} sortState={sort} onSortChange={setSort}
+          className="[&_thead_tr:first-child_th]:border-r [&_thead_tr:first-child_th]:text-left" subtotalLabel={`${rows.length} đối tác theo bộ lọc`} emptyState={<p className="py-12 text-center text-muted-foreground">Không có đối tác phù hợp bộ lọc</p>} />
+      </ReportSection>
+      <p className="text-xs text-muted-foreground">Cập nhật: {data ? new Date(data.generatedAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "—"}. Không bù trừ giữa các đối tác.</p>
+    </>}
+    {detail && !unavailable && <DebtDetailDialog open onOpenChange={open => { if (!open) setDetail(null); }} mode={mode === "receivable" ? "customer" : "supplier"} partyId={detail.id} branchId={activeBranchId} partyName={detail.name} partyCode={detail.code} estimatedDebt={detail.debt} />}
+  </div>;
 }

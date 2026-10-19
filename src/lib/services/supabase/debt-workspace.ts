@@ -19,6 +19,12 @@ export interface DebtPartyRow {
   bucket: string;
   type: "customer" | "supplier";
   oldestDocumentDate?: string;
+  ageBuckets?: {
+    bucket0_30: number;
+    bucket31_60: number;
+    bucket61_90: number;
+    bucket91Plus: number;
+  };
 }
 
 export interface DebtWorkspace {
@@ -113,6 +119,7 @@ export async function getCounterpartyBalanceSummary(branchId?: string | null) {
 
 export async function getDebtWorkspace(
   branchId?: string | null,
+  options?: { requireBalanceSummary?: boolean },
 ): Promise<DebtWorkspace> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
@@ -120,6 +127,9 @@ export async function getDebtWorkspace(
     getOpenDebtAging(branchId),
     getCounterpartyBalanceSummary(branchId),
   ]);
+  if (options?.requireBalanceSummary && !balanceSummary) {
+    throw new Error("Chưa tải được nguồn tiền ứng. Không thể kết luận số dư công nợ.");
+  }
 
   const receivableRows = positiveReceivables(openDebt.receivables);
   const payableRows = positivePayables(openDebt.payables);
@@ -197,6 +207,12 @@ export async function getDebtWorkspace(
         bucket: bucketLabel(Number(row?.oldestDays ?? 0)),
         type: "customer" as const,
         oldestDocumentDate: row?.oldestInvoiceDate,
+        ageBuckets: {
+          bucket0_30: Number(row?.bucket0_30 ?? 0),
+          bucket31_60: Number(row?.bucket31_60 ?? 0),
+          bucket61_90: Number(row?.bucket61_90 ?? 0),
+          bucket91Plus: Number(row?.bucket91Plus ?? 0),
+        },
       };
     })
     .sort((a, b) => Math.max(b.debt, b.advance) - Math.max(a.debt, a.advance));
@@ -221,6 +237,12 @@ export async function getDebtWorkspace(
         bucket: bucketLabel(Number(row?.oldestDays ?? 0)),
         type: "supplier" as const,
         oldestDocumentDate: row?.oldestDocumentDate,
+        ageBuckets: {
+          bucket0_30: Number(row?.bucket0_30 ?? 0),
+          bucket31_60: Number(row?.bucket31_60 ?? 0),
+          bucket61_90: Number(row?.bucket61_90 ?? 0),
+          bucket91Plus: Number(row?.bucket91Plus ?? 0),
+        },
       };
     })
     .sort((a, b) => Math.max(b.debt, b.advance) - Math.max(a.debt, a.advance));

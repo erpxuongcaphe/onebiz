@@ -16,12 +16,11 @@ const migration = readFileSync(
 
 describe("split receivable and payable aging report", () => {
   it("shows separate receivable and payable views instead of mixing entities", () => {
-    expect(page).toContain('value="receivable"');
-    expect(page).toContain('value="payable"');
+    expect(page).toContain('["receivable", "payable"]');
     expect(page).toContain("Phải thu khách hàng");
     expect(page).toContain("Phải trả nhà cung cấp");
-    expect(page).toContain("getReceivableAgingReport");
-    expect(page).toContain("getPayableAgingReport");
+    expect(page).toContain("getDebtWorkspace(activeBranchId, { requireBalanceSummary: true })");
+    expect(page).not.toContain("getPayableAgingReport");
   });
 
   it("exports separate summary and detail sheets for both sides", () => {
