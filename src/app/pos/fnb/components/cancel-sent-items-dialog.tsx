@@ -4,11 +4,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { getKitchenOrderById } from '@/lib/services/supabase/kitchen-orders';
-import { requestFnbCancellation, executeFnbCancellation, verifyAndExecuteFnbCancellation, type CancelRequest } from '@/lib/services/supabase/fnb-cancel-requests';
+import { requestFnbCancellation, executeFnbCancellation, verifyAndExecuteFnbCancellation, getFnbCancellationStatus, renewFnbCancellation, type CancelRequest, type CancelApproval } from '@/lib/services/supabase/fnb-cancel-requests';
 import { OTP_ACTION_CODES } from '@/lib/services/supabase/manager-otp';
 import { OtpApprovalDialog } from '@/components/shared/dialogs/otp-approval-dialog';
 import { findCancellationItem } from '@/lib/fnb-cancellation-line';
 import type { FnbOrderLine, KitchenOrderItem } from '@/lib/types/fnb';
+import { FnbCancelApprovalTiming, useApprovalClock, displayedApprovalStatus } from '@/components/shared/fnb-cancel-approval-timing';
 
 export function CancelSentItemsDialog({ open, onOpenChange, orderId, label, initialItemId, initialLine, wholeBill, canCancel, shiftId, onCompleted }: {
   open: boolean; onOpenChange: (open: boolean) => void; orderId?: string; label: string;
@@ -21,12 +22,36 @@ export function CancelSentItemsDialog({ open, onOpenChange, orderId, label, init
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loadRevision, setLoadRevision] = useState(0);
-  const [request, setRequest] = useState<CancelRequest | null>(null);
+  const [request, setRequest] = useState<CancelApproval | null>(null);
+  const [approvalError, setApprovalError] = useState('');
+  const [renewError, setRenewError] = useState('');
+  const [statusRevision, setStatusRevision] = useState(0);
+  const now = useApprovalClock(request?.server_now);
+  const approvalStatus = request ? displayedApprovalStatus(request, now) : undefined;
   const lock = useRef(false);
+  useEffect(() => {
+    if (!open || !request?.id) return;
+    let alive = true;
+    let inflight = false;
+    const id = request.id;
+    const load = async () => {
+      if (document.visibilityState === 'hidden' || inflight) return;
+      inflight = true;
+      try {
+        const next = await getFnbCancellationStatus(id);
+        if (alive) { setRequest(current => current?.id === id ? next : current); setApprovalError(''); }
+      } catch (e) { if (alive) setApprovalError(e instanceof Error ? e.message : 'Chưa cập nhật được trạng thái duyệt.'); }
+      finally { inflight = false; }
+    };
+    void load();
+    const timer = setInterval(() => void load(), 5000);
+    document.addEventListener('visibilitychange', load);
+    return () => { alive = false; clearInterval(timer); document.removeEventListener('visibilitychange', load); };
+  }, [open, request?.id, statusRevision]);
   useEffect(() => {
     if (!open || !orderId) return;
     let alive = true;
-    setItems([]); setQuantities({}); setReason(''); setError(''); setRequest(null); setLoading(true);
+    setItems([]); setQuantities({}); setReason(''); setError(''); setApprovalError(''); setRenewError(''); setRequest(null); setLoading(true);
     getKitchenOrderById(orderId).then(order => {
       if (!alive) return;
       if (!order || order.invoiceId || order.status === 'cancelled') throw new Error('Bill đã đóng. Hãy tải lại danh sách đơn.');
@@ -59,6 +84,20 @@ export function CancelSentItemsDialog({ open, onOpenChange, orderId, label, init
     } catch (e) { setError(e instanceof Error ? e.message : 'Không gửi được yêu cầu hủy.'); }
     finally { lock.current = false; setBusy(false); }
   };
+  const renew = async () => {
+    if (!request || lock.current) return;
+    lock.current = true; setBusy(true); setRenewError('');
+    try { setRequest(await renewFnbCancellation(request.id)); }
+    catch (e) { setRenewError(e instanceof Error ? e.message : 'Chưa xin lại được yêu cầu.'); setStatusRevision(v => v + 1); }
+    finally { lock.current = false; setBusy(false); }
+  };
+  const refreshCompleted = async () => {
+    if (!request || lock.current) return;
+    lock.current = true; setBusy(true);
+    try { await finish(request); }
+    catch (e) { setRenewError(e instanceof Error ? e.message : 'Bill đã hủy nhưng chưa cập nhật được màn hình.'); }
+    finally { lock.current = false; setBusy(false); }
+  };
   return <>
     <Dialog open={open && !request} onOpenChange={o => { if (!lock.current) onOpenChange(o); }}>
       <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden sm:max-w-xl">
@@ -78,10 +117,19 @@ export function CancelSentItemsDialog({ open, onOpenChange, orderId, label, init
         <DialogFooter><Button variant="outline" disabled={busy} onClick={() => onOpenChange(false)}>Đóng</Button><Button disabled={busy || !valid} onClick={() => void submit()}>{busy ? 'Đang xử lý…' : canCancel ? 'Xác nhận hủy' : 'Gửi yêu cầu · nhập OTP'}</Button></DialogFooter>
       </DialogContent>
     </Dialog>
-    <OtpApprovalDialog open={Boolean(request)} onOpenChange={o => { if (!o) { setRequest(null); onOpenChange(false); } }}
+    <OtpApprovalDialog key={request?.id ?? 'no-request'} open={Boolean(request)} onOpenChange={o => { if (!o) { setRequest(null); onOpenChange(false); } }}
       actionCode={request?.whole_bill ? OTP_ACTION_CODES.FNB_CANCEL_UNPAID_BILL : OTP_ACTION_CODES.FNB_CANCEL_UNPAID_ITEM}
       targetMeta={request ? { entity_id: request.order_id, kitchen_order_id: request.order_id, request_id: request.id } : undefined}
       contextLabel={`${label} · ${request?.whole_bill ? 'Hủy toàn bill' : 'Hủy món'} · ${reason}. Quản lý mở Cấp OTP → Yêu cầu chờ duyệt.`}
+      verificationDisabled={approvalStatus !== 'issued' || busy || Boolean(approvalError)}
+      statusPanel={request && <div className="space-y-2">
+        <FnbCancelApprovalTiming approval={request} now={now} />
+        {(renewError || approvalError) && <p role="alert" className="text-sm text-status-error">{renewError || approvalError}</p>}
+        {(approvalStatus === 'request_expired' || approvalStatus === 'otp_expired') && <Button className="min-h-11 w-full" disabled={busy} onClick={() => void renew()}>{busy ? 'Đang xin lại…' : approvalStatus === 'otp_expired' ? 'Xin cấp lại mã' : 'Xin lại yêu cầu'}</Button>}
+        {(approvalStatus === 'changed' || approvalStatus === 'superseded') && <Button className="min-h-11 w-full" variant="outline" onClick={() => { setRequest(null); setLoadRevision(v => v + 1); }}>Tải lại bill để xin duyệt</Button>}
+        {approvalStatus === 'executed' && <Button className="min-h-11 w-full" disabled={busy} onClick={() => void refreshCompleted()}>Cập nhật bill đã hủy</Button>}
+        <Button size="sm" variant="outline" disabled={busy} onClick={() => setStatusRevision(v => v + 1)}>Cập nhật trạng thái</Button>
+      </div>}
       verifyOtp={async input => {
         if (!request) throw new Error('Chưa có yêu cầu hủy.');
         return verifyAndExecuteFnbCancellation(request.id, input.code, shiftId);

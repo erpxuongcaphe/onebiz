@@ -5,7 +5,14 @@ export interface CancelRequest {
   id: string; order_id: string; branch_id: string; whole_bill: boolean;
   items: { id: string; quantity: number; name: string }[];
 }
+export type CancelApprovalStatus = 'pending' | 'issued' | 'request_expired' | 'otp_expired' | 'changed' | 'superseded' | 'rejected' | 'executed';
+export interface CancelApproval extends CancelRequest {
+  status: CancelApprovalStatus;
+  created_at: string; expires_at: string; server_now: string;
+  otp_issued_at: string | null; otp_expires_at: string | null; rejection_reason?: string | null;
+}
 export interface PendingCancelRequest extends CancelRequest {
+  created_at: string; approval: CancelApproval;
   cancel_net_amount: number;
   order_number: string; reason: string; requested_by_name: string; expires_at: string; branch_name?: string; order_label?: string;
 }
@@ -20,13 +27,20 @@ async function rpc<T>(name: string, args: Record<string, unknown> = {}): Promise
     if (message.includes('USE_WHOLE_BILL')) throw new Error('Anh/chị đang chọn toàn bộ món. Hãy chọn Hủy toàn bill.');
     if (message.includes('OTP_SCOPE')) throw new Error('Mã duyệt phải được cấp từ đúng yêu cầu hủy này.');
     if (message.includes('CANCEL_OTP_INVALID')) throw new Error('Mã này không thuộc yêu cầu đang mở, đã hết hạn hoặc đã được cấp lại. Nhờ quản lý cấp mã cho đúng yêu cầu này.');
+    if (message.includes('OTP_STILL_ACTIVE')) throw new Error('Mã đã cấp vẫn còn hiệu lực. Dùng mã hiện tại, không cần cấp mã mới.');
     throw new Error(message);
   }
   if (data == null) throw new Error('Máy chủ chưa trả kết quả. Vui lòng thử lại.');
   return data as T;
 }
 export function requestFnbCancellation(orderId: string, items: { id: string; quantity: number }[], reason: string, wholeBill: boolean) {
-  return rpc<CancelRequest>('fnb_request_cancel_00455', { p_order_id: orderId, p_items: items, p_reason: reason, p_whole_bill: wholeBill });
+  return rpc<CancelApproval>('fnb_request_cancel_20261019', { p_order_id: orderId, p_items: items, p_reason: reason, p_whole_bill: wholeBill });
+}
+export function getFnbCancellationStatus(requestId: string) {
+  return rpc<CancelApproval>('fnb_cancel_status_20261019', { p_request_id: requestId });
+}
+export function renewFnbCancellation(requestId: string) {
+  return rpc<CancelApproval>('fnb_renew_cancel_20261019', { p_request_id: requestId });
 }
 export function executeFnbCancellation(requestId: string, otpId?: string, shiftId?: string) {
   return rpc<{ success: boolean }>('fnb_execute_cancel_request_00455', { p_request_id: requestId, p_otp_id: otpId ?? null, p_shift_id: shiftId ?? null });

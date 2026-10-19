@@ -16,7 +16,7 @@
  *   - Có thể tích hợp Zalo OA / SMS cho iOS user về sau
  */
 
-import { useEffect, useRef, useState, useCallback, useId } from "react";
+import { useEffect, useRef, useState, useCallback, useId, type ReactNode } from "react";
 import {
   Dialog,
   DialogContent,
@@ -48,6 +48,8 @@ interface OtpApprovalDialogProps {
   onApproved: (verified: VerifiedOtp, reason: string) => void | Promise<void>;
   /** Domain-specific atomic verification/execution, when consuming OTP alone is unsafe. */
   verifyOtp?: typeof verifyAndUseManagerOtp;
+  statusPanel?: ReactNode;
+  verificationDisabled?: boolean;
 }
 
 export function OtpApprovalDialog({
@@ -59,6 +61,8 @@ export function OtpApprovalDialog({
   requireReason = false,
   onApproved,
   verifyOtp = verifyAndUseManagerOtp,
+  statusPanel,
+  verificationDisabled = false,
 }: OtpApprovalDialogProps) {
   const reasonInputId = useId();
   const [digits, setDigits] = useState<string[]>(["", "", "", "", "", ""]);
@@ -101,7 +105,7 @@ export function OtpApprovalDialog({
     finally { verifyLock.current = false; setSending(false); }
   };
   const code = digits.join("");
-  const codeReady = (code.length === 6 || Boolean(verifiedApproval)) && (!managed || Boolean(request && !["rejected", "expired"].includes(request.status)));
+  const codeReady = (Boolean(verifiedApproval) || (code.length === 6 && !verificationDisabled)) && (!managed || Boolean(request && !["rejected", "expired"].includes(request.status)));
   const reasonValid = !(requireReason || managed) || reason.trim().length >= 5;
 
   const handleVerify = useCallback(async () => {
@@ -218,6 +222,7 @@ export function OtpApprovalDialog({
         </DialogHeader>
 
         <DialogBody className="space-y-3 py-2">
+          {statusPanel && <fieldset disabled={verifying || sending} className="min-w-0">{statusPanel}</fieldset>}
           {managed && typeof targetMeta?.amount === "number" && <div className="flex items-center justify-between gap-3 rounded-md bg-primary/5 px-3 py-2 text-sm tabular-nums"><span>Giảm đề nghị</span><strong>{formatCurrency(targetMeta.amount)} đ</strong></div>}
           {/* Hướng dẫn */}
           <div className="bg-status-warning/5 border border-status-warning/20 rounded-lg p-3 text-xs text-muted-foreground">
@@ -279,7 +284,7 @@ export function OtpApprovalDialog({
                 maxLength={1}
                 aria-label={`Chữ số OTP ${i + 1}`}
                 value={d}
-                disabled={verifying || sending || (managed && !request)}
+                disabled={verifying || sending || verificationDisabled || (managed && !request)}
                 onChange={(e) => handleDigitChange(i, e.target.value)}
                 onKeyDown={(e) => handleKeyDown(i, e)}
                 onPaste={handlePaste}
