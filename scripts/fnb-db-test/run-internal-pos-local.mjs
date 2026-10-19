@@ -105,7 +105,7 @@ try {
  await db.exec('drop function public._allow_negative_sale_00473(uuid,uuid)');
  await db.exec(policySource.match(/create function public\._allow_negative_sale_00473\([\s\S]*?\n\$\$;/)[0]);
  const stockPolicyBefore=(await db.query('select * from branch_stock order by branch_id,product_id')).rows;
- await db.exec(fs.readFileSync('supabase/migrations/00568_internal_pos_branch_stock_policy.sql','utf8'));
+ await db.exec(fs.readFileSync('supabase/migrations/00569_internal_pos_branch_stock_policy.sql','utf8'));
  assert.deepEqual((await db.query('select * from branch_stock order by branch_id,product_id')).rows,stockPolicyBefore);
  // Direct-stock fixture: the source policy must not be confused with the outlet's.
  await db.exec(`update products set has_bom=false where id='${context.product}';
@@ -140,7 +140,7 @@ try {
  await db.exec(`update tenant_settings set value='true' where key='allow_negative_stock';`);
  const fallbackAllowed=(await db.query(call({...shortage,sessionId:'91000000-0000-0000-0000-000000000010'}))).rows[0].result;
  assert.ok(fallbackAllowed.invoice_id);
- await assert.rejects(db.exec(fs.readFileSync('supabase/migrations/00568_internal_pos_branch_stock_policy.sql','utf8')),/INTERNAL_POS_STOCK_POLICY_PATCH_MISMATCH/);
+ await assert.rejects(db.exec(fs.readFileSync('supabase/migrations/00569_internal_pos_branch_stock_policy.sql','utf8')),/INTERNAL_POS_STOCK_POLICY_PATCH_MISMATCH/);
  await db.exec('rollback');
  console.log('PASS: internal POS honors source-branch negative-stock policy, rolls back blocked checkout, retains paired stock/debt and replays without duplicates.');
 } catch(error) { console.error(error.message,error.where??''); process.exitCode=1; }
