@@ -49,7 +49,8 @@ describe("full export KPI summaries", () => {
     expect(finance).toContain("cashFlowSheet");
     expect(finance).toContain("Dòng tiền ròng");
     expect(finance).not.toContain("getMonthlyProfit(");
-    expect(cashFlow).toContain("categoryDetail");
-    expect(cashFlow).toContain("Chi tiết thu chi theo danh mục".toUpperCase());
+    expect(cashFlow).toContain("Thu chi theo khoản mục");
+    expect(cashFlow).toContain("categoryRows");
+    expect(cashFlow).toContain('"Phiếu thu" : "Phiếu chi"');
   });
 });
