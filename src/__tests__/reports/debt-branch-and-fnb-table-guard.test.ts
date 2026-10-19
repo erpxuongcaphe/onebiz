@@ -29,9 +29,12 @@ describe("branch-aware debt aging and F&B table permissions", () => {
       "src/lib/contexts/auth-context.tsx",
       "utf8",
     );
-    expect(authContext).toContain("function canViewAllBranches(");
-    expect(authContext).toContain("PERMISSIONS.REPORTS_VIEW_ALL_BRANCHES");
-    expect(authContext).toContain("PERMISSIONS.SYSTEM_MANAGE_BRANCHES");
+    const scope = readFileSync("src/lib/auth/branch-scope.ts", "utf8");
+    expect(scope).toContain("function canViewAllBranches(");
+    expect(scope).toContain("PERMISSIONS.REPORTS_VIEW_ALL_BRANCHES");
+    expect(scope).not.toContain("SYSTEM_MANAGE_BRANCHES");
+    expect(authContext).toContain('"get_user_accessible_branches"');
+    expect(authContext).toContain("accessibleIds.has(branch.id)");
     expect(authContext).toContain('storedBranchId === "__all__" &&');
     expect(authContext).toContain('branchId === null &&');
     expect(authContext).toContain("!canViewAllBranches(user?.role, permissions)");

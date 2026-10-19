@@ -78,12 +78,8 @@ function branchTypeIcon(type?: string): string {
 
 function BranchSelector() {
   const { tenant: _tenant, branches, currentBranch, switchBranch, hasPermission, isLoading } = useAuth();
-  // CEO 13/07: nút "Tất cả chi nhánh" trước chỉ xem ô vai trò CŨ (profiles.role)
-  // owner/admin → vai trò RBAC như "Chủ cửa hàng" bị bỏ sót dù được cấp quyền.
-  // Giờ mở theo quyền RBAC `system.manage_branches` (chỉ Chủ cửa hàng + Admin có).
-  const canViewAll =
-    hasPermission(PERMISSIONS.REPORTS_VIEW_ALL_BRANCHES) ||
-    hasPermission(PERMISSIONS.SYSTEM_MANAGE_BRANCHES);
+  // Branch administration and company-wide data access are separate capabilities.
+  const canViewAll = hasPermission(PERMISSIONS.REPORTS_VIEW_ALL_BRANCHES);
 
   const triggerIcon = currentBranch
     ? branchTypeIcon(currentBranch.branchType)
@@ -502,11 +498,8 @@ function MobileNav() {
   const hubAllowed = useHubAccess();
   const hasPermission = (code: string) => code === "ops.view" ? hubAllowed : baseHasPermission(code);
   const [open, setOpen] = useState(false);
-  // CEO 13/07: đồng bộ với BranchSelector — mở "Tất cả chi nhánh" theo quyền
-  // RBAC `system.manage_branches` (Chủ cửa hàng + Admin), không chỉ vai trò cũ.
-  const canViewAll =
-    hasPermission(PERMISSIONS.REPORTS_VIEW_ALL_BRANCHES) ||
-    hasPermission(PERMISSIONS.SYSTEM_MANAGE_BRANCHES);
+  // Keep mobile scope identical to the desktop selector.
+  const canViewAll = hasPermission(PERMISSIONS.REPORTS_VIEW_ALL_BRANCHES);
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>

@@ -21,14 +21,13 @@ export function useReportScope(
     switchBranch,
     tenant,
     user,
+    isLoading,
   } = useAuth();
   const initializedRef = useRef(!synchronizeUrl);
   const [isInitialized, setIsInitialized] = useState(!synchronizeUrl);
 
-  const canViewAll =
-    hasPermission(PERMISSIONS.REPORTS_VIEW_ALL_BRANCHES) ||
-    hasPermission(PERMISSIONS.SYSTEM_MANAGE_BRANCHES);
-  const authReady = !!tenant;
+  const canViewAll = hasPermission(PERMISSIONS.REPORTS_VIEW_ALL_BRANCHES);
+  const authReady = !!tenant && !isLoading && branches.length > 0;
 
   const fallbackBranchId = useMemo(
     () =>

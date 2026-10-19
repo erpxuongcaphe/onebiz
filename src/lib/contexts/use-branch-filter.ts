@@ -40,6 +40,6 @@ export function useBranchFilter() {
     branchLabel,
     switchBranch,
     /** AuthContext đã load xong (tenant set). Guard cho data fetch effects. */
-    isReady: !!tenant && !isLoading,
+    isReady: !!tenant && !isLoading && (branches.length > 0),
   };
 }
