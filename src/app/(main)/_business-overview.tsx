@@ -53,6 +53,8 @@ import { managementComparisonRange, managementFinancialRows, reportChange, sortM
 import { formatCashBookDate } from "@/lib/cash-time";
 import { useLiveDataRefresh } from "@/lib/hooks/use-live-data-refresh";
 import { ManagementCashSummary, cashMovementSummary } from "@/components/shared/report/management-cash-summary";
+import { getDebtWorkspace, type DebtWorkspace } from "@/lib/services/supabase/debt-workspace";
+import { ManagementDebtSummary, managementDebtSnapshot } from "@/components/shared/report/management-debt-summary";
 
 // === Helpers ===
 
@@ -91,6 +93,7 @@ export default function BusinessOverview() {
   const { tenant, hasPermission } = useAuth();
   const canViewProfit = hasPermission("reports.view_profit") && hasPermission("reports.view_detail");
   const canViewCash = hasPermission("finance.view_cash_book");
+  const canViewDebt = hasPermission("reports.analytics") && hasPermission("reports.view_detail");
   const { toast } = useToast();
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisMonth", defaultViewMode: "chart" });
@@ -119,9 +122,11 @@ export default function BusinessOverview() {
   const [branchError, setBranchError] = useState<string | null>(null);
   const [cashRows, setCashRows] = useState<CashFlowDetailedRow[]>([]);
   const [cashError, setCashError] = useState<string | null>(null);
+  const [debtWorkspace, setDebtWorkspace] = useState<DebtWorkspace | null>(null);
+  const [debtError, setDebtError] = useState<string | null>(null);
   const [branchSort, setBranchSort] = useState<{ id: string; direction: "asc" | "desc" } | null>(null);
   const visibleBranches = useMemo(() => sortManagementBranches(branchRows, branchSort), [branchRows, branchSort]);
-  const scopeKey = `${tenant?.id}:${activeBranchId ?? "all"}:${range.from}:${range.to}:${canViewProfit}:${canViewCash}`;
+  const scopeKey = `${tenant?.id}:${activeBranchId ?? "all"}:${range.from}:${range.to}:${canViewProfit}:${canViewCash}:${canViewDebt}`;
   const pending = loadedScope !== scopeKey || (!kpis && loading);
   const refreshState = useRef({ inFlight: false, queued: false });
   const refresh = useCallback(() => {
@@ -146,7 +151,21 @@ export default function BusinessOverview() {
     if (!kpis) return [];
     const financial = kpis.financial;
     const cashTotals = cashMovementSummary(cashRows);
-    return [...(canViewProfit ? [{ name: "Ket qua kinh doanh", titleRows: buildReportTitleRows({ title: "KẾT QUẢ KINH DOANH", range, branchName: branchLabel, generatedAt: new Date() }), columns: [
+    const debt = debtWorkspace && !debtError ? managementDebtSnapshot(debtWorkspace) : null;
+    const debtSheet: ExcelSheet = {
+      name: "Cong no hien tai",
+      titleRows: ["CÔNG NỢ HIỆN TẠI · KHÔNG PHẢI SỐ DƯ CUỐI KỲ", branchLabel, `Thời điểm nguồn: ${debtWorkspace?.generatedAt ?? "Chưa tải được"}`],
+      columns: [{ label: "Chỉ tiêu", key: "metric", width: 38 }, { label: "Giá trị (đ)", key: "value", format: "number", decimalPlaces: 2, width: 24 }],
+      rows: debt ? [
+        { metric: "Phải thu khách hàng", value: debt.receivable.debt },
+        { metric: "Phải trả nhà cung cấp", value: debt.payable.debt },
+        { metric: "Khách ứng trước", value: debt.receivable.advance },
+        { metric: "Ứng trước nhà cung cấp", value: debt.payable.advance },
+        { metric: "Có thể đối chiếu cấn theo từng khách", value: debt.receivable.availableOffset },
+        { metric: "Có thể đối chiếu cấn theo từng NCC", value: debt.payable.availableOffset },
+      ] : [{ metric: "Chưa tải đủ công nợ và tiền ứng", value: null }],
+    };
+    return [...(canViewDebt ? [debtSheet] : []), ...(canViewProfit ? [{ name: "Ket qua kinh doanh", titleRows: buildReportTitleRows({ title: "KẾT QUẢ KINH DOANH", range, branchName: branchLabel, generatedAt: new Date() }), columns: [
       { label: "Chỉ tiêu", key: "metric", width: 38 },
       { label: "Kỳ hiện tại (đ)", key: "current", format: "number" as const, decimalPlaces: 2, width: 20 },
       { label: "Kỳ trước (đ)", key: "previous", format: "number" as const, decimalPlaces: 2, width: 20 },
@@ -168,8 +187,8 @@ export default function BusinessOverview() {
         { metric: "Tổng chi", value: cashTotals.payments },
         { metric: "Thu − chi (không phải số dư)", value: cashTotals.net },
       ],
-    }] : [])].map(sheet => ({ ...sheet, titleRows: [...sheet.titleRows, comparisonLabel] }));
-  }, [canViewProfit, canViewCash, kpis, activeBranchId, branchError, visibleBranches, range, branchLabel, cashRows, cashError, comparisonLabel]);
+    }] : [])].map(sheet => sheet === debtSheet ? sheet : ({ ...sheet, titleRows: [...(sheet.titleRows ?? []), comparisonLabel] }));
+  }, [canViewProfit, canViewCash, canViewDebt, kpis, activeBranchId, branchError, visibleBranches, range, branchLabel, cashRows, cashError, debtWorkspace, debtError, comparisonLabel]);
 
   // ── Export Excel — 2 mode ──
   const handleExportView = useCallback(async () => {
@@ -400,7 +419,7 @@ export default function BusinessOverview() {
       setLoading(true);
       setLoadError(null);
       try {
-        const [kpiData, daily, category, products, branchResult, cashResult] = await Promise.all([
+        const [kpiData, daily, category, products, branchResult, cashResult, debtResult] = await Promise.all([
           getOverviewKpis(activeBranchId, range),
           getSalesReportDailyRows(activeBranchId, range),
           getRevenueByCategory(activeBranchId, range),
@@ -411,6 +430,10 @@ export default function BusinessOverview() {
           canViewCash
             ? getCashFlowDetailed(6, activeBranchId, range).then(rows => ({ rows, error: null })).catch((error: unknown) => ({ rows: [] as CashFlowDetailedRow[], error: error instanceof Error ? error.message : "Không thể tải thu chi" }))
             : Promise.resolve({ rows: [] as CashFlowDetailedRow[], error: null }),
+          canViewDebt ? getDebtWorkspace(activeBranchId, { requireBalanceSummary: true })
+            .then(workspace => ({ workspace, error: null }))
+            .catch((error: unknown) => ({ workspace: null, error: error instanceof Error ? error.message : "Không thể tải công nợ" }))
+            : Promise.resolve({ workspace: null, error: null }),
         ]);
         if (!isCurrentRequest) return;
         setKpis(kpiData);
@@ -421,6 +444,8 @@ export default function BusinessOverview() {
         setBranchError(branchResult.error);
         setCashRows(cashResult.rows);
         setCashError(cashResult.error);
+        setDebtWorkspace(debtResult.workspace);
+        setDebtError(debtResult.error);
         setLoadedScope(scopeKey);
         setUpdatedAt(new Date().toISOString());
       } catch (err) {
@@ -446,7 +471,7 @@ export default function BusinessOverview() {
     return () => {
       isCurrentRequest = false;
     };
-  }, [activeBranchId, range, isReady, revision, scopeKey, canViewProfit, canViewCash]);
+  }, [activeBranchId, range, isReady, revision, scopeKey, canViewProfit, canViewCash, canViewDebt]);
 
   if (pending) {
     return (
@@ -539,6 +564,7 @@ export default function BusinessOverview() {
         </div>
         {canViewProfit && updatedAt && <ManagementReview current={kpis.financial.current} previous={kpis.financial.previous} branchId={activeBranchId} range={range} branches={visibleBranches} branchError={branchError} updatedAt={updatedAt} branchSort={branchSort} onBranchSort={setBranchSort} />}
         {canViewCash && <ManagementCashSummary rows={cashRows} error={cashError} branchId={activeBranchId} range={range} />}
+        {canViewDebt && <ManagementDebtSummary workspace={debtWorkspace} error={debtError} branchId={activeBranchId} />}
 
         {!activeBranchId && <p className="border-l-2 border-border pl-3 text-xs leading-5 text-muted-foreground">Chi tiết bán hàng gồm nội bộ; cách tính theo tiêu đề từng bảng.</p>}
 
