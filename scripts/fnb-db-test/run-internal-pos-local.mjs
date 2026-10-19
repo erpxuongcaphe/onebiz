@@ -98,5 +98,50 @@ try {
  console.log('PASS: fractional quantities are retained while VND line totals and paired receipt cost round consistently.');
  console.log('PASS: paired completed cancellation restores actual stock in both branches, reverses paired cash, clears debt, retains documents, blocks one-sided void/return and is idempotent.');
  console.log('PASS: established internal document/stock/cost chain; POS debt checkout, shift linkage and replay without duplicate stock.');
+ await db.exec(`create table tenant_settings(tenant_id uuid,key text,value jsonb);
+ create function get_tenant_setting(uuid,text,jsonb) returns jsonb language sql as $$
+ select coalesce((select value from tenant_settings where tenant_id=$1 and key=$2),$3) $$;`);
+ const policySource=fs.readFileSync('supabase/migrations/00473_branch_negative_sale_policy.sql','utf8');
+ await db.exec('drop function public._allow_negative_sale_00473(uuid,uuid)');
+ await db.exec(policySource.match(/create function public\._allow_negative_sale_00473\([\s\S]*?\n\$\$;/)[0]);
+ const stockPolicyBefore=(await db.query('select * from branch_stock order by branch_id,product_id')).rows;
+ await db.exec(fs.readFileSync('supabase/migrations/00569_internal_pos_branch_stock_policy.sql','utf8').replace(/\r?\n/g,'\r\n'));
+ assert.deepEqual((await db.query('select * from branch_stock order by branch_id,product_id')).rows,stockPolicyBefore);
+ // Direct-stock fixture: the source policy must not be confused with the outlet's.
+ await db.exec(`update products set has_bom=false where id='${context.product}';
+ insert into tenant_settings values ('${context.tenant_id}','allow_negative_stock','true'),
+ ('${context.tenant_id}','allow_negative_stock:20000000-0000-0000-0000-000000000001','false'),
+ ('${context.tenant_id}','allow_negative_stock:${context.dest}','true');`);
+ const sourceQty=Number((await db.query(`select coalesce(sum(quantity),0) n from branch_stock where branch_id='${payload.branchId}' and product_id='${context.product}'`)).rows[0].n);
+ const destinationQty=Number((await db.query(`select coalesce(sum(quantity),0) n from branch_stock where branch_id='${context.dest}' and product_id='${context.product}'`)).rows[0].n);
+ const shortageQty=Math.max(0,sourceQty)+2;
+ const shortage={...fractional,items:[{productId:context.product,unit:context.unit,quantity:shortageQty,unitPrice:100,vatRate:0,discount:0}],
+ expectedTotal:shortageQty*100,payments:[],amountTendered:0,sessionId:'91000000-0000-0000-0000-000000000008'};
+ const snapshot=async()=>(await db.query(`select jsonb_build_object('stock',(select jsonb_agg(b order by branch_id,product_id) from branch_stock b),'invoices',(select count(*) from invoices),'sales',(select count(*) from internal_sales),'cash',(select count(*) from cash_transactions),'movements',(select count(*) from stock_movements)) state`)).rows[0].state;
+ const blockedBefore=await snapshot();
+ await assert.rejects(db.query(call(shortage)),/INTERNAL_POS_INSUFFICIENT_STOCK/);
+ assert.deepEqual(await snapshot(),blockedBefore);
+ await db.exec(`update tenant_settings set value='true' where key='allow_negative_stock:${payload.branchId}';
+ update tenant_settings set value='false' where key='allow_negative_stock:${context.dest}';`);
+ const negativeSale=(await db.query(call(shortage))).rows[0].result;
+ assert.equal(Number((await db.query(`select sum(quantity) n from branch_stock where branch_id='${payload.branchId}' and product_id='${context.product}'`)).rows[0].n),sourceQty-shortageQty);
+ assert.equal(Number((await db.query(`select sum(quantity) n from branch_stock where branch_id='${context.dest}' and product_id='${context.product}'`)).rows[0].n),destinationQty+shortageQty);
+ const allowedAfter=await snapshot();
+ assert.equal((await db.query(call(shortage))).rows[0].result.internal_sale_id,negativeSale.internal_sale_id);
+ assert.deepEqual(await snapshot(),allowedAfter);
+ const debtInvoice=(await db.query(`select total,paid,debt from invoices where id='${negativeSale.invoice_id}'`)).rows[0];
+ assert.equal(Number(debtInvoice.total),shortage.expectedTotal);
+ assert.equal(Number(debtInvoice.paid),0); assert.equal(Number(debtInvoice.debt),shortage.expectedTotal);
+ await db.exec(`delete from tenant_settings where key='allow_negative_stock:${payload.branchId}';
+ update tenant_settings set value='false' where key='allow_negative_stock';`);
+ const fallbackBefore=await snapshot();
+ await assert.rejects(db.query(call({...shortage,sessionId:'91000000-0000-0000-0000-000000000009'})),/INTERNAL_POS_INSUFFICIENT_STOCK/);
+ assert.deepEqual(await snapshot(),fallbackBefore);
+ await db.exec(`update tenant_settings set value='true' where key='allow_negative_stock';`);
+ const fallbackAllowed=(await db.query(call({...shortage,sessionId:'91000000-0000-0000-0000-000000000010'}))).rows[0].result;
+ assert.ok(fallbackAllowed.invoice_id);
+ await assert.rejects(db.exec(fs.readFileSync('supabase/migrations/00569_internal_pos_branch_stock_policy.sql','utf8')),/INTERNAL_POS_STOCK_POLICY_PATCH_MISMATCH/);
+ await db.exec('rollback');
+ console.log('PASS: internal POS honors source-branch negative-stock policy, rolls back blocked checkout, retains paired stock/debt and replays without duplicates.');
 } catch(error) { console.error(error.message,error.where??''); process.exitCode=1; }
 finally {await db.close();fs.rmSync(dir,{recursive:true,force:true});}
