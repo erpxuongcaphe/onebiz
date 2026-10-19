@@ -11,7 +11,7 @@ const branch2='22222222-2222-4222-8222-222222222222';
 const user='33333333-3333-4333-8333-333333333333';
 const user2='44444444-4444-4444-8444-444444444444';
 const workspace={branches:[{id:branch,name:'Quán A',capabilities:['approve_policy']},{id:branch2,name:'Quán B',capabilities:['approve_policy']}],people:[{id:user,name:'Quản lý A'}]} as Workspace;
-const lib={id:branch,title:'Bộ CEO',version:1,rows:ceoWorkingRows,notes:'',source_key:'ceo-working-20261014',archived:false,updated_at:'2026-10-17T00:00:00Z'};
+const lib={id:branch,title:'Bộ CEO',version:1,rows:ceoWorkingRows.map(row=>({...row,...(row.frequency==='weekly'?{dayNumber:row.number===32?1:5}:{})})),notes:'',source_key:'ceo-working-20261014',archived:false,updated_at:'2026-10-17T00:00:00Z'};
 let libraries:unknown[]=[];
 beforeEach(()=>{libraries=[];vi.stubGlobal('fetch',fetchMock);fetchMock.mockImplementation(async(url:string,init?:RequestInit)=>{
  if(url.startsWith('/api/operations/people'))return{ok:true,json:async()=>({people:[{id:user,name:'Quản lý A'},{id:user2,name:'Quản lý B'}]})};
@@ -20,13 +20,30 @@ beforeEach(()=>{libraries=[];vi.stubGlobal('fetch',fetchMock);fetchMock.mockImpl
 });});
 afterEach(()=>{cleanup();vi.unstubAllGlobals();vi.resetAllMocks();});
 describe('company working library and branch setup UX',()=>{
- it('shows only the branch schedule for one branch, with an explicit weekly meaning',async()=>{
+ it('explains and focuses the missing reason while keeping unsaved work intact',async()=>{
+  libraries=[{...lib,rows:lib.rows.slice(0,1)}];render(<WorkingLibrary workspace={workspace} onApplied={vi.fn()}/>);
+  fireEvent.click(await screen.findByRole('button',{name:'Sửa nội dung'}));
+  await waitFor(()=>expect(screen.getByLabelText('Tên bộ tiêu chí')).toHaveFocus());
+  fireEvent.change(screen.getByLabelText('Tên bộ tiêu chí'),{target:{value:'Nội dung CEO đang chỉnh'}});
+  fireEvent.click(screen.getByRole('button',{name:'Lưu bộ tiêu chí chung'}));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Lý do lưu / thay đổi cần từ 5 đến 1,000 ký tự');
+  const reason=screen.getByLabelText('Lý do lưu / thay đổi',{exact:true});
+  expect(reason).toHaveAttribute('aria-invalid','true');
+  await waitFor(()=>expect(reason).toHaveFocus());
+  expect(screen.getByLabelText('Tên bộ tiêu chí')).toHaveValue('Nội dung CEO đang chỉnh');
+  expect(fetchMock.mock.calls.every(([,init])=>init?.method!=='POST')).toBe(true);
+  fireEvent.change(reason,{target:{value:'Cập nhật lịch thực hiện công việc'}});
+  fireEvent.click(screen.getByRole('button',{name:'Lưu bộ tiêu chí chung'}));
+  await waitFor(()=>expect(fetchMock.mock.calls.filter(([,init])=>init?.method==='POST')).toHaveLength(1));
+ });
+ it('shows independent work schedules instead of a shared weekly selector',async()=>{
   libraries=[lib];render(<WorkingLibrary workspace={workspace} onApplied={vi.fn()}/>);
   fireEvent.click(await screen.findByRole('button',{name:'Áp dụng cho chi nhánh'}));
   fireEvent.click(screen.getByRole('checkbox',{name:'Quán A'}));
   expect(screen.queryByText(/Điền cùng lịch/)).not.toBeInTheDocument();
-  expect(screen.getByRole('combobox',{name:'Lặp hằng tuần vào'})).toHaveValue('');
-  expect(screen.getByText(/Thứ đã chọn chỉ áp dụng cho việc hằng tuần/)).toBeInTheDocument();
+  expect(screen.queryByRole('combobox',{name:'Lặp hằng tuần vào'})).toBeNull();
+  expect(screen.getByText('Mỗi thứ Hai',{exact:true})).toBeInTheDocument();
+  expect(screen.getByText('Mỗi thứ Sáu',{exact:true})).toBeInTheDocument();
  });
  it('does not request or display a weekly day for a daily-only library',async()=>{
   libraries=[{...lib,rows:lib.rows.filter(row=>row.frequency==='daily')}];render(<WorkingLibrary workspace={workspace} onApplied={vi.fn()}/>);
@@ -66,15 +83,16 @@ describe('company working library and branch setup UX',()=>{
   expect(screen.getByRole('button',{name:'Bỏ Quản lý B'})).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText('Ngày bắt đầu',{exact:true}),{target:{value:'20/10/2026'}});
   fireEvent.change(screen.getByLabelText('Giờ đến hạn (24 giờ)',{exact:true}),{target:{value:'18:30'}});
-  fireEvent.change(screen.getByLabelText('Lặp hằng tuần vào',{exact:true}),{target:{value:'6'}});
   fireEvent.click(screen.getByRole('button',{name:'Tiếp tục: kiểm tra phân công'}));
   const review=await screen.findByRole('dialog',{name:'Kiểm tra và lưu phân công'});
   expect(within(review).getByText('Quản lý A',{exact:true})).toBeInTheDocument();expect(within(review).getByText('Quản lý B',{exact:true})).toBeInTheDocument();
+  expect(within(review).getByText('Mỗi thứ Hai',{exact:true})).toBeInTheDocument();
+  expect(within(review).getByText('Mỗi thứ Sáu',{exact:true})).toBeInTheDocument();
   expect(fetchMock.mock.calls.every(([,init])=>init?.method!=='POST')).toBe(true);
   fireEvent.click(within(review).getByRole('button',{name:'Lưu và áp dụng'}));
   await waitFor(()=>expect(fetchMock.mock.calls.some(([,init])=>init?.method==='POST')).toBe(true));
   const body=JSON.parse(fetchMock.mock.calls.find(([,init])=>init?.method==='POST')![1].body);
-  expect(body.assignments).toEqual([{branchId:branch,assigneeIds:[user,user2],effectiveFrom:'2026-10-20',dueTime:'18:30',weeklyDay:6}]);
+  expect(body.assignments).toEqual([{branchId:branch,assigneeIds:[user,user2],effectiveFrom:'2026-10-20',dueTime:'18:30',weeklyDay:1}]);
  });
  it('names the incomplete branch next to the footer and does not write',async()=>{
   libraries=[lib];render(<WorkingLibrary workspace={workspace} onApplied={vi.fn()}/>);
@@ -83,7 +101,7 @@ describe('company working library and branch setup UX',()=>{
   fireEvent.click(screen.getByRole('button',{name:'Tiếp tục: kiểm tra phân công'}));
   expect(await screen.findByRole('alert')).toHaveTextContent('Bổ sung thông tin tại Quán B');
   expect(screen.getByText('Chọn quản lý phụ trách.')).toBeInTheDocument();
-  expect(screen.getByText('Chọn thứ thực hiện việc hằng tuần.')).toBeInTheDocument();
+  expect(screen.queryByText('Chọn thứ thực hiện việc hằng tuần.')).toBeNull();
   expect(fetchMock.mock.calls.every(([,init])=>init?.method!=='POST')).toBe(true);
  });
  it('keeps both managers and dates when the server rejects a save',async()=>{
@@ -98,7 +116,6 @@ describe('company working library and branch setup UX',()=>{
   fireEvent.click(screen.getByRole('button',{name:'Quản lý A'}));fireEvent.click(screen.getByRole('button',{name:'Quản lý B'}));
   fireEvent.change(screen.getByLabelText('Ngày bắt đầu',{exact:true}),{target:{value:'20/10/2026'}});
   fireEvent.change(screen.getByLabelText('Giờ đến hạn (24 giờ)',{exact:true}),{target:{value:'18:30'}});
-  fireEvent.change(screen.getByLabelText('Lặp hằng tuần vào',{exact:true}),{target:{value:'6'}});
   fireEvent.click(screen.getByRole('button',{name:'Tiếp tục: kiểm tra phân công'}));
   fireEvent.click(screen.getByRole('button',{name:'Lưu và áp dụng'}));
   expect(await within(screen.getByRole('dialog',{name:'Kiểm tra và lưu phân công'})).findByRole('alert')).toHaveTextContent('Một quản lý vừa bị thu hồi quyền. Chưa lưu.');
@@ -115,11 +132,11 @@ describe('company working library and branch setup UX',()=>{
  it('opens all 34 editable source rows and saves without requiring a manager or schedule',async()=>{
   render(<WorkingLibrary workspace={workspace} onApplied={vi.fn()}/>);
   const load=await screen.findByRole('button',{name:'Nạp 34 tiêu chí CEO'});await waitFor(()=>expect(load).toBeEnabled());fireEvent.click(load);
-  expect(screen.getAllByRole('group',{name:/^Mục \d+$/})).toHaveLength(34);
-  expect(within(screen.getByRole('group',{name:'Mục 19'})).getByLabelText('Công việc')).toHaveValue('Nguyên liệu');
-  expect(within(screen.getByRole('group',{name:'Mục 20'})).getByLabelText('Công việc')).toHaveValue('Nguyên liệu');
-  expect(screen.queryByRole('button',{name:/Quản lý phụ trách/})).toBeNull();
-  fireEvent.click(screen.getByRole('button',{name:'Lưu bộ tiêu chí chung'}));
+  expect(screen.getAllByText(/^Mục \d+$/)).toHaveLength(34);
+  expect(within(screen.getByText('Mục 19',{exact:true}).closest('fieldset')!).getByLabelText('Công việc')).toHaveValue('Nguyên liệu');
+  expect(within(screen.getByText('Mục 20',{exact:true}).closest('fieldset')!).getByLabelText('Công việc')).toHaveValue('Nguyên liệu');
+  expect(screen.queryByText(/Quản lý phụ trách/)).toBeNull();
+  fireEvent.click(screen.getByText('Lưu bộ tiêu chí chung',{exact:true}));
   await waitFor(()=>expect(fetchMock.mock.calls.some(([,init])=>init?.method==='POST')).toBe(true));
   const body=JSON.parse(fetchMock.mock.calls.find(([,init])=>init?.method==='POST')![1].body);
   expect(body.action).toBe('save');expect(body.rows).toHaveLength(34);expect(body).not.toHaveProperty('assignments');
@@ -151,15 +168,30 @@ describe('company working library and branch setup UX',()=>{
   libraries=[lib];render(<WorkingLibrary workspace={workspace} onApplied={vi.fn()}/>);
   fireEvent.click(await screen.findByRole('button',{name:'Áp dụng cho chi nhánh'}));
   fireEvent.click(screen.getByRole('checkbox',{name:'Chọn tất cả chi nhánh chưa áp dụng trong phạm vi được phép'}));
-  fireEvent.click(screen.getByText('Điền cùng lịch cho 2 chi nhánh'));
+  fireEvent.click(screen.getByText('Điền nhanh ngày bắt đầu và giờ hạn cho 2 chi nhánh'));
   fireEvent.change(screen.getByLabelText('Ngày bắt đầu chung'),{target:{value:'20/10/2026'}});
   fireEvent.change(screen.getByLabelText('Giờ hạn chung (24 giờ)'),{target:{value:'18:30'}});
-  fireEvent.change(screen.getByLabelText('Lặp hằng tuần vào (lịch chung)'),{target:{value:'6'}});
-  fireEvent.click(screen.getByRole('button',{name:'Điền lịch cho 2 chi nhánh đã chọn'}));
+  fireEvent.click(screen.getByRole('button',{name:'Điền cho 2 chi nhánh đã chọn'}));
   expect(screen.getAllByLabelText('Ngày bắt đầu',{exact:true}).map(e=>(e as HTMLInputElement).value)).toEqual(['20/10/2026','20/10/2026']);
   expect(screen.getAllByLabelText('Giờ đến hạn (24 giờ)',{exact:true}).map(e=>(e as HTMLInputElement).value)).toEqual(['18:30','18:30']);
-  expect(screen.getAllByLabelText('Lặp hằng tuần vào',{exact:true}).map(e=>(e as HTMLSelectElement).value)).toEqual(['6','6']);
+  expect(screen.queryByLabelText('Lặp hằng tuần vào')).toBeNull();
   expect(await screen.findAllByRole('button',{name:'Quản lý phụ trách * Chọn người'})).toHaveLength(2);
   expect(fetchMock.mock.calls.every(([,init])=>init?.method!=='POST')).toBe(true);
  });
+ it('blocks applying old weekly rows until each work has its own day without modifying the library',async()=>{
+  libraries=[{...lib,rows:ceoWorkingRows}];
+  const before=JSON.stringify(libraries);
+  render(<WorkingLibrary workspace={workspace} onApplied={vi.fn()}/>);
+  fireEvent.click(await screen.findByRole('button',{name:'Áp dụng cho chi nhánh'}));
+  expect(screen.getByRole('alert')).toHaveTextContent('mục 32: Tỷ lệ hao hụt');
+  expect(screen.getByRole('alert')).toHaveTextContent('mục 33: Hàng tồn kho');
+  expect(screen.getByRole('checkbox',{name:'Quán A'})).toBeDisabled();
+  fireEvent.click(screen.getByRole('button',{name:'Bổ sung lịch từng công việc'}));
+  const row=screen.getByText('Mục 32',{exact:true}).closest('fieldset')!;
+  fireEvent.change(within(row).getByLabelText('Thực hiện vào'),{target:{value:'5'}});
+  const other=screen.getByText('Mục 33',{exact:true}).closest('fieldset')!;
+  expect(within(other).getByLabelText('Thực hiện vào')).toHaveValue('0');
+  expect(JSON.stringify(libraries)).toBe(before);
+  expect(fetchMock.mock.calls.every(([,init])=>init?.method!=='POST')).toBe(true);
+ },15000);
 });

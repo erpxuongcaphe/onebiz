@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { isOperationsSameOrigin } from "@/lib/operations/same-origin";
 import { workingImportSchema } from "@/lib/operations/workbook-import";
+import { missingWorkSchedules } from "@/lib/operations/work-schedule";
 
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "private, no-store" };
@@ -30,6 +31,10 @@ export async function POST(request: NextRequest) {
   if (session.error || !session.data.user) return failure("Vui lòng đăng nhập lại.", 401);
   const activate = "activate" in parsed.data;
   const { requestId, ...payload } = parsed.data;
+  if('rows' in payload){
+    const incomplete=missingWorkSchedules(payload.rows);
+    if(incomplete.length) return failure(`Chọn lịch riêng cho ${incomplete.map(row=>`mục ${row.number}: ${row.title}`).join('; ')} trong bản nhập. Không dùng thứ lặp chung; chưa ghi dữ liệu.`);
+  }
   if('rows' in payload && (payload.rows.some(row=>!['daily','weekly'].includes(row.frequency)||row.dayNumber!==undefined||row.monthNumber!==undefined)||payload.effectiveUntil)){
     const capabilities=await (client as unknown as Rpc).rpc('ops_access_context',{});
     if(capabilities.error||Number((capabilities.data as {recurrenceVersion?:number}|null)?.recurrenceVersion??0)<1)
