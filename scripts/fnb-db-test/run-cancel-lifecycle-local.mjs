@@ -68,5 +68,53 @@ try{
  perform test_reject(format('select fnb_verify_execute_cancel_20261019(%L,%L)',changed->>'id','123456'),'CANCEL_REQUEST_NOT_FOUND');
  perform test_assert(not has_function_privilege('anon','fnb_verify_execute_cancel_20261019(uuid,text,uuid)','EXECUTE'),'anonymous cannot verify cancellation');
  end $$;`);
- console.log('PASS: legacy cancellation regressions, idempotent request reopen, issued request reuse, atomic OTP rollback, replay, scope supersession, exact request code, last-item close, sibling bill preservation, actor/anonymous boundaries.');
+ const timingMigration=fs.readFileSync('supabase/migrations/202610190002_fnb_cancel_approval_timing.sql','utf8');
+ await db.exec(timingMigration.replace(/\r?\n/g,'\r\n'));await db.exec(timingMigration);
+ await db.exec(`
+ update kitchen_order_items set quantity=3,cancelled_qty=0,note=null where id=test_id(20);
+ update kitchen_orders set status='ready',discount_amount=0 where id=test_id(10);
+ do $$ declare r jsonb; renewed jsonb; issued jsonb; otp uuid; old_id uuid; begin
+ perform set_config('test.actor',test_id(4)::text,false);
+ r:=fnb_request_cancel_20261019(test_id(10),jsonb_build_array(jsonb_build_object('id',test_id(20),'quantity',1)),'Xin duyệt theo thời gian',false);
+ perform test_assert(r->>'status'='pending','cashier sees waiting state');
+ perform test_assert((r->>'expires_at')::timestamptz-(r->>'created_at')::timestamptz=interval '10 minutes','new request waits exactly ten minutes');
+ perform test_assert(fnb_request_cancel_20261019(test_id(10),jsonb_build_array(jsonb_build_object('id',test_id(20),'quantity',1)),'Xin duyệt theo thời gian',false)=r,'reopening does not reset clocks');
+ -- Approve at the last second of the waiting window.
+ update fnb_cancel_requests set created_at=now()-interval '9 minutes 59 seconds',expires_at=now()+interval '1 second' where id=(r->>'id')::uuid;
+ perform set_config('test.actor',test_id(1)::text,false);
+ issued:=fnb_issue_cancel_otp_00455((r->>'id')::uuid);otp:=(issued->>'otp_id')::uuid;
+ perform test_assert((select expires_at=now()+interval '2 minutes' from fnb_cancel_requests where id=(r->>'id')::uuid),'late manager approval receives full two minutes');
+ perform test_reject(format('select fnb_issue_cancel_otp_00455(%L)',r->>'id'),'FNB_CANCEL_OTP_STILL_ACTIVE');
+ perform test_assert(jsonb_array_length(fnb_pending_cancel_requests_00455())>0,'manager sees request metadata');
+ perform test_assert(exists(select 1 from jsonb_array_elements(fnb_pending_cancel_requests_00455()) e where e->>'id'=r->>'id' and e->'approval'->>'status'='issued'),'manager sees issued state and authoritative expiry');
+ perform set_config('test.actor',test_id(4)::text,false);
+ perform test_assert(fnb_cancel_status_20261019((r->>'id')::uuid)->>'status'='issued','cashier sees manager issue');
+ -- Expiry is simulated by changing timestamps, never waiting or touching live data.
+ update fnb_cancel_requests set expires_at=now()-interval '1 second' where id=(r->>'id')::uuid;
+ update manager_otp_codes set expires_at=now()-interval '1 second' where id=otp;
+ perform test_assert(fnb_cancel_status_20261019((r->>'id')::uuid)->>'status'='otp_expired','expired code is distinct from waiting expiry');
+ old_id:=(r->>'id')::uuid;
+ renewed:=fnb_renew_cancel_20261019(old_id);
+ perform test_assert(renewed->>'id'<>r->>'id' and renewed->>'status'='pending','inline code renewal makes one new waiting request');
+ perform test_assert((renewed->>'expires_at')::timestamptz=now()+interval '10 minutes','renewed request gets ten minutes');
+ perform test_assert(fnb_renew_cancel_20261019(old_id)=renewed,'retry lost renewal response reuses current request');
+ perform test_assert(fnb_cancel_status_20261019(old_id)->>'status'='superseded','old request retained with superseded state');
+ perform test_reject(format('select fnb_verify_execute_cancel_20261019(%L,%L)',old_id,'123456'),'FNB_CANCEL_ORDER_CHANGED');
+ r:=renewed;
+ update fnb_cancel_requests set expires_at=now()-interval '1 second' where id=(r->>'id')::uuid;
+ perform test_assert(fnb_cancel_status_20261019((r->>'id')::uuid)->>'status'='request_expired','waiting expiry has its own state');
+ renewed:=fnb_renew_cancel_20261019((r->>'id')::uuid);
+ perform test_assert(renewed->>'status'='pending','cashier renews waiting request without re-entering items or reason');
+ update kitchen_order_items set note='changed after approval request' where id=test_id(20);
+ update fnb_cancel_requests set expires_at=now()-interval '1 second' where id=(renewed->>'id')::uuid;
+ perform test_assert(fnb_cancel_status_20261019((renewed->>'id')::uuid)->>'status'='changed','changed bill overrides expiry state');
+ perform test_reject(format('select fnb_renew_cancel_20261019(%L)',renewed->>'id'),'FNB_CANCEL_ORDER_CHANGED');
+ perform set_config('test.actor',test_id(5)::text,false);
+ perform test_reject(format('select fnb_cancel_status_20261019(%L)',renewed->>'id'),'CANCEL_REQUEST_NOT_FOUND');
+ perform test_reject(format('select fnb_renew_cancel_20261019(%L)',renewed->>'id'),'CANCEL_REQUEST_NOT_FOUND');
+ perform test_assert(not has_function_privilege('anon','fnb_cancel_status_20261019(uuid)','EXECUTE'),'anonymous cannot inspect approval');
+ perform test_assert(not has_function_privilege('authenticated','_fnb_cancel_status_20261019(uuid)','EXECUTE'),'internal status helper is not publicly callable');
+ perform test_assert((select cancelled_qty=0 from kitchen_order_items where id=test_id(20)),'timers and renewal never cancel a bill');
+ end $$;`);
+ console.log('PASS: cancellation regressions, atomic OTP rollback/replay, ten-minute waiting, full two-minute late issue, no duplicate issue, server status for both actors, inline expired request/code renewal, idempotent renewal retry, supersession history, changed-bill and actor/anonymous boundaries.');
 }catch(e){console.error(e.message,e.where??'');process.exitCode=1;}finally{await db.close();}

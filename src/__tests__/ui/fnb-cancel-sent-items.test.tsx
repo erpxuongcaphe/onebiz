@@ -3,16 +3,48 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CancelSentItemsDialog } from '@/app/pos/fnb/components/cancel-sent-items-dialog';
 import type { ComponentProps } from 'react';
 type OtpProps = ComponentProps<typeof import('@/components/shared/dialogs/otp-approval-dialog').OtpApprovalDialog>;
-const mocks=vi.hoisted(()=>({ get:vi.fn(), request:vi.fn(), execute:vi.fn(), verifyExecute:vi.fn(), otpProps: null as OtpProps | null }));
+const mocks=vi.hoisted(()=>({ get:vi.fn(), request:vi.fn(), execute:vi.fn(), verifyExecute:vi.fn(), status:vi.fn(), renew:vi.fn(), otpProps: null as OtpProps | null }));
 vi.mock('@/lib/services/supabase/kitchen-orders',()=>({getKitchenOrderById:mocks.get}));
-vi.mock('@/lib/services/supabase/fnb-cancel-requests',()=>({requestFnbCancellation:mocks.request,executeFnbCancellation:mocks.execute,verifyAndExecuteFnbCancellation:mocks.verifyExecute}));
-vi.mock('@/components/shared/dialogs/otp-approval-dialog',()=>({OtpApprovalDialog:(p:OtpProps)=>{mocks.otpProps=p;return p.open?<div>{p.contextLabel}</div>:null;}}));
+vi.mock('@/lib/services/supabase/fnb-cancel-requests',()=>({requestFnbCancellation:mocks.request,executeFnbCancellation:mocks.execute,verifyAndExecuteFnbCancellation:mocks.verifyExecute,getFnbCancellationStatus:mocks.status,renewFnbCancellation:mocks.renew}));
+vi.mock('@/components/shared/dialogs/otp-approval-dialog',()=>({OtpApprovalDialog:(p:OtpProps)=>{mocks.otpProps=p;return p.open?<div>{p.contextLabel}{p.statusPanel}</div>:null;}}));
+const timing={created_at:'2026-10-19T12:00:00Z',server_now:'2026-10-19T12:00:00Z',expires_at:'2026-10-19T12:10:00Z',otp_issued_at:null,otp_expires_at:null,status:'pending'};
 const props={open:true,onOpenChange:vi.fn(),orderId:'order',label:'Bàn 9',wholeBill:false,canCancel:true,onCompleted:vi.fn().mockResolvedValue(undefined)};
-beforeEach(()=>{vi.clearAllMocks();mocks.get.mockResolvedValue({status:'ready',items:[{id:'item',productName:'Trà',quantity:3}]});mocks.request.mockResolvedValue({id:'request',order_id:'order',whole_bill:false});mocks.execute.mockResolvedValue({success:true});});
+beforeEach(()=>{vi.clearAllMocks();mocks.get.mockResolvedValue({status:'ready',items:[{id:'item',productName:'Trà',quantity:3}]});mocks.request.mockResolvedValue({...timing,id:'request',order_id:'order',whole_bill:false});mocks.status.mockImplementation(async()=>await mocks.request.mock.results.at(-1)?.value);mocks.execute.mockResolvedValue({success:true});});
 describe('cancel sent quantities in the active POS bill',()=>{
+ it.each(['request_expired','otp_expired'])('renews %s inline without re-entering cancellation details',async status=>{
+  const expired={...timing,id:'request',order_id:'order',whole_bill:false,status,expires_at:'2026-10-19T11:59:59Z'};
+  const renewed={...timing,id:'renewed',order_id:'order',whole_bill:false};
+  mocks.request.mockResolvedValue(expired);
+  mocks.status.mockImplementation(async(id:string)=>id==='renewed'?renewed:expired);
+  mocks.renew.mockResolvedValue(renewed);
+  render(<CancelSentItemsDialog {...props} canCancel={false} initialItemId="item"/>);
+  await screen.findByLabelText('Số lượng hủy Trà');
+  fireEvent.change(screen.getByPlaceholderText('Khách đổi món, nhập nhầm…'),{target:{value:'Khách đổi món'}});
+  fireEvent.click(screen.getByRole('button',{name:'Gửi yêu cầu · nhập OTP'}));
+  const retry=await screen.findByRole('button',{name:status==='otp_expired'?'Xin cấp lại mã':'Xin lại yêu cầu'});
+  expect(mocks.otpProps?.verificationDisabled).toBe(true);
+  fireEvent.click(retry);
+  await screen.findByText('Chờ quản lý duyệt');
+  expect(mocks.renew).toHaveBeenCalledWith('request');
+  expect(mocks.request).toHaveBeenCalledTimes(1);
+  expect(screen.getByText(/Khách đổi món. Quản lý/)).toBeInTheDocument();
+  expect(mocks.execute).not.toHaveBeenCalled();
+ });
+ it('keeps an expired request on screen if renewal fails and does not claim it was sent',async()=>{
+  mocks.request.mockResolvedValue({...timing,id:'request',order_id:'order',status:'request_expired',expires_at:'2026-10-19T11:59:59Z'});
+  mocks.renew.mockRejectedValue(new Error('Mất kết nối, chưa xin lại được'));
+  render(<CancelSentItemsDialog {...props} canCancel={false} initialItemId="item"/>);
+  await screen.findByLabelText('Số lượng hủy Trà');
+  fireEvent.change(screen.getByPlaceholderText('Khách đổi món, nhập nhầm…'),{target:{value:'Nhập nhầm'}});
+  fireEvent.click(screen.getByRole('button',{name:'Gửi yêu cầu · nhập OTP'}));
+  fireEvent.click(await screen.findByRole('button',{name:'Xin lại yêu cầu'}));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Mất kết nối');
+  expect(screen.getByText('Yêu cầu đã hết hạn · chưa hủy món')).toBeInTheDocument();
+  expect(props.onCompleted).not.toHaveBeenCalled();
+ });
  it('cancels the last item as a whole bill without sending the cashier to a second menu',async()=>{
   mocks.get.mockResolvedValue({status:'ready',items:[{id:'item',productName:'Trà',quantity:1}]});
-  mocks.request.mockResolvedValue({id:'request',order_id:'order',whole_bill:true});
+  mocks.request.mockResolvedValue({...timing,id:'request',order_id:'order',whole_bill:true});
   render(<CancelSentItemsDialog {...props} initialItemId="item"/>);
   await screen.findByText(/Bill sẽ được hủy trong lần xác nhận này/);
   fireEvent.change(screen.getByPlaceholderText('Khách đổi món, nhập nhầm…'),{target:{value:'Nhập nhầm'}});
@@ -22,7 +54,7 @@ describe('cancel sent quantities in the active POS bill',()=>{
  });
  it('uses the returned whole-bill scope and atomic OTP execution for an employee',async()=>{
   mocks.get.mockResolvedValue({status:'ready',items:[{id:'item',productName:'Trà',quantity:1}]});
-  mocks.request.mockResolvedValue({id:'request',order_id:'order',whole_bill:true});
+  mocks.request.mockResolvedValue({...timing,id:'request',order_id:'order',whole_bill:true});
   mocks.verifyExecute.mockResolvedValue({otpId:'otp'});
   render(<CancelSentItemsDialog {...props} canCancel={false} initialItemId="item" shiftId="shift"/>);
   await screen.findByLabelText('Số lượng hủy Trà');
