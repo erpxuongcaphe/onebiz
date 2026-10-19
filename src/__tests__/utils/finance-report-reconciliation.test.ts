@@ -6,6 +6,10 @@ import {reconcileCashFlow,cashFlowMonths,summarizeRecognition} from '@/lib/utils
 const cash = (id:string,type:'receipt'|'payment',amount:number,category='Bán hàng'):CashBookEntry => ({id,code:id,date:'2026-10-05',type,typeName:type,amount,category,counterparty:'Test',createdBy:'user'});
 const link:FinanceCashLink = {cash_id:'expense',event_id:'event',event_code:'CP1',category_code:'CP-VH-DIEN',category_name:'Điện',kind:'expense',cash_flow_activity:'operating',business_date:'2026-09-30',event_status:'posted'};
 describe('finance report reconciliation',() => {
+  it('does not create an extra payable for receipt-generated expenses',()=>{
+    const row={id:'receipt-expense',status:'posted',kind:'expense',category_code:'CP-VH-NOIBO',category_name:'Vật tư vận hành nội bộ',amount:1000,report_amount:1000,settled_amount:0,source_type:'internal_receipt'} as FinanceEvent;
+    expect(summarizeRecognition([row])[0]).toMatchObject({amount:1000,outstanding:0});
+  });
   it('uses shared cash labels without changing source categories or classification',() => {
     const entry=cash('supplier','payment',40,'supplier_payment');
     const report=reconcileCashFlow([entry,cash('customer','receipt',50,'customer_payment')],[]);

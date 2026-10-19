@@ -94,7 +94,7 @@ export function summarizeRecognition(rows: FinanceEvent[]) {
     group.count++; group.amount = (financeMoneyCents(group.amount) + recognized) / 100;
     group.totalSource = (financeMoneyCents(group.totalSource) + amount) / 100;
     group.settled = (financeMoneyCents(group.settled) + settled) / 100;
-    group.outstanding = (financeMoneyCents(group.outstanding) + amount - settled) / 100;
+    group.outstanding = (financeMoneyCents(group.outstanding) + (row.source_type === 'internal_receipt' ? 0 : amount - settled)) / 100;
     groups.set(key,group);
   }
   return [...groups.values()].sort((a,b) => b.amount-a.amount || a.code.localeCompare(b.code));

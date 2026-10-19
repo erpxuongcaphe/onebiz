@@ -22,6 +22,21 @@ beforeEach(() => {
   mocks.all.mockResolvedValue([row]);
 });
 describe('management finance reporting workspace',() => {
+  it('links automatic receipt expenses to their source without offering another payment or separate cancellation',async()=>{
+    mocks.workspace.mockResolvedValue({items:[{...row,source_type:'internal_receipt',source_sale_id:'sale-source',source_receipt_id:'receipt-source',can_view_consolidated_cost:false,settled_amount:0,settlements:[]}],total:1,summary:{income:0,expense:600,non_pnl:0}});
+    render(<Page/>);
+    fireEvent.click(await screen.findByRole('button',{name:'CP001'}));
+    expect(screen.getByRole('link',{name:'Phiếu nhận nội bộ'})).toHaveAttribute('href','/hang-hoa/nhap-hang/noi-bo?sale=sale-source&branch=xtb');
+    expect(screen.queryByRole('button',{name:'Thanh toán'})).not.toBeInTheDocument();
+    expect(screen.queryByRole('button',{name:'Hủy ghi nhận'})).not.toBeInTheDocument();
+    expect(screen.queryByText(/Chi phí hợp nhất:/)).not.toBeInTheDocument();
+  });
+  it('does not display missing consolidated source cost as zero',async()=>{
+    mocks.workspace.mockResolvedValue({items:[{...row,source_type:'internal_receipt',source_sale_id:'sale-source',can_view_consolidated_cost:true,consolidated_amount:null}],total:1,summary:{income:0,expense:600,non_pnl:0}});
+    render(<Page/>);
+    fireEvent.click(await screen.findByRole('button',{name:'CP001'}));
+    expect(screen.getByText('Chi phí hợp nhất: Chưa có giá vốn nguồn')).toBeInTheDocument();
+  });
   it('opens financial reports in the selected branch and recognition period',async()=>{
     render(<Page/>);
     await screen.findByRole('button',{name:'CP001'});

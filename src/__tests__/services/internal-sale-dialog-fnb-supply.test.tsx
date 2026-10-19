@@ -72,8 +72,6 @@ async function selectRoute(receiver = "xtb") {
   const selectors = await screen.findAllByRole("combobox");
   fireEvent.change(selectors[0], { target: { value: "warehouse" } });
   fireEvent.change(selectors[1], { target: { value: receiver } });
-  await waitFor(() => expect(mocks.catalog).toHaveBeenCalledWith(receiver, expect.any(AbortSignal)));
-  await screen.findByText(/chỉ tìm trong 1 mã đã duyệt/);
 }
 
 describe("internal sale dialog for an F&B destination", () => {
@@ -87,7 +85,7 @@ describe("internal sale dialog for an F&B destination", () => {
   });
   afterEach(() => cleanup());
 
-  it("sends the approved Retail SKU and its sell price to the internal-sale service", async () => {
+  it("sends a Retail SKU without requiring recipe-catalog approval", async () => {
     render(<CreateInternalSaleDialog open onOpenChange={vi.fn()} />);
     await selectRoute();
     fireEvent.change(screen.getByPlaceholderText("Tìm sản phẩm theo tên hoặc mã..."), { target: { value: product.code } });
@@ -102,34 +100,30 @@ describe("internal sale dialog for an F&B destination", () => {
         unit: "Chai", quantity: 1, unitPrice: 250000, vatRate: 0,
       }],
     }));
-    expect(mocks.search).toHaveBeenCalledWith(product.code, expect.any(AbortSignal), false, ["honey"]);
+    expect(mocks.search).toHaveBeenCalledWith(product.code, expect.any(AbortSignal), true);
+    expect(mocks.catalog).not.toHaveBeenCalled();
+    expect(mocks.scope).not.toHaveBeenCalled();
   });
 
-  it("does not search or create a sale when the destination catalog cannot be checked", async () => {
+  it("does not depend on the recipe catalog being available", async () => {
     mocks.scope.mockRejectedValue(new Error("catalog unavailable"));
     render(<CreateInternalSaleDialog open onOpenChange={vi.fn()} />);
-    const selectors = await screen.findAllByRole("combobox");
-    fireEvent.change(selectors[0], { target: { value: "warehouse" } });
-    fireEvent.change(selectors[1], { target: { value: "xtb" } });
-    await screen.findByRole("alert");
-    expect(screen.getByPlaceholderText("Tìm sản phẩm theo tên hoặc mã...")).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "Tạo đơn nội bộ" }));
-    expect(mocks.search).not.toHaveBeenCalled();
-    expect(mocks.create).not.toHaveBeenCalled();
+    await selectRoute();
+    expect(screen.getByPlaceholderText("Tìm sản phẩm theo tên hoặc mã...")).toBeEnabled();
+    fireEvent.change(screen.getByPlaceholderText("Tìm sản phẩm theo tên hoặc mã..."), { target: { value: product.code } });
+    await screen.findByRole("button", { name: /SKU-SST-018.*Mật ong/ });
+    expect(mocks.scope).not.toHaveBeenCalled();
   });
 
-  it("rejects an item already selected when the receiving branch no longer approves it", async () => {
+  it("retains the selected SKU when changing the receiver without a catalog whitelist", async () => {
     mocks.catalog.mockImplementation(async (branchId: string) => branchId === "xtb" ? ["honey"] : ["other-product"]);
     render(<CreateInternalSaleDialog open onOpenChange={vi.fn()} />);
     await selectRoute();
     fireEvent.change(screen.getByPlaceholderText("Tìm sản phẩm theo tên hoặc mã..."), { target: { value: product.code } });
     fireEvent.click(await screen.findByRole("button", { name: /SKU-SST-018.*Mật ong/ }));
     fireEvent.change(screen.getAllByRole("combobox")[1], { target: { value: "other" } });
-    await screen.findByText(/chỉ tìm trong 1 mã đã duyệt/);
     fireEvent.click(screen.getByRole("button", { name: "Tạo đơn nội bộ" }));
-    expect(mocks.create).not.toHaveBeenCalled();
-    expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({
-      title: "Có SKU chưa được duyệt cấp cho quán này", variant: "error",
-    }));
+    await waitFor(() => expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({toBranchId:"other"})));
+    expect(mocks.catalog).not.toHaveBeenCalled();
   });
 });

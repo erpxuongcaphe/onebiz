@@ -11,6 +11,14 @@ function explainReceiptError(error: {message: string}): never {
     INTERNAL_RECEIVE_ADJUST_COST_REVIEW_REQUIRED: 'Chứng từ đã phát sinh sử dụng hàng sau lần nhận này. Cần người có quyền kiểm tra trước khi sửa; chưa thay đổi kho.',
     INTERNAL_RECEIVE_ORDER_NOT_OPEN: 'Đơn đã hủy hoặc đã nhập theo quy trình cũ. Bấm Cập nhật để kiểm tra.',
     INTERNAL_RECEIVE_QUANTITY_INVALID: 'Số thực nhận phải từ 0 trở lên và có tối đa 4 chữ số thập phân.',
+    INTERNAL_RECEIVE_POLICY_REVIEW_REQUIRED: 'Chưa xác định được công dụng hoặc quy đổi nguyên liệu. Cần kiểm tra cấu hình hàng trước khi nhận; tồn và chi phí chưa thay đổi.',
+    INTERNAL_RECEIVE_EXPENSE_CATEGORY_REQUIRED: 'Chưa có khoản mục vật tư vận hành nội bộ hợp lệ. Cần kiểm tra khoản mục; phiếu nhận chưa được ghi nhận.',
+    INTERNAL_RECEIVE_CONVERSION_PRECISION_REVIEW: 'Quy đổi này làm lệch số lượng hoặc giá trị nhận. Cần kiểm tra lại đơn vị và số thực nhận; tồn và chi phí chưa thay đổi.',
+    INTERNAL_RECEIVE_EXPENSE_PRECISION_REVIEW: 'Phân bổ giá trị các lần nhận chưa khớp đơn gốc. Cần đối chiếu trước khi ghi nhận; tồn và chi phí chưa thay đổi.',
+    INTERNAL_RECEIVE_USAGE_DENIED: 'Tài khoản chưa có quyền xác nhận lại công dụng hàng. Cần quyền sửa hàng hóa và điều chỉnh tồn.',
+    INTERNAL_RECEIVE_USAGE_REASON_REQUIRED: 'Cần ghi lý do chọn nhập tồn trước khi nhận hàng.',
+    INTERNAL_RECEIVE_USAGE_LOCKED: 'Dòng hàng đã có lịch sử nhận. Không thể đổi cách ghi nhận tồn hoặc chi phí.',
+    INTERNAL_RECEIVE_USAGE_INVALID: 'Cách ghi nhận không phù hợp với công dụng hoặc quy đổi đã xác minh. Kiểm tra lại cấu hình hàng trước khi nhận.',
     INTERNAL_RECEIVE_REQUEST_CHANGED: 'Yêu cầu này đã được ghi nhận với nội dung khác. Bấm Cập nhật để đối chiếu trước khi nhập tiếp.',
   };
   const message = Object.entries(messages).find(([code]) => error.message.includes(code))?.[1];
@@ -19,9 +27,13 @@ function explainReceiptError(error: {message: string}): never {
   throw new Error('Chưa xác nhận được nhận hàng. Bấm Cập nhật để kiểm tra trước khi nhập tiếp.');
 }
 
-export interface InternalReceivingItem { id: string; productId: string; code: string; name: string; unit: string; dispatched: number; received: number }
+export interface InternalReceivingItem {
+  id: string; productId: string; code: string; name: string; unit: string; dispatched: number; received: number;
+  treatment?: 'stock' | 'expense' | 'review'; receivingProductId?: string; receivingProductCode?: string;
+  receivingFactor?: number; receivingUnit?: string; receivingReason?: string;
+}
 export interface InternalReceipt { id: string; createdAt: string; updatedAt: string; revision: number; note?: string; createdBy: string; items: { itemId: string; quantity: number; inputQuantity?: number; inputUnit?: string; conversionFactor?: number; stockUnit?: string }[] }
-export interface InternalReceivingOrder { id: string; code: string; createdAt: string; fromBranch: string; invoiceId: string; items: InternalReceivingItem[]; receipts: InternalReceipt[] }
+export interface InternalReceivingOrder { id: string; code: string; createdAt: string; fromBranch: string; invoiceId: string; policyVersion?: number; items: InternalReceivingItem[]; receipts: InternalReceipt[] }
 export async function getInternalReceivingWorkspace(branchId: string): Promise<InternalReceivingOrder[]> {
   // RPC enforces actor + tenant + destination branch and omits all prices/costs.
   const { data, error } = await (getClient().rpc as any)('get_internal_receiving_workspace', { p_branch_id: branchId });
@@ -41,7 +53,7 @@ export async function getInternalReceivingWorkspace(branchId: string): Promise<I
   }
   return orders;
 }
-export async function receiveInternalSale(input: { saleId: string; requestId: string; items: { itemId: string; quantity: number; inputUnit?: string; expectedFactor?: number }[]; note?: string; receiptId?: string; expectedRevision?: number }) {
+export async function receiveInternalSale(input: { saleId: string; requestId: string; items: { itemId: string; quantity: number; inputUnit?: string; expectedFactor?: number; receivingTreatment?: 'stock' | 'expense' }[]; note?: string; receiptId?: string; expectedRevision?: number }) {
   const { data, error } = await (getClient().rpc as any)(input.items.some(item => item.inputUnit) ? 'receive_internal_sale_with_uom' : 'receive_internal_sale_actual', {
     p_sale_id: input.saleId, p_items: input.items, p_request_id: input.requestId, p_note: input.note || null,
     p_receipt_id: input.receiptId || null, p_expected_revision: input.expectedRevision ?? null,

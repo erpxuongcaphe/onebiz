@@ -74,6 +74,10 @@ export interface ProfitAndLoss {
   grossProfit: number;
   grossMargin: number;
   operatingExpense: number;
+  operatingExpenseComplete?: boolean;
+  missingExpenseCostLines?: number;
+  internalExpenseElimination?: number;
+  branchOperatingExpense?: number;
   otherIncome?: number;
   legacyCashExpense?: number;
   netProfit: number;
@@ -907,11 +911,15 @@ export async function getConsolidatedPnL(
         number(row.operating_expense),
         number(row.delivery_fee),
         row.cogs_complete === true,
-        number(row.missing_sales_cost_lines) + number(row.missing_return_cost_lines),
+        number(row.missing_sales_cost_lines) + number(row.missing_return_cost_lines) + number(row.missing_expense_cost_lines),
         number(row.other_income),
         number(row.legacy_cash_expense),
       ),
       internalRevenue: number(row.internal_revenue),
+      operatingExpenseComplete: number(row.missing_expense_cost_lines) === 0,
+      missingExpenseCostLines: number(row.missing_expense_cost_lines),
+      internalExpenseElimination: number(row.internal_expense_elimination),
+      branchOperatingExpense: row.branch_operating_expense == null ? number(row.operating_expense) : number(row.branch_operating_expense),
     });
 
     return {

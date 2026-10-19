@@ -114,7 +114,7 @@ export default function ManagementFinancePage() {
         return;
       }
       await exportToExcel(rows.map(r => ({code: r.code, date: r.business_date, category: `${r.category_code} · ${r.category_name}`,
-        counterparty: r.counterparty, amount: r.amount, recognized: r.report_amount, settled: r.settled_amount,
+        counterparty: r.counterparty, amount: r.amount, recognized: r.report_amount, settled: r.source_type === 'internal_receipt' ? 'Theo đơn nội bộ' : r.settled_amount,
         status: r.status === 'posted' ? 'Đã ghi nhận' : 'Đã hủy',
         allocations: r.allocations.map(a => `${a.branch_name} / ${a.recognition_date}: ${a.amount}`).join('; '),
         cash: r.settlements.map(s => `${s.code} / ${cashBranchName(s.branch_id)} / ${formatCashBookDate(s.transaction_date)} / ${formatCashTime(s.occurred_at)} / ${s.performed_by_name || 'Chưa ghi nhận'} / ${cashPaymentMethodLabel(s.payment_method)} / ${s.status === 'cancelled' ? 'Đã hủy' : s.status === 'completed' ? 'Hoàn tất' : 'Chưa hoàn tất'}: ${s.amount}`).join('; '), creator: r.created_by_name})),
@@ -250,16 +250,18 @@ function FinanceMonthTable({rows,from,to,branchId,loading,error}: {rows:FinanceE
 }
 
 function FinanceRow({row: r, cashBranchName, expanded, onExpand, canSettle, onSettle, canCancel, onCancel}: {row: FinanceEvent; cashBranchName:(id:string) => string; expanded: boolean; onExpand: () => void; canSettle: boolean; onSettle: () => void; canCancel: boolean; onCancel: () => void}) {
+  const fromReceipt = r.source_type === 'internal_receipt';
   return <><tr className="border-t">
     <td className="p-3"><button className="text-primary font-medium" onClick={onExpand} aria-expanded={expanded}>{r.code}</button></td>
     <td className="p-3">{formatCashBookDate(r.business_date)}</td><td className="p-3"><div>{r.category_name}</div><div className="text-muted-foreground">{r.counterparty}</div></td>
-    <td className="p-3 text-right tabular-nums">{formatCurrency(r.report_amount)}</td><td className="p-3 text-right tabular-nums">{formatCurrency(r.settled_amount)}</td>
-    <td className="p-3">{r.status === 'cancelled' ? 'Đã hủy' : 'Đã ghi nhận'}</td><td className="p-3">{canSettle && <Button size="sm" variant="outline" onClick={onSettle}><Icon name="payments"/>Thanh toán</Button>}</td>
+    <td className="p-3 text-right tabular-nums">{formatCurrency(r.report_amount)}</td><td className="p-3 text-right tabular-nums">{fromReceipt ? 'Theo đơn nội bộ' : formatCurrency(r.settled_amount)}</td>
+    <td className="p-3">{r.status === 'cancelled' ? 'Đã hủy' : 'Đã ghi nhận'}</td><td className="p-3">{canSettle && !fromReceipt && <Button size="sm" variant="outline" onClick={onSettle}><Icon name="payments"/>Thanh toán</Button>}</td>
   </tr>{expanded && <tr className="border-t bg-muted/30"><td colSpan={7} className="p-4 space-y-3">
     <p>Tổng khoản: <strong>{formatCurrency(r.amount)}</strong> · Người tạo: {r.created_by_name}</p>
     <div className="grid gap-4 lg:grid-cols-2"><div><h3 className="font-medium mb-2">Phân bổ ghi nhận</h3>{r.allocations.map((a, i) => <p key={i}>{a.branch_name} · {formatCashBookDate(a.recognition_date)} · {formatCurrency(a.amount)}</p>)}</div>
       <div className="min-w-0"><h3 className="font-medium mb-2">Phiếu thu / chi liên kết</h3>{r.settlements.length === 0 ? <p>Chưa có phiếu thu / chi.</p> : <div className="max-h-72 overflow-auto"><table className="w-full text-sm"><thead className="sticky top-0 bg-background"><tr>{['Mã phiếu','Chi nhánh thu/chi','Ngày chứng từ','Thực thu/chi','Người thu/chi','Phương thức','Số tiền','Trạng thái'].map(h => <th key={h} className="p-2 text-left whitespace-nowrap">{h}</th>)}</tr></thead><tbody>{r.settlements.map(s => <tr key={s.id} className="border-t"><td className="p-2 font-medium whitespace-nowrap">{s.code}</td><td className="p-2">{cashBranchName(s.branch_id)}</td><td className="p-2 whitespace-nowrap">{formatCashBookDate(s.transaction_date)}</td><td className="p-2 whitespace-nowrap">{formatCashTime(s.occurred_at)}</td><td className="p-2">{s.performed_by_name || 'Chưa ghi nhận'}</td><td className="p-2">{cashPaymentMethodLabel(s.payment_method)}</td><td className="p-2 text-right tabular-nums whitespace-nowrap">{formatCurrency(s.amount)}</td><td className="p-2">{s.status === 'cancelled' ? 'Đã hủy' : s.status === 'completed' ? 'Hoàn tất' : 'Chưa hoàn tất'}</td></tr>)}</tbody></table></div>}</div></div>
     {r.note && <p className="break-words">{r.note}</p>}
-    {canCancel && <Button size="sm" variant="outline" onClick={onCancel}><Icon name="cancel"/>Hủy ghi nhận</Button>}
+    {fromReceipt && <div className="border-l-2 border-amber-500 pl-3 text-sm"><Link className="font-medium text-primary underline" href={`/hang-hoa/nhap-hang/noi-bo?sale=${encodeURIComponent(r.source_sale_id ?? '')}&branch=${encodeURIComponent(r.allocations[0]?.branch_id ?? '')}`}>Phiếu nhận nội bộ</Link>{r.can_view_consolidated_cost && <p>Chi phí hợp nhất: {r.consolidated_amount == null ? 'Chưa có giá vốn nguồn' : formatCurrency(r.consolidated_amount)}</p>}</div>}
+    {canCancel && !fromReceipt && <Button size="sm" variant="outline" onClick={onCancel}><Icon name="cancel"/>Hủy ghi nhận</Button>}
   </td></tr>}</>;
 }

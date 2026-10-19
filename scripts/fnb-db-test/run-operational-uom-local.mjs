@@ -107,7 +107,7 @@ const receive=`
 `;
 for(const [source,extra,anchor] of [
  ['run-actual-prepared-yield-local.mjs',prod,"  console.log('PASS: under/over"],
- ['run-actual-receiving-local.mjs',receive,"  await db.exec(`create or replace function user_has_branch_access"],
+ ['run-actual-receiving-local.mjs',receive,"  await db.exec(`create or replace function user_has_branch_access(uuid,uuid) returns boolean language sql as 'select false'"],
 ]) {
  const code=fs.readFileSync('scripts/fnb-db-test/'+source,'utf8'); const offset=code.indexOf(anchor); if(offset<0)throw new Error('anchor');
  const file=path.resolve('.tmp/uom-'+source); fs.writeFileSync(file,code.slice(0,offset)+extra+'\n'+code.slice(offset));

@@ -46,13 +46,16 @@ export interface ManagementObservation {
 export function managementObservations(current: ProfitAndLoss, previous: ProfitAndLoss): ManagementObservation[] {
   const results: ManagementObservation[] = [];
   if (!current.cogsComplete || !previous.cogsComplete) {
-    results.push({ id: "cost-incomplete", title: "Chưa đủ giá vốn", detail: `Thiếu giá vốn: kỳ này ${current.missingCostLines} dòng, kỳ trước ${previous.missingCostLines} dòng.`, action: "Đối chiếu giá vốn", path: "/phan-tich/bao-cao-tai-chinh", severity: "warning" });
+    const expenseMissing = (current.missingExpenseCostLines ?? 0) + (previous.missingExpenseCostLines ?? 0);
+    results.push(expenseMissing > 0
+      ? {id:"cost-incomplete",title:"Chưa đủ giá vốn nguồn",detail:`${expenseMissing} dòng vật tư nội bộ chưa đủ căn cứ hợp nhất.`,action:"Đối chiếu chi phí nội bộ",path:"/tai-chinh/thu-nhap-chi-phi",severity:"warning"}
+      : { id: "cost-incomplete", title: "Chưa đủ giá vốn", detail: `Thiếu giá vốn: kỳ này ${current.missingCostLines} dòng, kỳ trước ${previous.missingCostLines} dòng.`, action: "Đối chiếu giá vốn", path: "/phan-tich/bao-cao-tai-chinh", severity: "warning" });
   } else if (current.goodsRevenue > previous.goodsRevenue && current.grossProfit < previous.grossProfit) {
     results.push({ id: "margin-pressure", title: "Doanh thu tăng, lãi gộp giảm", detail: "Kiểm tra giá bán, chiết khấu, cơ cấu mặt hàng và giá vốn.", action: "Hiệu quả mặt hàng", path: "/phan-tich/sku-chi-tiet", severity: "warning" });
   } else if (current.goodsRevenue < previous.goodsRevenue) {
     results.push({ id: "sales-decline", title: "Doanh thu giảm", detail: "Đối chiếu số hóa đơn, giá trị đơn và hàng trả.", action: "Chi tiết bán hàng", path: "/phan-tich/ban-hang", severity: "info" });
   }
-  if (current.operatingExpense > previous.operatingExpense) {
+  if (current.operatingExpenseComplete !== false && previous.operatingExpenseComplete !== false && current.operatingExpense > previous.operatingExpense) {
     results.push({ id: "expense-increase", title: "Chi phí vận hành tăng", detail: "Đối chiếu khoản mục, ngày ghi nhận và chi nhánh.", action: "Chi tiết chi phí", path: "/tai-chinh/thu-nhap-chi-phi", severity: "info" });
   }
   if (results.length === 0) {
@@ -67,7 +70,7 @@ export function managementFinancialRows(current: ProfitAndLoss, previous: Profit
     { metric: "Giá vốn", current: current.cogsComplete ? current.cogs : null, previous: previous.cogsComplete ? previous.cogs : null },
     { metric: "Lãi gộp", current: current.cogsComplete ? current.grossProfit : null, previous: previous.cogsComplete ? previous.grossProfit : null },
     { metric: "Thu nhập khác", current: current.otherIncome ?? 0, previous: previous.otherIncome ?? 0 },
-    { metric: "Chi phí vận hành", current: current.operatingExpense, previous: previous.operatingExpense },
+    { metric: "Chi phí vận hành", current: current.operatingExpenseComplete === false ? null : current.operatingExpense, previous: previous.operatingExpenseComplete === false ? null : previous.operatingExpense },
     { metric: "Kết quả vận hành", current: current.cogsComplete ? current.netProfit : null, previous: previous.cogsComplete ? previous.netProfit : null },
   ].map(row => ({ ...row, difference: row.current === null || row.previous === null ? null : row.current - row.previous }));
 }
