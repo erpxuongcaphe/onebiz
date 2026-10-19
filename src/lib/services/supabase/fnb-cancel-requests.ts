@@ -1,5 +1,5 @@
 import { getClient } from './base';
-import type { IssuedOtp } from './manager-otp';
+import type { IssuedOtp, VerifiedOtp } from './manager-otp';
 
 export interface CancelRequest {
   id: string; order_id: string; branch_id: string; whole_bill: boolean;
@@ -19,6 +19,7 @@ async function rpc<T>(name: string, args: Record<string, unknown> = {}): Promise
     if (message.includes('ORDER_CHANGED')) throw new Error('Bill vừa thay đổi hoặc yêu cầu đã hết hạn. Tải lại và chọn món cần hủy.');
     if (message.includes('USE_WHOLE_BILL')) throw new Error('Anh/chị đang chọn toàn bộ món. Hãy chọn Hủy toàn bill.');
     if (message.includes('OTP_SCOPE')) throw new Error('Mã duyệt phải được cấp từ đúng yêu cầu hủy này.');
+    if (message.includes('CANCEL_OTP_INVALID')) throw new Error('Mã này không thuộc yêu cầu đang mở, đã hết hạn hoặc đã được cấp lại. Nhờ quản lý cấp mã cho đúng yêu cầu này.');
     throw new Error(message);
   }
   if (data == null) throw new Error('Máy chủ chưa trả kết quả. Vui lòng thử lại.');
@@ -29,6 +30,13 @@ export function requestFnbCancellation(orderId: string, items: { id: string; qua
 }
 export function executeFnbCancellation(requestId: string, otpId?: string, shiftId?: string) {
   return rpc<{ success: boolean }>('fnb_execute_cancel_request_00455', { p_request_id: requestId, p_otp_id: otpId ?? null, p_shift_id: shiftId ?? null });
+}
+/** Verification and cancellation commit together; a failed action never burns the code. */
+export async function verifyAndExecuteFnbCancellation(requestId: string, code: string, shiftId?: string): Promise<VerifiedOtp> {
+  const d = await rpc<{ verification: Record<string, unknown>; result: { success: boolean } }>('fnb_verify_execute_cancel_20261019', { p_request_id: requestId, p_code: code, p_shift_id: shiftId ?? null });
+  if (!d.result?.success || !d.verification?.otp_id) throw new Error('Hủy chưa hoàn tất. Kiểm tra lại bill trước khi thử lại.');
+  const v = d.verification;
+  return { otpId: String(v.otp_id), actionCode: String(v.action_code), issuedBy: String(v.issued_by), issuedByName: String(v.issued_by_name ?? ''), issuedAt: String(v.issued_at), usedAt: String(v.used_at) };
 }
 export function pendingFnbCancellations() {
   return rpc<PendingCancelRequest[]>('fnb_pending_cancel_requests_00455');

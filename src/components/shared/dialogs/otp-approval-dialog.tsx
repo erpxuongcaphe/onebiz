@@ -46,6 +46,8 @@ interface OtpApprovalDialogProps {
   requireReason?: boolean;
   /** Callback chạy khi verify thành công. */
   onApproved: (verified: VerifiedOtp, reason: string) => void | Promise<void>;
+  /** Domain-specific atomic verification/execution, when consuming OTP alone is unsafe. */
+  verifyOtp?: typeof verifyAndUseManagerOtp;
 }
 
 export function OtpApprovalDialog({
@@ -56,6 +58,7 @@ export function OtpApprovalDialog({
   contextLabel,
   requireReason = false,
   onApproved,
+  verifyOtp = verifyAndUseManagerOtp,
 }: OtpApprovalDialogProps) {
   const reasonInputId = useId();
   const [digits, setDigits] = useState<string[]>(["", "", "", "", "", ""]);
@@ -108,7 +111,7 @@ export function OtpApprovalDialog({
     setError(null);
     let otpVerified = false;
     try {
-      const verified = verifiedApproval ?? await verifyAndUseManagerOtp({
+      const verified = verifiedApproval ?? await verifyOtp({
         code,
         actionCode,
         targetMeta: {
@@ -145,7 +148,6 @@ export function OtpApprovalDialog({
     code,
     codeReady,
     reasonValid,
-    verifying,
     actionCode,
     targetMeta,
     request,
@@ -153,6 +155,7 @@ export function OtpApprovalDialog({
     reason,
     attempts,
     onApproved,
+    verifyOtp,
     onOpenChange,
   ]);
 
