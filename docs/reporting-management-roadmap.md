@@ -7,7 +7,7 @@ Cap nhat: 2026-10-19. Khong sua so lieu kinh doanh de khop mau tham khao.
 | 1 | Dashboard, tong quan, chi tieu chung, bang chung, pham vi chi nhanh | Da phat hanh PR675/676 |
 | 2 | Ket qua kinh doanh: UX, ky doi chieu, realtime, gia von thieu, Excel | Da phat hanh PR677/678, da nghiem thu production |
 | 3 | Hieu qua ban hang: SKU, khach hang, chi nhanh, ban/tra/giam gia/gia von | Da phat hanh den PR687; da co lai gop khach hang va doi chieu hai ky; chenh 1.000d hoa don/dong hang van hien de doi chieu |
-| 4 | Su dung von: ton kho, cong no, tien; tach so du va phat sinh | Ton kho PR689 va cong no PR690 da phat hanh; con dong tien va ket noi dashboard |
+| 4 | Su dung von: ton kho, cong no, tien; tach so du va phat sinh | Ton kho PR689 va cong no PR690/691 da phat hanh; dot nay hoan thien dong tien; con ket noi dashboard |
 | 5 | Nghiem thu lien bao cao: filter, sort, file, mobile, phan quyen | Nghiem thu tung dot; chua chot toan bo |
 
 ## Nguyen tac
@@ -26,7 +26,10 @@ Cap nhat: 2026-10-19. Khong sua so lieu kinh doanh de khop mau tham khao.
 - Cong no: cung nguon voi trang Cong no; tach no chung tu, tien ung, so du rong va tuoi. 16 cot, loc/sort va Excel cung tap dong; full gom ca phai thu/phai tra va khong an cot.
 - Production PR690: phai thu 7.563.880d; phai tra 4.630.944d; ung NCC 4.457.009d. Trung Kien hien 630.000d no tren 1 phieu, rieng ung 4.457.009d; khong tu can tru.
 - Phat hien khi nghiem thu: cua so chi tiet cu tinh tuoi theo du 24 gio thay vi ngay Viet Nam. Bo sung helper ngay lich; khong doi ngay goc, thu tu FIFO hay tien tren phieu.
-- Can lam tiep: dong tien theo quy/tai khoan, doi chieu ghi nhan voi thu/chi; tong hop bang chung va buoc tiep theo tren dashboard; nghiem thu lien bao cao/quyen/mobile/Excel.
+- Dong tien dot nay: mot tap phieu hoan thanh cho tong, thang, hoat dong, khoan muc va Excel; tach bang phieu thu/phieu chi, giu noi dung va lien ket nguon. Khong quy tien ung thanh doanh thu.
+- So du quy/tai khoan dung RPC so tien hien co theo tung chi nhanh, gioi han 4 truy van dong thoi; khong truy van theo tung phieu. Khong tao so du goc hay gan tai khoan that tu dong. Thieu so du goc, tai khoan hoac nguon chi nhanh thi khong ket luan so du tong.
+- Tong cong ty tren trang dong tien hien la tong thu/chi cac chi nhanh; chua goi la luu chuyen hop nhat da loai noi bo khi chua co nguon ghep cap day du. Chua thay the bao cao luu chuyen tien te theo che do ke toan.
+- Can lam tiep: tong hop bang chung va buoc tiep theo tren dashboard; doi chieu ghi nhan va thu/chi day du ngoai cac phieu da lien ket; loai luan chuyen noi bo khi co nguon ghep cap chinh xac; nghiem thu lien bao cao/quyen/mobile/Excel.
 - Cong no hien la so du hien tai, chua phai anh chup so du lich su theo ngay ket thuc ky. Cac muc chua hoan tat trong nhung ghi chu dot 3 ben duoi la lich su ke hoach; bang trang thai tren la moc moi nhat.
 
 ## Nghiem thu dot 2

@@ -142,6 +142,18 @@ describe("getCashBookListWorkspace", () => {
     await expect(getAllCashBookEntries({})).rejects.toThrow("Chưa tải đủ sổ quỹ");
     expect(rpc).toHaveBeenCalledTimes(1);
   });
+  it("rejects a moving result count instead of mixing two cash snapshots", async () => {
+    rpc.mockResolvedValueOnce({ data: { items: [{ id: "a" }], total: 2 }, error: null });
+    rpc.mockResolvedValueOnce({ data: { items: [{ id: "b" }], total: 3 }, error: null });
+    await expect(getAllCashBookEntries({})).rejects.toThrow("Sổ quỹ đã thay đổi");
+  });
+  it("rejects duplicate pages and invalid advertised totals", async () => {
+    rpc.mockResolvedValueOnce({ data: { items: [{ id: "a" }], total: 2 }, error: null });
+    rpc.mockResolvedValueOnce({ data: { items: [{ id: "a" }], total: 2 }, error: null });
+    await expect(getAllCashBookEntries({})).rejects.toThrow("Phiếu sổ quỹ bị trùng");
+    rpc.mockResolvedValueOnce({ data: { items: [], total: -1 }, error: null });
+    await expect(getAllCashBookEntries({})).rejects.toThrow("Số dòng sổ quỹ không hợp lệ");
+  });
 });
 
 describe("cash-book workspace contract", () => {

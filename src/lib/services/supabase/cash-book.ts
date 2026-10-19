@@ -155,15 +155,24 @@ export async function getAllCashBookEntries(
   params: Omit<CashBookWorkspaceParams, "page" | "pageSize">,
 ): Promise<CashBookEntry[]> {
   const rows: CashBookEntry[] = [];
+  const ids = new Set<string>();
   let page = 0;
   let total = 0;
+  let expected: number | undefined;
   do {
     const result = await getCashBookListWorkspace({ ...params, page, pageSize: 200 });
+    if (!Number.isSafeInteger(result.total) || result.total < 0) throw new Error("Số dòng sổ quỹ không hợp lệ.");
+    expected ??= result.total;
+    if (result.total !== expected) throw new Error("Sổ quỹ đã thay đổi trong lúc tải. Vui lòng tải lại.");
     if (result.data.length === 0 && rows.length < result.total) {
       throw new Error("Chưa tải đủ sổ quỹ. Vui lòng tải lại trước khi xuất báo cáo.");
     }
-    rows.push(...result.data);
+    for (const row of result.data) {
+      if (!row.id || ids.has(row.id)) throw new Error("Phiếu sổ quỹ bị trùng trong lúc tải. Vui lòng tải lại.");
+      ids.add(row.id); rows.push(row);
+    }
     total = result.total;
+    if (rows.length > total) throw new Error("Số dòng sổ quỹ không khớp.");
     page += 1;
   } while (rows.length < total);
   return rows;
