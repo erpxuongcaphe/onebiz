@@ -10,6 +10,12 @@ const pnl: ProfitAndLoss = {
 };
 
 describe("management reporting", () => {
+  it("does not infer an expense trend while internal source costs are incomplete",()=>{
+    const incomplete={...pnl,cogsComplete:false,missingCostLines:1,missingExpenseCostLines:1,operatingExpenseComplete:false,operatingExpense:900};
+    expect(managementObservations(incomplete,pnl)[0]).toMatchObject({title:'Chưa đủ giá vốn nguồn',path:'/tai-chinh/thu-nhap-chi-phi'});
+    expect(managementObservations(incomplete,pnl).some(row=>row.id==='expense-increase')).toBe(false);
+    expect(managementFinancialRows(incomplete,pnl).find(row=>row.metric==='Chi phí vận hành')).toMatchObject({current:null,difference:null});
+  });
   it("does not invent percentage growth from zero or accept non-finite input", () => {
     expect(reportChange(10, 0)).toBe("Phát sinh mới");
     expect(reportChange(0, 0)).toContain("Không phát sinh");

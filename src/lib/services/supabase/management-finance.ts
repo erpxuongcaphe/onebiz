@@ -27,6 +27,9 @@ export interface FinanceEvent {
   category_name: string; business_date: string; amount: number;
   report_amount: number; settled_amount: number; counterparty: string;
   status: 'posted' | 'cancelled'; note: string | null; created_by_name: string;
+  source_type?: 'internal_receipt'; source_sale_id?: string; source_receipt_id?: string;
+  consolidated_amount?: number | null;
+  can_view_consolidated_cost?: boolean;
   allocations: Array<{branch_id: string; branch_name: string; recognition_date: string; amount: number}>;
   settlements: Array<{id: string; code: string; amount: number; status: string; transaction_date: string;
     occurred_at: string; performed_by_name: string; branch_id: string; payment_method: string}>;
@@ -49,7 +52,11 @@ async function rpc<T>(name: string, params: Record<string, unknown> = {}): Promi
 }
 
 export class FinanceRpcError extends Error {
-  constructor(message: string, public readonly code?: string) { super(message); }
+  constructor(message: string, public readonly code?: string) {
+    super(message.includes('INTERNAL_RECEIPT_FINANCE_SOURCE_LOCKED')
+      ? 'Chi phí này gắn với phiếu nhận hàng nội bộ. Thanh toán theo đơn nội bộ; sửa hoặc hủy tại phiếu nhận gốc.'
+      : message);
+  }
 }
 
 export function getFinanceCategories(): Promise<FinanceCategory[]> {

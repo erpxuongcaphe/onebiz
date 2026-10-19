@@ -390,7 +390,11 @@ export default function BaoCaoTaiChinhPage() {
               previous: prev.cogsComplete ? prev.grossProfit : null,
               previousRate: prev.cogsComplete ? prev.grossMargin : null,
             },
-            { label: "(-) Chi phí vận hành", current: cur.operatingExpense, previous: prev.operatingExpense },
+            ...(branchId === "all" ? [
+              { label: "Chi phí các chi nhánh trước loại trừ", current: cur.branchOperatingExpense ?? cur.operatingExpense, previous: prev.branchOperatingExpense ?? prev.operatingExpense },
+              { label: "Loại trừ giá nội bộ trong chi phí", current: cur.internalExpenseElimination ?? 0, previous: prev.internalExpenseElimination ?? 0 },
+            ] : []),
+            { label: "(-) Chi phí vận hành", current: cur.operatingExpenseComplete === false ? null : cur.operatingExpense, previous: prev.operatingExpenseComplete === false ? null : prev.operatingExpense },
             { label: "(+) Thu nhập khác ghi nhận", current: cur.otherIncome ?? 0, previous: prev.otherIncome ?? 0 },
             {
               label: "= Kết quả vận hành",
@@ -500,7 +504,11 @@ export default function BaoCaoTaiChinhPage() {
               previous: prev.cogsComplete ? prev.grossProfit : null,
               previousRate: prev.cogsComplete ? prev.grossMargin : null,
             },
-            { label: "(-) Chi phí vận hành", current: cur.operatingExpense, previous: prev.operatingExpense },
+            ...(branchId === "all" ? [
+              { label: "Chi phí các chi nhánh trước loại trừ", current: cur.branchOperatingExpense ?? cur.operatingExpense, previous: prev.branchOperatingExpense ?? prev.operatingExpense },
+              { label: "Loại trừ giá nội bộ trong chi phí", current: cur.internalExpenseElimination ?? 0, previous: prev.internalExpenseElimination ?? 0 },
+            ] : []),
+            { label: "(-) Chi phí vận hành", current: cur.operatingExpenseComplete === false ? null : cur.operatingExpense, previous: prev.operatingExpenseComplete === false ? null : prev.operatingExpense },
             { label: "(+) Thu nhập khác ghi nhận", current: cur.otherIncome ?? 0, previous: prev.otherIncome ?? 0 },
             {
               label: "= Kết quả vận hành",
@@ -879,11 +887,16 @@ export default function BaoCaoTaiChinhPage() {
                     isPercent: true,
                     dependsOnCogs: true,
                   },
+                  ...(useConsolidated ? [
+                    { label: "Chi phí các chi nhánh", cur: cur?.branchOperatingExpense ?? cur?.operatingExpense ?? 0, prev: prev?.branchOperatingExpense ?? prev?.operatingExpense ?? 0 },
+                    { label: "Đã loại trừ giá nội bộ", cur: cur?.internalExpenseElimination ?? 0, prev: prev?.internalExpenseElimination ?? 0 },
+                  ] : []),
                   {
                     label: "Chi phí vận hành",
                     cur: cur?.operatingExpense ?? 0,
                     prev: prev?.operatingExpense ?? 0,
                     negative: true,
+                    dependsOnExpense: true,
                   },
                   {
                     label: "Thu nhập khác",
@@ -907,8 +920,8 @@ export default function BaoCaoTaiChinhPage() {
                     dependsOnCogs: true,
                   },
                 ].map((row) => {
-                  const currentAvailable = !row.dependsOnCogs || currentCogsComplete;
-                  const previousAvailable = !row.dependsOnCogs || previousCogsComplete;
+                  const currentAvailable = (!row.dependsOnCogs || currentCogsComplete) && (!row.dependsOnExpense || cur?.operatingExpenseComplete !== false);
+                  const previousAvailable = (!row.dependsOnCogs || previousCogsComplete) && (!row.dependsOnExpense || prev?.operatingExpenseComplete !== false);
                   const change = currentAvailable && previousAvailable
                     ? row.isPercent
                       ? cur && prev && cur.goodsRevenue > 0 && prev.goodsRevenue > 0

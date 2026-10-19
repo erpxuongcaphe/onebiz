@@ -41,6 +41,8 @@ export function isAscending(params: QueryParams): boolean {
  */
 export function handleError(error: { message: string; code?: string }, context: string): never {
   const unitErrors: Record<string,string> = {
+    INTERNAL_SALE_RETAIL_SKU_REQUIRED: "Đơn nội bộ chỉ nhận SKU hàng hóa đang hoạt động, không nhận mã NVL hoặc món F&B bán trực tiếp. Kiểm tra lại mã hàng; đơn chưa được ghi nhận.",
+    INTERNAL_RECEIPT_FINANCE_SOURCE_LOCKED: "Khoản chi phí này phát sinh từ nhận hàng nội bộ. Thanh toán theo đơn nội bộ; muốn sửa hoặc hủy ghi nhận, xử lý tại phiếu nhận gốc.",
     GRAM_FORM_REFRESH_REQUIRED: "Đơn vị kho của BTP đã chuyển sang gram. Tải lại dữ liệu và kiểm tra số cân trước khi lưu; thao tác này chưa ghi nhận kho.",
     UOM_CONVERSION_CHANGED: "Hệ số quy đổi vừa thay đổi. Tải lại dữ liệu rồi kiểm tra số lượng trước khi lưu; kho chưa thay đổi.",
     UOM_REQUEST_CHANGED: "Thao tác này đã được ghi nhận với nội dung khác. Cập nhật chứng từ để đối chiếu trước khi lưu tiếp.",
