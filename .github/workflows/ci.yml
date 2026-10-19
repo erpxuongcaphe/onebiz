@@ -582,6 +582,16 @@ jobs:
           PGDATABASE=party_money_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00557_party_advance_refunds.integration.sql
           PGDATABASE=party_money_test node scripts/fnb-db-test/verify-advance-refund-concurrency.mjs
 
+      - name: Verify transactional branch isolation in isolated PostgreSQL
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          createdb branch_boundaries_test
+          PGDATABASE=branch_boundaries_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00567_transaction_branch_boundaries.integration.sql
+
   test-and-build:
     runs-on: ubuntu-latest
     timeout-minutes: 20

@@ -13,13 +13,12 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { UserProfile, Tenant, Branch } from "@/lib/types";
 import type { User } from "@supabase/supabase-js";
-import { getUserPermissions } from "@/lib/services/supabase/roles";
 // CEO 22/05/2026 (Phase 2): per-user permission overrides
 import { getUserEffectivePermissions } from "@/lib/services/supabase/permission-overrides";
 import { _seedProfileCache as seedProfileCache, _clearProfileCache as clearProfileCache } from "@/lib/services/supabase/base";
 import { readDeviceBinding } from "@/lib/hooks/use-device-binding";
 import { isInternalAuthEmail } from "@/lib/auth/user-identifiers";
-import { PERMISSIONS } from "@/lib/permissions/constants";
+import { canViewAllBranches, parseAccessibleBranchIds } from "@/lib/auth/branch-scope";
 
 // --- Types ---
 
@@ -60,18 +59,6 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 const MAX_SESSION_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const LOGIN_AT_KEY = "auth_login_at";
 
-function canViewAllBranches(
-  role: UserProfile["role"] | undefined,
-  permissionCodes: Set<string>,
-): boolean {
-  return (
-    role === "owner" ||
-    permissionCodes.has("*") ||
-    permissionCodes.has(PERMISSIONS.REPORTS_VIEW_ALL_BRANCHES) ||
-    permissionCodes.has(PERMISSIONS.SYSTEM_MANAGE_BRANCHES)
-  );
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [supabase] = useState(() => createClient());
@@ -83,10 +70,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentBranch, setCurrentBranch] = useState<Branch | null>(null);
   const [permissions, setPermissions] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
+  const profileRequestRef = useRef(0);
 
   // Load profile, tenant, branches from Supabase
   const loadUserData = useCallback(
     async (authUser: User) => {
+      const request = ++profileRequestRef.current;
+      setIsLoading(true);
+      setTenant(null);
+      setBranches([]);
+      setCurrentBranch(null);
+      setPermissions(new Set());
+      clearProfileCache();
       try {
         // 1. Profile TRƯỚC — các query khác cần profile.tenant_id + profile.id.
         const { data: profile } = await supabase
@@ -95,9 +90,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .eq("id", authUser.id)
           .single();
 
-        if (!profile) {
+        if (request !== profileRequestRef.current) return;
+
+        if (!profile || !profile.is_active) {
           // Profile not yet created (handle_new_user trigger hasn't fired or failed)
           setUser(buildFallbackProfile(authUser));
+          setPermissions(new Set());
+          setBranches([]);
+          setCurrentBranch(null);
+          setTenant(null);
+          clearProfileCache();
           return;
         }
 
@@ -137,14 +139,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             ? Promise.resolve(new Set(["*"]))
             : getUserEffectivePermissions(profile.id)
                 .then((codes) => new Set(codes))
-                .catch(async () => {
-                  // Fallback: RPC fail → dùng role permissions thuần
-                  return getUserPermissions(profile.id).catch(
-                    () => new Set<string>(),
-                  );
-                });
+                .catch(() => new Set<string>());
 
-        const [tenantRes, branchRes, perms] = await Promise.all([
+        const [tenantRes, branchRes, perms, scopeRes] = await Promise.all([
           supabase
             .from("tenants")
             .select("*")
@@ -157,7 +154,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             .eq("is_active", true)
             .order("is_default", { ascending: false }),
           permsPromise,
+          profile.role === "owner"
+            ? Promise.resolve({ data: [], error: null })
+            : supabase.rpc("get_user_accessible_branches" as never, { p_user_id: profile.id } as never),
         ]);
+
+        if (request !== profileRequestRef.current) return;
+
+        if (tenantRes.error || branchRes.error || scopeRes.error) {
+          throw new Error("Không tải được quyền chi nhánh.");
+        }
+        const accessibleIds = parseAccessibleBranchIds(scopeRes.data);
 
         setPermissions(perms);
 
@@ -172,7 +179,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           });
         }
 
-        const branchData = branchRes.data;
+        const branchData = (branchRes.data ?? []).filter(branch =>
+          canViewAllBranches(userProfile.role, perms) || accessibleIds.has(branch.id));
+        setBranches([]);
+        setCurrentBranch(null);
         if (branchData && branchData.length > 0) {
           const mappedBranches: Branch[] = branchData.map((b) => ({
             id: b.id,
@@ -225,8 +235,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         }
       } catch {
+        if (request !== profileRequestRef.current) return;
         // If DB queries fail (e.g., tables not created yet), use fallback
         setUser(buildFallbackProfile(authUser));
+        setPermissions(new Set());
+        setBranches([]);
+        setCurrentBranch(null);
+        setTenant(null);
+        clearProfileCache();
+      } finally {
+        if (request === profileRequestRef.current) setIsLoading(false);
       }
     },
     [supabase]
@@ -463,6 +481,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           loadUserData(sessionUser);
         }
       } else {
+        profileRequestRef.current += 1;
         setUser(null);
         setTenant(null);
         setBranches([]);
@@ -604,11 +623,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Permission check helper
   const hasPermission = useCallback(
     (code: string): boolean => {
+      if (!user?.isActive) return false;
       if (user?.role === "owner") return true;
       if (permissions.has("*")) return true;
       return permissions.has(code);
     },
-    [user?.role, permissions]
+    [user?.role, user?.isActive, permissions]
   );
 
   const logout = useCallback(async () => {
