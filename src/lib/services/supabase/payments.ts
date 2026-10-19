@@ -16,6 +16,7 @@ import { getClient, getCurrentContext, handleError } from "./base";
 import type { CashTimingInput } from "@/lib/cash-time";
 import { recordTimedCash } from "./cash-timing";
 import { readHistoryPages } from "./read-history-pages";
+import { debtCalendarAgeDays } from "@/lib/reports/debt-age";
 
 export interface RecordPaymentInput extends CashTimingInput {
   branchId?: string;
@@ -327,10 +328,9 @@ export async function getOpenInvoicesByCustomer(
   query = query.order("ngay_chung_tu", {ascending:true}).order("id", {ascending:true});
   const data = await readHistoryPages((offset,size) => query.range(offset,offset+size-1));
 
-  const now = Date.now();
+  const now = new Date();
   return (data ?? []).map((row) => {
-    const created = new Date(row.ngay_chung_tu as string).getTime();
-    const ageDays = Math.max(0, Math.floor((now - created) / 86400000));
+    const ageDays = debtCalendarAgeDays(row.ngay_chung_tu as string, now);
     return {
       id: row.id as string,
       code: row.code as string,
@@ -376,10 +376,9 @@ export async function getOpenPurchasesBySupplier(
   query = query.order("created_at", {ascending:true}).order("id", {ascending:true});
   const data = await readHistoryPages((offset,size) => query.range(offset,offset+size-1));
 
-  const now = Date.now();
+  const now = new Date();
   return (data ?? []).map((row) => {
-    const created = new Date(row.created_at as string).getTime();
-    const ageDays = Math.max(0, Math.floor((now - created) / 86400000));
+    const ageDays = debtCalendarAgeDays(row.created_at as string, now);
     return {
       id: row.id as string,
       code: row.code as string,
