@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 
 const state = vi.hoisted(() => ({
   branchId: "branch-a", refresh: undefined as (() => void) | undefined,
-  getOverviewKpis: vi.fn(), getCashFlowDetailed: vi.fn(), exportReportToExcel: vi.fn(), denied: new Set<string>(), range: { from: "2026-09-01", to: "2026-09-30" },
+  getOverviewKpis: vi.fn(), getDebtWorkspace: vi.fn(), getCashFlowDetailed: vi.fn(), exportReportToExcel: vi.fn(), denied: new Set<string>(), range: { from: "2026-09-01", to: "2026-09-30" },
 }));
 vi.mock("@/lib/contexts", () => ({
   useBranchFilter: () => ({ activeBranchId: state.branchId, branchLabel: state.branchId, isReady: true }),
@@ -25,6 +25,7 @@ vi.mock("@/lib/services", () => ({
   getCashFlowDetailed: state.getCashFlowDetailed,
 }));
 vi.mock("@/lib/services/supabase/reports", () => ({ getBranchPnLComparison: async () => [] }));
+vi.mock("@/lib/services/supabase/debt-workspace", () => ({ getDebtWorkspace: state.getDebtWorkspace }));
 vi.mock("@/components/shared/report", () => ({
   ReportPageHeader: ({ onExportView, exportDisabled }: { onExportView: () => void; exportDisabled: boolean }) => <><h1>Tổng quan kinh doanh</h1><button onClick={onExportView} disabled={exportDisabled}>Xuất bảng</button></>,
   ReportTableFrame: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -45,7 +46,7 @@ function deferred<T>() {
   const promise = new Promise<T>(done => { resolve = done; });
   return { promise, resolve };
 }
-beforeEach(() => { state.branchId = "branch-a"; state.denied = new Set(); state.getOverviewKpis.mockReset(); state.getCashFlowDetailed.mockReset().mockResolvedValue([]); state.exportReportToExcel.mockReset().mockResolvedValue(undefined); });
+beforeEach(() => { state.branchId = "branch-a"; state.denied = new Set(); state.getOverviewKpis.mockReset(); state.getDebtWorkspace.mockReset().mockResolvedValue({ receivables: [], payables: [], generatedAt: "2026-10-19T07:00:00Z" }); state.getCashFlowDetailed.mockReset().mockResolvedValue([]); state.exportReportToExcel.mockReset().mockResolvedValue(undefined); });
 afterEach(cleanup);
 
 describe("overview refresh safety", () => {
@@ -83,10 +84,14 @@ describe("overview refresh safety", () => {
     expect(exported.range).toEqual(state.range);
     expect(exported.branchName).toBe("branch-a");
     expect(exported.sheets[0].rows.find((row: { metric: string }) => row.metric === "Lãi gộp")).toMatchObject({ value: 444444.29 });
-    expect(exported.sheets[1].rows.find((row: { metric: string }) => row.metric === "Lãi gộp")).toMatchObject({ current: 444444.29 });
-    expect(exported.sheets[1].columns.find((column: { key: string }) => column.key === "current")).toMatchObject({ format: "number", decimalPlaces: 2 });
-    expect(exported.sheets[1].titleRows.join(" ")).toContain("02/08/2026");
-    expect(exported.sheets[1].titleRows.join(" ")).toContain("31/08/2026");
+    const financial = exported.sheets.find((sheet: { name: string }) => sheet.name === "Ket qua kinh doanh");
+    expect(financial.rows.find((row: { metric: string }) => row.metric === "Lãi gộp")).toMatchObject({ current: 444444.29 });
+    expect(financial.columns.find((column: { key: string }) => column.key === "current")).toMatchObject({ format: "number", decimalPlaces: 2 });
+    expect(financial.titleRows.join(" ")).toContain("02/08/2026");
+    expect(financial.titleRows.join(" ")).toContain("31/08/2026");
+    const debt = exported.sheets.find((sheet: { name: string }) => sheet.name === "Cong no hien tai");
+    expect(debt.titleRows.join(" ")).not.toContain("02/08/2026");
+    expect(debt.titleRows.join(" ")).toContain("2026-10-19T07:00:00Z");
   });
 
   it("does not query or export cash without cash-book permission", async () => {
@@ -110,5 +115,43 @@ describe("overview refresh safety", () => {
     const sheets = state.exportReportToExcel.mock.calls[0][0].sheets;
     expect(sheets.some((sheet: { name: string }) => sheet.name === "Ket qua kinh doanh")).toBe(false);
     expect(sheets.find((sheet: { name: string }) => sheet.name === "Thu chi").rows).toContainEqual({ metric: "Tổng thu", value: 700 });
+  });
+
+  it("does not read or export debt without detailed-report permission", async () => {
+    state.denied.add("reports.view_detail");
+    state.getOverviewKpis.mockResolvedValue(result(100));
+    render(<Overview />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Xuất bảng" })).toBeEnabled());
+    expect(state.getDebtWorkspace).not.toHaveBeenCalled();
+    expect(screen.queryByRole("region", { name: "Công nợ hiện tại" })).not.toBeInTheDocument();
+    await act(async () => { screen.getByRole("button", { name: "Xuất bảng" }).click(); });
+    expect(state.exportReportToExcel.mock.calls[0][0].sheets.some((sheet: { name: string }) => sheet.name === "Cong no hien tai")).toBe(false);
+  });
+
+  it("keeps sales usable when strict debt loading fails", async () => {
+    state.getDebtWorkspace.mockRejectedValue(new Error("Balance RPC missing"));
+    state.getOverviewKpis.mockResolvedValue(result(100));
+    render(<Overview />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Xuất bảng" })).toBeEnabled());
+    expect(screen.getByRole("alert")).toHaveTextContent("Chưa tải đủ công nợ");
+    expect(state.getDebtWorkspace).toHaveBeenCalledWith("branch-a", { requireBalanceSummary: true });
+    expect(screen.getAllByText("100đ").length).toBeGreaterThan(0);
+  });
+
+  it("discards a late debt workspace after switching branches", async () => {
+    const old = deferred<{ receivables: []; payables: []; generatedAt: string }>();
+    state.getOverviewKpis.mockResolvedValue(result(100));
+    state.getDebtWorkspace.mockReturnValueOnce(old.promise).mockResolvedValue({ receivables: [], payables: [], generatedAt: "new-branch" });
+    const view = render(<Overview />);
+    await waitFor(() => expect(state.getDebtWorkspace).toHaveBeenCalledTimes(1));
+    state.branchId = "branch-b";
+    view.rerender(<Overview />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Xuất bảng" })).toBeEnabled());
+    await act(async () => { old.resolve({ receivables: [], payables: [], generatedAt: "old-branch" }); });
+    await act(async () => { screen.getByRole("button", { name: "Xuất bảng" }).click(); });
+    const debt = state.exportReportToExcel.mock.calls[0][0].sheets.find((sheet: { name: string }) => sheet.name === "Cong no hien tai");
+    expect(debt.titleRows.join(" ")).toContain("new-branch");
+    expect(debt.titleRows.join(" ")).not.toContain("old-branch");
+    expect(state.getDebtWorkspace).toHaveBeenLastCalledWith("branch-b", { requireBalanceSummary: true });
   });
 });
