@@ -8,12 +8,16 @@ const register = (patch: Partial<CashAccountReport["accounts"][number]> = {}): C
 describe("cash capital report", () => {
   it("keeps advances in cash without inventing income recognition", () => {
     const rows = cashCapitalRows([entry("PT")], []);
-    expect(rows[0]).toMatchObject({ receipt: 100.25, payment: 0, recognitionLabel: "Chưa liên kết", activity: "operating" });
+    expect(rows[0]).toMatchObject({ receipt: 100.25, payment: 0, recognitionLabel: "Ứng / hoàn ứng", activity: "operating" });
     expect(cashCapitalSummary(rows)).toEqual({ count: 1, receipt: 100.25, payment: 0, net: 100.25 });
   });
   it("retains unknown activity and cancelled-source linkage without claiming posted recognition", () => {
     const rows = cashCapitalRows([entry("x", { category: "Unrecognized" })], [{ cash_id: "x", event_id: "e", event_code: "TC1", category_code: "OTHER", category_name: "Khác", kind: "income", cash_flow_activity: "investing", business_date: "2026-10-05", event_status: "cancelled" }]);
-    expect(rows[0]).toMatchObject({ activity: "unclassified", recognitionLabel: "Chưa liên kết" });
+    expect(rows[0]).toMatchObject({ activity: "unclassified", recognitionLabel: "Khoản ghi nhận đã hủy" });
+  });
+  it("recognizes invoice and purchase sources without demanding a duplicate external-income entry", () => {
+    const rows = cashCapitalRows([entry("a", { category: "Bán hàng", referenceType: "invoice", referenceId: "invoice", referenceCode: "HD1" }), entry("b", { category: "Nhập hàng", referenceType: "purchase_order", referenceId: "po", referenceCode: "PO1" })], []);
+    expect(rows.map(row => row.recognitionLabel)).toEqual(["Hóa đơn", "Phiếu nhập"]);
   });
   it("uses account IDs, shared search, numeric filters and stable source sorting", () => {
     const rows = cashCapitalRows([entry("a"), entry("b", { amount: 200, note: "Nội dung chi tiết", moneyAccountId: undefined }), entry("c", { amount: 300 })], []);

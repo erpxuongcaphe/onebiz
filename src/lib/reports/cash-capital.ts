@@ -14,20 +14,29 @@ export const CASH_FIELDS = [
   { key: "typeLabel", label: "Loại phiếu" }, { key: "branchName", label: "Chi nhánh" },
   { key: "accountCode", label: "Mã tài khoản" }, { key: "accountName", label: "Quỹ / tài khoản" }, { key: "methodLabel", label: "Phương thức" },
   { key: "counterparty", label: "Đối tượng" }, { key: "category", label: "Khoản mục" }, { key: "activityLabel", label: "Hoạt động" },
-  { key: "recognitionLabel", label: "Nhóm ghi nhận" }, { key: "eventCode", label: "Khoản ghi nhận" }, { key: "referenceCode", label: "Chứng từ gốc" },
+  { key: "recognitionLabel", label: "Nguồn ghi nhận" }, { key: "eventCode", label: "Khoản ghi nhận" }, { key: "referenceCode", label: "Chứng từ gốc" },
   { key: "note", label: "Nội dung" }, { key: "createdByName", label: "Người tạo" }, { key: "performedByName", label: "Người thu/chi" },
   { key: "receipt", label: "Thu" }, { key: "payment", label: "Chi" },
 ] as const;
 export const CASH_GROUPS = [{ label: "Chứng từ", span: 5 }, { label: "Nguồn tiền", span: 3 }, { label: "Nghiệp vụ", span: 7 }, { label: "Thực hiện", span: 2 }, { label: "Dòng tiền", span: 2 }];
 export const CASH_METRICS = [{ key: "amount", label: "Giá trị phiếu" }, { key: "receipt", label: "Thu" }, { key: "payment", label: "Chi" }];
 const KIND_LABELS = { income: "Thu nhập", expense: "Chi phí", non_pnl: "Không vào KQKD" };
+const ADVANCE_CATEGORIES = new Set(["customer_advance", "supplier_advance", "customer_advance_refund", "supplier_advance_refund"]);
+function recognitionSource(entry: CashBookEntry, source?: FinanceCashLink) {
+  if (source) return source.event_status === "posted" ? KIND_LABELS[source.kind] : "Khoản ghi nhận đã hủy";
+  if (ADVANCE_CATEGORIES.has(entry.category)) return "Ứng / hoàn ứng";
+  if (entry.referenceType === "invoice" && entry.referenceId) return entry.referenceCode ? "Hóa đơn" : "Hóa đơn chưa đối chiếu";
+  if (entry.referenceType === "purchase_order" && entry.referenceId) return entry.referenceCode ? "Phiếu nhập" : "Phiếu nhập chưa đối chiếu";
+  return "Chưa có nguồn ghi nhận";
+}
 export function cashCapitalRows(entries: CashBookEntry[], links: FinanceCashLink[]) {
   const sources = new Map(links.map(link => [link.cash_id, link]));
+  const originals = new Map(entries.filter(entry => !entry.status || entry.status === "completed").map(entry => [entry.id, entry]));
   return reconcileCashFlow(entries, links).detail.map(row => ({ ...row,
     typeLabel: row.type === "receipt" ? "Thu" : "Chi",
     accountCode: row.moneyAccountCode ?? "", accountName: row.moneyAccountName ?? (row.moneyAccountId ? "Chưa tải được tên tài khoản" : "Chưa gắn tài khoản"),
     methodLabel: cashPaymentMethodLabel(row.paymentMethod), activityLabel: CASH_FLOW_LABELS[row.activity],
-    recognitionLabel: sources.get(row.id)?.event_status === "posted" ? KIND_LABELS[sources.get(row.id)!.kind] : "Chưa liên kết",
+    recognitionLabel: recognitionSource(originals.get(row.id)!, sources.get(row.id)),
     receipt: row.type === "receipt" ? row.amount : 0, payment: row.type === "payment" ? row.amount : 0,
   }));
 }
