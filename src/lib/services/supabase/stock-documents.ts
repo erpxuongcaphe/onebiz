@@ -93,7 +93,10 @@ export async function getStockDocumentDetail(
   if (!header) return null;
 
   let itemRows: Record<string, unknown>[] = [];
-  let itemTable = config.itemTable;
+  // Retail invoice lines moved behind the branch-scoped read view. Keep the
+  // other document/F&B paths unchanged; never restore direct table grants.
+  let itemTable = kind === "invoice" && header.source === "pos"
+    ? "invoice_items_scoped" : config.itemTable;
   let itemForeignKey = config.itemForeignKey;
   let itemReferenceId = referenceId;
   if (kind === "input_invoice" && header.purchase_order_id) {
