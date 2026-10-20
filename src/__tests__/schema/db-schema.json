@@ -3283,6 +3283,7 @@
   ]
  },
  "rpc": [
+  "get_fnb_day_sales_summary",
   "_allow_negative_sale_00473",
   "_apply_disposal_export_impl_00084",
   "_apply_internal_export_impl_00084",

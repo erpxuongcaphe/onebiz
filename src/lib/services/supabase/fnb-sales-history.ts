@@ -20,7 +20,7 @@ export interface FnbSaleRow extends FnbRecentInvoice {
 }
 interface InvoiceRow { id: string; code: string; customer_name: string; total: number; paid: number; tip_amount: number; payment_method: string; ngay_chung_tu: string; created_at: string; status: string; discount_amount: number; note: string | null; created_by: string }
 interface KitchenRow { id: string; invoice_id: string | null; order_number: string; order_type: string; status: string; created_at: string; customer_name: string | null; note: string | null; created_by: string; merged_into_id: string | null; restaurant_tables: { name: string; table_number: string } | null }
-export interface FnbDayHistory { rows: FnbSaleRow[]; completed: number; pending: number; cancelled: number; invoiceValue: number }
+export interface FnbDayHistory { rows: FnbSaleRow[] }
 /** One business day, explicit tenant + branch, all headers (not a 50-row subtotal). No writes. */
 export async function getFnbDayHistory(branchId: string, day: string): Promise<FnbDayHistory> {
   if (!branchId) throw new Error("Chọn chi nhánh trước khi xem lịch sử.");
@@ -66,31 +66,19 @@ export async function getFnbDayHistory(branchId: string, day: string): Promise<F
     rows.push({id:ko.id,invoiceId:null,code:ko.order_number,customerName:ko.customer_name || "Khách lẻ",total:0,paid:0,tipAmount:0,paymentMethod:"",createdAt:ko.created_at,recordedAt:ko.created_at,kitchenOrderId:ko.id,kitchenOrderNumber:ko.order_number,tableName:ko.restaurant_tables?.name ?? ko.restaurant_tables?.table_number ?? null,orderType:ko.order_type,status:ko.status === "cancelled" ? "cancelled" : "pending",discount:0,note:ko.note,cashierName:staff.get(ko.created_by) ?? "—"});
   }
   rows.sort((a,b)=>b.createdAt.localeCompare(a.createdAt)||a.id.localeCompare(b.id));
-  return {rows,completed:rows.filter(row=>row.status==="completed").length,pending:rows.filter(row=>row.status==="pending").length,cancelled:rows.filter(row=>row.status==="cancelled").length,invoiceValue:rows.filter(row=>row.status==="completed").reduce((sum,row)=>sum+row.total,0)};
+  return {rows};
 }
-export interface FnbDayCash { received: number; refunded: number; net: number; methods: Record<string,number> }
-/** Cash follows the ledger posting date, independent of the invoice business date. */
+export interface FnbDayCash { received: number; refunded: number; net: number; methods: Record<string,number>; completed: number; pending: number; cancelled: number; invoiceValue: number }
+/** Aggregates are computed in the database after explicit permission + branch checks. */
 export async function getFnbDayCash(branchId:string,day:string):Promise<FnbDayCash> {
   fnbDayRange(day);
   if(!branchId) throw new Error("Thiếu chi nhánh.");
-  const db=getClient(),tenant=await getCurrentTenantId();
-  const cash=await readHistoryPages<{id:string;reference_id:string|null;amount:number;type:string;payment_method:string}>(async(offset,size)=>await db.from("cash_transactions")
-    .select("id,reference_id,amount,type,payment_method",{count:"exact"}).eq("tenant_id",tenant).eq("branch_id",branchId).eq("status","completed")
-    .in("reference_type",["invoice","invoice_void"]).eq("transaction_date",day).order("id").range(offset,offset+size-1));
-  const ids=[...new Set(cash.flatMap(row=>row.reference_id ? [row.reference_id] : []))],fnb=new Set<string>();
-  for(let i=0;i<ids.length;i+=100) {
-    const result=await db.from("invoices").select("id").eq("tenant_id",tenant).eq("branch_id",branchId).eq("source","fnb").in("id",ids.slice(i,i+100));
-    if(result.error) handleError(result.error,"fnbHistory.cashInvoices");
-    for(const row of result.data ?? []) fnb.add(row.id);
-  }
-  const summary:FnbDayCash={received:0,refunded:0,net:0,methods:{}};
-  for(const row of cash) if(row.reference_id && fnb.has(row.reference_id)) {
-    const amount=Number(row.amount),signed=row.type==="receipt" ? amount : -amount;
-    if(row.type==="receipt") summary.received+=amount; else summary.refunded+=amount;
-    summary.net+=signed; summary.methods[row.payment_method]=(summary.methods[row.payment_method]??0)+signed;
-  }
-  return summary;
+  const {data,error}=await getClient().rpc("get_fnb_day_sales_summary",{p_branch_id:branchId,p_day:day});
+  if(error) handleError(error,"fnbHistory.summary");
+  if(!data || typeof data!=="object" || Array.isArray(data)) throw new Error("Không tải được tổng thu F&B.");
+  return data as unknown as FnbDayCash;
 }
+
 export interface FnbHistoryItem {id:string;name:string;quantity:number;unitPrice:number;total:number;note:string}
 export async function getFnbHistoryItems(row:FnbSaleRow,branchId:string):Promise<FnbHistoryItem[]> {
   const db=getClient(),tenant=await getCurrentTenantId();

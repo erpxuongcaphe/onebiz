@@ -102,6 +102,7 @@ interface DataTableProps<TData, TValue> {
   onPageChange?: (page: number) => void;
   onPageSizeChange?: (size: number) => void;
   total?: number;
+  hideAggregateCounts?: boolean;
   selectable?: boolean;
   summaryRow?: Record<string, string | number>;
   onRowClick?: (row: TData, index: number) => void;
@@ -339,6 +340,7 @@ export function DataTable<TData, TValue>({
   onPageChange,
   onPageSizeChange,
   total = 0,
+  hideAggregateCounts = false,
   selectable = false,
   summaryRow,
   onRowClick,
@@ -1004,6 +1006,7 @@ export function DataTable<TData, TValue>({
           pageSize={pageSize}
           pageCount={pageCount}
           total={total}
+          hideAggregateCounts={hideAggregateCounts}
           onPageChange={onPageChange}
           onPageSizeChange={onPageSizeChange}
         />

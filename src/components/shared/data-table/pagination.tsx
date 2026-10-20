@@ -16,6 +16,7 @@ interface DataTablePaginationProps {
   pageSize: number;
   pageCount: number;
   total: number;
+  hideAggregateCounts?: boolean;
   onPageChange?: (page: number) => void;
   onPageSizeChange?: (size: number) => void;
 }
@@ -25,6 +26,7 @@ export function DataTablePagination({
   pageSize,
   pageCount,
   total,
+  hideAggregateCounts = false,
   onPageChange,
   onPageSizeChange,
 }: DataTablePaginationProps) {
@@ -49,9 +51,9 @@ export function DataTablePagination({
           </SelectContent>
         </Select>
         <span className="hidden sm:inline">dòng</span>
-        <span className="text-xs text-muted-foreground/60 ml-2">
+        {!hideAggregateCounts && <span className="text-xs text-muted-foreground/60 ml-2">
           ({formatNumber(total)} bản ghi)
-        </span>
+        </span>}
       </div>
 
       {/* Page navigation */}
@@ -77,7 +79,7 @@ export function DataTablePagination({
           <Icon name="chevron_left" size={14} />
         </Button>
         <span className="px-2 text-xs min-w-[50px] text-center text-muted-foreground">
-          {pageIndex + 1} / {pageCount}
+          {hideAggregateCounts ? `Trang ${pageIndex+1}` : `${pageIndex+1} / ${pageCount}`}
         </span>
         <Button
           variant="outline"
@@ -94,6 +96,7 @@ export function DataTablePagination({
           size="icon"
           className="h-7 w-7"
           disabled={pageIndex >= pageCount - 1}
+          hidden={hideAggregateCounts}
           onClick={() => onPageChange?.(pageCount - 1)}
           aria-label="Trang cuối"
         >

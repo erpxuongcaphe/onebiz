@@ -3074,6 +3074,10 @@ export interface Database {
         };
         Returns: Json;
       };
+      get_fnb_day_sales_summary: {
+        Args: { p_branch_id: string; p_day: string };
+        Returns: Json;
+      };
       normalize_phone: {
         Args: {
           p_phone: string;

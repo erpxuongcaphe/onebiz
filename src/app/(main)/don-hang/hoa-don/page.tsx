@@ -575,6 +575,7 @@ export default function HoaDonPage() {
   }, []);
   // CEO 08/07: xem tất cả chi nhánh (cục bộ) khi bảng trống vì lọc chi nhánh.
   const [viewAllBranches, setViewAllBranches] = useState(false);
+  const canViewSalesSummary = hasPermission("pos_fnb.view_sales_summary") || (!viewAllBranches && currentBranch?.branchType !== "store");
   const [otherBranchCount, setOtherBranchCount] = useState(0);
   const phamViHienTai = useMemo(
     () => phamViChiNhanhHoaDon({ activeBranchId, viewAllBranches, duocXemToanChuoi }),
@@ -781,6 +782,10 @@ export default function HoaDonPage() {
 
   useEffect(() => {
     if (!branchScopeReady) return;
+    if (!canViewSalesSummary) {
+      boNhoRef.current.batDau("summary-permission-denied");
+      setChiSo(null); setChiSoLoi(false); return;
+    }
     // TĂNG SỐ LƯỢT TRƯỚC khi xét nhớ tạm. Nếu để sau, tình huống sau làm hỏng
     // số: lượt A đang bay → đổi sang bộ lọc B đã có sẵn trong nhớ tạm → thoát
     // sớm mà KHÔNG tăng số lượt → A về muộn vẫn khớp số lượt và ghi đè số của
@@ -813,7 +818,7 @@ export default function HoaDonPage() {
         console.error("[Hoá đơn] không lấy được chỉ số:", err);
         setChiSoLoi(true);
       });
-  }, [branchScopeReady, thamSoChiSo, nhipChiSo]);
+  }, [branchScopeReady, thamSoChiSo, nhipChiSo, canViewSalesSummary]);
 
   const dangTaiChiSo =
     !branchScopeReady || (!chuaCoPhamVi && !chiSo && !chiSoLoi);
@@ -1049,9 +1054,10 @@ export default function HoaDonPage() {
           sortableColumnIds={INVOICE_SORT_COLUMNS}
           loading={loading}
           total={total}
+          hideAggregateCounts={!canViewSalesSummary}
           density="compact"
           columnToggle
-          toolbarMetrics={
+          toolbarMetrics={canViewSalesSummary ?
             <>
               <ListMetric
                 icon={<Icon name="receipt" size={15} />}
@@ -1094,7 +1100,7 @@ export default function HoaDonPage() {
                         : undefined
                 }
               />
-            </>
+            </> : undefined
           }
           toolbarActions={
             <>
@@ -1235,10 +1241,10 @@ export default function HoaDonPage() {
               onClick: (selectedRows) => setBulkCancelIds(selectedRows.map(row => row.id)),
             },
           ]}
-          summaryRow={{
+          summaryRow={canViewSalesSummary ? {
             totalAmount: formatCurrency(tongTrang.tien),
             discount: formatCurrency(tongTrang.giam),
-          }}
+          } : undefined}
           expandedRow={expandedRow}
           onExpandedRowChange={setExpandedRow}
           renderDetail={(invoice, onClose) => (
