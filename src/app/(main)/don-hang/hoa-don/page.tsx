@@ -1440,7 +1440,7 @@ export default function HoaDonPage() {
           ids={bulkCancelIds}
           permissions={{ fnb: canVoidFnb, retail: canVoidRetail }}
           onClose={() => setBulkCancelIds([])}
-          onDone={taiLaiSauKhiDoiDuLieu}
+          onDone={async () => { await taiLaiSauKhiDoiDuLieu(); }}
         />
       )}
       <CancelImpactDialog
