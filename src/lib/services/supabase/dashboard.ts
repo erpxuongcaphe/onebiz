@@ -205,7 +205,9 @@ export async function getDashboardKpis(branchId?: string): Promise<DashboardKpis
         row.type === "receipt" && row.reference_type === "invoice";
       const isSalesRefund =
         row.type === "payment" &&
-        (row.reference_type === "invoice" || row.reference_type === "sales_return");
+        (row.reference_type === "invoice" ||
+          row.reference_type === "sales_return" ||
+          row.reference_type === "invoice_void");
 
       if (isSalesReceipt) {
         totals[method] += amount;
