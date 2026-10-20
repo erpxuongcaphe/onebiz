@@ -41,6 +41,10 @@ export function isAscending(params: QueryParams): boolean {
  */
 export function handleError(error: { message: string; code?: string }, context: string): never {
   const unitErrors: Record<string,string> = {
+    SPLIT_QUANTITY_CHANGED: "Số lượng món đã thay đổi ở máy khác. Đóng màn tách, tải lại đơn rồi chọn lại.",
+    SPLIT_QUANTITY_INVALID: "Nhập số lượng nguyên từ 1 đến số món còn lại trên bill.",
+    SPLIT_PARENT_EMPTY: "Giữ lại ít nhất 1 món trên bill cũ; muốn chuyển toàn bộ hãy dùng Chuyển bàn.",
+    SPLIT_REQUEST_CHANGED: "Yêu cầu tách này đã được ghi nhận với nội dung khác. Kiểm tra các bill trước khi thử lại.",
     APPROVAL_ITEMS_SCOPE_INVALID: "Chọn lại món, số tiền hoặc tỷ lệ giảm rồi xin duyệt lại.",
     FNB_DISCOUNT_SCOPES_OVERLAP: "Các ưu đãi đang cùng giảm vượt giá trị một món. Kiểm tra món đã chọn và khuyến mãi/mã giảm giá trước khi thanh toán.",
     DELIVERY_ORDER_NOT_EDITABLE: "Đơn đã hủy hoặc đã giao xong; không thể đổi người giao hay địa chỉ. Tải lại để xem trạng thái mới.",

@@ -17,6 +17,7 @@ import type { CanvasTable } from "./floor-plan-canvas";
 
 export type TableActionKind =
   | "open"      // Mở đơn (bàn trống → đơn mới · bàn có khách → xem đơn hiện tại)
+  | "new_bill"
   | "transfer"  // Chuyển khách sang bàn khác
   | "merge";    // Gộp đơn của bàn này vào một bàn đang phục vụ khác
 
@@ -25,6 +26,7 @@ interface TableActionSheetProps {
   zoneName?: string;
   onAction: (kind: TableActionKind, table: CanvasTable) => void;
   onClose: () => void;
+  canCreateBill?: boolean;
   canTransfer?: boolean;
   canMerge?: boolean;
 }
@@ -34,6 +36,7 @@ export function TableActionSheet({
   zoneName,
   onAction,
   onClose,
+  canCreateBill = false,
   canTransfer = false,
   canMerge = false,
 }: TableActionSheetProps) {
@@ -115,6 +118,7 @@ export function TableActionSheet({
               onClick={() => onAction("open", table)}
             />
           )}
+          {hasActiveOrder && canCreateBill && <ActionButton icon="add_shopping_cart" label="Bill mới cùng bàn" onClick={() => onAction("new_bill", table)} />}
           {hasActiveOrder && canTransfer && (
             <ActionButton
               icon="swap_horiz"

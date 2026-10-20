@@ -7,7 +7,7 @@ const createOrder = source.slice(source.indexOf("const result = await offlineSen
 describe("F&B table state after kitchen submit", () => {
   it("updates ownership only after a successful online dine-in submit", () => {
     expect(createOrder).toContain('networkStatus.isOnline && tab.orderType === "dine_in" && tab.tableId && result.kitchenOrderId');
-    expect(createOrder).toContain('status: "occupied" as const, currentOrderId: result.kitchenOrderId');
+    expect(createOrder).toContain('status: "occupied" as const, currentOrderId: table.currentOrderId ?? result.kitchenOrderId');
     expect(createOrder.indexOf("setTables((prev)")).toBeGreaterThan(createOrder.indexOf("pos.markActiveLinesSent"));
   });
 

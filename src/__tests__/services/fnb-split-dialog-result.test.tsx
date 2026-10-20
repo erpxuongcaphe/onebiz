@@ -19,7 +19,7 @@ describe("F&B split result", () => {
     fireEvent.click(screen.getAllByRole("checkbox")[0]);
     fireEvent.click(screen.getByRole("button", { name: "Tách 1 món" }));
     await screen.findByRole("alert");
-    expect(byItems).toHaveBeenCalledWith(["one"]);
+    expect(byItems).toHaveBeenCalledWith([{ itemId: "one", quantity: 1, expectedQuantity: 1 }], expect.any(String));
     expect(screen.getAllByRole("checkbox")[0]).toBeChecked();
     expect(onOpenChange).not.toHaveBeenCalled();
   });

@@ -23,6 +23,12 @@ import { cn } from "@/lib/utils";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import { Icon } from "@/components/ui/icon";
 
+export interface SplitQuantitySelection {
+  itemId: string;
+  quantity: number;
+  expectedQuantity: number;
+}
+
 export interface SplitItem {
   id: string;
   name: string;
@@ -35,7 +41,7 @@ interface SplitBillDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   items: SplitItem[];
-  onSplitByItems: (itemIds: string[]) => Promise<boolean>;
+  onSplitByItems: (selection: SplitQuantitySelection[], requestId: string) => Promise<boolean>;
   onSplitEqually: (numberOfWays: number) => Promise<boolean>;
 }
 
@@ -49,15 +55,17 @@ export function SplitBillDialog({
   onSplitEqually,
 }: SplitBillDialogProps) {
   const [activeTab, setActiveTab] = useState<Tab>("items");
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const requestRef = useRef<{ key: string; id: string } | null>(null);
   const [numberOfWays, setNumberOfWays] = useState(2);
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState(false);
   const submitLock = useRef(false);
-  const itemIdentity = items.map(item => item.id).join("|");
+  const itemIdentity = items.map(item => `${item.id}:${item.quantity}:${item.unitPrice}`).join("|");
   useEffect(() => {
     if (open && !submitLock.current) {
-      setSelectedIds(new Set());
+      setQuantities({});
+      requestRef.current = null;
       setSubmitError(false);
       setNumberOfWays(2);
       setActiveTab("items");
@@ -66,26 +74,29 @@ export function SplitBillDialog({
   const validNumberOfWays = Number.isInteger(numberOfWays) && numberOfWays >= 2
     && numberOfWays <= Math.min(10, items.length);
 
-  const toggleItem = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
+  const selectedIds = new Set(items.filter(item => (quantities[item.id] ?? 0) !== 0).map(item => item.id));
+  const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0);
+  const selectedQuantity = items.reduce((sum, item) => sum + (quantities[item.id] ?? 0), 0);
+  const validSelection = selectedQuantity > 0 && selectedQuantity < totalQuantity
+    && items.every(item => Number.isInteger(quantities[item.id] ?? 0) && (quantities[item.id] ?? 0) >= 0 && (quantities[item.id] ?? 0) <= item.quantity);
+  const changeQuantity = (id: string, quantity: number) => setQuantities(previous => ({ ...previous, [id]: quantity }));
+  const toggleItem = (id: string) => changeQuantity(id, selectedIds.has(id) ? 0 : 1);
 
   const handleSplitItems = async () => {
-    if (selectedIds.size === 0 || selectedIds.size >= items.length || submitLock.current) return;
+    if (!validSelection || submitLock.current) return;
     submitLock.current = true;
     setLoading(true);
     setSubmitError(false);
     try {
-      if (!(await onSplitByItems(Array.from(selectedIds)))) {
+      const selection = items.filter(item => selectedIds.has(item.id)).map(item => ({ itemId: item.id, quantity: quantities[item.id], expectedQuantity: item.quantity }));
+      const key = JSON.stringify(selection);
+      if (requestRef.current?.key !== key) requestRef.current = { key, id: crypto.randomUUID() };
+      if (!(await onSplitByItems(selection, requestRef.current.id))) {
         setSubmitError(true);
         return;
       }
-      setSelectedIds(new Set());
+      setQuantities({});
+      requestRef.current = null;
       onOpenChange(false);
     } catch {
       setSubmitError(true);
@@ -116,7 +127,7 @@ export function SplitBillDialog({
 
   const selectedTotal = items
     .filter((i) => selectedIds.has(i.id))
-    .reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
+    .reduce((sum, i) => sum + i.unitPrice * quantities[i.id], 0);
 
   const totalAll = items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
   const previewBills = validNumberOfWays ? Array.from({ length: numberOfWays }, (_,index) =>
@@ -170,19 +181,20 @@ export function SplitBillDialog({
           {activeTab === "items" && (
             <div className="space-y-2">
               <p className="text-xs text-muted-foreground">
-                Chọn các món muốn tách sang bill mới:
+                Chọn món và số lượng chuyển sang bill mới. Mặc định tách 1; món còn lại giữ trên bill đang mở:
               </p>
               <div className="space-y-1">
                 {items.map((item) => (
-                  <label
+                  <div
                     key={item.id}
                     className={cn(
-                      "flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors",
+                      "flex flex-wrap items-center gap-3 px-3 py-2 rounded-lg transition-colors",
                       selectedIds.has(item.id) ? "bg-primary-fixed border border-primary-fixed" : "bg-muted/30 hover:bg-muted/50"
                     )}
                   >
                     <input
                       type="checkbox"
+                      aria-label={`Chọn ${item.name}`}
                       disabled={loading}
                       checked={selectedIds.has(item.id)}
                       onChange={() => toggleItem(item.id)}
@@ -193,12 +205,21 @@ export function SplitBillDialog({
                     <span className="shrink-0 text-sm text-muted-foreground tabular-nums">
                       {formatCurrency(item.unitPrice * item.quantity)}
                     </span>
-                  </label>
+                    {selectedIds.has(item.id) && <div className="flex w-full flex-wrap items-center gap-2 border-t border-primary/10 pt-2">
+                      <span className="text-xs">Số lượng tách</span>
+                      <Button type="button" variant="outline" size="icon" className="h-10 w-10" aria-label={`Giảm số lượng tách ${item.name}`} disabled={loading || quantities[item.id] <= 1} onClick={() => changeQuantity(item.id, quantities[item.id] - 1)}>−</Button>
+                      <Input type="number" inputMode="numeric" min={1} max={item.quantity} step={1} aria-label={`Số lượng tách ${item.name}`} aria-invalid={!Number.isInteger(quantities[item.id]) || quantities[item.id] < 1 || quantities[item.id] > item.quantity} value={Number.isNaN(quantities[item.id]) ? "" : quantities[item.id]} disabled={loading} onChange={event => changeQuantity(item.id, event.target.value === "" ? NaN : Number(event.target.value))} className="h-10 w-16 text-center" />
+                      <Button type="button" variant="outline" size="icon" className="h-10 w-10" aria-label={`Tăng số lượng tách ${item.name}`} disabled={loading || quantities[item.id] >= item.quantity} onClick={() => changeQuantity(item.id, quantities[item.id] + 1)}>+</Button>
+                      <span className="text-xs text-muted-foreground">/ {formatNumber(item.quantity)} · Còn lại: {formatNumber(Math.max(0,item.quantity - (quantities[item.id] || 0)))}</span>
+                      <span className="ml-auto text-sm font-semibold tabular-nums">{formatCurrency(item.unitPrice * (quantities[item.id] || 0))}đ</span>
+                    </div>}
+                  </div>
                 ))}
               </div>
+              {selectedQuantity >= totalQuantity && <p role="alert" className="text-sm text-destructive">Giữ lại ít nhất 1 món trên bill cũ. Nếu chuyển toàn bộ, dùng Chuyển bàn.</p>}
               {selectedIds.size > 0 && (
                 <div className="text-sm font-medium text-right">
-                  Giá trị món chọn: {formatCurrency(selectedTotal)}đ · trước giảm giá
+                  Giá trị món chọn: {formatCurrency(Number.isFinite(selectedTotal) ? selectedTotal : 0)}đ · trước giảm giá
                 </div>
               )}
             </div>
@@ -242,7 +263,7 @@ export function SplitBillDialog({
             Hủy
           </Button>
           {activeTab === "items" ? (
-            <Button onClick={handleSplitItems} disabled={selectedIds.size === 0 || selectedIds.size >= items.length || loading}>
+            <Button onClick={handleSplitItems} disabled={!validSelection || loading}>
               {loading && <Icon name="progress_activity" size={16} className="mr-1 animate-spin" />}
               Tách {selectedIds.size} món
             </Button>

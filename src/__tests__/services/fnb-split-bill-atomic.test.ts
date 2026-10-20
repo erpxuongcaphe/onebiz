@@ -11,7 +11,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
   },
 }));
 
-import { splitByItems, splitEqually } from "@/lib/services/supabase/split-bill";
+import { splitByItems, splitByQuantities, splitEqually } from "@/lib/services/supabase/split-bill";
 
 const splitMigration = readFileSync(
   "supabase/migrations/00273_atomic_fnb_split_bill.sql",
@@ -47,6 +47,15 @@ beforeEach(() => {
 });
 
 describe("atomic F&B split bill", () => {
+  it("sends remaining quantity snapshots and a stable request ID in one RPC", async () => {
+    const result = await splitByQuantities("order-1", [{itemId:"coffee", quantity:1, expectedQuantity:2}], "request-1");
+    expect(result.childOrderId).toBe("child-1");
+    expect(rpc).toHaveBeenCalledWith("split_kitchen_order_quantities_20261020", {p_order_id:"order-1",p_items:[{item_id:"coffee",quantity:1,expected_quantity:2}],p_request_id:"request-1"});
+  });
+  it("blocks invalid partial quantities before calling the server", async () => {
+    await expect(splitByQuantities("order-1", [{itemId:"coffee",quantity:3,expectedQuantity:2}],"request-1")).rejects.toThrow("Kiểm tra số lượng");
+    expect(rpc).not.toHaveBeenCalled();
+  });
   it("splits selected items through one RPC", async () => {
     const result = await splitByItems("order-1", ["item-1"]);
 

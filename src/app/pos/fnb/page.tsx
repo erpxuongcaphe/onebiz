@@ -48,7 +48,7 @@ import {
   hapticSuccess,
   hapticError,
 } from "@/lib/offline";
-import { splitByItems, splitEqually } from "@/lib/services/supabase/split-bill";
+import { splitByQuantities, splitEqually } from "@/lib/services/supabase/split-bill";
 import { validateCoupon } from "@/lib/services/supabase/coupons";
 import {
   getKitchenOrderById,
@@ -141,7 +141,7 @@ import { FnbSubcategoryPills } from "./components/fnb-subcategory-pills";
 import { FnbCart } from "./components/fnb-cart";
 import type { FnbItemConfirmPayload, FnbItemInitialSelection } from "./components/fnb-item-dialog";
 import type { FnbPaymentConfirmPayload } from "./components/fnb-payment-dialog";
-import type { SplitItem } from "./components/split-bill-dialog";
+import type { SplitItem, SplitQuantitySelection } from "./components/split-bill-dialog";
 import { ConnectionStatusBar } from "./components/connection-status-bar";
 import { Icon } from "@/components/ui/icon";
 import {
@@ -164,6 +164,7 @@ const FnbPaymentDialog = lazy(() => import("./components/fnb-payment-dialog").th
 const TableFloorPlan = lazy(() => import("./components/table-floor-plan").then(m => ({ default: m.TableFloorPlan })));
 const CancelSentItemsDialog = lazy(() => import("./components/cancel-sent-items-dialog").then(m => ({ default: m.CancelSentItemsDialog })));
 const SplitBillDialog = lazy(() => import("./components/split-bill-dialog").then(m => ({ default: m.SplitBillDialog })));
+const TableBillsDialog = lazy(() => import("./components/table-bills-dialog").then(m => ({ default: m.TableBillsDialog })));
 const OpenShiftDialog = lazy(() => import("./components/shift-dialog").then(m => ({ default: m.OpenShiftDialog })));
 const CloseShiftDialog = lazy(() => import("./components/shift-dialog").then(m => ({ default: m.CloseShiftDialog })));
 // CEO 05/06/2026: popup cảnh báo ca quên đóng — auto chuyển pending qua RPC.
@@ -259,6 +260,12 @@ function FnbPosPageInner() {
   const [paymentSubmitting, setPaymentSubmitting] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [showFloorPlan, setShowFloorPlan] = useState(false);
+  const [sameTableMergeSource, setSameTableMergeSource] = useState("");
+  const [sameTableMergeTarget, setSameTableMergeTarget] = useState("");
+  const sameTableMergeLock = useRef(false);
+  const [sameTableMergeBusy, setSameTableMergeBusy] = useState(false);
+  const [tableBillsId, setTableBillsId] = useState<string | null>(null);
+  useEffect(() => { setSameTableMergeSource(""); setSameTableMergeTarget(""); }, [tableBillsId]);
   const [splitBillOpen, setSplitBillOpen] = useState(false);
   const [splitItems, setSplitItems] = useState<SplitItem[]>([]);
   // 06/08 — MỘT nguồn duy nhất cho trạng thái ca (CEO chốt). Trước đây chỉ
@@ -355,6 +362,7 @@ function FnbPosPageInner() {
   const [couponApplying, setCouponApplying] = useState(false);
 
   const branchId = currentBranch?.id;
+  useEffect(() => setTableBillsId(null), [branchId]);
   useEffect(() => setMenuSearch(""), [branchId]);
   const tenantId = tenant?.id ?? "";
   const branchLayout = useFnbPosLayout(tenantId, branchId, networkStatus.isOnline);
@@ -1981,7 +1989,7 @@ function FnbPosPageInner() {
       // The server has claimed this table; reflect it without waiting for a reload.
       if (networkStatus.isOnline && tab.orderType === "dine_in" && tab.tableId && result.kitchenOrderId) {
         setTables((prev) => prev.map((table) => table.id === tab.tableId
-          ? { ...table, status: "occupied" as const, currentOrderId: result.kitchenOrderId }
+          ? { ...table, status: "occupied" as const, currentOrderId: table.currentOrderId ?? result.kitchenOrderId }
           : table));
         if (branchId) getTablesByBranch(branchId).then(setTables).catch((err) =>
           console.error("[FnB] refresh tables after kitchen submit failed:", err));
@@ -2801,35 +2809,10 @@ function FnbPosPageInner() {
         orderSelectionGeneration.current += 1;
         pos.createTab(getTableLabel(table), "dine_in", table.id);
         setShowFloorPlan(false);
-      } else if (table.status === "occupied" && table.currentOrderId) {
-        // Switch to existing tab for this table
-        const existingTab = pos.tabs.find((t) => t.kitchenOrderId === table.currentOrderId);
-        if (existingTab) {
-          handleSwitchOrderTab(existingTab.id);
-        } else {
-          // POS-FIX-B3: bàn occupied nhưng không có tab local (vd reload, đổi
-          // ca). Thay vì silent fail (click không gì xảy ra), tạo tab mới link
-          // tới table + thông báo barista xem đơn cũ ở KDS.
-          const newTabId = pos.createTab(
-            getTableLabel(table),
-            "dine_in",
-            table.id,
-          );
-          // Gắn currentOrderId để cart có context — barista có thể thêm món
-          // mới vào đơn cũ qua addItemsToExistingOrder.
-          pos.updateTabMeta(newTabId, {
-            kitchenOrderId: table.currentOrderId,
-          });
-          void hydrateKitchenOrderIntoTab(table.currentOrderId, newTabId, true);
-          setShowFloorPlan(false);
-          setMobileCartOpen(true);
-          toast({
-            title: `${getTableLabel(table)} đang có đơn cũ`,
-            description: "Đang nạp các món đã gọi vào giỏ hàng.",
-            variant: "default",
-            duration: 5000,
-          });
-        }
+      } else if (table.status === "occupied") {
+        setTableBillsId(table.id);
+        void openOrders.refresh();
+        return;
       } else if (table.status === "cleaning") {
         if (!canManageTables) {
           toast({
@@ -2852,7 +2835,7 @@ function FnbPosPageInner() {
           });
       }
     },
-    [pos, branchId, canManageTables, toast, hydrateKitchenOrderIntoTab, handleSwitchOrderTab],
+    [pos, branchId, canManageTables, toast, openOrders],
   );
 
   // ── Shift handlers ──
@@ -3333,6 +3316,30 @@ function FnbPosPageInner() {
     handleSwitchOrderTab,
   ]);
 
+  const handleSameTableMerge = useCallback(async () => {
+    if (sameTableMergeLock.current || !tableBillsId || !canManageTables || !networkStatus.isOnline) return;
+    const source = openOrders.orders.find(order => order.id === sameTableMergeSource && order.tableId === tableBillsId && isUnpaidFnbOrder(order));
+    const target = openOrders.orders.find(order => order.id === sameTableMergeTarget && order.tableId === tableBillsId && isUnpaidFnbOrder(order));
+    if (!source || !target || source.id === target.id) return;
+    if (pos.tabs.some(tab => [source.id,target.id].includes(tab.kitchenOrderId ?? "") && tab.lines.length > 0)) {
+      toast({title:"Còn món chưa gửi bếp",description:"Gửi hoặc bỏ món đang chờ trên hai bill trước khi gộp.",variant:"warning"}); return;
+    }
+    const selectedBranch = branchId;
+    sameTableMergeLock.current = true; setSameTableMergeBusy(true);
+    try {
+      await mergeKitchenOrders(target.id,[source.id]);
+      if (liveBranchRef.current !== selectedBranch) return;
+      const targetTabId = pos.tabs.find(tab => tab.kitchenOrderId === target.id)?.id ?? pos.createTab(target.tableName || "Tại quán","dine_in",target.tableId ?? undefined);
+      pos.updateTabMeta(targetTabId,{kitchenOrderId:target.id});
+      await hydrateKitchenOrderIntoTab(target.id,targetTabId,true);
+      for (const tab of pos.tabs.filter(tab => tab.kitchenOrderId === source.id)) pos.closeTab(tab.id);
+      handleSwitchOrderTab(targetTabId); setTableBillsId(null); setSameTableMergeSource(""); setSameTableMergeTarget("");
+      void openOrders.refresh(); if (branchId) void getTablesByBranch(branchId).then(setTables);
+      toast({title:"Đã gộp bill",description:`${source.orderNumber} đã gộp vào ${target.orderNumber}. Các bill khác giữ riêng.`,variant:"success"});
+    } catch (error) { toast({title:"Chưa gộp được bill",description:error instanceof Error ? error.message : "Tải lại danh sách bill trước khi thử tiếp.",variant:"error"}); }
+    finally {sameTableMergeLock.current=false;setSameTableMergeBusy(false);}
+  },[tableBillsId,canManageTables,networkStatus.isOnline,openOrders,sameTableMergeSource,sameTableMergeTarget,pos,toast,hydrateKitchenOrderIntoTab,handleSwitchOrderTab,branchId]);
+
   // ── Customer selection ──
   const customerSelectionLock = useRef(false);
   const handleCustomerSelect = useCallback(async (customer: Customer | null) => {
@@ -3385,10 +3392,14 @@ function FnbPosPageInner() {
     if (!canSplitBill || !networkStatus.isOnline) return;
     const tab = pos.activeTab;
     if (!tab?.kitchenOrderId) return;
+    if (tab.lines.length > 0) {
+      toast({ title: "Còn món chưa gửi bếp", description: "Gửi hoặc bỏ các món đang chờ trước khi tách bill để không mất món vừa nhập.", variant: "warning" });
+      return;
+    }
     try {
       const order = await getKitchenOrderById(tab.kitchenOrderId);
       const activeItems = (order?.items ?? []).filter(item => item.quantity > 0);
-      if (activeItems.length < 2) return;
+      if (activeItems.reduce((sum, item) => sum + item.quantity, 0) < 2) return;
       setSplitItems(
         activeItems.map((item) => ({
           id: item.id,
@@ -3426,7 +3437,7 @@ function FnbPosPageInner() {
   );
 
   const handleSplitByItems = useCallback(
-    async (itemIds: string[]): Promise<boolean> => {
+    async (selection: SplitQuantitySelection[], requestId: string): Promise<boolean> => {
       const tab = pos.activeTab;
       if (!tab?.kitchenOrderId) return false;
       if (!networkStatus.isOnline) {
@@ -3438,24 +3449,25 @@ function FnbPosPageInner() {
         });
         return false;
       }
-      if (!itemIds || itemIds.length === 0) {
+      if (!selection || selection.length === 0) {
         toast({ title: "Chọn ít nhất 1 món để tách", variant: "warning" });
         return false;
       }
       try {
-        const result = await splitByItems(tab.kitchenOrderId, itemIds);
+        const result = await splitByQuantities(tab.kitchenOrderId, selection, requestId);
         // 29/07: NỐI tab mới với đơn con vừa tách. Trước đây tab được tạo
         // rỗng, không cầm mã đơn bếp nào → bấm thanh toán trên tab đó sẽ mở
         // một đơn MỚI, còn đơn con đã tách nằm mồ côi: bếp đã làm món mà
         // không ai thu được tiền.
-        const newTabId = pos.createTab(`${tab.label}-B`, tab.orderType, tab.tableId);
+        const newTabId = pos.tabs.find(entry => entry.kitchenOrderId === result.childOrderId)?.id ?? pos.createTab(`${tab.label}-B`, tab.orderType, tab.tableId);
         pos.updateTabMeta(newTabId, { kitchenOrderId: result.childOrderId });
         await loadChildOrderIntoTab(result.childOrderId, newTabId);
         await hydrateKitchenOrderIntoTab(tab.kitchenOrderId, tab.id, true);
+        void openOrders.refresh();
         hapticSuccess();
         toast({
           title: "Đã tách bill",
-          description: `${itemIds.length} món chuyển sang tab "${tab.label}-B" — thu tiền ở tab đó`,
+          description: `${selection.reduce((sum, item) => sum + item.quantity, 0)} món chuyển sang tab "${tab.label}-B" — thu tiền ở tab đó`,
           variant: "success",
         });
         return true;
@@ -3469,7 +3481,7 @@ function FnbPosPageInner() {
         return false;
       }
     },
-    [pos, networkStatus.isOnline, toast, loadChildOrderIntoTab, hydrateKitchenOrderIntoTab]
+    [pos, networkStatus.isOnline, toast, loadChildOrderIntoTab, hydrateKitchenOrderIntoTab, openOrders]
   );
 
   const handleSplitEqually = useCallback(
@@ -3870,6 +3882,7 @@ function FnbPosPageInner() {
               <TableFloorPlan
                 tables={tables}
                 onSelectTable={handleTableSelect}
+                onCreateTableBill={(table) => { orderSelectionGeneration.current += 1; pos.createTab(`${getTableLabel(table)} · Bill mới`, "dine_in", table.id); setShowFloorPlan(false); setMobileCartOpen(false); }}
                 onTransferTable={
                   canTransferTables
                     ? (table) => {
@@ -4496,6 +4509,16 @@ function FnbPosPageInner() {
         </DialogContent>
       </Dialog>
 
+      {tableBillsId && <Suspense fallback={null}><TableBillsDialog open tableLabel={tables.find(table => table.id === tableBillsId) ? getTableLabel(tables.find(table => table.id === tableBillsId)!) : "Bàn"}
+        orders={openOrders.orders.filter(order => order.tableId === tableBillsId && isUnpaidFnbOrder(order))} drafts={pos.tabs.filter(tab => tab.tableId === tableBillsId && !tab.kitchenOrderId)}
+        loading={openOrders.loading} error={openOrders.error} opening={openingSharedOrder} busy={sameTableMergeBusy} canMerge={canManageTables} online={networkStatus.isOnline}
+        mergeSource={sameTableMergeSource} mergeTarget={sameTableMergeTarget} onSourceChange={setSameTableMergeSource} onTargetChange={setSameTableMergeTarget}
+        onOpenChange={open => { if (!open) setTableBillsId(null); }} onRefresh={() => { void openOrders.refresh(); }} onMerge={() => void handleSameTableMerge()}
+        onOpenOrder={order => { void handleOpenSharedOrder(order).then(opened => { if (opened) setTableBillsId(null); }); }}
+        onOpenDraft={id => { handleSwitchOrderTab(id); setTableBillsId(null); setShowFloorPlan(false); setMobileCartOpen(true); }}
+        onCreate={() => { const table = tables.find(entry => entry.id === tableBillsId); if (!table) return; orderSelectionGeneration.current += 1; pos.createTab(`${getTableLabel(table)} · Bill mới`, "dine_in", table.id); setTableBillsId(null); setShowFloorPlan(false); setMobileCartOpen(false); }}
+      /></Suspense>}
+
       {/* Transfer table dialog */}
       <Dialog open={transferTableOpen} onOpenChange={open => { if (!transferSubmitting) setTransferTableOpen(open); }}>
         <DialogContent className="sm:max-w-md">
@@ -4506,11 +4529,11 @@ function FnbPosPageInner() {
           </DialogHeader>
           <div className="py-2">
             <p className="text-xs text-muted-foreground mb-3">
-              Chuyển riêng bill <b>{openOrders.orders.find(order => order.id === pos.activeTab?.kitchenOrderId)?.orderNumber ?? pos.activeTab?.label}</b> từ <b>{pos.activeTab?.label}</b> sang bàn trống. Bill khác vẫn giữ nguyên bàn.
+              Chuyển riêng bill <b>{openOrders.orders.find(order => order.id === pos.activeTab?.kitchenOrderId)?.orderNumber ?? pos.activeTab?.label}</b> từ <b>{pos.activeTab?.label}</b> sang bàn khác. Bàn đã có khách sẽ giữ các bill riêng; không tự gộp.
             </p>
             <div className="grid grid-cols-4 gap-2 max-h-[320px] overflow-y-auto">
               {tables
-                .filter((t) => t.status === "available" && t.id !== pos.activeTab?.tableId)
+                .filter((t) => ["available", "occupied"].includes(t.status) && t.id !== pos.activeTab?.tableId)
                 .map((t) => (
                   <button
                     key={t.id}
@@ -4521,12 +4544,13 @@ function FnbPosPageInner() {
                   >
                     <div className="text-xs opacity-70">Bàn</div>
                     <div className="break-words text-lg">{getCompactTableLabel(t)}</div>
+                    <span className="text-xs">{t.status === "occupied" ? "Có khách · giữ bill riêng" : "Bàn trống"}</span>
                   </button>
                 ))}
             </div>
-            {tables.filter((t) => t.status === "available").length === 0 && (
+            {tables.filter((t) => ["available", "occupied"].includes(t.status) && t.id !== pos.activeTab?.tableId).length === 0 && (
               <p className="text-center text-sm text-muted-foreground py-6">
-                Không có bàn trống
+                Không có bàn phù hợp để chuyển
               </p>
             )}
           </div>
