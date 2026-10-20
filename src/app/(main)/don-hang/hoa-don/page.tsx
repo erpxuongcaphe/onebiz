@@ -856,6 +856,7 @@ export default function HoaDonPage() {
     else exportToCsv(data, exportColumns, "danh-sach-hoa-don");
   };
 
+  const isFnbBranch = !viewAllBranches && currentBranch?.branchType === "store";
   const columns: ColumnDef<Invoice, unknown>[] = [
     {
       id: "star",
@@ -923,7 +924,7 @@ export default function HoaDonPage() {
     },
     {
       accessorKey: "totalAmount",
-      header: "Tổng tiền hàng",
+      header: isFnbBranch ? "Tổng thanh toán" : "Tổng tiền hàng",
       cell: ({ row }) => (
         <span className="text-right block">
           {formatCurrency(row.original.totalAmount)}
@@ -943,6 +944,14 @@ export default function HoaDonPage() {
           <span className="text-right block">{formatCurrency(0)}</span>
         );
       },
+    },
+    {
+      accessorKey: "paid", meta: {align: "right"}, header: "Đã thu theo bill", enableSorting: false,
+      cell: ({row}) => <span className="block text-right tabular-nums">{row.original.status === "cancelled" ? "—" : formatCurrency(row.original.paid)}</span>,
+    },
+    {
+      id: "invoiceStatus", header: "Trạng thái", enableSorting: false,
+      cell: ({row}) => <Badge variant={statusMap[row.original.status]?.variant ?? "secondary"}>{statusMap[row.original.status]?.label ?? row.original.status}</Badge>,
     },
     {
       accessorKey: "debt",
@@ -1015,7 +1024,7 @@ export default function HoaDonPage() {
               variant: "default",
               // CEO 29/05/2026: tạo hóa đơn mới = vào thẳng POS Retail (đúng quy
               // trình bán hàng), không mở popup tạo tay nữa.
-              onClick: () => router.push("/pos"),
+              onClick: () => router.push(isFnbBranch ? "/pos/fnb" : "/pos"),
             },
           ]}
         />
@@ -1028,6 +1037,8 @@ export default function HoaDonPage() {
         )}
 
         <DataTable
+          key={isFnbBranch ? "fnb-invoices" : "erp-invoices"}
+          defaultColumnVisibility={isFnbBranch ? {star: false, returnCode: false, customerCode: false, discount: false, debt: false} : {paid: false, invoiceStatus: false}}
           columns={columns}
           data={data}
           sorting={sorting}

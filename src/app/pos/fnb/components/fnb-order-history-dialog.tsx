@@ -10,8 +10,8 @@
 //   - Có quyền → mở confirm dialog yêu cầu nhập lý do (>= 5 ký tự)
 //   - Sau khi RPC fnb_void_invoice_atomic chạy xong → reload list
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useLiveDataRefresh } from "@/lib/hooks/use-live-data-refresh";
+import { useCallback, useRef, useState } from "react";
+import { FnbSalesHistoryView } from "./fnb-sales-history-view";
 import {
   Dialog,
   DialogContent,
@@ -21,15 +21,12 @@ import {
   DialogFooter,
   DialogBody,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/lib/contexts";
 import { formatCurrency, formatTime } from "@/lib/format";
 import {
-  getFnbRecentInvoices,
   getFnbInvoiceForReprint,
   type FnbRecentInvoice,
 } from "@/lib/services/supabase/invoices";
@@ -60,12 +57,7 @@ interface FnbOrderHistoryDialogProps {
   receiptStyle?: "minimal" | "standard" | "full";
 }
 
-const METHOD_LABEL: Record<string, string> = {
-  cash: "Tiền mặt",
-  transfer: "Chuyển khoản",
-  card: "Thẻ",
-  mixed: "Hỗn hợp",
-};
+const METHOD_LABEL: Record<string,string> = {cash:"Tiền mặt",transfer:"Chuyển khoản",card:"Thẻ",mixed:"Hỗn hợp"};
 
 export function FnbOrderHistoryDialog({
   open,
@@ -84,10 +76,7 @@ export function FnbOrderHistoryDialog({
   receiptStyle,
 }: FnbOrderHistoryDialogProps) {
   const { toast } = useToast();
-  const [invoices, setInvoices] = useState<FnbRecentInvoice[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
+  const [revision, setRevision] = useState(0);
   const [reprinting, setReprinting] = useState<string | null>(null);
 
   // ── Void state ──
@@ -97,44 +86,7 @@ export function FnbOrderHistoryDialog({
   const voidLock = useRef(false);
   const [otpTarget, setOtpTarget] = useState<FnbRecentInvoice | null>(null);
 
-  const requestGeneration = useRef(0);
-  const refreshList = useCallback((silent = false) => {
-    if (!open || !branchId) return;
-    const generation = ++requestGeneration.current;
-    if (!silent) setLoading(true);
-    return getFnbRecentInvoices({ branchId, limit: 50, search: search || undefined })
-      .then((next) => {
-        if (generation === requestGeneration.current) { setInvoices(next); setLoadError(null); }
-      })
-      .catch((err: unknown) => {
-        if (generation !== requestGeneration.current) return;
-        setLoadError(err instanceof Error ? err.message : "Vui lòng tải lại.");
-        console.error("[FnbOrderHistory] load invoices failed:", err);
-        if (!silent) {
-          toast({
-            title: "Không tải được lịch sử đơn",
-            description:
-              err instanceof Error
-                ? err.message
-                : "Reload hoặc kiểm tra quyền truy cập",
-            variant: "error",
-          });
-        }
-      })
-      .finally(() => {
-        if (generation === requestGeneration.current) setLoading(false);
-      });
-  }, [open, branchId, search, toast]);
-
-  const refreshLiveHistory = useCallback(() => refreshList(true), [refreshList]);
-  useLiveDataRefresh(refreshLiveHistory, tenantId, branchId, ["kitchen_orders", "invoices"], open && Boolean(branchId));
-
-  useEffect(() => {
-    if (!open || !branchId) return;
-    setInvoices([]);
-    void refreshList();
-    return () => { requestGeneration.current += 1; };
-  }, [open, branchId, refreshList]);
+  const refreshList = useCallback(() => { setRevision(value => value + 1); }, []);
 
   const handleReprint = async (id: string) => {
     setReprinting(id);
@@ -220,6 +172,8 @@ export function FnbOrderHistoryDialog({
         platformCommissionPercent: isPlatformOrder ? detail.platformCommissionPercent : undefined,
         platformCommissionAmount: isPlatformOrder ? detail.platformCommissionAmount : undefined,
       });
+    } catch (error) {
+      toast({title: "Không in lại được", description: error instanceof Error ? error.message : "Thử lại sau.", variant: "error"});
     } finally {
       setReprinting(null);
     }
@@ -296,7 +250,7 @@ export function FnbOrderHistoryDialog({
       });
       setVoidTarget(null);
       setVoidReason("");
-      refreshList(true);
+      refreshList();
     } catch (err) {
       toast({
         title: "Huỷ hoá đơn thất bại",
@@ -309,149 +263,15 @@ export function FnbOrderHistoryDialog({
     }
   };
 
-  const totalTip = invoices.reduce((acc, inv) => acc + inv.tipAmount, 0);
-  const totalRevenue = invoices.reduce((acc, inv) => acc + inv.total, 0);
-
   return (
     <>
       <Dialog open={open} onOpenChange={(next) => { if (!voidLock.current) onOpenChange(next); }}>
-        <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Icon name="receipt_long" size={16} />
-              Lịch sử đơn F&B (24h gần nhất)
-            </DialogTitle>
-            <DialogDescription>
-              Tối đa 50 phiếu gần nhất trong 24 giờ. Xem hoặc in lại phiếu; hủy phiếu đã thu cần quyền hoặc OTP.
-            </DialogDescription>
+        <DialogContent className="flex h-[94dvh] max-h-[94dvh] min-w-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-6xl">
+          <DialogHeader className="shrink-0 px-4 pb-2 pt-4 pr-12">
+            <DialogTitle className="flex items-center gap-2"><Icon name="receipt_long" size={20}/>Lịch sử bán hàng</DialogTitle>
+            <DialogDescription className="text-xs">{storeName || "Chi nhánh đang chọn"} · Tra cứu đơn và in lại</DialogDescription>
           </DialogHeader>
-
-          <DialogBody className="space-y-3">
-            {loadError && <div role="alert" className="rounded-md border border-status-warning/30 bg-status-warning/5 p-2 text-sm"><p>Chưa cập nhật được lịch sử: {loadError}</p><Button size="sm" variant="outline" className="mt-1" onClick={() => void refreshList()}>Tải lại</Button></div>}
-            {/* Summary */}
-            <div className="grid grid-cols-3 gap-2">
-              <div className="rounded-lg bg-surface-container-low px-3 py-2">
-                <div className="text-xs text-muted-foreground">Đang hiển thị</div>
-                <div className="text-lg font-bold tabular-nums">{invoices.length === 0 && (loading || loadError) ? "—" : invoices.length}</div>
-              </div>
-              <div className="rounded-lg bg-surface-container-low px-3 py-2">
-                <div className="text-xs text-muted-foreground">Giá trị các phiếu</div>
-                <div className="text-lg font-bold tabular-nums text-primary">
-                  {invoices.length === 0 && (loading || loadError) ? "—" : formatCurrency(totalRevenue)}
-                </div>
-              </div>
-              <div className="rounded-lg bg-surface-container-low px-3 py-2">
-                <div className="text-xs text-muted-foreground">Tiền tip</div>
-                <div className="text-lg font-bold tabular-nums text-status-success">
-                  {invoices.length === 0 && (loading || loadError) ? "—" : formatCurrency(totalTip)}
-                </div>
-              </div>
-            </div>
-
-            {/* Search */}
-            <Input
-              placeholder="Tìm theo mã hoá đơn, tên khách..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-
-            {/* List */}
-            <ScrollArea className="h-[420px]">
-              {loading ? (
-                <div className="flex items-center justify-center py-12">
-                  <Icon
-                    name="progress_activity"
-                    size={24}
-                    className="animate-spin text-muted-foreground"
-                  />
-                </div>
-              ) : invoices.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                  <Icon name="inbox" size={40} className="mb-2 opacity-60" />
-                  <p className="text-sm">{loadError ? "Chưa tải được dữ liệu — bấm Tải lại" : "Không có phiếu trong 24h qua"}</p>
-                </div>
-              ) : (
-                <div className="space-y-2 pr-2">
-                  {invoices.map((inv) => (
-                    <div
-                      key={inv.id}
-                      className="flex items-center gap-3 p-3 rounded-lg bg-surface-container-low hover:bg-surface-container transition-colors"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold text-sm">{inv.code}</span>
-                          {inv.kitchenOrderNumber && (
-                            <span className="text-xs text-muted-foreground font-mono">
-                              {inv.kitchenOrderNumber}
-                            </span>
-                          )}
-                          {inv.tableName && (
-                            <span className="text-xs px-2 py-0.5 rounded bg-primary-fixed text-primary font-semibold">
-                              {inv.tableName}
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
-                          <span className="font-medium text-primary">{inv.customerName}</span>
-                          <span>•</span>
-                          <span>{formatTime(inv.createdAt)}</span>
-                          <span>•</span>
-                          <span>{METHOD_LABEL[inv.paymentMethod] ?? inv.paymentMethod}</span>
-                          {inv.tipAmount > 0 && (
-                            <>
-                              <span>•</span>
-                              <span className="text-status-success">
-                                Tip {formatCurrency(inv.tipAmount)}
-                              </span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="text-right shrink-0">
-                        <div className="font-bold text-sm tabular-nums text-primary">
-                          {formatCurrency(inv.total)}
-                        </div>
-                      </div>
-
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={reprinting === inv.id}
-                        onClick={() => handleReprint(inv.id)}
-                        className="shrink-0"
-                      >
-                        <Icon
-                          name={reprinting === inv.id ? "progress_activity" : "print"}
-                          size={14}
-                          className={reprinting === inv.id ? "animate-spin" : ""}
-                        />
-                        <span className="ml-1 text-xs">In lại</span>
-                      </Button>
-
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleVoidClick(inv)}
-                        className="shrink-0 text-status-error border-status-error/30 hover:bg-status-error/10"
-                        disabled={!inv.kitchenOrderId || voiding}
-                        title={
-                          !inv.kitchenOrderId
-                            ? "Chưa có đơn bếp tương ứng"
-                            : canVoidPaidBill
-                              ? "Huỷ hoá đơn — hoàn kho + tạo phiếu chi hoàn tiền"
-                              : "Cần manager duyệt OTP"
-                        }
-                      >
-                        <Icon name="money_off" size={14} />
-                        <span className="ml-1 text-xs">{canVoidPaidBill ? "Hủy" : "Xin duyệt"}</span>
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </ScrollArea>
-          </DialogBody>
+          {open && branchId && <FnbSalesHistoryView key={branchId} branchId={branchId} tenantId={tenantId} revision={revision} onReprint={handleReprint} onVoid={handleVoidClick} reprinting={reprinting} voiding={voiding} canVoidPaidBill={canVoidPaidBill}/>}
         </DialogContent>
       </Dialog>
 
@@ -584,7 +404,7 @@ export function FnbOrderHistoryDialog({
               description: `${otpTarget.code} — manager duyệt qua OTP, hoàn kho + phiếu chi hoàn tiền.`,
               variant: "success",
             });
-            refreshList(true);
+            refreshList();
             setOtpTarget(null);
           } catch (err) {
             toast({
