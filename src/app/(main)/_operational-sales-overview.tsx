@@ -54,7 +54,7 @@ function useSalesQuery(scope: string, branchId: string | undefined, from: string
     void refresh();
     return () => { request.current += 1; };
   }, [refresh]);
-  return { data: enabled && result?.key === key ? result.data : null, error: enabled && failure?.key === key ? failure.message : null, at: result?.key === key ? result.at : null, loading, refresh };
+  return { data: enabled && result?.key === key ? result.data : null, error: enabled && failure?.key === key ? failure.message : null, at: result?.key === key ? result.at : null, loading: enabled && loading, refresh };
 }
 
 export default function OperationalSalesOverview() {

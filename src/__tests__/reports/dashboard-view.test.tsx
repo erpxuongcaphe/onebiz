@@ -109,4 +109,13 @@ describe("sales dashboard permission and scope", () => {
     expect(screen.getByTestId("net-sales")).toHaveTextContent("111,111");
     expect(screen.getByLabelText("Ngày bán hàng")).toHaveValue("2026-10-20");
   });
+  it("does not lock refresh after leaving an in-flight chart period", async () => {
+    render(<Dashboard />);
+    await screen.findByTestId("net-sales");
+    state.fetch.mockReturnValueOnce(new Promise(() => {}));
+    fireEvent.click(screen.getByRole("button", { name: "Ngày" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Làm mới" })).toBeDisabled());
+    fireEvent.click(screen.getByRole("button", { name: "Giờ" }));
+    expect(screen.getByRole("button", { name: "Làm mới" })).toBeEnabled();
+  });
 });
