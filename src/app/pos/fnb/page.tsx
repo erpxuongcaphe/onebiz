@@ -3882,7 +3882,7 @@ function FnbPosPageInner() {
               <TableFloorPlan
                 tables={tables}
                 onSelectTable={handleTableSelect}
-                onCreateTableBill={(table) => { orderSelectionGeneration.current += 1; pos.createTab(`${getTableLabel(table)} · Bill mới`, "dine_in", table.id); setShowFloorPlan(false); setMobileCartOpen(true); }}
+                onCreateTableBill={(table) => { orderSelectionGeneration.current += 1; pos.createTab(`${getTableLabel(table)} · Bill mới`, "dine_in", table.id); setShowFloorPlan(false); setMobileCartOpen(false); }}
                 onTransferTable={
                   canTransferTables
                     ? (table) => {
@@ -4516,7 +4516,7 @@ function FnbPosPageInner() {
         onOpenChange={open => { if (!open) setTableBillsId(null); }} onRefresh={() => { void openOrders.refresh(); }} onMerge={() => void handleSameTableMerge()}
         onOpenOrder={order => { void handleOpenSharedOrder(order).then(opened => { if (opened) setTableBillsId(null); }); }}
         onOpenDraft={id => { handleSwitchOrderTab(id); setTableBillsId(null); setShowFloorPlan(false); setMobileCartOpen(true); }}
-        onCreate={() => { const table = tables.find(entry => entry.id === tableBillsId); if (!table) return; orderSelectionGeneration.current += 1; pos.createTab(`${getTableLabel(table)} · Bill mới`, "dine_in", table.id); setTableBillsId(null); setShowFloorPlan(false); setMobileCartOpen(true); }}
+        onCreate={() => { const table = tables.find(entry => entry.id === tableBillsId); if (!table) return; orderSelectionGeneration.current += 1; pos.createTab(`${getTableLabel(table)} · Bill mới`, "dine_in", table.id); setTableBillsId(null); setShowFloorPlan(false); setMobileCartOpen(false); }}
       /></Suspense>}
 
       {/* Transfer table dialog */}
