@@ -1,4 +1,5 @@
 "use client";
+import { fnbManualDiscountAmount } from "@/lib/fnb-manual-discount";
 
 import { changeDraftOrderType } from "../order-type-selection";
 import { finishKitchenSubmissionTabs } from './kitchen-submission-tabs';
@@ -146,7 +147,7 @@ export interface UseFnbPosStateReturn {
   // Discount
   setOrderDiscount: (tabId: string, discount: FnbDiscountInput | undefined) => void;
   /** Day 3 16/05: lưu otpId + reason cho audit log khi checkout. */
-  attachDiscountAudit: (tabId: string, ctx: { otpId: string; reason: string }) => void;
+  attachDiscountAudit: (tabId: string, ctx: { otpId: string; reason: string; cartKey?: string }) => void;
   orderDiscountAmount: number;
 
   // Sprint POS-FNB-EXT-1 (CEO 08/05): order metadata
@@ -579,7 +580,7 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
 
   // Day 3 16/05/2026: lưu otpId + reason để service checkout ghi audit log
   const attachDiscountAudit = useCallback(
-    (tabId: string, ctx: { otpId: string; reason: string }) => {
+    (tabId: string, ctx: { otpId: string; reason: string; cartKey?: string }) => {
       tabsMutationVersionRef.current += 1;
       setTabs((prev) =>
         prev.map((t) =>
@@ -696,14 +697,7 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
   const lineCount = allLines.reduce((sum, l) => sum + l.quantity, 0);
   const unsentLineCount = pendingLines.reduce((sum, l) => sum + l.quantity, 0);
 
-  const orderDiscountAmount = (() => {
-    const disc = activeTab?.orderDiscount;
-    if (!disc || disc.value <= 0) return 0;
-    const discountable = Math.max(0, subtotal - (activeTab?.persistedOrderDiscountAmount ?? 0));
-    if (disc.mode === "amount") return Math.min(disc.value, discountable);
-    // percent
-    return Math.round((discountable * Math.min(disc.value, 100)) / 100);
-  })();
+  const orderDiscountAmount = fnbManualDiscountAmount(allLines, activeTab?.orderDiscount, activeTab?.persistedOrderDiscountAmount);
 
   const total = Math.max(subtotal - orderDiscountAmount, 0);
 

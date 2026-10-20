@@ -2,6 +2,7 @@
 
 /** FnbCart — Right sidebar cart panel for F&B POS */
 
+import { fnbManualDiscountAmount } from "@/lib/fnb-manual-discount";
 import { useId, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
@@ -85,6 +86,7 @@ interface FnbCartProps {
     fee?: number,
   ) => void;
   /** Day 21/05/2026: list shipper khả dụng (staff branch hiện tại). */
+  deliveryStaffBusy?: boolean;
   staffOptions?: { id: string; name: string }[];
   /** Day 21/05/2026: list tier config từ fnb_delivery_fee_tiers. */
   deliveryPolicySlot?: React.ReactNode;
@@ -213,6 +215,7 @@ export function FnbCart({
   onDeliveryStaffChange,
   onDeliveryTierChange,
   staffOptions,
+  deliveryStaffBusy,
   selfDeliveryTiers,
   deliveryPolicySlot,
   discountPresets,
@@ -539,12 +542,12 @@ export function FnbCart({
             (optional, có thể gán sau từ list đơn). */}
         {activeTab?.orderType === "delivery" &&
           (activeTab?.deliveryPlatform ?? "direct") === "direct" &&
-          !activeTab?.kitchenOrderId &&
           (selfDeliveryTiers || staffOptions) && (
             <div className="mt-2 grid grid-cols-2 gap-2">
-              {deliveryPolicySlot && <div className="col-span-2">{deliveryPolicySlot}</div>}
+              <a href="/giao-hang-noi-bo" target="_blank" rel="noopener noreferrer" className="col-span-2 min-h-11 flex items-center text-sm font-medium text-primary underline">Phân công · địa chỉ · theo dõi giao hàng</a>
+              {!activeTab.kitchenOrderId && deliveryPolicySlot && <div className="col-span-2">{deliveryPolicySlot}</div>}
               {/* Tier picker */}
-              {!deliveryPolicySlot && selfDeliveryTiers && selfDeliveryTiers.length > 0 && onDeliveryTierChange && (
+              {!activeTab.kitchenOrderId && !deliveryPolicySlot && selfDeliveryTiers && selfDeliveryTiers.length > 0 && onDeliveryTierChange && (
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-1">
                     <span className="text-xs uppercase font-bold text-on-surface-variant">
@@ -603,12 +606,12 @@ export function FnbCart({
                     </span>
                     <HelpTip>
                       Chọn nhân viên quán đi giao đơn này. Có thể bỏ trống
-                      và gán sau từ danh sách đơn (vd lúc tạo chưa biết ai
-                      rảnh).
+                      và gán sau khi mở lại đơn hoặc ở màn Phân công giao hàng.
                     </HelpTip>
                   </div>
                   <select
                     aria-label="Nhân viên giao"
+                    disabled={deliveryStaffBusy}
                     value={activeTab.deliveryStaffId ?? ""}
                     onChange={(e) =>
                       onDeliveryStaffChange(e.target.value || undefined)
@@ -767,8 +770,11 @@ export function FnbCart({
             </div>
           ) : (
             <DiscountRow
-              key={`${activeTab?.id}:${activeTab?.orderDiscount?.mode}:${activeTab?.orderDiscount?.value}`}
+              key={`${activeTab?.id}:${activeTab?.orderDiscount?.mode}:${activeTab?.orderDiscount?.value}:${activeTab?.orderDiscount?.lineIds?.join(",")}`}
               discount={activeTab?.orderDiscount}
+              lines={lines}
+              needsApproval={!!activeTab?.orderDiscount?.value && !activeTab?.discountAuditCtx}
+              persisted={persistedOrderDiscountAmount}
               onChange={onDiscountChange}
               presets={discountPresets}
             />
@@ -786,7 +792,7 @@ export function FnbCart({
         )}
         {manualDiscountAmount > 0 && (
           <div className="flex items-center justify-between">
-            <span className="text-sm text-status-warning">Giảm giá thủ công</span>
+            <span className="text-sm text-status-warning">{activeTab?.orderDiscount?.lineIds ? "Giảm các món đã chọn" : "Giảm giá thủ công"}</span>
             <span className="text-sm font-medium text-status-warning tabular-nums">
               -{formatCurrency(manualDiscountAmount)}
             </span>
@@ -1037,7 +1043,13 @@ export function DiscountRow({
   discount,
   onChange,
   presets,
+  lines,
+  needsApproval = false,
+  persisted = 0,
 }: {
+  persisted?: number;
+  needsApproval?: boolean;
+  lines?: FnbOrderLine[];
   discount: FnbDiscountInput | undefined;
   onChange: (d: FnbDiscountInput | undefined) => void;
   presets?: { id: string; name: string; mode: "amount" | "percent"; value: number }[];
@@ -1046,14 +1058,18 @@ export function DiscountRow({
   const [localValue, setLocalValue] = useState(
     discount?.value ? String(discount.value) : "",
   );
+  const [scope, setScope] = useState<"bill" | "items">(discount?.lineIds ? "items" : "bill");
+  const [selectedIds, setSelectedIds] = useState<string[]>(discount?.lineIds ?? []);
+  const availableIds = selectedIds.filter(id => lines?.some(line => line.id === id));
   const [presetMenuOpen, setPresetMenuOpen] = useState(false);
 
   const normalized = mode === "amount" ? localValue.replace(/[.,\s]/g, "") : localValue.replace(",", ".");
   const validNumber = mode === "amount" ? /^\d+$/.test(normalized) : /^\d+(?:\.\d{1,2})?$/.test(normalized);
   const value = Number(normalized);
   const invalid = localValue !== "" && (!validNumber || !Number.isFinite(value) || value < 0 || (mode === "amount" && !Number.isSafeInteger(value)) || (mode === "percent" && value > 100));
-  const canApply = !invalid && value > 0;
-  const apply = () => { if (canApply) onChange({ mode, value }); };
+  const previewAmount = lines && !invalid ? fnbManualDiscountAmount(lines, { mode, value, ...(scope === "items" ? { lineIds: availableIds } : {}) }, persisted) : null;
+  const canApply = !invalid && value > 0 && (scope === "bill" || availableIds.length > 0) && (previewAmount === null || previewAmount > 0);
+  const apply = () => { if (canApply) onChange({ mode, value, ...(scope === "items" ? { lineIds: availableIds } : {}) }); };
 
   // Sprint POS-FNB-EXT-1: Apply preset từ dropdown — set both mode + value
   const applyPreset = (preset: { mode: "amount" | "percent"; value: number }) => {
@@ -1064,6 +1080,16 @@ export function DiscountRow({
 
   return (
     <div className="space-y-1.5">
+      {lines && <div className="space-y-2">
+        <div role="group" aria-label="Phạm vi giảm giá" className="flex flex-wrap gap-2">
+          {(["bill", "items"] as const).map(option => <Button key={option} type="button" variant={scope === option ? "default" : "outline"} aria-pressed={scope === option} onClick={() => setScope(option)}>{option === "bill" ? "Toàn bill" : "Chọn món giảm giá"}</Button>)}
+        </div>
+        {scope === "items" && <fieldset className="max-h-48 overflow-auto rounded-md border p-2">
+          <legend className="px-1 text-xs">Chọn món · áp dụng toàn bộ số lượng của dòng, gồm topping</legend>
+          {lines.map(line => <label key={line.id} className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" checked={availableIds.includes(line.id)} onChange={event => setSelectedIds(ids => event.target.checked ? [...ids.filter(id => id !== line.id), line.id] : ids.filter(id => id !== line.id))} /><span className="min-w-0 flex-1">{line.quantity} × {line.productName}{line.variantLabel ? ` · ${line.variantLabel}` : ""}{line.note ? ` · ${line.note}` : ""}</span><span className="tabular-nums">{formatCurrency(line.lineTotal)}đ</span></label>)}
+          {!availableIds.length && <p className="text-xs text-muted-foreground">Chọn ít nhất một món để áp dụng.</p>}
+        </fieldset>}
+      </div>}
       <div className="flex items-center gap-2">
         <span className="text-xs text-muted-foreground shrink-0">Giảm giá</span>
         <Input
@@ -1122,6 +1148,8 @@ export function DiscountRow({
           </div>
         )}
       </div>
+      {previewAmount !== null && value > 0 && <p className="text-xs font-medium text-primary">Dự kiến giảm {formatCurrency(previewAmount)}đ {scope === "items" ? `trên ${availableIds.length} dòng món được chọn` : "trên toàn bill"}.</p>}
+      {needsApproval && <p role="status" className="text-xs text-status-warning">Giảm giá cần được duyệt cho bill hiện tại. Bấm Áp dụng để xin duyệt lại.</p>}
       {invalid && <p role="alert" className="text-xs text-status-error">{mode === "percent" ? "Nhập tỷ lệ giảm từ 0 đến 100%." : "Nhập số tiền giảm hợp lệ."}</p>}
       <div className="flex flex-wrap items-center gap-2">
         <Button type="button" disabled={!canApply} onClick={apply} className="min-h-11">Áp dụng giảm giá</Button>
