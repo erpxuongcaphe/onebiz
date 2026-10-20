@@ -265,7 +265,7 @@ export function FnbOrderHistoryDialog({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={(next) => { if (!voidLock.current) onOpenChange(next); }}>
+      <Dialog open={open} trackFormChanges={false} onOpenChange={(next) => { if (!voidLock.current) onOpenChange(next); }}>
         <DialogContent className="flex h-[94dvh] max-h-[94dvh] min-w-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-6xl">
           <DialogHeader className="shrink-0 px-4 pb-2 pt-4 pr-12">
             <DialogTitle className="flex items-center gap-2"><Icon name="receipt_long" size={20}/>Lịch sử bán hàng</DialogTitle>
