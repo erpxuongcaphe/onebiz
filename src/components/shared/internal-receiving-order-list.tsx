@@ -11,32 +11,45 @@ import {formatDate,formatNumber} from '@/lib/format';
 import {exportToExcel} from '@/lib/utils/export';
 import type {InternalReceivingOrder} from '@/lib/services/supabase/internal-receiving';
 import {EMPTY_RECEIVING_FILTERS,RECEIVING_STATUS_LABELS,filterReceivingOrders,receivingMetrics,receivingSortValue,receivingStatus,type ReceivingListFilters} from '@/lib/internal-receiving-list';
+import {internalReceivingViewSchema,receivingPresetRange} from '@/lib/receiving-view-state';
+import {useReceivingVietnamDay,useReceivingViewMemory} from '@/lib/hooks/use-receiving-view-memory';
+import {STANDARD_LIST_PRESETS_WITH_ALL} from '@/lib/utils/list-date-preset-range';
+import type {DatePresetValue} from '@/components/shared/filter-sidebar';
 
 interface Props {
   orders:InternalReceivingOrder[];loading:boolean;busy:boolean;selected?:string;canExport:boolean;
   onOpen:(id:string)=>void;onClose:()=>void;detail:ReactNode;
+  memoryKey?:string;initialPreset?:'today'|'all';
 }
-export function InternalReceivingOrderList({orders,loading,busy,selected,canExport,onOpen,onClose,detail}:Props) {
-  const [filters,setFilters]=useState<ReceivingListFilters>(EMPTY_RECEIVING_FILTERS);
+export function InternalReceivingOrderList({orders,loading,busy,selected,canExport,onOpen,onClose,detail,memoryKey,initialPreset='today'}:Props) {
+  const [filters,setFilters]=useState<ReceivingListFilters & {preset:DatePresetValue}>({...EMPTY_RECEIVING_FILTERS,preset:initialPreset});
   const [sorting,setSorting]=useState<SortingState>([{id:'createdAt',desc:true}]);
   const [page,setPage]=useState(0),[size,setSize]=useState(25);
   const [exporting,setExporting]=useState(false),[exportError,setExportError]=useState('');
   const [full,setFull]=useState(false);
+  const day=useReceivingVietnamDay();
+  const initial=useMemo(()=>({filters:{...EMPTY_RECEIVING_FILTERS,preset:initialPreset},sorting:[{id:'createdAt',desc:true}],page:0,size:25,full:false}),[initialPreset]);
+  const memory=useReceivingViewMemory({key:memoryKey,snapshot:{filters,sorting,page,size,full},initial,schema:internalReceivingViewSchema,loading,restore:value=>{setFilters(initialPreset==='all'?{...EMPTY_RECEIVING_FILTERS,preset:'all'}:value.filters);setSorting(value.sorting);setPage(value.page);setSize(value.size);setFull(value.full);}});
+  const effectiveFilters=useMemo(()=>{
+    const range=receivingPresetRange(filters.preset,day);
+    return filters.preset==='custom'?filters:{...filters,from:range.from??'',to:range.to??''};
+  },[filters,day]);
   const sources=useMemo(()=>[...new Set(orders.map(o=>o.fromBranch))].sort(),[orders]);
   const receivers=useMemo(()=>[...new Set(orders.flatMap(o=>o.receipts.map(r=>r.createdBy)).filter(Boolean))].sort(),[orders]);
-  const filtered=useMemo(()=>filterReceivingOrders(orders,filters).sort((a,b)=>{
+  const filtered=useMemo(()=>filterReceivingOrders(orders,effectiveFilters).sort((a,b)=>{
     for(const sort of sorting){const av=receivingSortValue(a,sort.id),bv=receivingSortValue(b,sort.id);
       const result=typeof av==='number'&&typeof bv==='number'?av-bv:String(av).localeCompare(String(bv),'vi',{numeric:true});
       if(result) return sort.desc?-result:result;}
     return a.id.localeCompare(b.id);
-  }),[orders,filters,sorting]);
-  const rangeError=filters.from && filters.to && filters.from>filters.to ? 'Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.' : '';
+  }),[orders,effectiveFilters,sorting]);
+  const rangeError=effectiveFilters.from && effectiveFilters.to && effectiveFilters.from>effectiveFilters.to ? 'Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.' : '';
   const rows=rangeError?[]:filtered;
   const pageRows=rows.slice(page*size,(page+1)*size);
   const expanded=pageRows.findIndex(row=>row.id===selected);
   useEffect(()=>{if(selected){const index=filtered.findIndex(row=>row.id===selected);if(index>=0)setPage(Math.floor(index/size));}},[selected,filtered,size]);
-  useEffect(()=>{setPage(current=>Math.min(current,Math.max(0,Math.ceil(rows.length/size)-1)));},[rows.length,size]);
-  const patch=(value:Partial<ReceivingListFilters>)=>{setFilters(current=>({...current,...value}));setPage(0);};
+  useEffect(()=>{if(!loading&&memory.ready)setPage(current=>Math.min(current,Math.max(0,Math.ceil(rows.length/size)-1)));},[rows.length,size,loading,memory.ready]);
+  const patch=(value:Partial<ReceivingListFilters & {preset:DatePresetValue}>)=>{setFilters(current=>({...current,...value,...('from' in value||'to' in value?{preset:'custom' as const}:value.preset&&value.preset!=='custom'?{from:'',to:''}:{})}));setPage(0);};
+  const reset=()=>{setFilters({...EMPTY_RECEIVING_FILTERS,preset:'today'});setPage(0);};
   const chips:ListFilterChip[]=(['search','status','source','receiver','purpose','from','to'] as const).filter(key=>!!filters[key]).map(key=>({key,label:({search:'Tìm',status:'Trạng thái',source:'Nơi xuất',receiver:'Người nhận',purpose:'Công dụng',from:'Từ ngày',to:'Đến ngày'})[key],value:key==='status'?RECEIVING_STATUS_LABELS[filters.status as keyof typeof RECEIVING_STATUS_LABELS]:key==='purpose'?({stock:'Nhập tồn',expense:'Chi phí vận hành',review:'Cần kiểm tra'})[filters.purpose as 'stock'|'expense'|'review']:filters[key],onClear:()=>patch({[key]:''})}));
   const columns=useMemo<ColumnDef<InternalReceivingOrder>[]>(()=>[
     {accessorKey:'code',header:'Mã đơn',cell:({row})=><span className="font-medium text-primary">{row.original.code}</span>},
@@ -68,12 +81,13 @@ export function InternalReceivingOrderList({orders,loading,busy,selected,canExpo
     }catch(error){setExportError(error instanceof Error?error.message:'Không xuất được file.');}finally{setExporting(false);}
   }
   const selectClass='h-10 min-w-0 rounded-md border bg-background px-2 text-sm';
-  return <div className="@container min-w-0 space-y-3">
+  return <div ref={memory.containerRef} className="@container min-w-0 space-y-3">
     <div className="flex flex-wrap items-center gap-2"><Input className="max-w-lg" aria-label="Tìm đơn nhận nội bộ" placeholder="Mã đơn, mã hàng, người xuất/nhận, ghi chú…" value={filters.search} onChange={e=>patch({search:e.target.value})}/>
-      <Button variant="outline" onClick={()=>{setFilters(EMPTY_RECEIVING_FILTERS);setPage(0);}}><Icon name="filter_alt_off"/>Xóa bộ lọc</Button>
+      <Button variant="outline" onClick={reset}><Icon name="filter_alt_off"/>Đặt lại</Button>
       {canExport&&<><Button variant="outline" disabled={loading||exporting||!!rangeError||!rows.length} onClick={()=>void download(false)}><Icon name="download"/>Danh sách</Button><Button variant="outline" disabled={loading||exporting||!!rangeError||!rows.length} onClick={()=>void download(true)}><Icon name="download"/>Chi tiết hàng</Button></>}
     </div>
     <div role="group" aria-label="Trạng thái nhận nhanh" className="flex flex-wrap gap-1 border-b">{[['','Tất cả'],['pending','Chờ nhận'],['partial','Nhận một phần'],['received','Đã nhận đủ'],['cancelled','Đã hủy']].map(([value,label])=><button key={value} type="button" aria-pressed={filters.status===value} className={`border-b-2 px-3 py-2 text-sm ${filters.status===value?'border-primary font-medium text-primary':'border-transparent text-muted-foreground'}`} onClick={()=>patch({status:value})}>{label}</button>)}</div>
+    <label className="flex flex-wrap items-center gap-2 text-sm">Thời gian<select aria-label="Thời gian nhận nội bộ" className={selectClass} value={filters.preset} onChange={e=>patch({preset:e.target.value as DatePresetValue})}>{STANDARD_LIST_PRESETS_WITH_ALL.map(p=><option key={p.value} value={p.value}>{p.label}</option>)}</select><span className="text-muted-foreground">{effectiveFilters.from||effectiveFilters.to?`${effectiveFilters.from||'…'} → ${effectiveFilters.to||'…'}`:'Tất cả thời gian'}</span></label>
     <details className="border-y py-2" onKeyDown={event=>{if(event.key==='Escape')event.currentTarget.open=false;}}><summary className="cursor-pointer text-sm font-medium">Bộ lọc chứng từ{chips.length?` · ${chips.length} điều kiện`:''}</summary><div className="grid gap-3 py-3 sm:grid-cols-2 xl:grid-cols-4">
       <label className="grid gap-1 text-sm">Trạng thái nhận<select className={selectClass} value={filters.status} onChange={e=>patch({status:e.target.value})}><option value="">Tất cả trạng thái</option>{Object.entries(RECEIVING_STATUS_LABELS).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
       <label className="grid gap-1 text-sm">Chi nhánh xuất<select className={selectClass} value={filters.source} onChange={e=>patch({source:e.target.value})}><option value="">Tất cả nơi xuất</option>{sources.map(name=><option key={name}>{name}</option>)}</select></label>
@@ -83,10 +97,10 @@ export function InternalReceivingOrderList({orders,loading,busy,selected,canExpo
       <label className="grid gap-1 text-sm">Từ ngày<Input type="date" value={filters.from} onChange={e=>patch({from:e.target.value})}/></label>
       <label className="grid gap-1 text-sm">Đến ngày<Input type="date" value={filters.to} onChange={e=>patch({to:e.target.value})}/></label>
     </div></details>
-    <FilterChips filters={chips} onClearAll={()=>{setFilters(EMPTY_RECEIVING_FILTERS);setPage(0);}}/>
+    <FilterChips filters={chips} onClearAll={reset}/>
     {(rangeError||exportError)&&<p role="alert" className="text-sm text-destructive">{rangeError||exportError}</p>}
     <div className="flex flex-wrap items-center gap-2 text-sm"><div role="group" aria-label="Mức độ chi tiết" className="inline-flex border"><Button size="sm" variant={full?'ghost':'secondary'} aria-pressed={!full} onClick={()=>setFull(false)}>Gọn</Button><Button size="sm" variant={full?'secondary':'ghost'} aria-pressed={full} onClick={()=>setFull(true)}>Đầy đủ</Button></div><label className="flex items-center gap-2">Sắp xếp<select aria-label="Sắp xếp theo" className={selectClass} value={sorting[0]?.id??'createdAt'} onChange={e=>{setSorting([{id:e.target.value,desc:sorting[0]?.desc??true}]);setPage(0);}}>{columns.filter(column=>column.id!=='action').map(column=>{const id='accessorKey' in column?String(column.accessorKey):column.id??'';return <option key={id} value={id}>{String(column.header)}</option>;})}</select></label><select aria-label="Thứ tự sắp xếp" className={selectClass} value={sorting[0]?.desc?'desc':'asc'} onChange={e=>{setSorting([{id:sorting[0]?.id??'createdAt',desc:e.target.value==='desc'}]);setPage(0);}}><option value="desc">Giảm dần</option><option value="asc">Tăng dần</option></select></div>
-    <div className="min-h-[360px] min-w-0"><DataTable key={full?'full':'compact'} columns={displayedColumns} data={pageRows} loading={loading} density="compact" columnToggle selectable={false} getRowId={row=>row.id}
+    <div className="min-h-[360px] min-w-0"><DataTable key={full?'full':'compact'} columns={displayedColumns} data={memory.ready?pageRows:[]} loading={loading||!memory.ready} density="compact" columnToggle selectable={false} getRowId={row=>row.id}
       defaultColumnVisibility={full?Object.fromEntries(columns.map(column=>['accessorKey' in column?String(column.accessorKey):column.id??'',true])):undefined}
       sorting={sorting} onSortingChange={next=>{setSorting(next);setPage(0);}} sortableColumnIds={columns.filter(c=>c.id!=='action').map(c=>'accessorKey' in c?String(c.accessorKey):c.id??'')}
       pageIndex={page} pageSize={size} pageCount={Math.ceil(rows.length/size)} total={rows.length} onPageChange={setPage} onPageSizeChange={value=>{setSize(value);setPage(0);}}

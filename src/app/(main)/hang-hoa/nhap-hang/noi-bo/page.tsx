@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useBranchFilter } from '@/lib/contexts';
+import { useAuth,useBranchFilter } from '@/lib/contexts';
 import { usePermissions } from '@/lib/permissions/use-permission';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,7 @@ import { InternalReceivingOrderList } from '@/components/shared/internal-receivi
 import { receivingStatus } from '@/lib/internal-receiving-list';
 import { Icon } from '@/components/ui/icon';
 import { ReceivingSourceTabs } from '@/components/shared/receiving-source-tabs';
+import {receivingMemoryKey} from '@/lib/receiving-view-state';
 
 export default function InternalReceivingPage() {
   return <Suspense fallback={<p className="p-5">Đang tải phiếu nhận…</p>}><InternalReceivingWorkspace /></Suspense>;
@@ -28,6 +29,7 @@ function InternalReceivingWorkspace() {
   const requestedSale = params.get('sale');
   const requestedBranch = params.get('branch');
   const scope = useBranchFilter();
+  const {user}=useAuth();
   const [localBranch,setLocalBranch] = useState<string>();
   const chosenBranch = localBranch ?? requestedBranch ?? scope.activeBranchId ?? 'all';
   const routeBranch = scope.branches.find(branch => branch.id === chosenBranch);
@@ -125,7 +127,7 @@ function InternalReceivingWorkspace() {
     <header className="flex flex-wrap items-center justify-between gap-3">
       <div><h1 className="text-xl font-semibold text-primary">Nhập hàng</h1><p className="text-sm text-muted-foreground">{currentBranch?.name ?? 'Các chi nhánh được phép'}</p></div>
       <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <label className="flex min-w-0 flex-col gap-1 text-sm sm:flex-row sm:items-center">Chi nhánh nhận<select aria-label="Chi nhánh nhận" disabled={busy} className="h-10 w-full min-w-0 max-w-full rounded-md border bg-background px-2 sm:max-w-72" value={chosenBranch} onChange={e=>setLocalBranch(e.target.value)}><option value="all">Tất cả chi nhánh được phép</option>{scope.branches.map(branch=><option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label>
+        <label className="flex min-w-0 flex-col gap-1 text-sm sm:flex-row sm:items-center">Chi nhánh nhận<select aria-label="Chi nhánh nhận" disabled={busy} className="h-10 w-full min-w-0 max-w-full rounded-md border bg-background px-2 sm:max-w-72" value={chosenBranch} onChange={e=>{const url=new URL(window.location.href);url.searchParams.set('branch',e.target.value);url.searchParams.delete('sale');window.history.replaceState(null,'',url);setLocalBranch(e.target.value);}}><option value="all">Tất cả chi nhánh được phép</option>{scope.branches.map(branch=><option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label>
         {hasPermission('finance.view_cash_book')&&<Button nativeButton={false} variant="outline" render={<Link href={`/tai-chinh/thu-nhap-chi-phi?category=CP-VH-NOIBO&branch=${encodeURIComponent(chosenBranch)}`}/>}><Icon name="receipt_long"/>Vật tư nội bộ</Button>}
         <Button variant="outline" disabled={busy || loading} onClick={() => void refresh()}><Icon name="refresh"/>Cập nhật</Button>
       </div>
@@ -134,7 +136,7 @@ function InternalReceivingWorkspace() {
     {error && <p role="alert" className="rounded-md border border-status-error/30 bg-status-error/5 p-3 text-status-error">{error}</p>}
     {uom.error && <p role="alert" className="text-sm text-status-error">Không tải được quy đổi: {uom.error}. Có thể nhận theo đơn vị gốc trên phiếu giao.</p>}
     {success && <p role="status" className="rounded-md bg-status-success/10 p-3 text-status-success">{success}</p>}
-    <InternalReceivingOrderList orders={orders} loading={loading} busy={busy} selected={selected} canExport={hasPermission('reports.export')} onOpen={openOrder} onClose={()=>{if(!busy)setSelected(undefined);}} detail={<section className="sticky left-0 w-full min-w-0 max-w-full border-y border-primary/20 bg-background p-3 sm:p-5 md:w-[calc(100cqw-2px)]">
+    <InternalReceivingOrderList memoryKey={receivingMemoryKey(user?.tenantId,user?.id,chosenBranch,requestedSale?'internal-source':'internal')} initialPreset={requestedSale?'all':'today'} orders={orders} loading={loading} busy={busy} selected={selected} canExport={hasPermission('reports.export')} onOpen={openOrder} onClose={()=>{if(!busy)setSelected(undefined);}} detail={<section className="sticky left-0 w-full min-w-0 max-w-full border-y border-primary/20 bg-background p-3 sm:p-5 md:w-[calc(100cqw-2px)]">
       {!order ? <p className="py-8 text-center text-muted-foreground">Chọn đơn giao để nhận hàng.</p> : <>
         <div className="flex items-center justify-between gap-2"><h2 className="font-semibold text-primary">{order.code} · {editing ? 'Sửa số thực nhận đã ghi' : receivingStatus(order)==='received'?'Đã nhận đủ':'Chi tiết nhận hàng'}</h2><Button size="icon" variant="ghost" title="Đóng chi tiết" aria-label="Đóng chi tiết" disabled={busy} onClick={()=>setSelected(undefined)}><Icon name="close"/></Button></div>
         {order.policyVersion === 0 && <p className="mt-1 text-xs text-muted-foreground">Giữ ghi nhận theo phiếu gốc</p>}

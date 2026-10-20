@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { ColumnDef } from "@tanstack/react-table";
+import { ColumnDef,type SortingState } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
@@ -23,7 +23,7 @@ import {
   type DatePresetValue,
 } from "@/components/shared/filter-sidebar";
 // CEO 06/06/2026 Phase 3: chuẩn hoá 11 preset thời gian
-import { computeListPresetRange, STANDARD_LIST_PRESETS } from "@/lib/utils/list-date-preset-range";
+import { STANDARD_LIST_PRESETS,STANDARD_LIST_PRESETS_WITH_ALL } from "@/lib/utils/list-date-preset-range";
 import {
   InlineDetailPanel,
   DetailTabs,
@@ -32,7 +32,7 @@ import {
   AuditHistoryTab,
 } from "@/components/shared/inline-detail-panel";
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
-import { useToast, useBranchFilter } from "@/lib/contexts";
+import { useToast, useBranchFilter,useAuth } from "@/lib/contexts";
 import { usePermissions } from "@/lib/permissions/use-permission";
 import { DocumentNoteBox } from "@/components/shared/document-note-box";
 import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
@@ -84,8 +84,12 @@ import { useTxRowPermissions } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { ReceivingSourceTabs } from "@/components/shared/receiving-source-tabs";
+import {receivingMemoryKey,receivingPresetRange,supplierReceivingViewSchema} from '@/lib/receiving-view-state';
+import {useReceivingVietnamDay,useReceivingViewMemory} from '@/lib/hooks/use-receiving-view-memory';
 
 type ViewMode = "list" | "kanban";
+const SUPPLIER_SORT_FIELDS:Record<string,string>={code:'code',date:'created_at',supplierName:'supplier_name',total:'total',paid:'paid',amountOwed:'debt'};
+const DEFAULT_SUPPLIER_VIEW={search:'',searchField:'all',page:0,pageSize:15,selectedStatuses:[] as string[],datePreset:'today' as DatePresetValue,dateFrom:'',dateTo:'',creatorFilter:'',importerFilter:'',costReturnFilter:'all',viewMode:'list' as ViewMode,boardSort:'oldest',sorting:[{id:'date',desc:true}]};
 
 /* ------------------------------------------------------------------ */
 /*  Status config — full pipeline                                      */
@@ -474,6 +478,7 @@ function PurchaseOrderDetail({
 /* ------------------------------------------------------------------ */
 export default function NhapHangPage() {
   const { toast } = useToast();
+  const {user}=useAuth();
   const { activeBranchId: globalBranchId, currentBranch: globalBranch, branches, isReady: branchesReady } = useBranchFilter();
   const [requestedBranch,setRequestedBranch] = useState<string|null>();
   const branchDenied = !!requestedBranch && requestedBranch!=='all' && !branches.some(branch=>branch.id===requestedBranch);
@@ -535,9 +540,9 @@ export default function NhapHangPage() {
   // Stars
   const { starred, toggle: toggleStar } = useStarredSet();
 
-  // Keep the complete history visible until the user explicitly filters it.
+  // All statuses remain available; a fresh view starts with today's receipts.
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
-  const [datePreset, setDatePreset] = useState<DatePresetValue>("all");
+  const [datePreset, setDatePreset] = useState<DatePresetValue>("today");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [creatorFilter, setCreatorFilter] = useState("");
@@ -547,6 +552,18 @@ export default function NhapHangPage() {
   // CEO 08/07: xem tất cả chi nhánh (cục bộ) khi bảng trống vì lọc chi nhánh.
   const [viewAllBranches, setViewAllBranches] = useState(false);
   const [otherBranchCount, setOtherBranchCount] = useState(0);
+  const [sorting,setSorting]=useState<SortingState>([{id:'date',desc:true}]);
+  const day=useReceivingVietnamDay();
+  const memory=useReceivingViewMemory({
+    key:requestedBranch===undefined||!branchesReady||branchDenied?undefined:receivingMemoryKey(user?.tenantId,user?.id,activeBranchId??'all','supplier'),
+    snapshot:{search,searchField,page,pageSize,selectedStatuses,datePreset,dateFrom,dateTo,creatorFilter,importerFilter,costReturnFilter,viewMode,boardSort,sorting},
+    initial:DEFAULT_SUPPLIER_VIEW,schema:supplierReceivingViewSchema,loading,
+    restore:value=>{
+      const sourceSearch=new URLSearchParams(window.location.search).get('search')?.trim();
+      setSearch(sourceSearch||value.search);setSearchField(sourceSearch?'all':value.searchField);setPage(sourceSearch?0:value.page);setPageSize(value.pageSize);setSelectedStatuses(sourceSearch?[]:value.selectedStatuses);
+      setDatePreset(sourceSearch?'all':value.datePreset);setDateFrom(sourceSearch?'':value.dateFrom);setDateTo(sourceSearch?'':value.dateTo);setCreatorFilter(sourceSearch?'':value.creatorFilter);setImporterFilter(sourceSearch?'':value.importerFilter);setCostReturnFilter(sourceSearch?'all':value.costReturnFilter);setViewMode(value.viewMode);setBoardSort(value.boardSort);setSorting(value.sorting);
+    },
+  });
   const duocXemToanChuoi = hasAny(["reports.view_all_branches", "system.manage_branches"]);
   // Đổi chi nhánh ở global switcher → về lại chế độ lọc theo chi nhánh.
   useEffect(() => {
@@ -651,7 +668,7 @@ export default function NhapHangPage() {
   /* ---- Fetch data ---- */
   const fetchData = useCallback(async () => {
     const request = ++fetchRequest.current;
-    if (permissionsLoading || !branchesReady || requestedBranch===undefined) return;
+    if (permissionsLoading || !branchesReady || requestedBranch===undefined || !memory.ready) return;
     if (branchDenied) {setData([]);setTotal(0);setOtherBranchCount(0);setLoading(false);return;}
     if (!activeBranchId && !duocXemToanChuoi) {
       setData([]);
@@ -667,7 +684,7 @@ export default function NhapHangPage() {
     // Không có try/finally thì truy vấn lỗi là cờ loading không bao giờ tắt →
     // trang treo mãi ở vòng xoay, người dùng không biết vì sao.
     try {
-    const presetRange = computeListPresetRange(datePreset);
+    const presetRange = receivingPresetRange(datePreset,day);
     const effectiveDateFrom = datePreset === "custom" ? dateFrom : presetRange.from;
     const effectiveDateTo = datePreset === "custom" ? dateTo : presetRange.to;
     const commonFilters = {
@@ -679,10 +696,11 @@ export default function NhapHangPage() {
       ...(effectiveDateTo && { dateTo: effectiveDateTo }),
     };
     const branchScope = duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId;
-    const query = { search, searchField, branchId: branchScope, filters: commonFilters };
+    const query = { search, searchField, branchId: branchScope, filters: commonFilters,sortBy:SUPPLIER_SORT_FIELDS[sorting[0]?.id??'date'],sortOrder:sorting[0]?.desc===false?'asc' as const:'desc' as const };
     const boardRows = viewMode === "kanban" ? await getPurchaseOrderBoard(query) : null;
     const result = boardRows ? { data: boardRows, total: boardRows.length } : await getPurchaseOrders({ page, pageSize, ...query });
     if (request !== fetchRequest.current) return;
+    if(viewMode==='list'&&page>0&&page*pageSize>=result.total){setPage(Math.max(0,Math.ceil(result.total/pageSize)-1));return;}
     setData(result.data);
     setTotal(result.total);
     // Bảng trống vì lọc chi nhánh? Đếm phiếu ở chi nhánh khác để gợi ý (cùng bộ
@@ -712,16 +730,19 @@ export default function NhapHangPage() {
     } finally {
       if (request === fetchRequest.current) setLoading(false);
     }
-  }, [viewMode, page, pageSize, search, searchField, selectedStatuses, creatorFilter, importerFilter, costReturnFilter, activeBranchId, datePreset, dateFrom, dateTo, viewAllBranches, toast, duocXemToanChuoi, permissionsLoading,branchesReady,requestedBranch,branchDenied]);
+  }, [viewMode, page, pageSize, search, searchField, selectedStatuses, creatorFilter, importerFilter, costReturnFilter, activeBranchId, datePreset, dateFrom, dateTo, viewAllBranches, toast, duocXemToanChuoi, permissionsLoading,branchesReady,requestedBranch,branchDenied,memory.ready,sorting,day]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
+  const lastFilterSignature=useRef<string|undefined>(undefined);
   useEffect(() => {
-    setPage(0);
-    setExpandedRow(null);
-  }, [search, selectedStatuses, datePreset, dateFrom, dateTo, creatorFilter, importerFilter, costReturnFilter]);
+    if(!memory.ready){lastFilterSignature.current=undefined;return;}
+    const signature=JSON.stringify([search,selectedStatuses,datePreset,dateFrom,dateTo,creatorFilter,importerFilter,costReturnFilter,searchField]);
+    if(lastFilterSignature.current!==undefined&&lastFilterSignature.current!==signature){setPage(0);setExpandedRow(null);}
+    lastFilterSignature.current=signature;
+  }, [search, selectedStatuses, datePreset, dateFrom, dateTo, creatorFilter, importerFilter, costReturnFilter,searchField,memory.ready]);
 
   /* ---- Summary ---- */
   const totalAmountOwed = data.reduce((sum, o) => sum + o.amountOwed, 0);
@@ -1062,10 +1083,10 @@ export default function NhapHangPage() {
     return STANDARD_LIST_PRESETS.find((item) => item.value === datePreset)?.label ?? "Thời gian";
   }, [dateFrom, datePreset, dateTo]);
   const defaultStatuses = useMemo<string[]>(() => [], []);
-  const clearListFilters = useCallback(() => { setSelectedStatuses(defaultStatuses); setDatePreset("all"); setDateFrom(""); setDateTo(""); setCreatorFilter(""); setImporterFilter(""); setCostReturnFilter("all"); }, [defaultStatuses]);
+  const clearListFilters = useCallback(() => { setSelectedStatuses(defaultStatuses); setDatePreset("today"); setDateFrom(""); setDateTo(""); setCreatorFilter(""); setImporterFilter(""); setCostReturnFilter("all"); }, [defaultStatuses]);
   const filterChips = useMemo<ListFilterChip[]>(() => {
     const chips: ListFilterChip[] = [];
-    if (datePreset !== "all") chips.push({ key: "date", label: "Thời gian", value: datePresetLabel, onClear: () => { setDatePreset("all"); setDateFrom(""); setDateTo(""); } });
+    if(datePreset!=="all") chips.push({ key: "date", label: "Thời gian", value: datePresetLabel, onClear: () => { setDatePreset("all"); setDateFrom(""); setDateTo(""); } });
     if (selectedStatuses.join("|") !== defaultStatuses.join("|")) chips.push({ key: "status", label: "Trạng thái", value: selectedStatuses.length === 0 ? "Tất cả" : selectedStatuses.map((value) => statuses.find((item) => item.value === value)?.label ?? value).join(", "), onClear: () => setSelectedStatuses(defaultStatuses) });
     if (creatorFilter) chips.push({ key: "creator", label: "Người tạo", value: creatorFilter, onClear: () => setCreatorFilter("") });
     if (importerFilter) chips.push({ key: "importer", label: "Người nhập", value: importerFilter, onClear: () => setImporterFilter("") });
@@ -1122,8 +1143,9 @@ export default function NhapHangPage() {
         ]}
       />
 
-      <ReceivingSourceTabs source="supplier" branch={activeBranchId ?? 'all'} />
-      <div className="px-3 py-3"><label className="flex flex-wrap items-center gap-2 text-sm">Chi nhánh nhận<select aria-label="Chi nhánh nhận NCC" className="h-10 max-w-full rounded-md border bg-background px-2" value={activeBranchId??'all'} onChange={event=>{setRequestedBranch(event.target.value);setPage(0);setData([]);setTotal(0);setExpandedRow(null);}}>{duocXemToanChuoi?<option value="all">Tất cả chi nhánh được phép</option>:<option value="all" disabled>Chọn chi nhánh</option>}{branches.map(branch=><option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label>{branchDenied&&<p role="alert" className="mt-2 text-sm text-status-error">Không có quyền xem phiếu nhập tại chi nhánh này.</p>}</div>
+      <div ref={memory.containerRef}><ReceivingSourceTabs source="supplier" branch={activeBranchId ?? 'all'} /></div>
+      <div className="px-3 py-3"><label className="flex flex-wrap items-center gap-2 text-sm">Chi nhánh nhận<select aria-label="Chi nhánh nhận NCC" className="h-10 max-w-full rounded-md border bg-background px-2" value={activeBranchId??'all'} onChange={event=>{const url=new URL(window.location.href);url.searchParams.set('branch',event.target.value);window.history.replaceState(null,'',url);setRequestedBranch(event.target.value);setPage(0);setData([]);setTotal(0);setExpandedRow(null);}}>{duocXemToanChuoi?<option value="all">Tất cả chi nhánh được phép</option>:<option value="all" disabled>Chọn chi nhánh</option>}{branches.map(branch=><option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label>{branchDenied&&<p role="alert" className="mt-2 text-sm text-status-error">Không có quyền xem phiếu nhập tại chi nhánh này.</p>}</div>
+      <label className="mx-3 mb-3 flex flex-wrap items-center gap-2 text-sm">Thời gian<select aria-label="Thời gian nhập NCC" className="h-10 rounded-md border bg-background px-2" value={datePreset} onChange={event=>setDatePreset(event.target.value as DatePresetValue)}>{STANDARD_LIST_PRESETS_WITH_ALL.map(preset=><option key={preset.value} value={preset.value}>{preset.label}</option>)}</select></label>
       {viewAllBranches && (
         <AllBranchesBanner
           branchName={currentBranch?.name}
@@ -1192,6 +1214,9 @@ export default function NhapHangPage() {
       ) : (
       <DataTable
         columns={columns}
+        sorting={sorting}
+        onSortingChange={next=>{setSorting(current=>(typeof next==='function'?next(current):next).slice(-1));setPage(0);}}
+        sortableColumnIds={Object.keys(SUPPLIER_SORT_FIELDS)}
         data={data}
         loading={loading}
         total={total}
