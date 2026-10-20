@@ -41,6 +41,12 @@ export function isAscending(params: QueryParams): boolean {
  */
 export function handleError(error: { message: string; code?: string }, context: string): never {
   const unitErrors: Record<string,string> = {
+    APPROVAL_ITEMS_SCOPE_INVALID: "Chọn lại món, số tiền hoặc tỷ lệ giảm rồi xin duyệt lại.",
+    FNB_DISCOUNT_SCOPES_OVERLAP: "Các ưu đãi đang cùng giảm vượt giá trị một món. Kiểm tra món đã chọn và khuyến mãi/mã giảm giá trước khi thanh toán.",
+    DELIVERY_ORDER_NOT_EDITABLE: "Đơn đã hủy hoặc đã giao xong; không thể đổi người giao hay địa chỉ. Tải lại để xem trạng thái mới.",
+    DELIVERY_ORDER_NOT_COMPLETABLE: "Đơn không còn thuộc danh sách tự giao đang xử lý. Tải lại danh sách đơn.",
+    DELIVERY_DESTINATION_INVALID: "Nhập tên người nhận, địa chỉ và số điện thoại hợp lệ trước khi lưu.",
+    DELIVERY_STAFF_NOT_AVAILABLE_FOR_BRANCH: "Nhân viên không còn hoạt động hoặc không thuộc chi nhánh này. Chọn nhân viên khác.",
     INTERNAL_SALE_RETAIL_SKU_REQUIRED: "Đơn nội bộ chỉ nhận SKU hàng hóa đang hoạt động, không nhận mã NVL hoặc món F&B bán trực tiếp. Kiểm tra lại mã hàng; đơn chưa được ghi nhận.",
     INTERNAL_RECEIPT_FINANCE_SOURCE_LOCKED: "Khoản chi phí này phát sinh từ nhận hàng nội bộ. Thanh toán theo đơn nội bộ; muốn sửa hoặc hủy ghi nhận, xử lý tại phiếu nhận gốc.",
     GRAM_FORM_REFRESH_REQUIRED: "Đơn vị kho của BTP đã chuyển sang gram. Tải lại dữ liệu và kiểm tra số cân trước khi lưu; thao tác này chưa ghi nhận kho.",

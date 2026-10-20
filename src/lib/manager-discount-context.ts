@@ -1,12 +1,13 @@
+import { fnbManualDiscountAmount } from "@/lib/fnb-manual-discount";
 import type { FnbDiscountInput, FnbOrderLine } from '@/lib/types/fnb';
 import type { DiscountInput, OrderLine } from '@/app/pos/hooks/use-pos-state';
 
 export function fnbDiscountContext(branchId: string | undefined, tabId: string, label: string, orderId: string | undefined,
   lines: FnbOrderLine[], subtotal: number, discount: FnbDiscountInput | undefined, persisted = 0) {
-  const discountable = Math.max(0, subtotal - persisted);
-  const amount = !discount ? 0 : discount.mode === 'percent' ? Math.round(discountable * Math.min(discount.value, 100) / 100) : Math.min(discount.value, discountable);
+  const amount = fnbManualDiscountAmount(lines, discount, persisted);
   return { branch_id: branchId, draft_key: tabId, label, entity_id: orderId ?? null, subtotal, amount, existing_discount: persisted,
-    items: lines.map(l => ({ productId: l.productId, productName: l.productName, variantId: l.variantId ?? null,
+    ...(discount?.lineIds !== undefined ? { discount_scope: "items", discount_mode: discount.mode, discount_value: discount.value } : {}),
+    items: lines.map(l => ({ ...(discount?.lineIds !== undefined ? { discount_selected: discount.lineIds.includes(l.id), kitchen_item_id: l.kitchenOrderItemId ?? null, note: l.note ?? "" } : {}), productId: l.productId, productName: l.productName, variantId: l.variantId ?? null,
       quantity: l.quantity, unitPrice: l.unitPrice, toppings: l.toppings.map(t => ({ productId: t.productId, name: t.name, quantity: t.quantity, price: t.price })), modifierSelections: l.modifierSelections ?? [] })) };
 }
 

@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useUnsavedWork } from "@/lib/hooks/use-unsaved-work";
 
 /**
@@ -169,6 +170,7 @@ export default function DeliveryFeeSettingsPage() {
         </p>
       </div>
 
+      <Link href="/giao-hang-noi-bo" className="inline-flex min-h-11 items-center rounded-md border px-4 text-sm font-medium text-primary">Phân công và theo dõi đơn giao hàng</Link>
       <DeliveryPolicySettings />
       <details className="space-y-4 rounded-xl border p-4">
         <summary className="cursor-pointer font-medium">Mức phí chọn thủ công (khi tắt tự tính phí)</summary>

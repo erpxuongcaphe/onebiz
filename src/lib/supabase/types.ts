@@ -2898,6 +2898,14 @@ export interface Database {
       };
     };
     Functions: {
+      fnb_delivery_dispatch_20261020: {
+        Args: { p_branch_id: string; p_day: string; p_state?: string; p_offset?: number };
+        Returns: Json;
+      };
+      fnb_delivery_destination_20261020: {
+        Args: { p_order_id: string; p_address: string; p_phone: string; p_recipient: string };
+        Returns: Json;
+      };
       get_fnb_delivery_price_policy: {
         Args: { p_branch_id: string };
         Returns: Json;

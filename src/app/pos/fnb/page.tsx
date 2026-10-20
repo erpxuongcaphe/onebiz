@@ -153,6 +153,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { getDeliveryPricePolicy } from "@/lib/services/supabase/fnb-delivery-policy";
+import { fnbDiscountCartKey, fnbManualDiscountAmount } from "@/lib/fnb-manual-discount";
 import { quoteDeliveryPrice, type DeliveryPricePolicy } from "@/lib/fnb-delivery-policy";
 import { FnbDeliveryPrice } from "./components/fnb-delivery-price";
 
@@ -324,6 +325,7 @@ function FnbPosPageInner() {
   const [discountOtpOpen, setDiscountOtpOpen] = useState(false);
   const [discountRequestMeta, setDiscountRequestMeta] = useState<Record<string, unknown> | null>(null);
   const pendingDiscountTab = useRef<string | null>(null);
+  const pendingDiscountInput = useRef<import("@/lib/types/fnb").FnbDiscountInput | undefined>(undefined);
   const pendingDiscountRef = useRef<(() => void) | null>(null);
 
   // CEO 13/05 (Fabi/iPos): platform price override map.
@@ -1016,6 +1018,14 @@ function FnbPosPageInner() {
     : !currentDeliveryPolicy ? <p role="status" className="text-sm">Đang tải chính sách phí giao…</p>
       : currentDeliveryPolicy.enabled ? <FnbDeliveryPrice key={pos.activeTabId} policy={currentDeliveryPolicy} meters={pos.activeTab?.deliveryDistanceMeters} before={pos.subtotal} after={fnbBenefitDisplay.total}
           onChange={meters => pos.updateTabMeta(pos.activeTabId, { deliveryDistanceMeters: meters })} /> : undefined;
+
+  useEffect(() => {
+    const tab = pos.activeTab;
+    if (tab?.discountAuditCtx?.cartKey && tab.discountAuditCtx.cartKey !== fnbDiscountCartKey(pos.allLines, tab.persistedOrderDiscountAmount)) {
+      pos.updateTabMeta(tab.id, { discountAuditCtx: undefined });
+      toast({ title: "Bill đã thay đổi", description: "Bấm Áp dụng giảm giá để xin duyệt lại cho các món hiện tại.", variant: "warning" });
+    }
+  }, [pos, toast]);
 
   const activeDeliveryFee = pos.activeTab?.deliveryFee ?? 0;
   const activeCommissionPercent = pos.activeTab?.orderType === "delivery" &&
@@ -2165,22 +2175,29 @@ function FnbPosPageInner() {
     [toast],
   );
 
+  const deliveryStaffAssignLock = useRef(false);
+  const [deliveryStaffSaving, setDeliveryStaffSaving] = useState(false);
   const persistDeliveryStaff = useCallback(
     async (kitchenOrderId: string, staffId: string | undefined) => {
-      if (kitchenOrderId.startsWith("local_")) return;
+      if (kitchenOrderId.startsWith("local_")) {
+        toast({ title: "Đơn đang chờ đồng bộ", description: "Gán người giao sau khi đơn đã đồng bộ lên máy chủ.", variant: "warning" });
+        return false;
+      }
       try {
         if (staffId) {
           await assignDeliveryStaffService(kitchenOrderId, staffId);
         } else {
           await unassignDeliveryStaffService(kitchenOrderId);
         }
+        return true;
       } catch (err) {
         console.error("persistDeliveryStaff failed", err);
         toast({
           title: "Không lưu được người giao",
-          description: "Hãy thử chọn lại hoặc kiểm tra mạng.",
+          description: err instanceof Error ? err.message : "Hãy thử chọn lại hoặc kiểm tra mạng.",
           variant: "warning",
         });
+        return false;
       }
     },
     [toast],
@@ -2271,10 +2288,18 @@ function FnbPosPageInner() {
   );
 
   const handleDeliveryStaffChange = useCallback(
-    (staffId: string | undefined) => {
-      pos.setDeliveryStaff(pos.activeTabId, staffId);
-      const orderId = pos.activeTab?.kitchenOrderId;
-      if (orderId) void persistDeliveryStaff(orderId, staffId);
+    async (staffId: string | undefined) => {
+      const tab = pos.activeTab;
+      if (!tab || deliveryStaffAssignLock.current) return;
+      if (!tab.kitchenOrderId) { pos.setDeliveryStaff(tab.id, staffId); return; }
+      deliveryStaffAssignLock.current = true;
+      setDeliveryStaffSaving(true);
+      try {
+        if (await persistDeliveryStaff(tab.kitchenOrderId, staffId)) {
+          pos.setDeliveryStaff(tab.id, staffId);
+          window.dispatchEvent(new Event("fnb-open-orders-changed"));
+        }
+      } finally { deliveryStaffAssignLock.current = false; setDeliveryStaffSaving(false); }
     },
     [pos, persistDeliveryStaff],
   );
@@ -2869,6 +2894,10 @@ function FnbPosPageInner() {
       return false;
     }
     const tab = pos.activeTab;
+    if ((tab?.orderDiscount?.value ?? 0) > 0 && !tab?.discountAuditCtx) {
+      toast({ title: "Giảm giá cần được duyệt", description: "Bấm Áp dụng giảm giá để xin duyệt trước khi thanh toán.", variant: "warning" });
+      return false;
+    }
     // Tab có thể vừa được mở từ sơ đồ bàn/máy khác nên chưa có snapshot local.
     // Nạp trước khi mở dialog để thu ngân không thấy 0đ rồi thu thiếu.
     if (tab?.kitchenOrderId && pos.lineCount === 0) {
@@ -3337,13 +3366,18 @@ function FnbPosPageInner() {
         return;
       }
       // Manual > 0 → queue + mở OTP dialog
+      if (fnbManualDiscountAmount(pos.allLines, d, pos.activeTab?.persistedOrderDiscountAmount) <= 0) {
+        toast({ title: "Chưa có tiền giảm", description: "Chọn món và kiểm tra giá trị giảm trước khi xin duyệt.", variant: "warning" });
+        return;
+      }
       const activeTabId = pos.activeTabId;
+      pendingDiscountInput.current = d;
       setDiscountRequestMeta(fnbDiscountContext(branchId, activeTabId, pos.activeTab?.label ?? 'Bill', pos.activeTab?.kitchenOrderId, pos.allLines, pos.subtotal, d, pos.activeTab?.persistedOrderDiscountAmount ?? 0));
       pendingDiscountTab.current = activeTabId;
       pendingDiscountRef.current = () => pos.setOrderDiscount(activeTabId, d);
       setDiscountOtpOpen(true);
     },
-    [pos, branchId]
+    [pos, branchId, toast]
   );
 
   // ── Open split bill dialog ──
@@ -3963,6 +3997,7 @@ function FnbPosPageInner() {
           onDeliveryStaffChange={handleDeliveryStaffChange}
           onDeliveryTierChange={handleDeliveryTierChange}
           staffOptions={shipperOptions}
+          deliveryStaffBusy={deliveryStaffSaving}
           selfDeliveryTiers={deliveryTiers}
           deliveryPolicySlot={deliveryPolicySlot}
           discountPresets={discountPresets}
@@ -4183,6 +4218,7 @@ function FnbPosPageInner() {
               onDeliveryStaffChange={handleDeliveryStaffChange}
               onDeliveryTierChange={handleDeliveryTierChange}
               staffOptions={shipperOptions}
+              deliveryStaffBusy={deliveryStaffSaving}
               selfDeliveryTiers={deliveryTiers}
               deliveryPolicySlot={deliveryPolicySlot}
               discountPresets={discountPresets}
@@ -4419,6 +4455,8 @@ function FnbPosPageInner() {
         contextLabel={`Cashier yêu cầu giảm giá thủ công cho đơn ${pos.activeTab?.label ?? ""}`}
         onApproved={(verified, reason) => {
           if (!pendingDiscountTab.current || pendingDiscountTab.current !== pos.activeTabId || discountRequestMeta?.branch_id !== branchId) throw new Error('Bill hoặc chi nhánh đã thay đổi. Mở lại bill cần giảm giá.');
+          const desired = fnbDiscountContext(branchId, pos.activeTabId, pos.activeTab?.label ?? "Bill", pos.activeTab?.kitchenOrderId, pos.allLines, pos.subtotal, pendingDiscountInput.current, pos.activeTab?.persistedOrderDiscountAmount ?? 0);
+          if (JSON.stringify(desired.items) !== JSON.stringify(discountRequestMeta?.items) || desired.amount !== discountRequestMeta?.amount) throw new Error("Món hoặc giá trị bill đã thay đổi. Xin duyệt lại cho bill hiện tại.");
           pendingDiscountRef.current?.();
           pendingDiscountRef.current = null;
           // Lưu otpId + reason vào activeTab để khi checkout sẽ ghi audit
@@ -4426,6 +4464,7 @@ function FnbPosPageInner() {
             pos.attachDiscountAudit(pos.activeTabId, {
               otpId: verified.otpId,
               reason,
+              cartKey: fnbDiscountCartKey(pos.allLines, pos.activeTab?.persistedOrderDiscountAmount),
             });
           }
           toast({

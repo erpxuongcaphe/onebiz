@@ -196,6 +196,8 @@ export interface FnbOrderLine {
 }
 
 export interface FnbDiscountInput {
+  /** undefined = whole bill; selected row IDs = item-specific reduction. */
+  lineIds?: string[];
   mode: "amount" | "percent";
   value: number;
 }
@@ -222,7 +224,7 @@ export interface FnbTabSnapshot {
    * + reason vào tab để checkout V3 xác minh OTP và ghi audit log trong cùng
    * transaction thanh toán (truy vết được ai duyệt, không có audit "best effort").
    */
-  discountAuditCtx?: { otpId: string; reason: string };
+  discountAuditCtx?: { otpId: string; reason: string; cartKey?: string };
   /**
    * Những dòng đã được máy chủ nhận vào đơn bếp. Tách khỏi `lines` (món
    * chưa gửi) để thu ngân có thể thu tiền sau khi gửi bếp mà không thể vô

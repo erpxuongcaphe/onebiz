@@ -2392,11 +2392,14 @@
    "customer_id",
    "customer_name",
    "customer_selected",
+   "delivery_address",
    "delivery_assigned_at",
    "delivery_completed_at",
    "delivery_distance_tier",
    "delivery_fee",
+   "delivery_phone",
    "delivery_platform",
+   "delivery_recipient",
    "delivery_staff_id",
    "discount_amount",
    "discount_reason",
@@ -3452,6 +3455,8 @@
   "fnb_complete_payment_atomic_v2",
   "fnb_complete_payment_atomic_v3",
   "fnb_complete_payment_timed_v1",
+  "fnb_delivery_destination_20261020",
+  "fnb_delivery_dispatch_20261020",
   "fnb_execute_cancel_request_00455",
   "fnb_floor_decoration_config_atomic",
   "fnb_floor_layout_update_atomic",
@@ -3887,6 +3892,6 @@
   "void_internal_export_atomic"
  ],
  "soBang": 238,
- "soCot": 2802,
- "soRpc": 605
+ "soCot": 2805,
+ "soRpc": 607
 }
