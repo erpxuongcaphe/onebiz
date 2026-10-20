@@ -66,7 +66,7 @@ describe('internal receiving treatment',()=>{
     render(<Page/>);
     await screen.findByText('NB-FINISHED');
     expect(screen.getAllByText('NB-CANCELLED').length).toBeGreaterThan(0);
-    expect(screen.getByText('Đơn đã hủy. Lịch sử nhận được giữ để đối chiếu.')).toBeInTheDocument();
+    expect(await screen.findByText('Đơn đã hủy. Lịch sử nhận được giữ để đối chiếu.')).toBeInTheDocument();
     expect(screen.queryByLabelText('Thực nhận Sữa thùng')).not.toBeInTheDocument();
     expect(screen.queryByRole('button',{name:'Nhận hàng'})).not.toBeInTheDocument();
   });
