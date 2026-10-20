@@ -1,5 +1,6 @@
 import { bridgeHtml } from "./qz-bridge";
 import type { PaperWidth } from "./escpos";
+import { waitForPrint } from "./print-wait";
 
 /** GS v 0 raster, 203dpi: 384/576 dots = the common 48/72mm printable area. */
 export function encodeRaster(width: number, height: number, rgba: Uint8ClampedArray): Uint8Array {
@@ -40,7 +41,7 @@ export async function renderPrintRaster(html: string, paper: PaperWidth): Promis
     });
     const doc = frame.contentDocument;
     if (!doc?.body) throw new Error("Không dựng được bản in USB.");
-    await Promise.all(Array.from(doc.images).map(async img => {
+    await waitForPrint(Promise.all(Array.from(doc.images).map(async img => {
       if (!img.src.startsWith("data:")) {
         const response = await fetch(img.src, {signal:AbortSignal.timeout(5000)});
         if (!response.ok) throw new Error("Không tải được logo/QR cho bản in.");
@@ -50,12 +51,12 @@ export async function renderPrintRaster(html: string, paper: PaperWidth): Promis
         });
       }
       await img.decode();
-    }));
-    await doc.fonts?.ready;
-    const { default: html2canvas } = await import("html2canvas");
+    })), "Không tải xong logo/QR. Chưa gửi phiếu tới máy quầy.", 8000);
+    if (doc.fonts) await waitForPrint(doc.fonts.ready, "Trình duyệt chưa tải xong phông chữ. Chưa gửi phiếu tới máy quầy.", 5000);
+    const { default: html2canvas } = await waitForPrint(import("html2canvas"), "Không tải được bộ dựng bản in. Chưa gửi phiếu tới máy quầy.");
     const height = Math.ceil(Math.max(doc.body.scrollHeight, doc.documentElement.scrollHeight));
     if (height * dots / cssWidth > 24000) throw new Error("Đơn quá dài cho một bản in USB. Hãy dùng in qua trình duyệt.");
-    const canvas = await html2canvas(doc.body, { width:cssWidth, height, scale:dots / cssWidth, backgroundColor:"#ffffff", logging:false, scrollX:0, scrollY:0, windowWidth:Math.ceil(cssWidth), useCORS:true });
+    const canvas = await waitForPrint(html2canvas(doc.body, { width:cssWidth, height, scale:dots / cssWidth, backgroundColor:"#ffffff", logging:false, scrollX:0, scrollY:0, windowWidth:Math.ceil(cssWidth), useCORS:true }), "Trình duyệt chưa dựng được ảnh in. Chưa gửi phiếu tới máy quầy. Tải lại trang rồi thử một lần.", 20000);
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("Không dựng được ảnh in.");
     return canvas;

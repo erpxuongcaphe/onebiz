@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PaperWidth } from "./escpos";
 import { CONNECTION_PROBE } from "../../../public/print-point/destination.mjs";
+import { waitForPrint } from "./print-wait";
 
 export interface PrintRoute { key: string; label: string; printer: string; paper: PaperWidth }
 export interface BranchPrintPolicy { autoPrintKitchen?: boolean; autoPrintReceipt?: boolean; receiptStyle?: "minimal" | "standard" | "full"; kitchenTicketStyle?: "compact" | "standard" | "detailed" }
@@ -29,13 +30,16 @@ export async function checkBranchPrinter(branchId: string, route: PrintRoute) {
   return rpc("fnb_print_enqueue_v1", { p_branch: branchId, p_id: crypto.randomUUID(), p_route: route.key, p_label: `KIỂM TRA KẾT NỐI ${route.label}`.slice(0,80), p_paper: route.paper, p_bytes: bytesToBase64(new Uint8Array(CONNECTION_PROBE)) });
 }
 
-export async function enqueueBranchPrint(args: { branchId: string; routeKey: string; label: string; html: string; paper: string; buildHtml?: (paper: PaperWidth) => string; jobId: string }): Promise<{ id: string; route_label: string }> {
-  const state = await getBranchPrintState(args.branchId);
+export async function enqueueBranchPrint(args: { branchId: string; routeKey: string; label: string; html: string; paper: string; buildHtml?: (paper: PaperWidth) => string; jobId: string; onProgress?: (message: string) => void }): Promise<{ id: string; route_label: string }> {
+  args.onProgress?.("Đang kiểm tra điểm in… Chưa gửi phiếu.");
+  const state = await waitForPrint(getBranchPrintState(args.branchId), "Không tải được trạng thái điểm in. Chưa gửi phiếu tới máy quầy.");
   if (!state.point?.enabled) throw new Error("Chi nhánh chưa bật điểm in. Nhờ quản lý vào Cài đặt → In ấn để thiết lập.");
   const route = state.point.routes.find(r => r.key === args.routeKey);
   if (!route?.printer) throw new Error("Chưa gán máy cho nơi nhận này. Nhờ quản lý kiểm tra tuyến in; hệ thống không chuyển sang máy khác.");
-  const { rasterPrintBytes } = await import("./raster-print");
+  const { rasterPrintBytes } = await waitForPrint(import("./raster-print"), "Không tải được bộ dựng bản in. Chưa gửi phiếu tới máy quầy.");
   if (!args.buildHtml && route.paper !== args.paper) throw new Error("Khổ giấy mẫu khác máy đích. Nhờ quản lý chọn cùng khổ giấy trước khi gửi.");
-  const bytes = await rasterPrintBytes(args.buildHtml?.(route.paper) ?? args.html, route.paper);
+  args.onProgress?.("Đang dựng ảnh in trên thiết bị này… Chưa gửi phiếu.");
+  const bytes = await waitForPrint(rasterPrintBytes(args.buildHtml?.(route.paper) ?? args.html, route.paper), "Chuẩn bị bản in quá thời gian. Chưa gửi phiếu tới máy quầy. Tải lại trang rồi thử một lần.", 45000);
+  args.onProgress?.("Đang gửi phiếu tới máy quầy… Chờ kết quả, chưa bấm in lại.");
   return rpc("fnb_print_enqueue_v1", { p_branch: args.branchId, p_id: args.jobId, p_route: args.routeKey, p_label: args.label, p_paper: route.paper, p_bytes: bytesToBase64(bytes) });
 }

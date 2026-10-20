@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { encodeRaster } from "@/lib/printer/raster-print";
 const mocks = vi.hoisted(() => ({ rpc: vi.fn(), raster: vi.fn() }));
 vi.mock("@/lib/supabase/client", () => ({ createClient: () => ({ rpc: mocks.rpc }) }));
@@ -7,7 +7,36 @@ import { enqueueBranchPrint } from "@/lib/printer/branch-queue";
 // Standalone agent is also distributed as browser-downloadable JS.
 import { validateRaster, applyCutSetting } from "../../../public/print-point/agent.mjs";
 beforeEach(() => { vi.clearAllMocks(); });
+afterEach(() => { vi.useRealTimers(); });
 describe("branch print dispatch", () => {
+  it("never enqueues a render that completes after the preparation deadline", async () => {
+    vi.useFakeTimers();
+    mocks.rpc.mockResolvedValue({ data: { point: { enabled: true, routes: [{ key: "cashier", printer: "Quầy", paper: "80mm" }] } } });
+    let finish!: (bytes: Uint8Array) => void;
+    mocks.raster.mockImplementation(() => new Promise<Uint8Array>(resolve => { finish = resolve; }));
+    const progress = vi.fn();
+    const pending = enqueueBranchPrint({ branchId: "b", routeKey: "cashier", label: "Test", html: "x", paper: "80mm", jobId: "j", onProgress: progress });
+    const rejected = expect(pending).rejects.toThrow("Chưa gửi phiếu");
+    await vi.advanceTimersByTimeAsync(45000);
+    await rejected;
+    finish(new Uint8Array([1, 2]));
+    await vi.advanceTimersByTimeAsync(1);
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);
+    expect(progress).toHaveBeenLastCalledWith(expect.stringContaining("Đang dựng ảnh in"));
+  });
+  it("does not enqueue if the point state arrives after its deadline", async () => {
+    vi.useFakeTimers();
+    let finish!: (result: unknown) => void;
+    mocks.rpc.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const pending = enqueueBranchPrint({ branchId: "b", routeKey: "cashier", label: "Test", html: "x", paper: "80mm", jobId: "j" });
+    const rejected = expect(pending).rejects.toThrow("Không tải được trạng thái");
+    await vi.advanceTimersByTimeAsync(15000);
+    await rejected;
+    finish({ data: { point: { enabled: true, routes: [{ key: "cashier", printer: "Quầy", paper: "80mm" }] } } });
+    await vi.advanceTimersByTimeAsync(1);
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);
+    expect(mocks.raster).not.toHaveBeenCalled();
+  });
   it("renders using the physical route paper and retains one request ID", async () => {
     mocks.rpc.mockResolvedValueOnce({ data: { point: { enabled: true, routes: [{ key: "station", printer: "Bar", paper: "58mm" }] } } }).mockResolvedValueOnce({ data: { id: "job" } });
     mocks.raster.mockResolvedValue(new Uint8Array([1,2]));

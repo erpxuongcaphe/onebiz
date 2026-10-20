@@ -1,15 +1,55 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
-const mock = vi.hoisted(() => ({ state: vi.fn(), save: vi.fn(), check: vi.fn(), enqueue: vi.fn(), update: vi.fn() }));
+import { render, screen, fireEvent, waitFor, cleanup, act } from "@testing-library/react";
+const mock = vi.hoisted(() => ({ state: vi.fn(), save: vi.fn(), check: vi.fn(), enqueue: vi.fn(), update: vi.fn(), template: vi.fn(), stations: vi.fn() }));
 vi.mock("@/lib/contexts/auth-context", () => ({ useAuth: () => ({ currentBranch: { id: "branch-xtb", name: "Xưởng Tư Búa" }, hasPermission: () => true }) }));
-vi.mock("@/lib/services/supabase/kitchen-stations", () => ({ getKitchenStationsByBranch: async () => [{ id: "bar", name: "Bar" }] }));
+vi.mock("@/lib/services/supabase/kitchen-stations", () => ({ getKitchenStationsByBranch: mock.stations }));
+vi.mock("@/lib/printer/print-test-template", () => ({ resolveBranchPrintTestBuilder: mock.template }));
 vi.mock("@/lib/printer/branch-queue", () => ({ getBranchPrintState: mock.state, savePrintPoint: mock.save, checkBranchPrinter: mock.check, enqueueBranchPrint: mock.enqueue, rotatePrintPointToken: vi.fn(), resolvePrintJob: vi.fn() }));
 vi.mock("@/lib/contexts/settings-context", () => ({ useSettings: () => ({ settings: { print: { fnbBranchQueue: false } }, updateSettings: mock.update }) }));
 import { BranchPrintSetup } from "@/components/shared/branch-print-setup";
 const point = { id: "point", enabled: true, name: "Quầy", routes: [{ key: "cashier", label: "Quầy — bill / tạm tính", printer: "tcp://192.168.10.222:9100", paper: "80mm" }], last_seen_at: null };
-beforeEach(() => { vi.clearAllMocks(); mock.state.mockResolvedValue({ point, jobs: [] }); mock.save.mockImplementation(async (_id, _name, routes, enabled) => ({ ...point, routes, enabled })); });
-afterEach(cleanup);
+beforeEach(() => { vi.resetAllMocks(); mock.stations.mockResolvedValue([{ id: "bar", name: "Bar" }]); mock.template.mockResolvedValue(() => "test receipt"); mock.state.mockResolvedValue({ point, jobs: [] }); mock.save.mockImplementation(async (_id, _name, routes, enabled) => ({ ...point, routes, enabled })); });
+afterEach(() => { cleanup(); vi.useRealTimers(); });
 describe("branch scoped printer setup", () => {
+  it("unlocks refresh after a stalled initial load and ignores its late result", async () => {
+    vi.useFakeTimers();
+    let finish!: (value: unknown[]) => void;
+    mock.stations.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    render(<BranchPrintSetup />);
+    expect(screen.getByText("Đang tải cấu hình máy in…")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cập nhật" })).toBeDisabled();
+    await act(async () => { await vi.advanceTimersByTimeAsync(15000); });
+    expect(screen.getByText(/Tải cấu hình máy in quá thời gian/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cập nhật" })).toBeEnabled();
+    await act(async () => { finish([]); });
+    expect(screen.queryByDisplayValue("192.168.10.222")).not.toBeInTheDocument();
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Cập nhật" })); });
+    expect(screen.getByDisplayValue("192.168.10.222")).toBeInTheDocument();
+  });
+  it("shows the stalled template stage, unlocks on timeout, and never sends a late template", async () => {
+    render(<BranchPrintSetup />); await screen.findByDisplayValue("192.168.10.222");
+    vi.useFakeTimers();
+    let finish!: (builder: () => string) => void;
+    mock.template.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    fireEvent.click(screen.getByRole("button", { name: "3. In thử & sử dụng" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "In thử" })[0]);
+    expect(screen.getByText("Đang tải mẫu in thử… Chưa gửi phiếu.")).toBeInTheDocument();
+    await act(async () => { await vi.advanceTimersByTimeAsync(15000); });
+    expect(screen.getByText(/Tải mẫu in quá thời gian/)).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "In thử" })[0]).toBeEnabled();
+    await act(async () => { finish(() => "late receipt"); });
+    expect(mock.enqueue).not.toHaveBeenCalled();
+  });
+  it("keeps successful dispatch distinct from a failed history refresh", async () => {
+    render(<BranchPrintSetup />); await screen.findByDisplayValue("192.168.10.222");
+    mock.enqueue.mockResolvedValue({ id: "test", route_label: "Quầy" });
+    mock.state.mockRejectedValue(new Error("offline"));
+    fireEvent.click(screen.getByRole("button", { name: "3. In thử & sử dụng" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "In thử" })[0]);
+    await screen.findByText(/Đã nhận phiếu thử tới Quầy, nhưng chưa cập nhật được lịch sử/);
+    expect(mock.enqueue).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/Không gửi được phiếu thử/)).not.toBeInTheDocument();
+  });
   it("only activates branch routing after both cashier and kitchen have saved destinations", async () => {
     render(<BranchPrintSetup />); await screen.findByDisplayValue("192.168.10.222");
     fireEvent.click(screen.getByRole("button", { name: "3. In thử & sử dụng" }));
