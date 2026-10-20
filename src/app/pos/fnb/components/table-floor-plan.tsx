@@ -37,6 +37,7 @@ const FloorPlanCanvas = dynamic(
 interface TableFloorPlanProps {
   tables: RestaurantTable[];
   onSelectTable: (table: RestaurantTable) => void;
+  onCreateTableBill?: (table: RestaurantTable) => void;
   onTransferTable?: (table: RestaurantTable) => void;
   onMergeTable?: (table: RestaurantTable) => void;
   orderTimestamps?: Record<string, string>;
@@ -47,6 +48,8 @@ interface TableFloorPlanProps {
   ordersError?: string | null;
   onRefreshOrders?: () => void;
 }
+
+const NO_OPEN_ORDERS: FnbOpenOrder[] = [];
 
 const STATUS_CONFIG: Record<TableStatus, { label: string; dot: string }> = {
   available: { label: "Trống", dot: "bg-status-success" },
@@ -62,11 +65,12 @@ function elapsedMinutes(iso: string): number {
 export function TableFloorPlan({
   tables,
   onSelectTable,
+  onCreateTableBill,
   onTransferTable,
   onMergeTable,
   orderTimestamps,
   tableTotals,
-  openOrders = [],
+  openOrders = NO_OPEN_ORDERS,
   onOpenOrder,
   ordersLoading = false,
   ordersError,
@@ -111,6 +115,7 @@ export function TableFloorPlan({
       onSelectTable(original);
       return;
     }
+    if (kind === "new_bill") { onCreateTableBill?.(original); return; }
     if (kind === "transfer") {
       onTransferTable?.(original);
       return;
@@ -180,10 +185,7 @@ export function TableFloorPlan({
               capacity: meta.capacity,
               status: meta.status,
               elapsedMinutes: elapsed ? elapsedMinutes(elapsed) : undefined,
-              // 1 bàn = 1 đơn hiện tại theo schema FnB OneBiz. Có order chưa
-              // thanh toán → badge đỏ "1". Khi support split-bill nhiều đơn
-              // cùng lúc, đổi sang count thật từ orders.
-              unpaidOrders: meta.currentOrderId ? 1 : 0,
+              unpaidOrders: openOrders.filter(order => order.tableId === l.id && isUnpaidFnbOrder(order)).length || (meta.currentOrderId ? 1 : 0),
             } as CanvasTable;
           })
           .filter(Boolean) as CanvasTable[];
@@ -209,7 +211,7 @@ export function TableFloorPlan({
     return () => {
       cancelled = true;
     };
-  }, [activeZoneId, tables, orderTimestamps, toast, layoutRefresh]);
+  }, [activeZoneId, tables, orderTimestamps, openOrders, toast, layoutRefresh]);
 
   const activeZone = useMemo(
     () => zones.find((z) => z.id === activeZoneId) ?? null,
@@ -314,19 +316,20 @@ export function TableFloorPlan({
                 name: t.name,
                 capacity: t.capacity,
                 status: t.status,
-                unpaidOrders: t.currentOrderId ? 1 : 0,
+                unpaidOrders: openOrders.filter(order => order.tableId === t.id && isUnpaidFnbOrder(order)).length || (t.currentOrderId ? 1 : 0),
                 provisionalTotal: t.status === "occupied" ? tableTotals?.[t.id] : undefined,
               });
             }}
             orderTimestamps={orderTimestamps}
             tableTotals={tableTotals}
+            openOrders={openOrders}
           />
         ))}
       </div>
 
       {/* Action sheet khi tap bàn — Mở đơn / Chuyển bàn / Gộp bàn */}
       <TableActionSheet
-        table={actionTable ? { ...actionTable, provisionalTotal: tableTotals?.[actionTable.id] } : null}
+        table={actionTable ? { ...actionTable, unpaidOrders: openOrders.filter(order => order.tableId === actionTable.id && isUnpaidFnbOrder(order)).length || actionTable.unpaidOrders, provisionalTotal: tableTotals?.[actionTable.id] } : null}
         zoneName={
           actionTable
             ? tables.find((t) => t.id === actionTable.id)?.zone ?? activeZone?.name ?? undefined
@@ -334,6 +337,7 @@ export function TableFloorPlan({
         }
         onAction={handleAction}
         onClose={() => setActionTable(null)}
+        canCreateBill={Boolean(onCreateTableBill)}
         canTransfer={Boolean(onTransferTable)}
         canMerge={
           Boolean(onMergeTable) &&
@@ -391,6 +395,7 @@ function CanvasView({
 
 // ─── Grid fallback (giữ logic cũ) ───
 function GridFallback({
+  openOrders = NO_OPEN_ORDERS,
   tables,
   onSelectTable,
   orderTimestamps,
@@ -443,6 +448,7 @@ function GridFallback({
                   </span>
                   <span className="mt-1 text-xs font-medium">{STATUS_CONFIG[t.status].label}</span>
                   {t.status === "occupied" && <span className="mt-1 text-base font-bold tabular-nums text-primary"><span className="mr-1 text-xs font-medium">Tạm tính</span>{tableTotals?.[t.id] !== undefined ? formatCurrency(tableTotals[t.id]) : "—"}</span>}
+                  {t.status === "occupied" && <span className="text-xs font-semibold">{openOrders.filter(order => order.tableId === t.id && isUnpaidFnbOrder(order)).length || (t.currentOrderId ? 1 : 0)} bill đang mở</span>}
                   {elapsed && (
                     <span className="text-xs text-status-error mt-1">
                       <Icon name="schedule" size={12} className="inline" /> {fmt(elapsed)}

@@ -51,6 +51,18 @@ function parseSplitResult(data: unknown): {
   };
 }
 
+export interface SplitQuantitySelection { itemId: string; quantity: number; expectedQuantity: number; }
+
+export async function splitByQuantities(orderId: string, selection: SplitQuantitySelection[], requestId: string): Promise<SplitResult> {
+  if (!selection.length || selection.some(item => !Number.isInteger(item.expectedQuantity) || item.expectedQuantity <= 0 || !Number.isInteger(item.quantity) || item.quantity <= 0 || item.quantity > item.expectedQuantity)) throw new Error("Kiểm tra số lượng món muốn tách.");
+  const { data, error } = await getClient().rpc("split_kitchen_order_quantities_20261020", {
+    p_order_id: orderId, p_items: selection.map(item => ({ item_id: item.itemId, quantity: item.quantity, expected_quantity: item.expectedQuantity })), p_request_id: requestId,
+  });
+  if (error) handleError(error, "splitByQuantities.rpc");
+  const result = parseSplitResult(data); const child = result.children[0];
+  return { childOrderId: child.orderId, childDiscountAmount: child.discountAmount, parentItemsLeft: result.parentItemsLeft, parentDiscountAmount: result.parentDiscountAmount };
+}
+
 export async function splitByItems(
   orderId: string,
   itemIds: string[],

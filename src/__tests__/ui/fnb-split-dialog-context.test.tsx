@@ -7,12 +7,13 @@ const items = [
   { id: "b", name: "Cà phê", quantity: 1, unitPrice: 30000 },
 ];
 describe("split bill context and truthful preview", () => {
-  it("clears selection on reopen and prevents moving every remaining line", () => {
+  it("clears selection on reopen and prevents moving every remaining quantity", () => {
     const props={ items, onOpenChange:vi.fn(), onSplitByItems:vi.fn(), onSplitEqually:vi.fn() };
     const view=render(<SplitBillDialog {...props} open />);
     fireEvent.click(screen.getAllByRole("checkbox")[0]);
     expect(screen.getByRole("button",{name:"Tách 1 món"})).not.toBeDisabled();
     fireEvent.click(screen.getAllByRole("checkbox")[1]);
+    fireEvent.change(screen.getByLabelText("Số lượng tách Trà"), {target:{value:"2"}});
     expect(screen.getByRole("button",{name:"Tách 2 món"})).toBeDisabled();
     view.rerender(<SplitBillDialog {...props} open={false} />);
     view.rerender(<SplitBillDialog {...props} open />);

@@ -2898,6 +2898,10 @@ export interface Database {
       };
     };
     Functions: {
+      split_kitchen_order_quantities_20261020: {
+        Args: { p_order_id: string; p_items: Json; p_request_id: string };
+        Returns: Json;
+      };
       fnb_delivery_dispatch_20261020: {
         Args: { p_branch_id: string; p_day: string; p_state?: string; p_offset?: number };
         Returns: Json;
