@@ -3862,6 +3862,7 @@
   "show_trgm",
   "soft_delete_pos_draft_atomic",
   "split_kitchen_order_atomic",
+  "split_kitchen_order_quantities_20261020",
   "standardize_walk_in_customer_code",
   "sync_product_bom_status_for_bom",
   "sync_product_bom_uom_00465",
@@ -3893,5 +3894,5 @@
  ],
  "soBang": 238,
  "soCot": 2805,
- "soRpc": 607
+ "soRpc": 608
 }
