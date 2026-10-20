@@ -67,4 +67,55 @@ describe("sales dashboard permission and scope", () => {
     fireEvent.click(screen.getByRole("button", { name: "Năm" }));
     await waitFor(() => expect(state.fetch).toHaveBeenLastCalledWith("b1", "2022-01-01", "2026-10-20", "year"));
   });
+  it("keeps today's zero sales when the chart shows monthly or yearly sales", async () => {
+    state.fetch.mockImplementation((_branch, from, to) => Promise.resolve({ ...sample, sales: from === to ? 0 : 7444500 }));
+    render(<Dashboard />);
+    await waitFor(() => expect(screen.getByTestId("net-sales")).toHaveTextContent(/^0/));
+    fireEvent.click(screen.getByRole("button", { name: "Ngày" }));
+    await waitFor(() => expect(state.fetch).toHaveBeenLastCalledWith("b1", "2026-10-01", "2026-10-20", "day"));
+    expect(screen.getByTestId("net-sales")).toHaveTextContent(/^0/);
+    fireEvent.click(screen.getByRole("button", { name: "Năm" }));
+    await waitFor(() => expect(state.fetch).toHaveBeenLastCalledWith("b1", "2022-01-01", "2026-10-20", "year"));
+    expect(screen.getByTestId("net-sales")).toHaveTextContent(/^0/);
+    expect(screen.getByLabelText("Ngày bán hàng")).toHaveValue("2026-10-20");
+  });
+  it("changes a single sales day without changing the chart date or grain", async () => {
+    render(<Dashboard />);
+    await screen.findByTestId("net-sales");
+    fireEvent.click(screen.getByRole("button", { name: "Tháng" }));
+    await waitFor(() => expect(state.fetch).toHaveBeenLastCalledWith("b1", "2026-01-01", "2026-10-20", "month"));
+    fireEvent.change(screen.getByLabelText("Ngày bán hàng"), { target: { value: "2026-10-19" } });
+    await waitFor(() => expect(state.fetch).toHaveBeenLastCalledWith("b1", "2026-10-19", "2026-10-19", "hour"));
+    expect(screen.getByLabelText("Ngày tham chiếu biểu đồ")).toHaveValue("2026-10-20");
+    expect(screen.getByRole("button", { name: "Tháng" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Hôm nay" }));
+    await waitFor(() => expect(state.fetch).toHaveBeenLastCalledWith("b1", "2026-10-20", "2026-10-20", "hour"));
+    expect(screen.getByRole("button", { name: "Tháng" })).toHaveAttribute("aria-pressed", "true");
+  });
+  it("keeps daily sales visible if a separate chart request fails", async () => {
+    render(<Dashboard />);
+    await screen.findByTestId("net-sales");
+    state.fetch.mockRejectedValueOnce(new Error("Lỗi phân tích"));
+    fireEvent.click(screen.getByRole("button", { name: "Ngày" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Biểu đồ: Lỗi phân tích"));
+    expect(screen.getByTestId("net-sales")).toHaveTextContent("111,111");
+  });
+  it("changing the chart reference day never changes the daily summary", async () => {
+    render(<Dashboard />);
+    await screen.findByTestId("net-sales");
+    state.fetch.mockResolvedValueOnce({ ...sample, sales: 999999 });
+    fireEvent.change(screen.getByLabelText("Ngày tham chiếu biểu đồ"), { target: { value: "2026-10-19" } });
+    await waitFor(() => expect(state.fetch).toHaveBeenLastCalledWith("b1", "2026-10-19", "2026-10-19", "hour"));
+    expect(screen.getByTestId("net-sales")).toHaveTextContent("111,111");
+    expect(screen.getByLabelText("Ngày bán hàng")).toHaveValue("2026-10-20");
+  });
+  it("does not lock refresh after leaving an in-flight chart period", async () => {
+    render(<Dashboard />);
+    await screen.findByTestId("net-sales");
+    state.fetch.mockReturnValueOnce(new Promise(() => {}));
+    fireEvent.click(screen.getByRole("button", { name: "Ngày" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Làm mới" })).toBeDisabled());
+    fireEvent.click(screen.getByRole("button", { name: "Giờ" }));
+    expect(screen.getByRole("button", { name: "Làm mới" })).toBeEnabled();
+  });
 });
