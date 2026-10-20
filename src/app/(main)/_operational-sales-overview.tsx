@@ -92,7 +92,7 @@ export default function OperationalSalesOverview() {
       </header>
       <div className="flex flex-wrap items-center justify-between gap-2 border-y py-2">
         <div role="group" aria-label="Nhóm thời gian" className="flex rounded-md bg-muted p-1">
-          {GRAINS.map(item => <Button key={item.value} size="sm" variant={grain === item.value ? "secondary" : "ghost"} aria-pressed={grain === item.value} onClick={() => setGrain(item.value)}>{item.label}</Button>)}
+          {GRAINS.map(item => <Button key={item.value} size="sm" variant={grain === item.value ? "default" : "ghost"} aria-pressed={grain === item.value} onClick={() => setGrain(item.value)}>{item.label}</Button>)}
         </div>
         <div className="flex items-center gap-2">
           <input type="date" aria-label="Ngày tham chiếu" max={today} value={date} onChange={event => { const next = event.target.value; if (next && next <= today) setAnchor(next); }} className="h-9 min-w-0 rounded-md border bg-background px-2 text-sm" />
@@ -103,9 +103,9 @@ export default function OperationalSalesOverview() {
       {!data && !error && <div role="status" aria-label="Đang tải doanh số" className="h-56 animate-pulse rounded-md bg-muted" />}
       {data && <>
         <section aria-labelledby="sales-title" className="overflow-hidden rounded-md border bg-card">
-          <div className="border-l-4 border-primary p-4 sm:p-5">
-            <div className="flex items-center justify-between gap-2"><h2 id="sales-title" className="text-sm font-semibold">Doanh số thực tế</h2><span className="text-xs text-muted-foreground">Đồng</span></div>
-            <p className="mt-1 text-[28px] font-semibold leading-tight tabular-nums sm:text-[32px]" data-testid="net-sales">{formatCurrency(data.sales)}</p>
+          <div className="border-l-4 border-primary bg-primary/5 p-4 sm:p-5">
+            <div className="flex items-center justify-between gap-2"><h2 id="sales-title" className="text-sm font-semibold text-primary">Doanh số thực tế</h2><span className="text-xs text-muted-foreground">Đồng</span></div>
+            <p className="mt-1 text-[28px] font-semibold leading-tight tabular-nums text-primary sm:text-[32px]" data-testid="net-sales">{formatCurrency(data.sales)}</p>
             <p className="mt-1 text-xs text-muted-foreground">Sau giảm giá và hàng trả</p>
             <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
               <span><strong className="text-foreground">{formatNumber(data.orders)}</strong> hóa đơn hoàn tất</span>
@@ -117,7 +117,7 @@ export default function OperationalSalesOverview() {
             {Array.from(new Set(["cash", "transfer", ...Object.keys(data.methods).filter(method => data.methods[method] !== 0)])).map(method => (
               <div key={method} className="min-w-0 border-b p-3 sm:px-5"><dt className="text-xs text-muted-foreground">{METHODS[method] ?? method}</dt><dd className="mt-1 break-words text-base font-semibold tabular-nums">{formatCurrency(data.methods[method] ?? 0)}</dd></div>
             ))}
-            <div className="min-w-0 border-b p-3 sm:px-5"><dt className="text-xs text-muted-foreground">Thực thu sau hoàn</dt><dd className="mt-1 break-words text-base font-semibold tabular-nums">{formatCurrency(data.collected)}</dd></div>
+            <div className="col-span-2 flex min-w-0 items-center justify-between gap-2 border-b bg-primary/5 p-3 sm:col-span-1 sm:block sm:px-5"><dt className="text-xs text-muted-foreground">Thực thu sau hoàn</dt><dd className="break-words text-base font-semibold tabular-nums sm:mt-1">{formatCurrency(data.collected)}</dd></div>
           </dl>
           <details className="p-3 text-xs sm:px-5">
             <summary className="cursor-pointer font-medium">Đối chiếu bán hàng và thu tiền</summary>
