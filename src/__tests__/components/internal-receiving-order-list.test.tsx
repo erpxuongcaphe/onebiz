@@ -29,4 +29,15 @@ describe('receiving document management table',()=>{
     expect(screen.getByRole('alert')).toHaveTextContent('Ngày bắt đầu');
     expect(screen.getByRole('button',{name:'Danh sách'})).toBeDisabled();
   });
+  it('offers a compact view without losing the full columns or any historical status',()=>{
+    render(<InternalReceivingOrderList orders={orders} loading={false} busy={false} canExport onOpen={()=>{}} onClose={()=>{}} detail={null}/>);
+    expect(screen.getByRole('button',{name:'Tất cả'})).toHaveAttribute('aria-pressed','true');
+    expect(screen.getByText('Tiến độ nhận',{selector:'th *'})).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button',{name:'Đầy đủ'}));
+    expect(screen.getByRole('button',{name:'Đầy đủ'})).toHaveAttribute('aria-pressed','true');
+    expect(screen.getAllByText('Người xuất').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button',{name:'Đã nhận đủ'}));
+    expect(screen.getAllByText('NB-39').length).toBeGreaterThan(0);
+    expect(screen.queryByText('NB-38')).not.toBeInTheDocument();
+  });
 });

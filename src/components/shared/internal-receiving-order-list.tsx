@@ -21,6 +21,7 @@ export function InternalReceivingOrderList({orders,loading,busy,selected,canExpo
   const [sorting,setSorting]=useState<SortingState>([{id:'createdAt',desc:true}]);
   const [page,setPage]=useState(0),[size,setSize]=useState(25);
   const [exporting,setExporting]=useState(false),[exportError,setExportError]=useState('');
+  const [full,setFull]=useState(false);
   const sources=useMemo(()=>[...new Set(orders.map(o=>o.fromBranch))].sort(),[orders]);
   const receivers=useMemo(()=>[...new Set(orders.flatMap(o=>o.receipts.map(r=>r.createdBy)).filter(Boolean))].sort(),[orders]);
   const filtered=useMemo(()=>filterReceivingOrders(orders,filters).sort((a,b)=>{
@@ -51,7 +52,9 @@ export function InternalReceivingOrderList({orders,loading,busy,selected,canExpo
     {id:'receivers',header:'Người nhận',meta:{hideBelow:'lg'},accessorFn:row=>receivingMetrics(row).receivers||'—'},
     {accessorKey:'createdBy',header:'Người xuất',meta:{hideBelow:'lg'}},
     {accessorKey:'note',header:'Ghi chú',meta:{hideBelow:'lg'}},
-  ],[]);
+    {id:'action',header:'Thao tác',enableSorting:false,cell:({row})=><Button variant="outline" size="sm" disabled={busy} onClick={event=>{event.stopPropagation();onOpen(row.original.id);}}>Xem đơn</Button>},
+  ],[busy,onOpen]);
+  const displayedColumns=full?columns:columns.filter(column=>['code','createdAt','fromBranch','toBranch','status','items','action'].includes('accessorKey' in column?String(column.accessorKey):column.id??'')).map(column=>column.id==='items'?{...column,header:'Tiến độ nhận',cell:({row}:{row:{original:InternalReceivingOrder}})=>{const metrics=receivingMetrics(row.original);return ['cancelled','draft'].includes(receivingStatus(row.original))?'—':`${metrics.items-metrics.pending}/${metrics.items} mặt hàng`;}}:column);
   async function download(lines:boolean){
     setExporting(true);setExportError('');
     try{
@@ -70,6 +73,7 @@ export function InternalReceivingOrderList({orders,loading,busy,selected,canExpo
       <Button variant="outline" onClick={()=>{setFilters(EMPTY_RECEIVING_FILTERS);setPage(0);}}><Icon name="filter_alt_off"/>Xóa bộ lọc</Button>
       {canExport&&<><Button variant="outline" disabled={loading||exporting||!!rangeError||!rows.length} onClick={()=>void download(false)}><Icon name="download"/>Danh sách</Button><Button variant="outline" disabled={loading||exporting||!!rangeError||!rows.length} onClick={()=>void download(true)}><Icon name="download"/>Chi tiết hàng</Button></>}
     </div>
+    <div role="group" aria-label="Trạng thái nhận nhanh" className="flex flex-wrap gap-1 border-b">{[['','Tất cả'],['pending','Chờ nhận'],['partial','Nhận một phần'],['received','Đã nhận đủ'],['cancelled','Đã hủy']].map(([value,label])=><button key={value} type="button" aria-pressed={filters.status===value} className={`border-b-2 px-3 py-2 text-sm ${filters.status===value?'border-primary font-medium text-primary':'border-transparent text-muted-foreground'}`} onClick={()=>patch({status:value})}>{label}</button>)}</div>
     <details className="border-y py-2" onKeyDown={event=>{if(event.key==='Escape')event.currentTarget.open=false;}}><summary className="cursor-pointer text-sm font-medium">Bộ lọc chứng từ{chips.length?` · ${chips.length} điều kiện`:''}</summary><div className="grid gap-3 py-3 sm:grid-cols-2 xl:grid-cols-4">
       <label className="grid gap-1 text-sm">Trạng thái nhận<select className={selectClass} value={filters.status} onChange={e=>patch({status:e.target.value})}><option value="">Tất cả trạng thái</option>{Object.entries(RECEIVING_STATUS_LABELS).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
       <label className="grid gap-1 text-sm">Chi nhánh xuất<select className={selectClass} value={filters.source} onChange={e=>patch({source:e.target.value})}><option value="">Tất cả nơi xuất</option>{sources.map(name=><option key={name}>{name}</option>)}</select></label>
@@ -81,9 +85,10 @@ export function InternalReceivingOrderList({orders,loading,busy,selected,canExpo
     </div></details>
     <FilterChips filters={chips} onClearAll={()=>{setFilters(EMPTY_RECEIVING_FILTERS);setPage(0);}}/>
     {(rangeError||exportError)&&<p role="alert" className="text-sm text-destructive">{rangeError||exportError}</p>}
-    <div className="flex flex-wrap items-center gap-2 text-sm"><label className="flex items-center gap-2">Sắp xếp<select aria-label="Sắp xếp theo" className={selectClass} value={sorting[0]?.id??'createdAt'} onChange={e=>{setSorting([{id:e.target.value,desc:sorting[0]?.desc??true}]);setPage(0);}}>{columns.map(column=>{const id='accessorKey' in column?String(column.accessorKey):column.id??'';return <option key={id} value={id}>{String(column.header)}</option>;})}</select></label><select aria-label="Thứ tự sắp xếp" className={selectClass} value={sorting[0]?.desc?'desc':'asc'} onChange={e=>{setSorting([{id:sorting[0]?.id??'createdAt',desc:e.target.value==='desc'}]);setPage(0);}}><option value="desc">Giảm dần</option><option value="asc">Tăng dần</option></select></div>
-    <div className="min-h-[360px] min-w-0"><DataTable columns={columns} data={pageRows} loading={loading} density="compact" columnToggle selectable={false} getRowId={row=>row.id}
-      sorting={sorting} onSortingChange={next=>{setSorting(next);setPage(0);}} sortableColumnIds={columns.map(c=>'accessorKey' in c?String(c.accessorKey):c.id??'')}
+    <div className="flex flex-wrap items-center gap-2 text-sm"><div role="group" aria-label="Mức độ chi tiết" className="inline-flex border"><Button size="sm" variant={full?'ghost':'secondary'} aria-pressed={!full} onClick={()=>setFull(false)}>Gọn</Button><Button size="sm" variant={full?'secondary':'ghost'} aria-pressed={full} onClick={()=>setFull(true)}>Đầy đủ</Button></div><label className="flex items-center gap-2">Sắp xếp<select aria-label="Sắp xếp theo" className={selectClass} value={sorting[0]?.id??'createdAt'} onChange={e=>{setSorting([{id:e.target.value,desc:sorting[0]?.desc??true}]);setPage(0);}}>{columns.filter(column=>column.id!=='action').map(column=>{const id='accessorKey' in column?String(column.accessorKey):column.id??'';return <option key={id} value={id}>{String(column.header)}</option>;})}</select></label><select aria-label="Thứ tự sắp xếp" className={selectClass} value={sorting[0]?.desc?'desc':'asc'} onChange={e=>{setSorting([{id:sorting[0]?.id??'createdAt',desc:e.target.value==='desc'}]);setPage(0);}}><option value="desc">Giảm dần</option><option value="asc">Tăng dần</option></select></div>
+    <div className="min-h-[360px] min-w-0"><DataTable key={full?'full':'compact'} columns={displayedColumns} data={pageRows} loading={loading} density="compact" columnToggle selectable={false} getRowId={row=>row.id}
+      defaultColumnVisibility={full?Object.fromEntries(columns.map(column=>['accessorKey' in column?String(column.accessorKey):column.id??'',true])):undefined}
+      sorting={sorting} onSortingChange={next=>{setSorting(next);setPage(0);}} sortableColumnIds={columns.filter(c=>c.id!=='action').map(c=>'accessorKey' in c?String(c.accessorKey):c.id??'')}
       pageIndex={page} pageSize={size} pageCount={Math.ceil(rows.length/size)} total={rows.length} onPageChange={setPage} onPageSizeChange={value=>{setSize(value);setPage(0);}}
       toolbarMetrics={<span className="text-sm"><b>{formatNumber(rows.length)}</b> đơn · <b>{formatNumber(rows.filter(o=>['pending','partial'].includes(receivingStatus(o))).length)}</b> chờ nhận · <b>{formatNumber(rows.filter(o=>receivingStatus(o)==='received').length)}</b> nhận đủ</span>}
       expandedRow={expanded<0?null:expanded} onExpandedRowChange={index=>{if(busy)return;if(index==null)onClose();else onOpen(pageRows[index].id);}}

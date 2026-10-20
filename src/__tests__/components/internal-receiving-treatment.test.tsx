@@ -21,7 +21,7 @@ beforeEach(()=>{vi.clearAllMocks();vi.stubGlobal('matchMedia',vi.fn(()=>({matche
 describe('internal receiving treatment',()=>{
   it('opens the permitted source branch locally without changing the POS branch',async()=>{
     render(<Page/>);
-    await screen.findByText('Ghi chi phí vận hành');
+    await screen.findByText('Chi phí vận hành',{selector:'span'});
     expect(mocks.read).toHaveBeenCalledWith('xtb');
     expect(mocks.read).not.toHaveBeenCalledWith('warehouse');
     expect(screen.getByText('SKU-MILK-BOX · 1 Thùng = 12 Hộp')).toBeInTheDocument();
@@ -29,7 +29,7 @@ describe('internal receiving treatment',()=>{
   });
   it('submits physical source quantities, leaving cost and unit conversion authority on the server',async()=>{
     render(<Page/>);
-    await screen.findByText('Ghi chi phí vận hành');
+    fireEvent.click(await screen.findByRole('button',{name:'Nhận hàng'}));
     fireEvent.change(screen.getByLabelText('Thực nhận Sữa thùng'),{target:{value:'1'}});
     fireEvent.change(screen.getByLabelText('Thực nhận Vật tư vận hành'),{target:{value:'2'}});
     fireEvent.click(screen.getByRole('button',{name:'Xác nhận thực nhận'}));
@@ -46,7 +46,7 @@ describe('internal receiving treatment',()=>{
   });
   it('requires a reason before an administrator confirms an unconfigured ingredient as stock',async()=>{
     render(<Page/>);
-    await screen.findByText('Ghi chi phí vận hành');
+    fireEvent.click(await screen.findByRole('button',{name:'Nhận hàng'}));
     fireEvent.change(screen.getByLabelText('Thực nhận Vật tư vận hành'),{target:{value:'1'}});
     fireEvent.change(screen.getByLabelText('Cách ghi nhận Vật tư vận hành'),{target:{value:'stock'}});
     expect(screen.getByRole('button',{name:'Xác nhận thực nhận'})).toBeDisabled();
@@ -57,7 +57,7 @@ describe('internal receiving treatment',()=>{
   it('does not offer treatment changes after receipt history exists',async()=>{
     mocks.read.mockResolvedValue([{...order,items:order.items.map(item=>item.id==='tool'?{...item,received:1}:item),receipts:[{id:'previous',createdAt:'2026-10-19T09:00:00Z',updatedAt:'2026-10-19T09:00:00Z',createdBy:'Admin',revision:1,items:[{itemId:'tool',quantity:1}]}]}]);
     render(<Page/>);
-    await screen.findByText('Ghi chi phí vận hành');
+    fireEvent.click(await screen.findByRole('button',{name:'Nhận tiếp'}));
     expect(screen.queryByLabelText('Cách ghi nhận Vật tư vận hành')).not.toBeInTheDocument();
   });
   it('keeps completed and cancelled documents visible by default and blocks receiving cancelled orders',async()=>{
@@ -67,7 +67,8 @@ describe('internal receiving treatment',()=>{
     await screen.findByText('NB-FINISHED');
     expect(screen.getAllByText('NB-CANCELLED').length).toBeGreaterThan(0);
     expect(screen.getByText('Đơn đã hủy. Lịch sử nhận được giữ để đối chiếu.')).toBeInTheDocument();
-    expect(screen.getByLabelText('Thực nhận Sữa thùng')).toBeDisabled();
+    expect(screen.queryByLabelText('Thực nhận Sữa thùng')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button',{name:'Nhận hàng'})).not.toBeInTheDocument();
   });
   it('loads all and only assigned receiving branches when all branches are selected',async()=>{
     mocks.params='branch=all';mocks.read.mockResolvedValue([]);
@@ -79,5 +80,31 @@ describe('internal receiving treatment',()=>{
     render(<Page/>);
     fireEvent.click(await screen.findByRole('button',{name:'Đóng chi tiết'}));
     await waitFor(()=>expect(screen.queryByRole('button',{name:'Đóng chi tiết'})).not.toBeInTheDocument());
+  });
+  it('opens in read mode and shows canonical received quantities without an editable form',async()=>{
+    mocks.read.mockResolvedValue([{...order,items:order.items.map(item=>({...item,received:item.dispatched}))}]);
+    render(<Page/>);
+    await screen.findByText('Đã nhập: 24 Hộp · SKU-MILK-BOX');
+    expect(screen.queryByLabelText('Thực nhận Sữa thùng')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button',{name:'Xác nhận thực nhận'})).not.toBeInTheDocument();
+  });
+  it('fills remaining amounts without submitting and previews the actual destination unit',async()=>{
+    render(<Page/>);
+    fireEvent.click(await screen.findByRole('button',{name:'Nhận hàng'}));
+    fireEvent.click(screen.getByRole('button',{name:'Điền số còn lại'}));
+    expect(screen.getByText('Sẽ nhập: 24 Hộp · SKU-MILK-BOX')).toBeInTheDocument();
+    expect(mocks.receive).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button',{name:'Hủy'}));
+    expect(screen.queryByLabelText('Thực nhận Sữa thùng')).not.toBeInTheDocument();
+  });
+  it('shows receipt metadata and requires a reason when editing through history',async()=>{
+    mocks.read.mockResolvedValue([{...order,items:order.items.map(item=>({...item,received:item.dispatched})),receipts:[{id:'receipt-first',createdAt:'2026-10-19T09:00:00Z',updatedAt:'2026-10-19T09:00:00Z',createdBy:'Admin',revision:1,note:'Giao đủ',items:[{itemId:'milk',quantity:2},{itemId:'tool',quantity:3}]}]}]);
+    render(<Page/>);
+    fireEvent.click(await screen.findByRole('tab',{name:'Lịch sử nhận (1)'}));
+    expect(screen.getByText(/Mã lần nhận: receipt-first/)).toBeInTheDocument();
+    expect(screen.getByText('Giao đủ')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button',{name:'Sửa lần nhận'}));
+    expect(screen.getByRole('button',{name:'Lưu số thực nhận đã sửa'})).toBeDisabled();
+    expect(screen.getByLabelText('Lý do sửa (bắt buộc)')).toBeInTheDocument();
   });
 });
