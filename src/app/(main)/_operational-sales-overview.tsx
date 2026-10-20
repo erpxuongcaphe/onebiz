@@ -29,6 +29,34 @@ const WORK = [
   { permission: "ops.view", href: "/hub", icon: "task_alt", label: "Công việc" },
 ];
 
+function useSalesQuery(scope: string, branchId: string | undefined, from: string, to: string, grain: SalesGrain, enabled: boolean) {
+  const key = `${scope}:${branchId ?? "all"}:${from}:${to}:${grain}:${enabled}`;
+  const [result, setResult] = useState<{ key: string; data: SalesDashboard; at: string } | null>(null);
+  const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const request = useRef(0);
+  const refresh = useCallback(async () => {
+    const id = ++request.current;
+    if (!enabled) return;
+    setLoading(true);
+    try {
+      const data = await getSalesDashboard(branchId, from, to, grain);
+      if (request.current !== id) return;
+      setResult({ key, data, at: new Date().toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit" }) });
+      setFailure(null);
+    } catch (error) {
+      if (request.current === id) setFailure({ key, message: error instanceof Error ? error.message : "Không tải được tổng quan." });
+    } finally {
+      if (request.current === id) setLoading(false);
+    }
+  }, [branchId, enabled, from, grain, key, to]);
+  useEffect(() => {
+    void refresh();
+    return () => { request.current += 1; };
+  }, [refresh]);
+  return { data: enabled && result?.key === key ? result.data : null, error: enabled && failure?.key === key ? failure.message : null, at: result?.key === key ? result.at : null, loading, refresh };
+}
+
 export default function OperationalSalesOverview() {
   const { activeBranchId, isReady } = useBranchFilter();
   const { tenant, user, branches, hasPermission } = useAuth();
@@ -38,38 +66,27 @@ export default function OperationalSalesOverview() {
     : hasPermission("reports.view_all_branches") && hasPermission("reports.dashboard")
       && (!branches.some(item => item.branchType === "store") || hasPermission("pos_fnb.view_sales_summary"));
   const today = useReceivingVietnamDay();
+  const [summaryAnchor, setSummaryAnchor] = useState<string | null>(null);
+  const summaryDay = summaryAnchor ?? today;
   const [anchor, setAnchor] = useState<string | null>(null);
   const [grain, setGrain] = useState<SalesGrain>("hour");
   const date = anchor ?? today;
   const range = useMemo(() => salesRange(grain, date), [grain, date]);
   const to = range.to > today ? today : range.to;
-  const key = `${tenant?.id}:${user?.id}:${activeBranchId ?? "all"}:${range.from}:${to}:${grain}:${allowed}`;
-  const [result, setResult] = useState<{ key: string; data: SalesDashboard; at: string } | null>(null);
-  const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
-  const [loading, setLoading] = useState(false);
-  const request = useRef(0);
+  const enabled = isReady && allowed && !!tenant?.id && !!user?.id;
+  const scope = `${tenant?.id}:${user?.id}`;
+  const daily = useSalesQuery(scope, activeBranchId, summaryDay, summaryDay, "hour", enabled);
+  const samePeriod = grain === "hour" && range.from === summaryDay && to === summaryDay;
+  const analysis = useSalesQuery(scope, activeBranchId, range.from, to, grain, enabled && !samePeriod);
+  const chart = samePeriod ? daily : analysis;
+  const refreshDaily = daily.refresh;
+  const refreshAnalysis = analysis.refresh;
   const refresh = useCallback(async () => {
-    const id = ++request.current;
-    if (!isReady || !allowed || !tenant?.id || !user?.id) return;
-    setLoading(true);
-    try {
-      const data = await getSalesDashboard(activeBranchId, range.from, to, grain);
-      if (request.current !== id) return;
-      setResult({ key, data, at: new Date().toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit" }) });
-      setFailure(null);
-    } catch (error) {
-      if (request.current === id) setFailure({ key, message: error instanceof Error ? error.message : "Không tải được tổng quan." });
-    } finally {
-      if (request.current === id) setLoading(false);
-    }
-  }, [activeBranchId, allowed, grain, isReady, key, range.from, tenant?.id, to, user?.id]);
-  useEffect(() => {
-    void refresh();
-    return () => { request.current += 1; };
-  }, [refresh]);
+    await Promise.all([refreshDaily(), refreshAnalysis()]);
+  }, [refreshDaily, refreshAnalysis]);
   useLiveDataRefresh(refresh, tenant?.id, activeBranchId, ["dashboard_live_signals", "kitchen_orders"], isReady && allowed);
-  const data = allowed && result?.key === key ? result.data : null;
-  const error = failure?.key === key ? failure.message : null;
+  const data = daily.data;
+  const error = daily.error;
 
   if (!allowed) return (
     <main className="space-y-4 p-4 sm:p-6">
@@ -87,19 +104,17 @@ export default function OperationalSalesOverview() {
   return (
     <main className="min-w-0 space-y-5 p-3 sm:p-6">
       <header className="flex items-start justify-between gap-3">
-        <div className="min-w-0"><h1 className="text-xl font-bold text-foreground">Tổng quan bán hàng</h1><p className="break-words text-sm text-foreground/70">{branch?.name ?? "Tất cả chi nhánh"} · {range.label}</p></div>
-        <Button variant="outline" size="icon" aria-label="Làm mới" title="Làm mới" disabled={loading} onClick={() => void refresh()}><Icon name="refresh" size={19} /></Button>
+        <div className="min-w-0"><h1 className="text-xl font-bold text-foreground">Tổng quan bán hàng</h1><p className="break-words text-sm text-foreground/70">{branch?.name ?? "Tất cả chi nhánh"}</p></div>
+        <Button variant="outline" size="icon" aria-label="Làm mới" title="Làm mới" disabled={daily.loading || analysis.loading} onClick={() => void refresh()}><Icon name="refresh" size={19} /></Button>
       </header>
       <div className="flex flex-wrap items-center justify-between gap-2 border-y py-2">
-        <div role="group" aria-label="Nhóm thời gian" className="flex rounded-md bg-muted p-1">
-          {GRAINS.map(item => <Button key={item.value} size="sm" variant={grain === item.value ? "default" : "ghost"} aria-pressed={grain === item.value} onClick={() => setGrain(item.value)}>{item.label}</Button>)}
-        </div>
+        <label htmlFor="sales-day" className="text-sm font-semibold">{summaryDay === today ? "Doanh số hôm nay" : "Doanh số theo ngày"}</label>
         <div className="flex items-center gap-2">
-          <input type="date" aria-label="Ngày tham chiếu" max={today} value={date} onChange={event => { const next = event.target.value; if (next && next <= today) setAnchor(next); }} className="h-9 min-w-0 rounded-md border bg-background px-2 text-sm" />
-          <Button size="sm" variant="ghost" onClick={() => { setAnchor(null); setGrain("hour"); }}>Hôm nay</Button>
+          <input id="sales-day" type="date" aria-label="Ngày bán hàng" max={today} value={summaryDay} onChange={event => { const next = event.target.value; if (next && next <= today) setSummaryAnchor(next); }} className="h-9 min-w-0 rounded-md border bg-background px-2 text-sm" />
+          <Button size="sm" variant="ghost" onClick={() => setSummaryAnchor(null)}>Hôm nay</Button>
         </div>
       </div>
-      {error && <div role="alert" className="flex flex-wrap items-center justify-between gap-2 border-l-4 border-destructive bg-destructive/5 p-3 text-sm"><span>{error}</span><Button size="sm" variant="outline" onClick={() => void refresh()}>Thử lại</Button></div>}
+      {error && <div role="alert" className="flex flex-wrap items-center justify-between gap-2 border-l-4 border-destructive bg-destructive/5 p-3 text-sm"><span>{error}</span><Button size="sm" variant="outline" onClick={() => void daily.refresh()}>Thử lại</Button></div>}
       {!data && !error && <div role="status" aria-label="Đang tải doanh số" className="h-56 animate-pulse rounded-md bg-muted" />}
       {data && <>
         <section aria-labelledby="sales-title" className="overflow-hidden rounded-md border border-border/80 bg-card shadow-sm">
@@ -127,9 +142,20 @@ export default function OperationalSalesOverview() {
             <p className="mt-3 leading-relaxed text-muted-foreground">Doanh số theo ngày hóa đơn và hàng trả, gồm thuế/phí giao nếu có. Tiền theo ngày ghi sổ, có thể gồm thu nợ cũ hoặc hoàn hóa đơn kỳ trước. Không phải lợi nhuận.</p>
           </details>
         </section>
-        <SalesCharts buckets={data.buckets} modes={data.modes} grain={grain} period={range.label} />
-        <p className="text-right text-xs text-muted-foreground">Cập nhật {result?.at}</p>
+        <p className="text-right text-xs text-muted-foreground">Cập nhật {daily.at}</p>
       </>}
+      <section aria-labelledby="analysis-title" className="min-w-0 space-y-3 border-t pt-4">
+        <h2 id="analysis-title" className="text-base font-semibold">Phân tích bán hàng</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div role="group" aria-label="Nhóm thời gian biểu đồ" className="flex rounded-md bg-muted p-1">
+            {GRAINS.map(item => <Button key={item.value} size="sm" variant={grain === item.value ? "default" : "ghost"} aria-pressed={grain === item.value} onClick={() => setGrain(item.value)}>{item.label}</Button>)}
+          </div>
+          <input type="date" aria-label="Ngày tham chiếu biểu đồ" max={today} value={date} onChange={event => { const next = event.target.value; if (next && next <= today) setAnchor(next); }} className="h-9 min-w-0 rounded-md border bg-background px-2 text-sm" />
+        </div>
+        {!samePeriod && chart.error && <div role="alert" className="border-l-4 border-destructive bg-destructive/5 p-3 text-sm">Biểu đồ: {chart.error} <Button size="sm" variant="outline" onClick={() => void chart.refresh()}>Tải lại biểu đồ</Button></div>}
+        {!chart.data && !chart.error && <div role="status" aria-label="Đang tải phân tích" className="h-60 animate-pulse bg-muted" />}
+        {chart.data && <SalesCharts buckets={chart.data.buckets} modes={chart.data.modes} grain={grain} period={range.label} />}
+      </section>
     </main>
   );
 }
