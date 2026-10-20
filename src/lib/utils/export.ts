@@ -16,14 +16,15 @@ interface ExportColumn {
   header: string;
   key: string;
   width?: number;
+  precision?: number;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   format?: (value: any) => string | number;
 }
 
-function normalizeExportValue(value: string | number | null | undefined) {
+function normalizeExportValue(value: string | number | null | undefined, precision = 2) {
   if (typeof value !== "number") return value ?? "";
   if (!Number.isFinite(value)) return 0;
-  return roundDecimals(value);
+  return roundDecimals(value,Math.max(0,Math.min(12,precision)));
 }
 
 /**
@@ -62,7 +63,7 @@ export async function exportToExcel<T extends Record<string, any>>(
     columns.reduce(
       (acc, col) => {
         const value = item[col.key];
-        acc[col.header] = normalizeExportValue(col.format ? col.format(value) : value);
+        acc[col.header] = normalizeExportValue(col.format ? col.format(value) : value,col.precision);
         return acc;
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -80,7 +81,8 @@ export async function exportToExcel<T extends Record<string, any>>(
       if (address.startsWith("!") || !cell || typeof cell !== "object") continue;
       const value = cell as { t?: string; v?: unknown; z?: string };
       if (value.t === "n" && typeof value.v === "number") {
-        value.z = Number.isInteger(value.v) ? "#,##0" : "#,##0.00";
+        const precision=columns[XLSX.utils.decode_cell(address).c]?.precision;
+        value.z = Number.isInteger(value.v) ? "#,##0" : precision == null ? "#,##0.00" : `#,##0.${'#'.repeat(Math.max(0,Math.min(12,precision)))}`;
       }
     }
   }
@@ -108,7 +110,7 @@ export async function exportToCsv<T extends Record<string, any>>(
     columns.reduce(
       (acc, col) => {
         const value = item[col.key];
-        acc[col.header] = normalizeExportValue(col.format ? col.format(value) : value);
+        acc[col.header] = normalizeExportValue(col.format ? col.format(value) : value,col.precision);
         return acc;
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

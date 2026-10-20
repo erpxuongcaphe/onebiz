@@ -95,6 +95,10 @@ try {
   }
   const beforeSkuMigration=(await db.query('select * from branch_stock order by branch_id,product_id')).rows;
   await db.exec(fs.readFileSync('supabase/migrations/00570_internal_receiving_retail_skus.sql','utf8').replace(/\r?\n/g,'\r\n'));
+  if(process.env.FNB_RECEIVING_WORKSPACE_DEFINITIONS) {
+    for(const definition of Object.values(JSON.parse(fs.readFileSync(process.env.FNB_RECEIVING_WORKSPACE_DEFINITIONS,'utf8')))) await db.exec(definition);
+  }
+  await db.exec(fs.readFileSync('supabase/migrations/00571_internal_receiving_management_workspace.sql','utf8').replace(/\r?\n/g,'\r\n'));
   assert.deepEqual((await db.query('select * from branch_stock order by branch_id,product_id')).rows,beforeSkuMigration);
   for(const invalid of ["product_type='material'", "channel='fnb'", "inventory_role='fnb_menu_item'", "is_active=false"]) {
     await db.exec('begin');
@@ -159,6 +163,9 @@ try {
   const financeWorkspace=(await db.query(`select get_management_finance_workspace(current_date-1,current_date+1,'${context.dest}') r`)).rows[0].r;
   assert.equal(financeWorkspace.items[0].source_type,'internal_receipt');
   assert.equal(financeWorkspace.items[0].source_sale_id,operationsSale.internal_sale_id);
+  assert.equal(financeWorkspace.items[0].source_product_code,operationsItem.product_code);
+  assert.equal(Number(financeWorkspace.items[0].source_quantity),8);
+  assert.equal(Number(financeWorkspace.items[0].source_unit_price),100);
   await db.exec(`create or replace function user_has_branch_access(uuid,uuid) returns boolean language sql as $$select $2<>'${source}'::uuid$$`);
   const limitedFinance=(await db.query(`select get_management_finance_workspace(current_date-1,current_date+1,'${context.dest}') r`)).rows[0].r.items[0];
   assert.equal(limitedFinance.can_view_consolidated_cost,false); assert.equal(limitedFinance.consolidated_amount,null);
@@ -273,6 +280,11 @@ try {
   assert.equal(await stock(),mixedStockBefore);
   assert.equal(await operationsStock(),mixedOperationsBefore);
   assert.equal(Number((await financeTotals(context.dest)).expense),0);
+  const managementList=(await db.query(`select get_internal_receiving_workspace('${context.dest}') r`)).rows[0].r;
+  assert.equal(managementList.find(row=>row.id===mixedSale.internal_sale_id).status,'cancelled');
+  assert.equal(managementList.find(row=>row.id===mixedSale.internal_sale_id).toBranchId,context.dest);
+  assert.ok(managementList.some(row=>row.receiptMode==='legacy'),'legacy receiving history remains visible');
+  await assert.rejects(db.query(`select receive_internal_sale_actual('${mixedSale.internal_sale_id}','${mixedPayload}',gen_random_uuid(),'Cannot receive cancelled document')`),/ORDER_NOT_OPEN/);
   await db.exec(`create or replace function user_has_branch_access(uuid,uuid) returns boolean language sql as 'select false'`);
   await assert.rejects(db.query(`select get_internal_receiving_workspace('${context.dest}')`),/BRANCH_DENIED/);
   await assert.rejects(receive(1,'93000000-0000-0000-0000-000000000006'),/BRANCH_DENIED/);
