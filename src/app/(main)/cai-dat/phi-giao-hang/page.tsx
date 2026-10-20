@@ -29,6 +29,7 @@ import {
   type DeliveryTierCode,
 } from "@/lib/services";
 import { formatCurrency } from "@/lib/format";
+import { DeliveryPolicySettings } from "./delivery-policy-editor";
 
 const TIER_META: Record<
   DeliveryTierCode,
@@ -162,14 +163,15 @@ export default function DeliveryFeeSettingsPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-xl font-semibold">Phí giao hàng theo km</h1>
+        <h1 className="text-xl font-semibold">Phí giao hàng</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Cấu hình phí giao hàng tự giao theo 3 cấp ngưỡng. POS FnB sẽ
-          hiển thị 3 nút này khi cashier chọn loại đơn &quot;Giao hàng&quot; +
-          &quot;Tự giao&quot;.
+          Tùy chỉnh khoảng cách, giá trị bill và phí khách trả cho đơn tự giao.
         </p>
       </div>
 
+      <DeliveryPolicySettings />
+      <details className="space-y-4 rounded-xl border p-4">
+        <summary className="cursor-pointer font-medium">Mức phí chọn thủ công (khi tắt tự tính phí)</summary>
       {/* TIER MẶC ĐỊNH (TENANT) */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
@@ -181,9 +183,7 @@ export default function DeliveryFeeSettingsPage() {
             </p>
           </div>
           <HelpTip>
-            3 tier cố định: near / mid / far. Anh chỉ chỉnh được tên hiển
-            thị + giá tiền. Nếu muốn thêm tier (vd tier 4 &quot;Trên 10km&quot;)
-            cần migration mới.
+            Các mức này dùng khi chưa bật chính sách tự tính phí. Để thêm nhiều khoảng cách và ngưỡng bill, dùng phần cấu hình bên trên.
           </HelpTip>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -361,6 +361,7 @@ export default function DeliveryFeeSettingsPage() {
           </CardContent>
         </Card>
       )}
+      </details>
     </div>
   );
 }

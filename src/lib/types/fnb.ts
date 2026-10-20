@@ -264,4 +264,6 @@ export interface FnbTabSnapshot {
    * - "custom": cashier nhập tay (legacy, vẫn cho phép)
    */
   deliveryDistanceTier?: "near" | "mid" | "far" | "custom";
+  /** Draft-only distance; sent orders keep their quoted fee snapshot. */
+  deliveryDistanceMeters?: number;
 }
