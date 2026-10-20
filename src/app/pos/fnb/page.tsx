@@ -154,7 +154,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { getDeliveryPricePolicy } from "@/lib/services/supabase/fnb-delivery-policy";
 import { fnbDiscountCartKey, fnbManualDiscountAmount } from "@/lib/fnb-manual-discount";
-import { quoteDeliveryPrice, type DeliveryPricePolicy } from "@/lib/fnb-delivery-policy";
+import { quoteDeliveryPrice, resolveDeliveryDistanceMeters, formatDeliveryDistanceRange, type DeliveryPricePolicy } from "@/lib/fnb-delivery-policy";
 import { FnbDeliveryPrice } from "./components/fnb-delivery-price";
 
 // Lazy load heavy dialogs (only loaded when user opens them)
@@ -1013,7 +1013,7 @@ function FnbPosPageInner() {
   );
 
   const currentDeliveryPolicy = deliveryPolicy && deliveryPolicy.branchId === branchId ? deliveryPolicy.policy : null;
-  const deliveryPriceQuote = currentDeliveryPolicy ? quoteDeliveryPrice(currentDeliveryPolicy, pos.activeTab?.deliveryDistanceMeters, pos.subtotal, fnbBenefitDisplay.total) : null;
+  const deliveryPriceQuote = currentDeliveryPolicy ? quoteDeliveryPrice(currentDeliveryPolicy, resolveDeliveryDistanceMeters(currentDeliveryPolicy, pos.activeTab?.deliveryDistanceMeters, pos.activeTab?.deliveryDistanceRange), pos.subtotal, fnbBenefitDisplay.total) : null;
   const quotedDeliveryFee = deliveryPriceQuote?.fee;
   useEffect(() => {
     const tab = pos.activeTab;
@@ -1024,8 +1024,8 @@ function FnbPosPageInner() {
   }, [pos, quotedDeliveryFee]);
   const deliveryPolicySlot = deliveryPolicyError ? <div role="alert" className="space-y-2 text-sm"><p>Chưa tải được chính sách phí giao. {deliveryPolicyError}</p><Button variant="outline" onClick={() => { setDeliveryPolicyError(""); setDeliveryPolicy(null); setDeliveryPolicyReload(n => n + 1); }}>Thử tải lại</Button></div>
     : !currentDeliveryPolicy ? <p role="status" className="text-sm">Đang tải chính sách phí giao…</p>
-      : currentDeliveryPolicy.enabled ? <FnbDeliveryPrice key={pos.activeTabId} policy={currentDeliveryPolicy} meters={pos.activeTab?.deliveryDistanceMeters} before={pos.subtotal} after={fnbBenefitDisplay.total}
-          onChange={meters => pos.updateTabMeta(pos.activeTabId, { deliveryDistanceMeters: meters })} /> : undefined;
+      : currentDeliveryPolicy.enabled ? <FnbDeliveryPrice key={pos.activeTabId} policy={currentDeliveryPolicy} meters={pos.activeTab?.deliveryDistanceMeters} range={pos.activeTab?.deliveryDistanceRange} before={pos.subtotal} after={fnbBenefitDisplay.total}
+          onChange={(meters, range) => pos.updateTabMeta(pos.activeTabId, { deliveryDistanceMeters: meters, deliveryDistanceRange: range })} /> : undefined;
 
   useEffect(() => {
     const tab = pos.activeTab;
@@ -1859,14 +1859,14 @@ function FnbPosPageInner() {
           throw new Error("Cấu hình giao hàng vừa được cập nhật. Kiểm tra phí trên bill rồi bấm gửi lại.");
         }
         if (policy.enabled) {
-          const quote = quoteDeliveryPrice(policy, tab.deliveryDistanceMeters, pos.subtotal, fnbBenefitDisplay.total);
+          const quote = quoteDeliveryPrice(policy, resolveDeliveryDistanceMeters(policy, tab.deliveryDistanceMeters, tab.deliveryDistanceRange), pos.subtotal, fnbBenefitDisplay.total);
           if (!quote) throw new Error("Chưa có mức phí phù hợp với khoảng cách và giá trị bill. Kiểm tra cấu hình phí giao trước khi gửi đơn.");
           if (quote.fee !== (tab.deliveryFee ?? 0)) {
             setDeliveryPolicy({ branchId, policy });
             pos.updateTabMeta(tab.id, { deliveryFee: quote.fee, deliveryDistanceTier: "custom" });
             throw new Error("Phí giao vừa được cập nhật. Kiểm tra phí trên bill rồi bấm gửi lại.");
           }
-          tab = { ...tab, deliveryFee: quote.fee, deliveryDistanceTier: "custom", orderNote: [tab.orderNote, `Giao hàng: ${tab.deliveryDistanceMeters} m · ${quote.name} · ${quote.fee}đ`].filter(Boolean).join("\n") };
+          tab = { ...tab, deliveryFee: quote.fee, deliveryDistanceTier: "custom", orderNote: [tab.orderNote, `Giao hàng: ${tab.deliveryDistanceRange ? formatDeliveryDistanceRange(tab.deliveryDistanceRange) : `${tab.deliveryDistanceMeters} m`} · ${quote.name} · ${quote.fee}đ`].filter(Boolean).join("\n") };
         }
       }
       // Preserve tab/line identity before transport, without waiting for autosave.

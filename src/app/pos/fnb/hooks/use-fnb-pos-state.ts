@@ -113,6 +113,7 @@ export interface UseFnbPosStateReturn {
         | "deliveryStaffId"
         | "deliveryDistanceTier"
         | "deliveryDistanceMeters"
+        | "deliveryDistanceRange"
       >
     >,
   ) => void;
@@ -353,6 +354,7 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
           | "deliveryStaffId"
           | "deliveryDistanceTier"
         | "deliveryDistanceMeters"
+        | "deliveryDistanceRange"
         >
       >,
     ) => {

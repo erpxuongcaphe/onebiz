@@ -55,3 +55,37 @@ export function quoteDeliveryPrice(policy: DeliveryPricePolicy, meters: number |
   return policy.rules.find(r => r.enabled && meters >= r.fromMeters && (r.toMeters === null || meters < r.toMeters)
     && amount >= r.fromAmount && (r.toAmount === null || amount < r.toAmount)) ?? null;
 }
+
+/** A quick choice is a distance interval, never a measured address distance. */
+export interface DeliveryDistanceRange {
+  fromMeters: number;
+  toMeters: number | null;
+}
+
+export function formatDeliveryDistanceRange(range: DeliveryDistanceRange): string {
+  const format = (m: number) => m < 1000 ? `${m} m` : `${new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 3 }).format(m / 1000)} km`;
+  const lowerInclusiveKm = range.fromMeters > 1000 && range.fromMeters % 1000 === 1;
+  const upperInclusiveKm = range.toMeters !== null && range.toMeters > 1000 && range.toMeters % 1000 === 1;
+  const lower = format(lowerInclusiveKm ? range.fromMeters - 1 : range.fromMeters);
+  if (range.toMeters === null) return `${lowerInclusiveKm ? "Trên" : "Từ"} ${lower}`;
+  if (range.fromMeters === 0) return `${upperInclusiveKm ? "Đến" : "Dưới"} ${format(upperInclusiveKm ? range.toMeters - 1 : range.toMeters)}`;
+  return `${lowerInclusiveKm ? "Trên " : ""}${lower} – ${upperInclusiveKm ? "" : "dưới "}${format(upperInclusiveKm ? range.toMeters - 1 : range.toMeters)}`;
+}
+
+/** Partition every active distance boundary: price cannot change inside a choice,
+ * even when different amount brackets use overlapping distance intervals. */
+export function getDeliveryDistancePresets(policy: DeliveryPricePolicy): DeliveryDistanceRange[] {
+  if (!policy.enabled || validateDeliveryPolicy(policy)) return [];
+  const active = policy.rules.filter(rule => rule.enabled);
+  const boundaries = [...new Set(active.flatMap(rule => rule.toMeters === null ? [rule.fromMeters] : [rule.fromMeters, rule.toMeters]))].sort((a, b) => a - b);
+  return boundaries.flatMap((fromMeters, i) => {
+    if (!active.some(rule => fromMeters >= rule.fromMeters && (rule.toMeters === null || fromMeters < rule.toMeters))) return [];
+    return [{ fromMeters, toMeters: boundaries[i + 1] ?? null }];
+  });
+}
+
+/** Invalidate an old range when the branch policy changes its boundaries. */
+export function resolveDeliveryDistanceMeters(policy: DeliveryPricePolicy, meters?: number, range?: DeliveryDistanceRange): number | undefined {
+  if (!range) return meters;
+  return meters === range.fromMeters && getDeliveryDistancePresets(policy).some(p => p.fromMeters === range.fromMeters && p.toMeters === range.toMeters) ? meters : undefined;
+}
