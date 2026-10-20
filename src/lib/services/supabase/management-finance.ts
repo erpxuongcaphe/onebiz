@@ -28,6 +28,8 @@ export interface FinanceEvent {
   report_amount: number; settled_amount: number; counterparty: string;
   status: 'posted' | 'cancelled'; note: string | null; created_by_name: string;
   source_type?: 'internal_receipt'; source_sale_id?: string; source_receipt_id?: string;
+  source_sale_code?: string; source_product_code?: string; source_product_name?: string;
+  source_quantity?: number; source_unit?: string; source_unit_price?: number;
   consolidated_amount?: number | null;
   can_view_consolidated_cost?: boolean;
   allocations: Array<{branch_id: string; branch_name: string; recognition_date: string; amount: number}>;

@@ -1,6 +1,7 @@
 import {beforeEach,describe,expect,it,vi} from 'vitest';
 import {fireEvent,render,screen,waitFor} from '@testing-library/react';
 import type {InternalReceivingOrder} from '@/lib/services/supabase/internal-receiving';
+import type {ReactNode} from 'react';
 
 const mocks=vi.hoisted(()=>({read:vi.fn(),receive:vi.fn(),params:'branch=xtb&sale=sale-source'}));
 vi.mock('next/navigation',()=>({useSearchParams:()=>new URLSearchParams(mocks.params)}));
@@ -8,13 +9,14 @@ vi.mock('@/lib/contexts',()=>({useBranchFilter:()=>({activeBranchId:'warehouse',
 vi.mock('@/lib/permissions/use-permission',()=>({usePermissions:()=>({hasPermission:()=>true})}));
 vi.mock('@/lib/hooks/use-product-uom',()=>({useProductUom:()=>({map:new Map(),error:null})}));
 vi.mock('@/lib/services/supabase/internal-receiving',()=>({getInternalReceivingWorkspace:mocks.read,receiveInternalSale:mocks.receive}));
+vi.mock('@/components/shared/data-table',()=>({DataTable:({data,expandedRow,renderDetail}:{data:InternalReceivingOrder[];expandedRow:number|null;renderDetail:(row:InternalReceivingOrder,onClose:()=>void)=>ReactNode})=><div>{data.map(row=><div key={row.id}>{row.code}</div>)}{expandedRow!=null&&expandedRow>=0&&renderDetail(data[expandedRow],()=>{})}</div>}));
 import Page from '@/app/(main)/hang-hoa/nhap-hang/noi-bo/page';
 
 const order:InternalReceivingOrder={id:'sale-source',code:'BNB-FIXTURE',createdAt:'2026-10-19T08:00:00Z',fromBranch:'Kho Tổng',invoiceId:'invoice',policyVersion:1,receipts:[],items:[
   {id:'milk',productId:'milk-case',code:'SKU-MILK-CASE',name:'Sữa thùng',unit:'Thùng',dispatched:2,received:0,treatment:'stock',receivingProductId:'milk-box',receivingProductCode:'SKU-MILK-BOX',receivingFactor:12,receivingUnit:'Hộp'},
   {id:'tool',productId:'tool',code:'SKU-TOOL',name:'Vật tư vận hành',unit:'Cái',dispatched:3,received:0,treatment:'expense'},
 ]};
-beforeEach(()=>{vi.clearAllMocks();mocks.params='branch=xtb&sale=sale-source';mocks.read.mockResolvedValue([order]);mocks.receive.mockResolvedValue({receiptId:'new-receipt'});});
+beforeEach(()=>{vi.clearAllMocks();vi.stubGlobal('matchMedia',vi.fn(()=>({matches:false,addEventListener:vi.fn(),removeEventListener:vi.fn()})));mocks.params='branch=xtb&sale=sale-source';mocks.read.mockResolvedValue([order]);mocks.receive.mockResolvedValue({receiptId:'new-receipt'});});
 
 describe('internal receiving treatment',()=>{
   it('opens the permitted source branch locally without changing the POS branch',async()=>{
@@ -23,7 +25,7 @@ describe('internal receiving treatment',()=>{
     expect(mocks.read).toHaveBeenCalledWith('xtb');
     expect(mocks.read).not.toHaveBeenCalledWith('warehouse');
     expect(screen.getByText('SKU-MILK-BOX · 1 Thùng = 12 Hộp')).toBeInTheDocument();
-    expect(screen.getByText('Nhập tồn',{selector:'span'})).toBeInTheDocument();
+    expect(screen.getAllByText('Nhập tồn',{selector:'span'}).length).toBeGreaterThan(0);
   });
   it('submits physical source quantities, leaving cost and unit conversion authority on the server',async()=>{
     render(<Page/>);
@@ -57,5 +59,25 @@ describe('internal receiving treatment',()=>{
     render(<Page/>);
     await screen.findByText('Ghi chi phí vận hành');
     expect(screen.queryByLabelText('Cách ghi nhận Vật tư vận hành')).not.toBeInTheDocument();
+  });
+  it('keeps completed and cancelled documents visible by default and blocks receiving cancelled orders',async()=>{
+    mocks.params='branch=xtb&sale=cancelled';
+    mocks.read.mockResolvedValue([{...order,id:'finished',code:'NB-FINISHED',status:'completed',items:order.items.map(i=>({...i,received:i.dispatched}))},{...order,id:'cancelled',code:'NB-CANCELLED',status:'cancelled'}]);
+    render(<Page/>);
+    await screen.findByText('NB-FINISHED');
+    expect(screen.getAllByText('NB-CANCELLED').length).toBeGreaterThan(0);
+    expect(screen.getByText('Đơn đã hủy. Lịch sử nhận được giữ để đối chiếu.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Thực nhận Sữa thùng')).toBeDisabled();
+  });
+  it('loads all and only assigned receiving branches when all branches are selected',async()=>{
+    mocks.params='branch=all';mocks.read.mockResolvedValue([]);
+    render(<Page/>);
+    await waitFor(()=>expect(mocks.read).toHaveBeenCalledTimes(2));
+    expect(mocks.read).toHaveBeenCalledWith('warehouse');expect(mocks.read).toHaveBeenCalledWith('xtb');
+  });
+  it('allows closing a document opened from a source link without reopening it',async()=>{
+    render(<Page/>);
+    fireEvent.click(await screen.findByRole('button',{name:'Đóng chi tiết'}));
+    await waitFor(()=>expect(screen.queryByRole('button',{name:'Đóng chi tiết'})).not.toBeInTheDocument());
   });
 });

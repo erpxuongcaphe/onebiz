@@ -1,13 +1,13 @@
 import {beforeEach,describe,expect,it,vi} from 'vitest';
 import {fireEvent,render,screen,waitFor} from '@testing-library/react';
 import type {ReactNode} from 'react';
-const mocks = vi.hoisted(() => ({workspace:vi.fn(),all:vi.fn()}));
+const mocks = vi.hoisted(() => ({workspace:vi.fn(),all:vi.fn(),categories:vi.fn()}));
 vi.mock('@/lib/contexts',() => ({useAuth:() => ({activeBranchId:'xtb',branches:[{id:'xtb',name:'XTB - Thu ngân'}],hasPermission:() => true,isLoading:false})}));
 vi.mock('@/components/shared/report',() => ({ReportTableFrame:({children}:{children:ReactNode}) => <div>{children}</div>}));
 vi.mock('@/components/shared/page-header',() => ({PageHeader:({title}:{title:string}) => <h1>{title}</h1>}));
 vi.mock('@/components/shared/dialogs/management-finance-dialog',() => ({ManagementFinanceDialog:() => null}));
 vi.mock('@/lib/services/supabase/management-finance',() => ({
-  getFinanceWorkspace:mocks.workspace,getAllFinanceRows:mocks.all,getFinanceCategories:async () => [],
+  getFinanceWorkspace:mocks.workspace,getAllFinanceRows:mocks.all,getFinanceCategories:mocks.categories,
   saveFinanceCategory:vi.fn(),cancelFinanceDocument:vi.fn(),
 }));
 import Page from '@/app/(main)/tai-chinh/thu-nhap-chi-phi/page';
@@ -18,10 +18,39 @@ const row = {id:'e',code:'CP001',kind:'expense',category_code:'CP1',category_nam
     amount:300,status:'cancelled',payment_method:'bank_transfer',branch_id:'xtb'}]};
 beforeEach(() => {
   vi.clearAllMocks();
+  window.history.replaceState({},'','/');
+  mocks.categories.mockResolvedValue([]);
   mocks.workspace.mockResolvedValue({items:[row],total:1,summary:{income:0,expense:600,non_pnl:0},basis:'recognition_date'});
   mocks.all.mockResolvedValue([row]);
 });
 describe('management finance reporting workspace',() => {
+  it('opens the dedicated internal supply view with structured line details and the original branch scope',async()=>{
+    window.history.replaceState({},'','/?category=CP-VH-NOIBO&branch=xtb');
+    mocks.categories.mockResolvedValue([{id:'internal',code:'CP-VH-NOIBO',name:'Vật tư vận hành nội bộ',kind:'expense',is_group:false}]);
+    mocks.workspace.mockResolvedValue({items:[{...row,category_code:'CP-VH-NOIBO',source_type:'internal_receipt',source_sale_code:'NB-FIXTURE',source_product_code:'SKU-TOOL',source_product_name:'Vật tư vệ sinh',source_quantity:0.0042,source_unit:'Cái',source_unit_price:22000,settlements:[]}],total:1,summary:{income:0,expense:600,non_pnl:0}});
+    render(<Page/>);
+    await waitFor(()=>expect(mocks.workspace.mock.calls.at(-1)?.[0]).toMatchObject({categoryId:'internal',branchId:'xtb',kind:'expense'}));
+    expect(screen.getByRole('tab',{name:'Vật tư nội bộ'})).toHaveAttribute('aria-selected','true');
+    expect(await screen.findByText('SKU-TOOL')).toBeInTheDocument();
+    expect(screen.getByText('0.0042')).toBeInTheDocument();
+    expect(screen.queryByRole('button',{name:'Ghi nhận chi phí'})).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab',{name:'Tất cả chi phí'}));
+    await waitFor(()=>expect(mocks.workspace.mock.calls.at(-1)?.[0].categoryId).toBeUndefined());
+  });
+  it('does not read finance data for a branch outside the assigned scope',async()=>{
+    window.history.replaceState({},'','/?category=CP-VH-NOIBO&branch=foreign');
+    render(<Page/>);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Không có quyền xem chi phí tại chi nhánh này.');
+    expect(mocks.workspace).not.toHaveBeenCalled();
+  });
+  it('carries explicit all-branch scope into reports without changing the global POS branch',async()=>{
+    window.history.replaceState({},'','/?branch=all');
+    render(<Page/>);
+    await screen.findByRole('button',{name:'CP001'});
+    expect(mocks.workspace.mock.calls.at(-1)?.[0].branchId).toBeUndefined();
+    expect(screen.getByRole('button',{name:'Kết quả kinh doanh'}).getAttribute('href')).toContain('&branch=all');
+    expect(screen.getByRole('button',{name:'Dòng tiền'}).getAttribute('href')).toContain('&branch=all');
+  });
   it('links automatic receipt expenses to their source without offering another payment or separate cancellation',async()=>{
     mocks.workspace.mockResolvedValue({items:[{...row,source_type:'internal_receipt',source_sale_id:'sale-source',source_receipt_id:'receipt-source',can_view_consolidated_cost:false,settled_amount:0,settlements:[]}],total:1,summary:{income:0,expense:600,non_pnl:0}});
     render(<Page/>);

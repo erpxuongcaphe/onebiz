@@ -33,17 +33,29 @@ export interface InternalReceivingItem {
   receivingFactor?: number; receivingUnit?: string; receivingReason?: string;
 }
 export interface InternalReceipt { id: string; createdAt: string; updatedAt: string; revision: number; note?: string; createdBy: string; items: { itemId: string; quantity: number; inputQuantity?: number; inputUnit?: string; conversionFactor?: number; stockUnit?: string }[] }
-export interface InternalReceivingOrder { id: string; code: string; createdAt: string; fromBranch: string; invoiceId: string; policyVersion?: number; items: InternalReceivingItem[]; receipts: InternalReceipt[] }
+export interface InternalReceivingOrder {
+  id: string; code: string; createdAt: string; fromBranch: string; invoiceId: string; policyVersion?: number;
+  status?: 'draft' | 'confirmed' | 'completed' | 'cancelled'; receiptMode?: 'actual' | 'legacy';
+  fromBranchId?: string; toBranchId?: string; toBranch?: string; createdBy?: string; note?: string;
+  items: InternalReceivingItem[]; receipts: InternalReceipt[];
+}
 export async function getInternalReceivingWorkspace(branchId: string): Promise<InternalReceivingOrder[]> {
   // RPC enforces actor + tenant + destination branch and omits all prices/costs.
   const { data, error } = await (getClient().rpc as any)('get_internal_receiving_workspace', { p_branch_id: branchId });
   if (error) handleError(error, 'getInternalReceivingWorkspace');
   const orders: InternalReceivingOrder[] = (Array.isArray(data) ? data : []).map((order: InternalReceivingOrder) => ({ ...order, items: order.items ?? [], receipts: order.receipts ?? [] }));
-  const ids = orders.flatMap(order => order.receipts.map(receipt => receipt.id));
+  const ids = [...new Set(orders.flatMap(order => order.receipts.map(receipt => receipt.id)))];
   if (ids.length) {
     const tenant = await getCurrentTenantId();
-    const { data: entries, error: snapshotError } = await (getClient().from as any)('operational_uom_requests').select('reference_id,snapshots,result,created_at').eq('tenant_id',tenant).eq('reference_type','internal_receipt').in('reference_id',ids).order('created_at',{ ascending: false });
-    if (snapshotError) handleError(snapshotError,'getInternalReceivingWorkspace:units');
+    const entries: Array<{reference_id:string;result?:{revision?:number};snapshots?:InternalReceipt['items']}> = [];
+    for(let start=0;start<ids.length;start+=100) {
+      for(let offset=0;;offset+=500) {
+        const {data:batch,error:snapshotError}=await (getClient().from as any)('operational_uom_requests').select('reference_id,snapshots,result,created_at,request_id').eq('tenant_id',tenant).eq('reference_type','internal_receipt').in('reference_id',ids.slice(start,start+100)).order('created_at',{ascending:false}).order('request_id',{ascending:false}).range(offset,offset+499);
+        if(snapshotError) handleError(snapshotError,'getInternalReceivingWorkspace:units');
+        entries.push(...batch??[]);
+        if(!batch || batch.length<500) break;
+      }
+    }
     const newest = new Map<string, any>();
     for (const entry of entries ?? []) if (!newest.has(entry.reference_id) || Number(entry.result?.revision ?? 0) > Number(newest.get(entry.reference_id).result?.revision ?? 0)) newest.set(entry.reference_id,entry);
     for (const order of orders) for (const receipt of order.receipts) receipt.items = receipt.items.map(item => {

@@ -1,6 +1,6 @@
 "use client";
 
-import {useCallback, useEffect, useState} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import Link from 'next/link';
 import {useAuth} from '@/lib/contexts';
 import {Button} from '@/components/ui/button';
@@ -15,7 +15,7 @@ import {ManagementFinanceDialog} from '@/components/shared/dialogs/management-fi
 import {FinanceImportDialog} from '@/components/shared/dialogs/finance-import-dialog';
 import {Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter} from '@/components/ui/dialog';
 import {cashDateTimeInput, formatCashBookDate, formatCashTime} from '@/lib/cash-time';
-import {formatCurrency} from '@/lib/format';
+import {formatCurrency,formatNumber} from '@/lib/format';
 import {CASH_FLOW_LABELS, summarizeRecognition} from '@/lib/utils/finance-report-reconciliation';
 import {exportToExcel} from '@/lib/utils/export';
 import {financeCategoryMonths} from '@/lib/reports/finance-category-months';
@@ -23,11 +23,19 @@ import {getFinanceCategories, getFinanceWorkspace, getAllFinanceRows, saveFinanc
   type FinanceKind, type CashFlowActivity, type FinanceCategory, type FinanceEvent, type FinanceFilters, type FinanceWorkspace} from '@/lib/services/supabase/management-finance';
 
 export default function ManagementFinancePage() {
-  const {activeBranchId, branches, hasPermission, isLoading} = useAuth();
+  const {activeBranchId:globalBranchId, branches, hasPermission, isLoading} = useAuth();
+  const [localBranch,setLocalBranch]=useState<string>();
+  const [urlReady,setUrlReady]=useState(false);
+  useEffect(()=>{setLocalBranch(new URLSearchParams(window.location.search).get('branch')??undefined);setUrlReady(true);},[]);
+  const branchDenied=!!localBranch && localBranch!=='all' && !branches?.some(branch=>branch.id===localBranch);
+  const activeBranchId=localBranch==='all'?undefined:localBranch??globalBranchId;
   const cashBranchName = (id: string) => branches?.find(branch => branch.id === id)?.name ?? 'Chưa xác định';
   const today = cashDateTimeInput().slice(0, 10);
   const [filters, setFilters] = useState<FinanceFilters>({from: today.slice(0, 7) + '-01', to: today, kind: 'expense'});
   const [categories, setCategories] = useState<FinanceCategory[]>([]);
+  const initialCategoryApplied=useRef(false);
+  const internalCategory=categories.find(category=>category.code==='CP-VH-NOIBO' && category.kind==='expense' && !category.is_group);
+  const internalView=!!internalCategory && filters.kind==='expense' && filters.categoryId===internalCategory.id;
   const [data, setData] = useState<FinanceWorkspace | null>(null);
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -52,12 +60,12 @@ export default function ManagementFinancePage() {
   const [reason, setReason] = useState('');
   const [actionSaving, setActionSaving] = useState(false);
   const [actionError, setActionError] = useState('');
-  const canRead = hasPermission('finance.view_cash_book');
+  const canRead = urlReady && !branchDenied && hasPermission('finance.view_cash_book');
   const canCreate = hasPermission('finance.create_transaction');
   const canCancel = hasPermission('finance.void_transaction');
   const canExport = hasPermission('reports.export');
   const scoped = {...filters, branchId: activeBranchId};
-  const reportPeriod = new URLSearchParams({preset:'custom',from:filters.from,to:filters.to,view:'table',...(activeBranchId ? {branch:activeBranchId} : {})}).toString();
+  const reportPeriod = new URLSearchParams({preset:'custom',from:filters.from,to:filters.to,view:'table',branch:activeBranchId??'all'}).toString();
   const rangeError = financeReportRangeError(filters.from, filters.to);
 
   useEffect(() => {
@@ -88,6 +96,13 @@ export default function ManagementFinancePage() {
     return () => {active = false;};
   }, [isLoading,canRead,view,filters,activeBranchId,revision,rangeError]);
   const patch = useCallback((value: Partial<FinanceFilters>) => {setFilters(f => ({...f, ...value})); setPage(0);}, []);
+  useEffect(()=>{
+    if(initialCategoryApplied.current || !categories.length) return;
+    initialCategoryApplied.current=true;
+    if(new URLSearchParams(window.location.search).get('category')==='CP-VH-NOIBO' && internalCategory) {
+      patch({kind:'expense',categoryId:internalCategory.id,paymentState:undefined});
+    }
+  },[categories,internalCategory,patch]);
   function openCategory(kind: FinanceKind, selectCreated?: (id: string) => void) {
     setCategoryKind(kind); setCategoryTarget(() => selectCreated ?? null); setCategoryOpen(true);
     setParentId(''); setCategoryCode(''); setCategoryName(''); setCashFlowActivity('unclassified'); setActionError('');
@@ -115,14 +130,15 @@ export default function ManagementFinancePage() {
       }
       await exportToExcel(rows.map(r => ({code: r.code, date: r.business_date, category: `${r.category_code} · ${r.category_name}`,
         counterparty: r.counterparty, amount: r.amount, recognized: r.report_amount, settled: r.source_type === 'internal_receipt' ? 'Theo đơn nội bộ' : r.settled_amount,
-        status: r.status === 'posted' ? 'Đã ghi nhận' : 'Đã hủy',
+        status: r.status === 'posted' ? 'Đã ghi nhận' : 'Đã hủy',sourceOrder:r.source_sale_code,sku:r.source_product_code,product:r.source_product_name,quantity:r.source_quantity,unit:r.source_unit,unitPrice:r.source_unit_price,note:r.note,
         allocations: r.allocations.map(a => `${a.branch_name} / ${a.recognition_date}: ${a.amount}`).join('; '),
         cash: r.settlements.map(s => `${s.code} / ${cashBranchName(s.branch_id)} / ${formatCashBookDate(s.transaction_date)} / ${formatCashTime(s.occurred_at)} / ${s.performed_by_name || 'Chưa ghi nhận'} / ${cashPaymentMethodLabel(s.payment_method)} / ${s.status === 'cancelled' ? 'Đã hủy' : s.status === 'completed' ? 'Hoàn tất' : 'Chưa hoàn tất'}: ${s.amount}`).join('; '), creator: r.created_by_name})),
         [{header: 'Mã', key: 'code'}, {header: 'Ngày phát sinh', key: 'date'}, {header: 'Khoản mục', key: 'category'},
           {header: 'Đối tượng', key: 'counterparty'}, {header: 'Tổng khoản', key: 'amount'}, {header: 'Ghi nhận trong bộ lọc', key: 'recognized'},
           {header: 'Đã thanh toán toàn khoản đến cuối kỳ', key: 'settled'}, {header: 'Trạng thái', key: 'status'},
+          {header:'Đơn nội bộ',key:'sourceOrder'},{header:'Mã hàng',key:'sku'},{header:'Mặt hàng',key:'product'},{header:'Số lượng',key:'quantity',precision:4},{header:'ĐVT',key:'unit'},{header:'Đơn giá',key:'unitPrice',precision:8},{header:'Nội dung',key:'note'},
           {header: 'Phân bổ', key: 'allocations'}, {header: 'Phiếu thu/chi', key: 'cash'}, {header: 'Người tạo', key: 'creator'}],
-        `thu-nhap-chi-phi-${filters.from}-${filters.to}`);
+        `thu-nhap-chi-phi-${filters.from}-${filters.to}`,{financialTable:true});
     } catch (e) {setError(e instanceof Error ? e.message : 'Không xuất được báo cáo.');}
     finally {setExporting(false);}
   }
@@ -149,15 +165,21 @@ export default function ManagementFinancePage() {
     finally {setActionSaving(false);}
   }
 
-  if (isLoading) return <p className="p-6">Đang tải…</p>;
+  if (isLoading || !urlReady) return <p className="p-6">Đang tải…</p>;
+  if (branchDenied) return <p role="alert" className="p-6">Không có quyền xem chi phí tại chi nhánh này.</p>;
   if (!canRead) return <p className="p-6">Tài khoản chưa có quyền xem thu nhập / chi phí.</p>;
   return <div className="min-w-0 space-y-4 p-4 sm:p-6">
     <PageHeader title="Thu nhập và chi phí"/>
     <div role="tablist" aria-label="Loại nghiệp vụ tài chính" className="flex flex-wrap gap-1 border-b">
       {([['income','Thu nhập khác'],['expense','Chi phí'],['non_pnl','Ngoài kết quả kinh doanh']] as const).map(([kind,label]) => <button key={kind} role="tab" aria-selected={filters.kind === kind} className={`min-h-11 border-b-2 px-3 text-sm ${filters.kind === kind ? 'border-primary font-semibold text-primary' : 'border-transparent text-muted-foreground'}`} onClick={() => {patch({kind, categoryId: undefined}); setExpanded(undefined);}}>{label}</button>)}
     </div>
+    {filters.kind==='expense'&&<div role="tablist" aria-label="Nhóm chi phí" className="flex flex-wrap gap-1 border-b">
+      <button role="tab" aria-selected={!internalView} className={`min-h-10 border-b-2 px-3 text-sm ${!internalView?'border-primary font-semibold text-primary':'border-transparent text-muted-foreground'}`} onClick={()=>patch({categoryId:undefined,paymentState:undefined})}>Tất cả chi phí</button>
+      <button role="tab" aria-selected={internalView} disabled={!internalCategory} className={`min-h-10 border-b-2 px-3 text-sm disabled:opacity-50 ${internalView?'border-primary font-semibold text-primary':'border-transparent text-muted-foreground'}`} onClick={()=>{patch({categoryId:internalCategory?.id,paymentState:undefined});setView('documents');}}>Vật tư nội bộ</button>
+    </div>}
     <div className="flex flex-wrap gap-2">
-      {canCreate && <Button onClick={() => {setSettling(undefined); setOpen(true);}}><Icon name="add"/>{filters.kind === 'income' ? 'Ghi nhận thu nhập' : filters.kind === 'expense' ? 'Ghi nhận chi phí' : 'Ghi nhận khoản ngoài KQKD'}</Button>}
+      {canCreate && !internalView && <Button onClick={() => {setSettling(undefined); setOpen(true);}}><Icon name="add"/>{filters.kind === 'income' ? 'Ghi nhận thu nhập' : filters.kind === 'expense' ? 'Ghi nhận chi phí' : 'Ghi nhận khoản ngoài KQKD'}</Button>}
+      {internalView&&<Button nativeButton={false} variant="outline" render={<Link href={`/hang-hoa/nhap-hang/noi-bo?branch=${encodeURIComponent(activeBranchId??'all')}`}/>}><Icon name="move_to_inbox"/>Phiếu nhận nội bộ</Button>}
       {canCreate && <Button variant="outline" disabled={!activeBranchId || !categories.length} onClick={()=>setImportOpen(true)}><Icon name="upload"/>Nhập tài chính</Button>}
       {canCreate && <Button variant="outline" onClick={() => openCategory(filters.kind ?? 'expense')}><Icon name="category"/>Thêm khoản mục</Button>}
       {canExport && <Button variant="outline" disabled={loading || categoryLoading || exporting || !data || !!error || !!rangeError} onClick={download}><Icon name="download"/>{exporting ? 'Đang xuất…' : 'Xuất Excel'}</Button>}
@@ -168,6 +190,7 @@ export default function ManagementFinancePage() {
       <Button nativeButton={false} variant="outline" render={<Link href={`/phan-tich/luong-tien?${reportPeriod}`}/>}><Icon name="payments"/>Dòng tiền</Button>
     </div>
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <label className="grid gap-1 text-sm">Chi nhánh ghi nhận<select className="h-10 min-w-0 rounded-md border bg-background px-2" value={localBranch??globalBranchId??'all'} onChange={e=>{setLocalBranch(e.target.value);setPage(0);}}><option value="all">Tất cả chi nhánh được phép</option>{branches?.map(branch=><option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label>
       <label className="grid gap-1 text-sm">Ghi nhận từ ngày<Input type="date" value={filters.from} onChange={e => patch({from: e.target.value})}/></label>
       <label className="grid gap-1 text-sm">Đến ngày<Input type="date" value={filters.to} onChange={e => patch({to: e.target.value})}/></label>
       <label className="grid gap-1 text-sm">Khoản mục<SearchableSelect value={filters.categoryId} onValueChange={value => patch({categoryId: value || undefined})} placeholder="Tất cả khoản mục"
@@ -189,8 +212,8 @@ export default function ManagementFinancePage() {
     {view === 'months' && <FinanceMonthTable rows={categoryRows} from={filters.from} to={filters.to} branchId={activeBranchId} loading={categoryLoading} error={rangeError || error} />}
     {view === 'categories' && <FinanceCategoryTable rows={categoryRows} loading={categoryLoading} error={rangeError || error} onSelect={code => {const cat = categories.find(c => c.code === code); if (cat) {patch({categoryId:cat.id}); setView('documents');}}}/>}
     {view === 'documents' && <><ReportTableFrame tablePreferenceKey="finance.recognition.documents" allowColumnSelection={false}><div className="overflow-x-auto border rounded-md">
-      <table className="w-full min-w-[1000px] text-sm"><thead className="bg-muted"><tr>{['Khoản ghi nhận','Ngày phát sinh','Khoản mục / đối tượng','Ghi nhận trong bộ lọc','Đã thanh toán toàn khoản','Trạng thái',''].map((h, i) => <th key={i} className="p-3 text-left whitespace-nowrap">{h}</th>)}</tr></thead>
-        <tbody>{data?.items.map(r => <FinanceRow key={r.id} row={r} cashBranchName={cashBranchName} expanded={expanded === r.id} onExpand={() => setExpanded(expanded === r.id ? undefined : r.id)}
+      <table className="w-full min-w-[1000px] text-sm"><thead className="bg-muted"><tr>{['Khoản ghi nhận','Ngày phát sinh',...(internalView?['Đơn nội bộ','Mã hàng / tên hàng','Số lượng','ĐVT','Đơn giá','Chi nhánh ghi nhận']:['Khoản mục / đối tượng']),'Ghi nhận trong bộ lọc','Đã thanh toán toàn khoản','Trạng thái',''].map((h, i) => <th key={i} className="p-3 text-left whitespace-nowrap">{h}</th>)}</tr></thead>
+        <tbody>{data?.items.map(r => <FinanceRow key={r.id} row={r} internalView={internalView} cashBranchName={cashBranchName} expanded={expanded === r.id} onExpand={() => setExpanded(expanded === r.id ? undefined : r.id)}
           canSettle={canCreate && r.status === 'posted'} onSettle={() => {setSettling(r); setOpen(true);}}
           canCancel={canCancel && r.status === 'posted'} onCancel={() => {setCancelling(r); setReason(''); setActionError('');}}/>)}</tbody>
       </table>
@@ -249,17 +272,17 @@ function FinanceMonthTable({rows,from,to,branchId,loading,error}: {rows:FinanceE
   </section>;
 }
 
-function FinanceRow({row: r, cashBranchName, expanded, onExpand, canSettle, onSettle, canCancel, onCancel}: {row: FinanceEvent; cashBranchName:(id:string) => string; expanded: boolean; onExpand: () => void; canSettle: boolean; onSettle: () => void; canCancel: boolean; onCancel: () => void}) {
+function FinanceRow({row: r, internalView, cashBranchName, expanded, onExpand, canSettle, onSettle, canCancel, onCancel}: {row: FinanceEvent; internalView:boolean; cashBranchName:(id:string) => string; expanded: boolean; onExpand: () => void; canSettle: boolean; onSettle: () => void; canCancel: boolean; onCancel: () => void}) {
   const fromReceipt = r.source_type === 'internal_receipt';
   return <><tr className="border-t">
     <td className="p-3"><button className="text-primary font-medium" onClick={onExpand} aria-expanded={expanded}>{r.code}</button></td>
-    <td className="p-3">{formatCashBookDate(r.business_date)}</td><td className="p-3"><div>{r.category_name}</div><div className="text-muted-foreground">{r.counterparty}</div></td>
+    <td className="p-3">{formatCashBookDate(r.business_date)}</td>{internalView?<><td className="p-3">{r.source_sale_code??'—'}</td><td className="p-3"><div className="font-medium">{r.source_product_code??'—'}</div><div>{r.source_product_name??r.note}</div></td><td className="p-3 text-right tabular-nums">{r.source_quantity==null?'—':formatNumber(r.source_quantity)}</td><td className="p-3">{r.source_unit??'—'}</td><td className="p-3 text-right tabular-nums">{r.source_unit_price==null?'—':formatCurrency(r.source_unit_price)}</td><td className="p-3">{[...new Set(r.allocations.map(a=>a.branch_name))].join(', ')}</td></>:<td className="p-3"><div>{r.category_name}</div><div className="text-muted-foreground">{r.counterparty}</div></td>}
     <td className="p-3 text-right tabular-nums">{formatCurrency(r.report_amount)}</td><td className="p-3 text-right tabular-nums">{fromReceipt ? 'Theo đơn nội bộ' : formatCurrency(r.settled_amount)}</td>
     <td className="p-3">{r.status === 'cancelled' ? 'Đã hủy' : 'Đã ghi nhận'}</td><td className="p-3">{canSettle && !fromReceipt && <Button size="sm" variant="outline" onClick={onSettle}><Icon name="payments"/>Thanh toán</Button>}</td>
-  </tr>{expanded && <tr className="border-t bg-muted/30"><td colSpan={7} className="p-4 space-y-3">
+  </tr>{expanded && <tr className="border-t bg-muted/30"><td colSpan={internalView?12:7} className="p-4 space-y-3">
     <p>Tổng khoản: <strong>{formatCurrency(r.amount)}</strong> · Người tạo: {r.created_by_name}</p>
     <div className="grid gap-4 lg:grid-cols-2"><div><h3 className="font-medium mb-2">Phân bổ ghi nhận</h3>{r.allocations.map((a, i) => <p key={i}>{a.branch_name} · {formatCashBookDate(a.recognition_date)} · {formatCurrency(a.amount)}</p>)}</div>
-      <div className="min-w-0"><h3 className="font-medium mb-2">Phiếu thu / chi liên kết</h3>{r.settlements.length === 0 ? <p>Chưa có phiếu thu / chi.</p> : <div className="max-h-72 overflow-auto"><table className="w-full text-sm"><thead className="sticky top-0 bg-background"><tr>{['Mã phiếu','Chi nhánh thu/chi','Ngày chứng từ','Thực thu/chi','Người thu/chi','Phương thức','Số tiền','Trạng thái'].map(h => <th key={h} className="p-2 text-left whitespace-nowrap">{h}</th>)}</tr></thead><tbody>{r.settlements.map(s => <tr key={s.id} className="border-t"><td className="p-2 font-medium whitespace-nowrap">{s.code}</td><td className="p-2">{cashBranchName(s.branch_id)}</td><td className="p-2 whitespace-nowrap">{formatCashBookDate(s.transaction_date)}</td><td className="p-2 whitespace-nowrap">{formatCashTime(s.occurred_at)}</td><td className="p-2">{s.performed_by_name || 'Chưa ghi nhận'}</td><td className="p-2">{cashPaymentMethodLabel(s.payment_method)}</td><td className="p-2 text-right tabular-nums whitespace-nowrap">{formatCurrency(s.amount)}</td><td className="p-2">{s.status === 'cancelled' ? 'Đã hủy' : s.status === 'completed' ? 'Hoàn tất' : 'Chưa hoàn tất'}</td></tr>)}</tbody></table></div>}</div></div>
+      <div className="min-w-0"><h3 className="font-medium mb-2">{fromReceipt?'Thanh toán theo đơn gốc':'Phiếu thu / chi liên kết'}</h3>{r.settlements.length === 0 ? <p>{fromReceipt?'Theo đơn nội bộ; không phát sinh phiếu chi riêng.':'Chưa có phiếu thu / chi.'}</p> : <div className="max-h-72 overflow-auto"><table className="w-full text-sm"><thead className="sticky top-0 bg-background"><tr>{['Mã phiếu','Chi nhánh thu/chi','Ngày chứng từ','Thực thu/chi','Người thu/chi','Phương thức','Số tiền','Trạng thái'].map(h => <th key={h} className="p-2 text-left whitespace-nowrap">{h}</th>)}</tr></thead><tbody>{r.settlements.map(s => <tr key={s.id} className="border-t"><td className="p-2 font-medium whitespace-nowrap">{s.code}</td><td className="p-2">{cashBranchName(s.branch_id)}</td><td className="p-2 whitespace-nowrap">{formatCashBookDate(s.transaction_date)}</td><td className="p-2 whitespace-nowrap">{formatCashTime(s.occurred_at)}</td><td className="p-2">{s.performed_by_name || 'Chưa ghi nhận'}</td><td className="p-2">{cashPaymentMethodLabel(s.payment_method)}</td><td className="p-2 text-right tabular-nums whitespace-nowrap">{formatCurrency(s.amount)}</td><td className="p-2">{s.status === 'cancelled' ? 'Đã hủy' : s.status === 'completed' ? 'Hoàn tất' : 'Chưa hoàn tất'}</td></tr>)}</tbody></table></div>}</div></div>
     {r.note && <p className="break-words">{r.note}</p>}
     {fromReceipt && <div className="border-l-2 border-amber-500 pl-3 text-sm"><Link className="font-medium text-primary underline" href={`/hang-hoa/nhap-hang/noi-bo?sale=${encodeURIComponent(r.source_sale_id ?? '')}&branch=${encodeURIComponent(r.allocations[0]?.branch_id ?? '')}`}>Phiếu nhận nội bộ</Link>{r.can_view_consolidated_cost && <p>Chi phí hợp nhất: {r.consolidated_amount == null ? 'Chưa có giá vốn nguồn' : formatCurrency(r.consolidated_amount)}</p>}</div>}
     {canCancel && !fromReceipt && <Button size="sm" variant="outline" onClick={onCancel}><Icon name="cancel"/>Hủy ghi nhận</Button>}
