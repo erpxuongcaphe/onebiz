@@ -35,6 +35,7 @@ interface FnbSidenavDrawerProps {
   /** Sprint B.5 (CEO 12/05): mở dialog switch user qua PIN POS. */
   onSwitchUser?: () => void;
   onManagePin?: () => void;
+  onSalesHistory?: () => void;
 }
 
 interface NavItem {
@@ -71,6 +72,7 @@ export function FnbSidenavDrawer({
   hasOpenShift,
   onSwitchUser,
   onManagePin,
+  onSalesHistory,
 }: FnbSidenavDrawerProps) {
   const { user, currentBranch, logout, hasPermission } = useAuth();
   const { isFnb } = useFnbSubdomain();
@@ -138,6 +140,7 @@ export function FnbSidenavDrawer({
 
         {/* Nav sections */}
         <div className="flex-1 overflow-y-auto py-2">
+          {onSalesHistory && <button type="button" onClick={() => { onClose(); onSalesHistory(); }} className="mx-2 flex min-h-11 w-[calc(100%-1rem)] items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-surface-container"><Icon name="receipt_long" size={18}/><span>Lịch sử bán hàng</span></button>}
           <NavSection label="POS" items={POS_ITEMS} isFnb={isFnb} onClose={onClose} hasPermission={hasPermission} />
           <NavSection label="Quản lý" items={MANAGE_ITEMS} isFnb={isFnb} onClose={onClose} hasPermission={hasPermission} />
           <NavSection label="Hệ thống" items={SYSTEM_ITEMS} isFnb={isFnb} onClose={onClose} hasPermission={hasPermission} />

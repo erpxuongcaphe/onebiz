@@ -3570,6 +3570,7 @@ function FnbPosPageInner() {
           onMenuClick={() => setSidenavOpen(true)}
         />
         <FnbSidenavDrawer
+        onSalesHistory={canViewOrderHistory ? () => setOrderHistoryOpen(true) : undefined}
           open={sidenavOpen}
           onClose={() => setSidenavOpen(false)}
         />
@@ -3638,6 +3639,7 @@ function FnbPosPageInner() {
 
       {/* Sprint A: Sidenav drawer (☰ → slide-in). */}
       <FnbSidenavDrawer
+        onSalesHistory={canViewOrderHistory ? () => setOrderHistoryOpen(true) : undefined}
         onManagePin={() => setMyPinOpen(true)}
         open={sidenavOpen}
         onClose={() => setSidenavOpen(false)}
