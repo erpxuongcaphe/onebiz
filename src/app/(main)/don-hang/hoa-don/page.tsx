@@ -36,6 +36,10 @@ import { CreateShipmentDialog } from "@/components/shared/dialogs/create-shipmen
 // PERF (CEO 23/05/2026): Lazy-load 2 dialog nặng — chỉ load khi user click
 // "Sửa" / "Ghi nhận thanh toán". Save ~300KB initial.
 // CEO 29/05/2026: "Tạo mới" hóa đơn nay vào thẳng POS Retail (bỏ popup tạo tay).
+const BulkInvoiceCancelDialog = dynamic(
+  () => import("@/components/shared/dialogs/bulk-invoice-cancel-dialog").then(m => m.BulkInvoiceCancelDialog),
+  { ssr: false },
+);
 const EditInvoiceDialog = dynamic(
   () =>
     import("@/components/shared/dialogs/edit-invoice-dialog").then(
@@ -488,7 +492,7 @@ export default function HoaDonPage() {
   // viên chỉ được gán 1 chi nhánh vẫn bấm được và danh sách chạy toàn tenant.
   // Nay khoá đúng 2 mã quyền mà RPC chỉ số dùng, để bảng và dải chỉ số cùng
   // một phạm vi. Chỉ chặn ở TẦNG ĐỌC, không đụng dữ liệu.
-  const { hasAny } = usePermissions();
+  const { hasAny, hasPermission } = usePermissions();
   const duocXemToanChuoi = hasAny([
     "reports.view_all_branches",
     "system.manage_branches",
@@ -513,6 +517,9 @@ export default function HoaDonPage() {
   // 21/07: 1 dialog hủy DUY NHẤT (CancelImpactDialog) cho cả nháp + đã hoàn
   // thành — hiện bảng tác động 3 sổ + chọn phương thức hoàn. Route theo status.
   const [cancellingItem, setCancellingItem] = useState<Invoice | null>(null);
+  const [bulkCancelIds, setBulkCancelIds] = useState<string[]>([]);
+  const canVoidFnb = hasPermission("pos_fnb.void_paid_bill");
+  const canVoidRetail = hasPermission("pos_retail.void");
   const [payingItem, setPayingItem] = useState<Invoice | null>(null);
   // Sprint UX-1 Stage 4: Audit log dialog + duplicating state
   const [auditDialogTarget, setAuditDialogTarget] = useState<Invoice | null>(null);
@@ -1211,46 +1218,10 @@ export default function HoaDonPage() {
               },
             },
             {
-              label: "Hủy hàng loạt",
+              label: "Hủy & hoàn tác hàng loạt",
               icon: <Icon name="cancel" size={16} />,
               variant: "destructive",
-              onClick: async (selectedRows) => {
-                const cancellable = selectedRows.filter(
-                  (r) => r.status !== "completed" && r.status !== "cancelled",
-                );
-                if (cancellable.length === 0) {
-                  toast({
-                    title: "Không có hoá đơn nào có thể hủy",
-                    description:
-                      "Chỉ hủy được hoá đơn chưa hoàn thành / chưa hủy",
-                    variant: "info",
-                  });
-                  return;
-                }
-                if (
-                  !window.confirm(
-                    `Hủy ${cancellable.length} hoá đơn? Thao tác này không thể hoàn tác.`,
-                  )
-                )
-                  return;
-                try {
-                  await Promise.all(
-                    cancellable.map((r) => cancelInvoice(r.id)),
-                  );
-                  toast({
-                    title: `Đã hủy ${cancellable.length} hoá đơn`,
-                    variant: "success",
-                  });
-                  await taiLaiSauKhiDoiDuLieu();
-                } catch (err) {
-                  toast({
-                    title: "Lỗi hủy hàng loạt",
-                    description:
-                      err instanceof Error ? err.message : "Vui lòng thử lại",
-                    variant: "error",
-                  });
-                }
-              },
+              onClick: (selectedRows) => setBulkCancelIds(selectedRows.map(row => row.id)),
             },
           ]}
           summaryRow={{
@@ -1366,7 +1337,7 @@ export default function HoaDonPage() {
                       },
                     ]
                   : []),
-                ...(row.status === "completed" && txPerms.canCancel
+                ...(row.status === "completed" && (row.source === "fnb" ? canVoidFnb : canVoidRetail)
                   ? [
                       {
                         label: "Hủy & hoàn tác",
@@ -1464,6 +1435,14 @@ export default function HoaDonPage() {
       {/* 21/07: 1 dialog hủy hợp nhất — bảng tác động 3 sổ + chọn phương thức
           hoàn. Route theo status: completed → void atomic (hoàn kho/tiền/nợ/
           điểm); nháp/xử lý → cancelInvoice (flip status). */}
+      {bulkCancelIds.length > 0 && (
+        <BulkInvoiceCancelDialog
+          ids={bulkCancelIds}
+          permissions={{ fnb: canVoidFnb, retail: canVoidRetail }}
+          onClose={() => setBulkCancelIds([])}
+          onDone={taiLaiSauKhiDoiDuLieu}
+        />
+      )}
       <CancelImpactDialog
         target={
           cancellingItem
