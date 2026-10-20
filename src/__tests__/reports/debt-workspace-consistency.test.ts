@@ -76,7 +76,7 @@ describe("branch-scoped debt workspace", () => {
     expect(settleDialog).toContain(
       "getOpenPurchasesBySupplier(partyId, branchId)",
     );
-    // Detail, settlement and advance dialogs all inherit the active branch.
-    expect(debtPage.split("branchId={activeBranchId}")).toHaveLength(4);
+    // Detail, settlement, advance and supplier-refund dialogs inherit the active branch.
+    expect(debtPage.split("branchId={activeBranchId}")).toHaveLength(5);
   });
 });

@@ -12,12 +12,18 @@ export function MoneyAccountSelect({
   value,
   onChange,
   disabled = false,
+  label = "Quỹ / tài khoản thu chi",
+  refreshKey = 0,
+  emptyHint,
 }: {
   branchId?: string | null;
   method: string;
   value: string;
   onChange: (id: string) => void;
   disabled?: boolean;
+  label?: string;
+  refreshKey?: number;
+  emptyHint?: string;
 }) {
   const id = useId();
   const [accounts, setAccounts] = useState<MoneyAccount[]>([]);
@@ -50,14 +56,14 @@ export function MoneyAccountSelect({
     return () => {
       cancelled = true;
     };
-  }, [branchId]);
+  }, [branchId, refreshKey]);
   const choices = accounts.filter(
     (a) => (a.active || a.id === value) && accountSupportsMethod(a, method),
   );
   return (
     <div className="space-y-1.5 text-sm">
       <label htmlFor={id} className="font-medium">
-        Quỹ / tài khoản thu chi
+        {label}
       </label>
       <select
         id={id}
@@ -77,6 +83,7 @@ export function MoneyAccountSelect({
           </option>
         ))}
       </select>
+      {!loading && !error && branchId && !choices.length && emptyHint && <p role="status" className="text-xs text-muted-foreground">{emptyHint}</p>}
       {error && (
         <p role="alert" className="text-xs text-destructive">
           {error}
