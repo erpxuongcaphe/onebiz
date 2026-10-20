@@ -6,6 +6,30 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 const { PGlite } = await import(pathToFileURL(path.resolve(process.argv[2])).href);
+// Optional read-only export of deployed function definitions: verify exact patch
+// compatibility offline without executing any checkout or accessing production.
+if(process.argv[3]) {
+ const liveDb=new PGlite();
+ try {
+  const rows=JSON.parse(fs.readFileSync(process.argv[3],'utf8'));
+  const migration=fs.readFileSync('supabase/migrations/00574_retail_internal_source_authorization.sql','utf8').replaceAll('\r\n','\n');
+  const oldGuards=[...migration.matchAll(/\$old\$([\s\S]*?)\$old\$/g)].map(m=>m[1]);
+  const newGuards=[...migration.matchAll(/\$new\$([\s\S]*?)\$new\$/g)].map(m=>m[1]);
+  const deployed=migration.match(/\$deployed\$([\s\S]*?)\$deployed\$/)[1];
+  await liveDb.exec('set check_function_bodies=off;');
+  for(const row of rows)await liveDb.exec(row.definition);
+  const before=(await liveDb.query(`select proname,pg_get_functiondef(oid) definition from pg_proc where proname in ('checkout_internal_pos_v2','_create_internal_sale_auth_impl_00243')`)).rows;
+  await liveDb.exec(migration);await liveDb.exec(migration);
+  for(const row of before) {
+   const index=row.proname==='checkout_internal_pos_v2'?0:1;
+   const guard=row.definition.includes(oldGuards[index])?oldGuards[index]:deployed;
+   assert.equal(row.definition.split(guard).length-1,1);
+   const actual=(await liveDb.query('select pg_get_functiondef(oid) definition from pg_proc where proname=$1',[row.proname])).rows[0].definition;
+   assert.equal(actual,row.definition.replace(guard,newGuards[index]));
+  }
+  console.log('PASS deployed definitions: both exact live functions patched offline; all code outside authorization guards preserved; repeat migration safe.');
+ } finally {await liveDb.close();}
+}
 const dir=fs.mkdtempSync(path.join(os.tmpdir(),'onebiz-internal-pos-'));
 const generated=new Map();
 for(const name of ['internal-sale-stock-out','internal-sale-documents','supply-cost-flow']) {
@@ -66,6 +90,14 @@ try {
  await assert.rejects(db.exec(migration),/ATOMIC_GUARD_CHANGED/); await db.exec('rollback;');checks++;
  assert.equal((await db.query("select pg_get_functiondef('public.checkout_internal_pos_v2(jsonb)'::regprocedure) d")).rows[0].d,original.checkout);checks++;
  await db.exec(original.primitive);
+ // Production can contain the same guard with single-space indentation.
+ const deployedPrimitive=original.primitive.replace(/^[ \t]+/gm,' ');
+ await db.exec(deployedPrimitive);
+ await db.exec(migration);await db.exec(migration);
+ assert.match((await db.query("select pg_get_functiondef('public._create_internal_sale_auth_impl_00243(uuid,uuid,uuid,uuid,uuid,text,uuid,text,jsonb,text,boolean,text)'::regprocedure) d")).rows[0].d,/retail_internal_source_00574/);checks++;
+ assert.deepEqual(await snapshot(),before);checks++;
+ assert.deepEqual(await defs(),fnbBefore);checks++;
+ await db.exec(original.checkout);await db.exec(original.primitive);
  await db.exec(migration); await db.exec(migration);
  assert.deepEqual(await snapshot(),before);checks++;
  assert.deepEqual(await defs(),fnbBefore);checks++;

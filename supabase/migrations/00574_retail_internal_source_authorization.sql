@@ -49,6 +49,15 @@ begin
   end if;$new$;
   old_guard := replace(old_guard, E'\r\n', E'\n');
   new_guard := replace(new_guard, E'\r\n', E'\n');
+  -- Some deployed definitions have single-space indentation after earlier patches.
+  -- Match only the same complete authorization guard; preserve the rest verbatim.
+  if position(old_guard in definition) = 0 then
+   old_guard := $deployed$ if not public.user_has_branch_access(v_actor, p_from_branch_id)
+ or not public.user_has_branch_access(v_actor, p_to_branch_id) then
+ raise exception 'BRANCH_ACCESS_DENIED' using errcode = 'P0001';
+ end if;$deployed$;
+   old_guard := replace(old_guard, E'\r\n', E'\n');
+  end if;
   if (length(definition)-length(replace(definition,old_guard,'')))/length(old_guard) <> 1 then
    raise exception 'RETAIL_INTERNAL_00574_ATOMIC_GUARD_CHANGED';
   end if;
