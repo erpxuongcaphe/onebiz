@@ -13,12 +13,15 @@ const user2='44444444-4444-4444-8444-444444444444';
 const workspace={branches:[{id:branch,name:'Quán A',capabilities:['approve_policy']},{id:branch2,name:'Quán B',capabilities:['approve_policy']}],people:[{id:user,name:'Quản lý A'}]} as Workspace;
 const lib={id:branch,title:'Bộ CEO',version:1,rows:ceoWorkingRows.map(row=>({...row,...(row.frequency==='weekly'?{dayNumber:row.number===32?1:5}:{})})),notes:'',source_key:'ceo-working-20261014',archived:false,updated_at:'2026-10-17T00:00:00Z'};
 let libraries:unknown[]=[];
-beforeEach(()=>{libraries=[];vi.stubGlobal('fetch',fetchMock);fetchMock.mockImplementation(async(url:string,init?:RequestInit)=>{
+beforeEach(()=>{
+ vi.useFakeTimers({toFake:['Date']});
+ vi.setSystemTime(new Date('2026-10-20T03:00:00Z'));
+ libraries=[];vi.stubGlobal('fetch',fetchMock);fetchMock.mockImplementation(async(url:string,init?:RequestInit)=>{
  if(url.startsWith('/api/operations/people'))return{ok:true,json:async()=>({people:[{id:user,name:'Quản lý A'},{id:user2,name:'Quản lý B'}]})};
  if(init?.method==='POST')return{ok:true,json:async()=>({result:{}})};
  return{ok:true,json:async()=>({libraries,applications:[]})};
 });});
-afterEach(()=>{cleanup();vi.unstubAllGlobals();vi.resetAllMocks();});
+afterEach(()=>{cleanup();vi.useRealTimers();vi.unstubAllGlobals();vi.resetAllMocks();});
 describe('company working library and branch setup UX',()=>{
  it('asks for a reason beside the changed name instead of a global save field',async()=>{
   libraries=[{...lib,rows:lib.rows.slice(0,1)}];render(<WorkingLibrary workspace={workspace} onApplied={vi.fn()}/>);
