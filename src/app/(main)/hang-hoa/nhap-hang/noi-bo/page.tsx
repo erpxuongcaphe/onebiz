@@ -153,7 +153,7 @@ function InternalReceivingWorkspace() {
           {(i.treatment??'stock')==='stock'&&<p className="mt-2 text-sm text-emerald-700">Đã nhập: {formatOperationalQuantity(i.received*(i.receivingFactor??1))} {i.receivingUnit??i.unit} · {i.receivingProductCode??i.code}</p>}
           {i.treatment==='expense'&&<p className="mt-2 text-sm">Vật tư vận hành nội bộ · {order.toBranch??currentBranch?.name}</p>}
           {i.receivingProductId&&i.receivingProductId!==i.productId&&<p className="mt-1 text-xs text-muted-foreground">{i.receivingProductCode} · 1 {i.unit} = {formatNumber(i.receivingFactor??1)} {i.receivingUnit}</p>}
-          {i.receivingReason&&<p className="mt-1 text-xs text-muted-foreground">{i.receivingReason}</p>}
+          {i.treatment==='review'&&<p className="mt-1 text-xs text-muted-foreground">Cần xác nhận công dụng hoặc quy đổi trước khi nhận.</p>}
         </article>)}</div>}
         {detailTab==='documents'&&<div role="tabpanel" aria-label="Chứng từ liên quan" className="space-y-3 text-sm">
           <p>Đơn nội bộ: <b>{order.code}</b> · Người xuất: {order.createdBy||'—'}</p>

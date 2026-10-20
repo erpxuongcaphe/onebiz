@@ -16,5 +16,8 @@ describe('receiving source navigation',()=>{
     expect(source).toContain('useState<DatePresetValue>("all")');
     expect(source).toContain('useState<string[]>([])');
     expect(source).not.toContain('setActiveBranch');
+    expect(source).not.toContain('router.push("/hang-hoa/nhap-hang/noi-bo")');
+    const internal=readFileSync('src/app/(main)/hang-hoa/nhap-hang/noi-bo/page.tsx','utf8');
+    expect(internal).not.toContain('{i.receivingReason}');
   });
 });
