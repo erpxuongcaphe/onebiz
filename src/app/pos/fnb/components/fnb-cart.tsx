@@ -87,6 +87,7 @@ interface FnbCartProps {
   /** Day 21/05/2026: list shipper khả dụng (staff branch hiện tại). */
   staffOptions?: { id: string; name: string }[];
   /** Day 21/05/2026: list tier config từ fnb_delivery_fee_tiers. */
+  deliveryPolicySlot?: React.ReactNode;
   selfDeliveryTiers?: {
     code: "near" | "mid" | "far";
     label: string;
@@ -213,6 +214,7 @@ export function FnbCart({
   onDeliveryTierChange,
   staffOptions,
   selfDeliveryTiers,
+  deliveryPolicySlot,
   discountPresets,
   deliveryPlatformSettings,
   deliveryPlatformSettingsStatus = "ready",
@@ -540,8 +542,9 @@ export function FnbCart({
           !activeTab?.kitchenOrderId &&
           (selfDeliveryTiers || staffOptions) && (
             <div className="mt-2 grid grid-cols-2 gap-2">
+              {deliveryPolicySlot && <div className="col-span-2">{deliveryPolicySlot}</div>}
               {/* Tier picker */}
-              {selfDeliveryTiers && selfDeliveryTiers.length > 0 && onDeliveryTierChange && (
+              {!deliveryPolicySlot && selfDeliveryTiers && selfDeliveryTiers.length > 0 && onDeliveryTierChange && (
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-1">
                     <span className="text-xs uppercase font-bold text-on-surface-variant">
@@ -764,6 +767,7 @@ export function FnbCart({
             </div>
           ) : (
             <DiscountRow
+              key={`${activeTab?.id}:${activeTab?.orderDiscount?.mode}:${activeTab?.orderDiscount?.value}`}
               discount={activeTab?.orderDiscount}
               onChange={onDiscountChange}
               presets={discountPresets}
@@ -1029,7 +1033,7 @@ function CouponRow({
   );
 }
 
-function DiscountRow({
+export function DiscountRow({
   discount,
   onChange,
   presets,
@@ -1038,34 +1042,23 @@ function DiscountRow({
   onChange: (d: FnbDiscountInput | undefined) => void;
   presets?: { id: string; name: string; mode: "amount" | "percent"; value: number }[];
 }) {
-  const mode = discount?.mode ?? "amount";
+  const [mode, setMode] = useState<FnbDiscountInput["mode"]>(discount?.mode ?? "amount");
   const [localValue, setLocalValue] = useState(
     discount?.value ? String(discount.value) : "",
   );
   const [presetMenuOpen, setPresetMenuOpen] = useState(false);
 
-  const handleValueChange = (v: string) => {
-    setLocalValue(v);
-    const num = parseInt(v.replace(/\D/g, ""), 10);
-    if (!v || Number.isNaN(num) || num <= 0) {
-      onChange(undefined);
-    } else {
-      onChange({ mode, value: num });
-    }
-  };
-
-  const toggleMode = () => {
-    const newMode = mode === "amount" ? "percent" : "amount";
-    const num = parseInt(localValue.replace(/\D/g, ""), 10);
-    if (localValue && !Number.isNaN(num) && num > 0) {
-      onChange({ mode: newMode, value: num });
-    }
-  };
+  const normalized = mode === "amount" ? localValue.replace(/[.,\s]/g, "") : localValue.replace(",", ".");
+  const validNumber = mode === "amount" ? /^\d+$/.test(normalized) : /^\d+(?:\.\d{1,2})?$/.test(normalized);
+  const value = Number(normalized);
+  const invalid = localValue !== "" && (!validNumber || !Number.isFinite(value) || value < 0 || (mode === "amount" && !Number.isSafeInteger(value)) || (mode === "percent" && value > 100));
+  const canApply = !invalid && value > 0;
+  const apply = () => { if (canApply) onChange({ mode, value }); };
 
   // Sprint POS-FNB-EXT-1: Apply preset từ dropdown — set both mode + value
   const applyPreset = (preset: { mode: "amount" | "percent"; value: number }) => {
     setLocalValue(String(preset.value));
-    onChange({ mode: preset.mode, value: preset.value });
+    setMode(preset.mode);
     setPresetMenuOpen(false);
   };
 
@@ -1075,29 +1068,18 @@ function DiscountRow({
         <span className="text-xs text-muted-foreground shrink-0">Giảm giá</span>
         <Input
           type="text"
-          inputMode="numeric"
+          inputMode={mode === "percent" ? "decimal" : "numeric"}
           value={localValue}
-          onChange={(e) => handleValueChange(e.target.value)}
+          aria-label="Giá trị giảm giá"
+          aria-invalid={invalid}
+          onChange={(e) => setLocalValue(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); apply(); } }}
           placeholder="0"
           className="min-h-11 xl:min-h-7 xl:h-7 text-sm xl:text-xs flex-1 min-w-0 tabular-nums"
         />
-        <button
-          type="button"
-          onClick={toggleMode}
-          className={cn(
-            "min-h-11 min-w-11 xl:min-h-7 xl:min-w-7 xl:h-7 xl:w-7 rounded border flex items-center justify-center shrink-0 transition-colors",
-            mode === "percent"
-              ? "bg-primary-fixed border-primary text-primary"
-              : "bg-surface-container-low border-border text-muted-foreground",
-          )}
-          title={mode === "percent" ? "Phần trăm" : "Số tiền"}
-        >
-          {mode === "percent" ? (
-            <Icon name="percent" size={14} className="md:h-3 md:w-3" />
-          ) : (
-            <span className="text-xs md:text-xs font-bold">đ</span>
-          )}
-        </button>
+        <div role="group" aria-label="Cách giảm giá" className="flex shrink-0">
+          {(["amount", "percent"] as const).map(option => <button key={option} type="button" aria-label={option === "amount" ? "Giảm giá theo số tiền" : "Giảm giá theo phần trăm"} aria-pressed={mode === option} onClick={() => setMode(option)} className={cn("min-h-11 min-w-11 rounded border text-sm font-semibold", mode === option ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground")}>{option === "amount" ? "đ" : "%"}</button>)}
+        </div>
         {/* Sprint POS-FNB-EXT-1: Preset dropdown trigger */}
         {presets && presets.length > 0 && (
           <div className="relative shrink-0">
@@ -1139,6 +1121,12 @@ function DiscountRow({
             )}
           </div>
         )}
+      </div>
+      {invalid && <p role="alert" className="text-xs text-status-error">{mode === "percent" ? "Nhập tỷ lệ giảm từ 0 đến 100%." : "Nhập số tiền giảm hợp lệ."}</p>}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="button" disabled={!canApply} onClick={apply} className="min-h-11">Áp dụng giảm giá</Button>
+        {!!discount?.value && <Button type="button" variant="outline" onClick={() => onChange(undefined)} className="min-h-11">Bỏ giảm giá</Button>}
+        <p className="text-xs text-muted-foreground">Nhập xong rồi bấm Áp dụng để xin duyệt.</p>
       </div>
     </div>
   );

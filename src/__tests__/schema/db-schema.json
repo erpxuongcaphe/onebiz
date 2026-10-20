@@ -3269,6 +3269,14 @@
    "library_version",
    "settings",
    "tenant_id"
+  ],
+  "fnb_delivery_price_policies": [
+   "branch_id",
+   "policy",
+   "revision",
+   "tenant_id",
+   "updated_at",
+   "updated_by"
   ]
  },
  "rpc": [
@@ -3498,6 +3506,7 @@
   "get_finance_dashboard_report",
   "get_financial_analysis_details_report",
   "get_financial_analysis_details_report_v2",
+  "get_fnb_delivery_price_policy",
   "get_fnb_exact_sweetness_groups_00544",
   "get_fnb_menu_order_revision",
   "get_fnb_production_stock_health_00476",
@@ -3799,6 +3808,7 @@
   "save_bom_modifier_option_quantities",
   "save_branch_atomic",
   "save_branch_price_tier_assignments_00363",
+  "save_fnb_delivery_price_policy",
   "save_fnb_menu_order_atomic",
   "save_fnb_modifier_display_order_atomic",
   "save_fnb_modifier_links_atomic",
@@ -3876,7 +3886,7 @@
   "void_disposal_export_atomic",
   "void_internal_export_atomic"
  ],
- "soBang": 237,
- "soCot": 2796,
- "soRpc": 603
+ "soBang": 238,
+ "soCot": 2802,
+ "soRpc": 605
 }

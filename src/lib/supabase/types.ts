@@ -2898,6 +2898,14 @@ export interface Database {
       };
     };
     Functions: {
+      get_fnb_delivery_price_policy: {
+        Args: { p_branch_id: string };
+        Returns: Json;
+      };
+      save_fnb_delivery_price_policy: {
+        Args: { p_branch_id: string; p_revision: number; p_policy: Json };
+        Returns: Json;
+      };
       fnb_kitchen_return_lines: {
         Args: { p_branch_id: string };
         Returns: { kitchen_order_id: string; kitchen_order_item_id: string; remaining_quantity: number; returned_quantity: number }[];

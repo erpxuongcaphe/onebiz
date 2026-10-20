@@ -151,8 +151,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
+import { Button } from "@/components/ui/button";
+import { getDeliveryPricePolicy } from "@/lib/services/supabase/fnb-delivery-policy";
+import { quoteDeliveryPrice, type DeliveryPricePolicy } from "@/lib/fnb-delivery-policy";
+import { FnbDeliveryPrice } from "./components/fnb-delivery-price";
+
 // Lazy load heavy dialogs (only loaded when user opens them)
 const FnbItemDialog = lazy(() => import("./components/fnb-item-dialog").then(m => ({ default: m.FnbItemDialog })));
+
 const FnbPaymentDialog = lazy(() => import("./components/fnb-payment-dialog").then(m => ({ default: m.FnbPaymentDialog })));
 const TableFloorPlan = lazy(() => import("./components/table-floor-plan").then(m => ({ default: m.TableFloorPlan })));
 const CancelSentItemsDialog = lazy(() => import("./components/cancel-sent-items-dialog").then(m => ({ default: m.CancelSentItemsDialog })));
@@ -851,6 +857,21 @@ function FnbPosPageInner() {
     { code: "near" | "mid" | "far"; label: string; fee: number }[]
   >([]);
   const [deliveryCountToday, setDeliveryCountToday] = useState<number>(0);
+  const [deliveryPolicy, setDeliveryPolicy] = useState<{ branchId: string; policy: DeliveryPricePolicy } | null>(null);
+  const [deliveryPolicyError, setDeliveryPolicyError] = useState("");
+  const [deliveryPolicyReload, setDeliveryPolicyReload] = useState(0);
+  useEffect(() => {
+    if (!branchId) return;
+    let cancelled = false;
+    setDeliveryPolicyError("");
+    getDeliveryPricePolicy(branchId).then(policy => {
+      if (!cancelled) setDeliveryPolicy({ branchId, policy });
+    }).catch(err => {
+      if (!cancelled) setDeliveryPolicyError(err instanceof Error ? err.message : "Không tải được chính sách phí giao.");
+    });
+    return () => { cancelled = true; };
+  }, [branchId, deliveryPolicyReload]);
+
 
   useEffect(() => {
     if (!branchId) return;
@@ -980,6 +1001,21 @@ function FnbPosPageInner() {
       }),
     [pos.total, pos.orderDiscountAmount, pos.activeTab?.persistedOrderDiscountAmount, appliedPromotion?.discountAmount, couponApplied?.discount],
   );
+
+  const currentDeliveryPolicy = deliveryPolicy && deliveryPolicy.branchId === branchId ? deliveryPolicy.policy : null;
+  const deliveryPriceQuote = currentDeliveryPolicy ? quoteDeliveryPrice(currentDeliveryPolicy, pos.activeTab?.deliveryDistanceMeters, pos.subtotal, fnbBenefitDisplay.total) : null;
+  const quotedDeliveryFee = deliveryPriceQuote?.fee;
+  useEffect(() => {
+    const tab = pos.activeTab;
+    if (!tab || tab.kitchenOrderId || tab.orderType !== "delivery" || (tab.deliveryPlatform ?? "direct") !== "direct" || quotedDeliveryFee === undefined) return;
+    if (tab.deliveryFee !== quotedDeliveryFee || tab.deliveryDistanceTier !== "custom") {
+      pos.updateTabMeta(tab.id, { deliveryFee: quotedDeliveryFee, deliveryDistanceTier: "custom" });
+    }
+  }, [pos, quotedDeliveryFee]);
+  const deliveryPolicySlot = deliveryPolicyError ? <div role="alert" className="space-y-2 text-sm"><p>Chưa tải được chính sách phí giao. {deliveryPolicyError}</p><Button variant="outline" onClick={() => { setDeliveryPolicyError(""); setDeliveryPolicy(null); setDeliveryPolicyReload(n => n + 1); }}>Thử tải lại</Button></div>
+    : !currentDeliveryPolicy ? <p role="status" className="text-sm">Đang tải chính sách phí giao…</p>
+      : currentDeliveryPolicy.enabled ? <FnbDeliveryPrice key={pos.activeTabId} policy={currentDeliveryPolicy} meters={pos.activeTab?.deliveryDistanceMeters} before={pos.subtotal} after={fnbBenefitDisplay.total}
+          onChange={meters => pos.updateTabMeta(pos.activeTabId, { deliveryDistanceMeters: meters })} /> : undefined;
 
   const activeDeliveryFee = pos.activeTab?.deliveryFee ?? 0;
   const activeCommissionPercent = pos.activeTab?.orderType === "delivery" &&
@@ -1757,8 +1793,9 @@ function FnbPosPageInner() {
 
   const fnbKitchenSubmitLockRef = useRef(false);
   const handleSendToKitchen = useCallback(async (keepCartOpen = false): Promise<string | null> => {
-    const tab = pos.activeTab;
-    if (!tab || tab.lines.length === 0) return null;
+    const initialTab = pos.activeTab;
+    if (!initialTab || initialTab.lines.length === 0) return null;
+    let tab = initialTab;
     if (requireTable()) return null;
     if (needsCustomerSelection(tab)) { setCustomerPickerOpen(true); toast({title:"Chọn khách cho đơn",description:"Chọn Khách lẻ hoặc khách có tên trước khi gửi bếp.",variant:"info"}); return null; }
     if (fnbKitchenSubmitLockRef.current) {
@@ -1793,6 +1830,27 @@ function FnbPosPageInner() {
     }));
 
     try {
+      if (!tab.kitchenOrderId && tab.orderType === "delivery" && (tab.deliveryPlatform ?? "direct") === "direct") {
+        if (!branchId) throw new Error("Chọn chi nhánh trước khi gửi đơn giao.");
+        // Re-read at submission: never silently send an obsolete fee policy.
+        const policy = networkStatus.isOnline ? await getDeliveryPricePolicy(branchId) : currentDeliveryPolicy;
+        if (!policy || (policy.enabled && !networkStatus.isOnline)) throw new Error("Cần kết nối mạng để kiểm tra phí giao trước khi gửi đơn.");
+        if (!currentDeliveryPolicy || policy.revision !== currentDeliveryPolicy.revision) {
+          setDeliveryPolicy({ branchId, policy });
+          setDeliveryPolicyError("");
+          throw new Error("Cấu hình giao hàng vừa được cập nhật. Kiểm tra phí trên bill rồi bấm gửi lại.");
+        }
+        if (policy.enabled) {
+          const quote = quoteDeliveryPrice(policy, tab.deliveryDistanceMeters, pos.subtotal, fnbBenefitDisplay.total);
+          if (!quote) throw new Error("Chưa có mức phí phù hợp với khoảng cách và giá trị bill. Kiểm tra cấu hình phí giao trước khi gửi đơn.");
+          if (quote.fee !== (tab.deliveryFee ?? 0)) {
+            setDeliveryPolicy({ branchId, policy });
+            pos.updateTabMeta(tab.id, { deliveryFee: quote.fee, deliveryDistanceTier: "custom" });
+            throw new Error("Phí giao vừa được cập nhật. Kiểm tra phí trên bill rồi bấm gửi lại.");
+          }
+          tab = { ...tab, deliveryFee: quote.fee, deliveryDistanceTier: "custom", orderNote: [tab.orderNote, `Giao hàng: ${tab.deliveryDistanceMeters} m · ${quote.name} · ${quote.fee}đ`].filter(Boolean).join("\n") };
+        }
+      }
       // Preserve tab/line identity before transport, without waiting for autosave.
       await pos.flushPersistedTabs(true);
       const isAddItems = !!tab.kitchenOrderId;
@@ -2033,7 +2091,7 @@ function FnbPosPageInner() {
       fnbKitchenSubmitLockRef.current = false;
       setKitchenSubmitting(false);
     }
-  }, [pos, tenantId, branchId, userId, toast, settings, user, networkStatus.isOnline, requireTable]);
+  }, [pos, tenantId, branchId, userId, toast, settings, user, networkStatus.isOnline, requireTable, currentDeliveryPolicy, fnbBenefitDisplay.total]);
 
   // ── Voucher / Coupon apply ──
   // Kết quả này là xem trước; máy chủ tính lại và ghi số tiền thật lúc thanh toán.
@@ -3906,6 +3964,7 @@ function FnbPosPageInner() {
           onDeliveryTierChange={handleDeliveryTierChange}
           staffOptions={shipperOptions}
           selfDeliveryTiers={deliveryTiers}
+          deliveryPolicySlot={deliveryPolicySlot}
           discountPresets={discountPresets}
           discountPresetsError={discountPresetsError}
           onRetryDiscountPresets={retryFnbSettings}
@@ -4125,6 +4184,7 @@ function FnbPosPageInner() {
               onDeliveryTierChange={handleDeliveryTierChange}
               staffOptions={shipperOptions}
               selfDeliveryTiers={deliveryTiers}
+              deliveryPolicySlot={deliveryPolicySlot}
               discountPresets={discountPresets}
               discountPresetsError={discountPresetsError}
               onRetryDiscountPresets={retryFnbSettings}

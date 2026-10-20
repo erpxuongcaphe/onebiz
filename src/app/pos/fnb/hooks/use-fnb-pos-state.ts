@@ -111,6 +111,7 @@ export interface UseFnbPosStateReturn {
         | "platformCommissionPercent"
         | "deliveryStaffId"
         | "deliveryDistanceTier"
+        | "deliveryDistanceMeters"
       >
     >,
   ) => void;
@@ -350,6 +351,7 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
           | "platformCommissionPercent"
           | "deliveryStaffId"
           | "deliveryDistanceTier"
+        | "deliveryDistanceMeters"
         >
       >,
     ) => {
