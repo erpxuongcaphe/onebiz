@@ -87,7 +87,7 @@ export default function OperationalSalesOverview() {
   return (
     <main className="min-w-0 space-y-5 p-3 sm:p-6">
       <header className="flex items-start justify-between gap-3">
-        <div className="min-w-0"><h1 className="text-xl font-semibold">Tổng quan bán hàng</h1><p className="break-words text-sm text-muted-foreground">{branch?.name ?? "Tất cả chi nhánh"} · {range.label}</p></div>
+        <div className="min-w-0"><h1 className="text-xl font-bold text-foreground">Tổng quan bán hàng</h1><p className="break-words text-sm text-foreground/70">{branch?.name ?? "Tất cả chi nhánh"} · {range.label}</p></div>
         <Button variant="outline" size="icon" aria-label="Làm mới" title="Làm mới" disabled={loading} onClick={() => void refresh()}><Icon name="refresh" size={19} /></Button>
       </header>
       <div className="flex flex-wrap items-center justify-between gap-2 border-y py-2">
@@ -102,11 +102,11 @@ export default function OperationalSalesOverview() {
       {error && <div role="alert" className="flex flex-wrap items-center justify-between gap-2 border-l-4 border-destructive bg-destructive/5 p-3 text-sm"><span>{error}</span><Button size="sm" variant="outline" onClick={() => void refresh()}>Thử lại</Button></div>}
       {!data && !error && <div role="status" aria-label="Đang tải doanh số" className="h-56 animate-pulse rounded-md bg-muted" />}
       {data && <>
-        <section aria-labelledby="sales-title" className="overflow-hidden rounded-md border bg-card">
+        <section aria-labelledby="sales-title" className="overflow-hidden rounded-md border border-border/80 bg-card shadow-sm">
           <div className="border-l-4 border-primary bg-primary/5 p-4 sm:p-5">
             <div className="flex items-center justify-between gap-2"><h2 id="sales-title" className="text-sm font-semibold text-primary">Doanh số thực tế</h2><span className="text-xs text-muted-foreground">Đồng</span></div>
             <p className="mt-1 text-[28px] font-semibold leading-tight tabular-nums text-primary sm:text-[32px]" data-testid="net-sales">{formatCurrency(data.sales)}</p>
-            <p className="mt-1 text-xs text-muted-foreground">Sau giảm giá và hàng trả</p>
+            <p className="mt-1 text-xs text-foreground/70">Sau giảm giá và hàng trả</p>
             <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
               <span><strong className="text-foreground">{formatNumber(data.orders)}</strong> hóa đơn hoàn tất</span>
               <span className="text-amber-700 dark:text-amber-400">Giảm giá {formatCurrency(data.discounts)}</span>
@@ -115,9 +115,9 @@ export default function OperationalSalesOverview() {
           </div>
           <dl className="grid grid-cols-2 border-t bg-muted/30 sm:grid-cols-3">
             {Array.from(new Set(["cash", "transfer", ...Object.keys(data.methods).filter(method => data.methods[method] !== 0)])).map(method => (
-              <div key={method} className={`min-w-0 border-b p-3 sm:px-5 ${method === "cash" ? "border-l-2 border-l-teal-500 bg-teal-500/5" : method === "transfer" ? "border-l-2 border-l-violet-500 bg-violet-500/5" : ""}`}><dt className="text-xs text-muted-foreground">{METHODS[method] ?? method}</dt><dd className="mt-1 break-words text-base font-semibold tabular-nums">{formatCurrency(data.methods[method] ?? 0)}</dd></div>
+              <div key={method} className={`min-w-0 border-b p-3 sm:px-5 ${method === "cash" ? "border-l-2 border-l-teal-500 bg-teal-500/5" : method === "transfer" ? "border-l-2 border-l-violet-500 bg-violet-500/5" : ""}`}><dt className={`text-xs font-medium ${method === "cash" ? "text-teal-700 dark:text-teal-400" : method === "transfer" ? "text-violet-700 dark:text-violet-400" : "text-foreground/70"}`}>{METHODS[method] ?? method}</dt><dd className="mt-1 break-words text-base font-semibold tabular-nums">{formatCurrency(data.methods[method] ?? 0)}</dd></div>
             ))}
-            <div className="col-span-2 flex min-w-0 items-center justify-between gap-2 border-b bg-primary/5 p-3 sm:col-span-1 sm:block sm:px-5"><dt className="text-xs text-muted-foreground">Thực thu sau hoàn</dt><dd className="break-words text-base font-semibold tabular-nums sm:mt-1">{formatCurrency(data.collected)}</dd></div>
+            <div className="col-span-2 flex min-w-0 items-center justify-between gap-2 border-b bg-primary/5 p-3 sm:col-span-1 sm:block sm:px-5"><dt className="text-xs font-medium text-foreground/70">Thực thu sau hoàn</dt><dd className="break-words text-base font-semibold tabular-nums sm:mt-1">{formatCurrency(data.collected)}</dd></div>
           </dl>
           <details className="p-3 text-xs sm:px-5">
             <summary className="cursor-pointer font-medium">Đối chiếu bán hàng và thu tiền</summary>
