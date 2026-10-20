@@ -65,7 +65,7 @@ export default function ManagementFinancePage() {
   const canCancel = hasPermission('finance.void_transaction');
   const canExport = hasPermission('reports.export');
   const scoped = {...filters, branchId: activeBranchId};
-  const reportPeriod = new URLSearchParams({preset:'custom',from:filters.from,to:filters.to,view:'table',...(activeBranchId ? {branch:activeBranchId} : {})}).toString();
+  const reportPeriod = new URLSearchParams({preset:'custom',from:filters.from,to:filters.to,view:'table',branch:activeBranchId??'all'}).toString();
   const rangeError = financeReportRangeError(filters.from, filters.to);
 
   useEffect(() => {
@@ -179,7 +179,7 @@ export default function ManagementFinancePage() {
     </div>}
     <div className="flex flex-wrap gap-2">
       {canCreate && !internalView && <Button onClick={() => {setSettling(undefined); setOpen(true);}}><Icon name="add"/>{filters.kind === 'income' ? 'Ghi nhận thu nhập' : filters.kind === 'expense' ? 'Ghi nhận chi phí' : 'Ghi nhận khoản ngoài KQKD'}</Button>}
-      {internalView&&<Button nativeButton={false} variant="outline" render={<Link href="/hang-hoa/nhap-hang/noi-bo"/>}><Icon name="move_to_inbox"/>Phiếu nhận nội bộ</Button>}
+      {internalView&&<Button nativeButton={false} variant="outline" render={<Link href={`/hang-hoa/nhap-hang/noi-bo?branch=${encodeURIComponent(activeBranchId??'all')}`}/>}><Icon name="move_to_inbox"/>Phiếu nhận nội bộ</Button>}
       {canCreate && <Button variant="outline" disabled={!activeBranchId || !categories.length} onClick={()=>setImportOpen(true)}><Icon name="upload"/>Nhập tài chính</Button>}
       {canCreate && <Button variant="outline" onClick={() => openCategory(filters.kind ?? 'expense')}><Icon name="category"/>Thêm khoản mục</Button>}
       {canExport && <Button variant="outline" disabled={loading || categoryLoading || exporting || !data || !!error || !!rangeError} onClick={download}><Icon name="download"/>{exporting ? 'Đang xuất…' : 'Xuất Excel'}</Button>}

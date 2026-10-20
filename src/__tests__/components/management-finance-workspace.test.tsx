@@ -43,6 +43,14 @@ describe('management finance reporting workspace',() => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Không có quyền xem chi phí tại chi nhánh này.');
     expect(mocks.workspace).not.toHaveBeenCalled();
   });
+  it('carries explicit all-branch scope into reports without changing the global POS branch',async()=>{
+    window.history.replaceState({},'','/?branch=all');
+    render(<Page/>);
+    await screen.findByRole('button',{name:'CP001'});
+    expect(mocks.workspace.mock.calls.at(-1)?.[0].branchId).toBeUndefined();
+    expect(screen.getByRole('button',{name:'Kết quả kinh doanh'}).getAttribute('href')).toContain('&branch=all');
+    expect(screen.getByRole('button',{name:'Dòng tiền'}).getAttribute('href')).toContain('&branch=all');
+  });
   it('links automatic receipt expenses to their source without offering another payment or separate cancellation',async()=>{
     mocks.workspace.mockResolvedValue({items:[{...row,source_type:'internal_receipt',source_sale_id:'sale-source',source_receipt_id:'receipt-source',can_view_consolidated_cost:false,settled_amount:0,settlements:[]}],total:1,summary:{income:0,expense:600,non_pnl:0}});
     render(<Page/>);
