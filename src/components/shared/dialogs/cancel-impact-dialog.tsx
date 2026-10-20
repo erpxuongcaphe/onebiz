@@ -157,7 +157,7 @@ export function CancelImpactDialog({
         if (!o && !saving) onClose();
       }}
     >
-      <DialogContent className="sm:max-w-[420px]">
+      <DialogContent className="min-w-0 max-h-[90dvh] overflow-y-auto sm:max-w-[420px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
             <Icon name="cancel" size={18} className="text-destructive" />
@@ -256,7 +256,7 @@ export function CancelImpactDialog({
             {/* Ô HOÀN TIỀN — hổ phách, việc người phải làm tay + chọn phương thức */}
             {impact.cashAmount > 0 && (
               <div className="rounded-lg border border-amber-400/50 bg-amber-50 p-2.5 dark:bg-amber-950/30">
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-1.5 text-sm font-semibold text-amber-800 dark:text-amber-300">
                     <Icon name="payments" size={16} />
                     {impact.cashDirection === "refund_to_customer"
@@ -265,7 +265,7 @@ export function CancelImpactDialog({
                     {formatCurrency(impact.cashAmount)}
                   </div>
                   <Select value={method} onValueChange={(v) => setMethod((v as RefundMethod | "original") ?? "original")}>
-                    <SelectTrigger aria-label="Phương thức hoàn tiền" className="h-8 w-[170px] text-xs">
+                    <SelectTrigger aria-label="Phương thức hoàn tiền" className="h-8 w-full text-xs sm:w-[170px]">
                       {/* Base UI Select.Value hiện raw value → map sang nhãn Việt */}
                       <SelectValue>
                         {(v: unknown) => v === "original" ? "Theo thanh toán gốc" : METHOD_LABELS[(v as RefundMethod)] ?? METHOD_LABELS.cash}
@@ -321,13 +321,14 @@ export function CancelImpactDialog({
           </div>
         )}
 
-        <DialogFooter className="gap-2 sm:gap-2">
-          <Button variant="outline" size="sm" disabled={saving} onClick={onClose}>
+        <DialogFooter className="flex-col gap-2 sm:flex-row">
+          <Button className="w-full sm:w-auto" variant="outline" size="sm" disabled={saving} onClick={onClose}>
             Đóng
           </Button>
           <Button
             variant="destructive"
             size="sm"
+            className="w-full sm:w-auto"
             disabled={saving || loadingImpact || !impact || reasonInvalid}
             onClick={handleConfirm}
           >
