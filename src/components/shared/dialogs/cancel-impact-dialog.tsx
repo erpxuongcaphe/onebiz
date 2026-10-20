@@ -45,7 +45,7 @@ export interface CancelTarget {
 }
 
 export interface CancelConfirmOptions {
-  refundMethod: RefundMethod;
+  refundMethod?: RefundMethod;
   allowNegativeStock: boolean;
   reason: string;
 }
@@ -79,7 +79,7 @@ export function CancelImpactDialog({
   const { toast } = useToast();
   const [impact, setImpact] = useState<CancelImpact | null>(null);
   const [loadingImpact, setLoadingImpact] = useState(false);
-  const [method, setMethod] = useState<RefundMethod>("cash");
+  const [method, setMethod] = useState<RefundMethod | "original">("original");
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -97,7 +97,7 @@ export function CancelImpactDialog({
       .then((res) => {
         if (cancelled) return;
         setImpact(res);
-        setMethod(res.suggestedMethod);
+        setMethod(target.type === "invoice" ? "original" : res.suggestedMethod);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -121,7 +121,7 @@ export function CancelImpactDialog({
     setSaving(true);
     try {
       await onConfirm({
-        refundMethod: method,
+        refundMethod: method === "original" ? undefined : method,
         allowNegativeStock: impact.negativeStock.length > 0,
         reason: reason.trim(),
       });
@@ -157,7 +157,7 @@ export function CancelImpactDialog({
         if (!o && !saving) onClose();
       }}
     >
-      <DialogContent className="sm:max-w-[420px]">
+      <DialogContent className="min-w-0 max-h-[90dvh] overflow-y-auto sm:max-w-[420px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
             <Icon name="cancel" size={18} className="text-destructive" />
@@ -256,7 +256,7 @@ export function CancelImpactDialog({
             {/* Ô HOÀN TIỀN — hổ phách, việc người phải làm tay + chọn phương thức */}
             {impact.cashAmount > 0 && (
               <div className="rounded-lg border border-amber-400/50 bg-amber-50 p-2.5 dark:bg-amber-950/30">
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-1.5 text-sm font-semibold text-amber-800 dark:text-amber-300">
                     <Icon name="payments" size={16} />
                     {impact.cashDirection === "refund_to_customer"
@@ -264,24 +264,28 @@ export function CancelImpactDialog({
                       : "NCC hoàn lại"}{" "}
                     {formatCurrency(impact.cashAmount)}
                   </div>
-                  <Select value={method} onValueChange={(v) => setMethod((v as RefundMethod) ?? "cash")}>
-                    <SelectTrigger className="h-7 w-[120px] text-xs">
+                  <Select value={method} onValueChange={(v) => setMethod((v as RefundMethod | "original") ?? "original")}>
+                    <SelectTrigger aria-label="Phương thức hoàn tiền" className="h-8 w-full text-xs sm:w-[170px]">
                       {/* Base UI Select.Value hiện raw value → map sang nhãn Việt */}
                       <SelectValue>
-                        {(v: unknown) => METHOD_LABELS[(v as RefundMethod)] ?? METHOD_LABELS.cash}
+                        {(v: unknown) => v === "original" ? "Theo thanh toán gốc" : METHOD_LABELS[(v as RefundMethod)] ?? METHOD_LABELS.cash}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
+                      {isInvoice && <SelectItem value="original">Theo thanh toán gốc</SelectItem>}
                       <SelectItem value="cash">Tiền mặt</SelectItem>
                       <SelectItem value="transfer">Chuyển khoản</SelectItem>
                       <SelectItem value="card">Thẻ</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+                {method === "original" && impact.refundMethods && <dl className="mt-2 space-y-1 text-xs text-amber-900 dark:text-amber-200">
+                  {Object.entries(impact.refundMethods).filter(([, amount]) => amount > 0).map(([key, amount]) => <div key={key} className="flex justify-between gap-3"><dt>{METHOD_LABELS[key as RefundMethod]}</dt><dd className="tabular-nums">{formatCurrency(amount)}</dd></div>)}
+                </dl>}
                 <p className="mt-1 text-xs text-amber-700/80 dark:text-amber-400/70">
                   {impact.cashDirection === "refund_to_customer"
-                    ? `Máy ghi phiếu chi tự động · bạn trả khách bằng ${METHOD_LABELS[method].toLowerCase()}.`
-                    : `Máy ghi phiếu thu tự động · bạn nhận lại bằng ${METHOD_LABELS[method].toLowerCase()}.`}
+                    ? method === "original" ? "Ghi hoàn theo từng khoản thanh toán gốc. Không tự chuyển tiền ngân hàng." : `Ghi hoàn bằng ${METHOD_LABELS[method].toLowerCase()}. Kiểm tra phương thức đã đổi trước khi xác nhận.`
+                    : `Máy ghi phiếu thu tự động · bạn nhận lại bằng ${METHOD_LABELS[method === "original" ? impact.suggestedMethod : method].toLowerCase()}.`}
                 </p>
               </div>
             )}
@@ -317,13 +321,14 @@ export function CancelImpactDialog({
           </div>
         )}
 
-        <DialogFooter className="gap-2 sm:gap-2">
-          <Button variant="outline" size="sm" disabled={saving} onClick={onClose}>
+        <DialogFooter className="flex-col gap-2 sm:flex-row">
+          <Button className="w-full sm:w-auto" variant="outline" size="sm" disabled={saving} onClick={onClose}>
             Đóng
           </Button>
           <Button
             variant="destructive"
             size="sm"
+            className="w-full sm:w-auto"
             disabled={saving || loadingImpact || !impact || reasonInvalid}
             onClick={handleConfirm}
           >

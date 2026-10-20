@@ -39,6 +39,7 @@ const completedInvoiceImpact = {
   cashDirection: "refund_to_customer",
   cashAmount: 79000,
   suggestedMethod: "cash",
+  refundMethods: { cash: 49000, transfer: 30000 },
   debtAmount: 0,
   counterpartyDebtBefore: null,
   loyaltyPoints: 0,
@@ -68,6 +69,9 @@ describe("CancelImpactDialog", () => {
       name: "Xác nhận hủy & hoàn tiền",
     });
     expect(confirm).toBeDisabled();
+    expect(screen.getByText("Ghi hoàn theo từng khoản thanh toán gốc. Không tự chuyển tiền ngân hàng.")).toBeInTheDocument();
+    expect(screen.getByText("49,000")).toBeInTheDocument();
+    expect(screen.getByText("30,000")).toBeInTheDocument();
     expect(screen.getByText("Nhập ít nhất 3 ký tự để lưu vào lịch sử thao tác.")).toBeTruthy();
 
     const reason = screen.getByPlaceholderText("Lý do hủy * (tối thiểu 3 ký tự)");
@@ -80,7 +84,7 @@ describe("CancelImpactDialog", () => {
 
     await waitFor(() =>
       expect(onConfirm).toHaveBeenCalledWith({
-        refundMethod: "cash",
+        refundMethod: undefined,
         allowNegativeStock: false,
         reason: "Hủy UAT",
       }),

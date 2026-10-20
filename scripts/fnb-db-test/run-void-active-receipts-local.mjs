@@ -1,0 +1,81 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { pathToFileURL } from 'node:url';
+import path from 'node:path';
+
+if (!process.argv[2]) throw new Error('Pass the isolated PGlite module path.');
+const { PGlite } = await import(pathToFileURL(path.resolve(process.argv[2])).href);
+const db = new PGlite();
+const id = n => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
+const tenant = id(1), actor = id(2), branch = id(3), invoice = id(4);
+const extract = async (file, marker) => {
+  const source = (await readFile(file, 'utf8')).replace(/\r\n/g, '\n');
+  const start = source.indexOf(marker), end = source.indexOf('$$;', start);
+  assert.ok(start >= 0 && end > start, 'actual SQL function must exist');
+  return source.slice(start, end + 3);
+};
+await db.exec(`
+create role anon; create role authenticated; create schema auth; create schema extensions;
+create function auth.uid() returns uuid language sql as $$ select '${actor}'::uuid $$;
+create function get_user_tenant_id() returns uuid language sql as $$ select '${tenant}'::uuid $$;
+create table profiles(id uuid,tenant_id uuid,is_active boolean);
+insert into profiles values('${actor}','${tenant}',true);
+create function user_has_branch_access(uuid,uuid) returns boolean language sql as $$ select $2='${branch}'::uuid $$;
+create function user_has_permission(uuid,text) returns boolean language sql as $$ select coalesce(current_setting('test.permitted',true),'true')='true' $$;
+create table invoices(id uuid primary key,tenant_id uuid,branch_id uuid,source text,status text,total numeric,paid numeric,debt numeric,code text,customer_id uuid,customer_name text,shift_id uuid,cancelled_at timestamptz,cancelled_by uuid,cancel_reason text,updated_at timestamptz);
+create table shifts(id uuid,tenant_id uuid,branch_id uuid,cashier_id uuid,status text);
+create table products(id uuid primary key,stock numeric);
+create table branch_stock(tenant_id uuid,branch_id uuid,product_id uuid,quantity numeric);
+create table stock_movements(id uuid default gen_random_uuid(),tenant_id uuid,branch_id uuid,product_id uuid,type text,quantity numeric,reference_type text,reference_id uuid,note text,created_by uuid);
+create function increment_product_stock(uuid,numeric) returns void language sql as $$ update products set stock=stock+$2 where id=$1 $$;
+create function upsert_branch_stock(uuid,uuid,uuid,numeric) returns void language sql as $$ update branch_stock set quantity=quantity+$4 where tenant_id=$1 and branch_id=$2 and product_id=$3 $$;
+create table lot_allocations(id uuid,tenant_id uuid,lot_id uuid,source_type text,source_id uuid,quantity numeric,allocated_by uuid);
+create table product_lots(id uuid,current_qty numeric,status text,updated_at timestamptz);
+create table customers(id uuid,tenant_id uuid,loyalty_points integer);
+create table loyalty_transactions(tenant_id uuid,customer_id uuid,type text,points integer,balance_after integer,reference_type text,reference_id uuid,note text,created_by uuid);
+create sequence test_cash_code;
+create function next_code(uuid,text) returns text language sql as $$ select 'TEST-'||nextval('test_cash_code') $$;
+create table cash_transactions(id uuid default gen_random_uuid(),tenant_id uuid,branch_id uuid,code text,type text,category text,amount numeric,counterparty text,payment_method text,reference_type text,reference_id uuid,note text,created_by uuid,shift_id uuid,status text default 'completed');
+create table audit_log(tenant_id uuid,user_id uuid,action text,entity_type text,entity_id uuid,old_data jsonb,new_data jsonb);
+insert into invoices(id,tenant_id,branch_id,source,status,total,paid,debt,code) values('${invoice}','${tenant}','${branch}','fnb','completed',100,100,0,'TEST-1');
+insert into products values('${id(5)}',10);
+insert into branch_stock values('${tenant}','${branch}','${id(5)}',10);
+insert into stock_movements(tenant_id,branch_id,product_id,type,quantity,reference_type,reference_id) values('${tenant}','${branch}','${id(5)}','out',2,'bom_consume','${invoice}');
+insert into cash_transactions(tenant_id,branch_id,type,amount,payment_method,reference_type,reference_id,status) values
+('${tenant}','${branch}','receipt',60,'cash','invoice','${invoice}','completed'),
+('${tenant}','${branch}','receipt',40,'transfer','invoice','${invoice}','completed'),
+('${tenant}','${branch}','receipt',900,'cash','invoice','${invoice}','cancelled'),
+('${tenant}','${branch}','receipt',800,'transfer','invoice','${invoice}','pending');
+`);
+const legacy = await extract('supabase/migrations/00161_fix_void_invoice_reversal_symmetry.sql', 'create or replace function public.void_completed_invoice_atomic(');
+await db.exec(legacy.replace('public.void_completed_invoice_atomic(', 'public._void_completed_invoice_impl_00161('));
+await db.exec(`revoke all on function public._void_completed_invoice_impl_00161(uuid,uuid,uuid,text,uuid) from public,anon,authenticated;`);
+const wrapper = await extract('supabase/migrations/00402_fix_fnb_void_shift_reconciliation.sql', 'create or replace function public._void_completed_invoice_atomic_v2_impl_00250(');
+await db.exec(wrapper);
+const snapshot = async () => (await db.query(`select jsonb_build_array((select jsonb_agg(i) from invoices i),(select jsonb_agg(c order by amount) from cash_transactions c),(select jsonb_agg(s) from stock_movements s)) value`)).rows[0].value;
+const before = await snapshot();
+const migration = await readFile('supabase/migrations/202610210001_void_active_receipts.sql', 'utf8');
+await db.exec(migration); await db.exec(migration);
+assert.deepEqual(await snapshot(), before, 'migration and replay must not alter business rows');
+assert.equal((await db.query(`select has_function_privilege('authenticated','public._void_completed_invoice_impl_00161(uuid,uuid,uuid,text,uuid)','execute') ok`)).rows[0].ok, false);
+const voidInvoice = (method = null) => db.query(`select public._void_completed_invoice_atomic_v2_impl_00250($1,'Test reason',$2,null) value`, [invoice, method]);
+await db.exec(`set test.permitted='false';`);
+await assert.rejects(voidInvoice(), /INSUFFICIENT_PERMISSION/);
+await db.exec(`set test.permitted='true'; update invoices set branch_id='${id(8)}';`);
+await assert.rejects(voidInvoice(), /BRANCH_ACCESS_DENIED/);
+await db.exec(`update invoices set branch_id='${branch}';`);
+const result = (await voidInvoice()).rows[0].value;
+assert.equal(result.reversed_cash, 100, 'only effective receipts are refunded');
+assert.deepEqual((await db.query(`select payment_method,sum(amount)::int amount from cash_transactions where type='payment' group by payment_method order by payment_method`)).rows, [{ payment_method: 'cash', amount: 60 }, { payment_method: 'transfer', amount: 40 }]);
+assert.equal((await db.query(`select stock::int from products`)).rows[0].stock, 12, 'stock reversal remains intact');
+assert.equal((await db.query(`select quantity::int from branch_stock`)).rows[0].quantity, 12);
+await assert.rejects(voidInvoice(), /đã được hủy/);
+assert.equal((await db.query(`select count(*)::int n from cash_transactions where type='payment'`)).rows[0].n, 2, 'repeat cannot create duplicate refunds');
+await db.exec(`update invoices set status='completed'; delete from cash_transactions where type='payment';`);
+await voidInvoice('card');
+assert.deepEqual((await db.query(`select distinct payment_method from cash_transactions where type='payment'`)).rows, [{ payment_method: 'card' }], 'explicit override remains supported');
+await db.exec(`create or replace function public._void_completed_invoice_impl_00161(p_tenant_id uuid,p_invoice_id uuid,p_actor uuid,p_reason text default null,p_shift_id uuid default null) returns jsonb language sql as $$ select '{}'::jsonb $$;`);
+await assert.rejects(db.exec(migration), /VOID_RECEIPT_CURSOR_CHANGED_REVIEW_REQUIRED/);
+await db.exec('rollback');
+await db.close();
+console.log('PASS: active receipts only, mixed-method refunds, explicit override, authorization, branch denial, stock symmetry, repeat guard, unchanged migration data and private ACL.');

@@ -29,7 +29,7 @@ export async function previewInvoiceBulkCancel(ids: string[]): Promise<InvoiceCa
     readHistoryPages<{ id: string; reference_id: string | null; amount: number }>(async (offset, size) => {
       const result = await db.from("cash_transactions").select("id,reference_id,amount", { count: "exact" })
         .eq("tenant_id", ctx.tenantId).in("reference_id", selected)
-        .eq("reference_type", "invoice").eq("type", "receipt")
+        .eq("reference_type", "invoice").eq("type", "receipt").eq("status", "completed")
         .order("id").range(offset, offset + size - 1);
       return { ...result, data: result.data as { id: string; reference_id: string | null; amount: number }[] | null };
     }),

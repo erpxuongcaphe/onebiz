@@ -11,6 +11,7 @@
  */
 
 import { getClient, getCurrentContext, handleError } from "./base";
+import { readHistoryPages } from "./read-history-pages";
 
 export type CancelDocType = "invoice" | "purchase";
 export type RefundMethod = "cash" | "transfer" | "card";
@@ -42,6 +43,7 @@ export interface CancelImpact {
   cashDirection: "refund_to_customer" | "collect_from_supplier" | null;
   cashAmount: number;
   suggestedMethod: RefundMethod;
+  refundMethods?: Partial<Record<RefundMethod, number>>;
 
   // ─── Công nợ (sẽ xóa — chỉ điều chỉnh sổ, không cần làm tay) ───
   debtAmount: number;
@@ -81,7 +83,6 @@ export async function getInvoiceCancelImpact(
   if (!inv) throw new Error("Không tìm thấy hóa đơn");
 
   const hasSideEffects = inv.status === "completed";
-  const paid = Number(inv.paid ?? 0);
   const debt = Number(inv.debt ?? 0);
 
   const base: CancelImpact = {
@@ -110,13 +111,14 @@ export async function getInvoiceCancelImpact(
   }
 
   // ─── Completed: tính đủ tác động (chạy song song cho nhanh) ───
-  const [itemCount, branchName, loyalty, pendingShipping, custDebt] =
+  const [itemCount, branchName, loyalty, pendingShipping, custDebt, receipts] =
     await Promise.all([
       countInvoiceItems(invoiceId, ctx.tenantId),
       resolveBranchName(inv.branch_id, ctx.tenantId),
       sumLoyaltyEarned(invoiceId, ctx.tenantId),
       countPendingShipping(invoiceId, ctx.tenantId),
       inv.customer_id ? fetchCustomerDebt(inv.customer_id, ctx.tenantId) : Promise.resolve(null),
+      readInvoiceReceipts(invoiceId, ctx.tenantId, inv.branch_id),
     ]);
 
   base.stockLineCount = itemCount;
@@ -124,9 +126,11 @@ export async function getInvoiceCancelImpact(
   base.loyaltyPoints = loyalty;
   base.pendingShippingCount = pendingShipping;
 
-  if (paid > 0) {
+  base.refundMethods = receipts;
+  const refund = Object.values(receipts).reduce((sum, amount) => sum + amount, 0);
+  if (refund > 0) {
     base.cashDirection = "refund_to_customer";
-    base.cashAmount = paid;
+    base.cashAmount = refund;
   }
   if (debt > 0) {
     base.debtAmount = debt;
@@ -134,6 +138,24 @@ export async function getInvoiceCancelImpact(
   }
 
   return base;
+}
+
+async function readInvoiceReceipts(invoiceId: string, tenantId: string, branchId: string | null) {
+  if (!branchId) throw new Error("Hóa đơn chưa xác định chi nhánh. Kiểm tra trước khi hủy.");
+  const rows = await readHistoryPages<{ id: string; amount: number; payment_method: string | null }>(async (offset, size) => {
+    const result = await getClient().from("cash_transactions")
+      .select("id,amount,payment_method", { count: "exact" })
+      .eq("tenant_id", tenantId).eq("reference_id", invoiceId)
+      .eq("reference_type", "invoice").eq("type", "receipt").eq("status", "completed")
+      .eq("branch_id", branchId).order("id").range(offset, offset + size - 1);
+    return { ...result, data: result.data as { id: string; amount: number; payment_method: string | null }[] | null };
+  });
+  const methods: Partial<Record<RefundMethod, number>> = {};
+  for (const row of rows) {
+    const method = normalizeMethod(row.payment_method);
+    methods[method] = (methods[method] ?? 0) + Number(row.amount);
+  }
+  return methods;
 }
 
 /* ------------------------------------------------------------------ */
