@@ -15,7 +15,7 @@ const TYPES:Record<string,string>={dine_in:"Tại quán",takeaway:"Mang về",de
 const PAGE_SIZE=20;
 export function FnbSalesHistoryView({branchId,tenantId,revision,onReprint,onVoid,reprinting,voiding,canVoidPaidBill}:{branchId:string;tenantId?:string;revision:number;onReprint:(id:string)=>Promise<void>;onVoid:(row:FnbSaleRow)=>void;reprinting:string|null;voiding:boolean;canVoidPaidBill:boolean}) {
   const {hasPermission}=useAuth();
-  const canViewCash=hasPermission(PERMISSIONS.FINANCE_VIEW_CASH_BOOK);
+  const canViewCash=hasPermission(PERMISSIONS.POS_FNB_VIEW_SALES_SUMMARY);
   const [day,setDay]=useState(todayFnb),[search,setSearch]=useState(""),[status,setStatus]=useState<keyof typeof STATES>("all"),[method,setMethod]=useState("all"),[page,setPage]=useState(0);
   const [history,setHistory]=useState<FnbDayHistory|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState("");
   const [cash,setCash]=useState<FnbDayCash|null>(null),[cashError,setCashError]=useState("");
@@ -25,7 +25,7 @@ export function FnbSalesHistoryView({branchId,tenantId,revision,onReprint,onVoid
     const gen=++generation.current;
     setLoading(true); setError(""); setCashError("");
     // Cash errors must not hide order history; lack of permission is never displayed as zero.
-    const money=canViewCash ? getFnbDayCash(branchId,day).then(result=>{if(gen===generation.current)setCash(result);}).catch(()=>{if(gen===generation.current)setCashError("Chưa tải được tiền thu. Thử tải lại.");}) : Promise.resolve();
+    const money=canViewCash ? getFnbDayCash(branchId,day).then(result=>{if(gen===generation.current)setCash(result);}).catch((err:unknown)=>{if(gen===generation.current){if(err instanceof Error && /PERMISSION_DENIED|BRANCH_DENIED/.test(err.message))setCash(null);setCashError("Chưa tải được tiền thu. Thử tải lại.");}}) : Promise.resolve();
     try { const result=await getFnbDayHistory(branchId,day); if(gen===generation.current){setHistory(result);setSelected(old=>{const next=old ? result.rows.find(row=>row.id===old.id)??null : null;return JSON.stringify(old)===JSON.stringify(next) ? old : next;});} }
     catch(err){if(gen===generation.current){setHistory(null);setError(err instanceof Error?err.message:"Không tải được lịch sử.");}}
     finally{await money;if(gen===generation.current)setLoading(false);}
@@ -55,14 +55,14 @@ export function FnbSalesHistoryView({branchId,tenantId,revision,onReprint,onVoid
         <Button variant="outline" size="icon" aria-label="Tải lại lịch sử" onClick={()=>void refresh()} disabled={loading}><Icon name="refresh" size={19}/></Button>
       </div>
       <div className="flex flex-wrap gap-1.5" role="group" aria-label="Trạng thái đơn">
-        {(Object.entries(STATES) as [keyof typeof STATES,string][]).map(([key,label])=><button type="button" key={key} aria-pressed={key===status} onClick={()=>{setStatus(key);setPage(0);}} className={`min-h-11 rounded-lg border px-3 text-sm ${key===status ? "border-primary bg-primary/10 font-semibold text-primary" : "border-border hover:bg-muted"}`}>{label} <span className="ml-1 tabular-nums">{history ? formatNumber(key==="all"?history.rows.length:history[key]) : "—"}</span></button>)}
+        {(Object.entries(STATES) as [keyof typeof STATES,string][]).map(([key,label])=><button type="button" key={key} aria-pressed={key===status} onClick={()=>{setStatus(key);setPage(0);}} className={`min-h-11 rounded-lg border px-3 text-sm ${key===status ? "border-primary bg-primary/10 font-semibold text-primary" : "border-border hover:bg-muted"}`}>{label} <span className="ml-1 tabular-nums">{canViewCash && <span>{cash ? formatNumber(key==="all" ? cash.completed+cash.pending+cash.cancelled : cash[key]) : "—"}</span>}</span></button>)}
       </div>
-      <div className="grid grid-cols-2 gap-2">
-        <div className="rounded-lg bg-muted/50 px-3 py-2"><p className="text-xs text-muted-foreground">Giá trị bill hoàn thành</p><p className="text-lg font-semibold tabular-nums">{history ? formatCurrency(history.invoiceValue) : "—"}</p><p className="text-[11px] text-muted-foreground">Đã giảm giá · gồm tip, phí nếu có</p></div>
-        <div className="rounded-lg bg-primary/5 px-3 py-2"><p className="text-xs text-muted-foreground">Thực thu F&B trong ngày</p><p className="text-lg font-semibold tabular-nums text-primary">{cash ? formatCurrency(cash.net) : "—"}</p><p className="text-[11px] text-muted-foreground">{!canViewCash ? "Cần quyền xem sổ quỹ" : cashError || (cash ? `Thu ${formatCurrency(cash.received)} · Hoàn ${formatCurrency(cash.refunded)}` : "Đang tải sổ quỹ…")}</p></div>
-      </div>
-      {cash && <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">{Object.entries(cash.methods).map(([key,amount])=><span key={key}>{METHODS[key]??key}: <strong className="tabular-nums text-foreground">{formatCurrency(amount)}</strong></span>)}</div>}
-      <p className="text-[11px] text-muted-foreground">Giờ Việt Nam · Bill theo ngày hóa đơn; thực thu theo ngày ghi sổ, đã trừ hoàn tiền. Đơn chờ theo ngày mở, chưa tính vào giá trị bill.</p>
+      {canViewCash && <div className="grid grid-cols-2 gap-2">
+        <div className="rounded-lg bg-muted/50 px-3 py-2"><p className="text-xs text-muted-foreground">Giá trị bill hoàn thành</p><p className="text-lg font-semibold tabular-nums">{cash ? formatCurrency(cash.invoiceValue) : "—"}</p><p className="text-[11px] text-muted-foreground">Đã giảm giá · gồm tip, phí nếu có</p></div>
+        <div className="rounded-lg bg-primary/5 px-3 py-2"><p className="text-xs text-muted-foreground">Thực thu F&B trong ngày</p><p className="text-lg font-semibold tabular-nums text-primary">{cash ? formatCurrency(cash.net) : "—"}</p><p className="text-[11px] text-muted-foreground">{cashError || (cash ? `Thu ${formatCurrency(cash.received)} · Hoàn ${formatCurrency(cash.refunded)}` : "Đang tải sổ quỹ…")}</p></div>
+      </div>}
+      {canViewCash && cash && <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">{Object.entries(cash.methods).map(([key,amount])=><span key={key}>{METHODS[key]??key}: <strong className="tabular-nums text-foreground">{formatCurrency(amount)}</strong></span>)}</div>}
+      <p className="text-[11px] text-muted-foreground">{canViewCash ? "Giờ Việt Nam · Bill theo ngày hóa đơn; thực thu theo ngày ghi sổ, đã trừ hoàn tiền. Đơn chờ theo ngày mở, chưa tính vào giá trị bill." : "Giờ Việt Nam · Tra cứu và in lại từng bill."}</p>
     </div>
     {error ? <div role="alert" className="p-4 text-destructive">{error}<Button variant="outline" className="ml-2" onClick={()=>void refresh()}>Thử lại</Button></div> : <div className="flex min-h-0 flex-1">
       <div className={`${selected ? "hidden lg:flex lg:w-1/2" : "flex w-full"} min-h-0 flex-col`}>
@@ -72,7 +72,7 @@ export function FnbSalesHistoryView({branchId,tenantId,revision,onReprint,onVoid
             <div className="shrink-0 text-right"><p className="font-semibold tabular-nums">{row.invoiceId ? formatCurrency(row.total) : "—"}</p><p className={`mt-1 text-xs ${row.status==="cancelled"?"text-destructive":row.status==="pending"?"text-status-warning":"text-status-success"}`}>{STATES[row.status]}{row.paymentMethod ? ` · ${METHODS[row.paymentMethod]??row.paymentMethod}` : ""}</p></div><Icon name="chevron_right" size={18}/>
           </button>)}
         </div>
-        <div className="flex shrink-0 items-center justify-between border-t px-3 py-2 text-xs text-muted-foreground"><span>{rows.length} kết quả · {safePage+1}/{pageCount}</span><div className="flex gap-1"><Button variant="outline" size="icon" aria-label="Trang trước" disabled={!safePage} onClick={()=>setPage(safePage-1)}><Icon name="chevron_left" size={18}/></Button><Button variant="outline" size="icon" aria-label="Trang sau" disabled={safePage>=pageCount-1} onClick={()=>setPage(safePage+1)}><Icon name="chevron_right" size={18}/></Button></div></div>
+        <div className="flex shrink-0 items-center justify-between border-t px-3 py-2 text-xs text-muted-foreground"><span>{canViewCash ? `${rows.length} kết quả · ${safePage+1}/${pageCount}` : `Trang ${safePage+1}`}</span><div className="flex gap-1"><Button variant="outline" size="icon" aria-label="Trang trước" disabled={!safePage} onClick={()=>setPage(safePage-1)}><Icon name="chevron_left" size={18}/></Button><Button variant="outline" size="icon" aria-label="Trang sau" disabled={safePage>=pageCount-1} onClick={()=>setPage(safePage+1)}><Icon name="chevron_right" size={18}/></Button></div></div>
       </div>
       {selected && <section aria-label="Chi tiết đơn bán hàng" className="flex min-h-0 w-full flex-col border-l lg:w-1/2">
         <div className="flex shrink-0 items-center gap-2 border-b p-3"><Button variant="ghost" size="icon" aria-label="Quay lại danh sách" onClick={()=>setSelected(null)}><Icon name="arrow_back" size={20}/></Button><div className="min-w-0 flex-1"><h3 className="font-semibold">{selected.code}</h3><p className="text-xs text-muted-foreground">{selected.tableName || TYPES[selected.orderType]} · {STATES[selected.status]}</p></div>
