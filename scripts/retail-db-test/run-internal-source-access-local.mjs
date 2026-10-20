@@ -133,5 +133,34 @@ try {
  await deny(payload(),/CUSTOMER_INVALID/);await db.query("update branches set branch_type='warehouse' where id=$1",[source]);
  await deny({...payload(),expectedTotal:11},/POS_CART_TOTAL_CHANGED/);
  assert.deepEqual(await defs(),fnbBefore);checks++;
+ // Staff notes must survive the real internal-sale checkout chain.
+ const oldInvoice=(await db.query('select note from invoices where id=$1',[first.invoice_id])).rows[0].note;
+ assert.match(oldInvoice,/Ban noi bo/);checks++;
+ const beforeNotes=await snapshot();
+ const notesMigration=fs.readFileSync('supabase/migrations/00575_retail_internal_staff_notes.sql','utf8');
+ await db.exec(notesMigration);await db.exec(notesMigration);
+ assert.deepEqual(await snapshot(),beforeNotes);checks++;
+ assert.deepEqual(await defs(),fnbBefore);checks++;
+ for(const [label,note,expected] of [
+  ['omitted',undefined,null],['empty','',null],['null',null,null],['spaces','   ',null],
+  ['staff','Giao sau 15h, gọi kho trước khi đến.','Giao sau 15h, gọi kho trước khi đến.'],
+  ['verbatim',"  Dòng 1: O'Brien\nDòng 2: giữ nguyên  ","  Dòng 1: O'Brien\nDòng 2: giữ nguyên  "],
+  ['staff prefix','Ban noi bo do nhân viên tự ghi','Ban noi bo do nhân viên tự ghi'],
+ ]) {
+  const request={...payload(),note};
+  const result=(await call(request)).rows[0].result;
+  const inv=(await db.query('select note,total,paid,debt from invoices where id=$1',[result.invoice_id])).rows[0];
+  const input=(await db.query('select note,total_amount from input_invoices where id=$1',[result.input_invoice_id])).rows[0];
+  assert.equal(inv.note,expected,label+' sales note');checks++;
+  assert.equal(input.note,expected,label+' paired note');checks++;
+  assert.equal(Number(inv.total),10);assert.equal(Number(inv.paid),0);assert.equal(Number(inv.debt),10);
+  assert.equal(Number(input.total_amount),10);checks+=4;
+  const beforeReplay=await snapshot();
+  assert.equal((await call(request)).rows[0].result.internal_sale_id,result.internal_sale_id);
+  assert.deepEqual(await snapshot(),beforeReplay);checks+=2;
+ }
+ assert.equal((await db.query('select note from invoices where id=$1',[first.invoice_id])).rows[0].note,oldInvoice);checks++;
+ await deny({...payload(),expectedTotal:11,note:'Không được lưu ghi chú đơn lỗi'},/POS_CART_TOTAL_CHANGED/);
+ assert.deepEqual(await defs(),fnbBefore);checks++;
  console.log(`PASS ${checks}: reproduced warehouse-only failure; real checkout and paired documents succeed after patch; replay safe; destination access remains false; source permission, tenant, customer, branch and totals guards retained; rejected requests rollback; F&B/stock/cost functions unchanged; migration idempotent and data unchanged.`);
 } finally { await db.close(); fs.rmSync(dir,{recursive:true,force:true}); }
