@@ -113,11 +113,13 @@ describe("F&B live data wiring", () => {
     expect(source).not.toContain("pos.reprice");
   });
   it("history refreshes only while open and rejects stale results", () => {
-    const source = readFileSync("src/app/pos/fnb/components/fnb-order-history-dialog.tsx", "utf8");
-    expect(source).toContain('["kitchen_orders", "invoices"], open && Boolean(branchId)');
-    expect(source).toContain("generation === requestGeneration.current");
-    expect(source).toContain("requestGeneration.current += 1");
-    expect(source).not.toContain(".then(setInvoices)");
+    const parent = readFileSync("src/app/pos/fnb/components/fnb-order-history-dialog.tsx", "utf8");
+    const source = readFileSync("src/app/pos/fnb/components/fnb-sales-history-view.tsx", "utf8");
+    expect(parent).toContain("open && branchId && <FnbSalesHistoryView");
+    expect(source).toContain('["invoices","kitchen_orders","cash_transactions"]');
+    expect(source).toContain("gen===generation.current");
+    expect(source).toContain("generation.current+=1");
+    expect(source).not.toContain(".then(setHistory)");
   });
   it("KDS reconnects immediately and delivery count follows order events", () => {
     const kds = readFileSync("src/app/pos/fnb/kds/page.tsx", "utf8");

@@ -271,7 +271,7 @@ export function FnbOrderHistoryDialog({
             <DialogTitle className="flex items-center gap-2"><Icon name="receipt_long" size={20}/>Lịch sử bán hàng</DialogTitle>
             <DialogDescription className="text-xs">{storeName || "Chi nhánh đang chọn"} · Tra cứu đơn và in lại</DialogDescription>
           </DialogHeader>
-          {branchId && <FnbSalesHistoryView key={branchId} branchId={branchId} tenantId={tenantId} revision={revision} onReprint={handleReprint} onVoid={handleVoidClick} reprinting={reprinting} voiding={voiding} canVoidPaidBill={canVoidPaidBill}/>}
+          {open && branchId && <FnbSalesHistoryView key={branchId} branchId={branchId} tenantId={tenantId} revision={revision} onReprint={handleReprint} onVoid={handleVoidClick} reprinting={reprinting} voiding={voiding} canVoidPaidBill={canVoidPaidBill}/>}
         </DialogContent>
       </Dialog>
 
