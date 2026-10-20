@@ -13,6 +13,7 @@ import { saveDevicePrintOverride } from "./branch-print-defaults";
 import { parseDestination } from "../../../public/print-point/destination.mjs";
 import type { BranchPrintPolicy } from "@/lib/printer/branch-queue";
 import { downloadPrintSetup, getPrintSetupFiles } from "@/lib/printer/setup-package";
+import { waitForPrint } from "@/lib/printer/print-wait";
 
 export const PRINT_STATUS = { queued: "Chờ điểm in", sending: "Đang chuyển", handed_off: "Đã chuyển dữ liệu in", failed: "Chưa gửi được", unknown: "Cần kiểm tra giấy", cancelled: "Đã dừng" };
 export function PrintJobList({ jobs, onAction }: { jobs: BranchPrintJob[]; onAction?: (id: string, action: "retry" | "cancel") => void }) {
@@ -45,6 +46,7 @@ function BranchPrintSetupForBranch() {
   const [enabled, setEnabled] = useState(false);
   const [jobs, setJobs] = useState<BranchPrintJob[]>([]);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState("");
   const [message, setMessage] = useState("");
   const [sharedPrinter, setSharedPrinter] = useState(false);
   const [policy, setPolicy] = useState<BranchPrintPolicy>({ autoPrintKitchen: true, autoPrintReceipt: true, receiptStyle: "standard", kitchenTicketStyle: "compact" });
@@ -52,8 +54,9 @@ function BranchPrintSetupForBranch() {
   const load = useCallback(async () => {
     if (!branchId) return;
     setBusy(true);
+    setProgress("Đang tải cấu hình máy in…");
     try {
-      const [state, stations] = await Promise.all([getBranchPrintState(branchId), getKitchenStationsByBranch(branchId)]);
+      const [state, stations] = await waitForPrint(Promise.all([getBranchPrintState(branchId), getKitchenStationsByBranch(branchId)]), "Tải cấu hình máy in quá thời gian. Bấm Cập nhật để thử lại.");
       setPoint(state.point); setJobs(state.jobs); setName(state.point?.name ?? "Máy quầy"); setEnabled(state.point?.enabled ?? false);
       const cashier = state.point?.routes.find(route => route.key === "cashier");
       const kitchen = state.point?.routes.find(route => route.key === "kitchen");
@@ -63,7 +66,7 @@ function BranchPrintSetupForBranch() {
       setRoutes(choices.map(c => state.point?.routes.find(r => r.key === c.key) ?? { ...c, printer: "", paper: "80mm" as const }));
       setMessage("");
     } catch (e) { setMessage(e instanceof Error ? e.message : "Không tải được điểm in."); }
-    finally { setBusy(false); }
+    finally { setBusy(false); setProgress(""); }
   }, [branchId]);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
@@ -73,7 +76,7 @@ function BranchPrintSetupForBranch() {
       if (loading) return;
       loading = true;
       try {
-        const state = await getBranchPrintState(branchId);
+        const state = await waitForPrint(getBranchPrintState(branchId), "Không tải được lịch sử.");
         // Do not hydrate editable routes/policy during background refresh.
         if (!disposed) { setPoint(state.point); setJobs(state.jobs); }
       } catch { /* Keep the last successful history; manual refresh reports errors. */ }
@@ -117,33 +120,42 @@ function BranchPrintSetupForBranch() {
   const sendTest = async (route: PrintRoute) => {
     if (!branchId || busy) return;
     setBusy(true);
+    setMessage("");
+    setProgress("Đang tải mẫu in thử… Chưa gửi phiếu.");
     try {
       const saved = point?.routes.find(r => r.key === route.key);
       if (!saved || saved.printer !== route.printer || saved.paper !== route.paper) throw new Error("Lưu thay đổi trước khi in thử. Phiếu thử dùng cấu hình đã lưu của chi nhánh.");
       const testTime = new Date().toISOString();
-      const buildHtml = await resolveBranchPrintTestBuilder(branchId, route, point?.policy?.kitchenTicketStyle, testTime);
-      const job = await enqueueBranchPrint({ branchId, routeKey: route.key, label: `IN THỬ ${route.label}`.slice(0,80), html: buildHtml(route.paper), paper: route.paper, buildHtml, jobId: crypto.randomUUID() });
+      const buildHtml = await waitForPrint(resolveBranchPrintTestBuilder(branchId, route, point?.policy?.kitchenTicketStyle, testTime), "Tải mẫu in quá thời gian. Chưa gửi phiếu tới máy quầy.");
+      const job = await enqueueBranchPrint({ branchId, routeKey: route.key, label: `IN THỬ ${route.label}`.slice(0,80), html: buildHtml(route.paper), paper: route.paper, buildHtml, jobId: crypto.randomUUID(), onProgress: setProgress });
       setMessage(`Đã nhận phiếu thử tới ${job.route_label}. Kiểm tra giấy tại máy; xem kết quả ở lịch sử.`);
-      const state = await getBranchPrintState(branchId); setJobs(state.jobs);
+      setProgress("Đã gửi phiếu. Đang cập nhật lịch sử…");
+      try { const state = await waitForPrint(getBranchPrintState(branchId), "Không tải được lịch sử."); setJobs(state.jobs); }
+      catch { setMessage(`Đã nhận phiếu thử tới ${job.route_label}, nhưng chưa cập nhật được lịch sử. Kiểm tra giấy trước khi in lại.`); }
     } catch (e) { setMessage(`${e instanceof Error ? e.message : "Không gửi được phiếu thử."} Nếu mạng ngắt, xem lịch sử trước khi gửi lại.`); }
-    finally { setBusy(false); }
+    finally { setBusy(false); setProgress(""); }
   };
   const checkConnection = async (route: PrintRoute) => {
     if (!branchId || busy) return;
     setBusy(true);
+    setMessage("");
+    setProgress("Đang gửi yêu cầu kiểm tra kết nối… Yêu cầu này không in giấy.");
     try {
       const saved = point?.routes.find(r => r.key === route.key);
       if (!saved || saved.printer !== route.printer || saved.paper !== route.paper) throw new Error("Lưu thay đổi trước khi kiểm tra kết nối.");
       await checkBranchPrinter(branchId, saved);
       setMessage("Đã gửi yêu cầu kiểm tra kết nối, không in giấy. Bấm Cập nhật để xem kết quả trong lịch sử; điểm in cần đang chạy bản mới.");
-      setJobs((await getBranchPrintState(branchId)).jobs);
+      try { setJobs((await waitForPrint(getBranchPrintState(branchId), "Không tải được lịch sử.")).jobs); }
+      catch { setMessage("Đã gửi yêu cầu kiểm tra kết nối, nhưng chưa cập nhật được lịch sử. Bấm Cập nhật để xem kết quả; yêu cầu này không in giấy."); }
     } catch (e) { setMessage(e instanceof Error ? e.message : "Không kiểm tra được kết nối."); }
-    finally { setBusy(false); }
+    finally { setBusy(false); setProgress(""); }
   };
   return <Card><CardHeader className="pb-3"><CardTitle className="text-primary">Máy in tại chi nhánh</CardTitle><p className="text-sm font-semibold">{currentBranch?.name ?? "Chọn một chi nhánh ở thanh đầu trang"}</p><p className="text-sm text-muted-foreground">Cài một lần tại máy quầy; mọi thiết bị dùng chung.</p></CardHeader><CardContent className="space-y-4">
     {branchId && <>
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/20 p-3"><p role="status" className="text-sm"><strong className={point?.connected ? "text-status-success" : "text-primary"}>{point?.connected ? "Máy quầy đã kết nối" : "Chưa có kết nối gần đây"}</strong><span className="block text-muted-foreground">{point?.enabled ? "Đã bật nhận phiếu" : "Chưa bật nhận phiếu"}{point?.last_seen_at ? ` · Lần cuối ${new Date(point.last_seen_at).toLocaleString("vi-VN")}` : ""}</span></p><Button className="min-h-11" variant="outline" disabled={busy} onClick={load}>Cập nhật</Button></div>
       <div role="group" aria-label="Các bước kết nối máy in" className="grid grid-cols-3 gap-1 sm:flex sm:gap-2">{([{id:"routes",label:"1. Chọn máy & nơi nhận"},{id:"install",label:"2. Kết nối máy quầy"},{id:"test",label:"3. In thử & sử dụng"}] as const).map(item => <Button key={item.id} className="min-h-11 px-2 sm:px-4" aria-label={item.label} variant={step===item.id ? "default" : "outline"} aria-pressed={step===item.id} onClick={() => { setStep(item.id); setMessage(""); }}>{item.id === "routes" ? "1. Máy in" : item.id === "install" ? "2. Máy quầy" : "3. In thử"}</Button>)}</div>
+      {busy && <p role="status" className="rounded-lg border-l-4 border-primary bg-primary/5 px-3 py-2 text-sm" aria-live="polite">{progress || "Đang xử lý yêu cầu…"}</p>}
+      {message && <p role="status" className="rounded-lg border-l-4 border-primary bg-primary/5 px-3 py-2 text-sm break-words">{message}</p>}
       {canManage && <fieldset disabled={busy} className="space-y-4">
         {step === "routes" && <>
           <p className="text-sm text-muted-foreground">LAN / Wi-Fi: điền IP và cổng 9100. USB: chọn tên máy đã cài driver trong Windows. Cùng một máy có thể nhận bill và bếp.</p>
@@ -169,7 +181,6 @@ function BranchPrintSetupForBranch() {
           <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-2"><p className="text-sm">Sau khi giấy in đúng, chọn dùng điểm in chi nhánh trên trình duyệt này. Gửi bếp, tạm tính và thanh toán sẽ tới máy đã gán, không mở hộp thoại chọn máy.</p><Button className="min-h-11" disabled={!point?.enabled || !point.routes.some(route => route.key === "cashier") || !point.routes.some(route => route.key === "kitchen")} onClick={() => { saveDevicePrintOverride(tenant?.id, branchId, { fnbBranchQueue: true }); updateSettings("print",{fnbBranchQueue:true}); setMessage("Đã chọn điểm in chi nhánh. Thiết bị của nhân viên tự dùng cấu hình chi nhánh, trừ khi đã chọn ngoại lệ riêng."); }}>{settings.print.fnbBranchQueue ? "Đang dùng điểm in chi nhánh" : "Dùng điểm in chi nhánh"}</Button></div>
         </>}
       </fieldset>}
-      {message && <p role="status" className="rounded-lg border-l-4 border-primary bg-primary/5 px-3 py-2 text-sm break-words">{message}</p>}
       {step === "test" && <section aria-label="Lịch sử lệnh in" className="rounded-lg border p-3"><h3 className="text-sm font-semibold text-primary">Lịch sử lệnh in · {jobs.length} lệnh gần nhất</h3><p className="mb-2 text-xs text-muted-foreground">Tự cập nhật mỗi 5 giây. Đã chuyển dữ liệu in chưa xác nhận giấy đã ra; kiểm tra máy trước khi in lại.</p><PrintJobList jobs={jobs} onAction={canManage && !busy ? action : undefined} /></section>}
     </>}
   </CardContent></Card>;
