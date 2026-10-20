@@ -83,6 +83,7 @@ import { buildTransactionRowActions } from "@/components/shared/transaction-row-
 import { useTxRowPermissions } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { ReceivingSourceTabs } from "@/components/shared/receiving-source-tabs";
 
 type ViewMode = "list" | "kanban";
 
@@ -473,7 +474,11 @@ function PurchaseOrderDetail({
 /* ------------------------------------------------------------------ */
 export default function NhapHangPage() {
   const { toast } = useToast();
-  const { activeBranchId, currentBranch, branches } = useBranchFilter();
+  const { activeBranchId: globalBranchId, currentBranch: globalBranch, branches, isReady: branchesReady } = useBranchFilter();
+  const [requestedBranch,setRequestedBranch] = useState<string|null>();
+  const branchDenied = !!requestedBranch && requestedBranch!=='all' && !branches.some(branch=>branch.id===requestedBranch);
+  const activeBranchId = requestedBranch ? requestedBranch==='all'?undefined:branches.find(branch=>branch.id===requestedBranch)?.id : globalBranchId;
+  const currentBranch = requestedBranch ? branches.find(branch=>branch.id===requestedBranch) : globalBranch;
   const { hasAny, isLoading: permissionsLoading } = usePermissions();
   const router = useRouter();
   const { printWithPicker, printerDialog } = usePrintWithPicker();
@@ -483,7 +488,9 @@ export default function NhapHangPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   useEffect(() => {
-    const code = new URLSearchParams(window.location.search).get("search")?.trim();
+    const params = new URLSearchParams(window.location.search);
+    setRequestedBranch(params.get('branch'));
+    const code = params.get("search")?.trim();
     if (code) setSearch(code);
   }, []);
   // CEO 05/07: ô "Tìm theo" — "all" = gộp mã phiếu+NCC như cũ.
@@ -528,14 +535,9 @@ export default function NhapHangPage() {
   // Stars
   const { starred, toggle: toggleStar } = useStarredSet();
 
-  // Filters — default = pipeline thực sự (loại trừ cancelled)
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([
-    "draft",
-    "ordered",
-    "partial",
-    "completed",
-  ]);
-  const [datePreset, setDatePreset] = useState<DatePresetValue>("this_month");
+  // Keep the complete history visible until the user explicitly filters it.
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  const [datePreset, setDatePreset] = useState<DatePresetValue>("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [creatorFilter, setCreatorFilter] = useState("");
@@ -649,7 +651,8 @@ export default function NhapHangPage() {
   /* ---- Fetch data ---- */
   const fetchData = useCallback(async () => {
     const request = ++fetchRequest.current;
-    if (permissionsLoading) return;
+    if (permissionsLoading || !branchesReady || requestedBranch===undefined) return;
+    if (branchDenied) {setData([]);setTotal(0);setOtherBranchCount(0);setLoading(false);return;}
     if (!activeBranchId && !duocXemToanChuoi) {
       setData([]);
       setTotal(0);
@@ -658,6 +661,8 @@ export default function NhapHangPage() {
       return;
     }
     setLoading(true);
+    setData([]);
+    setTotal(0);
     setBoardOrderId(null);
     // Không có try/finally thì truy vấn lỗi là cờ loading không bao giờ tắt →
     // trang treo mãi ở vòng xoay, người dùng không biết vì sao.
@@ -707,7 +712,7 @@ export default function NhapHangPage() {
     } finally {
       if (request === fetchRequest.current) setLoading(false);
     }
-  }, [viewMode, page, pageSize, search, searchField, selectedStatuses, creatorFilter, importerFilter, costReturnFilter, activeBranchId, datePreset, dateFrom, dateTo, viewAllBranches, toast, duocXemToanChuoi, permissionsLoading]);
+  }, [viewMode, page, pageSize, search, searchField, selectedStatuses, creatorFilter, importerFilter, costReturnFilter, activeBranchId, datePreset, dateFrom, dateTo, viewAllBranches, toast, duocXemToanChuoi, permissionsLoading,branchesReady,requestedBranch,branchDenied]);
 
   useEffect(() => {
     fetchData();
@@ -1056,11 +1061,11 @@ export default function NhapHangPage() {
     if (datePreset === "custom") return !dateFrom && !dateTo ? "Tùy chỉnh" : `${dateFrom || "..."} đến ${dateTo || "..."}`;
     return STANDARD_LIST_PRESETS.find((item) => item.value === datePreset)?.label ?? "Thời gian";
   }, [dateFrom, datePreset, dateTo]);
-  const defaultStatuses = useMemo(() => ["draft", "ordered", "partial", "completed"], []);
-  const clearListFilters = useCallback(() => { setSelectedStatuses(defaultStatuses); setDatePreset("this_month"); setDateFrom(""); setDateTo(""); setCreatorFilter(""); setImporterFilter(""); setCostReturnFilter("all"); }, [defaultStatuses]);
+  const defaultStatuses = useMemo<string[]>(() => [], []);
+  const clearListFilters = useCallback(() => { setSelectedStatuses(defaultStatuses); setDatePreset("all"); setDateFrom(""); setDateTo(""); setCreatorFilter(""); setImporterFilter(""); setCostReturnFilter("all"); }, [defaultStatuses]);
   const filterChips = useMemo<ListFilterChip[]>(() => {
     const chips: ListFilterChip[] = [];
-    if (datePreset !== "this_month") chips.push({ key: "date", label: "Thời gian", value: datePresetLabel, onClear: () => { setDatePreset("this_month"); setDateFrom(""); setDateTo(""); } });
+    if (datePreset !== "all") chips.push({ key: "date", label: "Thời gian", value: datePresetLabel, onClear: () => { setDatePreset("all"); setDateFrom(""); setDateTo(""); } });
     if (selectedStatuses.join("|") !== defaultStatuses.join("|")) chips.push({ key: "status", label: "Trạng thái", value: selectedStatuses.length === 0 ? "Tất cả" : selectedStatuses.map((value) => statuses.find((item) => item.value === value)?.label ?? value).join(", "), onClear: () => setSelectedStatuses(defaultStatuses) });
     if (creatorFilter) chips.push({ key: "creator", label: "Người tạo", value: creatorFilter, onClear: () => setCreatorFilter("") });
     if (importerFilter) chips.push({ key: "importer", label: "Người nhập", value: importerFilter, onClear: () => setImporterFilter("") });
@@ -1118,6 +1123,8 @@ export default function NhapHangPage() {
         ]}
       />
 
+      <ReceivingSourceTabs source="supplier" branch={activeBranchId ?? 'all'} />
+      <div className="px-3 py-3"><label className="flex flex-wrap items-center gap-2 text-sm">Chi nhánh nhận<select aria-label="Chi nhánh nhận NCC" className="h-10 max-w-full rounded-md border bg-background px-2" value={activeBranchId??'all'} onChange={event=>{setRequestedBranch(event.target.value);setPage(0);setData([]);setTotal(0);setExpandedRow(null);}}>{duocXemToanChuoi?<option value="all">Tất cả chi nhánh được phép</option>:<option value="all" disabled>Chọn chi nhánh</option>}{branches.map(branch=><option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label>{branchDenied&&<p role="alert" className="mt-2 text-sm text-status-error">Không có quyền xem phiếu nhập tại chi nhánh này.</p>}</div>
       {viewAllBranches && (
         <AllBranchesBanner
           branchName={currentBranch?.name}

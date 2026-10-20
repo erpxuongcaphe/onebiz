@@ -22,7 +22,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/lib/contexts";
@@ -70,8 +70,8 @@ export function PartialReceiveDialog({
             .filter((r) => r.remaining > 0)
             .map((r) => ({
               ...r,
-              checked: true,
-              receiveQty: r.remaining,
+              checked: false,
+              receiveQty: 0,
             })),
         );
       })
@@ -92,9 +92,7 @@ export function PartialReceiveDialog({
 
   const selectedLines = lines.filter((l) => l.checked && l.receiveQty > 0);
   const selectedCount = selectedLines.length;
-  const totalReceiveQty = selectedLines.reduce((s, l) => s + l.receiveQty, 0);
-  const totalRemainingQty = lines.reduce((s, l) => s + l.remaining, 0);
-  const totalAfterReceiveQty = Math.max(0, totalRemainingQty - totalReceiveQty);
+  const pendingLines = lines.filter(l => l.remaining - (l.checked ? l.receiveQty : 0) > 0).length;
   const totalValue = selectedLines.reduce((s, l) => s + l.receiveQty * l.unitPrice, 0);
 
   const handleToggle = (id: string) => {
@@ -206,15 +204,15 @@ export function PartialReceiveDialog({
                   </div>
                 </div>
                 <div className="rounded-lg border bg-surface-container-lowest p-3">
-                  <div className="text-xs uppercase text-muted-foreground">SL nhận</div>
+                  <div className="text-xs uppercase text-muted-foreground">Mặt hàng nhận</div>
                   <div className="mt-1 text-xl font-bold tabular-nums">
-                    {formatNumber(totalReceiveQty)}
+                    {formatNumber(selectedCount)}
                   </div>
                 </div>
                 <div className="rounded-lg border bg-surface-container-lowest p-3">
-                  <div className="text-xs uppercase text-muted-foreground">Còn sau nhập</div>
+                  <div className="text-xs uppercase text-muted-foreground">Mặt hàng còn thiếu</div>
                   <div className="mt-1 text-xl font-bold tabular-nums">
-                    {formatNumber(totalAfterReceiveQty)}
+                    {formatNumber(pendingLines)}
                   </div>
                 </div>
                 <div className="rounded-lg border bg-primary/5 p-3">
@@ -234,7 +232,7 @@ export function PartialReceiveDialog({
                     Bỏ chọn
                   </Button>
                   <Button size="sm" variant="outline" onClick={handleReceiveAll}>
-                    Nhận hết còn lại
+                    Điền số còn lại
                   </Button>
                 </div>
               </div>
@@ -291,13 +289,13 @@ export function PartialReceiveDialog({
                         </div>
 
                         <div className="space-y-1">
-                          <Input
-                            type="number"
+                          <NumericInput
+                            aria-label={`Nhận lần này ${l.productName}`}
                             value={l.receiveQty}
-                            onChange={(e) => handleQtyChange(l.id, e.target.value)}
+                            onChange={(value) => handleQtyChange(l.id, String(value ?? 0))}
                             min={0}
                             max={l.remaining}
-                            step="any"
+                            decimals={4}
                             disabled={!l.checked}
                             className="h-8 text-right tabular-nums"
                           />
