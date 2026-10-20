@@ -23,14 +23,14 @@ export function FnbSalesHistoryView({branchId,tenantId,revision,onReprint,onVoid
   const generation=useRef(0);
   const refresh=useCallback(async()=>{
     const gen=++generation.current;
-    setLoading(true); setError(""); setCash(null); setCashError("");
+    setLoading(true); setError(""); setCashError("");
     // Cash errors must not hide order history; lack of permission is never displayed as zero.
     const money=canViewCash ? getFnbDayCash(branchId,day).then(result=>{if(gen===generation.current)setCash(result);}).catch(()=>{if(gen===generation.current)setCashError("Chưa tải được tiền thu. Thử tải lại.");}) : Promise.resolve();
-    try { const result=await getFnbDayHistory(branchId,day); if(gen===generation.current){setHistory(result);setSelected(old=>old ? result.rows.find(row=>row.id===old.id)??null : null);} }
+    try { const result=await getFnbDayHistory(branchId,day); if(gen===generation.current){setHistory(result);setSelected(old=>{const next=old ? result.rows.find(row=>row.id===old.id)??null : null;return JSON.stringify(old)===JSON.stringify(next) ? old : next;});} }
     catch(err){if(gen===generation.current){setHistory(null);setError(err instanceof Error?err.message:"Không tải được lịch sử.");}}
     finally{await money;if(gen===generation.current)setLoading(false);}
   },[branchId,day,canViewCash]);
-  useEffect(()=>{setHistory(null);setSelected(null);setPage(0);void refresh();return()=>{generation.current+=1;};},[refresh,revision]);
+  useEffect(()=>{setHistory(null);setCash(null);setSelected(null);setPage(0);void refresh();return()=>{generation.current+=1;};},[refresh,revision]);
   useLiveDataRefresh(refresh,tenantId,branchId,["invoices","kitchen_orders","cash_transactions"],true);
   useEffect(()=>{
     let stale=false;setItems([]);setItemError("");
