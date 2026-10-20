@@ -1,12 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { SALES_MODES, salesBucketLabel, type SalesBucket, type SalesGrain, type SalesMode } from "@/lib/dashboard-sales";
 import { formatChartCurrency, formatCurrency, formatNumber } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 
 interface Props { buckets: SalesBucket[]; modes: SalesMode[]; grain: SalesGrain; period: string }
+const MODE_COLORS: Record<string, string> = {
+  dine_in: "#0d9488", takeaway: "#d97706", delivery: "#8b5cf6",
+  retail: "#2563eb", internal: "#0e7490", unknown: "#64748b",
+};
 
 export default function SalesOverviewCharts({ buckets, modes, grain, period }: Props) {
   const [metric, setMetric] = useState<"orders" | "sales">("orders");
@@ -15,7 +19,7 @@ export default function SalesOverviewCharts({ buckets, modes, grain, period }: P
   return (
     <div className="grid min-w-0 gap-6 lg:grid-cols-2">
       <section aria-labelledby="sales-trend-title" className="min-w-0 border-t pt-4">
-        <header className="mb-4 flex flex-wrap items-baseline justify-between gap-2"><h2 id="sales-trend-title" className="text-base font-semibold">Xu hướng doanh số</h2><span className="text-xs text-muted-foreground">{period}</span></header>
+        <header className="mb-4 flex flex-wrap items-baseline justify-between gap-2 border-b border-primary/15 bg-primary/5 px-3 py-2"><h2 id="sales-trend-title" className="text-base font-semibold">Xu hướng doanh số</h2><span className="text-xs text-muted-foreground">{period}</span></header>
         <div className="h-56 w-full min-w-0 sm:h-64" role="img" aria-label={`Doanh số theo ${grain === "hour" ? "giờ" : grain === "day" ? "ngày" : grain === "month" ? "tháng" : "năm"}`}>
           <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <AreaChart data={buckets} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
@@ -30,7 +34,7 @@ export default function SalesOverviewCharts({ buckets, modes, grain, period }: P
         <details className="mt-3 text-xs"><summary className="cursor-pointer text-muted-foreground">Bảng số liệu</summary><div className="max-h-64 overflow-auto"><table className="mt-2 w-full tabular-nums"><thead className="sticky top-0 bg-background"><tr><th className="py-2 text-left">Thời gian</th><th className="text-right">Số đơn</th><th className="text-right">Doanh số</th></tr></thead><tbody>{buckets.map(row => <tr key={row.key} className="border-t"><td className="py-2">{salesBucketLabel(row.key, grain)}</td><td className="text-right">{formatNumber(row.orders)}</td><td className="text-right">{formatCurrency(row.sales)}</td></tr>)}</tbody></table></div></details>
       </section>
       <section aria-labelledby="sales-mode-title" className="min-w-0 border-t pt-4">
-        <header className="mb-4 flex flex-wrap items-center justify-between gap-2"><h2 id="sales-mode-title" className="text-base font-semibold">Hình thức bán</h2><div role="group" aria-label="Chỉ tiêu hình thức bán" className="flex rounded-md bg-muted p-1">{(["orders", "sales"] as const).map(value => <Button key={value} size="sm" variant={metric === value ? "secondary" : "ghost"} aria-pressed={metric === value} onClick={() => setMetric(value)}>{value === "orders" ? "Số đơn" : "Doanh số"}</Button>)}</div></header>
+        <header className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-teal-600/20 bg-teal-600/5 px-3 py-2"><h2 id="sales-mode-title" className="text-base font-semibold">Hình thức bán</h2><div role="group" aria-label="Chỉ tiêu hình thức bán" className="flex rounded-md bg-background p-1">{(["orders", "sales"] as const).map(value => <Button key={value} size="sm" variant={metric === value ? "default" : "ghost"} aria-pressed={metric === value} onClick={() => setMetric(value)}>{value === "orders" ? "Số đơn" : "Doanh số"}</Button>)}</div></header>
         {rows.length ? <>
           <div className="h-56 w-full min-w-0 sm:h-64" role="img" aria-label="Cơ cấu tại chỗ, mang về và giao hàng">
             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
@@ -39,7 +43,7 @@ export default function SalesOverviewCharts({ buckets, modes, grain, period }: P
                 <XAxis type="number" tickFormatter={metric === "sales" ? formatChartCurrency : value => formatNumber(Number(value))} allowDecimals={metric !== "orders"} axisLine={false} tickLine={false} fontSize={11} />
                 <YAxis type="category" dataKey="label" width={96} axisLine={false} tickLine={false} fontSize={11} />
                 <Tooltip formatter={value => [metric === "sales" ? formatCurrency(Number(value)) : formatNumber(Number(value)), metric === "sales" ? "Doanh số" : "Số đơn"]} />
-                <Bar dataKey={metric} fill="var(--primary)" barSize={22} isAnimationActive={false} />
+                <Bar dataKey={metric} barSize={22} isAnimationActive={false}>{rows.map(row => <Cell key={row.mode} fill={MODE_COLORS[row.mode] ?? MODE_COLORS.unknown} />)}</Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
