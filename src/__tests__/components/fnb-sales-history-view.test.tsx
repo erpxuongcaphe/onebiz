@@ -1,4 +1,4 @@
-import {fireEvent,render,screen,within} from "@testing-library/react";
+import {act,fireEvent,render,screen,within} from "@testing-library/react";
 import {beforeEach,describe,expect,it,vi} from "vitest";
 const mock=vi.hoisted(()=>({history:vi.fn(),cash:vi.fn(),items:vi.fn(),permission:true}));
 vi.mock("@/lib/contexts",()=>({useAuth:()=>({hasPermission:()=>mock.permission})}));
@@ -22,6 +22,15 @@ describe("cashier sales history",()=>{
  it("keeps history usable when cash fails and gives a visible retry on history failure",async()=>{
   mock.cash.mockRejectedValue(new Error("cash denied"));mock.history.mockRejectedValueOnce(new Error("Mạng lỗi"));render(<FnbSalesHistoryView {...props()}/>);
   await screen.findByRole("alert");fireEvent.click(screen.getByText("Thử lại"));await screen.findByText("25 kết quả · 1/2");expect(screen.getByText("Chưa tải được tiền thu. Thử tải lại.")).toBeInTheDocument();
+ });
+ it("keeps cash totals and loaded detail stable while refreshing unchanged rows",async()=>{
+  const initial={rows:[row(1)],completed:1,pending:0,cancelled:0,invoiceValue:100};mock.history.mockResolvedValue(initial);
+  render(<FnbSalesHistoryView {...props()}/>);await screen.findByText("1 kết quả · 1/1");fireEvent.click(screen.getByRole("button",{name:/HD1/}));await screen.findByText("Cà phê");
+  let resolveCash!:(value:unknown)=>void;mock.cash.mockReturnValueOnce(new Promise(resolve=>{resolveCash=resolve;}));
+  fireEvent.click(screen.getByLabelText("Tải lại lịch sử"));
+  expect(screen.getByText("Thu 2,200 · Hoàn 200")).toBeInTheDocument();expect(screen.getByText("Cà phê")).toBeInTheDocument();
+  await act(async()=>{resolveCash({net:2000,received:2200,refunded:200,methods:{cash:2000}});});
+  expect(mock.items).toHaveBeenCalledTimes(1);
  });
  it("does not expose destructive actions as row buttons; cancelled bills have no print/void actions",async()=>{
   mock.history.mockResolvedValue({rows:[{...row(1),status:"cancelled"}],completed:0,pending:0,cancelled:1,invoiceValue:0});render(<FnbSalesHistoryView {...props()}/>);await screen.findByText("1 kết quả · 1/1");fireEvent.click(screen.getByRole("button",{name:/HD1/}));await screen.findByText("Cà phê");
