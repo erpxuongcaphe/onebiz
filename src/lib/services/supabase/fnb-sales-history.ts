@@ -97,7 +97,7 @@ export async function getFnbHistoryItems(row:FnbSaleRow,branchId:string):Promise
   // Verify the selected record is still in this branch before fetching scoped children.
   const parent=await db.from(row.invoiceId ? "invoices" : "kitchen_orders").select("id").eq("id",row.id).eq("tenant_id",tenant).eq("branch_id",branchId).single();
   if(parent.error) handleError(parent.error,"fnbHistory.detail");
-  const result=row.invoiceId ? await db.from("invoice_items_scoped").select("*").eq("invoice_id",row.invoiceId) : await db.from("kitchen_order_items").select("*").eq("kitchen_order_id",row.id);
+  const result=row.invoiceId ? await db.from("invoice_items_scoped").select("id,product_name,quantity,unit_price,total,note").eq("invoice_id",row.invoiceId) : await db.from("kitchen_order_items").select("id,product_name,quantity,unit_price,note,variant_label,cancelled_qty").eq("kitchen_order_id",row.id);
   if(result.error) handleError(result.error,"fnbHistory.items");
   return (result.data ?? []).map(value=>{
     const item=value as unknown as Record<string,unknown>;

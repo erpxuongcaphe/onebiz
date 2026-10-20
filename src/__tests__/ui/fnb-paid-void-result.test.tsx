@@ -37,6 +37,13 @@ describe("paid FNB void result", () => {
     expect(screen.getAllByText("HD000001").length).toBeGreaterThan(0);
     expect(mocks.toast).not.toHaveBeenCalledWith(expect.objectContaining({ variant: "success" }));
   });
+  it("closes read-only history after filtering without asking to discard data", async () => {
+    const close=vi.fn();render(<FnbOrderHistoryDialog open onOpenChange={close} branchId="b1" tenantId="t1" userId="u1" />);
+    await screen.findByRole("button", {name:/HD000001/});
+    fireEvent.change(screen.getByLabelText("Tìm đơn bán hàng"),{target:{value:"HD000001"}});
+    fireEvent.click(screen.getByRole("button",{name:/^Đóng$/}));
+    expect(close).toHaveBeenCalledWith(false);expect(screen.queryByText("Có nội dung chưa lưu")).not.toBeInTheDocument();
+  });
   it("does not show a failed history query as an empty business day", async () => {
     mocks.list.mockRejectedValue(new Error("Mất kết nối"));
     render(<FnbOrderHistoryDialog open onOpenChange={vi.fn()} branchId="b1" tenantId="t1" />);
