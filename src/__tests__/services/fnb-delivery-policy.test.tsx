@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { quoteDeliveryPrice, validateDeliveryPolicy, type DeliveryPricePolicy, type DeliveryPriceRule } from "@/lib/fnb-delivery-policy";
+import { quoteDeliveryPrice, validateDeliveryPolicy, getDeliveryDistancePresets, formatDeliveryDistanceRange, resolveDeliveryDistanceMeters, type DeliveryDistanceRange, type DeliveryPricePolicy, type DeliveryPriceRule } from "@/lib/fnb-delivery-policy";
 import { DeliveryPolicyEditor } from "@/app/(main)/cai-dat/phi-giao-hang/delivery-policy-editor";
 import { FnbDeliveryPrice } from "@/app/pos/fnb/components/fnb-delivery-price";
 
@@ -59,5 +60,90 @@ describe("delivery price boundaries and editable policies", () => {
     expect(change).toHaveBeenCalledWith(1500);
     rerender(<FnbDeliveryPrice policy={policy} meters={4000} before={50000} after={50000} onChange={change} />);
     expect(screen.getByRole("status")).toHaveTextContent("Chưa có mức phí phù hợp");
+  });
+});
+
+
+const liveBoundaries: DeliveryPricePolicy = { ...policy, rules: policy.rules.map(r => ({ ...r,
+  fromMeters: r.fromMeters === 3000 ? 3001 : r.fromMeters,
+  toMeters: r.toMeters === 3000 ? 3001 : r.toMeters,
+})) };
+function DistanceHarness({ after = 75000 }: { after?: number }) {
+  const [distance, setDistance] = useState<{ meters?: number; range?: DeliveryDistanceRange }>({});
+  return <FnbDeliveryPrice policy={liveBoundaries} {...distance} before={150000} after={after}
+    onChange={(meters, range) => setDistance({ meters, range })} />;
+}
+
+describe("quick delivery distance choices", () => {
+  it("deduplicates amount brackets and labels exact 3 km / 5 km boundaries truthfully", () => {
+    expect(getDeliveryDistancePresets(liveBoundaries).map(formatDeliveryDistanceRange)).toEqual([
+      "Dưới 500 m", "500 m – dưới 1 km", "1 km – 3 km", "Trên 3 km – 5 km",
+    ]);
+    expect(quoteDeliveryPrice(liveBoundaries, 3000, 50000, 50000)?.fee).toBe(0);
+    expect(quoteDeliveryPrice(liveBoundaries, 3001, 50000, 50000)).toBeNull();
+  });
+  it("partitions overlapping distance rules so one preset never crosses a price boundary", () => {
+    const customPolicy: DeliveryPricePolicy = { ...policy, rules: [
+      rule("small", 0, 1000, 0, 50000, 5000),
+      rule("large", 0, 3000, 50000, null, 0),
+      rule("far", 4000, null, 0, null, 20000),
+      { ...rule("off", 200, 300, 0, null, 0), enabled: false },
+    ] };
+    expect(getDeliveryDistancePresets(customPolicy)).toEqual([
+      { fromMeters: 0, toMeters: 1000 }, { fromMeters: 1000, toMeters: 3000 }, { fromMeters: 4000, toMeters: null },
+    ]);
+    expect(formatDeliveryDistanceRange({ fromMeters: 4000, toMeters: null })).toBe("Từ 4 km");
+    expect(getDeliveryDistancePresets({ ...customPolicy, enabled: false })).toEqual([]);
+  });
+  it("quotes in one click and re-quotes after discount without asking for distance again", () => {
+    const { rerender } = render(<DistanceHarness />);
+    expect(screen.queryByLabelText("Khoảng cách giao (km)")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "1 km – 3 km" }));
+    expect(screen.getByRole("button", { name: "1 km – 3 km" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("status")).toHaveTextContent("Miễn phí giao hàng");
+    rerender(<DistanceHarness after={45000} />);
+    expect(screen.getByRole("status")).toHaveTextContent(/10[.,]000/);
+    expect(screen.getByRole("button", { name: "1 km – 3 km" })).toHaveAttribute("aria-pressed", "true");
+  });
+  it("does not turn an ineligible far order into free delivery", () => {
+    const { rerender } = render(<DistanceHarness after={99999} />);
+    fireEvent.click(screen.getByRole("button", { name: "Trên 3 km – 5 km" }));
+    expect(screen.getByRole("status")).toHaveTextContent("Chưa có mức phí phù hợp");
+    rerender(<DistanceHarness after={100000} />);
+    expect(screen.getByRole("status")).toHaveTextContent(/15[.,]000/);
+    rerender(<DistanceHarness after={150000} />);
+    expect(screen.getByRole("status")).toHaveTextContent("Miễn phí giao hàng");
+  });
+  it("clears the range when switching to custom entry and accepts decimal comma", () => {
+    render(<DistanceHarness />);
+    fireEvent.click(screen.getByRole("button", { name: "Dưới 500 m" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tự nhập khoảng cách" }));
+    expect(screen.getByRole("status")).toHaveTextContent("Chọn khoảng cách");
+    fireEvent.change(screen.getByLabelText("Khoảng cách giao (km)"), { target: { value: "3," } });
+    expect(screen.getByLabelText("Khoảng cách giao (km)")).toHaveValue("3,");
+    fireEvent.change(screen.getByLabelText("Khoảng cách giao (km)"), { target: { value: "3,5" } });
+    expect(screen.getByRole("status")).toHaveTextContent("Chưa có mức phí phù hợp");
+    fireEvent.click(screen.getByRole("button", { name: "Dưới 500 m" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tự nhập khoảng cách" }));
+    expect(screen.getByLabelText("Khoảng cách giao (km)")).toHaveValue("3,5");
+  });
+  it("restores a saved range and blocks stale boundaries after a configuration change", () => {
+    const range = { fromMeters: 1000, toMeters: 3001 };
+    const { rerender } = render(<FnbDeliveryPrice policy={liveBoundaries} meters={1000} range={range} before={75000} after={75000} onChange={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "1 km – 3 km" })).toHaveAttribute("aria-pressed", "true");
+    rerender(<FnbDeliveryPrice policy={policy} meters={1000} range={range} before={75000} after={75000} onChange={vi.fn()} />);
+    expect(screen.getByRole("status")).toHaveTextContent("Chọn lại khoảng cách");
+    expect(resolveDeliveryDistanceMeters(policy, 1000, range)).toBeUndefined();
+    expect(resolveDeliveryDistanceMeters(liveBoundaries, 1000, range)).toBe(1000);
+    expect(resolveDeliveryDistanceMeters(liveBoundaries, 1500, range)).toBeUndefined();
+    expect(resolveDeliveryDistanceMeters(policy, 1500)).toBe(1500);
+  });
+  it("keeps external restored manual distances visible and rejects unsafe input", () => {
+    const change = vi.fn();
+    const { rerender } = render(<FnbDeliveryPrice policy={policy} meters={1500} before={75000} after={75000} onChange={change} />);
+    rerender(<FnbDeliveryPrice policy={policy} meters={2500} before={75000} after={75000} onChange={change} />);
+    expect(screen.getByLabelText("Khoảng cách giao (km)")).toHaveValue("2.5");
+    fireEvent.change(screen.getByLabelText("Khoảng cách giao (km)"), { target: { value: "9999999999999999999999" } });
+    expect(change).toHaveBeenLastCalledWith(undefined);
   });
 });

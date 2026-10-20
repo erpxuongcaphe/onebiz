@@ -268,4 +268,6 @@ export interface FnbTabSnapshot {
   deliveryDistanceTier?: "near" | "mid" | "far" | "custom";
   /** Draft-only distance; sent orders keep their quoted fee snapshot. */
   deliveryDistanceMeters?: number;
+  /** Draft-only quick selection; retain the interval for truthful order notes. */
+  deliveryDistanceRange?: { fromMeters: number; toMeters: number | null };
 }
