@@ -5,7 +5,7 @@ import type {ReactNode} from 'react';
 
 const mocks=vi.hoisted(()=>({read:vi.fn(),receive:vi.fn(),params:'branch=xtb&sale=sale-source'}));
 vi.mock('next/navigation',()=>({useSearchParams:()=>new URLSearchParams(mocks.params)}));
-vi.mock('@/lib/contexts',()=>({useBranchFilter:()=>({activeBranchId:'warehouse',currentBranch:{id:'warehouse',name:'Kho Tổng'},isReady:true,branches:[{id:'warehouse',name:'Kho Tổng'},{id:'xtb',name:'Tư Búa'}]})}));
+vi.mock('@/lib/contexts',()=>({useAuth:()=>({user:{id:'user',tenantId:'tenant'}}),useBranchFilter:()=>({activeBranchId:'warehouse',currentBranch:{id:'warehouse',name:'Kho Tổng'},isReady:true,branches:[{id:'warehouse',name:'Kho Tổng'},{id:'xtb',name:'Tư Búa'}]})}));
 vi.mock('@/lib/permissions/use-permission',()=>({usePermissions:()=>({hasPermission:()=>true})}));
 vi.mock('@/lib/hooks/use-product-uom',()=>({useProductUom:()=>({map:new Map(),error:null})}));
 vi.mock('@/lib/services/supabase/internal-receiving',()=>({getInternalReceivingWorkspace:mocks.read,receiveInternalSale:mocks.receive}));
@@ -16,7 +16,7 @@ const order:InternalReceivingOrder={id:'sale-source',code:'BNB-FIXTURE',createdA
   {id:'milk',productId:'milk-case',code:'SKU-MILK-CASE',name:'Sữa thùng',unit:'Thùng',dispatched:2,received:0,treatment:'stock',receivingProductId:'milk-box',receivingProductCode:'SKU-MILK-BOX',receivingFactor:12,receivingUnit:'Hộp'},
   {id:'tool',productId:'tool',code:'SKU-TOOL',name:'Vật tư vận hành',unit:'Cái',dispatched:3,received:0,treatment:'expense'},
 ]};
-beforeEach(()=>{vi.clearAllMocks();vi.stubGlobal('matchMedia',vi.fn(()=>({matches:false,addEventListener:vi.fn(),removeEventListener:vi.fn()})));mocks.params='branch=xtb&sale=sale-source';mocks.read.mockResolvedValue([order]);mocks.receive.mockResolvedValue({receiptId:'new-receipt'});});
+beforeEach(()=>{vi.clearAllMocks();sessionStorage.clear();vi.stubGlobal('matchMedia',vi.fn(()=>({matches:false,addEventListener:vi.fn(),removeEventListener:vi.fn()})));mocks.params='branch=xtb&sale=sale-source';mocks.read.mockResolvedValue([order]);mocks.receive.mockResolvedValue({receiptId:'new-receipt'});});
 
 describe('internal receiving treatment',()=>{
   it('opens the permitted source branch locally without changing the POS branch',async()=>{

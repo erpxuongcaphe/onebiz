@@ -13,7 +13,7 @@ describe('receiving source navigation',()=>{
     const source=readFileSync('src/app/(main)/hang-hoa/nhap-hang/page.tsx','utf8');
     expect(source.indexOf('if (branchDenied)')).toBeLessThan(source.indexOf('await getPurchaseOrders({ page, pageSize'));
     expect(source).toContain("!branches.some(branch=>branch.id===requestedBranch)");
-    expect(source).toContain('useState<DatePresetValue>("all")');
+    expect(source).toContain('useState<DatePresetValue>("today")');
     expect(source).toContain('useState<string[]>([])');
     expect(source).not.toContain('setActiveBranch');
     expect(source).not.toContain('router.push("/hang-hoa/nhap-hang/noi-bo")');
