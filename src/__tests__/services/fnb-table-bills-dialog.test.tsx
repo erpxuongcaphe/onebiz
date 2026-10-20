@@ -8,9 +8,9 @@ import type { CanvasTable } from "@/components/shared/floor-plan/floor-plan-canv
 
 const orders=[{id:"a",orderNumber:"KB001",customerName:"Khách lẻ",itemCount:2,provisionalTotal:44000},{id:"b",orderNumber:"KB002",customerName:"Khách khác",itemCount:1,provisionalTotal:25000}] as FnbOpenOrder[];
 function setup(busy=false,canMerge=true) {
- const opened=vi.fn(),merged=vi.fn(),created=vi.fn();
- function Fixture(){const[source,setSource]=useState("");const[target,setTarget]=useState("");return <TableBillsDialog open tableLabel="Bàn 1" orders={orders} drafts={[]} loading={false} opening={false} busy={busy} canMerge={canMerge} online mergeSource={source} mergeTarget={target} onSourceChange={setSource} onTargetChange={setTarget} onOpenChange={vi.fn()} onOpenOrder={opened} onOpenDraft={vi.fn()} onRefresh={vi.fn()} onCreate={created} onMerge={merged}/>;}
- render(<Fixture/>);return {opened,merged,created};
+ const opened=vi.fn(),merged=vi.fn(),created=vi.fn(),closed=vi.fn();
+ function Fixture(){const[source,setSource]=useState("");const[target,setTarget]=useState("");return <TableBillsDialog open tableLabel="Bàn 1" orders={orders} drafts={[]} loading={false} opening={false} busy={busy} canMerge={canMerge} online mergeSource={source} mergeTarget={target} onSourceChange={setSource} onTargetChange={setTarget} onOpenChange={closed} onOpenOrder={opened} onOpenDraft={vi.fn()} onRefresh={vi.fn()} onCreate={created} onMerge={merged}/>;}
+ render(<Fixture/>);return {opened,merged,created,closed};
 }
 describe("independent bills at one table",()=>{
  it("opens exactly the selected bill and creates a separate bill only on its explicit action",()=>{
@@ -29,6 +29,11 @@ describe("independent bills at one table",()=>{
  it("offers new bill on an occupied table as a distinct action",()=>{
   const onAction=vi.fn();render(<TableActionSheet table={{id:"table",status:"occupied",unpaidOrders:2,name:"Bàn 1"} as CanvasTable} onAction={onAction} onClose={vi.fn()} canCreateBill />);
   fireEvent.click(screen.getByRole("button",{name:"Bill mới cùng bàn"}));expect(onAction).toHaveBeenCalledWith("new_bill",expect.objectContaining({id:"table"}));
+ });
+ it("closes the read-only bill picker without treating merge choices as unsaved form data",()=>{
+  const callbacks=setup();fireEvent.change(screen.getByLabelText("Bill nguồn để gộp"),{target:{value:"a"}});
+  fireEvent.click(screen.getByRole("button",{name:"Đóng"}));
+  expect(callbacks.closed).toHaveBeenCalledWith(false);expect(screen.queryByRole("dialog",{name:"Có nội dung chưa lưu"})).not.toBeInTheDocument();expect(callbacks.merged).not.toHaveBeenCalled();
  });
  it("does not show merge when the user lacks permission",()=>{setup(false,false);expect(screen.queryByLabelText("Bill nguồn để gộp")).not.toBeInTheDocument();});
 });

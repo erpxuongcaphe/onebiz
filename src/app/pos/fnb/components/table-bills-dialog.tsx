@@ -31,7 +31,7 @@ interface TableBillsDialogProps {
 
 export function TableBillsDialog(props: TableBillsDialogProps) {
   const { orders, busy } = props;
-  return <Dialog open={props.open} onOpenChange={open => { if (!busy) props.onOpenChange(open); }}>
+  return <Dialog open={props.open} trackFormChanges={false} onOpenChange={open => { if (!busy) props.onOpenChange(open); }}>
     <DialogContent className="sm:max-w-lg">
       <DialogHeader><DialogTitle>Các bill · {props.tableLabel}</DialogTitle><DialogDescription>Chọn bill để gọi thêm hoặc thanh toán. Bill mới cùng bàn được tính tiền riêng.</DialogDescription></DialogHeader>
       <DialogBody className="space-y-2">
