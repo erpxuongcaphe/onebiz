@@ -1,89 +1,70 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-const state = vi.hoisted(() => ({
-  ready: true, branchId: "b1",
-  permissions: new Set(["reports.analytics", "reports.view_detail", "reports.view_profit"]),
-  getDashboardKpis: vi.fn(),
-}));
+const state = vi.hoisted(() => ({ ready: true, branchId: "b1" as string | undefined, permissions: new Set<string>(), fetch: vi.fn() }));
 vi.mock("next/dynamic", () => ({ default: () => () => <div data-testid="dynamic-view" /> }));
 vi.mock("@/lib/contexts", () => ({
   useBranchFilter: () => ({ activeBranchId: state.branchId, isReady: state.ready }),
-  useAuth: () => ({ user: { fullName: "Admin" }, tenant: { id: "t1" }, branches: [], hasPermission: (key: string) => state.permissions.has(key) }),
+  useAuth: () => ({ user: { id: "u1" }, tenant: { id: "t1" }, branches: [{ id: "b1", name: "Quán A", branchType: "store" }, { id: "b2", name: "Quán B", branchType: "store" }], hasPermission: (key: string) => state.permissions.has(key) }),
 }));
 vi.mock("@/lib/hooks/use-report-scope", () => ({ useReportScope: () => ({ isReady: state.ready }) }));
 vi.mock("@/lib/hooks/use-live-data-refresh", () => ({ useLiveDataRefresh: () => false }));
-vi.mock("@/lib/hooks/use-fnb-open-orders", () => ({ useFnbOpenOrders: () => ({ orders: [], loading: false, connected: false, error: null }) }));
-vi.mock("@/lib/services", () => ({
-  getDashboardKpis: state.getDashboardKpis,
-  getRevenueByDay: async () => [], getRevenueByHour: async () => [],
-  getRevenueByWeekday: async () => [], getOrdersByWeekday: async () => [],
-  getTopProducts: async () => [], getLowStockProducts: async () => [],
-  getRecentActivities: async () => [], getFinancialAlerts: async () => [],
-}));
+vi.mock("@/lib/hooks/use-receiving-view-memory", () => ({ useReceivingVietnamDay: () => "2026-10-20" }));
+vi.mock("@/lib/services/supabase/dashboard-sales", () => ({ getSalesDashboard: state.fetch }));
 import Dashboard from "@/app/(main)/page";
-
-beforeEach(() => {
-  state.ready = true;
-  state.branchId = "b1";
-  state.permissions = new Set(["reports.analytics", "reports.view_detail", "reports.view_profit"]);
-  state.getDashboardKpis.mockReset().mockResolvedValue({
-    todayCollected: 0, yesterdayCollected: 0, todayRevenue: 0, yesterdayRevenue: 0,
-    todayOrders: 0, yesterdayOrders: 0, todayProfit: 0, yesterdayProfit: 0,
-    todayDiscounts: 0, todayDeliveryFee: 0, todayCash: 0, todayTransfer: 0,
-    todayCard: 0, todayRefunds: 0,
-  });
-});
+const sample = { sales: 111111, discounts: 5000, returns: 0, orders: 3, received: 121111, refunded: 10000, collected: 111111, methods: { cash: 100000, transfer: 11111 }, buckets: [], modes: [] };
+beforeEach(() => { state.ready = true; state.branchId = "b1"; state.permissions = new Set(["pos_fnb.view_sales_summary", "reports.analytics", "reports.view_detail", "reports.view_profit"]); state.fetch.mockReset().mockResolvedValue(sample); });
 afterEach(cleanup);
-
-describe("dashboard management views", () => {
-  it("defaults to business without starting a second operational data feed", () => {
+describe("sales dashboard permission and scope", () => {
+  it("defaults to sales and compactly separates net sales from collections", async () => {
     render(<Dashboard />);
-    expect(screen.getByRole("tab", { name: "Kinh doanh" })).toHaveAttribute("aria-selected", "true");
-    expect(state.getDashboardKpis).not.toHaveBeenCalled();
+    expect(screen.getByRole("tab", { name: "Bán hàng" })).toHaveAttribute("aria-selected", "true");
+    await waitFor(() => expect(screen.getByTestId("net-sales")).toHaveTextContent("111,111"));
+    expect(screen.getByText("Thực thu sau hoàn")).toBeInTheDocument();
+    expect(screen.queryByText("Chênh lệch thu−chi")).not.toBeInTheDocument();
+    expect(state.fetch).toHaveBeenCalledWith("b1", "2026-10-20", "2026-10-20", "hour");
   });
-
-  it("loads operations only when selected", async () => {
-    render(<Dashboard />);
-    fireEvent.click(screen.getByRole("tab", { name: "Vận hành" }));
-    await waitFor(() => expect(state.getDashboardKpis).toHaveBeenCalledWith("b1"));
-    expect(screen.getByRole("tab", { name: "Vận hành" })).toHaveAttribute("aria-selected", "true");
-  });
-
-  it("keeps operations accessible without exposing profit to an unauthorized role", async () => {
-    state.permissions.delete("reports.view_profit");
-    render(<Dashboard />);
+  it("allows manager sales without any profit permission", async () => {
+    state.permissions.delete("reports.view_profit"); render(<Dashboard />);
     expect(screen.queryByRole("tab", { name: "Kinh doanh" })).not.toBeInTheDocument();
-    await waitFor(() => expect(state.getDashboardKpis).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(state.fetch).toHaveBeenCalledTimes(1));
   });
-
-  it("does not fetch any dashboard data before the branch scope is ready", () => {
-    state.ready = false;
-    render(<Dashboard />);
-    expect(screen.getByRole("status")).toHaveTextContent("Đang tải tổng quan");
-    expect(state.getDashboardKpis).not.toHaveBeenCalled();
+  it("does not fetch aggregate money for cashier even with cashbook permission", () => {
+    state.permissions = new Set(["finance.view_cash_book", "pos_fnb.checkout"]); render(<Dashboard />);
+    expect(screen.getByRole("link", { name: "Bán hàng F&B" })).toBeInTheDocument();
+    expect(state.fetch).not.toHaveBeenCalled(); expect(screen.queryByText("Doanh số thực tế")).not.toBeInTheDocument();
   });
-
-  it("shows an operational load failure instead of a valid-looking zero", async () => {
-    state.getDashboardKpis.mockRejectedValueOnce(new Error("network unavailable"));
-    render(<Dashboard />);
-    fireEvent.click(screen.getByRole("tab", { name: "Vận hành" }));
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Chưa tải được số liệu vận hành"));
-    expect(screen.queryByText("Thực thu")).not.toBeInTheDocument();
+  it("gives warehouse only its granted workspace", () => {
+    state.permissions = new Set(["inventory.view"]); render(<Dashboard />);
+    expect(screen.getByRole("link", { name: "Tồn kho" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Bán hàng F&B" })).not.toBeInTheDocument();
+    expect(state.fetch).not.toHaveBeenCalled();
   });
-
-  it("hides loaded KPIs immediately when the operational branch changes", async () => {
-    const defaults = await state.getDashboardKpis();
-    state.getDashboardKpis.mockClear().mockResolvedValueOnce({ ...defaults, todayRevenue: 111111 });
+  it("waits for the branch scope", () => {
+    state.ready = false; render(<Dashboard />); expect(state.fetch).not.toHaveBeenCalled();
+  });
+  it("shows errors instead of fake zeros", async () => {
+    state.fetch.mockRejectedValueOnce(new Error("Không đủ quyền")); render(<Dashboard />);
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Không đủ quyền"));
+    expect(screen.queryByTestId("net-sales")).not.toBeInTheDocument();
+  });
+  it("hides old branch amounts immediately and discards stale responses", async () => {
     const view = render(<Dashboard />);
-    fireEvent.click(screen.getByRole("tab", { name: "Vận hành" }));
-    await waitFor(() => expect(screen.getByText("111,111")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId("net-sales")).toHaveTextContent("111,111"));
     let resolve!: (value: unknown) => void;
-    state.getDashboardKpis.mockReturnValueOnce(new Promise(done => { resolve = done; }));
-    state.branchId = "b2";
-    view.rerender(<Dashboard />);
-    expect(screen.queryByText("111,111")).not.toBeInTheDocument();
-    await act(async () => { resolve({ ...defaults, todayRevenue: 222222 }); });
-    expect(screen.getByText("222,222")).toBeInTheDocument();
+    state.fetch.mockReturnValueOnce(new Promise(done => { resolve = done; }));
+    state.branchId = "b2"; view.rerender(<Dashboard />);
+    expect(screen.queryByTestId("net-sales")).not.toBeInTheDocument();
+    state.permissions.delete("pos_fnb.view_sales_summary"); view.rerender(<Dashboard />);
+    await act(async () => resolve({ ...sample, sales: 222222 }));
+    expect(screen.queryByTestId("net-sales")).not.toBeInTheDocument();
+  });
+  it("requires the all-branch permission rather than treating no branch as unrestricted", () => {
+    state.branchId = undefined; render(<Dashboard />); expect(state.fetch).not.toHaveBeenCalled();
+  });
+  it("uses a full month for day view, capped at today", async () => {
+    render(<Dashboard />); fireEvent.click(screen.getByRole("button", { name: "Ngày" }));
+    await waitFor(() => expect(state.fetch).toHaveBeenLastCalledWith("b1", "2026-10-01", "2026-10-20", "day"));
+    fireEvent.click(screen.getByRole("button", { name: "Năm" }));
+    await waitFor(() => expect(state.fetch).toHaveBeenLastCalledWith("b1", "2022-01-01", "2026-10-20", "year"));
   });
 });
