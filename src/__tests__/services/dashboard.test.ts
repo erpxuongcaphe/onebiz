@@ -96,4 +96,48 @@ describe("getDashboardKpis", () => {
     const kpis = await getDashboardKpis();
     expect(kpis.todayOrders).toBe(2);
   });
+
+  it("deducts completed invoice-void refunds from their original payment methods exactly once", async () => {
+    overrides.cash_transactions = [
+      { type: "receipt", status: "completed", amount: 300000, payment_method: "cash", reference_type: "invoice" },
+      { type: "receipt", status: "completed", amount: 200000, payment_method: "transfer", reference_type: "invoice" },
+      { type: "receipt", status: "completed", amount: 100000, payment_method: "card", reference_type: "invoice" },
+      { type: "payment", status: "completed", amount: 120000, payment_method: "cash", reference_type: "invoice_void" },
+      { type: "payment", status: "completed", amount: 80000, payment_method: "transfer", reference_type: "invoice_void" },
+      { type: "payment", status: "completed", amount: 40000, payment_method: "card", reference_type: "invoice_void" },
+      { type: "payment", status: "cancelled", amount: 900000, payment_method: "cash", reference_type: "invoice_void" },
+      { type: "payment", status: "draft", amount: 800000, payment_method: "transfer", reference_type: "invoice_void" },
+      { type: "payment", status: "completed", amount: 70000, payment_method: "cash", reference_type: "supplier_payment" },
+    ];
+    try {
+      const kpis = await getDashboardKpis("branch-1");
+      expect(kpis.todayCash).toBe(180000);
+      expect(kpis.todayTransfer).toBe(120000);
+      expect(kpis.todayCard).toBe(60000);
+      expect(kpis.todayRefunds).toBe(240000);
+      expect(kpis.todayCollected).toBe(360000);
+      expect(kpis.yesterdayCollected).toBe(360000);
+      expect(kpis.todayCash + kpis.todayTransfer + kpis.todayCard).toBe(kpis.todayCollected);
+    } finally {
+      delete overrides.cash_transactions;
+    }
+  });
+
+  it("keeps an invoice-void refund in its posting day even without a sale that day", async () => {
+    overrides.invoices = [];
+    overrides.cash_transactions = [
+      { type: "payment", status: "completed", amount: 50000, payment_method: "transfer", reference_type: "invoice_void" },
+    ];
+    try {
+      const kpis = await getDashboardKpis("branch-1");
+      expect(kpis.todayRevenue).toBe(0);
+      expect(kpis.todayCollected).toBe(-50000);
+      expect(kpis.todayCash).toBe(0);
+      expect(kpis.todayTransfer).toBe(-50000);
+      expect(kpis.todayRefunds).toBe(50000);
+    } finally {
+      delete overrides.invoices;
+      delete overrides.cash_transactions;
+    }
+  });
 });
