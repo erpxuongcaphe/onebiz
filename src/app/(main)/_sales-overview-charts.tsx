@@ -1,12 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { SALES_MODES, salesBucketLabel, type SalesBucket, type SalesGrain, type SalesMode } from "@/lib/dashboard-sales";
 import { formatChartCurrency, formatCurrency, formatNumber } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 
 interface Props { buckets: SalesBucket[]; modes: SalesMode[]; grain: SalesGrain; period: string }
+const MODE_COLORS: Record<string, string> = {
+  dine_in: "#0d9488", takeaway: "#d97706", delivery: "#8b5cf6",
+  retail: "#2563eb", internal: "#0e7490", unknown: "#64748b",
+};
 
 export default function SalesOverviewCharts({ buckets, modes, grain, period }: Props) {
   const [metric, setMetric] = useState<"orders" | "sales">("orders");
@@ -39,7 +43,7 @@ export default function SalesOverviewCharts({ buckets, modes, grain, period }: P
                 <XAxis type="number" tickFormatter={metric === "sales" ? formatChartCurrency : value => formatNumber(Number(value))} allowDecimals={metric !== "orders"} axisLine={false} tickLine={false} fontSize={11} />
                 <YAxis type="category" dataKey="label" width={96} axisLine={false} tickLine={false} fontSize={11} />
                 <Tooltip formatter={value => [metric === "sales" ? formatCurrency(Number(value)) : formatNumber(Number(value)), metric === "sales" ? "Doanh số" : "Số đơn"]} />
-                <Bar dataKey={metric} fill="var(--color-teal-600)" barSize={22} isAnimationActive={false} />
+                <Bar dataKey={metric} barSize={22} isAnimationActive={false}>{rows.map(row => <Cell key={row.mode} fill={MODE_COLORS[row.mode] ?? MODE_COLORS.unknown} />)}</Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
