@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import {
   STANDARD_LIST_PRESETS_WITH_ALL,
   computeListPresetRange,
+  resolveListDateRange,
 } from "@/lib/utils/list-date-preset-range";
 import {
   InlineDetailPanel,
@@ -381,6 +382,14 @@ export default function VanDonPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [partnerFilter, setPartnerFilter] = useState("all");
   const [createdDatePreset, setCreatedDatePreset] = useState<DatePresetValue>("all");
+  const [customDates, setCustomDates] = useState(() => {
+    const initial = computeListPresetRange("today");
+    return { from: initial.from ?? "", to: initial.to ?? "" };
+  });
+  const createdDateRange = useMemo(() => resolveListDateRange(createdDatePreset, customDates), [createdDatePreset, customDates]);
+  const dateRangeError = createdDateRange === null ? "Chọn đủ hai ngày; ngày kết thúc không trước ngày bắt đầu." : null;
+  const listRequest = useRef(0);
+  useEffect(() => () => { listRequest.current += 1; }, []);
   const [filterOpen, setFilterOpen] = useState(false);
 
   const createdDateLabel =
@@ -430,17 +439,25 @@ export default function VanDonPage() {
   const [statusCounts, setStatusCounts] = useState<ShippingStatusCounts | null>(null);
 
   const buildFilters = useCallback(() => {
-    const range = computeListPresetRange(createdDatePreset);
+    const range = createdDateRange;
+    if (!range) return null;
     return {
       ...(statusFilter !== "all" && { status: statusFilter }),
       ...(partnerFilter !== "all" && { partner: partnerFilter }),
       ...(range.from && { dateFrom: range.from }),
       ...(range.to && { dateTo: range.to }),
     };
-  }, [statusFilter, partnerFilter, createdDatePreset]);
+  }, [statusFilter, partnerFilter, createdDateRange]);
 
   const fetchData = useCallback(async () => {
+    const request = ++listRequest.current;
+    const filters = buildFilters();
+    if (!filters) {
+      setData([]); setTotal(0); setStatusCounts(null); setLoading(false);
+      return;
+    }
     setLoading(true);
+    setStatusCounts(null);
     // Không có try/finally thì truy vấn lỗi là cờ loading không bao giờ tắt →
     // trang treo mãi ở vòng xoay, người dùng không biết vì sao.
     try {
@@ -451,21 +468,25 @@ export default function VanDonPage() {
         page,
         pageSize,
         search,
-        filters: buildFilters(),
+        filters,
       }),
-      getShippingStatusCounts(),
+      getShippingStatusCounts({ search, filters }),
     ]);
+    if (request !== listRequest.current) return;
     setData(result.data);
     setTotal(result.total);
     setStatusCounts(counts);
     } catch (e) {
+      if (request !== listRequest.current) return;
+      setData([]);
+      setTotal(0);
       toast({
         variant: "error",
         title: "Không tải được danh sách vận đơn",
         description: e instanceof Error ? e.message : "Lỗi không xác định",
       });
     } finally {
-      setLoading(false);
+      if (request === listRequest.current) setLoading(false);
     }
   }, [page, pageSize, search, buildFilters, toast]);
 
@@ -485,13 +506,18 @@ export default function VanDonPage() {
   useEffect(() => {
     setPage(0);
     setExpandedRow(null);
-  }, [search, statusFilter, partnerFilter, createdDatePreset]);
+  }, [search, statusFilter, partnerFilter, createdDatePreset, customDates]);
 
   /* ---- Export ---- */
   // 04/08: tải TOÀN BỘ theo bộ lọc hiện tại (trước chỉ xuất 15 dòng đang hiện)
   // + thêm các cột tiền (phí giao, COD) và liên lạc — trước xuất 6 cột không
   // có đồng nào.
   const handleExport = async (type: "excel" | "csv") => {
+    const filters = buildFilters();
+    if (!filters) {
+      toast({ variant: "error", title: "Khoảng ngày chưa hợp lệ", description: dateRangeError ?? undefined });
+      return;
+    }
     const exportColumns = [
       { header: "Mã vận đơn", key: "code", width: 15 },
       { header: "Thời gian tạo", key: "createdAt", width: 18, format: (v: string) => formatDate(v) },
@@ -515,7 +541,7 @@ export default function VanDonPage() {
         page: 0,
         pageSize: Math.max(total, pageSize),
         search,
-        filters: buildFilters(),
+        filters,
       });
       rows = all.data;
     } catch {
@@ -666,36 +692,36 @@ export default function VanDonPage() {
             <ListMetric
               icon={<Icon name="schedule" size={15} />}
               label="Chờ lấy hàng"
-              value={(statusCounts?.pending ?? 0).toString()}
-              loading={!statusCounts}
+              value={statusCounts ? statusCounts.pending.toString() : "—"}
+              loading={loading && !statusCounts}
               tone={(statusCounts?.pending ?? 0) > 0 ? "primary" : "default"}
-              hint="Toàn bộ vận đơn"
+              hint="Theo ngày, đối tác và tìm kiếm"
             />
             <ListMetric
               icon={<Icon name="local_shipping" size={15} />}
               label="Đang giao"
-              value={(
+              value={statusCounts ? (
                 (statusCounts?.picked_up ?? 0) +
                 (statusCounts?.in_transit ?? 0)
-              ).toString()}
-              loading={!statusCounts}
-              hint="Toàn bộ vận đơn"
+              ).toString() : "—"}
+              loading={loading && !statusCounts}
+              hint="Theo ngày, đối tác và tìm kiếm"
             />
             <ListMetric
               icon={<Icon name="check_circle" size={15} />}
               label="Đã giao"
-              value={(statusCounts?.delivered ?? 0).toString()}
-              loading={!statusCounts}
-              hint="Toàn bộ vận đơn"
+              value={statusCounts ? statusCounts.delivered.toString() : "—"}
+              loading={loading && !statusCounts}
+              hint="Theo ngày, đối tác và tìm kiếm"
             />
             <ListMetric
               icon={<Icon name="warning" size={15} />}
               label="Hoàn / Hủy"
-              value={(
+              value={statusCounts ? (
                 (statusCounts?.returned ?? 0) +
                 (statusCounts?.cancelled ?? 0)
-              ).toString()}
-              loading={!statusCounts}
+              ).toString() : "—"}
+              loading={loading && !statusCounts}
               tone={
                 (statusCounts?.returned ?? 0) +
                   (statusCounts?.cancelled ?? 0) >
@@ -703,7 +729,7 @@ export default function VanDonPage() {
                   ? "danger"
                   : "default"
               }
-              hint="Toàn bộ vận đơn"
+              hint="Theo ngày, đối tác và tìm kiếm"
             />
           </>
         }
@@ -745,12 +771,12 @@ export default function VanDonPage() {
         }
         emptyState={emptyState}
         emptyTitle={
-          emptyState === "no-results" ? "Không tìm thấy vận đơn" : "Chưa có vận đơn"
+          dateRangeError ? "Khoảng ngày chưa hợp lệ" : emptyState === "no-results" ? "Không tìm thấy vận đơn" : "Chưa có vận đơn"
         }
         emptyDescription={
-          emptyState === "no-results"
+          dateRangeError ?? (emptyState === "no-results"
             ? "Thử thay đổi trạng thái, đối tác, thời gian tạo hoặc nội dung tìm kiếm."
-            : "Vận đơn mới sẽ hiển thị tại đây sau khi được tạo."
+            : "Vận đơn mới sẽ hiển thị tại đây sau khi được tạo.")
         }
         emptyIcon="local_shipping"
         pageIndex={page}
@@ -833,8 +859,13 @@ export default function VanDonPage() {
           <DatePresetFilter
             value={createdDatePreset}
             onChange={setCreatedDatePreset}
+            from={customDates.from}
+            to={customDates.to}
+            onFromChange={(from) => setCustomDates(current => ({ ...current, from }))}
+            onToChange={(to) => setCustomDates(current => ({ ...current, to }))}
             presets={STANDARD_LIST_PRESETS_WITH_ALL}
           />
+          {dateRangeError && <p role="alert" className="mt-2 text-sm text-destructive">{dateRangeError}</p>}
         </FilterGroup>
       </FilterPanel>
 
