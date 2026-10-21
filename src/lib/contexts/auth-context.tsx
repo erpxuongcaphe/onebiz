@@ -623,12 +623,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Permission check helper
   const hasPermission = useCallback(
     (code: string): boolean => {
-      if (!user?.isActive) return false;
+      if (isLoading || !user?.isActive) return false;
       if (user?.role === "owner") return true;
       if (permissions.has("*")) return true;
       return permissions.has(code);
     },
-    [user?.role, user?.isActive, permissions]
+    [user?.role, user?.isActive, permissions, isLoading]
   );
 
   const logout = useCallback(async () => {

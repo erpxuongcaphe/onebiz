@@ -18,37 +18,28 @@ interface PermissionPageProps {
   children: ReactNode;
 }
 
-export function PermissionPage({ requires, children }: PermissionPageProps) {
-  const { hasPermission, isLoading } = usePermissions();
+function PermissionLoading() {
   const [slowLoading, setSlowLoading] = useState(false);
-  const requiredPermissions = Array.isArray(requires) ? requires : [requires];
-  const isAllowed = requiredPermissions.some((permission) =>
-    hasPermission(permission),
-  );
-
-  // PERF F1: KHÔNG block render khi đang load auth.
-  // Trước đây isLoading=true → spinner full page → user click chức năng
-  // thấy "không load" vì auth chưa xong (cold start ~1s qua 3 round-trip).
-  // Giờ:
-  // - render children NGAY → page mount, fetch data của nó song song
-  // - chỉ chặn khi auth XONG nhưng KHÔNG có quyền (deny chính xác)
-  // - permission check trong children dựa vào hasPermission() đã thread-safe
-  //   (trả về false khi loading, true/false khi xong)
-  // Kết quả: cảm giác app phản hồi tức thì, blank time -> 0.
-
-  // Track slow loading for diagnostic toast (không block UI).
   useEffect(() => {
-    if (!isLoading) {
-      setSlowLoading(false);
-      return;
-    }
     const t = setTimeout(() => setSlowLoading(true), 6_000);
     return () => clearTimeout(t);
-  }, [isLoading]);
+  }, []);
 
-  // Chỉ deny khi auth đã hoàn tất + không có quyền.
-  // isLoading → cứ render children, để user thấy app phản hồi.
-  if (!isLoading && !isAllowed) {
+  return (
+    <div role="status" className="flex min-h-48 flex-wrap items-center justify-center gap-2 p-4 text-sm text-muted-foreground">
+      <Icon name="hourglass_empty" size={20} className="animate-pulse" />
+      <span>{slowLoading ? "Đang xác thực lâu hơn thường lệ. Kiểm tra kết nối mạng." : "Đang xác thực quyền truy cập..."}</span>
+      {slowLoading && <button type="button" onClick={() => window.location.reload()} className="min-h-10 px-2 font-medium text-primary underline">Tải lại</button>}
+    </div>
+  );
+}
+
+export function PermissionPage({ requires, children }: PermissionPageProps) {
+  const { hasPermission, isLoading } = usePermissions();
+  const requiredPermissions = Array.isArray(requires) ? requires : [requires];
+  const isAllowed = requiredPermissions.some(permission => hasPermission(permission));
+  if (isLoading) return <PermissionLoading />;
+  if (!isAllowed) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-3">
         <Icon name="gpp_bad" size={40} className="text-muted-foreground" />
@@ -62,23 +53,5 @@ export function PermissionPage({ requires, children }: PermissionPageProps) {
     );
   }
 
-  // Slow loading diagnostic — không block render, chỉ banner nhỏ trên cùng.
-  return (
-    <>
-      {slowLoading && isLoading && (
-        <div className="bg-status-warning/10 border-b border-status-warning/30 px-4 py-2 text-xs text-status-warning flex items-center gap-2">
-          <Icon name="hourglass_empty" size={14} className="animate-pulse" />
-          <span>Đang xác thực lâu hơn thường lệ — kiểm tra kết nối mạng.</span>
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="ml-auto underline hover:no-underline"
-          >
-            Tải lại
-          </button>
-        </div>
-      )}
-      {children}
-    </>
-  );
+  return <>{children}</>;
 }

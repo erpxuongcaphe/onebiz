@@ -28,6 +28,7 @@ export function usePermissions(): PermissionsAPI {
   const isOwner = user?.role === "owner";
 
   const hasPermission = (code: PermissionCode | string): boolean => {
+    if (isLoading || !user?.isActive) return false;
     if (isOwner) return true;
     if (permissions.has("*")) return true;
     return permissions.has(code);
