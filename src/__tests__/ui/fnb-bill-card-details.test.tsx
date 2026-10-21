@@ -1,8 +1,8 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FnbOpenOrdersDialog } from "@/app/pos/fnb/components/fnb-open-orders-dialog";
-import { buildFnbTableBillDetails, getFnbBillCardIdentity, matchesFnbBillCardSearch } from "@/lib/fnb-bill-card-details";
-import { FnbBillIdentity } from "@/components/shared/fnb-bill-identity";
+import { buildFnbTableBillDetails, matchesFnbBillCardSearch } from "@/lib/fnb-bill-card-details";
+import { FnbBillCardHeading, FnbBillIdentity } from "@/components/shared/fnb-bill-identity";
 import type { FnbOpenOrder } from "@/lib/fnb-open-orders";
 afterEach(cleanup);
 const orders=[{id:"a",orderNumber:"KB001",tableId:"table",tableName:"Bàn 1",orderType:"dine_in",status:"pending",customerName:"Chị Hằng",note:"Giao cổng sau",invoiceId:null,mergedIntoId:null,itemCount:1,provisionalTotal:25000},{id:"b",orderNumber:"KB002",tableId:null,orderType:"delivery",status:"ready",customerName:"Anh Bình",note:"Gọi trước khi giao",invoiceId:null,mergedIntoId:null,itemCount:2,provisionalTotal:50000},{id:"c",orderNumber:"KB003",tableId:null,orderType:"takeaway",status:"pending",customerName:"Chị Mai",note:"Lấy lúc 10h",invoiceId:null,mergedIntoId:null,itemCount:1,provisionalTotal:22000}] as FnbOpenOrder[];
@@ -24,16 +24,17 @@ describe("customer and order notes on bill cards",()=>{
   v.rerender(<FnbBillIdentity customerName="A" note="<script>no()</script>"/>);expect(screen.getByText("Ghi chú: <script>no()</script>")).toBeInTheDocument();expect(v.container.querySelector("script")).toBeNull();
   expect(matchesFnbBillCardSearch("chi hang", "Chị Hằng")).toBe(true);
  });
- it("promotes guest notes on every order type while keeping named customers",()=>{
+ it("shows both guest identity and notes once on every order type",()=>{
   const guestOrders=orders.map(order=>({...order,customerName:"Khách lẻ"}));
   render(<FnbOpenOrdersDialog open onOpenChange={vi.fn()} orders={guestOrders} drafts={[]} onOpenOrder={vi.fn()} onOpenDraft={vi.fn()} updatedAt={null} loading={false} error={null} connected busy={false} onRefresh={vi.fn()}/>);
   for(const order of guestOrders)expect(screen.getByLabelText(`Ghi chú: ${order.note}`)).toHaveAttribute("title",order.note);
-  expect(screen.queryByLabelText("Khách: Khách lẻ")).not.toBeInTheDocument();
-  expect(getFnbBillCardIdentity("Chị Hằng","Giao cổng sau")).toEqual({text:"Chị Hằng",isNote:false});
+  expect(screen.getAllByLabelText("Khách: Khách lẻ")).toHaveLength(3);
+  for(const order of guestOrders)expect(screen.getAllByText(`Ghi chú: ${order.note}`)).toHaveLength(1);
  });
- it.each([null,"","Khách lẻ"," KHÁCH LẺ "])("uses the note only for guest identity %s",name=>{
-  expect(getFnbBillCardIdentity(name,"  Áo xanh, bàn ngoài  ")).toEqual({text:"Áo xanh, bàn ngoài",isNote:true});
-  expect(getFnbBillCardIdentity(name," ").isNote).toBe(false);
+ it.each([null,"","Khách lẻ","Chị Hằng"])("keeps both name %s and note in the card heading",name=>{
+  render(<FnbBillCardHeading label="NS 02" customerName={name} note="  Áo xanh, bàn ngoài  "/>);
+  expect(screen.getByLabelText(`Khách: ${name?.trim() || "Khách lẻ"}`)).toBeInTheDocument();
+  expect(screen.getByLabelText("Ghi chú: Áo xanh, bàn ngoài")).toHaveAttribute("title","Áo xanh, bàn ngoài");
  });
 
 });

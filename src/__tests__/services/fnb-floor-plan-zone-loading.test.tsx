@@ -161,11 +161,11 @@ describe("POS floor plan keeps table actions in the selected zone", () => {
     ] as FnbOpenOrder[];
     const opened=vi.fn();
     render(<TableFloorPlan tables={[{...tables[0],status:"occupied"}]} onSelectTable={opened} openOrders={orders}/>);
-    expect(await screen.findByText("Khách: Chị Hằng")).toBeInTheDocument();
-    expect(screen.getByText("Ghi chú: Mang lên lầu")).toBeInTheDocument();expect(screen.getByText("Khách: Anh Bình")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Khách: Chị Hằng")).toBeInTheDocument();
+    expect(screen.getByText("Ghi chú: Mang lên lầu")).toBeInTheDocument();expect(screen.getByLabelText("Khách: Anh Bình")).toBeInTheDocument();
     expect(screen.queryByText(/Ẩn ghi chú cũ/)).not.toBeInTheDocument();
     fireEvent.change(screen.getByRole("textbox",{name:"Tìm bàn"}),{target:{value:"khong ong hut"}});
-    expect(screen.getByText("Khách: Anh Bình")).toBeInTheDocument();expect(opened).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Khách: Anh Bình")).toBeInTheDocument();expect(opened).not.toHaveBeenCalled();
   });
 
 });

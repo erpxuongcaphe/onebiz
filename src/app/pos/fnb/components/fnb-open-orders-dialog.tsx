@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { FnbBillCardHeading, FnbBillIdentity } from "@/components/shared/fnb-bill-identity";
+import { FnbBillCardHeading } from "@/components/shared/fnb-bill-identity";
 import { fnbOpenOrderLabel, type FnbOpenOrder } from "@/lib/fnb-open-orders";
 import type { FnbTabSnapshot } from "@/lib/types/fnb";
 import { formatCurrency } from "@/lib/format";
@@ -48,7 +48,6 @@ export function FnbOpenOrdersDialog({ open, onOpenChange, orders, drafts, active
           <span className="text-xs text-muted-foreground">{order.orderNumber} · Chưa thanh toán</span>
           <span className="text-xl font-bold tabular-nums text-primary">{formatCurrency(order.provisionalTotal)}đ</span>
           <span className="text-sm text-muted-foreground">{order.itemCount} món</span>
-          <FnbBillIdentity note={order.note} showCustomer={false} />
           <span className="mt-auto pt-1 text-xs font-medium text-primary">Xem / thêm món →</span>
         </button>;
       })}

@@ -12,11 +12,3 @@ export function matchesFnbBillCardSearch(query: string, ...values: (string | nul
   const normalize = (value: string) => value.toLocaleLowerCase("vi").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d");
   return normalize(values.filter(Boolean).join(" ")).includes(normalize(query.trim()));
 }
-
-export function getFnbBillCardIdentity(customerName?: string | null, note?: string | null) {
-  const customer = customerName?.trim() || "Khách lẻ";
-  const normalized = customer.toLocaleLowerCase("vi").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  const text = note?.trim();
-  const isNote = normalized === "khach le" && !!text;
-  return { text: isNote ? text : customer, isNote };
-}
