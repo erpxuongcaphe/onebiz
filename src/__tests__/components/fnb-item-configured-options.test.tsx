@@ -80,4 +80,26 @@ describe('F&B configured preparation options', () => {
     expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({note: 'Không đường; Ít béo'}));
     expect(onConfirm.mock.calls[0][0].modifierSelections ?? []).toEqual([]);
   });
+  it.each(["missing", "selected", "empty", "ambiguous", "paid", "linked", "cleared"])("editing a partial snapshot handles %s defaults safely", (mode) => {
+    const group = { id: 'sweet', tenantId: 'tenant', name: 'Mức ngọt', rule: 'single' as const,
+      channel: 'fnb' as const, sortOrder: 0, minSelect: 0, maxSelect: null, isActive: true, createdAt: '', updatedAt: '' };
+    const normal = { id: 'normal', groupId: 'sweet', label: '100% bình thường', priceDelta: mode==='paid'?5000:0,
+      scaleFactor: null, linkedProductId: mode==='linked'?'stock':null, isDefault: true, sortOrder: 0, isActive: true };
+    const less = {...normal,id:'less',label:'80% ít ngọt',isDefault:mode==='ambiguous'};
+    const saved = mode==='selected'?[{groupId:'sweet',groupName:'Mức ngọt',rule:'single' as const,options:[{optionId:'less',label:'80% ít ngọt',priceDelta:0,scaleFactor:null,linkedProductId:null}]}]
+      :mode==='empty'?[{groupId:'sweet',groupName:'Mức ngọt',rule:'single' as const,options:[]}]:[];
+    const onConfirm=vi.fn();
+    render(<FnbItemDialog open onOpenChange={vi.fn()} product={product} variants={variants}
+      initialSelection={{variantId:'m',modifierSelections:saved}} dynamicModifiers={{groups:[group],optionsByGroup:new Map([['sweet',[normal,less]]])}} onConfirm={onConfirm}/>);
+    expect(screen.getByRole('button',{name:/^100% bình thường/})).toHaveAttribute('aria-pressed',['missing','cleared'].includes(mode)?'true':'false');
+    expect(screen.getByRole('button',{name:/^80% ít ngọt/})).toHaveAttribute('aria-pressed',mode==='selected'?'true':'false');
+    if(mode==='cleared')fireEvent.click(screen.getByRole('button',{name:/^100% bình thường/}));
+    fireEvent.click(screen.getByRole('button',{name:/Thêm vào đơn/}));
+    const selections=onConfirm.mock.calls[0][0].modifierSelections ?? [];
+    if(mode==='missing')expect(selections).toEqual(expect.arrayContaining([expect.objectContaining({groupId:'sweet',options:[expect.objectContaining({optionId:'normal'})]})]));
+    if(mode==='selected')expect(selections[0].options[0].optionId).toBe('less');
+    if(['empty','cleared'].includes(mode))expect(selections).toEqual([expect.objectContaining({groupId:'sweet',options:[]})]);
+    if(['ambiguous','paid','linked'].includes(mode))expect(selections).toEqual([]);
+  });
+
 });
