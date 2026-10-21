@@ -443,7 +443,7 @@ export const REPORT_CATALOG: ReportCatalogItem[] = [
     category: "inventory",
     icon: "receipt_long",
     keywords: ["cogs", "bom", "giá vốn", "công thức"],
-    permissions: PROFIT_PERMISSIONS,
+    permissions: [...PROFIT_PERMISSIONS, PERMISSIONS.PRODUCTS_VIEW_COST],
     permissionMode: "all",
   },
   {
