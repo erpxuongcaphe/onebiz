@@ -8,7 +8,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 const orderGroups = [{ type: "dine_in", label: "Tại quán" }, { type: "takeaway", label: "Mang về" }, { type: "delivery", label: "Giao hàng" }] as const;
 type OrderFilter = "all" | typeof orderGroups[number]["type"];
 const normalize = (value: string) => value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d");
-export function FnbOpenOrdersDialog({ open, onOpenChange, orders, drafts, activeOrderId, onOpenOrder, onOpenDraft, loading, error, connected, busy, onRefresh, updatedAt }: {
+export function FnbOpenOrdersDialog({ open, onOpenChange, orders, drafts, activeOrderId, onOpenOrder, onOpenDraft, loading, error, connected, busy, onRefresh, updatedAt, onMerge }: {
+  onMerge?: () => void;
   open: boolean; onOpenChange: (open: boolean) => void; orders: FnbOpenOrder[]; drafts: FnbTabSnapshot[];
   activeOrderId?: string | null;
   onOpenOrder: (order: FnbOpenOrder) => void; onOpenDraft: (id: string) => void;
@@ -23,6 +24,7 @@ export function FnbOpenOrdersDialog({ open, onOpenChange, orders, drafts, active
       <div><h1 className="text-xl font-bold text-primary">Chờ thanh toán · {orders.length} bill</h1><p className="text-sm text-muted-foreground">Tổng tạm tính <strong className="text-primary">{formatCurrency(orders.reduce((sum, order) => sum + order.provisionalTotal, 0))}đ</strong> · chưa cộng vào thực thu</p></div>
       <button type="button" onClick={() => onOpenChange(false)} className="min-h-11 rounded-md border px-3 text-sm font-semibold text-primary hover:bg-primary/5">← Quay lại POS</button>
     </div>
+    {onMerge && <button type="button" disabled={busy} onClick={onMerge} className="min-h-11 self-start rounded-md border border-primary/30 px-3 text-sm font-semibold text-primary disabled:opacity-50">Gộp 2 hoặc nhiều bill…</button>}
     <div className="flex items-center justify-between gap-2 text-sm"><span className={connected && !error ? "text-status-success" : "text-muted-foreground"}>{error ? "Chưa cập nhật được" : connected ? "Trực tiếp · toàn chi nhánh" : "Tự cập nhật mỗi 30 giây"}</span><button type="button" className="min-h-11 px-3 font-medium text-primary" onClick={onRefresh}>Làm mới</button></div>
     {updatedAt && <p className="text-xs text-muted-foreground">Cập nhật {updatedAt.toLocaleTimeString("vi-VN")}</p>}
     <input aria-label="Tìm đơn đang mở" placeholder="Tìm bàn, mã đơn hoặc nhân viên…" value={search} onChange={(event) => setSearch(event.target.value)} className="min-h-11 w-full rounded-md border bg-background px-3 text-sm" />

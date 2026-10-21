@@ -115,6 +115,8 @@ import { cn } from "@/lib/utils";
 import { useFnbOpenOrders } from "@/lib/hooks/use-fnb-open-orders";
 import { useLiveDataRefresh } from "@/lib/hooks/use-live-data-refresh";
 import { fnbOpenOrderLabel, isUnpaidFnbOrder, type FnbOpenOrder } from "@/lib/fnb-open-orders";
+import { canMergeFnbOrder, getFnbMergePlan } from "@/lib/fnb-merge-plan";
+import { FnbMergeBillsDialog } from "./components/fnb-merge-bills-dialog";
 import { FnbOpenOrdersDialog } from "./components/fnb-open-orders-dialog";
 import { customerContextFromOrder, needsCustomerSelection } from "@/lib/fnb-customer-context";
 import { selectFnbOrderCustomer } from "@/lib/services/supabase/fnb-order-customer";
@@ -260,12 +262,10 @@ function FnbPosPageInner() {
   const [paymentSubmitting, setPaymentSubmitting] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [showFloorPlan, setShowFloorPlan] = useState(false);
-  const [sameTableMergeSource, setSameTableMergeSource] = useState("");
-  const [sameTableMergeTarget, setSameTableMergeTarget] = useState("");
-  const sameTableMergeLock = useRef(false);
-  const [sameTableMergeBusy, setSameTableMergeBusy] = useState(false);
+  const [mergeIntent, setMergeIntent] = useState<{ initialId?: string } | null>(null);
+  const mergeBillsLock = useRef(false);
+  const [mergeBillsBusy, setMergeBillsBusy] = useState(false);
   const [tableBillsId, setTableBillsId] = useState<string | null>(null);
-  useEffect(() => { setSameTableMergeSource(""); setSameTableMergeTarget(""); }, [tableBillsId]);
   const [splitBillOpen, setSplitBillOpen] = useState(false);
   const [splitItems, setSplitItems] = useState<SplitItem[]>([]);
   // 06/08 — MỘT nguồn duy nhất cho trạng thái ca (CEO chốt). Trước đây chỉ
@@ -319,9 +319,6 @@ function FnbPosPageInner() {
   const [transferSubmitting, setTransferSubmitting] = useState(false);
   const transferLock = useRef(false);
   const [selectDineInTabId, setSelectDineInTabId] = useState<string | null>(null);
-  const [mergeSourceTable, setMergeSourceTable] = useState<RestaurantTable | null>(null);
-  const [mergeTargetTableId, setMergeTargetTableId] = useState("");
-  const [mergeInProgress, setMergeInProgress] = useState(false);
   // Sprint A — CEO 06/05: Sidenav drawer trigger từ ☰ button trong header.
   const [sidenavOpen, setSidenavOpen] = useState(false);
   // Sprint B.5 (CEO 12/05): PIN POS switch user dialog
@@ -362,7 +359,7 @@ function FnbPosPageInner() {
   const [couponApplying, setCouponApplying] = useState(false);
 
   const branchId = currentBranch?.id;
-  useEffect(() => setTableBillsId(null), [branchId]);
+  useEffect(() => { setTableBillsId(null); setMergeIntent(null); }, [branchId]);
   useEffect(() => setMenuSearch(""), [branchId]);
   const tenantId = tenant?.id ?? "";
   const branchLayout = useFnbPosLayout(tenantId, branchId, networkStatus.isOnline);
@@ -3221,124 +3218,39 @@ function FnbPosPageInner() {
     [pos, tables, branchId, networkStatus.isOnline, toast, canTransferTables, openOrders]
   );
 
-  // ── Merge orders (gộp đơn) ──
-  const handleMergeOrders = useCallback(async () => {
-    if (mergeInProgress) return;
-    if (!canManageTables) {
-      toast({
-        title: "Không có quyền gộp đơn",
-        description: "Cần quyền Quản lý bàn để thực hiện thao tác này.",
-        variant: "warning",
-      });
-      return;
-    }
-    if (!networkStatus.isOnline) {
-      hapticError();
-      toast({
-        title: "Cần kết nối mạng",
-        description: "Gộp đơn không khả dụng khi ngoại tuyến.",
-        variant: "warning",
-      });
-      return;
-    }
-
-    const source = tables.find((table) => table.id === mergeSourceTable?.id);
-    const target = tables.find((table) => table.id === mergeTargetTableId);
-    if (!source?.currentOrderId || source.currentOrderId !== mergeSourceTable?.currentOrderId || !target?.currentOrderId || source.id === target.id) {
-      toast({
-        title: "Bàn hoặc đơn vừa thay đổi",
-        description: "Vui lòng tải lại sơ đồ bàn rồi chọn lại.",
-        variant: "warning",
-      });
-      return;
-    }
-
-    const sourceTabs = pos.tabs.filter((tab) => tab.kitchenOrderId === source.currentOrderId);
-    if (sourceTabs.some((tab) => tab.lines.length > 0)) {
-      toast({
-        title: "Bàn nguồn còn món chưa gửi bếp",
-        description: "Hãy gửi bếp hoặc bỏ các món đang chờ trước khi gộp đơn.",
-        variant: "warning",
-      });
-      return;
-    }
-
-    setMergeInProgress(true);
-    try {
-      await mergeKitchenOrders(target.currentOrderId, [source.currentOrderId]);
-
-      const targetTab = pos.tabs.find((tab) => tab.kitchenOrderId === target.currentOrderId);
-      let targetTabId = targetTab?.id;
-      if (!targetTabId) {
-        targetTabId = pos.createTab(getTableLabel(target), "dine_in", target.id);
-        pos.updateTabMeta(targetTabId, { kitchenOrderId: target.currentOrderId });
-      }
-      await hydrateKitchenOrderIntoTab(target.currentOrderId, targetTabId, true);
-      for (const sourceTab of sourceTabs) pos.closeTab(sourceTab.id);
-      handleSwitchOrderTab(targetTabId);
-
-      setMergeSourceTable(null);
-      setMergeTargetTableId("");
-      setShowFloorPlan(false);
-      hapticSuccess();
-      toast({
-        title: "Đã gộp đơn",
-        description: `Đơn ${getTableLabel(source)} đã gộp vào ${getTableLabel(target)}.`,
-        variant: "success",
-      });
-
-      if (branchId) {
-        getTablesByBranch(branchId)
-          .then(setTables)
-          .catch((err) => console.error("[FnB] refresh tables failed:", err));
-      }
-    } catch (err) {
-      hapticError();
-      toast({
-        title: "Gộp đơn thất bại",
-        description: err instanceof Error ? err.message : "Vui lòng thử lại.",
-        variant: "error",
-      });
-    } finally {
-      setMergeInProgress(false);
-    }
-  }, [
-    branchId,
-    canManageTables,
-    mergeInProgress,
-    mergeSourceTable?.id,
-    mergeTargetTableId,
-    networkStatus.isOnline,
-    pos,
-    tables,
-    toast,
-    hydrateKitchenOrderIntoTab,
-    handleSwitchOrderTab,
-  ]);
-
-  const handleSameTableMerge = useCallback(async () => {
-    if (sameTableMergeLock.current || !tableBillsId || !canManageTables || !networkStatus.isOnline) return;
-    const source = openOrders.orders.find(order => order.id === sameTableMergeSource && order.tableId === tableBillsId && isUnpaidFnbOrder(order));
-    const target = openOrders.orders.find(order => order.id === sameTableMergeTarget && order.tableId === tableBillsId && isUnpaidFnbOrder(order));
-    if (!source || !target || source.id === target.id) return;
-    if (pos.tabs.some(tab => [source.id,target.id].includes(tab.kitchenOrderId ?? "") && tab.lines.length > 0)) {
-      toast({title:"Còn món chưa gửi bếp",description:"Gửi hoặc bỏ món đang chờ trên hai bill trước khi gộp.",variant:"warning"}); return;
-    }
+  // One server transaction for every selected bill; no pair-by-pair loop.
+  const handleMergeBills = useCallback(async (targetId: string, ids: string[]) => {
+    if (mergeBillsLock.current || !branchId || !canManageTables || !networkStatus.isOnline || openOrders.loading || openOrders.error) return;
+    const plan = getFnbMergePlan(openOrders.orders, ids, targetId, branchId, pos.tabs.filter(tab => tab.lines.length > 0 && tab.kitchenOrderId).map(tab => tab.kitchenOrderId!));
+    if (plan.error) { toast({ title: "Chưa gộp được bill", description: plan.error, variant: "warning" }); return; }
     const selectedBranch = branchId;
-    sameTableMergeLock.current = true; setSameTableMergeBusy(true);
+    mergeBillsLock.current = true; setMergeBillsBusy(true);
     try {
-      await mergeKitchenOrders(target.id,[source.id]);
+      await mergeKitchenOrders(plan.target.id, plan.sources.map(order => order.id));
       if (liveBranchRef.current !== selectedBranch) return;
-      const targetTabId = pos.tabs.find(tab => tab.kitchenOrderId === target.id)?.id ?? pos.createTab(target.tableName || "Tại quán","dine_in",target.tableId ?? undefined);
-      pos.updateTabMeta(targetTabId,{kitchenOrderId:target.id});
-      await hydrateKitchenOrderIntoTab(target.id,targetTabId,true);
-      for (const tab of pos.tabs.filter(tab => tab.kitchenOrderId === source.id)) pos.closeTab(tab.id);
-      handleSwitchOrderTab(targetTabId); setTableBillsId(null); setSameTableMergeSource(""); setSameTableMergeTarget("");
-      void openOrders.refresh(); if (branchId) void getTablesByBranch(branchId).then(setTables);
-      toast({title:"Đã gộp bill",description:`${source.orderNumber} đã gộp vào ${target.orderNumber}. Các bill khác giữ riêng.`,variant:"success"});
-    } catch (error) { toast({title:"Chưa gộp được bill",description:error instanceof Error ? error.message : "Tải lại danh sách bill trước khi thử tiếp.",variant:"error"}); }
-    finally {sameTableMergeLock.current=false;setSameTableMergeBusy(false);}
-  },[tableBillsId,canManageTables,networkStatus.isOnline,openOrders,sameTableMergeSource,sameTableMergeTarget,pos,toast,hydrateKitchenOrderIntoTab,handleSwitchOrderTab,branchId]);
+      // Merge is committed: close the selector before fetching the result so a
+      // slow reload cannot present an already-merged batch for resubmission.
+      setMergeIntent(null); setTableBillsId(null); setOpenOrdersDialog(false);
+      const targetTabId = pos.tabs.find(tab => tab.kitchenOrderId === plan.target.id)?.id
+        ?? pos.createTab(fnbOpenOrderLabel(plan.target), plan.target.orderType, plan.target.tableId ?? undefined);
+      pos.updateTabMeta(targetTabId, { kitchenOrderId: plan.target.id });
+      const sources = new Set(plan.sources.map(order => order.id));
+      for (const tab of pos.tabs.filter(tab => sources.has(tab.kitchenOrderId ?? ""))) pos.closeTab(tab.id);
+      handleSwitchOrderTab(targetTabId); setShowFloorPlan(false); setMobileCartOpen(true);
+      try {
+        await hydrateKitchenOrderIntoTab(plan.target.id, targetTabId, true);
+        toast({ title: "Đã gộp bill", description: `${plan.selected.length} bill đã gộp vào ${plan.target.orderNumber}. Các bill khác giữ riêng.`, variant: "success" });
+      } catch {
+        toast({ title: "Đã gộp trên máy chủ", description: `Chưa tải lại được ${plan.target.orderNumber}. Mở lại bill từ Chờ thanh toán; không cần gộp lại.`, variant: "warning" });
+      }
+      void openOrders.refresh();
+      void getTablesByBranch(selectedBranch).then(rows => { if (liveBranchRef.current === selectedBranch) setTables(rows); }).catch(() => {});
+    } catch (error) {
+      if (liveBranchRef.current !== selectedBranch) return;
+      void openOrders.refresh();
+      toast({ title: "Chưa xác nhận được kết quả gộp", description: error instanceof Error ? error.message : "Làm mới danh sách để kiểm tra kết quả trước khi thử lại.", variant: "error" });
+    } finally { mergeBillsLock.current = false; setMergeBillsBusy(false); }
+  }, [branchId, canManageTables, networkStatus.isOnline, openOrders, pos, toast, hydrateKitchenOrderIntoTab, handleSwitchOrderTab]);
 
   // ── Customer selection ──
   const customerSelectionLock = useRef(false);
@@ -3894,8 +3806,8 @@ function FnbPosPageInner() {
                 onMergeTable={
                   canManageTables && networkStatus.isOnline
                     ? (table) => {
-                        setMergeSourceTable(table);
-                        setMergeTargetTableId("");
+                        setMergeIntent({ initialId: table.currentOrderId ?? undefined });
+                        void openOrders.refresh();
                       }
                     : undefined
                 }
@@ -3995,7 +3907,7 @@ function FnbPosPageInner() {
           onCancelSentLine={networkStatus.isOnline ? line => { setCancelSentItemId(line.kitchenOrderItemId); setCancelSentLine(line); setCancelSentMode("items"); } : undefined}
           voidKitchenOrderLabel={canCancelUnpaidOrder ? "Hủy đơn chưa thanh toán" : "Xin duyệt hủy đơn"}
           onTransferTable={canTransferTables && canTransferFnbTab(pos.activeTab, tables) ? () => setTransferTableOpen(true) : undefined}
-          onMergeTable={canManageTables && networkStatus.isOnline && tables.some(t => t.id === pos.activeTab?.tableId && t.currentOrderId === pos.activeTab?.kitchenOrderId) ? () => { setMergeSourceTable(tables.find(t => t.id === pos.activeTab?.tableId) ?? null); setMergeTargetTableId(""); } : undefined}
+          onMergeTable={canManageTables ? () => { setMergeIntent({ initialId: pos.activeTab?.kitchenOrderId }); void openOrders.refresh(); } : undefined}
           auditHistoryHref={activeBillAuditHref}
           onOrderHistory={canViewOrderHistory ? () => setOrderHistoryOpen(true) : undefined}
           onApplyCoupon={handleApplyCoupon}
@@ -4216,7 +4128,7 @@ function FnbPosPageInner() {
           onCancelSentLine={networkStatus.isOnline ? line => { setCancelSentItemId(line.kitchenOrderItemId); setCancelSentLine(line); setCancelSentMode("items"); } : undefined}
           voidKitchenOrderLabel={canCancelUnpaidOrder ? "Hủy đơn chưa thanh toán" : "Xin duyệt hủy đơn"}
               onTransferTable={canTransferTables && canTransferFnbTab(pos.activeTab, tables) ? () => setTransferTableOpen(true) : undefined}
-          onMergeTable={canManageTables && networkStatus.isOnline && tables.some(t => t.id === pos.activeTab?.tableId && t.currentOrderId === pos.activeTab?.kitchenOrderId) ? () => { setMergeSourceTable(tables.find(t => t.id === pos.activeTab?.tableId) ?? null); setMergeTargetTableId(""); } : undefined}
+          onMergeTable={canManageTables ? () => { setMergeIntent({ initialId: pos.activeTab?.kitchenOrderId }); void openOrders.refresh(); } : undefined}
               auditHistoryHref={activeBillAuditHref}
           onOrderHistory={canViewOrderHistory ? () => setOrderHistoryOpen(true) : undefined}
               onApplyCoupon={handleApplyCoupon}
@@ -4488,7 +4400,7 @@ function FnbPosPageInner() {
         }}
       />
 
-      <FnbOpenOrdersDialog activeOrderId={pos.activeTab?.kitchenOrderId} updatedAt={openOrders.updatedAt} open={openOrdersDialog} onOpenChange={setOpenOrdersDialog} orders={openOrders.orders} drafts={pos.tabs.filter((tab) => !tab.kitchenOrderId)} onOpenOrder={handleOpenSharedOrder} onOpenDraft={(id) => { pos.switchTab(id); setOpenOrdersDialog(false); setMobileCartOpen(true); setShowFloorPlan(false); }} loading={openOrders.loading} error={openOrders.error} connected={openOrders.connected} busy={openingSharedOrder} onRefresh={() => { void openOrders.refresh(); }} />
+      <FnbOpenOrdersDialog onMerge={canManageTables ? () => { setMergeIntent({}); void openOrders.refresh(); } : undefined} activeOrderId={pos.activeTab?.kitchenOrderId} updatedAt={openOrders.updatedAt} open={openOrdersDialog} onOpenChange={setOpenOrdersDialog} orders={openOrders.orders} drafts={pos.tabs.filter((tab) => !tab.kitchenOrderId)} onOpenOrder={handleOpenSharedOrder} onOpenDraft={(id) => { pos.switchTab(id); setOpenOrdersDialog(false); setMobileCartOpen(true); setShowFloorPlan(false); }} loading={openOrders.loading} error={openOrders.error} connected={openOrders.connected} busy={openingSharedOrder} onRefresh={() => { void openOrders.refresh(); }} />
 
       <Dialog open={Boolean(selectDineInTabId)} onOpenChange={(open) => { if (!open) setSelectDineInTabId(null); }}>
         <DialogContent className="sm:max-w-md">
@@ -4511,9 +4423,8 @@ function FnbPosPageInner() {
 
       {tableBillsId && <Suspense fallback={null}><TableBillsDialog open tableLabel={tables.find(table => table.id === tableBillsId) ? getTableLabel(tables.find(table => table.id === tableBillsId)!) : "Bàn"}
         orders={openOrders.orders.filter(order => order.tableId === tableBillsId && isUnpaidFnbOrder(order))} drafts={pos.tabs.filter(tab => tab.tableId === tableBillsId && !tab.kitchenOrderId)}
-        loading={openOrders.loading} error={openOrders.error} opening={openingSharedOrder} busy={sameTableMergeBusy} canMerge={canManageTables} online={networkStatus.isOnline}
-        mergeSource={sameTableMergeSource} mergeTarget={sameTableMergeTarget} onSourceChange={setSameTableMergeSource} onTargetChange={setSameTableMergeTarget}
-        onOpenChange={open => { if (!open) setTableBillsId(null); }} onRefresh={() => { void openOrders.refresh(); }} onMerge={() => void handleSameTableMerge()}
+        loading={openOrders.loading} error={openOrders.error} opening={openingSharedOrder} busy={mergeBillsBusy} canMerge={canManageTables}
+        onOpenChange={open => { if (!open) setTableBillsId(null); }} onRefresh={() => { void openOrders.refresh(); }} onMerge={() => { setMergeIntent({ initialId: openOrders.orders.find(order => order.tableId === tableBillsId && branchId && canMergeFnbOrder(order, branchId))?.id }); void openOrders.refresh(); }}
         onOpenOrder={order => { void handleOpenSharedOrder(order).then(opened => { if (opened) setTableBillsId(null); }); }}
         onOpenDraft={id => { handleSwitchOrderTab(id); setTableBillsId(null); setShowFloorPlan(false); setMobileCartOpen(true); }}
         onCreate={() => { const table = tables.find(entry => entry.id === tableBillsId); if (!table) return; orderSelectionGeneration.current += 1; pos.createTab(`${getTableLabel(table)} · Bill mới`, "dine_in", table.id); setTableBillsId(null); setShowFloorPlan(false); setMobileCartOpen(false); }}
@@ -4557,78 +4468,12 @@ function FnbPosPageInner() {
         </DialogContent>
       </Dialog>
 
-      {/* Merge order dialog */}
-      <Dialog
-        open={Boolean(mergeSourceTable)}
-        onOpenChange={(open) => {
-          if (mergeInProgress) return;
-          if (!open) {
-            setMergeSourceTable(null);
-            setMergeTargetTableId("");
-          }
-        }}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Icon name="call_merge" size={16} /> Gộp đơn
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 py-2">
-            <p className="text-xs text-muted-foreground">
-Chọn bàn đích. Món của bill <b>{openOrders.orders.find(order => order.id === mergeSourceTable?.currentOrderId)?.orderNumber}</b> tại <b>{mergeSourceTable ? getTableLabel(mergeSourceTable) : "Bàn"}</b>{" "}
-              sẽ gộp vào bill chính của bàn đích.
-            </p>
-            <div className="grid max-h-[320px] grid-cols-3 gap-2 overflow-y-auto sm:grid-cols-4">
-              {tables
-                .filter(
-                  (table) =>
-                    table.id !== mergeSourceTable?.id &&
-                    table.status === "occupied" &&
-                    Boolean(table.currentOrderId),
-                )
-                .map((table) => {
-                  const selected = mergeTargetTableId === table.id;
-                  return (
-                    <button
-                      key={table.id}
-                      type="button"
-                      aria-pressed={selected}
-                      onClick={() => setMergeTargetTableId(table.id)}
-                      className={cn(
-                        "flex h-14 flex-col items-center justify-center rounded-lg border font-semibold transition-colors",
-                        selected
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-border bg-card hover:border-primary hover:bg-primary/5",
-                      )}
-                    >
-                      <span className="text-xs opacity-70">Bàn đích</span>
-                      <span className="break-words text-lg">{getCompactTableLabel(table)}</span>
-                    </button>
-                  );
-                })}
-            </div>
-            {tables.filter(
-              (table) =>
-                table.id !== mergeSourceTable?.id &&
-                table.status === "occupied" &&
-                Boolean(table.currentOrderId),
-            ).length === 0 && (
-              <p className="py-6 text-center text-sm text-muted-foreground">
-                Không có bàn đang phục vụ khác để gộp
-              </p>
-            )}
-            <button
-              type="button"
-              disabled={!mergeTargetTableId || mergeInProgress}
-              onClick={() => void handleMergeOrders()}
-              className="h-11 w-full rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {mergeInProgress ? "Đang gộp..." : "Xác nhận gộp đơn"}
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {mergeIntent && branchId && canManageTables && <FnbMergeBillsDialog key={branchId} branchId={branchId}
+        orders={openOrders.orders} initialId={mergeIntent.initialId}
+        pendingIds={pos.tabs.filter(tab => tab.lines.length > 0 && tab.kitchenOrderId).map(tab => tab.kitchenOrderId!)}
+        busy={mergeBillsBusy} loading={openOrders.loading} error={openOrders.error} online={networkStatus.isOnline}
+        onClose={() => { if (!mergeBillsLock.current) setMergeIntent(null); }} onRefresh={() => { void openOrders.refresh(); }}
+        onConfirm={(target, ids) => { void handleMergeBills(target, ids); }} />}
 
       {/* Keyboard help overlay (F1 / ?) */}
       <Dialog open={keyboardHelpOpen} onOpenChange={setKeyboardHelpOpen}>
