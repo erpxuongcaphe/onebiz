@@ -67,6 +67,8 @@ await db.exec(migration);await db.exec(migration); // migration is safely repeat
 const resolve=async selections=>(await db.query('select _fnb_resolve_recipe_defaults_20261021($1,$2,$3,null,$4) value',[id(1),id(2),id(3),selections===null?null:JSON.stringify(selections)])).rows[0].value;
 const saved=n=>[{groupId:id(5),groupName:'Mức ngọt',options:[{optionId:id(n),label:n===20?'100%':'80%'}]}];
 assert.equal((await resolve(null))[0].options[0].optionId,id(20));assert.equal((await resolve([]))[0].options[0].optionId,id(20));
+assert.equal((await db.query('select _fnb_resolve_recipe_defaults_20261021($1,$2,$3,null,$4) value',[id(1),id(2),id(3),'null'])).rows[0].value[0].options[0].optionId,id(20),'legacy JSON null is missing, not an explicit clear');
+await assert.rejects(()=>resolve([{groupId:id(5),options:null}]),/SELECTION_REQUIRED/);
 assert.deepEqual(await resolve(saved(21)),saved(21),'explicit 80% preserved');
 await assert.rejects(()=>resolve([{groupId:id(5),options:[]}]),/SELECTION_REQUIRED/);
 await assert.rejects(()=>resolve(saved(404)),/INVALID_OPTION/);

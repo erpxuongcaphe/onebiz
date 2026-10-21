@@ -6,7 +6,7 @@ create or replace function public._fnb_resolve_recipe_defaults_20261021(
   p_tenant_id uuid, p_branch_id uuid, p_product_id uuid, p_variant_id uuid, p_selections jsonb
 ) returns jsonb language plpgsql security definer set search_path=public,extensions as $fn$
 declare
-  v_result jsonb := coalesce(p_selections,'[]'::jsonb);
+  v_result jsonb := coalesce(nullif(p_selections,'null'::jsonb),'[]'::jsonb);
   v_bom_id uuid;
   v_product_name text;
   v_group record;
@@ -39,7 +39,7 @@ begin
     -- Never overwrite a saved choice or an explicitly empty selection.
     if exists(select 1 from jsonb_array_elements(v_result) s where s->>'groupId'=v_group.id::text) then
       if (select count(*) from jsonb_array_elements(v_result) s
-        cross join lateral jsonb_array_elements(coalesce(s->'options','[]'::jsonb)) o
+        cross join lateral jsonb_array_elements(case when jsonb_typeof(s->'options')='array' then s->'options' else '[]'::jsonb end) o
         where s->>'groupId'=v_group.id::text)<>1 then
         raise exception using errcode='P0001',message='FNB_EXACT_RECIPE_SELECTION_REQUIRED',
           detail=format('Món "%s" — nhóm "%s": cần lưu đúng một lựa chọn.',v_product_name,v_group.name);
@@ -47,7 +47,7 @@ begin
       begin
         select nullif(o->>'optionId','')::uuid into v_selected_id
           from jsonb_array_elements(v_result) s
-          cross join lateral jsonb_array_elements(coalesce(s->'options','[]'::jsonb)) o
+          cross join lateral jsonb_array_elements(case when jsonb_typeof(s->'options')='array' then s->'options' else '[]'::jsonb end) o
          where s->>'groupId'=v_group.id::text limit 1;
       exception when invalid_text_representation then
         raise exception using errcode='P0001',message='FNB_EXACT_RECIPE_INVALID_OPTION',
@@ -124,7 +124,7 @@ begin
   loop
     v_resolved := public._fnb_resolve_recipe_defaults_20261021(
       v_tenant,v_order.branch_id,v_item.product_id,v_item.variant_id,v_item.modifier_selections);
-    if v_resolved is distinct from coalesce(v_item.modifier_selections,'[]'::jsonb) then
+    if v_resolved is distinct from coalesce(nullif(v_item.modifier_selections,'null'::jsonb),'[]'::jsonb) then
       update public.kitchen_order_items set modifier_selections=v_resolved where id=v_item.id;
     end if;
   end loop;
