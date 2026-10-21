@@ -290,6 +290,85 @@ try {
   await assert.rejects(receive(1,'93000000-0000-0000-0000-000000000006'),/BRANCH_DENIED/);
   console.log('PASS: uncatalogued Retail SKU dispatch and actual receipt without changing recipe approvals; invalid/menu/inactive products rejected; historical stock unchanged; partial receiving/correction/replay; original cost; debt; cancellation; branch denial.');
   console.log('PASS: operations receipts post linked expenses without inventory or cash; branch/consolidated cost and internal elimination; receipt correction/replay/cancellation; no separate settlement or void; missing source cost remains flagged.');
+
+  // Reproduce variant-only packaging: the parent/default recipe uses 250g,
+  // while the 500g variant references a different tracked packaging SKU.
+  await db.exec(`create or replace function user_has_branch_access(uuid,uuid) returns boolean language sql as 'select true';
+    create role service_role;
+    alter table products add column bom_code text;
+    alter table bom add column code text,add column variant_id uuid,add column version integer default 1;
+    create table product_variants(id uuid primary key,tenant_id uuid,product_id uuid,bom_code text,is_active boolean);
+  `);
+  const resolverSource=fs.readFileSync('supabase/migrations/00147_variant_aware_bom_lookup.sql','utf8');
+  const resolverStart=resolverSource.indexOf('create or replace function public.get_active_bom_for_branch(');
+  const resolverEnd=resolverSource.indexOf('\n$$;',resolverStart);
+  await db.exec(resolverSource.slice(resolverStart,resolverEnd+4));
+  const roast='96000000-0000-0000-0000-000000000001',zip250='96000000-0000-0000-0000-000000000002',zip500='96000000-0000-0000-0000-000000000003';
+  const variant250='96000000-0000-0000-0000-000000000004',variant500='96000000-0000-0000-0000-000000000005';
+  const bom250='96000000-0000-0000-0000-000000000006',bom500='96000000-0000-0000-0000-000000000007';
+  await db.exec(`insert into products(id,tenant_id,code,name,unit,inventory_role,is_active,has_bom,stock,product_type,channel,bom_code) values
+    ('${roast}','${context.tenant_id}','ROAST-FIXTURE','Roast coffee','Tui','fnb_menu_item',true,true,0,'sku','fnb','ZIP250'),
+    ('${zip250}','${context.tenant_id}','ZIP250-FIXTURE','Zip 250g','Tui','retail_sku',true,false,100,'sku','retail',null),
+    ('${zip500}','${context.tenant_id}','ZIP500-FIXTURE','Zip 500g','Tui','retail_sku',true,false,100,'sku','retail',null);
+    insert into branch_stock(tenant_id,branch_id,product_id,quantity) values('${context.tenant_id}','${source}','${zip250}',100),('${context.tenant_id}','${source}','${zip500}',100);
+    insert into product_variants values('${variant250}','${context.tenant_id}','${roast}','ZIP250',true),('${variant500}','${context.tenant_id}','${roast}','ZIP500',true);
+    insert into bom(id,tenant_id,product_id,variant_id,branch_id,code,is_active) values
+    ('${bom250}','${context.tenant_id}','${roast}','${variant250}',null,'ZIP250',true),('${bom500}','${context.tenant_id}','${roast}','${variant500}',null,'ZIP500',true);
+    insert into bom_items values('${bom250}','${zip250}',1,'Tui',0),('${bom500}','${zip500}',1,'Tui',0);
+  `);
+  const zipPolicy=async product=>(await db.query(`select _internal_receiving_policy_00570('${context.tenant_id}','${source}','${context.dest}','${product}') r`)).rows[0].r;
+  const zipStock=async()=>Number((await db.query(`select coalesce(sum(quantity),0) n from branch_stock where tenant_id='${context.tenant_id}' and branch_id='${context.dest}' and product_id='${zip500}'`)).rows[0].n);
+  assert.equal((await zipPolicy(zip250)).treatment,'stock');
+  assert.equal((await zipPolicy(zip500)).treatment,'expense','reproduces production: parent lookup misses 500g');
+  const makeZipSale=async()=> (await db.query(`select create_internal_sale_atomic('${context.tenant_id}','${source}','${context.dest}','${context.actor}',null,null,null,null,
+    '${JSON.stringify([{productId:zip500,quantity:20,unitPrice:100,vatRate:0}])}'::jsonb,'debt',false,'Variant zip fixture') r`)).rows[0].r;
+  const oldZip=await makeZipSale();
+  const oldZipItem=(await db.query(`select id from internal_sale_items where internal_sale_id='${oldZip.internal_sale_id}'`)).rows[0].id;
+  await db.query(`select receive_internal_sale_actual('${oldZip.internal_sale_id}','${JSON.stringify([{itemId:oldZipItem,quantity:20}])}',gen_random_uuid(),'Old expense fixture')`);
+  const beforeVariantStock=await zipStock(),beforeVariantExpense=Number((await financeTotals(context.dest)).expense);
+  const variantMigration=fs.readFileSync('supabase/migrations/202610210004_internal_receiving_variant_recipes.sql','utf8');
+  await db.exec(variantMigration);await db.exec(variantMigration);
+  assert.equal(await zipStock(),beforeVariantStock,'install never updates old stock');
+  assert.equal(Number((await financeTotals(context.dest)).expense),beforeVariantExpense,'install never rewrites historical expense');
+  assert.equal((await db.query(`select receiving_treatment from internal_sale_items where id='${oldZipItem}'`)).rows[0].receiving_treatment,'expense','historical classification remains frozen');
+  for(const product of [zip250,zip500]) assert.deepEqual(await zipPolicy(product),{treatment:'stock',productId:product,factor:1,reason:'recipe_ingredient'});
+  for(const change of [
+    `update product_variants set is_active=false where id='${variant500}'`,
+    `update bom set is_active=false where id='${bom500}'`,
+    `update product_variants set tenant_id=gen_random_uuid() where id='${variant500}'`,
+    `insert into fnb_product_branch_menu_scopes values('${context.tenant_id}','${roast}','${source}')`,
+    `insert into fnb_product_branch_menu_scopes values('${context.tenant_id}','${roast}','${context.dest}'); insert into fnb_product_branch_menu_policies values('${context.tenant_id}','${roast}','except')`,
+  ]) {
+    await db.exec('begin');await db.exec(change);
+    assert.equal((await zipPolicy(zip500)).treatment,'expense','inactive, foreign-tenant or excluded menu cannot classify packaging as stock');
+    await db.exec('rollback');
+  }
+  await db.exec('begin');
+  await db.exec(`insert into bom(id,tenant_id,product_id,variant_id,branch_id,code,is_active,version) values(gen_random_uuid(),'${context.tenant_id}','${roast}','${variant500}','${context.dest}','ZIP500',true,2);
+    insert into bom_items select id,'${zip250}',1,'Tui',0 from bom where branch_id='${context.dest}' and code='ZIP500';`);
+  assert.equal((await zipPolicy(zip500)).treatment,'expense','branch override replaces global variant recipe');
+  await db.exec('rollback');
+  await db.exec('begin');
+  await db.exec(`update products set bom_code='ZIP-REAL-BASE' where id='${roast}';
+    insert into bom(id,tenant_id,product_id,branch_id,code,is_active,version) values(gen_random_uuid(),'${context.tenant_id}','${roast}',null,'ZIP-REAL-BASE',true,1);
+    insert into bom_items select id,'${operationsProduct}',1,'Goi',0 from bom where code='ZIP-REAL-BASE';`);
+  assert.equal((await zipPolicy(operationsProduct)).treatment,'stock','a real parent recipe remains reachable alongside variant recipes');
+  assert.equal((await zipPolicy(zip500)).treatment,'stock');
+  await db.exec('rollback');
+  assert.equal((await db.query("select has_function_privilege('authenticated','public._internal_receiving_recipe_boms_20261021(uuid,uuid,uuid)','execute') allowed")).rows[0].allowed,false);
+  const newZip=await makeZipSale();
+  const newZipItem=(await db.query(`select id from internal_sale_items where internal_sale_id='${newZip.internal_sale_id}'`)).rows[0].id;
+  assert.equal((await db.query(`select receiving_treatment from internal_sale_items where id='${newZipItem}'`)).rows[0].receiving_treatment,'stock');
+  const zipRequest='96000000-0000-0000-0000-000000000008';
+  const receiveZip=()=>db.query(`select receive_internal_sale_actual('${newZip.internal_sale_id}','${JSON.stringify([{itemId:newZipItem,quantity:20}])}','${zipRequest}','Receive variant packaging') r`);
+  await receiveZip();assert.equal(await zipStock(),beforeVariantStock+20);
+  assert.equal(Number((await financeTotals(context.dest)).expense),beforeVariantExpense,'new packaging receipt is inventory, not a duplicate expense');
+  assert.equal((await receiveZip()).rows[0].r.replayed,true);assert.equal(await zipStock(),beforeVariantStock+20);
+  await db.query(`select cancel_internal_sale_atomic('${newZip.internal_sale_id}','Cancel packaging fixture')`);
+  assert.equal(await zipStock(),beforeVariantStock);
+  assert.equal(Number((await financeTotals(context.dest)).expense),beforeVariantExpense);
+  console.log('PASS: actual variant BOM resolver; 250g/500g packaging, active variants/menu/tenant/branch overrides; unchanged history; stock receipt +20 without expense, replay once and paired cancellation.');
+
   const reportDb=new PGlite();
   try {
     await reportDb.exec('create role anon; create role authenticated;');
