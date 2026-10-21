@@ -49,11 +49,13 @@ describe("bố cục danh sách Hàng hóa", () => {
       ["statusFilter", "setStatusFilter"],
       ["expectedOutDate", "setExpectedOutDate"],
       ["createdDatePreset", "setCreatedDatePreset"],
-      ["supplierFilter", "setSupplierFilter"],
     ]) {
       expect(page).toContain(`value={${value}}`);
       expect(page).toContain(`onChange={${setter}}`);
     }
+    expect(page).toContain('aria-label="Tên nhà cung cấp"');
+    expect(page).toContain("value={supplierFilter}");
+    expect(page).toContain("setSupplierFilter(event.target.value)");
   });
 
   it("giữ nguyên giá trị lọc mặc định của bản production", () => {

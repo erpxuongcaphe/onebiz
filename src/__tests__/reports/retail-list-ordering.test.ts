@@ -15,8 +15,9 @@ describe("Retail list ordering", () => {
   it("orders the complete product result before pagination and exports in that order", () => {
     expect(productsPage).toContain("sortableColumnIds={PRODUCT_SORT_COLUMNS}");
     expect(productsPage).toContain("sortBy: PRODUCT_SORT_FIELDS[sorting[0]?.id]");
-    expect(productsPage).toContain("pageSize: 1000");
-    expect(productsPage).toContain("rows.length >= result.total");
+    expect(productsPage).toContain("await getProductsForExport({");
+    expect(productsService).toContain("readHistoryPages<Product>");
+    expect(productsService).toContain("count: result.total");
     expect(productsService).toContain('query = query.order(sortBy, { ascending });');
     expect(productsService).toContain('query = query.order("id", { ascending });');
   });
