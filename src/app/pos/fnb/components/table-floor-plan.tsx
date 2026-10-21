@@ -1,4 +1,6 @@
 "use client";
+import { FnbBillIdentity } from "@/components/shared/fnb-bill-identity";
+import { buildFnbTableBillDetails, matchesFnbBillCardSearch } from "@/lib/fnb-bill-card-details";
 
 /**
  * TableFloorPlan — sơ đồ bàn cho POS FnB.
@@ -93,7 +95,8 @@ export function TableFloorPlan({
   const [tableSearch, setTableSearch] = useState("");
   const [offsiteArea, setOffsiteArea] = useState(false);
   const offsiteOrders = openOrders.filter(order => order.orderType !== "dine_in" && isUnpaidFnbOrder(order));
-  const visibleOffsiteOrders = offsiteOrders.filter(order => `${order.orderNumber} ${order.customerName ?? ""} ${order.orderType === "delivery" ? "Giao hàng" : "Mang về"}`.toLocaleLowerCase("vi").includes(tableSearch.trim().toLocaleLowerCase("vi")));
+  const visibleOffsiteOrders = offsiteOrders.filter(order => matchesFnbBillCardSearch(tableSearch, order.orderNumber, order.customerName, order.note, order.orderType === "delivery" ? "Giao hàng" : "Mang về"));
+  const tableBillDetails = useMemo(() => buildFnbTableBillDetails(openOrders), [openOrders]);
   const [statusFilter, setStatusFilter] = useState<TableStatus | "all">("all");
   const [zones, setZones] = useState<FloorPlanZone[]>([]);
   const [activeZoneId, setActiveZoneId] = useState<string | null>(null);
@@ -236,7 +239,7 @@ export function TableFloorPlan({
           <button type="button" aria-pressed={tableView === "list"} onClick={() => chooseTableView("list")} className={cn("min-h-11 rounded-lg px-3 text-sm font-medium", tableView === "list" ? "bg-primary/10 text-primary" : "hover:bg-muted")}>Danh sách</button>
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-2 shrink-0 border-b border-border bg-white dark:bg-card px-4 py-2"><input aria-label="Tìm bàn" placeholder="Tìm bàn, khu vực hoặc mã bill..." value={tableSearch} onChange={(event) => { setTableSearch(event.target.value); setTableView("list"); }} className="min-h-11 w-full rounded-lg border border-border bg-background px-3 text-sm sm:max-w-sm" /><button type="button" aria-pressed={offsiteArea} onClick={() => { setOffsiteArea(!offsiteArea); setTableSearch(""); }} className={cn("min-h-11 rounded-lg border px-3 text-sm font-semibold",offsiteArea ? "border-primary bg-primary text-primary-foreground" : "border-primary/25 text-primary hover:bg-primary/5")}>Mang về / Giao hàng ({offsiteOrders.length})</button></div>
+      <div className="flex flex-wrap items-center gap-2 shrink-0 border-b border-border bg-white dark:bg-card px-4 py-2"><input aria-label="Tìm bàn" placeholder="Tìm bàn, mã bill, khách hoặc ghi chú..." value={tableSearch} onChange={(event) => { setTableSearch(event.target.value); setTableView("list"); }} className="min-h-11 w-full rounded-lg border border-border bg-background px-3 text-sm sm:max-w-sm" /><button type="button" aria-pressed={offsiteArea} onClick={() => { setOffsiteArea(!offsiteArea); setTableSearch(""); }} className={cn("min-h-11 rounded-lg border px-3 text-sm font-semibold",offsiteArea ? "border-primary bg-primary text-primary-foreground" : "border-primary/25 text-primary hover:bg-primary/5")}>Mang về / Giao hàng ({offsiteOrders.length})</button></div>
       {/* Legend */}
       {!offsiteArea && <div className="flex items-center gap-2 px-4 py-1 border-b bg-card shrink-0 flex-wrap">
         <button type="button" aria-pressed={statusFilter === "all"} onClick={() => { setStatusFilter("all"); setTableView("list"); }}
@@ -278,7 +281,7 @@ export function TableFloorPlan({
 
       {/* Canvas hoặc Grid fallback */}
       <div className="flex-1 overflow-auto p-2 sm:p-4">
-        {(offsiteArea || tableView === "list" || useFallback) && <section className="mb-4" aria-label="Khu mang về và giao hàng"><div className="mb-2 flex items-center justify-between gap-2"><h3 className="text-sm font-semibold text-primary">Mang về & giao hàng · {offsiteOrders.length} đơn</h3><span className="text-sm font-bold tabular-nums text-primary">{formatCurrency(offsiteOrders.reduce((sum,order) => sum + order.provisionalTotal,0))}đ</span></div>{ordersError && <div role="alert" className="mb-2 flex flex-wrap items-center gap-2 rounded border border-status-error/30 p-3 text-sm text-status-error"><span>{ordersError}</span><button type="button" className="min-h-11 px-3 font-semibold underline" onClick={onRefreshOrders}>Thử lại</button></div>}{ordersLoading && <p role="status" className="text-sm text-muted-foreground">Đang cập nhật bill…</p>}<div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">{visibleOffsiteOrders.map(order => <button type="button" key={order.id} onClick={() => onOpenOrder?.(order)} className="min-h-24 rounded-lg border border-blue-200 bg-blue-50 p-3 text-left hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><span className="block text-sm font-semibold">{order.orderType === "delivery" ? "Giao hàng" : "Mang về"} · {order.orderNumber}</span><span className="my-1 block text-base font-bold tabular-nums text-primary">{formatCurrency(order.provisionalTotal)}đ</span><span className="block text-xs text-muted-foreground">{order.itemCount} món · {order.customerName || "Khách lẻ"}</span><span className="block text-xs text-muted-foreground">{new Date(order.createdAt).toLocaleTimeString("vi-VN",{hour:"2-digit",minute:"2-digit"})} · Chưa thanh toán</span></button>)}</div>{!ordersLoading && !ordersError && !visibleOffsiteOrders.length && <p className="rounded border border-dashed p-3 text-sm text-muted-foreground">{tableSearch ? "Không có bill phù hợp." : "Chưa có bill mang về hoặc giao hàng đang mở."}</p>}</section>}
+        {(offsiteArea || tableView === "list" || useFallback) && <section className="mb-4" aria-label="Khu mang về và giao hàng"><div className="mb-2 flex items-center justify-between gap-2"><h3 className="text-sm font-semibold text-primary">Mang về & giao hàng · {offsiteOrders.length} đơn</h3><span className="text-sm font-bold tabular-nums text-primary">{formatCurrency(offsiteOrders.reduce((sum,order) => sum + order.provisionalTotal,0))}đ</span></div>{ordersError && <div role="alert" className="mb-2 flex flex-wrap items-center gap-2 rounded border border-status-error/30 p-3 text-sm text-status-error"><span>{ordersError}</span><button type="button" className="min-h-11 px-3 font-semibold underline" onClick={onRefreshOrders}>Thử lại</button></div>}{ordersLoading && <p role="status" className="text-sm text-muted-foreground">Đang cập nhật bill…</p>}<div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">{visibleOffsiteOrders.map(order => <button type="button" key={order.id} onClick={() => onOpenOrder?.(order)} className="min-h-24 rounded-lg border border-blue-200 bg-blue-50 p-3 text-left hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><span className="block text-sm font-semibold">{order.orderType === "delivery" ? "Giao hàng" : "Mang về"} · {order.orderNumber}</span><span className="my-1 block text-base font-bold tabular-nums text-primary">{formatCurrency(order.provisionalTotal)}đ</span><span className="block text-xs text-muted-foreground">{order.itemCount} món</span><FnbBillIdentity customerName={order.customerName} note={order.note} className="my-2" /><span className="block text-xs text-muted-foreground">{new Date(order.createdAt).toLocaleTimeString("vi-VN",{hour:"2-digit",minute:"2-digit"})} · Chưa thanh toán</span></button>)}</div>{!ordersLoading && !ordersError && !visibleOffsiteOrders.length && <p className="rounded border border-dashed p-3 text-sm text-muted-foreground">{tableSearch ? "Không có bill phù hợp." : "Chưa có bill mang về hoặc giao hàng đang mở."}</p>}</section>}
         {!offsiteArea && (tableView === "plan" && !useFallback && activeZone ? (
           loadedZoneId !== activeZoneId ? (
             <div role="status" className="flex min-h-64 items-center justify-center gap-2 text-sm text-muted-foreground">
@@ -288,7 +291,7 @@ export function TableFloorPlan({
           ) : (
           <CanvasView
             zone={activeZone}
-            tables={zoneTables.map(table => ({ ...table, provisionalTotal: table.status === "occupied" ? tableTotals?.[table.id] : undefined }))}
+            tables={zoneTables.map(table => ({ ...table, billDetails: tableBillDetails[table.id], provisionalTotal: table.status === "occupied" ? tableTotals?.[table.id] : undefined }))}
             decorations={decorations}
             onSelect={(ct) => setActionTable(ct)}
           />
@@ -297,7 +300,7 @@ export function TableFloorPlan({
           <GridFallback
             tables={tables.filter((table) => tableView === "plan" ||
               ((statusFilter === "all" || table.status === statusFilter) &&
-              (table.tableNumber + " " + table.name + " " + (table.zone ?? "")).toLocaleLowerCase("vi").includes(tableSearch.trim().toLocaleLowerCase("vi"))))
+              matchesFnbBillCardSearch(tableSearch, String(table.tableNumber), table.name, table.zone, ...(tableBillDetails[table.id] ?? []).flatMap(bill => [bill.orderNumber, bill.customerName, bill.note]))))
               .sort((a, b) => a.tableNumber - b.tableNumber)}
             onSelectTable={(t) => {
               // Convert RestaurantTable → CanvasTable shape tối thiểu
@@ -329,7 +332,7 @@ export function TableFloorPlan({
 
       {/* Action sheet khi tap bàn — Mở đơn / Chuyển bàn / Gộp bàn */}
       <TableActionSheet
-        table={actionTable ? { ...actionTable, unpaidOrders: openOrders.filter(order => order.tableId === actionTable.id && isUnpaidFnbOrder(order)).length || actionTable.unpaidOrders, provisionalTotal: tableTotals?.[actionTable.id] } : null}
+        table={actionTable ? { ...actionTable, billDetails: tableBillDetails[actionTable.id], unpaidOrders: openOrders.filter(order => order.tableId === actionTable.id && isUnpaidFnbOrder(order)).length || actionTable.unpaidOrders, provisionalTotal: tableTotals?.[actionTable.id] } : null}
         zoneName={
           actionTable
             ? tables.find((t) => t.id === actionTable.id)?.zone ?? activeZone?.name ?? undefined
@@ -401,6 +404,7 @@ function GridFallback({
   orderTimestamps,
   tableTotals,
 }: TableFloorPlanProps) {
+  const billDetailsByTable = useMemo(() => buildFnbTableBillDetails(openOrders), [openOrders]);
   const zonesGroup = useMemo(() => {
     const map = new Map<string, RestaurantTable[]>();
     for (const t of tables) {
@@ -449,6 +453,7 @@ function GridFallback({
                   <span className="mt-1 text-xs font-medium">{STATUS_CONFIG[t.status].label}</span>
                   {t.status === "occupied" && <span className="mt-1 text-base font-bold tabular-nums text-primary"><span className="mr-1 text-xs font-medium">Tạm tính</span>{tableTotals?.[t.id] !== undefined ? formatCurrency(tableTotals[t.id]) : "—"}</span>}
                   {t.status === "occupied" && <span className="text-xs font-semibold">{openOrders.filter(order => order.tableId === t.id && isUnpaidFnbOrder(order)).length || (t.currentOrderId ? 1 : 0)} bill đang mở</span>}
+                  {(billDetailsByTable[t.id] ?? []).map(bill => <span key={bill.id} className="mt-2 block w-full border-t border-current/15 pt-2">{(billDetailsByTable[t.id]?.length ?? 0) > 1 && <span className="block text-left text-xs font-medium">{bill.orderNumber}</span>}<FnbBillIdentity customerName={bill.customerName} note={bill.note} /></span>)}
                   {elapsed && (
                     <span className="text-xs text-status-error mt-1">
                       <Icon name="schedule" size={12} className="inline" /> {fmt(elapsed)}

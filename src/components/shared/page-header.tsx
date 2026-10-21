@@ -63,6 +63,8 @@ interface PageHeaderProps {
   tabs?: ReactNode;
   searchPlaceholder?: string;
   searchValue?: string;
+  /** Keep a readable search row when this page has many toolbar actions. */
+  searchOnOwnRow?: boolean;
   onSearchChange?: (value: string) => void;
   /**
    * CEO 04/07: ô "Tìm theo" — khai danh sách cột tìm được (nên có mục
@@ -374,6 +376,7 @@ function DebouncedSearchInput({
   fields,
   field,
   onFieldChange,
+  fullWidth = false,
 }: {
   value: string | undefined;
   onChange: (v: string) => void;
@@ -381,6 +384,7 @@ function DebouncedSearchInput({
   fields?: { value: string; label: string }[];
   field?: string;
   onFieldChange?: (v: string) => void;
+  fullWidth?: boolean;
 }) {
   const [local, setLocal] = useState(value ?? "");
   // Sync khi parent đổi value từ ngoài (clear filter, load preset, ...).
@@ -405,7 +409,7 @@ function DebouncedSearchInput({
   const hasFields = !!(fields && fields.length > 0 && onFieldChange);
 
   return (
-    <div className="flex items-stretch w-full min-w-0 lg:max-w-md lg:flex-1">
+    <div className={cn("flex items-stretch w-full min-w-0", !fullWidth && "lg:max-w-md lg:flex-1")}>
       {hasFields && (
         <Select
           value={field ?? fields![0].value}
@@ -431,9 +435,10 @@ function DebouncedSearchInput({
         <Icon name="search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <Input
           value={local}
+          aria-label={placeholder}
           onChange={(e) => setLocal(e.target.value)}
           placeholder={placeholder}
-          className={cn("pl-9 h-8", hasFields && "rounded-l-none")}
+          className={cn("pl-9 h-8", fullWidth && "h-11 text-base", hasFields && "rounded-l-none")}
         />
       </div>
     </div>
@@ -447,6 +452,7 @@ export function PageHeader({
   tabs,
   searchPlaceholder = "Tìm kiếm...",
   searchValue,
+  searchOnOwnRow = false,
   onSearchChange,
   searchFields,
   searchField,
@@ -467,6 +473,7 @@ export function PageHeader({
   const mainActions = actions.filter((a) => !a.overflow);
   const overflowActions = actions.filter((a) => a.overflow);
   const compact = density === "compact";
+  const searchInput = onSearchChange !== undefined ? <DebouncedSearchInput value={searchValue} onChange={onSearchChange} placeholder={searchPlaceholder} fields={searchFields} field={searchField} onFieldChange={onSearchFieldChange} fullWidth={searchOnOwnRow} /> : null;
 
   return (
     // Stitch style: bg-surface-container-lowest + ambient-shadow thay border-b;
@@ -498,6 +505,7 @@ export function PageHeader({
             compact
               ? "gap-2 md:flex-row md:items-center"
               : "gap-3 lg:flex-row lg:items-center",
+            searchOnOwnRow && "md:flex-wrap",
           )}
         >
           {/* Sprint VISUAL-2 P1: title text-2xl font-bold (24px/700) thay text-lg font-medium (18px/500).
@@ -524,19 +532,10 @@ export function PageHeader({
               đủ cho ~95% case. Cần thêm trường (mã vạch, ...) thì mở rộng
               service `.or(...)` thay vì thêm popover chọn trường (giảm
               cognitive load cho nhân viên chưa training). */}
-          {onSearchChange !== undefined && (
-            <DebouncedSearchInput
-              value={searchValue}
-              onChange={onSearchChange}
-              placeholder={searchPlaceholder}
-              fields={searchFields}
-              field={searchField}
-              onFieldChange={onSearchFieldChange}
-            />
-          )}
+          {searchInput && (searchOnOwnRow ? <div className="order-last w-full min-w-0 basis-full">{searchInput}</div> : searchInput)}
 
           {/* Desktop actions */}
-          <div className="hidden md:flex min-w-0 flex-wrap items-center justify-end gap-2 lg:ml-auto">
+          <div className={cn("hidden md:flex min-w-0 flex-wrap items-center justify-end gap-2 lg:ml-auto", searchOnOwnRow && "md:ml-auto md:flex-1")}>
             {mainActions.map((action, i) => (
               <ActionButton key={i} action={action} />
             ))}

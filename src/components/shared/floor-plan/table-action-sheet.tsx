@@ -10,6 +10,7 @@
  * Tách riêng để mockup + POS FnB thật dùng chung component. Không gọi DB.
  */
 
+import { FnbBillIdentity } from "@/components/shared/fnb-bill-identity";
 import { formatCurrency } from "@/lib/format";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
@@ -96,6 +97,7 @@ export function TableActionSheet({
           </button>
         </div>
 
+        {table.billDetails?.length ? <div className="mb-3 max-h-[35dvh] space-y-2 overflow-y-auto">{table.billDetails.map(bill => <div key={bill.id} className="rounded-lg border p-2"><p className="text-xs font-semibold">{bill.orderNumber}</p><FnbBillIdentity customerName={bill.customerName} note={bill.note} /></div>)}</div> : null}
         {/* Actions */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {(isAvailable || isCleaning || hasActiveOrder) && (

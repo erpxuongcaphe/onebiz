@@ -7,6 +7,7 @@
 
 import { useEffect, useRef, useCallback, useState } from "react";
 import { Stage, Layer, Group, Rect, Circle, Text, Line, Image as KonvaImage, Transformer, Shape } from "react-konva";
+import type { FnbBillCardDetail } from "@/lib/fnb-bill-card-details";
 import { formatCurrency } from "@/lib/format";
 import { getCompactTableLabel } from "@/lib/fnb/table-label";
 import useImage from "use-image";
@@ -25,6 +26,7 @@ export interface CanvasTable extends TableLayout {
   /** Số phiếu/đơn chưa thanh toán — hiển thị badge đỏ góc bàn (pattern KiotViet/Sapo). */
   unpaidOrders?: number;
   provisionalTotal?: number;
+  billDetails?: FnbBillCardDetail[];
 }
 
 interface FloorPlanCanvasProps {
@@ -510,7 +512,12 @@ function TableNode({
   // Font số bàn: scale theo cạnh nhỏ — không nhồi chữ ngoài shape
   const minSide = Math.min(table.width, table.height);
   const tableLabel = getCompactTableLabel(table);
-  const numberFontSize = Math.max(10, Math.min(minSide / 2.5, 36, (table.width - 12) / Math.max(1, tableLabel.length * 0.65)));
+  const details = mode === "view" && table.status === "occupied" ? table.billDetails ?? [] : [];
+  const showIdentity = details.length > 0 && minSide >= 50;
+  const identityFont = Math.max(9, Math.min(12, minSide / 7));
+  const identityLine = identityFont + 2;
+  const identityTop = Math.max(10, table.height - identityLine * 2 - 16);
+  const numberFontSize = Math.max(10, Math.min(minSide / (showIdentity ? 3.5 : 2.5), showIdentity ? Math.min(24, identityTop) : 36, (table.width - 12) / Math.max(1, tableLabel.length * 0.65)));
   // Nhãn phụ (tên bàn ngắn) chỉ hiện khi:
   //  1. Có tên
   //  2. Tên KHÁC số bàn ("VIP", "Bàn họp" — không phải "Bàn 1" / "1")
@@ -521,7 +528,7 @@ function TableNode({
     table.name !== tableNumStr &&
     table.name !== `Bàn ${tableNumStr}` &&
     table.name !== `Ban ${tableNumStr}` &&
-    minSide >= 80 && table.provisionalTotal === undefined;
+    minSide >= 80 && table.provisionalTotal === undefined && !showIdentity;
 
   return (
     <Group
@@ -552,12 +559,16 @@ function TableNode({
         fontFamily="Inter, system-ui, sans-serif"
         fill={textColor}
         width={table.width}
-        height={table.height}
+        height={showIdentity ? identityTop : table.height}
         align="center"
         verticalAlign="middle"
         listening={false}
         wrap="word"
       />
+      {showIdentity && <>
+        <Text text={[...new Set(details.map(bill => bill.customerName))].join(", ")} fontSize={identityFont} fontStyle="bold" fill={textColor} x={3} y={identityTop} width={Math.max(0, table.width - 6)} height={identityLine} wrap="none" ellipsis align="center" listening={false} />
+        <Text text={details.map(bill => bill.note).filter(Boolean).join(" · ").replace(/\s+/g," ")} fontSize={identityFont} fill={textColor} x={3} y={identityTop + identityLine} width={Math.max(0, table.width - 6)} height={identityLine} wrap="none" ellipsis align="center" listening={false} />
+      </>}
       {/* Tên ngắn dưới số bàn — chỉ khi đủ chỗ */}
       {showName && (
         <Text
