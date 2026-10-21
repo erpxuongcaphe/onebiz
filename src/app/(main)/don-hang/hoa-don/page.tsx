@@ -21,6 +21,7 @@ import {
 } from "@/components/shared/filter-sidebar";
 import {
   computeListPresetRange,
+  resolveListDateRange,
   STANDARD_LIST_PRESETS,
 } from "@/lib/utils/list-date-preset-range";
 import {
@@ -552,6 +553,19 @@ export default function HoaDonPage() {
     [selectedTypes],
   );
   const [datePreset, setDatePreset] = useState<DatePresetValue>("this_month");
+  const [customDates, setCustomDates] = useState(() => {
+    const initial = computeListPresetRange("this_month");
+    return { from: initial.from ?? "", to: initial.to ?? "" };
+  });
+  const dateRange = useMemo(
+    () => resolveListDateRange(datePreset, customDates),
+    [datePreset, customDates],
+  );
+  const dateRangeError = dateRange === null
+    ? "Chọn đủ ngày bắt đầu và kết thúc; ngày kết thúc không trước ngày bắt đầu."
+    : null;
+  const listRequest = useRef(0);
+  useEffect(() => () => { listRequest.current += 1; }, []);
   const [filterOpen, setFilterOpen] = useState(false);
   // Nút "Mở trang chứng từ" và mã HD con đều truyền ?tim=<mã>. Riêng
   // ?mo=1 yêu cầu mở chi tiết, đồng thời bỏ giới hạn "Tháng này" để hóa đơn
@@ -631,18 +645,21 @@ export default function HoaDonPage() {
       ? "no-results"
       : "no-data";
 
-  // CEO 06/06/2026: chuyển sang utility chung computeListPresetRange()
-  // để chuẩn hoá 11 preset (thêm last_week, this_quarter, last_quarter,
-  // this_year, last_year). Function inline cũ chỉ handle 5 preset.
-  const dateRange = useCallback(() => computeListPresetRange(datePreset), [datePreset]);
-
   const fetchData = useCallback(async () => {
+    const request = ++listRequest.current;
     if (!branchScopeReady || !deepLinkReady) return;
+    if (!dateRange) {
+      setData([]);
+      setTotal(0);
+      setOtherBranchCount(0);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     // Không có try/finally thì truy vấn lỗi là cờ loading không bao giờ tắt →
     // trang treo mãi ở vòng xoay, người dùng không biết vì sao.
     try {
-    const range = dateRange();
+    const range = dateRange;
     const commonFilters: Record<string, string | string[]> = {};
     if (selectedStatuses.length > 0) commonFilters.status = selectedStatuses;
     commonFilters.delivery = deliveryFilter;
@@ -659,6 +676,7 @@ export default function HoaDonPage() {
       sortOrder: sorting[0]?.desc ? "desc" : "asc",
       filters: commonFilters,
     });
+    if (request !== listRequest.current) return;
     setData(result.data);
     setTotal(result.total);
     // Bảng trống vì lọc chi nhánh? Đếm hóa đơn ở chi nhánh khác để gợi ý (cùng
@@ -666,24 +684,25 @@ export default function HoaDonPage() {
     // KHÔNG có quyền xem toàn chuỗi thì tuyệt đối không phát sinh lời gọi
     // getInvoices với branchId undefined — kể cả chỉ để đếm.
     if (result.data.length === 0) {
-      setOtherBranchCount(
-        await demHoaDonChiNhanhKhac(phamViHienTai, {
+      const otherCount = await demHoaDonChiNhanhKhac(phamViHienTai, {
           search: debouncedSearch,
           searchField,
           filters: commonFilters,
-        }),
-      );
+        });
+      if (request !== listRequest.current) return;
+      setOtherBranchCount(otherCount);
     } else {
       setOtherBranchCount(0);
     }
     } catch (e) {
+      if (request !== listRequest.current) return;
       toast({
         variant: "error",
         title: "Không tải được danh sách hoá đơn",
         description: e instanceof Error ? e.message : "Lỗi không xác định",
       });
     } finally {
-      setLoading(false);
+      if (request === listRequest.current) setLoading(false);
     }
   }, [page, pageSize, sorting, debouncedSearch, searchField, selectedStatuses, deliveryFilter, branchScopeReady, deepLinkReady, dateRange, phamViHienTai, toast]);
 
@@ -695,7 +714,7 @@ export default function HoaDonPage() {
   useEffect(() => {
     setPage(0);
     setExpandedRow(null);
-  }, [debouncedSearch, selectedStatuses, selectedTypes, datePreset]);
+  }, [debouncedSearch, selectedStatuses, selectedTypes, datePreset, customDates]);
 
   useEffect(() => {
     if (!invoiceToOpen || loading) return;
@@ -744,11 +763,11 @@ export default function HoaDonPage() {
   const thamSoChiSo = useMemo<
     Omit<InvoiceListSummaryParams, "branchId"> & { phamVi: PhamViChiNhanh }
   >(() => {
-    const range = computeListPresetRange(datePreset);
+    const range = dateRange;
     return {
       phamVi: phamViHienTai,
-      dateFrom: range.from,
-      dateTo: range.to,
+      dateFrom: range?.from,
+      dateTo: range?.to,
       // Truyền THẲNG trạng thái của giao diện. RPC vẫn hỗ trợ alias legacy
       // processing → draft + confirmed, nhưng UI dùng giá trị thật để ô chọn
       // và chip phản ánh đúng phạm vi đang lọc.
@@ -757,7 +776,7 @@ export default function HoaDonPage() {
       searchField,
       delivery: deliveryFilter,
     };
-  }, [datePreset, phamViHienTai, selectedStatuses, debouncedSearch, searchField, deliveryFilter]);
+  }, [dateRange, phamViHienTai, selectedStatuses, debouncedSearch, searchField, deliveryFilter]);
 
   const locTheoChiSo = useCallback((filter: InvoiceKpiFilter) => {
     setSelectedStatuses(invoiceStatusesForKpi(filter));
@@ -782,6 +801,12 @@ export default function HoaDonPage() {
 
   useEffect(() => {
     if (!branchScopeReady) return;
+    if (!dateRange) {
+      boNhoRef.current.batDau("invalid-date-range");
+      setChiSo(null);
+      setChiSoLoi(false);
+      return;
+    }
     if (!canViewSalesSummary) {
       boNhoRef.current.batDau("summary-permission-denied");
       setChiSo(null); setChiSoLoi(false); return;
@@ -818,10 +843,10 @@ export default function HoaDonPage() {
         console.error("[Hoá đơn] không lấy được chỉ số:", err);
         setChiSoLoi(true);
       });
-  }, [branchScopeReady, thamSoChiSo, nhipChiSo, canViewSalesSummary]);
+  }, [branchScopeReady, thamSoChiSo, nhipChiSo, canViewSalesSummary, dateRange]);
 
   const dangTaiChiSo =
-    !branchScopeReady || (!chuaCoPhamVi && !chiSo && !chiSoLoi);
+    !branchScopeReady || (!!dateRange && !chuaCoPhamVi && !chiSo && !chiSoLoi);
   const moTaChuaCoPhamVi =
     branches.length > 0
       ? "Chọn chi nhánh trên thanh phía trên để xem đúng hóa đơn và chỉ số."
@@ -1142,6 +1167,8 @@ export default function HoaDonPage() {
           emptyTitle={
             chuaCoPhamVi
               ? "Chưa có chi nhánh làm việc"
+              : dateRangeError
+                ? "Khoảng ngày chưa hợp lệ"
               : emptyState === "no-results"
                 ? "Không tìm thấy hóa đơn"
                 : "Chưa có hóa đơn"
@@ -1149,6 +1176,8 @@ export default function HoaDonPage() {
           emptyDescription={
             chuaCoPhamVi
               ? moTaChuaCoPhamVi
+              : dateRangeError
+                ? dateRangeError
               : emptyState === "no-results"
                 ? "Thử thay đổi thời gian, trạng thái hoặc từ khóa tìm kiếm."
                 : "Hóa đơn mới sẽ hiển thị tại đây sau khi được tạo."
@@ -1382,8 +1411,13 @@ export default function HoaDonPage() {
           <DatePresetFilter
             value={datePreset}
             onChange={setDatePreset}
+            from={customDates.from}
+            to={customDates.to}
+            onFromChange={(from) => setCustomDates((current) => ({ ...current, from }))}
+            onToChange={(to) => setCustomDates((current) => ({ ...current, to }))}
             presets={STANDARD_LIST_PRESETS}
           />
+          {dateRangeError && <p role="alert" className="mt-2 text-sm text-destructive">{dateRangeError}</p>}
         </FilterGroup>
 
         <FilterGroup

@@ -4,12 +4,43 @@ import {
   applyDateRangeFilter,
   computeListPresetRange,
   normalizeCreatedAtRange,
+  resolveListDateRange,
   toCreatedAtEndExclusiveIso,
   toCreatedAtRangeWindow,
   toCreatedAtStartIso,
 } from "@/lib/utils/list-date-preset-range";
 
 describe("list date preset range", () => {
+  it("uses the exact custom days, including a single day", () => {
+    expect(resolveListDateRange("custom", { from: "2026-09-01", to: "2026-09-30" })).toEqual({
+      from: "2026-09-01", to: "2026-09-30",
+    });
+    expect(resolveListDateRange("custom", { from: "2026-09-30", to: "2026-09-30" })).toEqual({
+      from: "2026-09-30", to: "2026-09-30",
+    });
+  });
+
+  it.each([
+    { from: "", to: "2026-09-30" },
+    { from: "2026-09-01", to: "" },
+    { from: "2026-09-30", to: "2026-09-01" },
+    { from: "2026-02-29", to: "2026-03-01" },
+    { from: "2026-09-31", to: "2026-10-01" },
+    { from: "01/09/2026", to: "2026-09-30" },
+  ])("never turns invalid custom dates into all-time: %o", (range) => {
+    expect(resolveListDateRange("custom", range)).toBeNull();
+  });
+
+  it("preserves ordinary presets independently of unfinished custom fields", () => {
+    const now = new Date("2026-07-06T10:00:00.000Z");
+    expect(resolveListDateRange("today", { from: "", to: "" }, now)).toEqual(
+      computeListPresetRange("today", now),
+    );
+    expect(resolveListDateRange("all", { from: "", to: "" }, now)).toEqual({
+      from: undefined, to: undefined,
+    });
+  });
+
   it("keeps preset ranges as YYYY-MM-DD for UI state", () => {
     const now = new Date("2026-07-06T10:00:00.000Z");
     expect(computeListPresetRange("today", now)).toEqual({
