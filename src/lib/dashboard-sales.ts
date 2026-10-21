@@ -34,6 +34,42 @@ export function salesBucketLabel(key: string, grain: SalesGrain) {
   return key.slice(0, 4);
 }
 
+export interface SalesChartBucket {
+  key: string;
+  sales: number | null;
+  orders: number | null;
+  pending: boolean;
+  current: boolean;
+}
+
+export function salesChartBuckets(
+  buckets: SalesBucket[],
+  grain: SalesGrain,
+  now: Date = new Date(),
+): SalesChartBucket[] {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit',
+    day: '2-digit', hour: '2-digit', hourCycle: 'h23',
+  }).formatToParts(now);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find(item => item.type === type)?.value;
+  const localKey = `${part('year')}-${part('month')}-${part('day')}T${part('hour')}`;
+  const length = { hour: 13, day: 10, month: 7, year: 4 }[grain];
+  const currentKey = localKey.slice(0, length);
+
+  return buckets.map(row => {
+    const key = row.key.slice(0, length);
+    // Keep unexpected nonzero source data visible; only empty future slots are pending.
+    const pending = key > currentKey && row.sales === 0 && row.orders === 0;
+    return {
+      ...row,
+      sales: pending ? null : row.sales,
+      orders: pending ? null : row.orders,
+      pending,
+      current: key === currentKey,
+    };
+  });
+}
+
 export function canViewSalesDashboard(has: (code: string) => boolean, branchType?: string) {
   return branchType === 'store' ? has('pos_fnb.view_sales_summary') : has('reports.dashboard');
 }
