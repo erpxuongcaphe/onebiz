@@ -1,277 +1,199 @@
 "use client";
 
-/**
- * Permission Override Dialog — CEO 23/05/2026
- *
- * Cho phép admin cấp quyền/khoá quyền RIÊNG cho từng user, ngoài
- * permissions inherited từ role. Use cases:
- *   - Cashier lâu năm trust → grant POS_EDIT_PRICE riêng
- *   - Thực tập sinh → revoke POS_VOID tạm thời
- *
- * State của mỗi permission:
- *   - "default": dùng theo role (effective = có/không tuỳ role)
- *   - "grant":   force cho phép (effective = có, dù role không có)
- *   - "revoke":  force khoá (effective = không, dù role có)
- *
- * Effective = (role_perms ∪ grants) ∖ revokes
- */
-
-import { useState, useEffect, useCallback } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/lib/contexts";
-import {
-  PERMISSION_GROUPS,
-  type PermissionCode,
-} from "@/lib/permissions/constants";
-import {
-  getUserPermissionOverrides,
-  setUserPermissionOverride,
-  deleteUserPermissionOverride,
-  type PermissionOverride,
-} from "@/lib/services/supabase/permission-overrides";
+import { PERMISSION_GROUPS } from "@/lib/permissions/constants";
+import { normalizeListSearch } from "@/lib/local-list-query";
+import { getUserPermissionOverrides, setUserPermissionOverride, deleteUserPermissionOverride } from "@/lib/services/supabase/permission-overrides";
 import { getUserPermissions } from "@/lib/services/supabase/roles";
 
 type OverrideState = "default" | "grant" | "revoke";
-
+type Filter = "all" | "custom" | "allowed" | "blocked";
 interface PermissionOverrideDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  user: {
-    id: string;
-    fullName: string;
-    roleName: string | null;
-  } | null;
+  user: { id: string; fullName: string; roleName: string | null } | null;
 }
 
-export function PermissionOverrideDialog({
-  open,
-  onOpenChange,
-  user,
-}: PermissionOverrideDialogProps) {
+export function PermissionOverrideDialog({ open, onOpenChange, user }: PermissionOverrideDialogProps) {
   const { toast } = useToast();
+  const userId = user?.id;
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  // Set các permission code mà role đã có (effective default behavior)
+  const [loadedUserId, setLoadedUserId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [rolePerms, setRolePerms] = useState<Set<string>>(new Set());
-  // Override state cho TỪNG permission. Default: 'default'.
-  const [overrides, setOverrides] = useState<Map<string, OverrideState>>(
-    new Map(),
-  );
-  // Backup để biết permission nào đã thay đổi → call API tương ứng
-  const [originalOverrides, setOriginalOverrides] = useState<
-    Map<string, OverrideState>
-  >(new Map());
+  const [overrides, setOverrides] = useState<Map<string, OverrideState>>(new Map());
+  const [originalOverrides, setOriginalOverrides] = useState<Map<string, OverrideState>>(new Map());
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
+  const request = useRef(0);
+  const saveLock = useRef(false);
+  const activeUserId = useRef(userId);
+  activeUserId.current = userId;
 
   const loadData = useCallback(async () => {
-    if (!user) return;
+    const id = ++request.current;
+    if (!userId) return;
     setLoading(true);
+    setLoadedUserId(null);
+    setLoadError(false);
+    setSaveError(null);
+    setRolePerms(new Set());
+    setOverrides(new Map());
+    setOriginalOverrides(new Map());
     try {
       const [roleP, userOverrides] = await Promise.all([
-        getUserPermissions(user.id).catch(() => new Set<string>()),
-        getUserPermissionOverrides(user.id),
+        getUserPermissions(userId, { strict: true }), getUserPermissionOverrides(userId),
       ]);
+      if (id !== request.current || activeUserId.current !== userId) return;
+      const map = new Map<string, OverrideState>(userOverrides.map(item => [item.permissionCode, item.overrideType]));
       setRolePerms(roleP);
-
-      const overrideMap = new Map<string, OverrideState>();
-      userOverrides.forEach((o: PermissionOverride) => {
-        overrideMap.set(o.permissionCode, o.overrideType);
-      });
-      setOverrides(new Map(overrideMap));
-      setOriginalOverrides(new Map(overrideMap));
-    } catch (err) {
-      toast({
-        variant: "error",
-        title: "Lỗi tải quyền",
-        description: err instanceof Error ? err.message : "",
-      });
+      setOverrides(new Map(map));
+      setOriginalOverrides(new Map(map));
+      setLoadedUserId(userId);
+    } catch {
+      if (id === request.current && activeUserId.current === userId) setLoadError(true);
     } finally {
-      setLoading(false);
+      if (id === request.current) setLoading(false);
     }
-  }, [user, toast]);
+  }, [userId]);
 
   useEffect(() => {
-    if (open && user) {
-      void loadData();
-    }
-  }, [open, user, loadData]);
+    setSearch("");
+    setFilter("all");
+    if (open && userId) void loadData();
+    return () => { request.current += 1; };
+  }, [open, userId, user?.roleName, loadData]);
+
+  const ready = open && !loading && !loadError && loadedUserId === userId;
+  const changedCodes = [...new Set([...originalOverrides.keys(), ...overrides.keys()])]
+    .filter(code => originalOverrides.get(code) !== overrides.get(code));
+  const hasChanges = ready && changedCodes.length > 0;
+  const hasFromRole = (code: string) => rolePerms.has("*") || rolePerms.has(code);
+  const isAllowed = (code: string) => overrides.get(code) === "grant" || (overrides.get(code) !== "revoke" && hasFromRole(code));
+  const query = normalizeListSearch(search);
+  const groups = PERMISSION_GROUPS.map(group => ({
+    ...group,
+    permissions: group.permissions.filter(perm => {
+      if (filter === "custom" && !overrides.has(perm.code)) return false;
+      if (filter === "allowed" && !isAllowed(perm.code)) return false;
+      if (filter === "blocked" && isAllowed(perm.code)) return false;
+      return normalizeListSearch(`${group.group} ${perm.label} ${perm.code}`).includes(query);
+    }),
+  })).filter(group => group.permissions.length > 0);
+  const visibleCount = groups.reduce((sum, group) => sum + group.permissions.length, 0);
+  const totalCount = PERMISSION_GROUPS.reduce((sum, group) => sum + group.permissions.length, 0);
 
   function setOverride(code: string, state: OverrideState) {
-    const next = new Map(overrides);
-    if (state === "default") {
-      next.delete(code);
-    } else {
-      next.set(code, state);
-    }
-    setOverrides(next);
+    if (!ready || saveLock.current) return;
+    setOverrides(current => {
+      const next = new Map(current);
+      if (state === "default") next.delete(code);
+      else next.set(code, state);
+      return next;
+    });
   }
 
   async function handleSave() {
-    if (!user) return;
+    if (!user || !ready || !hasChanges || saveLock.current) return;
+    saveLock.current = true;
     setSaving(true);
+    setSaveError(null);
+    const target = { id: user.id, name: user.fullName };
+    const generation = request.current;
+    const changes = changedCodes.map(code => ({ code, state: overrides.get(code) }));
     try {
-      // Diff: tìm permissions thay đổi giữa original và current
-      const allCodes = new Set([
-        ...originalOverrides.keys(),
-        ...overrides.keys(),
-      ]);
-      const ops: Promise<void>[] = [];
-
-      for (const code of allCodes) {
-        const oldState = originalOverrides.get(code);
-        const newState = overrides.get(code);
-
-        if (oldState === newState) continue;
-
-        if (!newState || newState === "default") {
-          // Xoá override → reset về role default
-          ops.push(deleteUserPermissionOverride(user.id, code));
-        } else {
-          // newState ở đây CHẮC CHẮN là 'grant' | 'revoke' (đã loại default)
-          // Upsert grant/revoke
-          ops.push(
-            setUserPermissionOverride({
-              userId: user.id,
-              permissionCode: code,
-              overrideType: newState as "grant" | "revoke",
-            }),
-          );
-        }
+      // Confirm every write before reporting; retry only changes not yet acknowledged.
+      const results = await Promise.allSettled(changes.map(async change => {
+        if (!change.state || change.state === "default") await deleteUserPermissionOverride(target.id, change.code);
+        else await setUserPermissionOverride({ userId: target.id, permissionCode: change.code, overrideType: change.state });
+      }));
+      if (generation !== request.current || activeUserId.current !== target.id) return;
+      setOriginalOverrides(current => {
+        const next = new Map(current);
+        results.forEach((result, index) => {
+          if (result.status !== "fulfilled") return;
+          const { code, state } = changes[index];
+          if (!state || state === "default") next.delete(code);
+          else next.set(code, state);
+        });
+        return next;
+      });
+      const confirmed = results.filter(result => result.status === "fulfilled").length;
+      if (confirmed !== changes.length) {
+        setSaveError(`Đã xác nhận ${confirmed}/${changes.length} thay đổi. Còn ${changes.length - confirmed} chưa xác nhận; thử lưu lại.`);
+        return;
       }
-
-      await Promise.all(ops);
-      toast({
-        variant: "success",
-        title: "Đã lưu quyền tuỳ chỉnh",
-        description: `${ops.length} thay đổi áp dụng cho ${user.fullName}. User cần đăng nhập lại để cập nhật.`,
-      });
+      toast({ variant: "success", title: "Đã lưu quyền riêng", description: `${target.name}. Đăng nhập lại để cập nhật quyền.` });
       onOpenChange(false);
-    } catch (err) {
-      toast({
-        variant: "error",
-        title: "Lỗi lưu quyền",
-        description: err instanceof Error ? err.message : "",
-      });
     } finally {
+      saveLock.current = false;
       setSaving(false);
     }
   }
 
-  const hasChanges =
-    overrides.size !== originalOverrides.size ||
-    Array.from(overrides.entries()).some(
-      ([code, state]) => originalOverrides.get(code) !== state,
-    );
-
   if (!user) return null;
-
   return (
-    <Dialog open={open} hasUnsavedChanges={hasChanges} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl max-h-[90vh] flex flex-col p-0">
-        <DialogHeader className="px-6 pt-6 pb-3 border-b shrink-0">
-          <DialogTitle>
-            Quyền tuỳ chỉnh — {user.fullName}
-          </DialogTitle>
-          <p className="text-xs text-muted-foreground mt-1">
-            Vai trò:{" "}
-            <span className="font-medium text-foreground">
-              {user.roleName ?? "—"}
-            </span>
-            {" · "}
-            Override permission riêng cho user này. Không thay đổi role gốc.
-          </p>
-        </DialogHeader>
-
-        {loading ? (
-          <div className="flex items-center justify-center py-16 flex-1">
-            <Icon
-              name="progress_activity"
-              size={32}
-              className="animate-spin text-muted-foreground"
-            />
-          </div>
-        ) : (
-          <div className="overflow-y-auto flex-1 px-6 py-4">
-            {/* Legend */}
-            <div className="mb-4 p-3 bg-surface-container-low rounded-lg text-xs space-y-1.5">
-              <div className="font-semibold">Hướng dẫn:</div>
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <span className="inline-block w-3 h-3 rounded bg-muted mr-1.5 align-middle" />
-                  <strong>Mặc định</strong>: theo vai trò
-                </div>
-                <div>
-                  <span className="inline-block w-3 h-3 rounded bg-status-success/30 mr-1.5 align-middle" />
-                  <strong>Cho thêm</strong>: force cấp quyền
-                </div>
-                <div>
-                  <span className="inline-block w-3 h-3 rounded bg-status-error/30 mr-1.5 align-middle" />
-                  <strong>Khoá bớt</strong>: force chặn
-                </div>
-              </div>
+    <Dialog open={open} trackFormChanges={false} hasUnsavedChanges={hasChanges} onOpenChange={value => { if (!saveLock.current) onOpenChange(value); }}>
+      <DialogContent showCloseButton={false} className="flex max-h-[90dvh] w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl">
+        <DialogHeader className="shrink-0 border-b border-primary/15 bg-primary/5 px-4 py-3 sm:px-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <DialogTitle className="break-words pr-0">Quyền riêng · {user.fullName}</DialogTitle>
+              <p className="mt-1 break-words text-xs text-muted-foreground">Vai trò: {user.roleName ?? "Chưa gán"}</p>
             </div>
-
-            {/* Permission groups */}
-            <div className="space-y-4">
-              {PERMISSION_GROUPS.map((group) => (
-                <div key={group.group}>
-                  <h3 className="text-sm font-semibold mb-2 text-foreground/90">
-                    {group.group}
-                  </h3>
-                  <div className="space-y-1">
-                    {group.permissions.map((perm) => {
-                      const hasFromRole = rolePerms.has(perm.code);
-                      const override = overrides.get(perm.code) ?? "default";
-                      const effective =
-                        override === "grant"
-                          ? true
-                          : override === "revoke"
-                            ? false
-                            : hasFromRole;
-                      return (
+            <Button type="button" size="icon" variant="ghost" className="size-11 shrink-0" data-dialog-close aria-label="Đóng quyền riêng" title="Đóng" disabled={saving} onClick={() => onOpenChange(false)}><Icon name="close" size={20} /></Button>
+          </div>
+        </DialogHeader>
+        {loading || (!ready && !loadError) ? <div role="status" aria-label="Đang tải quyền riêng" className="flex min-h-48 items-center justify-center"><Icon name="progress_activity" size={28} className="animate-spin text-muted-foreground" /></div>
+          : loadError ? <div role="alert" className="space-y-3 p-5 text-sm"><p>Chưa tải được quyền. Không thể chỉnh sửa.</p><Button variant="outline" onClick={() => void loadData()}>Thử lại</Button></div>
+            : <>
+              <div className="shrink-0 space-y-2 border-b bg-muted/20 px-4 py-3 sm:px-5">
+                <div className="grid gap-2 sm:grid-cols-[1fr_180px]">
+                  <Input aria-label="Tìm quyền" placeholder="Tìm quyền..." value={search} onChange={event => setSearch(event.target.value)} disabled={saving} />
+                  <select aria-label="Lọc quyền" value={filter} onChange={event => setFilter(event.target.value as Filter)} disabled={saving} className="h-10 min-w-0 rounded-md border bg-background px-2 text-sm">
+                    <option value="all">Tất cả quyền</option>
+                    <option value="custom">Đã tùy chỉnh</option>
+                    <option value="allowed">Được phép</option>
+                    <option value="blocked">Không được phép</option>
+                  </select>
+                </div>
+                <p className="text-xs tabular-nums text-muted-foreground">{visibleCount}/{totalCount} quyền{hasChanges ? ` · ${changedCodes.length} thay đổi chưa lưu` : ""}</p>
+              </div>
+              <div data-testid="permission-override-scroll" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 sm:px-5">
+                {groups.length ? groups.map(group => (
+                  <section key={group.group} aria-label={group.group} className="mb-5 last:mb-0">
+                    <h3 className="border-y border-primary/10 bg-primary/5 px-2 py-2 text-sm font-semibold text-foreground">{group.group}</h3>
+                    <div className="divide-y">
+                      {group.permissions.map(perm => (
                         <PermissionRow
                           key={perm.code}
                           code={perm.code}
                           label={perm.label}
-                          hasFromRole={hasFromRole}
-                          override={override}
-                          effective={effective}
-                          onChange={(state) => setOverride(perm.code, state)}
+                          hasFromRole={hasFromRole(perm.code)}
+                          override={overrides.get(perm.code) ?? "default"}
+                          effective={isAllowed(perm.code)}
+                          disabled={saving}
+                          onChange={state => setOverride(perm.code, state)}
                         />
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <DialogFooter className="px-6 py-3 border-t shrink-0">
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={saving}
-          >
-            Huỷ
-          </Button>
-          <Button onClick={handleSave} disabled={!hasChanges || saving || loading}>
-            {saving && (
-              <Icon
-                name="progress_activity"
-                size={14}
-                className="mr-1.5 animate-spin"
-              />
-            )}
-            Lưu thay đổi
+                      ))}
+                    </div>
+                  </section>
+                )) : <p className="py-8 text-center text-sm text-muted-foreground">Không có quyền khớp bộ lọc.</p>}
+              </div>
+            </>}
+        {saveError && <p role="alert" className="shrink-0 border-t border-amber-600/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">{saveError}</p>}
+        <DialogFooter className="m-0 shrink-0 px-4 sm:px-5">
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Đóng</Button>
+          <Button onClick={() => void handleSave()} disabled={!hasChanges || saving || !ready}>
+            {saving && <Icon name="progress_activity" size={15} className="animate-spin" />}Lưu thay đổi
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -279,120 +201,38 @@ export function PermissionOverrideDialog({
   );
 }
 
-/**
- * Row hiển thị 1 permission với 3 nút radio: Mặc định / Cho thêm / Khoá bớt.
- */
-function PermissionRow({
-  code,
-  label,
-  hasFromRole,
-  override,
-  effective,
-  onChange,
-}: {
-  code: PermissionCode;
-  label: string;
-  hasFromRole: boolean;
-  override: OverrideState;
-  effective: boolean;
-  onChange: (state: OverrideState) => void;
+function PermissionRow({ code, label, hasFromRole, override, effective, disabled, onChange }: {
+  code: string; label: string; hasFromRole: boolean; override: OverrideState; effective: boolean; disabled: boolean; onChange: (state: OverrideState) => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 px-2 py-1.5 rounded hover:bg-surface-container-low">
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-sm">{label}</span>
-          {hasFromRole && override === "default" && (
-            <span className="text-xs text-status-success font-medium">
-              ✓ có theo vai trò
-            </span>
-          )}
-          {!hasFromRole && override === "default" && (
-            <span className="text-xs text-muted-foreground/60 font-medium">
-              · không có
-            </span>
-          )}
-          {override !== "default" && (
-            <span
-              className={cn(
-                "text-xs px-1.5 py-0.5 rounded font-semibold uppercase",
-                override === "grant" &&
-                  "bg-status-success/15 text-status-success",
-                override === "revoke" && "bg-status-error/15 text-status-error",
-              )}
-            >
-              {override === "grant" ? "Cấp" : "Khoá"}
-            </span>
-          )}
-        </div>
-        <code className="text-xs text-muted-foreground/70 font-mono">
-          {code}
-        </code>
-      </div>
-      <div className="flex items-center gap-1 shrink-0">
-        <RadioBtn
-          active={override === "default"}
-          onClick={() => onChange("default")}
-          tone="default"
-          label="Mặc định"
-        />
-        <RadioBtn
-          active={override === "grant"}
-          onClick={() => onChange("grant")}
-          tone="grant"
-          label="Cấp"
-        />
-        <RadioBtn
-          active={override === "revoke"}
-          onClick={() => onChange("revoke")}
-          tone="revoke"
-          label="Khoá"
-        />
-      </div>
-      <div className="w-14 text-right shrink-0">
-        {effective ? (
-          <span className="inline-flex items-center gap-0.5 text-xs text-status-success font-semibold">
-            <Icon name="check_circle" size={12} />
-            CÓ
+    <div data-permission-code={code} className="grid min-w-0 gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-4">
+      <div className="min-w-0">
+        <p className="break-words text-sm font-medium" title={code}>{label}</p>
+        <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          <span>Theo vai trò: {hasFromRole ? "Có" : "Không"}</span>
+          <span className={effective ? "font-medium text-teal-700 dark:text-teal-400" : "text-muted-foreground"}>
+            {effective ? "Được phép" : "Không được phép"}
           </span>
-        ) : (
-          <span className="inline-flex items-center gap-0.5 text-xs text-muted-foreground/60">
-            <Icon name="block" size={12} />
-            Không
-          </span>
-        )}
+        </p>
+      </div>
+      <div role="radiogroup" aria-label={label} className="grid grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)] rounded-md border bg-muted/30 p-0.5 sm:w-[236px]">
+        {([
+          { value: "default", label: "Theo vai trò" },
+          { value: "grant", label: "Cấp" },
+          { value: "revoke", label: "Chặn" },
+        ] as const).map(option => (
+          <label key={option.value} className={cn(
+            "relative flex min-h-11 min-w-0 cursor-pointer items-center justify-center rounded px-2 text-xs font-medium",
+            disabled && "cursor-not-allowed opacity-50",
+            override === option.value && (option.value === "grant"
+              ? "bg-teal-600 text-white" : option.value === "revoke"
+                ? "bg-rose-600 text-white" : "bg-background text-foreground shadow-sm"),
+          )}>
+            <input type="radio" name={`override-${code}`} value={option.value} checked={override === option.value} disabled={disabled} onChange={() => onChange(option.value)} className="peer sr-only" />
+            <span className="break-words peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2">{option.label}</span>
+          </label>
+        ))}
       </div>
     </div>
-  );
-}
-
-function RadioBtn({
-  active,
-  onClick,
-  tone,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  tone: "default" | "grant" | "revoke";
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "px-2 py-1 text-xs font-medium rounded border transition-colors",
-        active
-          ? tone === "grant"
-            ? "bg-status-success/15 border-status-success text-status-success"
-            : tone === "revoke"
-              ? "bg-status-error/15 border-status-error text-status-error"
-              : "bg-muted border-border text-foreground"
-          : "border-transparent text-muted-foreground hover:bg-surface-container-low",
-      )}
-    >
-      {label}
-    </button>
   );
 }

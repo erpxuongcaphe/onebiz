@@ -191,12 +191,13 @@ export async function setRolePermissions(
 }
 
 /** Get all permission codes for a user (via their role) */
-export async function getUserPermissions(userId: string): Promise<Set<string>> {
+export async function getUserPermissions(userId: string, options?: { strict?: boolean }): Promise<Set<string>> {
   const supabase = getClient();
 
   // Use the RPC function for efficiency
   const { data, error } = await supabase.rpc("get_user_permissions", { p_user_id: userId });
   if (error) {
+    if (options?.strict) handleError(error, "getUserPermissions");
     // Fallback: direct query if RPC not available
     const { data: profile } = await supabase
       .from("profiles")
