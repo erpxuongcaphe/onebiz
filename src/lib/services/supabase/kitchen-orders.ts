@@ -543,6 +543,7 @@ const MERGE_ORDER_ERROR_MESSAGES: ReadonlyArray<{
   codes: readonly string[];
   message: string;
 }> = [
+  { codes: ["FNB_MERGE_TOO_MANY_ORDERS"], message: "Mỗi lần gộp tối đa 50 bill." },
   {
     codes: [
       "FNB_MERGE_SELECTION_REQUIRED",
@@ -565,7 +566,7 @@ const MERGE_ORDER_ERROR_MESSAGES: ReadonlyArray<{
       "FNB_MERGE_SOURCE_NOT_ELIGIBLE",
       "FNB_MERGE_SOURCE_EMPTY",
     ],
-    message: "Chỉ gộp được các đơn tại quán chưa thanh toán và còn món.",
+    message: "Chỉ gộp được bill tại quán hoặc mang về chưa thanh toán và còn món.",
   },
   {
     codes: [

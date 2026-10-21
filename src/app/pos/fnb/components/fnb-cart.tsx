@@ -302,7 +302,7 @@ export function FnbCart({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-48">
               {onTransferTable && activeTab?.orderType === "dine_in" && activeTab.tableId && activeTab.kitchenOrderId && <DropdownMenuItem onClick={onTransferTable}><Icon name="swap_horiz" size={18} /> Chuyển bill sang bàn khác</DropdownMenuItem>}
-              {onMergeTable && <DropdownMenuItem onClick={onMergeTable}><Icon name="call_merge" size={18} /> Gộp bill vào bàn khác</DropdownMenuItem>}
+              {onMergeTable && <DropdownMenuItem onClick={onMergeTable}><Icon name="call_merge" size={18} /> Gộp 2 hoặc nhiều bill…</DropdownMenuItem>}
               {onSplitBill && activeTab?.kitchenOrderId && lines.reduce((sum, line) => sum + line.quantity, 0) > 1 && <DropdownMenuItem onClick={onSplitBill}><Icon name="content_cut" size={18} /> Tách bill</DropdownMenuItem>}
               {onPrintPreBill && !isEmpty && <DropdownMenuItem onClick={onPrintPreBill}><Icon name="description" size={18} /> In tạm tính</DropdownMenuItem>}
               {auditHistoryHref && activeTab?.kitchenOrderId && <DropdownMenuItem render={<a href={auditHistoryHref} target="_blank" rel="noopener noreferrer" title="Mở nhật ký bill trong tab mới" />}><Icon name="history" size={18} /> Nhật ký bill</DropdownMenuItem>}

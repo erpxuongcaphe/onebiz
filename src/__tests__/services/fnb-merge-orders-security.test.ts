@@ -55,7 +55,7 @@ describe("FnB order merge security contract", () => {
     ],
     [
       "FNB_MERGE_SOURCE_NOT_ELIGIBLE",
-      "Chỉ gộp được các đơn tại quán chưa thanh toán và còn món.",
+      "Chỉ gộp được bill tại quán hoặc mang về chưa thanh toán và còn món.",
     ],
     [
       "FNB_MERGE_PERMISSION_REQUIRED",
