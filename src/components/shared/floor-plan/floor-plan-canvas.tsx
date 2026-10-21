@@ -571,7 +571,7 @@ function TableNode({
       />
       {showIdentity && <>
         <Text text={[...new Set(details.map(bill => bill.customerName))].join(", ")} fontSize={identityFont} fontStyle="bold" fill={textColor} x={headingInset + headingWidth * 0.5} y={identityTop} width={headingWidth * 0.5} height={identityLine * 1.5} verticalAlign="middle" wrap="none" ellipsis align="right" listening={false} />
-        <Text text={details.map(bill => bill.note).filter(Boolean).join(" · ").replace(/\s+/g," ")} fontSize={identityFont} fill={textColor} x={3} y={Math.max(identityTop + identityLine * 1.5, table.height - identityLine - 18)} width={Math.max(0, table.width - 6)} height={identityLine} wrap="none" ellipsis align="center" listening={false} />
+        <Text text={details.map(bill => bill.note).filter(Boolean).join(" · ").replace(/\s+/g," ")} fontSize={identityFont} fill={textColor} x={headingInset + headingWidth * 0.5} y={identityTop + identityLine * 1.5} width={headingWidth * 0.5} height={Math.max(0, Math.min(identityLine * 2, table.height - 18 - identityTop - identityLine * 1.5))} wrap="word" ellipsis align="right" listening={false} />
       </>}
       {/* Tên ngắn dưới số bàn — chỉ khi đủ chỗ */}
       {showName && (
