@@ -35,6 +35,18 @@ export interface PresetRange {
   to: string | undefined;
 }
 
+export function resolveListDateRange(
+  preset: DatePresetValue,
+  custom: { from: string; to: string },
+  now: Date = new Date(),
+): PresetRange | null {
+  if (preset !== "custom") return computeListPresetRange(preset, now);
+  if (!parseDateOnly(custom.from) || !parseDateOnly(custom.to) || custom.from > custom.to) {
+    return null;
+  }
+  return { from: custom.from, to: custom.to };
+}
+
 export interface CreatedAtRange {
   from: string | undefined;
   toExclusive: string | undefined;

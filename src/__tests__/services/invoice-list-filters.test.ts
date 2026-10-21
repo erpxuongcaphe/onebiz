@@ -68,6 +68,21 @@ describe("Trạng thái hủy chỉ hiện khi chọn rõ", () => {
 });
 
 describe("Wiring màn Hóa đơn", () => {
+  it("custom dates reach the same range for rows and totals, with invalid-query guards", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync("src/app/(main)/don-hang/hoa-don/page.tsx", "utf8");
+    expect(src).toContain("resolveListDateRange(datePreset, customDates)");
+    expect(src).toContain("from={customDates.from}");
+    expect(src).toContain("to={customDates.to}");
+    expect(src).toContain("onFromChange={(from) => setCustomDates");
+    expect(src).toContain("onToChange={(to) => setCustomDates");
+    expect(src.match(/const range = dateRange;/g)).toHaveLength(2);
+    expect(src.match(/if \(!dateRange\) \{/g)).toHaveLength(2);
+    expect(src).not.toContain("computeListPresetRange(datePreset)");
+    expect(src).toContain('batDau("invalid-date-range")');
+    expect(src).toContain("if (request !== listRequest.current) return;");
+  });
+
   it("bảng và chỉ số dùng chung bộ lọc giao hàng, không còn điều khiển chết", async () => {
     const { readFileSync } = await import("node:fs");
     const src = readFileSync(
