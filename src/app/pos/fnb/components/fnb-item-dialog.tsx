@@ -414,16 +414,19 @@ export function FnbItemDialog({
         };
         for (const g of effectiveModifierGroups) {
           const saved = savedByGroup.get(g.id);
-          if (saved && saved.size > 0) {
+          if (saved) {
             initChoices.set(g.id, epChonMot(g, saved));
             continue;
           }
-          // No saved → use defaults (only for "add new" mode)
-          if (!initialSelection?.modifierSelections) {
-            const opts = dynamicModifiers.optionsByGroup.get(g.id) ?? [];
-            const defaults = opts.filter((o) => o.isDefault).map((o) => o.id);
+          const opts = dynamicModifiers.optionsByGroup.get(g.id) ?? [];
+          const defaults = opts.filter((o) => o.isDefault && o.isActive);
+          // A legacy snapshot may predate a group. Fill only one free, non-topping
+          // default; preserve saved choices (including an explicitly empty group).
+          const safeMissingDefault = !savedByGroup.has(g.id) && g.rule !== "multi" &&
+            defaults.length === 1 && defaults[0].priceDelta === 0 && !defaults[0].linkedProductId;
+          if (!initialSelection?.modifierSelections || safeMissingDefault) {
             if (defaults.length > 0) {
-              initChoices.set(g.id, epChonMot(g, new Set(defaults)));
+              initChoices.set(g.id, epChonMot(g, new Set(defaults.map((option) => option.id))));
             }
           }
         }
@@ -466,8 +469,7 @@ export function FnbItemDialog({
         }
         current.add(optionId);
       }
-      if (current.size === 0) next.delete(group.id);
-      else next.set(group.id, current);
+      next.set(group.id, current); // keep an explicit clear distinct from an absent legacy group
       return next;
     });
   }
@@ -606,7 +608,13 @@ export function FnbItemDialog({
       const payload: ModifierSelectionPayload[] = [];
       for (const g of effectiveModifierGroups) {
         const choices = dynamicChoices.get(g.id);
-        if (!choices || choices.size === 0) continue;
+        if (!choices) continue;
+        // An explicit clear is different from a legacy missing group. Preserve it
+        // so the server cannot silently replace the customer's intent by a default.
+        if (choices.size === 0) {
+          payload.push({ groupId: g.id, groupName: g.name, rule: g.rule, options: [] });
+          continue;
+        }
         const opts = dynamicModifiers.optionsByGroup.get(g.id) ?? [];
         const selectedOpts = opts.filter((o) => choices.has(o.id));
         if (selectedOpts.length === 0) continue;

@@ -152,6 +152,12 @@ describe("sendToKitchen", () => {
       .rejects.toMatchObject({ kitchenRequestRejected: true });
   });
 
+  it("recipe validation names the item and retains the rejected-send marker", async () => {
+    rpcResponses.fnb_send_to_kitchen_atomic_v2={data:null,error:{code:"P0001",message:"FNB_EXACT_RECIPE_DEFAULT_UNAVAILABLE",details:'Món "Bạc Sỉu" — nhóm "Mức ngọt": thiếu mặc định.'}};
+    const error=await sendToKitchen({...CTX,orderType:"takeaway",items:[]}).catch((value:unknown)=>value);
+    expect(error).toMatchObject({kitchenRequestRejected:true});expect((error as Error).message).toContain("Bạc Sỉu");expect((error as Error).message).toContain("Chưa gửi món xuống bếp");expect((error as Error).message).not.toContain("FNB_EXACT");
+  });
+
   it("does not label an unknown transport error as a rolled-back request", async () => {
     rpcResponses.fnb_send_to_kitchen_atomic_v2 = { data: null, error: { message: "Failed to fetch" } };
     const error = await sendToKitchen({ ...CTX, orderType: "takeaway", items: [] }).catch((value: unknown) => value);
@@ -296,6 +302,11 @@ describe("fnbPayment (atomic RPC wrapper)", () => {
     expect(result.invoiceId).toBe("inv-1");
     expect(insertCalls).toHaveLength(0);
   });
+  it.each(["SELECTION_REQUIRED", "DEFAULT_UNAVAILABLE", "OPTION_MISSING", "INVALID_OPTION"])("recipe %s gives a named actionable error", (code) => {
+    const message=getFnbPaymentErrorMessage({message:`FNB_EXACT_RECIPE_${code}`,details:'Món "Xưởng Gu Việt Sữa" — nhóm "Mức ngọt": cần chọn.'});
+    expect(message).toContain('Xưởng Gu Việt Sữa');expect(message).toContain('Mức ngọt');expect(message).toContain('Chưa ghi nhận thanh toán');expect(message).not.toContain('FNB_EXACT');
+  });
+
   it("stock shortage names the ingredient and the branch setting without a raw RPC error", () => {
     const message = getFnbPaymentErrorMessage({message: 'NVL_INSUFFICIENT: NVL "Kem Sữa" tại chi nhánh thiếu'});
     expect(message).toContain('Kem Sữa');

@@ -44,6 +44,7 @@ jobs:
           mkdir -p .tmp
           node scripts/fnb-db-test/run-modifier-scale-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
           node scripts/fnb-db-test/run-explicit-sweetness-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
+          node scripts/fnb-db-test/run-safe-recipe-defaults-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
           node scripts/fnb-db-test/run-production-value-restatement-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
           node scripts/fnb-db-test/run-operational-uom-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
           node scripts/fnb-db-test/run-gram-cutover-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"

@@ -218,6 +218,17 @@ const FNB_PAYMENT_ERROR_MESSAGES: ReadonlyArray<{
   },
 ];
 
+function getFnbRecipeErrorMessage(error: unknown, operation: "payment" | "kitchen"): string | null {
+  const rawMessage = typeof error === "string" ? error : error && typeof error === "object" && "message" in error
+    ? String((error as { message?: unknown }).message ?? "") : "";
+  if (!/FNB_EXACT_RECIPE_(SELECTION_REQUIRED|DEFAULT_UNAVAILABLE|OPTION_MISSING|INVALID_OPTION)/.test(rawMessage)) return null;
+  const details = error && typeof error === "object" && "details" in error
+    ? String((error as { details?: unknown }).details ?? "").trim().slice(0, 300) : "";
+  const context = details && !/[<>]/.test(details) ? `${details} ` : "";
+  const outcome = operation === "payment" ? "Chưa ghi nhận thanh toán; không gửi lại món đã báo bếp." : "Chưa gửi món xuống bếp. Kiểm tra lựa chọn rồi gửi lại.";
+  return `${context}Món chưa có lựa chọn công thức hợp lệ. Mở lại món để chọn mức pha chế; nếu không có lựa chọn phù hợp, nhờ quản lý kiểm tra mặc định và định lượng của nhóm. ${outcome}`;
+}
+
 export function getFnbPaymentErrorMessage(error: unknown): string | null {
   const rawMessage =
     typeof error === "string"
@@ -226,6 +237,8 @@ export function getFnbPaymentErrorMessage(error: unknown): string | null {
         ? String((error as { message?: unknown }).message ?? "")
         : "";
 
+  const recipeMessage = getFnbRecipeErrorMessage(error, "payment");
+  if (recipeMessage) return recipeMessage;
   if (/NVL_INSUFFICIENT|POS_STOCK_SHORTAGE|INSUFFICIENT_STOCK/.test(rawMessage)) {
     const material = rawMessage.match(/NVL\s+"([^"]+)"/)?.[1];
     return `${material ? `Nguyên liệu ${material}` : "Nguyên liệu tại chi nhánh"} không đủ tồn. Nhập/nhận hàng hoặc nhờ chủ quán bật “Cho phép bán khi không đủ tồn kho” tại Cài đặt → Kho & công thức, đúng chi nhánh này. Chưa ghi nhận thanh toán; không gửi lại món đã báo bếp.`;
@@ -340,6 +353,8 @@ export async function sendToKitchen(input: SendToKitchenInput): Promise<SendToKi
       );
     }
     try {
+      const recipeMessage = getFnbRecipeErrorMessage(atomicError, "kitchen");
+      if (recipeMessage) throw new Error(recipeMessage);
       handleError(atomicError, "sendToKitchen:atomic_rpc");
     } catch (error) {
       // Only explicit SQL rejections prove the atomic request did not commit.
