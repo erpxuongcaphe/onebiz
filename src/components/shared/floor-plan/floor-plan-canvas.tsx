@@ -519,7 +519,7 @@ function TableNode({
   const identityTop = table.shape === "round" ? table.height * 0.22 : 8;
   const headingInset = table.shape === "round" ? table.width * 0.15 : 4;
   const headingWidth = Math.max(0, table.width - headingInset * 2);
-  const numberFontSize = Math.max(9, Math.min(minSide / (showIdentity ? 5 : 2.5), showIdentity ? 18 : 36, (showIdentity ? headingWidth * 0.4 : table.width - 12) / Math.max(1, tableLabel.length * 0.65)));
+  const numberFontSize = Math.max(9, Math.min(minSide / (showIdentity ? 5 : 2.5), showIdentity ? 18 : 36, (showIdentity ? headingWidth * 0.5 : table.width - 12) / Math.max(1, tableLabel.length * 0.65)));
   // Nhãn phụ (tên bàn ngắn) chỉ hiện khi:
   //  1. Có tên
   //  2. Tên KHÁC số bàn ("VIP", "Bàn họp" — không phải "Bàn 1" / "1")
@@ -560,7 +560,7 @@ function TableNode({
         fontStyle="bold"
         fontFamily="Inter, system-ui, sans-serif"
         fill={textColor}
-        width={showIdentity ? headingWidth * 0.4 : table.width}
+        width={showIdentity ? headingWidth * 0.5 : table.width}
         x={showIdentity ? headingInset : 0}
         y={showIdentity ? identityTop : 0}
         height={showIdentity ? identityLine * 1.5 : table.height}
@@ -570,7 +570,7 @@ function TableNode({
         wrap="word"
       />
       {showIdentity && <>
-        <Text text={[...new Set(details.map(bill => bill.customerName))].join(", ")} fontSize={identityFont} fontStyle="bold" fill={textColor} x={headingInset + headingWidth * 0.4} y={identityTop} width={headingWidth * 0.6} height={identityLine * 1.5} verticalAlign="middle" wrap="none" ellipsis align="right" listening={false} />
+        <Text text={[...new Set(details.map(bill => bill.customerName))].join(", ")} fontSize={identityFont} fontStyle="bold" fill={textColor} x={headingInset + headingWidth * 0.5} y={identityTop} width={headingWidth * 0.5} height={identityLine * 1.5} verticalAlign="middle" wrap="none" ellipsis align="right" listening={false} />
         <Text text={details.map(bill => bill.note).filter(Boolean).join(" · ").replace(/\s+/g," ")} fontSize={identityFont} fill={textColor} x={3} y={Math.max(identityTop + identityLine * 1.5, table.height - identityLine - 18)} width={Math.max(0, table.width - 6)} height={identityLine} wrap="none" ellipsis align="center" listening={false} />
       </>}
       {/* Tên ngắn dưới số bàn — chỉ khi đủ chỗ */}
