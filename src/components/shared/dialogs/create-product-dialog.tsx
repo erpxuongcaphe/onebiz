@@ -4157,7 +4157,7 @@ export function CreateProductDialog({
 
               {canViewCost && usesFnbRecipeCosts && unreconciledPreparedNames.length > 0 && (
                 <p role="status" className="rounded-md border border-amber-500/40 bg-amber-50 p-3 text-sm font-medium text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
-                  Tổng đang là dự toán theo đơn giá đã có. {unreconciledPreparedNames.join(", ")}: tồn thực tế chưa khớp lượng đã ghi giá vốn; cần đối soát hoặc hoàn tất mẻ. Chưa ghi nhận lại giá vốn thực tế.
+                  Tổng đang là dự toán theo đơn giá đã có. {unreconciledPreparedNames.join(", ")}: tồn đang âm hoặc lượng có giá vốn chưa đủ; cần đối soát hoặc hoàn tất mẻ. Chưa ghi nhận lại giá vốn thực tế.
                 </p>
               )}
               {channel === "fnb" && bomItems.some((item) => item.modifierScaleTarget) && (

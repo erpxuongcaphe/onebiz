@@ -41,6 +41,6 @@ describe("prepared batch prices in the size matrix", () => {
   it("the product editor supplies the same branch-adjusted prices to header and matrix", () => {
     const source = readFileSync("src/components/shared/dialogs/create-product-dialog.tsx", "utf8");
     expect(source).toContain("materials={fnbCostMaterials}");
-    expect(source).toContain("costUnavailable={hasMissingPreparedComponentCost}");
+    expect(source).toContain("costUnavailable={hasUnpricedPreparedComponent}");
   });
 });

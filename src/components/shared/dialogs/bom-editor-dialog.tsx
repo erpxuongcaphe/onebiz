@@ -885,7 +885,7 @@ export function BOMEditorDialog({
                 </table>
                 {canViewCost && unreconciledPreparedNames.length > 0 && (
                   <p role="status" className="border-t bg-amber-50 px-3 py-2 text-sm font-medium text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
-                    Dự toán theo đơn giá đã có. {unreconciledPreparedNames.join(", ")}: tồn thực tế chưa khớp lượng đã ghi giá vốn; cần đối soát hoặc hoàn tất mẻ. Chưa ghi nhận lại giá vốn thực tế.
+                    Dự toán theo đơn giá đã có. {unreconciledPreparedNames.join(", ")}: tồn đang âm hoặc lượng có giá vốn chưa đủ; cần đối soát hoặc hoàn tất mẻ. Chưa ghi nhận lại giá vốn thực tế.
                   </p>
                 )}
                 {canViewCost && hasPendingPreparedCost && (
