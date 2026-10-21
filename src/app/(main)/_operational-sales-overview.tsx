@@ -11,6 +11,7 @@ import { getSalesDashboard } from "@/lib/services/supabase/dashboard-sales";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
+import { UnpaidBills } from "./_unpaid-bills";
 
 const SalesCharts = dynamic(() => import("./_sales-overview-charts"), {
   ssr: false,
@@ -61,6 +62,9 @@ export default function OperationalSalesOverview() {
   const { activeBranchId, isReady } = useBranchFilter();
   const { tenant, user, branches, hasPermission } = useAuth();
   const branch = branches.find(item => item.id === activeBranchId);
+  const canViewOpenBills = isReady && !!tenant?.id && !!user?.id && hasPermission("pos_fnb.view_orders")
+    && (activeBranchId ? branch?.branchType === "store" : hasPermission("reports.view_all_branches"));
+  const unpaidBills = canViewOpenBills && tenant ? <UnpaidBills key={`${tenant.id}:${user?.id}:${activeBranchId ?? "all"}`} tenantId={tenant.id} branchId={activeBranchId} /> : null;
   const allowed = activeBranchId
     ? !!branch && canViewSalesDashboard(hasPermission, branch.branchType)
     : hasPermission("reports.view_all_branches") && hasPermission("reports.dashboard")
@@ -98,6 +102,7 @@ export default function OperationalSalesOverview() {
           </Link>
         ))}
       </nav>
+      {unpaidBills}
     </main>
   );
 
@@ -144,6 +149,7 @@ export default function OperationalSalesOverview() {
         </section>
         <p className="text-right text-xs text-muted-foreground">Cập nhật {daily.at}</p>
       </>}
+      {unpaidBills}
       <section aria-labelledby="analysis-title" className="min-w-0 space-y-3 border-t pt-4">
         <h2 id="analysis-title" className="text-base font-semibold">Phân tích bán hàng</h2>
         <div className="flex flex-wrap items-center justify-between gap-2">

@@ -1,6 +1,8 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({ ready: true, branchId: "b1" as string | undefined, permissions: new Set<string>(), fetch: vi.fn() }));
+const openBills = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/hooks/use-fnb-open-orders", () => ({ useFnbOpenOrders: openBills }));
 vi.mock("next/dynamic", () => ({ default: () => () => <div data-testid="dynamic-view" /> }));
 vi.mock("@/lib/contexts", () => ({
   useBranchFilter: () => ({ activeBranchId: state.branchId, isReady: state.ready }),
@@ -14,7 +16,42 @@ import Dashboard from "@/app/(main)/page";
 const sample = { sales: 111111, discounts: 5000, returns: 0, orders: 3, received: 121111, refunded: 10000, collected: 111111, methods: { cash: 100000, transfer: 11111 }, buckets: [], modes: [] };
 beforeEach(() => { state.ready = true; state.branchId = "b1"; state.permissions = new Set(["pos_fnb.view_sales_summary", "reports.analytics", "reports.view_detail", "reports.view_profit"]); state.fetch.mockReset().mockResolvedValue(sample); });
 afterEach(cleanup);
+beforeEach(() => openBills.mockReset().mockReturnValue({ orders: [], loading: false, error: null, refresh: vi.fn() }));
 describe("sales dashboard permission and scope", () => {
+  it("restores live unpaid bills independently of the sales day and chart", async () => {
+    state.permissions.add("pos_fnb.view_orders");
+    openBills.mockReturnValue({ orders: [{ id: "test-open-1", branchId: "b1", tableId: "table-1", tableName: "Bàn thử", orderNumber: "TEST-OPEN-001", orderType: "dine_in", createdAt: "2026-10-18T01:00:00Z", provisionalTotal: 100 }], loading: false, error: null, refresh: vi.fn() });
+    render(<Dashboard />);
+    expect(screen.getByTestId("unpaid-total")).toHaveTextContent("100");
+    expect(screen.getByText("1 bill · 1 bàn")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Xem các bill chờ thu (1)"));
+    expect(screen.getByText(/TEST-OPEN-001/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Ngày bán hàng"), { target: { value: "2026-10-19" } });
+    fireEvent.click(screen.getByRole("button", { name: "Tháng" }));
+    expect(screen.getByTestId("unpaid-total")).toHaveTextContent("100");
+    expect(openBills).toHaveBeenLastCalledWith("t1", "b1");
+    await screen.findByTestId("net-sales");
+  });
+  it("allows the unpaid workspace without exposing completed sales totals", () => {
+    state.permissions = new Set(["pos_fnb.view_orders", "pos_fnb.checkout"]);
+    render(<Dashboard />);
+    expect(screen.getByText("F&B · Chưa thanh toán")).toBeInTheDocument();
+    expect(state.fetch).not.toHaveBeenCalled();
+  });
+  it("does not load unpaid bills without order access or unrestricted branch scope", () => {
+    const view = render(<Dashboard />);
+    expect(openBills).not.toHaveBeenCalled();
+    state.permissions.add("pos_fnb.view_orders"); state.branchId = undefined;
+    view.rerender(<Dashboard />);
+    expect(openBills).not.toHaveBeenCalled();
+  });
+  it("does not present failed unpaid data as a zero balance", () => {
+    state.permissions.add("pos_fnb.view_orders");
+    openBills.mockReturnValue({ orders: [], loading: false, error: "Test failure", refresh: vi.fn() });
+    render(<Dashboard />);
+    expect(screen.getByTestId("unpaid-total")).toHaveTextContent("—");
+    expect(screen.getByRole("alert")).toHaveTextContent("Chưa tải được bill chưa thanh toán");
+  });
   it("defaults to sales and compactly separates net sales from collections", async () => {
     render(<Dashboard />);
     expect(screen.getByRole("tab", { name: "Bán hàng" })).toHaveAttribute("aria-selected", "true");
