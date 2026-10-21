@@ -7,7 +7,7 @@
 
 import { useEffect, useRef, useCallback, useState } from "react";
 import { Stage, Layer, Group, Rect, Circle, Text, Line, Image as KonvaImage, Transformer, Shape } from "react-konva";
-import type { FnbBillCardDetail } from "@/lib/fnb-bill-card-details";
+import { getFnbBillCardIdentity, type FnbBillCardDetail } from "@/lib/fnb-bill-card-details";
 import { formatCurrency } from "@/lib/format";
 import { getCompactTableLabel } from "@/lib/fnb/table-label";
 import useImage from "use-image";
@@ -570,7 +570,7 @@ function TableNode({
         wrap="word"
       />
       {showIdentity && <>
-        <Text text={[...new Set(details.map(bill => bill.customerName))].join(", ")} fontSize={identityFont} fontStyle="bold" fill={textColor} x={headingInset + headingWidth * 0.5} y={identityTop} width={headingWidth * 0.5} height={identityLine * 1.5} verticalAlign="middle" wrap="none" ellipsis align="right" listening={false} />
+        <Text text={[...new Set(details.map(bill => getFnbBillCardIdentity(bill.customerName, bill.note).text))].join(", ")} fontSize={identityFont} fontStyle="bold" fill={textColor} x={headingInset + headingWidth * 0.5} y={identityTop} width={headingWidth * 0.5} height={identityLine * 1.5} verticalAlign="middle" wrap="none" ellipsis align="right" listening={false} />
         <Text text={details.map(bill => bill.note).filter(Boolean).join(" · ").replace(/\s+/g," ")} fontSize={identityFont} fill={textColor} x={3} y={Math.max(identityTop + identityLine * 1.5, table.height - identityLine - 18)} width={Math.max(0, table.width - 6)} height={identityLine} wrap="none" ellipsis align="center" listening={false} />
       </>}
       {/* Tên ngắn dưới số bàn — chỉ khi đủ chỗ */}

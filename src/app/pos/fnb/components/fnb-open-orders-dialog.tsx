@@ -43,7 +43,7 @@ export function FnbOpenOrdersDialog({ open, onOpenChange, orders, drafts, active
       {checks.map((order) => {
         const selected = order.id === activeOrderId;
         return <button key={order.id} type="button" disabled={busy} aria-pressed={selected} onClick={() => onOpenOrder(order)} className={cn("flex min-h-36 min-w-0 flex-col gap-1 rounded-lg border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:opacity-50", selected ? "border-primary bg-primary/10 ring-1 ring-primary" : "border-amber-300 bg-amber-50 text-amber-950 hover:border-primary dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100")}>
-          <FnbBillCardHeading label={fnbOpenOrderLabel(order)} customerName={order.customerName} />
+          <FnbBillCardHeading label={fnbOpenOrderLabel(order)} customerName={order.customerName} note={order.note} />
           {selected && <span className="self-start rounded bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground">Đang chọn</span>}
           <span className="text-xs text-muted-foreground">{order.orderNumber} · Chưa thanh toán</span>
           <span className="text-xl font-bold tabular-nums text-primary">{formatCurrency(order.provisionalTotal)}đ</span>
