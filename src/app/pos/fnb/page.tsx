@@ -3236,11 +3236,12 @@ function FnbPosPageInner() {
       pos.updateTabMeta(targetTabId, { kitchenOrderId: plan.target.id });
       const sources = new Set(plan.sources.map(order => order.id));
       for (const tab of pos.tabs.filter(tab => sources.has(tab.kitchenOrderId ?? ""))) pos.closeTab(tab.id);
-      handleSwitchOrderTab(targetTabId); setShowFloorPlan(false); setMobileCartOpen(true);
-      try {
-        await hydrateKitchenOrderIntoTab(plan.target.id, targetTabId, true);
+      pos.switchTab(targetTabId); setShowFloorPlan(false); setMobileCartOpen(true);
+      const loaded = await hydrateKitchenOrderIntoTab(plan.target.id, targetTabId, true);
+      if (liveBranchRef.current !== selectedBranch) return;
+      if (loaded) {
         toast({ title: "Đã gộp bill", description: `${plan.selected.length} bill đã gộp vào ${plan.target.orderNumber}. Các bill khác giữ riêng.`, variant: "success" });
-      } catch {
+      } else {
         toast({ title: "Đã gộp trên máy chủ", description: `Chưa tải lại được ${plan.target.orderNumber}. Mở lại bill từ Chờ thanh toán; không cần gộp lại.`, variant: "warning" });
       }
       void openOrders.refresh();
@@ -3250,7 +3251,7 @@ function FnbPosPageInner() {
       void openOrders.refresh();
       toast({ title: "Chưa xác nhận được kết quả gộp", description: error instanceof Error ? error.message : "Làm mới danh sách để kiểm tra kết quả trước khi thử lại.", variant: "error" });
     } finally { mergeBillsLock.current = false; setMergeBillsBusy(false); }
-  }, [branchId, canManageTables, networkStatus.isOnline, openOrders, pos, toast, hydrateKitchenOrderIntoTab, handleSwitchOrderTab]);
+  }, [branchId, canManageTables, networkStatus.isOnline, openOrders, pos, toast, hydrateKitchenOrderIntoTab]);
 
   // ── Customer selection ──
   const customerSelectionLock = useRef(false);
