@@ -23,7 +23,7 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { useToast } from "@/lib/contexts";
+import { useToast, useBranchFilter } from "@/lib/contexts";
 import { useAuth } from "@/lib/contexts/auth-context";
 import {
   createBOM,
@@ -51,7 +51,7 @@ import {
 } from "@/lib/format-uom";
 import type { Product, UOMConversion } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
-import { getFnbBranchComponentCosts } from "@/lib/services/supabase/fnb-branch-cost";
+import { getFnbBranchComponentCosts, getPreparedRecipeUnitCost, getPreparedRecipeEstimateUnitCost, type FnbBranchComponentCost } from "@/lib/services/supabase/fnb-branch-cost";
 
 interface BOMEditorDialogProps {
   open: boolean;
@@ -97,6 +97,7 @@ export function BOMEditorDialog({
   const canViewCost = hasPermission("products.view_cost");
   const { toast } = useToast();
   const { branches } = useAuth();
+  const { activeBranchId } = useBranchFilter();
 
   // Outputs (SKU choices)
   const [skuOptions, setSkuOptions] = useState<Product[]>([]);
@@ -126,7 +127,7 @@ export function BOMEditorDialog({
 
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [preparedCosts, setPreparedCosts] = useState<Record<string, number>>({});
+  const [preparedCosts, setPreparedCosts] = useState<Record<string, FnbBranchComponentCost>>({});
 
   // Load options on open
   useEffect(() => {
@@ -295,36 +296,40 @@ export function BOMEditorDialog({
     .filter((item) => nvlOptions.find((product) => product.id === item.materialId)?.isFnbStockItem)
     .map((item) => item.materialId);
   const preparedIdsKey = preparedIds.join(",");
+  const costBranchId = branchId ?? activeBranchId;
 
   useEffect(() => {
-    if (!canViewCost || !open || !isFnbRecipe || !branchId || !preparedIdsKey) {
+    if (!canViewCost || !open || !isFnbRecipe || !costBranchId || !preparedIdsKey) {
       setPreparedCosts({});
       return;
     }
     let cancelled = false;
-    getFnbBranchComponentCosts(branchId, preparedIdsKey.split(","))
+    setPreparedCosts({});
+    getFnbBranchComponentCosts(costBranchId, preparedIdsKey.split(","))
       .then((costs) => {
         if (cancelled) return;
         setPreparedCosts(Object.fromEntries(
-          Array.from(costs.entries())
-            .filter(([, cost]) => cost.costedQuantity > 0 &&
-              Math.abs(cost.costedQuantity - cost.physicalQuantity) <= 0.0001)
-            .map(([id, cost]) => [id, cost.unitCost]),
+          Array.from(costs.entries()),
         ));
       })
       .catch(() => { if (!cancelled) setPreparedCosts({}); });
     return () => { cancelled = true; };
-  }, [canViewCost, open, isFnbRecipe, branchId, preparedIdsKey]);
+  }, [canViewCost, open, isFnbRecipe, costBranchId, preparedIdsKey]);
 
   const previewUnitCost = (item: MaterialLine) => {
     if (!isFnbRecipe) return item.costPrice;
     const material = nvlOptions.find((product) => product.id === item.materialId);
-    if (material?.isFnbStockItem) return preparedCosts[item.materialId] ?? null;
+    if (material?.isFnbStockItem) return getPreparedRecipeEstimateUnitCost(preparedCosts[item.materialId]);
     return material?.sellPrice ?? null;
   };
   const hasPendingPreparedCost = isFnbRecipe && preparedIds.some(
-    (id) => preparedCosts[id] == null,
+    (id) => getPreparedRecipeEstimateUnitCost(preparedCosts[id]) === null,
   );
+
+  const unreconciledPreparedNames = preparedIds.filter((id) =>
+    getPreparedRecipeEstimateUnitCost(preparedCosts[id]) !== null &&
+    getPreparedRecipeUnitCost(preparedCosts[id]) === null).map((id) =>
+      items.find((item) => item.materialId === id)?.materialName ?? id);
 
   // Compute live preview cost (client-side)
   const previewTotal = items.reduce((sum, it) => {
@@ -878,6 +883,11 @@ export function BOMEditorDialog({
                     )}
                   </tfoot>}
                 </table>
+                {canViewCost && unreconciledPreparedNames.length > 0 && (
+                  <p role="status" className="border-t bg-amber-50 px-3 py-2 text-sm font-medium text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
+                    Dự toán theo đơn giá đã có. {unreconciledPreparedNames.join(", ")}: tồn thực tế chưa khớp lượng đã ghi giá vốn; cần đối soát hoặc hoàn tất mẻ. Chưa ghi nhận lại giá vốn thực tế.
+                  </p>
+                )}
                 {canViewCost && hasPendingPreparedCost && (
                   <p className="border-t px-3 py-2 text-xs text-muted-foreground">
                     Vẫn lưu được công thức. Giá vốn thực tế của bán thành phẩm sẽ có sau khi hoàn tất mẻ tại quán.

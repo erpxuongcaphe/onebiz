@@ -320,10 +320,10 @@ try {
   const zipStock=async()=>Number((await db.query(`select coalesce(sum(quantity),0) n from branch_stock where tenant_id='${context.tenant_id}' and branch_id='${context.dest}' and product_id='${zip500}'`)).rows[0].n);
   assert.equal((await zipPolicy(zip250)).treatment,'stock');
   assert.equal((await zipPolicy(zip500)).treatment,'expense','reproduces production: parent lookup misses 500g');
-  const makeZipSale=async()=> (await db.query(`select create_internal_sale_atomic('${context.tenant_id}','${source}','${context.dest}','${context.actor}',null,null,null,null,
-    '${JSON.stringify([{productId:zip500,quantity:20,unitPrice:100,vatRate:0}])}'::jsonb,'debt',false,'Variant zip fixture') r`)).rows[0].r;
-  const oldZip=await makeZipSale();
-  const oldZipItem=(await db.query(`select id from internal_sale_items where internal_sale_id='${oldZip.internal_sale_id}'`)).rows[0].id;
+  const makeZipSale=async(extra=false)=> (await db.query(`select create_internal_sale_atomic('${context.tenant_id}','${source}','${context.dest}','${context.actor}',null,null,null,null,
+    '${JSON.stringify([{productId:zip500,quantity:20,unitPrice:100,vatRate:0},...(extra?[{productId:operationsProduct,quantity:1,unitPrice:40,vatRate:0}]:[])])}'::jsonb,'debt',false,'Variant zip fixture') r`)).rows[0].r;
+  const oldZip=await makeZipSale(true);
+  const oldZipItem=(await db.query(`select id from internal_sale_items where internal_sale_id='${oldZip.internal_sale_id}' and product_id='${zip500}'`)).rows[0].id;
   await db.query(`select receive_internal_sale_actual('${oldZip.internal_sale_id}','${JSON.stringify([{itemId:oldZipItem,quantity:20}])}',gen_random_uuid(),'Old expense fixture')`);
   const beforeVariantStock=await zipStock(),beforeVariantExpense=Number((await financeTotals(context.dest)).expense);
   const variantMigration=fs.readFileSync('supabase/migrations/202610210004_internal_receiving_variant_recipes.sql','utf8');
@@ -368,6 +368,47 @@ try {
   assert.equal(await zipStock(),beforeVariantStock);
   assert.equal(Number((await financeTotals(context.dest)).expense),beforeVariantExpense);
   console.log('PASS: actual variant BOM resolver; 250g/500g packaging, active variants/menu/tenant/branch overrides; unchanged history; stock receipt +20 without expense, replay once and paired cancellation.');
+
+  {
+  await db.exec(fs.readFileSync('supabase/migrations/202610210006_internal_receipt_reclassification.sql','utf8'));
+  const oldReceipt=(await db.query(`select r.id,r.revision from internal_sale_receipts r where r.internal_sale_id='${oldZip.internal_sale_id}'`)).rows[0];
+  const reclassRequest='96000000-0000-0000-0000-000000000009';
+  const otherReceiptLines=(await db.query(`select * from internal_sale_receipt_items where receipt_id='${oldReceipt.id}' and sale_item_id<>'${oldZipItem}' order by sale_item_id`)).rows;
+  const reclassify=(revision=oldReceipt.revision,reason='Repair variant packaging')=>db.query(`select reclassify_internal_receipt_to_stock_20261021($1,$2,$3,$4,$5) r`,[oldReceipt.id,oldZipItem,revision,reclassRequest,reason]);
+  await assert.rejects(()=>reclassify(999),/REVISION_CHANGED/);
+  await db.exec(`create or replace function user_has_permission(uuid,text) returns boolean language sql as $$select coalesce(current_setting('test.reclass_permission',true),'yes')='yes'$$;select set_config('test.reclass_permission','no',false);`);
+  await assert.rejects(()=>reclassify(),/RECLASS_DENIED/);
+  await db.exec(`select set_config('test.reclass_permission','yes',false);
+    create function fail_reclass_fixture() returns trigger language plpgsql as $$begin if new.id='${zip500}' and current_setting('test.reclass_fail',true)='yes' then raise exception 'TEST_RECLASS_FAILURE';end if;return new;end$$;
+    create trigger fail_reclass_fixture before update on products for each row execute function fail_reclass_fixture();
+    select set_config('test.reclass_fail','yes',false);`);
+  await assert.rejects(()=>reclassify(),/TEST_RECLASS_FAILURE/);
+  assert.equal(await zipStock(),beforeVariantStock,'second step failure rolls back stock');
+  assert.equal(Number((await financeTotals(context.dest)).expense),beforeVariantExpense,'second step failure rolls back reversed expense');
+  assert.equal((await db.query(`select count(*)::int n from internal_receiving_usage_confirmations where sale_item_id='${oldZipItem}'`)).rows[0].n,0);
+  await db.exec(`select set_config('test.reclass_fail','no',false);`);
+  const reclassified=(await reclassify()).rows[0].r;
+  assert.equal(Number(reclassified.quantity),20);assert.equal(Number(reclassified.reversedExpense),2000);
+  assert.equal(await zipStock(),beforeVariantStock+20);
+  assert.equal(Number((await financeTotals(context.dest)).expense),beforeVariantExpense-2000);
+  assert.deepEqual((await db.query(`select * from internal_sale_receipt_items where receipt_id='${oldReceipt.id}' and sale_item_id<>'${oldZipItem}' order by sale_item_id`)).rows,otherReceiptLines,'other receipt lines unchanged');
+  assert.equal((await db.query(`select receiving_treatment from internal_sale_items where id='${oldZipItem}'`)).rows[0].receiving_treatment,'expense','frozen dispatch snapshot preserved');
+  assert.equal((await db.query(`select quantity from internal_sale_receipt_items where receipt_id='${oldReceipt.id}' and sale_item_id='${oldZipItem}'`)).rows[0].quantity,'20.0000');
+  assert.equal((await reclassify()).rows[0].r.replayed,true);assert.equal(await zipStock(),beforeVariantStock+20);
+  await assert.rejects(()=>reclassify(oldReceipt.revision,'Changed reason'),/REQUEST_CHANGED/);
+  const correctZip=(quantity,revision)=>db.query(`select receive_internal_sale_actual($1,$2,gen_random_uuid(),'Correct reclassified line',$3,$4) r`,[oldZip.internal_sale_id,JSON.stringify(otherReceiptLines.map(line=>({itemId:line.sale_item_id,quantity:Number(line.quantity)})).concat([{itemId:oldZipItem,quantity}])),oldReceipt.id,revision]);
+  const corrected=(await correctZip(19,reclassified.revision)).rows[0].r;
+  assert.equal(await zipStock(),beforeVariantStock+19);
+  const restored=(await correctZip(20,corrected.revision)).rows[0].r;assert(restored.revision);
+  assert.equal(await zipStock(),beforeVariantStock+20);
+  assert.equal(Number((await financeTotals(context.dest)).expense),beforeVariantExpense-2000,'later receipt edits never reopen expense');
+  await db.query(`select cancel_internal_sale_atomic('${oldZip.internal_sale_id}','Cancel reclassified fixture')`);
+  assert.equal(await zipStock(),beforeVariantStock,'cancellation reverses reclassified stock through original sale');
+  assert.equal(Number((await financeTotals(context.dest)).expense),beforeVariantExpense-2000);
+  assert.equal((await db.query("select has_table_privilege('authenticated','public.internal_receipt_reclassification_requests_20261021','SELECT') allowed")).rows[0].allowed,false);
+  console.log('PASS: historical receipt reclassification through actual RPC, linked expense reversal + stock, immutable snapshot, ACL/revision guards, rollback after expense reversal, replay, later correction and paired cancellation.');
+  }
+
 
   const reportDb=new PGlite();
   try {

@@ -112,7 +112,7 @@ import {
   getFnbSupplyBranchScope,
   listFnbSupplyCatalogProductIds,
 } from "@/lib/services/supabase/fnb-supply-catalog";
-import { getFnbBranchComponentCosts, getPreparedRecipeUnitCost } from "@/lib/services/supabase/fnb-branch-cost";
+import { getFnbBranchComponentCosts, getPreparedRecipeUnitCost, getPreparedRecipeEstimateUnitCost } from "@/lib/services/supabase/fnb-branch-cost";
 import { invalidateMenuCache } from "@/lib/offline";
 import { useDurableFormDraft } from "@/lib/hooks/use-durable-form-draft";
 
@@ -698,6 +698,13 @@ export function CreateProductDialog({
       ),
     [bomItems, fnbPreparedCostByProductId, materialOptions, recipeRows],
   );
+  const selectedPreparedProducts = materialOptions.filter((product) => product.isFnbStockItem &&
+    (bomItems.some((item) => item.materialId === product.id) || recipeRows.some((row) => row.materialId === product.id)));
+  const hasUnpricedPreparedComponent = selectedPreparedProducts.some((product) =>
+    getPreparedRecipeEstimateUnitCost(fnbPreparedCostByProductId[product.id]) === null);
+  const unreconciledPreparedNames = selectedPreparedProducts.filter((product) =>
+    getPreparedRecipeEstimateUnitCost(fnbPreparedCostByProductId[product.id]) !== null &&
+    getPreparedRecipeUnitCost(fnbPreparedCostByProductId[product.id]) === null).map((product) => product.name);
   const inlineFnbBomCost = useMemo(
     () =>
       bomItems.reduce((sum, item) => {
@@ -718,7 +725,7 @@ export function CreateProductDialog({
     if (perSizeCostDataPending || fnbPreparedCostLoading) {
       return <span className="text-muted-foreground">Đang tính…</span>;
     }
-    if (hasMissingPreparedComponentCost) {
+    if (hasUnpricedPreparedComponent) {
       return <span className="text-status-warning">Chờ mẻ đầu</span>;
     }
     return formatCurrency(perSizeCostByKey[variant.key] ?? variant.costPrice ?? 0);
@@ -3358,13 +3365,16 @@ export function CreateProductDialog({
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Dự toán theo công thức (₫)</label>
                     <div className="flex min-h-10 items-center rounded-md border bg-muted/30 px-3 text-sm font-semibold tabular-nums">
-                      {fnbBomCostPending ? "Đang tính..." : hasMissingPreparedComponentCost
+                      {fnbBomCostPending ? "Đang tính..." : hasUnpricedPreparedComponent
                         ? "Chờ giá vốn mẻ đầu"
                         : formatCurrency(inlineFnbBomCost)}
                     </div>
                     <p className="text-xs text-muted-foreground">
                       SKU Retail dùng giá cấp nội bộ hiện hành. Vẫn lưu được công thức khi bán thành phẩm chưa có mẻ; giá vốn thực tế chốt theo chi nhánh lúc nhập, sản xuất và bán.
                     </p>
+                    {unreconciledPreparedNames.length > 0 && <p role="status" className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                      Dự toán theo đơn giá đã có. Cần đối soát tồn và giá vốn: {unreconciledPreparedNames.join(", ")}.
+                    </p>}
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -3713,7 +3723,7 @@ export function CreateProductDialog({
                           onChange={setRecipeRows}
                           materials={fnbCostMaterials}
                           costPending={fnbPreparedCostLoading || perSizeCostDataPending}
-                          costUnavailable={hasMissingPreparedComponentCost}
+                          costUnavailable={hasUnpricedPreparedComponent}
                           showCost={canViewCost}
                           selectableMaterials={selectableFnbComponentOptions}
                           groups={perSizeModifierGroups}
@@ -4129,7 +4139,7 @@ export function CreateProductDialog({
                           <td className="px-3 py-2 text-right font-bold text-primary">
                             {fnbBomCostPending
                               ? <span className="text-muted-foreground">Đang tính...</span>
-                              : usesFnbRecipeCosts && hasMissingPreparedComponentCost
+                              : usesFnbRecipeCosts && hasUnpricedPreparedComponent
                               ? <span className="text-status-warning">Chờ giá vốn mẻ đầu; vẫn lưu được BOM</span>
                               : formatCurrency(inlineFnbBomCost)}
                           </td>
@@ -4137,7 +4147,7 @@ export function CreateProductDialog({
                         </tr>
                         {isFnbStockItem && Number(bomYieldQty) > 0 && <tr>
                           <td colSpan={(channel === "fnb" ? 4 : 3) + 1} className="px-3 py-2 text-right text-xs text-muted-foreground">Dự toán / 1 {stockUnit.trim() || initialData?.unit || "G"} BTP:</td>
-                          <td className="px-3 py-2 text-right text-xs tabular-nums">{fnbBomCostPending || hasMissingPreparedComponentCost ? "—" : formatStockQuantity(inlineFnbBomCost / Number(bomYieldQty))}</td><td />
+                          <td className="px-3 py-2 text-right text-xs tabular-nums">{fnbBomCostPending || hasUnpricedPreparedComponent ? "—" : formatStockQuantity(inlineFnbBomCost / Number(bomYieldQty))}</td><td />
                         </tr>}
                       </tfoot>}
                     </table>
@@ -4145,6 +4155,11 @@ export function CreateProductDialog({
                 )}
               </div>
 
+              {canViewCost && usesFnbRecipeCosts && unreconciledPreparedNames.length > 0 && (
+                <p role="status" className="rounded-md border border-amber-500/40 bg-amber-50 p-3 text-sm font-medium text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
+                  Tổng đang là dự toán theo đơn giá đã có. {unreconciledPreparedNames.join(", ")}: tồn thực tế chưa khớp lượng đã ghi giá vốn; cần đối soát hoặc hoàn tất mẻ. Chưa ghi nhận lại giá vốn thực tế.
+                </p>
+              )}
               {channel === "fnb" && bomItems.some((item) => item.modifierScaleTarget) && (
                 <section className="space-y-3 rounded-lg border border-primary/25 bg-primary/5 p-3">
                   <div className="flex flex-wrap items-start justify-between gap-3">
