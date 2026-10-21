@@ -146,6 +146,10 @@ export function CancelImpactDialog({
   };
 
   const isInvoice = target?.type === "invoice";
+  const originalMethods = Object.entries(impact?.refundMethods ?? {}).filter(([, amount]) => amount > 0);
+  const originalMethodLabel = originalMethods.length === 1
+    ? METHOD_LABELS[originalMethods[0][0] as RefundMethod] ?? "Chưa xác định"
+    : originalMethods.length > 1 ? "Thanh toán kết hợp" : "Chưa xác định";
   const docLabel = isInvoice ? "hóa đơn" : "phiếu nhập";
   const reasonInvalid =
     reasonRequired && reason.trim().length < reasonMinLength;
@@ -268,14 +272,14 @@ export function CancelImpactDialog({
                     <SelectTrigger aria-label="Phương thức hoàn tiền" className="h-8 w-full text-xs sm:w-[170px]">
                       {/* Base UI Select.Value hiện raw value → map sang nhãn Việt */}
                       <SelectValue>
-                        {(v: unknown) => v === "original" ? "Theo thanh toán gốc" : METHOD_LABELS[(v as RefundMethod)] ?? METHOD_LABELS.cash}
+                        {(v: unknown) => v === "original" ? originalMethodLabel : METHOD_LABELS[(v as RefundMethod)] ?? "Chưa xác định"}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      {isInvoice && <SelectItem value="original">Theo thanh toán gốc</SelectItem>}
-                      <SelectItem value="cash">Tiền mặt</SelectItem>
-                      <SelectItem value="transfer">Chuyển khoản</SelectItem>
-                      <SelectItem value="card">Thẻ</SelectItem>
+                      {isInvoice && <SelectItem value="original">Giữ {originalMethodLabel.toLocaleLowerCase("vi-VN")}</SelectItem>}
+                      <SelectItem value="cash">{isInvoice ? "Đổi sang tiền mặt" : "Tiền mặt"}</SelectItem>
+                      <SelectItem value="transfer">{isInvoice ? "Đổi sang chuyển khoản" : "Chuyển khoản"}</SelectItem>
+                      <SelectItem value="card">{isInvoice ? "Đổi sang thẻ" : "Thẻ"}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
