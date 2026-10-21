@@ -127,6 +127,101 @@ describe("POS multi-tab isolation", () => {
     });
   });
 
+  it("hands checkout the acknowledged revision after an in-flight save, without another autosave during checkout", async () => {
+    let finishSave!: (value: { invoiceId: string; revision: number }) => void;
+    let finishCheckout!: () => void;
+    serviceMocks.saveDraftOrder.mockImplementationOnce(() => new Promise(resolve => { finishSave = resolve; }));
+    const checkout = vi.fn(() => new Promise<void>(resolve => { finishCheckout = resolve; }));
+    const props = autoSaveProps("session-a", "invoice-a", "a");
+    const view = renderHook((input) => useAutoSaveDraft(input), { initialProps: props });
+    await act(() => vi.advanceTimersByTimeAsync(401));
+    // Queue a newer cart while the old snapshot is still saving.
+    const changed = { ...props, snapshot: { ...props.snapshot, note: "new note" } };
+    view.rerender(changed);
+    await act(() => vi.advanceTimersByTimeAsync(401));
+    let completion!: Promise<void>;
+    act(() => { completion = view.result.current.withCheckoutDraft(checkout); });
+    expect(checkout).not.toHaveBeenCalled();
+    await act(async () => { finishSave({ invoiceId: "invoice-a", revision: 2 }); });
+    expect(checkout).toHaveBeenCalledExactlyOnceWith({ invoiceId: "invoice-a", revision: 2 });
+    await act(() => vi.advanceTimersByTimeAsync(2000));
+    expect(serviceMocks.saveDraftOrder).toHaveBeenCalledTimes(1);
+    await act(async () => { finishCheckout(); await completion; });
+  });
+
+  it("waits for the first autosave to create a draft rather than checking out with a null identity", async () => {
+    let finishSave!: (value: { invoiceId: string; revision: number }) => void;
+    serviceMocks.saveDraftOrder.mockImplementationOnce(() => new Promise(resolve => { finishSave = resolve; }));
+    const props = { ...autoSaveProps("new-session", "", "a"), draftId: null, draftRevision: null };
+    const view = renderHook(() => useAutoSaveDraft(props));
+    await act(() => vi.advanceTimersByTimeAsync(401));
+    const checkout = vi.fn().mockResolvedValue("done");
+    let completion!: Promise<string>;
+    act(() => { completion = view.result.current.withCheckoutDraft(checkout); });
+    await act(async () => { finishSave({ invoiceId: "new-draft", revision: 1 }); await completion; });
+    expect(checkout).toHaveBeenCalledExactlyOnceWith({ invoiceId: "new-draft", revision: 1 });
+  });
+
+  it("cancels a pending debounce before fresh checkout without creating an orphan draft", async () => {
+    const props = { ...autoSaveProps("fresh", "", "a"), draftId: null, draftRevision: null };
+    const view = renderHook(() => useAutoSaveDraft(props));
+    const checkout = vi.fn().mockResolvedValue("done");
+    await act(() => view.result.current.withCheckoutDraft(checkout));
+    await act(() => vi.advanceTimersByTimeAsync(1000));
+    expect(checkout).toHaveBeenCalledExactlyOnceWith({ invoiceId: null, revision: null });
+    expect(serviceMocks.saveDraftOrder).not.toHaveBeenCalled();
+  });
+
+  it.each(["POS_DRAFT_CONFLICT", "POS_DRAFT_SESSION_CHANGED"])("never submits after a real %s from autosave", async (code) => {
+    serviceMocks.saveDraftOrder.mockRejectedValueOnce(new Error(code));
+    const view = renderHook(() => useAutoSaveDraft(autoSaveProps("session-a", "invoice-a", "a")));
+    await act(() => vi.advanceTimersByTimeAsync(401));
+    const checkout = vi.fn();
+    await act(async () => { await expect(view.result.current.withCheckoutDraft(checkout)).rejects.toThrow("POS_DRAFT_CONFLICT"); });
+    expect(checkout).not.toHaveBeenCalled();
+  });
+
+  it("never guesses the revision after an unacknowledged save failure", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    serviceMocks.saveDraftOrder.mockRejectedValueOnce(new Error("network timeout"));
+    const view = renderHook(() => useAutoSaveDraft(autoSaveProps("session-a", "invoice-a", "a")));
+    await act(() => vi.advanceTimersByTimeAsync(401));
+    const checkout = vi.fn();
+    await act(async () => { await expect(view.result.current.withCheckoutDraft(checkout)).rejects.toThrow("tự lưu"); });
+    expect(checkout).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+
+  it("aborts checkout if the active cart changes while waiting for a save", async () => {
+    let finishSave!: (value: { invoiceId: string; revision: number }) => void;
+    serviceMocks.saveDraftOrder.mockImplementationOnce(() => new Promise(resolve => { finishSave = resolve; }));
+    const props = autoSaveProps("session-a", "invoice-a", "a");
+    const view = renderHook((input) => useAutoSaveDraft(input), { initialProps: props });
+    await act(() => vi.advanceTimersByTimeAsync(401));
+    const checkout = vi.fn();
+    let completion!: Promise<unknown>;
+    let assertion!: Promise<unknown>;
+    act(() => {
+      completion = view.result.current.withCheckoutDraft(checkout);
+      assertion = expect(completion).rejects.toThrow("thay đổi");
+    });
+    view.rerender(autoSaveProps("session-b", "invoice-b", "b"));
+    await act(async () => { finishSave({ invoiceId: "invoice-a", revision: 2 }); await assertion; });
+    expect(checkout).not.toHaveBeenCalled();
+  });
+
+  it("resumes autosave after rejected checkout so the cashier can correct and retry", async () => {
+    const props = autoSaveProps("session-a", "invoice-a", "a");
+    serviceMocks.saveDraftOrder.mockResolvedValue({ invoiceId: "invoice-a", revision: 2 });
+    const view = renderHook((input) => useAutoSaveDraft(input), { initialProps: props });
+    await act(async () => {
+      await expect(view.result.current.withCheckoutDraft(async () => { throw new Error("stock"); })).rejects.toThrow("stock");
+    });
+    view.rerender({ ...props, snapshot: { ...props.snapshot, note: "corrected" } });
+    await act(() => vi.advanceTimersByTimeAsync(401));
+    expect(serviceMocks.saveDraftOrder).toHaveBeenCalledTimes(1);
+  });
+
   it("resets payment and delivery fields when loading another order", () => {
     const { result } = renderHook(() => usePosState());
 

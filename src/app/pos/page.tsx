@@ -2043,6 +2043,7 @@ function PosPageInner() {
         toast({ title: "Biến thể chưa có ánh xạ tồn kho nội bộ", description: "Chọn mã hàng riêng để xuất và nhập đúng cùng một SKU.", variant: "warning" });
         return;
       }
+      const internalCustomer = state.customer;
       const internalPayments = state.paymentMethod === "mixed"
         ? state.paymentBreakdown.filter(b => b.amount > 0)
         : state.paid > 0 && state.total > 0 ? [{ method: state.paymentMethod, amount: Math.min(state.paid, state.total) }] : [];
@@ -2059,8 +2060,8 @@ function PosPageInner() {
       submitLockRef.current = true;
       setSubmitting("complete");
       try {
-        const result = await checkoutInternalPos({
-          branchId: currentBranch!.id, customerId: state.customer.id,
+        const result = await hasUnsavedCart.withCheckoutDraft((draft) => checkoutInternalPos({
+          branchId: currentBranch!.id, customerId: internalCustomer.id,
           items: state.lines.map(line => ({ ...line, discount: line.discount.mode === "percent"
             ? Math.round(Math.round(line.quantity * line.unitPrice) * line.discount.value / 100) : line.discount.value })),
           payments: internalPayments as Array<{ method: "cash" | "transfer" | "card"; amount: number }>,
@@ -2068,9 +2069,9 @@ function PosPageInner() {
           amountTendered: state.paymentMethod === "mixed" ? internalPayments.reduce((sum,p) => sum+p.amount,0) : state.paid,
           discountOtpId: state.discountAuditCtx?.otpId ?? null,
           expectedTotal: state.total, sessionId: clientSessionId,
-          draftId: state.loadedDraftId, revision: state.loadedDraftRevision ?? null,
+          draftId: draft.invoiceId, revision: draft.revision,
           shiftId: checkoutShift.id, note: state.note,
-        });
+        }));
         notifyPosStockChanged(currentBranch!.id);
         notifyPosStockChanged(state.customer.branchId);
         state.clearCart();
@@ -2095,7 +2096,12 @@ function PosPageInner() {
           }
         }
       } catch (error) {
-        toast({ title: "Chưa hoàn tất bán nội bộ", description: error instanceof Error ? error.message : "Vui lòng thử lại", variant: "error" });
+        const message = error instanceof Error ? error.message : "Vui lòng thử lại";
+        if (/POS_DRAFT_(CONFLICT|SESSION_CHANGED|NOT_FOUND|CHANGED_DURING_SAVE)/.test(message)) {
+          setDraftConflict({ invoiceId: state.loadedDraftId });
+          return;
+        }
+        toast({ title: "Chưa hoàn tất bán nội bộ", description: message, variant: "error", duration: 0 });
       } finally { submitLockRef.current = false; setSubmitting(null); }
       return;
     }
@@ -2835,7 +2841,7 @@ function PosPageInner() {
       setSubmitting(null);
       submitLockRef.current = false;
     }
-  }, [state, toast, autoPrint, networkStatus.isOnline, currentShift, currentBranch?.id, user?.id, appliedPromotion, appliedRedeem, clientSessionId]);
+  }, [state, toast, autoPrint, networkStatus.isOnline, currentShift, currentBranch?.id, user?.id, appliedPromotion, appliedRedeem, clientSessionId, hasUnsavedCart]);
 
   // CEO 04/05/2026: Bỏ handleDebtCheckout — nút "Ghi nợ" cũ thay bằng
   // logic auto trong handleComplete (paid < total → auto-link walk-in
@@ -4444,11 +4450,11 @@ function PosPageInner() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Icon name="sync_problem" size={20} className="text-status-warning" />
-              {"\u0110\u01a1n \u0111\u00e3 thay \u0111\u1ed5i \u1edf thi\u1ebft b\u1ecb kh\u00e1c"}
+              {"Cần kiểm tra lại đơn nháp"}
             </DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            {"OneBiz \u0111\u00e3 d\u1eebng l\u01b0u \u0111\u1ec3 kh\u00f4ng ghi \u0111\u00e8 d\u1eef li\u1ec7u m\u1edbi h\u01a1n. H\u00f3a \u0111\u01a1n ch\u01b0a b\u1ecb thanh to\u00e1n."}
+            {"OneBiz đã dừng thao tác để không ghi đè dữ liệu mới hơn. Tải bản mới nhất để kiểm tra trạng thái đơn trước khi tiếp tục."}
           </p>
           <DialogFooter className="flex-col sm:flex-row gap-2">
             <Button

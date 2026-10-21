@@ -174,9 +174,14 @@ interface PendingDraftSave {
   stateKey: string;
 }
 
-interface DraftServerState {
+export interface DraftServerState {
   invoiceId: string | null;
   revision: number | null;
+}
+
+export interface DraftAutoSaveController {
+  (session: string, cart: CartNavigationSnapshot): boolean;
+  withCheckoutDraft<T>(checkout: (draft: DraftServerState) => Promise<T>): Promise<T>;
 }
 
 /**
@@ -194,7 +199,7 @@ export function useAutoSaveDraft({
   draftRevision = null,
   onSaved,
   onConflict,
-}: UseAutoSaveDraftArgs): (session: string, cart: CartNavigationSnapshot) => boolean {
+}: UseAutoSaveDraftArgs): DraftAutoSaveController {
   const debouncedRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedKeyRef = useRef<string>("");
   const navigationSaved = useRef(new Map<string, string>());
@@ -210,6 +215,11 @@ export function useAutoSaveDraft({
   const serverStateBySessionRef = useRef<Map<string, DraftServerState>>(new Map());
   const conflictedSessionsRef = useRef<Set<string>>(new Set());
   const saveQueueRef = useRef<LatestOnlyAsyncQueue<PendingDraftSave> | null>(null);
+  const checkoutSessionsRef = useRef(new Set<string>());
+  const saveErrorsRef = useRef(new Map<string, unknown>());
+  const latestCheckoutScopeRef = useRef("");
+  const checkoutScope = JSON.stringify([sessionId, ctx, ctx ? buildInput(snapshot, ctx) : null]);
+  latestCheckoutScopeRef.current = checkoutScope;
   // 04/08/2026 — chống bão retry (pg_stat 03/08: tab POS để qua đêm bắn
   // save lặp vì lastSavedKeyRef chỉ ghi khi THÀNH CÔNG, còn poll tồn 10-60s
   // làm lines đổi → effect chạy lại → bắn tiếp không giới hạn).
@@ -244,13 +254,14 @@ export function useAutoSaveDraft({
         revision: draftRevision,
       });
       conflictedSessionsRef.current.delete(sessionId);
+      saveErrorsRef.current.delete(sessionId);
     }
   }
 
   if (!saveQueueRef.current) {
     saveQueueRef.current = new LatestOnlyAsyncQueue<PendingDraftSave>(
       async (request) => {
-        if (conflictedSessionsRef.current.has(request.sessionId)) return;
+        if (conflictedSessionsRef.current.has(request.sessionId) || checkoutSessionsRef.current.has(request.sessionId)) return;
         try {
           const input = buildInput(request.snapshot, request.ctx);
           const serverState =
@@ -268,6 +279,7 @@ export function useAutoSaveDraft({
             invoiceId: result.invoiceId,
             revision: result.revision,
           });
+          saveErrorsRef.current.delete(request.sessionId);
           lastSavedKeyRef.current = request.stateKey;
           navigationSaved.current.set(`${request.ctx.tenantId}:${request.ctx.branchId}:${request.sessionId}`, JSON.stringify(input));
           navigationCartSaved.current.set(`${request.ctx.tenantId}:${request.ctx.branchId}:${request.sessionId}`, navigationCartSignature(request.snapshot));
@@ -297,6 +309,7 @@ export function useAutoSaveDraft({
             });
           }
         } catch (err) {
+          saveErrorsRef.current.set(request.sessionId, err);
           const message = err instanceof Error ? err.message : "";
           const match = message.match(/POS_DRAFT_(CONFLICT|SESSION_CHANGED|NOT_FOUND|CHANGED_DURING_SAVE)/);
           if (match) {
@@ -342,7 +355,7 @@ export function useAutoSaveDraft({
   }, []);
 
   useEffect(() => {
-    if (!enabled || !sessionId || !ctx) return;
+    if (!enabled || !sessionId || !ctx || checkoutSessionsRef.current.has(sessionId)) return;
 
     // ── 1. localStorage backup IMMEDIATELY (sync, không network) ──
     // F5/cúp điện trong khoảng debounce vẫn cứu được vì LS đã có data.
@@ -407,7 +420,9 @@ export function useAutoSaveDraft({
     // sau lỗi save → chờ tới hạn backoff (tối đa 60s) mới bắn lại.
     const delayMs = Math.max(400, nextRetryAtRef.current - Date.now());
     debouncedRef.current = setTimeout(() => {
-      saveQueueRef.current?.enqueue({ sessionId, snapshot, ctx, stateKey });
+      if (!checkoutSessionsRef.current.has(sessionId)) {
+        saveQueueRef.current?.enqueue({ sessionId, snapshot, ctx, stateKey });
+      }
     }, delayMs);
 
     return () => {
@@ -415,7 +430,38 @@ export function useAutoSaveDraft({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, sessionId, JSON.stringify(snapshot.lines), snapshot.customer?.id, snapshot.orderDiscount.value, snapshot.orderDiscount.mode, snapshot.paymentMethod, snapshot.shippingFee, snapshot.orderVatRate, snapshot.note, ctx?.tenantId, ctx?.branchId, visibilityTick]);
-  return (session, cart) => cart.lines.length > 0 && (!ctx || navigationCartSaved.current.get(`${ctx.tenantId}:${ctx.branchId}:${session}`) !== navigationCartSignature(cart));
+  const hasUnsavedCart = (session: string, cart: CartNavigationSnapshot) =>
+    cart.lines.length > 0 && (!ctx || navigationCartSaved.current.get(`${ctx.tenantId}:${ctx.branchId}:${session}`) !== navigationCartSignature(cart));
+
+  return Object.assign(hasUnsavedCart, {
+    async withCheckoutDraft<T>(checkout: (draft: DraftServerState) => Promise<T>): Promise<T> {
+      if (!sessionId || !ctx || !mountedRef.current || latestCheckoutScopeRef.current !== checkoutScope) {
+        throw new Error("Phiên bán hàng đã thay đổi. Vui lòng kiểm tra lại giỏ trước khi thanh toán.");
+      }
+      if (checkoutSessionsRef.current.has(sessionId)) throw new Error("Đơn đang được xử lý. Vui lòng chờ kết quả.");
+      // Disable synchronously: a React enabled=false render cannot stop a write
+      // that has already started, nor provide its freshly acknowledged revision.
+      checkoutSessionsRef.current.add(sessionId);
+      if (debouncedRef.current) clearTimeout(debouncedRef.current);
+      saveQueueRef.current?.clearPending((request) => request.sessionId === sessionId);
+      try {
+        await saveQueueRef.current?.whenIdle();
+        if (!mountedRef.current || latestCheckoutScopeRef.current !== checkoutScope) {
+          throw new Error("Giỏ hàng hoặc chi nhánh đã thay đổi khi chờ lưu. Vui lòng kiểm tra rồi thanh toán lại.");
+        }
+        if (conflictedSessionsRef.current.has(sessionId)) throw new Error("POS_DRAFT_CONFLICT");
+        // A failed/unknown save may have committed on the server. Never guess
+        // its revision or issue checkout until the save can be acknowledged.
+        if (saveErrorsRef.current.has(sessionId)) {
+          throw new Error("Chưa xác nhận được lần tự lưu gần nhất. Giỏ hàng vẫn còn; chờ kết nối rồi thử lại.");
+        }
+        const draft = serverStateBySessionRef.current.get(sessionId) ?? { invoiceId: null, revision: null };
+        return await checkout({ ...draft });
+      } finally {
+        checkoutSessionsRef.current.delete(sessionId);
+      }
+    },
+  });
 }
 
 /**

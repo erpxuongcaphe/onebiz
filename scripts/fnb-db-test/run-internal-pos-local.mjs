@@ -143,5 +143,29 @@ try {
  await assert.rejects(db.exec(fs.readFileSync('supabase/migrations/00569_internal_pos_branch_stock_policy.sql','utf8')),/INTERNAL_POS_STOCK_POLICY_PATCH_MISMATCH/);
  await db.exec('rollback');
  console.log('PASS: internal POS honors source-branch negative-stock policy, rolls back blocked checkout, retains paired stock/debt and replays without duplicates.');
+ // Reproduce the cashier's race: autosave has acknowledged revision 2,
+ // but the click handler still holds revision 1 from the earlier render.
+ const draftId='93000000-0000-0000-0000-000000000001';
+ const draftSession='91000000-0000-0000-0000-000000000011';
+ await db.query(`insert into invoices(id,tenant_id,branch_id,code,status,source,client_session_id,draft_revision,total,created_by)
+ values($1,$2,$3,'DRAFT-HANDOFF','draft','pos',$4,2,10,$5)`,[draftId,context.tenant_id,payload.branchId,draftSession,context.actor]);
+ const handedOff={...fractional,items:[{productId:context.product,unit:context.unit,quantity:.1,unitPrice:100,vatRate:0,discount:0}],
+ expectedTotal:10,payments:[],amountTendered:0,sessionId:draftSession,draftId,revision:1};
+ const beforeConflict=await snapshot();
+ await assert.rejects(db.query(call(handedOff)),/POS_DRAFT_CONFLICT/);
+ assert.deepEqual(await snapshot(),beforeConflict,'stale revision cannot alter documents, stock or money');
+ assert.equal(Number((await db.query('select draft_revision from invoices where id=$1',[draftId])).rows[0].draft_revision),2);
+ await assert.rejects(db.query(call({...handedOff,revision:null})),/POS_DRAFT_CONFLICT/);
+ await assert.rejects(db.query(call({...handedOff,revision:2,sessionId:'91000000-0000-0000-0000-000000000012'})),/POS_DRAFT_CONFLICT/);
+ assert.deepEqual(await snapshot(),beforeConflict);
+ const completedDraft=(await db.query(call({...handedOff,revision:2}))).rows[0].result;
+ assert.equal((await db.query('select count(*)::int n from invoices where id=$1',[draftId])).rows[0].n,0);
+ assert.equal((await db.query('select source from invoices where id=$1',[completedDraft.invoice_id])).rows[0].source,'internal');
+ assert.ok((await db.query('select id from input_invoices where id=$1',[completedDraft.input_invoice_id])).rows[0]);
+ const afterHandoff=await snapshot();
+ assert.equal((await db.query(call({...handedOff,revision:2}))).rows[0].result.invoice_id,completedDraft.invoice_id);
+ assert.deepEqual(await snapshot(),afterHandoff,'same acknowledged checkout replays without duplicate export/import');
+ console.log('PASS: stale/missing/foreign-session draft revisions reject atomically; acknowledged revision completes paired internal documents and replays once.');
+
 } catch(error) { console.error(error.message,error.where??''); process.exitCode=1; }
 finally {await db.close();fs.rmSync(dir,{recursive:true,force:true});}
