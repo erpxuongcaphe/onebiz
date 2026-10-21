@@ -16,8 +16,19 @@ import type {
 } from "@/lib/types";
 import { getClient, getCurrentContext, getCurrentTenantId, getPaginationRange, handleError } from "./base";
 import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
+import { readHistoryPages } from "./read-history-pages";
 
 // --- Shipping Orders ---
+
+function applyShippingListFilters<T>(query: T, params: Pick<QueryParams, "search" | "filters">, includeStatus = true): T {
+  // The list and exact status counts share all non-status conditions.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let q = query as any;
+  if (params.search) q = q.or(`code.ilike.%${params.search}%,receiver_phone.ilike.%${params.search}%`);
+  if (includeStatus && params.filters?.status && params.filters.status !== "all") q = q.eq("status", params.filters.status);
+  if (params.filters?.partner && params.filters.partner !== "all") q = q.eq("partner_id", params.filters.partner);
+  return applyCreatedAtRangeFilter(q, params.filters);
+}
 
 export async function getShippingOrders(params: QueryParams): Promise<QueryResult<ShippingOrder>> {
   const supabase = getClient();
@@ -33,26 +44,7 @@ export async function getShippingOrders(params: QueryParams): Promise<QueryResul
     `, { count: "exact" })
     .eq("tenant_id", tenantId);
 
-  // Search
-  if (params.search) {
-    query = query.or(`code.ilike.%${params.search}%,receiver_phone.ilike.%${params.search}%`);
-  }
-
-  // Filter: status
-  if (params.filters?.status && params.filters.status !== "all") {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    query = query.eq("status", params.filters.status as any);
-  }
-
-  // Filter: partner
-  if (params.filters?.partner && params.filters.partner !== "all") {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    query = query.eq("partner_id", params.filters.partner as any);
-  }
-
-  // Filter: thời gian tạo (dateFrom/dateTo) — 04/08: trước đây sidebar có ô
-  // lọc nhưng không truyền vào truy vấn (UI giả). Dùng khuôn chung như hóa đơn.
-  query = applyCreatedAtRangeFilter(query, params.filters);
+  query = applyShippingListFilters(query, params);
 
   // CEO 08/07 (verify DB): bảng shipping_orders KHÔNG có cột branch_id —
   // filter .eq("branch_id") cũ làm query LỖI khi chọn 1 chi nhánh (bug ẩn vì
@@ -61,6 +53,7 @@ export async function getShippingOrders(params: QueryParams): Promise<QueryResul
   // Sort & paginate
   query = query
     .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
     .range(from, to);
 
   const { data, count, error } = await query;
@@ -70,37 +63,36 @@ export async function getShippingOrders(params: QueryParams): Promise<QueryResul
   return { data: orders, total: count ?? 0 };
 }
 
-/**
- * Đếm vận đơn theo trạng thái trên TOÀN BỘ tenant — cho 4 thẻ KPI đầu trang.
- * 04/08: thẻ cũ đếm `data.filter(...)` = chỉ 15 dòng của trang hiện tại nên
- * số sai ngay khi có phân trang. 1 truy vấn chỉ lấy cột status, không phân
- * trang (vài chục–vài nghìn dòng, nhẹ).
- */
+export async function getAllShippingOrders(params: Pick<QueryParams, "search" | "filters">): Promise<ShippingOrder[]> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+  const rows = await readHistoryPages(async (offset, size) => {
+    const query = supabase.from("shipping_orders").select(`
+      *, invoices!shipping_orders_invoice_id_fkey(code),
+      delivery_partners!shipping_orders_partner_id_fkey(name)
+    `, { count: "exact" }).eq("tenant_id", tenantId);
+    return await applyShippingListFilters(query, params)
+      .order("created_at", { ascending: false }).order("id", { ascending: false })
+      .range(offset, offset + size - 1);
+  });
+  return rows.map(mapShippingOrder);
+}
+
+/** Exact server counts, independent of row limits and the selected status. */
 export type ShippingStatusCounts = Record<ShippingStatus, number>;
 
-export async function getShippingStatusCounts(): Promise<ShippingStatusCounts> {
+export async function getShippingStatusCounts(params: Pick<QueryParams, "search" | "filters"> = {}): Promise<ShippingStatusCounts> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
-  const { data, error } = await supabase
-    .from("shipping_orders")
-    .select("status")
-    .eq("tenant_id", tenantId);
-  if (error) handleError(error, "getShippingStatusCounts");
-
-  const counts: ShippingStatusCounts = {
-    pending: 0,
-    picked_up: 0,
-    in_transit: 0,
-    delivered: 0,
-    returned: 0,
-    cancelled: 0,
-  };
-  for (const row of data ?? []) {
-    const s = row.status as ShippingStatus;
-    if (s in counts) counts[s] += 1;
-  }
-  return counts;
+  const statuses: ShippingStatus[] = ["pending", "picked_up", "in_transit", "delivered", "returned", "cancelled"];
+  const counts = await Promise.all(statuses.map(async status => {
+    const query = supabase.from("shipping_orders").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).eq("status", status);
+    const { count, error } = await applyShippingListFilters(query, params, false);
+    if (error) handleError(error, "getShippingStatusCounts");
+    return [status, count ?? 0] as const;
+  }));
+  return Object.fromEntries(counts) as ShippingStatusCounts;
 }
 
 /**

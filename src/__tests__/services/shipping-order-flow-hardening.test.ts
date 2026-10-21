@@ -70,16 +70,33 @@ describe("Van don list shows real filters and whole-dataset KPIs", () => {
   });
 
   it("passes the created-at range down to the query", () => {
-    expect(vanDonPage).toContain("computeListPresetRange(createdDatePreset)");
+    expect(vanDonPage).toContain("resolveListDateRange(createdDatePreset, customDates)");
+    expect(vanDonPage).toContain("from={customDates.from}");
+    expect(vanDonPage).toContain("to={customDates.to}");
+    expect(vanDonPage).toContain("onFromChange={(from) => setCustomDates");
+    expect(vanDonPage).toContain("onToChange={(to) => setCustomDates");
     expect(vanDonPage).toContain("dateFrom");
-    expect(shippingService).toContain("applyCreatedAtRangeFilter(query, params.filters)");
+    expect(shippingService).toContain("applyCreatedAtRangeFilter(q, params.filters)");
   });
 
-  it("KPI cards read status counts for the whole tenant", () => {
-    expect(vanDonPage).toContain("getShippingStatusCounts()");
+  it("KPI cards read exact counts with the same non-status filters", () => {
+    expect(vanDonPage).toContain("getShippingStatusCounts({ search, filters })");
     expect(shippingService).toContain("export async function getShippingStatusCounts");
     // Không còn đếm KPI từ trang dữ liệu hiện tại
     expect(vanDonPage).not.toMatch(/data\.filter\(\(r\) => r\.status ===/);
+  });
+
+  it("does not query or export when a custom range is invalid", () => {
+    expect(vanDonPage.match(/if \(!filters\) \{/g)).toHaveLength(2);
+    expect(vanDonPage).toContain("if (request !== listRequest.current) return;");
+    expect(vanDonPage).toContain('title: "Khoảng ngày chưa hợp lệ"');
+  });
+
+  it("exports every page or reports failure without a partial-file fallback", () => {
+    expect(vanDonPage).toContain("rows = await getAllShippingOrders({");
+    expect(vanDonPage).not.toContain("rows = all.data");
+    expect(vanDonPage).not.toContain("let rows = data");
+    expect(shippingService).toContain("readHistoryPages(async (offset, size)");
   });
 
   it("shows the money columns that were missing", () => {
