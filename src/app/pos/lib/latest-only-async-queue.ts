@@ -7,6 +7,7 @@ export class LatestOnlyAsyncQueue<T> {
   private latest: T | null = null;
   private running = false;
   private stopped = false;
+  private idleWaiters = new Set<() => void>();
 
   constructor(private readonly worker: (value: T) => Promise<void>) {}
 
@@ -16,8 +17,14 @@ export class LatestOnlyAsyncQueue<T> {
     void this.drain();
   }
 
-  clearPending(): void {
-    this.latest = null;
+  clearPending(matches: (value: T) => boolean = () => true): void {
+    if (this.latest !== null && matches(this.latest)) this.latest = null;
+  }
+
+  /** Wait for already-started writes before handing the draft to checkout. */
+  whenIdle(): Promise<void> {
+    if (!this.running && this.latest === null) return Promise.resolve();
+    return new Promise((resolve) => this.idleWaiters.add(resolve));
   }
 
   stop(): void {
@@ -38,6 +45,10 @@ export class LatestOnlyAsyncQueue<T> {
     } finally {
       this.running = false;
       if (!this.stopped && this.latest !== null) void this.drain();
+      else {
+        for (const resolve of this.idleWaiters) resolve();
+        this.idleWaiters.clear();
+      }
     }
   }
 }
