@@ -6,7 +6,7 @@ export function FnbBillIdentity({ customerName, note, className = "", showCustom
   if (!showCustomer && !text) return null;
   return <span className={`block min-w-0 space-y-1 text-left ${className}`}>
     {showCustomer && <span className="block break-words text-sm font-semibold" title={customer}>Khách: {customer}</span>}
-    {text ? <span className="block line-clamp-2 whitespace-pre-line break-words text-sm font-normal text-muted-foreground" title={text}>Ghi chú: {text}</span> : null}
+    {text ? <span className="block line-clamp-2 whitespace-pre-line break-words text-sm font-medium text-foreground" title={text}>Ghi chú: {text}</span> : null}
   </span>;
 }
 
@@ -18,7 +18,7 @@ export function FnbBillCardHeading({ label, customerName, note, billDetails }: {
       {bills.map(bill => <span key={bill.id} className="block min-w-0">
         {bills.length > 1 && <span className="block text-xs font-medium text-muted-foreground">{bill.orderNumber}</span>}
         <span className="block line-clamp-2 break-words text-base font-bold text-primary" title={bill.customerName?.trim() || "Khách lẻ"} aria-label={`Khách: ${bill.customerName?.trim() || "Khách lẻ"}`}>{bill.customerName?.trim() || "Khách lẻ"}</span>
-        {bill.note?.trim() && <span className="mt-0.5 block line-clamp-2 whitespace-pre-line break-words text-xs font-normal leading-snug text-muted-foreground" title={bill.note.trim()} aria-label={`Ghi chú: ${bill.note.trim()}`}>Ghi chú: {bill.note.trim()}</span>}
+        {bill.note?.trim() && <span className="mt-0.5 block line-clamp-2 whitespace-pre-line break-words text-sm font-medium leading-snug text-foreground" title={bill.note.trim()} aria-label={`Ghi chú: ${bill.note.trim()}`}>Ghi chú: {bill.note.trim()}</span>}
       </span>)}
     </span>
   </span>;
