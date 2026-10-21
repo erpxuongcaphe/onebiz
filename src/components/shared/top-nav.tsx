@@ -92,7 +92,7 @@ function BranchSelector() {
     <DropdownMenu>
       <DropdownMenuTrigger
         className={cn(
-          "hidden md:flex press-scale-sm items-center gap-2 px-3 h-8 text-sm rounded-lg cursor-pointer outline-none transition-colors",
+          "hidden min-w-0 max-w-[220px] md:flex lg:max-w-[280px] xl:max-w-[340px] press-scale-sm items-center gap-2 px-3 h-8 text-sm rounded-lg cursor-pointer outline-none transition-colors",
           currentBranch
             ? "text-primary bg-primary-fixed/40 hover:bg-primary-fixed"
             : "text-foreground/90 hover:bg-surface-container-low",
@@ -110,7 +110,7 @@ function BranchSelector() {
             full branch name. Trước đây tên dài bị cắt "Xưởng Cà Phê - X..."
             → 2 quán đều giống nhau → CEO không biết đang ở quán nào. */}
         <span
-          className="truncate max-w-[180px] sm:max-w-[220px] lg:max-w-[280px] font-semibold"
+          className="min-w-0 truncate font-semibold"
           title={branchLabel}
         >
           {branchLabel}
@@ -186,18 +186,20 @@ function GlobalSearchBar() {
     <button
       type="button"
       onClick={openPalette}
+      aria-label="Tìm sản phẩm, khách hàng, đơn hàng..."
+      title="Tìm sản phẩm, khách hàng, đơn hàng..."
       className={cn(
-        "hidden md:flex press-scale-sm items-center gap-3 h-10 w-full max-w-md px-4 rounded-full",
+        "hidden md:flex shrink-0 press-scale-sm items-center justify-center gap-2 h-10 w-10 xl:w-full max-w-md px-2 xl:px-4 rounded-full",
         "bg-surface-container-low hover:bg-surface-container border border-border hover:border-primary-fixed-dim",
         "text-muted-foreground hover:text-foreground text-sm text-left",
         "focus:outline-none focus:ring-2 focus:ring-primary/30"
       )}
     >
       <Icon name="search" size={16} className="shrink-0 text-muted-foreground" />
-      <span className="flex-1 truncate">
+      <span className="hidden xl:block flex-1 truncate">
         Tìm sản phẩm, khách hàng, đơn hàng...
       </span>
-      <kbd className="hidden lg:inline-flex font-sans items-center gap-0.5 bg-surface-container-high border border-border rounded-lg px-2 py-0.5 text-xs font-semibold text-muted-foreground">
+      <kbd className="hidden xl:inline-flex font-sans items-center gap-0.5 bg-surface-container-high border border-border rounded-lg px-2 py-0.5 text-xs font-semibold text-muted-foreground">
         Ctrl K
       </kbd>
     </button>
@@ -647,7 +649,7 @@ export function TopNav() {
       {/* Stitch style: bg-surface-container-lowest (white) + subtle bottom border.
           h-16 để nghỉ mắt hơn so với h-12 cũ. */}
       <header className="bg-surface-container-lowest/85 backdrop-blur-md text-foreground sticky top-0 z-40 border-b border-border">
-        <div className="flex items-center gap-3 h-16 px-4 md:px-6">
+        <div className="flex min-w-0 items-center gap-2 xl:gap-3 h-16 px-3 xl:px-6">
           {/* Left: Mobile menu + AppSwitcher + Logo + BranchSelector */}
           <MobileNav />
           <AppSwitcher />
@@ -662,7 +664,7 @@ export function TopNav() {
             {/* Sprint VISUAL-2 P3: thêm wordmark cạnh icon ở desktop để
                 brand identity rõ hơn — header trước chỉ có "O." nhỏ.
                 Hide ở mobile (<lg) để tiết kiệm space. */}
-            <LogoWordmark height={20} className="hidden lg:block" />
+            <LogoWordmark height={20} className="hidden xl:block" />
           </Link>
           <div className="hidden md:block w-px h-6 bg-border ml-1" />
           <BranchSelector />
@@ -673,7 +675,7 @@ export function TopNav() {
           </div>
 
           {/* Right: Quick Import + Bell + Help + User + Bán hàng */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1 xl:gap-2 shrink-0">
             {/* Quick Import — Trung tâm nhập Excel theo schema */}
             <button
               type="button"
@@ -682,6 +684,7 @@ export function TopNav() {
                 "hidden md:inline-flex press-scale-sm items-center gap-2 h-8 px-4 rounded-lg text-xs font-semibold",
                 "bg-primary-fixed text-primary hover:bg-primary-fixed-dim transition-colors"
               )}
+              aria-label="Trung tâm nhập Excel"
               title="Trung tâm nhập Excel — tải mẫu & đi tới trang nhập"
             >
               <Icon name="cloud_upload" size={16} />
@@ -702,7 +705,7 @@ export function TopNav() {
             {/* CEO 12/05: Shortcut "Cấp OTP" trên header — desktop route
                 /cap-otp có sidebar đầy đủ (back nav tự nhiên). Mobile manager
                 portal dùng /manager/otp riêng. */}
-            <OtpQuickAccess />
+            <OtpQuickAccess compact />
 
             {/* Notification bell — badge hiển thị unread count thật từ DB */}
             <Link href="/thong-bao" className="relative hidden sm:flex">
@@ -734,16 +737,18 @@ export function TopNav() {
             {canSeePosDropdown && (
               <DropdownMenu>
                 <DropdownMenuTrigger
+                  aria-label="POS"
+                  title="Chế độ bán hàng"
                   className={cn(
-                    "hidden sm:inline-flex items-center justify-center ml-2 gap-1",
-                    "h-10 px-4 rounded-xl text-sm font-semibold",
+                    "hidden sm:inline-flex items-center justify-center xl:ml-2 gap-1",
+                    "h-10 min-w-10 px-2 xl:px-4 rounded-xl text-sm font-semibold",
                     "bg-primary text-primary-foreground hover:bg-primary/90",
                     "ambient-shadow cursor-pointer outline-none transition-colors",
                   )}
                 >
-                  <Icon name="point_of_sale" size={16} className="mr-1" />
-                  POS
-                  <Icon name="expand_more" size={16} />
+                  <Icon name="point_of_sale" size={16} />
+                  <span className="hidden xl:inline">POS</span>
+                  <Icon name="expand_more" size={16} className="hidden xl:block" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="min-w-[200px]">
                   <DropdownMenuLabel>Chế độ bán hàng</DropdownMenuLabel>
