@@ -1,5 +1,7 @@
 "use client";
 import { useState } from "react";
+import { FnbBillIdentity } from "@/components/shared/fnb-bill-identity";
+import { matchesFnbBillCardSearch } from "@/lib/fnb-bill-card-details";
 import { fnbOpenOrderLabel, type FnbOpenOrder } from "@/lib/fnb-open-orders";
 import type { FnbTabSnapshot } from "@/lib/types/fnb";
 import { formatCurrency } from "@/lib/format";
@@ -7,7 +9,6 @@ import { cn } from "@/lib/utils";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 const orderGroups = [{ type: "dine_in", label: "Tại quán" }, { type: "takeaway", label: "Mang về" }, { type: "delivery", label: "Giao hàng" }] as const;
 type OrderFilter = "all" | typeof orderGroups[number]["type"];
-const normalize = (value: string) => value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d");
 export function FnbOpenOrdersDialog({ open, onOpenChange, orders, drafts, activeOrderId, onOpenOrder, onOpenDraft, loading, error, connected, busy, onRefresh, updatedAt }: {
   open: boolean; onOpenChange: (open: boolean) => void; orders: FnbOpenOrder[]; drafts: FnbTabSnapshot[];
   activeOrderId?: string | null;
@@ -16,7 +17,7 @@ export function FnbOpenOrdersDialog({ open, onOpenChange, orders, drafts, active
 }) {
   const [search, setSearch] = useState("");
   const [orderFilter, setOrderFilter] = useState<OrderFilter>("all");
-  const filtered = orders.filter((order) => normalize(`${fnbOpenOrderLabel(order)} ${order.orderNumber} ${order.createdByName ?? ""}`).includes(normalize(search.trim())));
+  const filtered = orders.filter((order) => matchesFnbBillCardSearch(search, fnbOpenOrderLabel(order), order.orderNumber, order.createdByName, order.customerName, order.note));
   if (!open) return null;
   return <section aria-label="Đơn chờ thanh toán" className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden bg-background p-3 sm:p-4">
     <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border pb-2">
@@ -25,7 +26,7 @@ export function FnbOpenOrdersDialog({ open, onOpenChange, orders, drafts, active
     </div>
     <div className="flex items-center justify-between gap-2 text-sm"><span className={connected && !error ? "text-status-success" : "text-muted-foreground"}>{error ? "Chưa cập nhật được" : connected ? "Trực tiếp · toàn chi nhánh" : "Tự cập nhật mỗi 30 giây"}</span><button type="button" className="min-h-11 px-3 font-medium text-primary" onClick={onRefresh}>Làm mới</button></div>
     {updatedAt && <p className="text-xs text-muted-foreground">Cập nhật {updatedAt.toLocaleTimeString("vi-VN")}</p>}
-    <input aria-label="Tìm đơn đang mở" placeholder="Tìm bàn, mã đơn hoặc nhân viên…" value={search} onChange={(event) => setSearch(event.target.value)} className="min-h-11 w-full rounded-md border bg-background px-3 text-sm" />
+    <input aria-label="Tìm đơn đang mở" placeholder="Tìm bàn, mã bill, khách, ghi chú hoặc nhân viên…" value={search} onChange={(event) => setSearch(event.target.value)} className="min-h-11 w-full rounded-md border bg-background px-3 text-sm" />
     {error && <p role="alert" className="text-sm text-status-warning">{error}. Dữ liệu trước đó có thể đã thay đổi.</p>}
     <Tabs value={orderFilter} onValueChange={(value) => { if (value === "all" || orderGroups.some(group => group.type === value)) setOrderFilter(value as OrderFilter); }} className="min-h-0 flex-1">
       <TabsList aria-label="Loại đơn chờ thanh toán" className="grid h-auto! w-full shrink-0 grid-cols-4 gap-1 rounded-lg border bg-muted/40 p-1 sm:w-fit">
@@ -43,7 +44,8 @@ export function FnbOpenOrdersDialog({ open, onOpenChange, orders, drafts, active
           <span className="flex w-full items-start justify-between gap-2"><span className="min-w-0 break-words text-lg font-bold">{fnbOpenOrderLabel(order)}</span>{selected && <span className="shrink-0 rounded bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground">Đang chọn</span>}</span>
           <span className="text-xs text-muted-foreground">{order.orderNumber} · Chưa thanh toán</span>
           <span className="text-xl font-bold tabular-nums text-primary">{formatCurrency(order.provisionalTotal)}đ</span>
-          <span className="text-sm text-muted-foreground">{order.itemCount} món · {order.customerName || "Khách lẻ"}</span>
+          <span className="text-sm text-muted-foreground">{order.itemCount} món</span>
+          <FnbBillIdentity customerName={order.customerName} note={order.note} />
           <span className="mt-auto pt-1 text-xs font-medium text-primary">Xem / thêm món →</span>
         </button>;
       })}

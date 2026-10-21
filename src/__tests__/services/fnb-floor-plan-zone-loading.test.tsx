@@ -152,4 +152,20 @@ describe("POS floor plan keeps table actions in the selected zone", () => {
     expect(screen.getByRole("button", { name: /^1\s*Ban 1Trống/ })).toBeInTheDocument();
   });
 
+  it("shows each unpaid customer's name and note at a shared table, and searches those details", async () => {
+    mocks.zones.mockResolvedValue([]);
+    const orders = [
+      {id:"bill-a",orderNumber:"KB-A",tableId:"inside-1",orderType:"dine_in",status:"pending",customerName:"Chị Hằng",note:"Mang lên lầu",invoiceId:null,mergedIntoId:null},
+      {id:"bill-b",orderNumber:"KB-B",tableId:"inside-1",orderType:"dine_in",status:"ready",customerName:"Anh Bình",note:"Không ống hút",invoiceId:null,mergedIntoId:null},
+      {id:"paid",orderNumber:"KB-C",tableId:"inside-1",orderType:"dine_in",status:"served",customerName:"Đã trả",note:"Ẩn ghi chú cũ",invoiceId:"invoice"},
+    ] as FnbOpenOrder[];
+    const opened=vi.fn();
+    render(<TableFloorPlan tables={[{...tables[0],status:"occupied"}]} onSelectTable={opened} openOrders={orders}/>);
+    expect(await screen.findByText("Khách: Chị Hằng")).toBeInTheDocument();
+    expect(screen.getByText("Ghi chú: Mang lên lầu")).toBeInTheDocument();expect(screen.getByText("Khách: Anh Bình")).toBeInTheDocument();
+    expect(screen.queryByText(/Ẩn ghi chú cũ/)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox",{name:"Tìm bàn"}),{target:{value:"khong ong hut"}});
+    expect(screen.getByText("Khách: Anh Bình")).toBeInTheDocument();expect(opened).not.toHaveBeenCalled();
+  });
+
 });

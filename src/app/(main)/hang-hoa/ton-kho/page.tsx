@@ -1092,6 +1092,7 @@ export default function TonKhoPage() {
       <PageHeader
         title="Tồn kho"
         searchPlaceholder="Theo mã hàng, tên hàng..."
+        searchOnOwnRow
         searchValue={search}
         onSearchChange={setSearch}
         density="compact"
