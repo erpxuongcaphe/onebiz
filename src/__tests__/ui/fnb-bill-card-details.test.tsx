@@ -9,10 +9,10 @@ const orders=[{id:"a",orderNumber:"KB001",tableId:"table",tableName:"Bàn 1",ord
 describe("customer and order notes on bill cards",()=>{
  it("renders the actual names and order notes on all order types, searches accents and opens only on click",()=>{
   const opened=vi.fn();render(<FnbOpenOrdersDialog open onOpenChange={vi.fn()} orders={orders} drafts={[]} onOpenOrder={opened} onOpenDraft={vi.fn()} updatedAt={null} loading={false} error={null} connected busy={false} onRefresh={vi.fn()}/>);
-  for(const name of ["Chị Hằng","Anh Bình","Chị Mai"])expect(screen.getByText(`Khách: ${name}`)).toBeInTheDocument();
+  for(const name of ["Chị Hằng","Anh Bình","Chị Mai"])expect(screen.getByLabelText(`Khách: ${name}`)).toBeInTheDocument();
   expect(screen.getByText("Ghi chú: Lấy lúc 10h")).toBeInTheDocument();
   fireEvent.change(screen.getByRole("textbox",{name:"Tìm đơn đang mở"}),{target:{value:"goi truoc"}});
-  expect(screen.getByText("Khách: Anh Bình")).toBeInTheDocument();expect(screen.queryByText("Khách: Chị Mai")).not.toBeInTheDocument();expect(opened).not.toHaveBeenCalled();
+  expect(screen.getByLabelText("Khách: Anh Bình")).toBeInTheDocument();expect(screen.queryByLabelText("Khách: Chị Mai")).not.toBeInTheDocument();expect(opened).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button",{name:/KB002/}));expect(opened).toHaveBeenCalledWith(orders[1]);
  });
  it("keeps each bill's identity and excludes paid or merged bills from table summaries",()=>{
