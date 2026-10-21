@@ -70,6 +70,10 @@ function PermissionSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [expandedRole, setExpandedRole] = useState<string | null>(null);
   const [roleDetail, setRoleDetail] = useState<DbRoleDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState(false);
+  const detailRequest = useRef(0);
+  const saveLock = useRef(false);
   const [editPerms, setEditPerms] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -136,27 +140,48 @@ function PermissionSettingsPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Load role detail when expanded
-  const handleExpand = async (roleId: string) => {
-    if (expandedRole === roleId) {
-      setExpandedRole(null);
-      setRoleDetail(null);
-      setDirty(false);
-      return;
-    }
-    setExpandedRole(roleId);
+  const loadRoleDetail = async (roleId: string) => {
+    const request = ++detailRequest.current;
+    setRoleDetail(null);
+    setEditPerms(new Set());
+    setDetailLoading(true);
+    setDetailError(false);
     try {
       const detail = await getRoleById(roleId);
+      if (request !== detailRequest.current) return;
+      if (detail.id !== roleId) throw new Error("Role scope mismatch");
       setRoleDetail(detail);
       setEditPerms(new Set(detail.permissions));
       setDirty(false);
     } catch {
-      // silent
+      if (request === detailRequest.current) setDetailError(true);
+    } finally {
+      if (request === detailRequest.current) setDetailLoading(false);
     }
+  };
+
+  const handleExpand = (roleId: string) => {
+    if (saveLock.current) return;
+    if (dirty) {
+      toast({ title: "Có thay đổi chưa lưu", description: "Lưu hoặc hủy thay đổi trước khi đổi vai trò.", variant: "error" });
+      return;
+    }
+    if (expandedRole === roleId) {
+      detailRequest.current += 1;
+      setExpandedRole(null);
+      setRoleDetail(null);
+      setDetailLoading(false);
+      setDetailError(false);
+      setDirty(false);
+      return;
+    }
+    setExpandedRole(roleId);
+    void loadRoleDetail(roleId);
   };
 
   // Toggle permission
   const togglePerm = (code: string) => {
+    if (saveLock.current || !roleDetail || roleDetail.id !== expandedRole) return;
     setEditPerms((prev) => {
       const next = new Set(prev);
       if (next.has(code)) next.delete(code);
@@ -168,6 +193,7 @@ function PermissionSettingsPage() {
 
   // Toggle all in a group
   const toggleGroup = (groupCodes: string[]) => {
+    if (saveLock.current || !roleDetail || roleDetail.id !== expandedRole) return;
     const allOn = groupCodes.every((c) => editPerms.has(c));
     setEditPerms((prev) => {
       const next = new Set(prev);
@@ -182,15 +208,19 @@ function PermissionSettingsPage() {
 
   // Save permissions
   const handleSave = async () => {
-    if (!expandedRole || !roleDetail) return;
+    if (!expandedRole || !roleDetail || roleDetail.id !== expandedRole || detailLoading || !dirty || saveLock.current) return;
+    saveLock.current = true;
+    const savedPermissions = Array.from(editPerms);
     setSaving(true);
     try {
-      await setRolePermissions(expandedRole, Array.from(editPerms));
+      await setRolePermissions(roleDetail.id, savedPermissions);
       toast({ title: "Đã lưu quyền", description: roleDetail.name, variant: "success" });
+      setRoleDetail(current => current?.id === roleDetail.id ? { ...current, permissions: savedPermissions } : current);
       setDirty(false);
     } catch (err) {
       toast({ title: "Lỗi", description: (err as Error).message, variant: "error" });
     } finally {
+      saveLock.current = false;
       setSaving(false);
     }
   };
@@ -318,6 +348,9 @@ function PermissionSettingsPage() {
               <button
                 type="button"
                 className="min-w-0 flex-1 text-left"
+                aria-label={`Quyền vai trò ${role.name}`}
+                aria-expanded={isExpanded}
+                disabled={saving}
                 onClick={() => handleExpand(role.id)}
               >
                 <CardHeader className="py-3">
@@ -359,6 +392,7 @@ function PermissionSettingsPage() {
               </button>
               {!role.isSystem && (
                 <Button variant="ghost" size="sm" className="mr-3 shrink-0"
+                  disabled={saving}
                   aria-label={`Đổi tên vai trò ${role.name}`}
                   title="Đổi tên vai trò"
                   onClick={() => { setRenamingRole(role); setRenameName(role.name); setRenameError(""); }}>
@@ -368,7 +402,9 @@ function PermissionSettingsPage() {
               )}
               </div>
 
-              {isExpanded && roleDetail && (
+              {isExpanded && detailLoading && <p role="status" className="px-4 pb-4 text-sm text-muted-foreground">Đang tải quyền vai trò...</p>}
+              {isExpanded && detailError && <div role="alert" className="flex flex-wrap items-center justify-between gap-2 px-4 pb-4 text-sm"><span>Chưa tải được quyền vai trò.</span><Button size="sm" variant="outline" onClick={() => void loadRoleDetail(role.id)}>Thử lại</Button></div>}
+              {isExpanded && roleDetail?.id === role.id && (
                 <CardContent>
                   <Separator className="mb-4" />
                   <div className="space-y-5">
@@ -388,6 +424,7 @@ function PermissionSettingsPage() {
                             </h4>
                             <button
                               type="button"
+                              disabled={saving}
                               onClick={() => toggleGroup(groupCodes)}
                               className="text-xs text-primary hover:underline"
                             >
@@ -399,6 +436,9 @@ function PermissionSettingsPage() {
                               <button
                                 key={perm.code}
                                 type="button"
+                                role="checkbox"
+                                aria-checked={editPerms.has(perm.code)}
+                                disabled={saving}
                                 onClick={() => togglePerm(perm.code)}
                                 className={cn(
                                   "flex items-center gap-2 rounded-lg px-3 py-2 text-sm cursor-pointer transition-colors text-left",
@@ -430,12 +470,13 @@ function PermissionSettingsPage() {
                     })}
                   </div>
 
-                  <div className="flex items-center justify-between mt-6 pt-4 border-t">
+                  <div className="mt-6 flex flex-wrap items-center justify-between gap-2 border-t pt-4">
                     {!role.isSystem && (
                       <Button
                         variant="ghost"
                         size="sm"
                         className="text-status-error hover:text-status-error hover:bg-status-error/10"
+                        disabled={saving || dirty}
                         onClick={() => setDeletingRole(role)}
                       >
                         <Icon name="delete" size={16} className="mr-1" />
@@ -443,6 +484,8 @@ function PermissionSettingsPage() {
                       </Button>
                     )}
                     {role.isSystem && <div />}
+                    <div className="flex flex-wrap items-center gap-2">
+                    {dirty && <Button variant="outline" size="sm" disabled={saving} onClick={() => { setEditPerms(new Set(roleDetail.permissions)); setDirty(false); }}>Hủy thay đổi</Button>}
                     <Button
                       onClick={handleSave}
                       disabled={!dirty || saving}
@@ -455,6 +498,7 @@ function PermissionSettingsPage() {
                       )}
                       Lưu thay đổi
                     </Button>
+                    </div>
                   </div>
                 </CardContent>
               )}
