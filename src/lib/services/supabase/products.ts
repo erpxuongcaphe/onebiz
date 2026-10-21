@@ -11,6 +11,7 @@ import { isRpcUnavailable } from "./rpc-utils";
 import { MOVEMENT_TYPE_LABELS } from "@/lib/constants/stock-movement-refs";
 import { getRecordedMovementPrices } from "@/lib/stock-movement-values";
 import { getStockValuations } from "./stock-valuation";
+import { readHistoryPages } from "./read-history-pages";
 
 type ProductInsert = Database["public"]["Tables"]["products"]["Insert"];
 type ProductUpdate = Database["public"]["Tables"]["products"]["Update"];
@@ -48,6 +49,16 @@ async function loadRecordedBranchCosts(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function applyCreatedAtRange(query: any, filters: QueryParams["filters"] | undefined) {
   return applyCreatedAtRangeFilter(query, filters);
+}
+
+function supplierNameFilter(filters: QueryParams["filters"] | undefined): string {
+  return typeof filters?.supplierName === "string" ? filters.supplierName.trim() : "";
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applySupplierNameFilter(query: any, filters: QueryParams["filters"] | undefined) {
+  const name = supplierNameFilter(filters);
+  return name ? query.ilike("suppliers.name", `%${name.replace(/[\\%_*]/g, "\\$&")}%`) : query;
 }
 
 /**
@@ -107,8 +118,9 @@ export async function getProducts(params: QueryParams): Promise<QueryResult<Prod
   const branchId =
     params.branchId && params.branchId !== "all" ? params.branchId : undefined;
   const hasStockFilter = Boolean(params.filters?.stock);
+  const supplierJoin = supplierNameFilter(params.filters) ? "!inner" : "";
   const selectCols =
-    "*, categories!products_category_id_fkey(name, code), suppliers!products_supplier_id_fkey(name)" +
+    `*, categories!products_category_id_fkey(name, code), suppliers!products_supplier_id_fkey${supplierJoin}(name)` +
     (branchId ? `, branch_stock${hasStockFilter ? "!inner" : ""}(quantity)` : "");
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -188,6 +200,7 @@ export async function getProducts(params: QueryParams): Promise<QueryResult<Prod
     }
   }
 
+  query = applySupplierNameFilter(query, params.filters);
   query = applyCreatedAtRange(query, params.filters);
 
   // Sort
@@ -218,17 +231,18 @@ export async function getProducts(params: QueryParams): Promise<QueryResult<Prod
   return { data: products, total: count ?? 0 };
 }
 
+export async function getProductsForExport(params: QueryParams): Promise<Product[]> {
+  return readHistoryPages<Product>(async (offset, size) => {
+    const result = await getProducts({ ...params, page: offset / size, pageSize: size });
+    return { data: result.data, count: result.total, error: null };
+  });
+}
+
 /**
  * Day 17/05/2026: Lấy TẤT CẢ product IDs khớp filter — phục vụ
  * "Chọn tất cả X SP khớp bộ lọc" trong DataTable (Select-all-matching pattern).
  *
- * Reuse logic filter của getProducts nhưng:
- *  - Chỉ select cột `id` (payload ~36 bytes × N rows)
- *  - KHÔNG paginate (lấy hết)
- *  - KHÔNG sort (không cần)
- *
- * Với 1000 SP: payload ~36KB — acceptable. Nếu CEO scale 10K+ SP nên thêm
- * upper limit (`limit(5000)`) + warning UI.
+ * Cùng bộ lọc với getProducts, đọc đủ trang ID với thứ tự ổn định.
  */
 export async function getAllMatchingProductIds(params: QueryParams): Promise<string[]> {
   const supabase = getClient();
@@ -239,80 +253,87 @@ export async function getAllMatchingProductIds(params: QueryParams): Promise<str
 
   // Khớp getProducts (Phương án B): LEFT join khi không lọc tồn + scope ngành.
   const hasStockFilter = Boolean(params.filters?.stock);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let query = (supabase as any)
-    .from("products_scoped")
-    .select(branchId ? `id, branch_stock${hasStockFilter ? "!inner" : ""}(quantity)` : "id")
-    .eq("tenant_id", tenantId);
-  if (branchId) {
-    query = query
-      .eq("branch_stock.branch_id", branchId)
-      .is("branch_stock.variant_id", null);
-    const industryScope = await getBranchIndustryScope(supabase, tenantId, branchId);
-    query = applyBranchIndustryScope(query, industryScope);
-  }
-
-  // Search — CEO 04/07: khớp getProducts để "chọn tất cả khớp lọc" đúng cột.
-  if (params.search) {
-    const esc = params.search.replace(/[%_]/g, "\\$&");
-    if (params.searchField === "code") query = query.ilike("code", `%${esc}%`);
-    else if (params.searchField === "name") query = query.ilike("name", `%${esc}%`);
-    else query = query.or(`name.ilike.%${esc}%,code.ilike.%${esc}%`);
-  }
-
-  // Filter: productType
-  if (params.filters?.productType && params.filters.productType !== "all") {
-    query = query.eq("product_type", params.filters.productType as string);
-  }
-
-  // Filter: channel
-  if (params.filters?.channel && params.filters.channel !== "all") {
-    query = query.eq("channel", params.filters.channel as string);
-  }
-
-  // Filter: category
-  if (params.filters?.category && params.filters.category !== "all") {
-    const cats = Array.isArray(params.filters.category)
-      ? params.filters.category
-      : [params.filters.category];
-    query = query.in("category_id", cats);
-  }
-
-  // Filter: stock — branch-scope thì lọc theo TỒN CHI NHÁNH (branch_stock.quantity),
-  // ngược lại theo tồn tổng (products.stock).
-  if (params.filters?.stock) {
-    const stockFilter = params.filters.stock as string;
-    const col = branchId ? "branch_stock.quantity" : "stock";
-    if (stockFilter === "in_stock") query = query.gt(col, 0);
-    else if (stockFilter === "out_of_stock") query = query.eq(col, 0);
-    else if (stockFilter === "low_stock") query = query.gt(col, 0).lte(col, 5);
-  }
-
-  // Filter: status (active | inactive)
-  if (params.filters?.status && params.filters.status !== "all") {
-    const isActive = params.filters.status === "active";
-    query = query.eq("is_active", isActive);
-  }
-
-  // Filter: brand
-  if (params.filters?.brand && params.filters.brand !== "all") {
-    const brandFilter = params.filters.brand as string;
-    if (brandFilter === "__no_brand__") {
-      query = query.is("brand", null);
-    } else {
-      query = query.eq("brand", brandFilter);
+  const supplierJoin = supplierNameFilter(params.filters)
+    ? ", suppliers!products_supplier_id_fkey!inner(name)" : "";
+  const industryScope = branchId ? await getBranchIndustryScope(supabase, tenantId, branchId) : undefined;
+  const rows = await readHistoryPages<{ id: string }>(async (offset, size) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let query = (supabase as any)
+      .from("products_scoped")
+      .select((branchId ? `id, branch_stock${hasStockFilter ? "!inner" : ""}(quantity)` : "id") + supplierJoin, { count: "exact" })
+      .eq("tenant_id", tenantId);
+    if (branchId) {
+      query = query
+        .eq("branch_stock.branch_id", branchId)
+        .is("branch_stock.variant_id", null);
+      query = applyBranchIndustryScope(query, industryScope!);
     }
-  }
 
-  // Cap 5000 để tránh fetch quá lớn — UI sẽ cảnh báo nếu thực sự > 5000
-  query = applyCreatedAtRange(query, params.filters);
+    // Search — CEO 04/07: khớp getProducts để "chọn tất cả khớp lọc" đúng cột.
+    if (params.search) {
+      const esc = params.search.replace(/[%_]/g, "\\$&");
+      if (params.searchField === "code") query = query.ilike("code", `%${esc}%`);
+      else if (params.searchField === "name") query = query.ilike("name", `%${esc}%`);
+      else query = query.or(`name.ilike.%${esc}%,code.ilike.%${esc}%`);
+    }
 
-  query = query.limit(5000);
-  const { data, error } = await query;
-  if (error) handleError(error, "getAllMatchingProductIds");
+    // Filter: productType
+    if (params.filters?.productType && params.filters.productType !== "all") {
+      query = query.eq("product_type", params.filters.productType as string);
+    }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((row: any) => row.id as string);
+    // Filter: channel
+    if (params.filters?.channel && params.filters.channel !== "all") {
+      query = query.eq("channel", params.filters.channel as string);
+    }
+
+    // Filter: category
+    if (params.filters?.category && params.filters.category !== "all") {
+      const cats = Array.isArray(params.filters.category)
+        ? params.filters.category
+        : [params.filters.category];
+      query = query.in("category_id", cats);
+    }
+
+    // Filter: stock — branch-scope thì lọc theo TỒN CHI NHÁNH (branch_stock.quantity),
+    // ngược lại theo tồn tổng (products.stock).
+    if (params.filters?.stock) {
+      const stockFilter = params.filters.stock as string;
+      const col = branchId ? "branch_stock.quantity" : "stock";
+      if (stockFilter === "in_stock") query = query.gt(col, 0);
+      else if (stockFilter === "out_of_stock") query = query.eq(col, 0);
+      else if (stockFilter === "low_stock") query = query.gt(col, 0).lte(col, 5);
+    }
+
+    // Filter: status (active | inactive)
+    if (params.filters?.status && params.filters.status !== "all") {
+      const isActive = params.filters.status === "active";
+      query = query.eq("is_active", isActive);
+    }
+
+    if (params.filters?.allowSale === "true") {
+      query = query.eq("allow_sale", true);
+    }
+
+    // Filter: brand
+    if (params.filters?.brand && params.filters.brand !== "all") {
+      const brandFilter = params.filters.brand as string;
+      if (brandFilter === "__no_brand__") {
+        query = query.is("brand", null);
+      } else {
+        query = query.eq("brand", brandFilter);
+      }
+    }
+
+    query = applySupplierNameFilter(query, params.filters);
+    query = applyCreatedAtRange(query, params.filters);
+
+    query = query.order("id", { ascending: true }).range(offset, offset + size - 1);
+    const { data, count, error } = await query;
+    if (error) handleError(error, "getAllMatchingProductIds");
+    return { data: data as { id: string }[] | null, count, error: null };
+  });
+  return rows.map(row => row.id);
 }
 
 /**

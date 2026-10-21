@@ -37,7 +37,8 @@ describe("F&B outlet Retail ingredient catalog", () => {
   });
 
   it("keeps list, bulk selection and KPIs on the same branch-aware catalog", () => {
-    expect(page).toContain("filters: buildListFilters()");
+    expect(page).toContain("const listFilters = buildListFilters();");
+    expect(page).toContain("filters: listFilters");
     expect(page).toContain("getProductStats(catalogProductType");
     expect(page).toContain("branchId: branchStockView ? activeBranchId : undefined");
     expect(service).toContain('branchId ? ", branch_stock(quantity)" : ""');

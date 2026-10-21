@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useDebounce } from "@/lib/utils/use-debounce";
 import dynamic from "next/dynamic";
 import { ColumnDef, type SortingState } from "@tanstack/react-table";
@@ -15,10 +15,11 @@ import {
   FilterGroup,
   SelectFilter,
   DatePresetFilter,
-  PersonFilter,
   type DatePresetValue,
 } from "@/components/shared/filter-sidebar";
-import { computeListPresetRange, STANDARD_LIST_PRESETS } from "@/lib/utils/list-date-preset-range";
+import { resolveListDateRange, STANDARD_LIST_PRESETS } from "@/lib/utils/list-date-preset-range";
+import { Input } from "@/components/ui/input";
+import { getProductsForExport } from "@/lib/services/supabase/products";
 import {
   InlineDetailPanel,
   DetailTabs,
@@ -646,12 +647,11 @@ export default function HangHoaPage() {
 
   // Bộ lọc danh sách hiện hành — dùng chung cho tải trang VÀ xuất file, để
   // file xuất ra đúng tập đang lọc (không phải chỉ trang đang xem).
+  const createdDateRange = useMemo(() => resolveListDateRange(createdDatePreset, {
+    from: createdDateFrom, to: createdDateTo,
+  }), [createdDatePreset, createdDateFrom, createdDateTo]);
   const buildListFilters = useCallback(() => {
-    const createdRange = computeListPresetRange(createdDatePreset);
-    const effectiveCreatedFrom =
-      createdDatePreset === "custom" ? createdDateFrom : createdRange.from;
-    const effectiveCreatedTo =
-      createdDatePreset === "custom" ? createdDateTo : createdRange.to;
+    if (!createdDateRange) return null;
     return {
       productType: catalogProductType,
       ...(catalogChannel && { channel: catalogChannel }),
@@ -659,8 +659,9 @@ export default function HangHoaPage() {
       ...(stockFilter !== "all" && { stock: stockFilter }),
       ...(statusFilter !== "all" && { status: statusFilter }),
       ...(brandFilter !== "all" && { brand: brandFilter }),
-      ...(effectiveCreatedFrom && { dateFrom: effectiveCreatedFrom }),
-      ...(effectiveCreatedTo && { dateTo: effectiveCreatedTo }),
+      ...(createdDateRange.from && { dateFrom: createdDateRange.from }),
+      ...(createdDateRange.to && { dateTo: createdDateRange.to }),
+      ...(supplierFilter.trim() && { supplierName: supplierFilter.trim() }),
     };
   }, [
     catalogProductType,
@@ -669,9 +670,8 @@ export default function HangHoaPage() {
     stockFilter,
     statusFilter,
     brandFilter,
-    createdDatePreset,
-    createdDateFrom,
-    createdDateTo,
+    createdDateRange,
+    supplierFilter,
   ]);
 
   const fetchData = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
@@ -690,6 +690,18 @@ export default function HangHoaPage() {
     }
     if (!background) setLoading(true);
     const listFilters = buildListFilters();
+    if (!listFilters) {
+      setData([]);
+      setTotal(0);
+      setOtherBranchCount(0);
+      setPreparedCosts(new Map());
+      setPreparedCostsLoading(false);
+      setMenuEstimates(new Map());
+      setMenuEstimatesLoading(false);
+      setBomAvailability(new Map());
+      setLoading(false);
+      return;
+    }
     const query = {
       page,
       pageSize,
@@ -1284,23 +1296,23 @@ export default function HangHoaPage() {
    */
   const handleExport = async (type: "import" | "report" | "summary") => {
     if (exporting) return; // đang tải toàn bộ dòng — chặn bấm kép
+    const listFilters = buildListFilters();
+    if (!listFilters) {
+      toast({ title: "Khoảng ngày chưa hợp lệ", description: "Chọn đủ ngày bắt đầu và kết thúc theo đúng thứ tự.", variant: "warning" });
+      return;
+    }
     setExporting(true);
     try {
-      const rows: Product[] = [];
-      for (let exportPage = 0; ; exportPage += 1) {
-        const result = await getProducts({
-          page: exportPage,
-          pageSize: 1000,
-          sortBy: PRODUCT_SORT_FIELDS[sorting[0]?.id] ?? "created_at",
-          sortOrder: sorting[0] ? (sorting[0].desc ? "desc" : "asc") : "desc",
-          search: debouncedSearch,
-          searchField,
-          branchId: duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId,
-          filters: buildListFilters(),
-        });
-        rows.push(...result.data);
-        if (result.data.length === 0 || rows.length >= result.total) break;
-      }
+      const rows = await getProductsForExport({
+        page: 0,
+        pageSize: 200,
+        sortBy: PRODUCT_SORT_FIELDS[sorting[0]?.id] ?? "created_at",
+        sortOrder: sorting[0] ? (sorting[0].desc ? "desc" : "asc") : "desc",
+        search: debouncedSearch,
+        searchField,
+        branchId: duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId,
+        filters: listFilters,
+      });
       if (rows.length === 0) {
         toast({ title: "Không có dòng nào để xuất", variant: "warning" });
         return;
@@ -1958,6 +1970,14 @@ export default function HangHoaPage() {
       },
     });
   }
+  if (supplierFilter.trim()) {
+    filterChips.push({
+      key: "supplier",
+      label: "Nhà cung cấp",
+      value: supplierFilter.trim(),
+      onClear: () => setSupplierFilter(""),
+    });
+  }
 
   const clearListFilters = () => {
     setCategoryFilter("all");
@@ -2169,10 +2189,13 @@ export default function HangHoaPage() {
             </>
           }
           toolbarFooter={
-            <FilterChips
-              filters={filterChips}
-              onClearAll={filterChips.length > 1 ? clearListFilters : undefined}
-            />
+            <>
+              {!createdDateRange && <p role="alert" className="border-l-4 border-destructive bg-destructive/5 px-3 py-2 text-sm">Khoảng ngày chưa hợp lệ. Chọn đủ ngày bắt đầu và kết thúc theo đúng thứ tự.</p>}
+              <FilterChips
+                filters={filterChips}
+                onClearAll={filterChips.length > 1 ? clearListFilters : undefined}
+              />
+            </>
           }
           // CEO 22/05/2026 (UX P0 #1): empty state context-aware
           emptyState={emptyState}
@@ -2241,17 +2264,15 @@ export default function HangHoaPage() {
           onSelectAllMatching={async () => {
             // Day 17/05/2026: fetch tất cả product IDs khớp filter hiện tại
             // (kể cả các trang chưa load). Reuse filter logic của getProducts.
-            const createdRange = computeListPresetRange(createdDatePreset);
-            const effectiveCreatedFrom =
-              createdDatePreset === "custom" ? createdDateFrom : createdRange.from;
-            const effectiveCreatedTo =
-              createdDatePreset === "custom" ? createdDateTo : createdRange.to;
+            const listFilters = buildListFilters();
+            if (!listFilters) return [];
             return getAllMatchingProductIds({
-              search,
+              search: debouncedSearch,
+              searchField,
               page: 0,
               pageSize: 5000,
               branchId: duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId,
-              filters: buildListFilters(),
+              filters: listFilters,
             });
           }}
           bulkActions={[
@@ -2472,11 +2493,11 @@ export default function HangHoaPage() {
         </FilterGroup>
 
         <FilterGroup label="Nhà cung cấp">
-          <PersonFilter
+          <Input
+            aria-label="Tên nhà cung cấp"
             value={supplierFilter}
-            onChange={setSupplierFilter}
-            placeholder="Chọn nhà cung cấp"
-            suggestions={[]}
+            onChange={(event) => setSupplierFilter(event.target.value)}
+            placeholder="Tìm theo tên nhà cung cấp"
           />
         </FilterGroup>
       </FilterPanel>
