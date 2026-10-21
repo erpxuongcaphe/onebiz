@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useState } from "react";
+import { ReactNode, useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -165,20 +165,24 @@ export function FilterGroup({
   activeHint,
 }: FilterGroupProps) {
   const [open, setOpen] = useState(defaultOpen);
+  const contentId = useId();
   const hasActive = !!activeHint;
 
   return (
-    <div className="border-b border-border/40 last:border-b-0 pb-2 last:pb-0">
+    <div className="border-b border-border/80 pb-4 last:border-b-0 last:pb-0">
+      <div className="flex min-w-0 items-center gap-2">
       <button
         type="button"
+        aria-expanded={open}
+        aria-controls={contentId}
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          "w-full press-scale-sm flex items-center justify-between gap-2 py-2 text-xs font-semibold transition-colors",
+          "flex min-h-10 min-w-0 flex-1 items-center justify-between gap-2 rounded-md px-2 py-2 text-left text-sm font-semibold transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-primary",
           hasActive ? "text-primary" : "text-foreground hover:text-primary",
         )}
       >
-        <span className="flex items-center gap-2 truncate">
-          <span className="truncate">{label}</span>
+        <span className="flex min-w-0 flex-wrap items-center gap-2">
+          <span className="break-words">{label}</span>
           {hasActive && !open && (
             <span className="text-xs font-medium text-primary bg-primary-fixed px-2 py-0.5 rounded-full">
               {activeHint}
@@ -186,7 +190,6 @@ export function FilterGroup({
           )}
         </span>
         <span className="flex items-center gap-1 shrink-0">
-          {action}
           <Icon
             name="expand_more"
             size={14}
@@ -197,7 +200,9 @@ export function FilterGroup({
           />
         </span>
       </button>
-      {open && <div className="mt-2 space-y-1 stitch-fade-in">{children}</div>}
+      {action && <div className="shrink-0">{action}</div>}
+      </div>
+      {open && <div id={contentId} className="mt-2 space-y-2 px-2 stitch-fade-in">{children}</div>}
     </div>
   );
 }

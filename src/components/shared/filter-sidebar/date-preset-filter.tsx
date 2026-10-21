@@ -59,25 +59,26 @@ export function DatePresetFilter({
   const radioGroupName = useId();
 
   return (
-    <div className="space-y-2">
+    <div className="@container space-y-3">
+      <div className="grid grid-cols-1 gap-2 @min-[280px]:grid-cols-2">
       {presets.map((preset) => (
         <label
           key={preset.value}
-          className="flex items-center gap-2 cursor-pointer text-sm"
+          className={cn("flex min-h-10 min-w-0 cursor-pointer items-center gap-2 rounded-md border px-2.5 py-2 text-sm transition-colors", value === preset.value ? "border-primary/40 bg-primary/5" : "border-border/80 hover:bg-muted/60")}
         >
           <input
             type="radio"
             name={`date-preset-filter-${radioGroupName}`}
             checked={value === preset.value}
             onChange={() => onChange(preset.value)}
-            className="h-3.5 w-3.5 accent-primary cursor-pointer"
+            className="size-4 shrink-0 cursor-pointer accent-primary"
           />
           <span
             className={cn(
-              "flex-1 flex items-center gap-1",
+              "flex min-w-0 flex-1 items-center gap-1 break-words",
               value === preset.value
                 ? "text-primary font-medium"
-                : "text-muted-foreground"
+                : "text-foreground/80"
             )}
           >
             {preset.label}
@@ -90,22 +91,26 @@ export function DatePresetFilter({
           </span>
         </label>
       ))}
+      </div>
 
       {value === "custom" && (
-        <div className="flex items-center gap-2 mt-2 pl-5">
+        <div className="grid min-w-0 grid-cols-2 gap-2">
+          <label className="grid min-w-0 gap-1 text-xs font-medium text-muted-foreground">Từ ngày
           <Input
             type="date"
             value={from || ""}
             onChange={(e) => onFromChange?.(e.target.value)}
-            className="h-8 text-xs"
+            className="h-10 min-w-0 w-full text-sm text-foreground"
           />
-          <span className="text-muted-foreground text-xs shrink-0">→</span>
+          </label>
+          <label className="grid min-w-0 gap-1 text-xs font-medium text-muted-foreground">Đến ngày
           <Input
             type="date"
             value={to || ""}
             onChange={(e) => onToChange?.(e.target.value)}
-            className="h-8 text-xs"
+            className="h-10 min-w-0 w-full text-sm text-foreground"
           />
+          </label>
         </div>
       )}
     </div>
