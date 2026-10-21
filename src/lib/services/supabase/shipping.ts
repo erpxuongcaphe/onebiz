@@ -16,6 +16,7 @@ import type {
 } from "@/lib/types";
 import { getClient, getCurrentContext, getCurrentTenantId, getPaginationRange, handleError } from "./base";
 import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
+import { readHistoryPages } from "./read-history-pages";
 
 // --- Shipping Orders ---
 
@@ -52,6 +53,7 @@ export async function getShippingOrders(params: QueryParams): Promise<QueryResul
   // Sort & paginate
   query = query
     .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
     .range(from, to);
 
   const { data, count, error } = await query;
@@ -59,6 +61,21 @@ export async function getShippingOrders(params: QueryParams): Promise<QueryResul
 
   const orders: ShippingOrder[] = (data ?? []).map(mapShippingOrder);
   return { data: orders, total: count ?? 0 };
+}
+
+export async function getAllShippingOrders(params: Pick<QueryParams, "search" | "filters">): Promise<ShippingOrder[]> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+  const rows = await readHistoryPages(async (offset, size) => {
+    const query = supabase.from("shipping_orders").select(`
+      *, invoices!shipping_orders_invoice_id_fkey(code),
+      delivery_partners!shipping_orders_partner_id_fkey(name)
+    `, { count: "exact" }).eq("tenant_id", tenantId);
+    return await applyShippingListFilters(query, params)
+      .order("created_at", { ascending: false }).order("id", { ascending: false })
+      .range(offset, offset + size - 1);
+  });
+  return rows.map(mapShippingOrder);
 }
 
 /** Exact server counts, independent of row limits and the selected status. */

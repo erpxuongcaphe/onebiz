@@ -92,6 +92,13 @@ describe("Van don list shows real filters and whole-dataset KPIs", () => {
     expect(vanDonPage).toContain('title: "Khoảng ngày chưa hợp lệ"');
   });
 
+  it("exports every page or reports failure without a partial-file fallback", () => {
+    expect(vanDonPage).toContain("rows = await getAllShippingOrders({");
+    expect(vanDonPage).not.toContain("rows = all.data");
+    expect(vanDonPage).not.toContain("let rows = data");
+    expect(shippingService).toContain("readHistoryPages(async (offset, size)");
+  });
+
   it("shows the money columns that were missing", () => {
     expect(vanDonPage).toContain('header: "Phí giao"');
     expect(vanDonPage).toContain('header: "Thu khi giao"');

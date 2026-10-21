@@ -52,6 +52,7 @@ import {
   SHIPPING_STATUS_LABEL,
   type ShippingStatusCounts,
 } from "@/lib/services";
+import { getAllShippingOrders } from "@/lib/services/supabase/shipping";
 import { getAuditLogsByEntity, type AuditLogEntry } from "@/lib/services/supabase/audit";
 import { CreateShippingOrderDialog } from "@/components/shared/dialogs";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
@@ -535,22 +536,19 @@ export default function VanDonPage() {
         format: (v: ShippingOrder["status"]) => statusMap[v]?.label ?? v,
       },
     ];
-    let rows = data;
+    let rows: ShippingOrder[];
     try {
-      const all = await getShippingOrders({
-        page: 0,
-        pageSize: Math.max(total, pageSize),
+      rows = await getAllShippingOrders({
         search,
         filters,
       });
-      rows = all.data;
     } catch {
-      // Tải toàn bộ lỗi thì vẫn xuất trang hiện tại, còn hơn câm lặng.
       toast({
         variant: "error",
-        title: "Chỉ xuất được trang hiện tại",
-        description: "Tải toàn bộ vận đơn bị lỗi, thử lại sau.",
+        title: "Chưa xuất được danh sách đầy đủ",
+        description: "Tải vận đơn bị lỗi hoặc dữ liệu đã thay đổi. Vui lòng thử lại.",
       });
+      return;
     }
     if (type === "excel") exportToExcel(rows, exportColumns, "danh-sach-van-don");
     else exportToCsv(rows, exportColumns, "danh-sach-van-don");
