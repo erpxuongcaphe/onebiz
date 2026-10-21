@@ -25,7 +25,7 @@ export function FnbMergeBillsDialog({ orders, branchId, initialId, pendingIds, b
     if (targetId === id) setTargetId("");
   };
   return <Dialog open trackFormChanges={false} onOpenChange={open => { if (!open && !busy) onClose(); }}>
-    <DialogContent className="sm:max-w-2xl">
+    <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col sm:max-w-2xl">
       <DialogHeader><DialogTitle>Gộp bill</DialogTitle><DialogDescription>Chọn từ 2 bill tại quán hoặc mang về chưa thanh toán, rồi chọn bill giữ lại. Có thể chọn cùng bàn hoặc khác bàn.</DialogDescription></DialogHeader>
       <DialogBody className="space-y-3">
         {!online && <p role="alert" className="text-sm text-status-warning">Cần kết nối mạng để gộp bill.</p>}
