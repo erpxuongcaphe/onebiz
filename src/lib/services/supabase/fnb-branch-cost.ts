@@ -27,6 +27,15 @@ export function getPreparedRecipeUnitCost(cost: Pick<FnbBranchComponentCost, "un
   return cost.unitCost;
 }
 
+/** Preview only: retain a known batch unit price while stock awaits reconciliation.
+ * This must never replace getPreparedRecipeUnitCost in posting/readiness guards.
+ */
+export function getPreparedRecipeEstimateUnitCost(cost: Pick<FnbBranchComponentCost, "unitCost" | "costedQuantity" | "physicalQuantity"> | undefined): number | null {
+  if (!cost || !Number.isFinite(cost.unitCost) || cost.unitCost < 0) return null;
+  if (cost.unitCost === 0 && getPreparedRecipeUnitCost(cost) === null) return null;
+  return cost.unitCost;
+}
+
 /** Quantity-only production check; never returns prices or cost amounts. */
 export async function getFnbProductionStockHealth(branchId: string, productIds: string[]) {
   // Migration RPC precedes generated schema types.
