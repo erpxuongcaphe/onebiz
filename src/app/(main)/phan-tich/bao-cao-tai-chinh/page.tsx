@@ -302,7 +302,7 @@ export default function BaoCaoTaiChinhPage() {
   }, [activeBranchId, ceoView, isReady, range, toast, scopeKey]);
 
   useEffect(() => { fetchRef.current = fetchData; }, [fetchData]);
-  useLiveDataRefresh(fetchData, tenant?.id, activeBranchId, ["dashboard_live_signals"], isReady);
+  useLiveDataRefresh(fetchData, tenant?.id, activeBranchId, ["dashboard_live_signals"], isReady, 120_000);
 
   const loadMoreCogs = async () => {
     if (loadingMoreCogs || cogsItems.length >= cogsTotalCount) return;
