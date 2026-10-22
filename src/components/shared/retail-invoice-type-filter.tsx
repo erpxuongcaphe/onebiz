@@ -12,7 +12,7 @@ export function RetailInvoiceTypeFilter({value,onChange}: {
       variant={value === option.value ? "default" : "outline"}
       className="h-7 min-h-7 gap-1 px-2 text-xs font-medium pointer-coarse:min-h-11"
       onClick={()=>onChange(option.value)}>
-      <Icon name={option.icon} size={15} className="hidden sm:inline-block" /><span>{option.label}</span>
+      <span className="hidden sm:inline-flex"><Icon name={option.icon} size={15} /></span><span>{option.label}</span>
     </Button>)}
   </div>;
 }
