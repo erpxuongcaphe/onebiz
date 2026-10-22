@@ -12,7 +12,7 @@ export function FnbInvoiceTypeFilter({ value, onChange }: {
       aria-pressed={value === option.value}
       className="h-8 min-h-8 gap-1.5 px-2.5 text-xs font-medium pointer-coarse:min-h-11"
       onClick={() => onChange(option.value)}>
-      <Icon name={option.icon} size={16} /><span>{option.label}</span>
+      <Icon name={option.icon} size={16} className="hidden sm:inline-block" /><span>{option.label}</span>
     </Button>)}
   </div>;
 }
