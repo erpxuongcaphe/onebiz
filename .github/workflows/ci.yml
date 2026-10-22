@@ -400,6 +400,25 @@ jobs:
           createdb profit_loss_cross_period_test
           PGDATABASE=profit_loss_cross_period_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00426_profit_loss_cross_period.integration.sql
 
+      - name: Verify report-only inventory projection in isolated PostgreSQL
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: financial_inventory_read_test
+        run: |
+          createdb financial_inventory_read_test
+          mkdir -p .tmp
+          node scripts/fnb-db-test/extract-financial-inventory-baseline.mjs .tmp/financial-inventory-baseline.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/tests/202610220001_financial_inventory_read.integration.sql
+          psql -X -v ON_ERROR_STOP=1 -c "DROP FUNCTION public._financial_inventory_summary_20261022(timestamptz,timestamptz,uuid,uuid); DROP FUNCTION public._financial_inventory_timeline_20261022(timestamptz,timestamptz,uuid,uuid); CREATE TABLE test_guard_before AS SELECT public.test_business_hash() hash;"
+          if psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/202610220001_financial_report_inventory_read.sql; then
+            echo 'Unexpected success for changed report source'
+            exit 1
+          fi
+          psql -X -v ON_ERROR_STOP=1 -c "DO \$\$ BEGIN IF to_regprocedure('public._financial_inventory_summary_20261022(timestamptz,timestamptz,uuid,uuid)') IS NOT NULL OR to_regprocedure('public._financial_inventory_timeline_20261022(timestamptz,timestamptz,uuid,uuid)') IS NOT NULL OR public.test_business_hash() IS DISTINCT FROM (SELECT hash FROM test_guard_before) THEN RAISE EXCEPTION 'Guard failed to roll back'; END IF; END \$\$;"
+
       - name: Verify read-only kitchen return summary in an isolated database
         env:
           PGHOST: localhost
