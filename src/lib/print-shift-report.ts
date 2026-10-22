@@ -12,6 +12,8 @@ import { formatCurrency, formatDate } from "@/lib/format";
 
 export interface ShiftReportData {
   branchId?: string;
+  closeKind?: "end_of_day"|"shift_change"|null;
+  expectedTransfer?:number|null;actualTransfer?:number|null;transferDifference?:number|null;
   /** X: báo cáo tạm thời giữa ca. Z: báo cáo cuối khi đóng ca. */
   type: "X" | "Z";
   storeName?: string;
@@ -105,6 +107,11 @@ ${data.type === "Z" ? `
 <div class="row"><span>Thuc te dem:</span><span>${formatCurrency(data.actualCash)}</span></div>
 <div class="row diff"><span>Chenh lech:</span><span>${diffLabel}</span></div>
 ` : ""}
+${data.type === "Z" && data.actualTransfer != null ? `<div class="line"></div><div class="section-title">DOI CHIEU CHUYEN KHOAN</div>
+<div>${data.closeKind==='end_of_day'?'Chot cuoi ngay - khong ban giao':'Ket thuc ca'}</div>
+<div class="row"><span>Theo ca:</span><span>${formatCurrency(data.expectedTransfer??0)}</span></div>
+<div class="row"><span>Thuc nhan:</span><span>${formatCurrency(data.actualTransfer)}</span></div>
+<div class="row bold"><span>Chenh lech:</span><span>${formatCurrency(data.transferDifference??0)}</span></div>` : ""}
 ${data.note ? `<div class="line"></div><div>Ghi chu:</div><div>${data.note}</div>` : ""}
 <div class="line"></div>
 <div class="center" style="margin-top:4px">--- HET ---</div>

@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
+  DialogBody,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -26,10 +27,12 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
-import type { Shift } from "@/lib/types/shift";
+import type { Shift, ShiftCloseKind, ShiftTotalsInput } from "@/lib/types/shift";
 import { Icon } from "@/components/ui/icon";
 import { previewShiftClose, type ShiftPreview } from "@/lib/services/supabase/shifts";
 import { formatPaymentMethod } from "@/lib/constants/payment-methods";
+import { ShiftTotalsFields } from "@/components/shared/shift/shift-totals-fields";
+import { shiftTotalsDraft, SHIFT_CLOSE_LABELS } from "@/lib/shift-reconciliation";
 import { shiftSalesEmptyMessage } from "@/lib/shift-cash-preview";
 
 // R4: Quick-pick denominations cho mở/đóng ca — VND tiền mặt phổ biến.
@@ -131,7 +134,8 @@ interface CloseShiftDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   currentShift: Shift | null;
-  onConfirm: (actualCash: number, note?: string) => Promise<void>;
+  onConfirm: (actualCash: number, note?: string, reconciliation?: ShiftTotalsInput) => Promise<void>;
+  reconcileTransfer?: boolean;
 }
 
 export function CloseShiftDialog({
@@ -139,8 +143,13 @@ export function CloseShiftDialog({
   onOpenChange,
   currentShift,
   onConfirm,
+  reconcileTransfer = false,
 }: CloseShiftDialogProps) {
   const [actualCash, setActualCash] = useState("");
+  const [actualTransfer,setActualTransfer] = useState("");
+  const [closeKind,setCloseKind] = useState<ShiftCloseKind>("end_of_day");
+  const [saveError,setSaveError] = useState<string|null>(null);
+  const [refreshVersion,setRefreshVersion] = useState(0);
   const [note, setNote] = useState("");
   const [loading, setLoading] = useState(false);
   // CEO 05/06/2026: preview live thông tin ca trước khi đóng
@@ -150,20 +159,20 @@ export function CloseShiftDialog({
   // CEO 05/06/2026: popup xác nhận trước khi đóng (không thể hoàn tác)
   const [showConfirm, setShowConfirm] = useState(false);
 
-  // Fetch preview khi mở dialog
+  const shiftId = currentShift?.id;
   useEffect(() => {
-    if (!open || !currentShift) return;
-    setPreviewLoading(true);
-    setPreviewError(null);
-    previewShiftClose(currentShift.id)
-      .then(setPreview)
-      .catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : "Lỗi tải tổng quan";
-        setPreviewError(msg);
-        setPreview(null);
-      })
-      .finally(() => setPreviewLoading(false));
-  }, [open, currentShift]);
+    if (!open) return;
+    setActualCash("");setActualTransfer("");setNote("");setCloseKind("end_of_day");setSaveError(null);setShowConfirm(false);
+  }, [open,shiftId]);
+  useEffect(() => {
+    if (!open || !shiftId) return;
+    let cancelled=false;
+    setPreview(null);setPreviewLoading(true);setPreviewError(null);setShowConfirm(false);
+    previewShiftClose(shiftId).then(value=>{if(!cancelled)setPreview(value);})
+      .catch((err:unknown)=>{if(!cancelled)setPreviewError(err instanceof Error?err.message:"Lỗi tải tổng quan");})
+      .finally(()=>{if(!cancelled)setPreviewLoading(false);});
+    return ()=>{cancelled=true;};
+  }, [open,shiftId,refreshVersion]);
 
   if (!currentShift) return null;
 
@@ -173,26 +182,26 @@ export function CloseShiftDialog({
   const hours = Math.floor(elapsed / 60);
   const mins = elapsed % 60;
 
+  const draft=shiftTotalsDraft(preview,actualCash,actualTransfer,closeKind,note);
   const actualCashNum = Number(actualCash) || 0;
   const variance = preview ? actualCashNum - preview.expectedCash : 0;
 
   const handleConfirm = async () => {
-    setLoading(true);
+    if(reconcileTransfer&&!draft.valid)return;
+    setLoading(true);setSaveError(null);
     try {
-      await onConfirm(actualCashNum, note || undefined);
+      await onConfirm(actualCashNum, note || undefined, reconcileTransfer?draft.input:undefined);
       setShowConfirm(false);
-    } finally {
-      setLoading(false);
-      setActualCash("");
-      setNote("");
-      setPreview(null);
-    }
+    } catch(error) {
+      setSaveError(error instanceof Error?error.message:"Chưa chốt được ca. Kiểm tra và thử lại.");
+      setShowConfirm(false);
+    } finally { setLoading(false); }
   };
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
+      <Dialog open={open} onOpenChange={next=>{if(!loading)onOpenChange(next);}}>
+        <DialogContent className={cn("flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden",reconcileTransfer?"sm:max-w-3xl":"sm:max-w-xl")}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Icon name="check_circle" className="text-status-success" />
@@ -200,6 +209,7 @@ export function CloseShiftDialog({
             </DialogTitle>
           </DialogHeader>
 
+          <DialogBody>
           {previewLoading && (
             <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
               <Icon name="progress_activity" className="animate-spin mr-2" />
@@ -207,12 +217,7 @@ export function CloseShiftDialog({
             </div>
           )}
 
-          {previewError && (
-            <div className="rounded-lg border border-status-error/30 bg-status-error/10 p-3 text-xs text-status-error">
-              Không tải được tổng quan ca: {previewError}
-            </div>
-          )}
-
+          {(previewError||saveError)&&<div role="alert" className="space-y-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm"><p>{saveError??previewError}</p><Button type="button" variant="outline" disabled={loading||previewLoading} onClick={()=>{setSaveError(null);setRefreshVersion(v=>v+1);}}>Tải lại tổng quan</Button></div>}
           {preview && (
             <div className="py-2 space-y-4">
               {/* Section: Thời gian + Đơn hàng */}
@@ -253,6 +258,8 @@ export function CloseShiftDialog({
                 )}
               </div>
 
+              <div className={reconcileTransfer?"grid gap-4 md:grid-cols-2":""}>
+              <div className="space-y-4">
               {/* Section: Quỹ tiền mặt */}
               <div className="border border-primary/30 bg-primary/5 rounded-lg p-3 space-y-1.5 text-sm">
                 <div className="text-xs font-semibold uppercase text-primary tracking-wide mb-1">
@@ -269,7 +276,7 @@ export function CloseShiftDialog({
                   </span>
                 </div>
                 <div className="flex flex-wrap justify-between gap-x-2">
-                  <span className="text-muted-foreground">− Chi tiền mặt trong ca</span>
+                  <span className="text-muted-foreground">{reconcileTransfer?"− Hoàn/trả và khoản giảm tiền mặt":"− Chi tiền mặt trong ca"}</span>
                   <span className="font-medium tabular-nums text-status-error">
                     −{formatCurrency(preview.cashOut)}đ
                   </span>
@@ -284,7 +291,7 @@ export function CloseShiftDialog({
 
               {/* Actual cash input */}
               <div>
-                <Label className="font-semibold">Tiền mặt thực tế trong ngăn kéo *</Label>
+                <Label htmlFor="shift-counted-cash" className="font-semibold">Tiền mặt thực đếm trong ngăn kéo *</Label>
                 <div className="relative mt-1">
                   <Icon name="attach_money" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <Input
@@ -293,7 +300,7 @@ export function CloseShiftDialog({
                     inputMode="numeric"
                     value={actualCash}
                     onChange={(e) => setActualCash(e.target.value)}
-                    placeholder="Đếm tiền mặt thực tế và nhập vào đây..."
+                    id="shift-counted-cash" disabled={loading} placeholder="Đếm tiền mặt thực tế và nhập vào đây..."
                     className="pl-9 text-lg h-11"
                     /* autoFocus bỏ — mobile keyboard jump làm mất tóm tắt ca */
                   />
@@ -329,19 +336,24 @@ export function CloseShiftDialog({
                 )}
               </div>
 
+              </div>
+              {reconcileTransfer&&<ShiftTotalsFields id="close-shift" expectedTransfer={draft.expectedTransfer} actualTransfer={actualTransfer} onTransfer={setActualTransfer} closeKind={closeKind} onKind={setCloseKind} disabled={loading}/>}
+              </div>
+              {reconcileTransfer&&draft.hasDifference&&note.trim().length<3&&<p className="text-sm text-destructive">Nhập lý do chênh lệch trong ghi chú (ít nhất 3 ký tự).</p>}
               {/* Note */}
               <div>
-                <Label>Ghi chú (tùy chọn)</Label>
+                <Label htmlFor="shift-close-note">{reconcileTransfer&&draft.hasDifference?"Lý do chênh lệch *":"Ghi chú (tùy chọn)"}</Label>
                 <Input
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  placeholder="VD: Thiếu 50k do trả nhầm khách..."
+                  id="shift-close-note" disabled={loading} placeholder="VD: Thiếu 50k do trả nhầm khách..."
                   className="mt-1"
                 />
               </div>
             </div>
           )}
 
+          </DialogBody>
           <DialogFooter>
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
               Hủy
@@ -350,7 +362,7 @@ export function CloseShiftDialog({
               onClick={() => setShowConfirm(true)}
               // BUG FIX: cho phép nhập 0 (két trống thật) — string "" thay vì
               // !actualCash (đề phòng JS coerce). Cashier có thể đếm ra 0đ.
-              disabled={loading || !preview || actualCash === ""}
+              disabled={loading || !preview || actualCash === "" || (reconcileTransfer&&!draft.valid)}
               className="bg-status-success text-on-success hover:bg-status-success/90"
             >
               Đóng ca
@@ -372,6 +384,7 @@ export function CloseShiftDialog({
             </DialogDescription>
           </DialogHeader>
           <div className="py-3 space-y-2 text-sm">
+            {reconcileTransfer&&<div className="rounded-md border p-2"><b>{SHIFT_CLOSE_LABELS[closeKind]}</b><p>Chuyển khoản thực nhận: {formatCurrency(draft.actualTransfer??0)}đ · theo ca: {formatCurrency(draft.expectedTransfer)}đ</p></div>}
             <div className="flex flex-wrap justify-between gap-x-2">
               <span className="text-muted-foreground">Doanh thu ca:</span>
               <span className="font-bold tabular-nums">{formatCurrency(preview?.totalSales ?? 0)}đ</span>

@@ -75,8 +75,10 @@ describe("Tiền không được giấu", () => {
   it("shift-dialog: dòng tiền flex-wrap (số dài xuống dòng, không tràn)", () => {
     const src = readFileSync("src/app/pos/fnb/components/shift-dialog.tsx", "utf8");
     expect(src).toContain("flex flex-wrap justify-between gap-x-2");
-    // CloseShiftDialog vẫn giữ mẫu chuẩn max-h + overflow
-    expect(src).toContain("max-h-[90vh] overflow-y-auto");
+    // Header/footer stay visible; the shared DialogBody owns scrolling.
+    expect(src).toContain("max-h-[calc(100dvh-2rem)] flex-col overflow-hidden");
+    expect(src).toContain("<DialogBody>");
+    expect(src.indexOf("</DialogBody>")).toBeLessThan(src.indexOf("<DialogFooter>",src.indexOf("<DialogBody>")));
   });
 });
 
