@@ -71,7 +71,7 @@ export function OpeningStockDialog({open,onOpenChange,onFinished,mode="file"}: {
     entryContent={entryMode==="manual"?(onPreview,busy)=><OpeningStockManualEntry onPreview={onPreview} busy={busy} contextContent={contextContent} onSummary={setEntrySummary}/>:undefined}
     entryFormId={entryMode==="manual"?"opening-manual-form":undefined} entrySubmitDisabled={entrySummary.count===0}
     entrySummary={<div><p className="font-semibold text-primary">{entrySummary.count} mã · {formatCurrency(entrySummary.value)} <span className="text-xs font-normal">₫</span></p>{entrySummary.incomplete>0&&<p className="text-xs text-status-warning">{entrySummary.incomplete} hàng chưa đủ thông tin</p>}</div>}
-    compactInstructions showSteps
+    compactInstructions showSteps wideEntry
     preparePreview={prepare} onFinished={onFinished} retryOnFailure
     confirmDisabled={!prepared || (needsZero&&!zeroConfirmed)}
     onCommit={async()=>{
@@ -97,7 +97,7 @@ export function OpeningStockDialog({open,onOpenChange,onFinished,mode="file"}: {
       <div className="hidden sm:block overflow-x-auto border rounded-md"><table className="w-full text-sm min-w-[630px]">
         <thead className="bg-primary/5 text-primary"><tr>{["Mã / tên hàng","ĐVT","Đang có","Sau nhập","Thay đổi","Giá vốn","Giá trị"].map(label=><th key={label} className="p-2 text-left font-medium">{label}</th>)}</tr></thead>
         <tbody>{preview.map(row=><tr key={row.productId} className="border-t">
-          <td className="p-2"><b>{row.productCode}</b><p className="text-muted-foreground">{row.productName}</p></td>
+          <td className="p-2 whitespace-nowrap"><b className="mr-2 text-primary">{row.productCode}</b><span>{row.productName}</span></td>
           <td className="p-2">{row.unit}</td><td className="p-2 tabular-nums">{formatStockQuantity(row.quantityBefore)}</td>
           <td className="p-2 tabular-nums font-medium">{formatStockQuantity(row.quantity)}</td>
           <td className="p-2 tabular-nums text-primary">{row.delta>0?"+":""}{formatStockQuantity(row.delta)}</td>

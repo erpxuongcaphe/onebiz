@@ -163,7 +163,7 @@ export function CreatePromotionDialog({
   useEffect(() => {
     if (!open || type !== "gift") return;
     if (productsCache.length > 0) return; // đã cache
-    getProducts({ page: 0, pageSize: 200, search: "" })
+    getProducts({ page: 0, pageSize: 200, search: "", filters: { productType: "sku" } })
       .then((r) => setProductsCache(r.data))
       .catch(() => {});
   }, [open, type, productsCache.length]);
@@ -174,7 +174,7 @@ export function CreatePromotionDialog({
     const timer = setTimeout(() => {
       setScopeLoading(true); setScopeError("");
       const load = appliesTo === "product"
-        ? getProducts({ page:0, pageSize:100, search:scopeSearch }).then(r => r.data)
+        ? getProducts({ page:0, pageSize:100, search:scopeSearch, filters: { productType: "sku" } }).then(r => r.data)
         : getCategoriesByScope("sku").then(rows => rows.filter(r => r.name.toLowerCase().includes(scopeSearch.toLowerCase())));
       load.then(rows => { if (alive) setScopeOptions(rows); })
         .catch(e => { if (alive) setScopeError(e instanceof Error ? e.message : "Không tải được danh mục/món."); })

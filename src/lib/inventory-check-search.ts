@@ -7,7 +7,7 @@ export function buildInventoryCheckProductFilter(
 
   const groups = [
     "or(inventory_role.is.null,inventory_role.neq.fnb_menu_item)",
-    ...(isOutlet ? [] : ["or(product_type.eq.nvl,has_bom.is.false)"]),
+    ...(isOutlet ? ["product_type.eq.sku"] : ["or(product_type.eq.nvl,has_bom.is.false)"]),
     `or(code.ilike.%${term}%,name.ilike.%${term}%,barcode.ilike.%${term}%)`,
   ];
 

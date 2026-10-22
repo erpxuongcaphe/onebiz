@@ -1,5 +1,8 @@
 "use client";
 
+import { useFnbCatalogScope } from "@/lib/hooks/use-fnb-catalog-scope";
+import { applyFnbCatalogScope } from "@/lib/fnb-catalog-scope";
+
 import { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
@@ -84,6 +87,7 @@ export function CreatePurchaseEntryDialog({
   onSuccess,
 }: CreatePurchaseEntryDialogProps) {
   const { toast } = useToast();
+  const fnbCatalog = useFnbCatalogScope();
   const [code, setCode] = useState("");
   const [supplierSearch, setSupplierSearch] = useState("");
   const [selectedSupplier, setSelectedSupplier] = useState<{ id: string; name: string } | null>(null);
@@ -185,6 +189,8 @@ export function CreatePurchaseEntryDialog({
   }, [supplierSearch, currentTenantId]);
 
   useEffect(() => {
+    let cancelled = false;
+    setFilteredProducts([]);
     if (!productSearch || productSearch.length < 1) {
       setFilteredProducts([]);
       return;
@@ -193,14 +199,15 @@ export function CreatePurchaseEntryDialog({
     const timer = setTimeout(async () => {
       const supabase = getClient();
       const ctx = await getCurrentContext();
-      const { data } = await supabase
+      const { data } = await applyFnbCatalogScope(supabase
         .from("products_scoped")
         .select("id, code, name, unit, cost_price, vat_rate")
         .or(`name.ilike.%${productSearch}%,code.ilike.%${productSearch}%`)
         .eq("tenant_id", currentTenantId ?? ctx.tenantId)
-        .eq("is_active", true)
+        .eq("is_active", true), fnbCatalog)
         .limit(10);
 
+      if (cancelled) return;
       setFilteredProducts((data ?? []).map((p) => ({
         id: p.id,
         code: p.code ?? "",
@@ -211,8 +218,8 @@ export function CreatePurchaseEntryDialog({
       })));
     }, 300);
 
-    return () => clearTimeout(timer);
-  }, [productSearch, currentTenantId]);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [productSearch, currentTenantId, fnbCatalog]);
 
   function addProduct(product: SearchProduct) {
     const existing = items.find((item) => item.id === product.id);

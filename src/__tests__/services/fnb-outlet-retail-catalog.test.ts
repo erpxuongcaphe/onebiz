@@ -17,7 +17,7 @@ describe("F&B outlet Retail ingredient catalog", () => {
 
   it("derives the outlet catalog from active Retail SKUs instead of stock rows", () => {
     expect(service).toContain(
-      'return query.or("channel.eq.fnb,channel.eq.retail")',
+      'return query.eq("product_type", "sku").or("channel.eq.fnb,channel.eq.retail")',
     );
     expect(service).not.toContain("stockedIds");
     expect(service).not.toMatch(

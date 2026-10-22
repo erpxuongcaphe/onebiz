@@ -10,7 +10,7 @@ describe("inventory check product search filter", () => {
 
   it("keeps the outlet stock rule while excluding menu items", () => {
     expect(buildInventoryCheckProductFilter("NVL-SST-019", true)).toBe(
-      "and(or(inventory_role.is.null,inventory_role.neq.fnb_menu_item),or(code.ilike.%NVL-SST-019%,name.ilike.%NVL-SST-019%,barcode.ilike.%NVL-SST-019%))",
+      "and(or(inventory_role.is.null,inventory_role.neq.fnb_menu_item),product_type.eq.sku,or(code.ilike.%NVL-SST-019%,name.ilike.%NVL-SST-019%,barcode.ilike.%NVL-SST-019%))",
     );
   });
 

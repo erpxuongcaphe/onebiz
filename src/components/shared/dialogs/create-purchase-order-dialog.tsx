@@ -1,5 +1,7 @@
 "use client";
 
+import { useFnbCatalogScope } from "@/lib/hooks/use-fnb-catalog-scope";
+
 import { ExpiryDateInput } from "@/components/shared/expiry-date-input";
 import { useState, useEffect, useMemo, useRef } from "react";
 import {
@@ -240,6 +242,7 @@ export function CreatePurchaseOrderDialog({
   // Phase 1.5 (CEO 01/06/2026): edit phiếu đã nhập kho — locked items/qty.
   const isOrderedLocked = isEdit && editingPO?.status === "ordered";
   const { toast } = useToast();
+  const fnbCatalog = useFnbCatalogScope();
   const [code, setCode] = useState("");
   const [supplierSearch, setSupplierSearch] = useState("");
   const [selectedSupplier, setSelectedSupplier] = useState<{ id: string; name: string } | null>(null);
@@ -433,7 +436,9 @@ export function CreatePurchaseOrderDialog({
   }, [supplierSearch, currentTenantId]);
 
   useEffect(() => {
-    if (!productSearch || productSearch.length < 1) {
+    let cancelled = false;
+    setFilteredProducts([]);
+    if (fnbCatalog || !productSearch || productSearch.length < 1) {
       setFilteredProducts([]);
       return;
     }
@@ -455,6 +460,7 @@ export function CreatePurchaseOrderDialog({
         .eq("product_type", "nvl")
         .limit(10);
 
+      if (cancelled) return;
       setFilteredProducts((data ?? []).map((p) => ({
         id: p.id,
         code: p.code ?? "",
@@ -465,8 +471,8 @@ export function CreatePurchaseOrderDialog({
       })));
     }, 300);
 
-    return () => clearTimeout(timer);
-  }, [productSearch, currentTenantId]);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [productSearch, currentTenantId, fnbCatalog]);
 
   async function addProduct(product: SearchProduct) {
     const existing = items.find((item) => item.id === product.id);

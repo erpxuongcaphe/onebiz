@@ -198,7 +198,7 @@ export function AssignExpiryDialog({
           onlyWithoutLots,
         });
         if (cancelled) return;
-        setProducts(rows);
+        setProducts(rows.filter(row => branches.find(branch => branch.id === branchId)?.branchType !== "store" || row.productType === "sku"));
         // Khởi tạo per-row state: default qty = branchStock (toàn bộ)
         const init: Record<string, RowState> = {};
         for (const p of rows) {
@@ -227,7 +227,7 @@ export function AssignExpiryDialog({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, branchId, categoryId, supplierId, onlyWithoutLots]);
+  }, [open, branchId, categoryId, supplierId, onlyWithoutLots, branches]);
 
   // Reset khi close
   useEffect(() => {
@@ -377,7 +377,7 @@ export function AssignExpiryDialog({
             supplierId: supplierId || null,
             onlyWithoutLots,
           });
-          setProducts(fresh);
+          setProducts(fresh.filter(row => branches.find(branch => branch.id === branchId)?.branchType !== "store" || row.productType === "sku"));
           const init: Record<string, RowState> = {};
           for (const p of fresh) {
             init[p.productId] = {

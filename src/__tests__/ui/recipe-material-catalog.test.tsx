@@ -51,3 +51,11 @@ describe("recipe material catalog refresh", () => {
     expect(onData).not.toHaveBeenCalled();
   });
 });
+
+it("requests SKU scope before pagination for F&B recipes while retaining BTP rows", async () => {
+  api.getProducts.mockResolvedValue({ data: [{ id: "prepared" }] });
+  const onData = vi.fn();
+  renderHook(() => useRecipeMaterialCatalog(true, onData, true));
+  await waitFor(() => expect(onData).toHaveBeenCalledWith([{ id: "prepared" }]));
+  expect(api.getProducts).toHaveBeenCalledWith(expect.objectContaining({ filters: { productType: "sku" } }));
+});
