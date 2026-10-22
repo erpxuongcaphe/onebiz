@@ -25,6 +25,7 @@ const PRINTER_VENDORS = [
   { vendorId: 0x04b8, name: "Epson" }, // TM-T20, TM-T82, TM-T88
   { vendorId: 0x0519, name: "Xprinter (Star Micronics)" },
   { vendorId: 0x0fe6, name: "Xprinter/ICS (XP-58/XP-80)" },
+  { vendorId: 0x1fc9, name: "Printer-80 (Xprinter OEM)" }, // Verified on Premium Android POS: PID 0x2016
   { vendorId: 0x0dd4, name: "Custom Engineering" },
   { vendorId: 0x0416, name: "Winbond (Rongta, Gprinter)" },
   { vendorId: 0x0483, name: "STMicroelectronics" },
