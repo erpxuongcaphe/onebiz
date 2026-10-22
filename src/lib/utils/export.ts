@@ -53,7 +53,7 @@ export async function exportToExcel<T extends Record<string, any>>(
   data: T[],
   columns: ExportColumn[],
   fileName: string,
-  options?: { financialTable?: boolean; onPrepared?: (blob: Blob, fileName: string) => void },
+  options?: { financialTable?: boolean; onPrepared?: (blob: Blob, fileName: string) => void; shouldSave?: () => boolean },
 ): Promise<void> {
   // Lazy import — xlsx chỉ tải khi function thực sự được gọi.
   const { XLSX, saveAs } = await loadXlsxAndSaver();
@@ -94,6 +94,7 @@ export async function exportToExcel<T extends Record<string, any>>(
   const blob = new Blob([excelBuffer], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
+  if (options?.shouldSave && !options.shouldSave()) return;
   options?.onPrepared?.(blob, `${fileName}.xlsx`);
   saveAs(blob, `${fileName}.xlsx`);
 }
@@ -103,6 +104,7 @@ export async function exportToCsv<T extends Record<string, any>>(
   data: T[],
   columns: ExportColumn[],
   fileName: string,
+  options?: { shouldSave?: () => boolean },
 ): Promise<void> {
   const { XLSX, saveAs } = await loadXlsxAndSaver();
 
@@ -121,5 +123,6 @@ export async function exportToCsv<T extends Record<string, any>>(
   const ws = XLSX.utils.json_to_sheet(rows);
   const csv = XLSX.utils.sheet_to_csv(ws);
   const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }); // BOM for Vietnamese
+  if (options?.shouldSave && !options.shouldSave()) return;
   saveAs(blob, `${fileName}.csv`);
 }
