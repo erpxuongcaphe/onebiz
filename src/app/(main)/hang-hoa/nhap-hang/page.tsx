@@ -564,7 +564,7 @@ export default function NhapHangPage() {
       setDatePreset(sourceSearch?'all':value.datePreset);setDateFrom(sourceSearch?'':value.dateFrom);setDateTo(sourceSearch?'':value.dateTo);setCreatorFilter(sourceSearch?'':value.creatorFilter);setImporterFilter(sourceSearch?'':value.importerFilter);setCostReturnFilter(sourceSearch?'all':value.costReturnFilter);setViewMode(value.viewMode);setBoardSort(value.boardSort);setSorting(value.sorting);
     },
   });
-  const duocXemToanChuoi = hasAny(["reports.view_all_branches", "system.manage_branches"]);
+  const duocXemToanChuoi = hasAny(["reports.view_all_branches"]);
   // Đổi chi nhánh ở global switcher → về lại chế độ lọc theo chi nhánh.
   useEffect(() => {
     setViewAllBranches(false);

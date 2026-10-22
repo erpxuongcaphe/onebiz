@@ -71,7 +71,7 @@ export default function LoSanXuatPage() {
   const { toast } = useToast();
   const { activeBranchId, currentBranch, isReady } = useBranchFilter();
   const { hasAny, isLoading: permissionsLoading } = usePermissions();
-  const duocXemToanChuoi = hasAny(["reports.view_all_branches","system.manage_branches"]);
+  const duocXemToanChuoi = hasAny(["reports.view_all_branches"]);
   const txPerms = useTxRowPermissions("production");
   const [data,setData]=useState<LotRow[]>([]);
   const units = useProductUom(data.map(row => row.productId));

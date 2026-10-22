@@ -39,7 +39,7 @@ export default function HSDPage() {
   const { toast } = useToast();
   const { activeBranchId, currentBranch, isReady } = useBranchFilter();
   const { hasAny, isLoading: permissionsLoading } = usePermissions();
-  const duocXemToanChuoi = hasAny(["reports.view_all_branches", "system.manage_branches"]);
+  const duocXemToanChuoi = hasAny(["reports.view_all_branches"]);
   const [viewAllBranches, setViewAllBranches] = useState(false);
   const [otherBranchCount, setOtherBranchCount] = useState(0);
   const [data, setData] = useState<LotRow[]>([]);

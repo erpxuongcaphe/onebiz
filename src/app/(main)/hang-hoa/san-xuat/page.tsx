@@ -313,7 +313,7 @@ export default function SanXuatPage() {
   // CEO 08/07: xem tất cả chi nhánh (cục bộ) khi bảng trống vì lọc chi nhánh.
   const [viewAllBranches, setViewAllBranches] = useState(false);
   const [otherBranchCount, setOtherBranchCount] = useState(0);
-  const duocXemToanChuoi = hasAny(["reports.view_all_branches", "system.manage_branches"]);
+  const duocXemToanChuoi = hasAny(["reports.view_all_branches"]);
   // Đổi chi nhánh ở global switcher → về lại chế độ lọc theo chi nhánh.
   useEffect(() => {
     setViewAllBranches(false);

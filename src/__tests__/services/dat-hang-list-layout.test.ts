@@ -63,7 +63,7 @@ describe("bố cục và bộ lọc Đơn đặt hàng", () => {
     expect(page).toContain("getOrdersTheoPhamVi");
     expect(page).toContain("getChiSoDonDatHangTheoPhamVi");
     expect(page).toContain('"reports.view_all_branches"');
-    expect(page).toContain('"system.manage_branches"');
+    expect(page).not.toContain('"system.manage_branches"');
   });
 
   it("kết quả danh sách cũ về muộn không được ghi đè bộ lọc mới", () => {

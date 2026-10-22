@@ -231,7 +231,6 @@ export default function SoQuyPage() {
   const { hasAny, isLoading: permissionsLoading } = usePermissions();
   const duocXemToanChuoi = hasAny([
     "reports.view_all_branches",
-    "system.manage_branches",
   ]);
   const txPerms = useTxRowPermissions("cash_transaction");
   const [data, setData] = useState<CashBookEntry[]>([]);
