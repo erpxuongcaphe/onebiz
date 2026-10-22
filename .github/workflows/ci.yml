@@ -622,6 +622,16 @@ jobs:
           createdb branch_boundaries_test
           PGDATABASE=branch_boundaries_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00567_transaction_branch_boundaries.integration.sql
 
+      - name: Verify concurrent F&B shift totals close and cash posting
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          createdb fnb_shift_totals_race_test
+          PGDATABASE=fnb_shift_totals_race_test node scripts/fnb-db-test/run-shift-totals-postgres.mjs
+
   test-and-build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
