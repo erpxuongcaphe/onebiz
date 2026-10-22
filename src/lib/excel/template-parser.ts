@@ -39,9 +39,15 @@ export function parseWorkbook<TRow>(
 ): ParseResult<TRow> {
   const tableErrors: string[] = [];
 
-  // Tìm sheet "Dữ liệu" trước, fallback first sheet
+  // Opening stock accepts visually equivalent headers without changing data values.
+  const headerKey = (value: unknown): string => {
+    const text = value == null ? "" : String(value);
+    return schema.normalizeHeaders
+      ? text.normalize("NFC").replace(/[\u200B-\u200D\u2060\uFEFF]/g, "").replace(/\s+/g, " ").trim().toLocaleLowerCase("vi-VN")
+      : text.trim();
+  };
   const sheetName =
-    wb.SheetNames.find((n) => n === "Dữ liệu") ?? wb.SheetNames[0];
+    wb.SheetNames.find((name) => headerKey(name) === headerKey("Dữ liệu")) ?? wb.SheetNames[0];
 
   if (!sheetName) {
     return {
@@ -66,7 +72,7 @@ export function parseWorkbook<TRow>(
   const aoa = XLSX.utils.sheet_to_json<unknown[]>(ws, {
     header: 1,
     defval: null,
-    blankrows: false,
+    blankrows: schema.headerRowSearchLimit ? true : false,
     raw: true,
   });
 
@@ -75,15 +81,31 @@ export function parseWorkbook<TRow>(
     return { validRows: [], errorRows: [], totalRows: 0, tableErrors };
   }
 
-  // Hàng 1 = header
-  const headerRow = (aoa[0] ?? []).map((h) =>
-    h === null || h === undefined ? "" : String(h).trim()
-  );
+  let headerIndex = 0;
+  const searchLimit = Math.min(aoa.length, Math.max(1, schema.headerRowSearchLimit ?? 1));
+  const requiredHeaders = schema.columns.filter(column => column.required).map(column => headerKey(column.header));
+  let bestScore = -1;
+  for (let index = 0; index < searchLimit; index++) {
+    const keys = new Set((aoa[index] ?? []).map(headerKey));
+    const score = schema.columns.filter((column) => keys.has(headerKey(column.header))).length;
+    if (score > bestScore) { bestScore = score; headerIndex = index; }
+    // Stop at the first complete required header; never skip data for a later header.
+    if (requiredHeaders.length > 0 && requiredHeaders.every(header => keys.has(header))) {
+      headerIndex = index; break;
+    }
+  }
+  const headerRow = (aoa[headerIndex] ?? []).map(headerKey);
 
   // Map từ column.key → index trong file
   const keyToIndex = new Map<string, number>();
   for (const column of schema.columns) {
-    const idx = headerRow.findIndex((h) => h === column.header);
+    const matches = headerRow.flatMap((header, index) =>
+      header === headerKey(column.header) ? [index] : []);
+    if (schema.normalizeHeaders && matches.length > 1) {
+      tableErrors.push(`Cột "${column.header}" bị lặp ở dòng tiêu đề ${headerIndex + 1}. Xóa hoặc đổi tên cột trùng trước khi nhập.`);
+      continue;
+    }
+    const idx = matches[0] ?? -1;
     if (idx === -1) {
       if (column.required) {
         tableErrors.push(
@@ -99,9 +121,12 @@ export function parseWorkbook<TRow>(
   // Nếu có table error nghiêm trọng, vẫn parse để show lỗi từng dòng
   // nhưng return với tableErrors đầy đủ.
 
-  // Parse từng data row (hàng 2+ trong Excel, tức index 1+ trong aoa)
+  if (schema.normalizeHeaders && tableErrors.length > 0) {
+    tableErrors.push(`Đang đọc sheet "${sheetName}", tiêu đề dòng ${headerIndex + 1}. Các cột đọc được: ${(aoa[headerIndex] ?? []).filter((cell) => cell != null && String(cell).trim()).join(" · ")}.`);
+  }
+
   const parsedRows: ParsedRow<TRow>[] = [];
-  for (let i = 1; i < aoa.length; i++) {
+  for (let i = headerIndex + 1; i < aoa.length; i++) {
     const row = aoa[i] ?? [];
     if (isRowEmpty(row)) continue;
 

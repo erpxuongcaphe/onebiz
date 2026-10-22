@@ -57,3 +57,42 @@ it("filters unfinished rows but restores the full draft when review finds missin
  expect(await screen.findByRole("alert")).toHaveTextContent("SUA: nhập đủ");expect(screen.getByText("Trà")).toBeTruthy();
  expect(screen.getByText("Còn thiếu số lượng và giá vốn.")).toBeTruthy();expect(mocks.preview).not.toHaveBeenCalled();expect(mocks.commit).not.toHaveBeenCalled();
 });
+
+
+it("offers direct entry from the Excel screen without a file and keeps manual drafts safe", async () => {
+ render(<OpeningStockDialog open mode="file" onOpenChange={()=>{}} onFinished={()=>{}}/>);
+ expect(screen.getByRole("button",{name:"Từ Excel"})).toHaveAttribute("aria-pressed","true");
+ fireEvent.click(screen.getByRole("button",{name:"Nhập trực tiếp"}));
+ expect(screen.getByRole("button",{name:"Nhập trực tiếp"})).toHaveAttribute("aria-pressed","true");
+ expect(screen.queryByRole("button",{name:"Chọn file"})).not.toBeInTheDocument();
+ await add();
+ fireEvent.change(screen.getByLabelText("Số lượng (G)"),{target:{value:"2"}});
+ expect(screen.getByRole("button",{name:"Từ Excel"})).toBeDisabled();
+ expect(screen.getByLabelText("Số lượng (G)")).toHaveValue("2");
+ expect(mocks.preview).not.toHaveBeenCalled();
+ expect(mocks.commit).not.toHaveBeenCalled();
+});
+
+it("previews and commits multiple manually entered ingredients together only after confirmation", async () => {
+ render(<OpeningStockDialog open mode="manual" onOpenChange={()=>{}} onFinished={()=>{}}/>);
+ await add();
+ fireEvent.change(screen.getByLabelText("Lý do / nguồn đối chiếu"),{target:{value:"Khởi tạo nhiều nguyên liệu"}});
+ fireEvent.change(screen.getByLabelText("Số lượng (G)"),{target:{value:"2.0042"}});
+ fireEvent.change(screen.getByLabelText("Giá vốn / G"),{target:{value:"250.000001"}});
+ mocks.search.mockResolvedValue([{id:"p2",code:"SUA",name:"Sữa",unit:"Hộp"}]);
+ fireEvent.change(screen.getByLabelText("Thêm hàng"),{target:{value:"SUA"}});
+ fireEvent.click(await screen.findByRole("option",{name:/SUA.*Sữa/}));
+ fireEvent.change(screen.getByLabelText("Số lượng (Hộp)"),{target:{value:"3"}});
+ fireEvent.change(screen.getByLabelText("Giá vốn / Hộp"),{target:{value:"32000"}});
+ mocks.preview.mockResolvedValue([snapshot,{...snapshot,productId:"p2",productCode:"SUA",productName:"Sữa",unit:"Hộp",quantity:3,costPrice:32000,delta:3,value:96000}]);
+ fireEvent.click(screen.getByRole("button",{name:"Xem trước tồn"}));
+ await screen.findByRole("button",{name:"Xác nhận nhập 2 dòng"});
+ expect(mocks.preview).toHaveBeenCalledWith([
+   expect.objectContaining({productCode:"TRA",quantity:2.0042,costPrice:250.000001}),
+   expect.objectContaining({productCode:"SUA",quantity:3,costPrice:32000})
+ ]);
+ expect(mocks.commit).not.toHaveBeenCalled();
+ fireEvent.click(screen.getByRole("button",{name:"Xác nhận nhập 2 dòng"}));
+ await waitFor(()=>expect(mocks.commit).toHaveBeenCalledTimes(1));
+ expect(mocks.commit.mock.calls[0][0].rows).toHaveLength(2);
+});

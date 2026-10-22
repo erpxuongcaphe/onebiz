@@ -63,6 +63,10 @@ export interface ExcelSchema<TRow = Record<string, unknown>> {
   /** Prefix cho tên file xuất (KHÔNG kèm .xlsx, không kèm date) */
   fileName: string;
   columns: ExcelColumn<TRow>[];
+  /** Opt in to matching equivalent Unicode/case/spacing in sheet and column headers. */
+  normalizeHeaders?: boolean;
+  /** Opt in to finding the header after introductory rows; preserves actual Excel row numbers. */
+  headerRowSearchLimit?: number;
   /**
    * Validate cross-column hoặc cross-row sau khi parse xong.
    * Trả null = OK, trả string = message lỗi tiếng Việt.

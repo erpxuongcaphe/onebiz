@@ -62,6 +62,7 @@ interface ImportExcelDialogProps<TRow> {
   onFinished?: () => void;
   preparePreview?: (rows: TRow[], file: File) => Promise<void>;
   uploadContent?: ReactNode;
+  entryModeContent?: (busy: boolean, resetEntry: () => void) => ReactNode;
   previewContent?: ReactNode;
   instructions?: ReactNode;
   confirmDisabled?: boolean;
@@ -82,7 +83,7 @@ export function ImportExcelDialog<TRow>({
   schema,
   onCommit,
   onFinished,
-  preparePreview, uploadContent, previewContent, instructions, confirmDisabled, retryOnFailure, entryContent, title,
+  preparePreview, uploadContent, previewContent, instructions, confirmDisabled, retryOnFailure, entryContent, title, entryModeContent,
   entryFormId,entrySubmitDisabled,entrySummary,compactInstructions,showSteps,
 }: ImportExcelDialogProps<TRow>) {
   const [step, setStep] = useState<Step>("upload");
@@ -241,6 +242,7 @@ export function ImportExcelDialog<TRow>({
         })}</ol>}
 
         <DialogBody>
+        {step === "upload" && entryModeContent?.(preparing, reset)}
         {entryContent && <div hidden={step !== "upload"}>{entryContent(handleManualPreview, preparing)}</div>}
         {step === "upload" && (
           <div className="space-y-3">

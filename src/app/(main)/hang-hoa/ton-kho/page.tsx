@@ -1107,12 +1107,12 @@ export default function TonKhoPage() {
             // CEO 28/05/2026: disable khi tồn kho đã khóa.
             label: inventoryLocked
               ? "Nhập tồn đầu kỳ (đã khóa)"
-              : "Nhập tồn kho đầu kỳ",
-            icon: <Icon name={inventoryLocked ? "lock" : "upload"} size={16} />,
-            onClick: () => {setOpeningMode("file");setImportOpen(true);},
+              : "Nhập tồn đầu kỳ",
+            icon: <Icon name={inventoryLocked ? "lock" : "edit_note"} size={16} />,
+            onClick: () => {setOpeningMode("manual");setImportOpen(true);},
             disabled: inventoryLocked,
           },
-          {label:"Nhập trực tiếp",icon:<Icon name="edit_note" size={16}/>,onClick:()=>{setOpeningMode("manual");setImportOpen(true);},disabled:inventoryLocked},
+          {label:"Nhập từ Excel",icon:<Icon name="upload" size={16}/>,variant:"outline",onClick:()=>{setOpeningMode("file");setImportOpen(true);},disabled:inventoryLocked},
           {label:"Lịch sử tồn ban đầu",icon:<Icon name="history" size={16}/>,variant:"ghost",onClick:()=>setOpeningHistoryOpen(true)},
           // CEO 28/05/2026: nút Chốt & khóa / Mở khóa — chỉ ai có quyền inventory.lock.
           ...(canLock

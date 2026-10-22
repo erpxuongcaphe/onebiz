@@ -6,6 +6,7 @@ import { ImportExcelDialog } from "./import-excel-dialog";
 import { OpeningStockManualEntry, type OpeningEntrySummary } from "./opening-stock-manual-entry";
 import { initialStockExcelSchema, type InitialStockImportRow } from "@/lib/excel/schemas";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { formatCurrency, formatStockQuantity } from "@/lib/format";
 import { commitOpeningStock, previewOpeningStock, openingPurposeLabels, type OpeningPurpose, type OpeningPreviewRow } from "@/lib/services/supabase/opening-stock";
@@ -19,6 +20,7 @@ function localNow() {
 export function OpeningStockDialog({open,onOpenChange,onFinished,mode="file"}: {
   open:boolean;onOpenChange:(open:boolean)=>void;onFinished:()=>void;mode?:"file"|"manual";
 }) {
+  const [entryMode,setEntryMode]=useState(mode);
   const [purpose,setPurpose]=useState<OpeningPurpose>("migration");
   const requestGeneration=useRef(0);
   const [sourceAt,setSourceAt]=useState(localNow);
@@ -55,9 +57,19 @@ export function OpeningStockDialog({open,onOpenChange,onFinished,mode="file"}: {
       <p className="text-xs text-muted-foreground">Ngày giờ nguồn dùng để đối chiếu; hệ thống ghi nhận khi anh/chị xác nhận, không sửa ngược lịch sử.</p>
     </div>;
   return <ImportExcelDialog open={open} onOpenChange={next=>{if(!next){requestGeneration.current++;setPrepared(null);}onOpenChange(next);}} schema={initialStockExcelSchema}
-    title={mode==="manual"?"Nhập tồn ban đầu trực tiếp":undefined}
-    entryContent={mode==="manual"?(onPreview,busy)=><OpeningStockManualEntry onPreview={onPreview} busy={busy} contextContent={contextContent} onSummary={setEntrySummary}/>:undefined}
-    entryFormId={mode==="manual"?"opening-manual-form":undefined} entrySubmitDisabled={entrySummary.count===0}
+    title="Nhập tồn đầu kỳ"
+    entryModeContent={(busy,resetEntry)=><div className="mb-4 space-y-2">
+      <div role="group" aria-label="Cách nhập tồn đầu kỳ" className="grid grid-cols-2 gap-2">
+        <Button type="button" size="touch" variant={entryMode==="manual"?"default":"outline"} aria-pressed={entryMode==="manual"} disabled={busy}
+          onClick={()=>{if(entryMode!=="manual"){resetEntry();setEntryMode("manual");}}}>Nhập trực tiếp</Button>
+        <Button type="button" size="touch" variant={entryMode==="file"?"default":"outline"} aria-pressed={entryMode==="file"} disabled={busy || (entryMode==="manual" && entrySummary.count>0)}
+          onClick={()=>{if(entryMode!=="file"){resetEntry();setEntryMode("file");}}}>Từ Excel</Button>
+      </div>
+      <p className="text-sm text-foreground">{entryMode==="manual"?"Thêm nhiều nguyên liệu vào cùng bảng, điền số lượng và giá vốn rồi xem trước cả đợt. Không cần file Excel.":"Dùng file mẫu Onebiz, nhập đủ mã hàng, mã chi nhánh, số lượng và giá vốn; xem lỗi cụ thể từng dòng trước khi ghi."}</p>
+      {entryMode==="manual" && entrySummary.count>0 && <p className="text-xs text-muted-foreground">Đang có {entrySummary.count} mã trong bảng. Hoàn tất hoặc xóa các dòng trước khi đổi sang Excel để không mất dữ liệu đã nhập.</p>}
+    </div>}
+    entryContent={entryMode==="manual"?(onPreview,busy)=><OpeningStockManualEntry onPreview={onPreview} busy={busy} contextContent={contextContent} onSummary={setEntrySummary}/>:undefined}
+    entryFormId={entryMode==="manual"?"opening-manual-form":undefined} entrySubmitDisabled={entrySummary.count===0}
     entrySummary={<div><p className="font-semibold text-primary">{entrySummary.count} mã · {formatCurrency(entrySummary.value)} <span className="text-xs font-normal">₫</span></p>{entrySummary.incomplete>0&&<p className="text-xs text-status-warning">{entrySummary.incomplete} hàng chưa đủ thông tin</p>}</div>}
     compactInstructions showSteps
     preparePreview={prepare} onFinished={onFinished} retryOnFailure
@@ -69,7 +81,7 @@ export function OpeningStockDialog({open,onOpenChange,onFinished,mode="file"}: {
     }}
     uploadContent={contextContent}
     instructions={<ul className="list-disc pl-4 space-y-1">
-      <li>{mode==="manual"?"Một đợt, một chi nhánh. Kiểm tra chi nhánh nhận tồn ở bước xem trước.":"Một file, một chi nhánh. Chi nhánh nhận tồn theo mã trong file; kiểm tra ở bước xem trước."}</li>
+      <li>{entryMode==="manual"?"Một đợt, một chi nhánh. Kiểm tra chi nhánh nhận tồn ở bước xem trước.":"Một file, một chi nhánh. Chi nhánh nhận tồn theo mã trong file; kiểm tra ở bước xem trước."}</li>
       <li>Nhập mã nguyên liệu, bao bì hoặc bán thành phẩm giữ tồn. Mã phải có sẵn.</li>
       <li>Lượng và đơn giá theo đơn vị tồn Onebiz. Hàng không có trong đợt nhập giữ nguyên.</li>
       <li>Đã có phát sinh thì đổi lượng tại <Link className="text-primary underline" href="/hang-hoa/kiem-kho">Kiểm kho</Link>; không ghi đè đầu kỳ để sửa lịch sử.</li>
