@@ -50,3 +50,17 @@ export function resolveFnbInvoiceType(value: unknown): FnbInvoiceType {
 export function invoiceFnbTypeLabel(value?: string): string {
   return FNB_INVOICE_TYPES.find(option => option.value !== "all" && option.value === value)?.label ?? "Chưa ghi nhận";
 }
+
+export const RETAIL_INVOICE_TYPES = [
+  { value: "all", label: "Tất cả", icon: "receipt_long", hint: "Tất cả hóa đơn trong phạm vi đang xem" },
+  { value: "no_delivery", label: "Không giao", icon: "storefront", hint: "Bán cho khách, không có vận đơn; không gồm bán nội bộ" },
+  { value: "delivery", label: "Giao hàng", icon: "local_shipping", hint: "Giao hàng cho khách; không gồm bán nội bộ" },
+  { value: "internal", label: "Nội bộ", icon: "swap_horiz", hint: "Bán nội bộ giữa các chi nhánh, kể cả có vận đơn" },
+] as const;
+export type RetailInvoiceType = (typeof RETAIL_INVOICE_TYPES)[number]["value"];
+export function resolveRetailInvoiceType(value: unknown): RetailInvoiceType {
+  return RETAIL_INVOICE_TYPES.some(option => option.value === value) ? value as RetailInvoiceType : "all";
+}
+export function invoiceRetailTypeLabel(value?: string): string {
+  return RETAIL_INVOICE_TYPES.find(option => option.value !== "all" && option.value === value)?.label ?? "—";
+}

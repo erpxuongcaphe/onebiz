@@ -50,5 +50,20 @@ await equal(`select so_dong_theo_bo_loc::int v from get_invoice_list_summary('${
 await denied(sum('fnb_delivery',3),'KPI_BRANCH_DENIED');
 await db.exec(`select set_config('test.summary','no',false)`);await denied(sum('fnb_delivery'),'FNB_SALES_SUMMARY_PERMISSION_DENIED');
 await db.exec(`select set_config('test.summary','yes',false);select set_config('test.actor','',false)`);await denied(sum('fnb_delivery'),'KPI_AUTH_REQUIRED');
+// Retail extension: internal sales win regardless of shipment, legacy NULL source survives.
+await db.exec(`select set_config('test.actor','${id(7)}',false)`);
+const retailMigration=fs.readFileSync('supabase/migrations/202610220004_retail_invoice_type_filter.sql','utf8');
+await db.exec(retailMigration);await db.exec(retailMigration);
+for(const [n,source,order] of [[17,'internal',null],[18,'internal',null],[19,'order','DH19'],[20,null,null]])await db.exec(`insert into invoices values('${id(n)}','${id(1)}','${id(2)}',${source===null?'null':"'"+source+"'"},${order===null?'null':"'"+order+"'"},'HD${n}','Khách ${n}','completed',100,0,0,null,null,'2026-10-22T02:00:00Z')`);
+await db.exec(`insert into shipping_orders values('${id(17)}','${id(1)}'),('${id(12)}','${id(1)}')`);
+await equal(sum('retail_internal'),2,'internal includes both shipped and non-shipped internal invoices');
+await equal(sum('retail_delivery'),1,'Retail delivery excludes shipped internal and F&B invoices');
+await equal(sum('retail_no_delivery'),2,'Retail no-delivery keeps NULL source and converted sales orders');
+for(const [mode,amount] of [['retail_internal',200],['retail_delivery',100],['retail_no_delivery',200]])await equal(`select gia_tri_hoan_thanh::int v from get_invoice_list_summary('${id(2)}',null,null,null,null,'all','${mode}')`,amount,'Retail amount matches '+mode);
+await equal(sum('retail_internal',2,"ARRAY['completed']","'HD17'"),1,'Retail search combines with internal classification');
+await equal(sum('fnb_delivery'),1,'F&B classification unchanged after Retail migration');
+await equal(sum('delivery'),3,'legacy shipment lookup remains compatible including internal/F&B');
+await denied(sum('retail_internal',3),'KPI_BRANCH_DENIED');
+await db.exec(`select set_config('test.summary','no',false)`);await denied(sum('retail_internal'),'FNB_SALES_SUMMARY_PERMISSION_DENIED');
 console.log(checks+' PostgreSQL invoice-type checks passed');
 }finally{await db.close();}

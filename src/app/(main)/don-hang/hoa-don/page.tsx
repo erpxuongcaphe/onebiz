@@ -5,9 +5,10 @@ import { useDebounce } from "@/lib/utils/use-debounce";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { ColumnDef, type SortingState } from "@tanstack/react-table";
+import { RetailInvoiceTypeFilter } from "@/components/shared/retail-invoice-type-filter";
 import { FnbInvoiceTypeFilter } from "@/components/shared/fnb-invoice-type-filter";
 import { useFnbSubdomain } from "@/lib/hooks/use-fnb-subdomain";
-import { invoiceFnbTypeLabel, type FnbInvoiceType } from "@/lib/utils/invoice-list-filters";
+import { invoiceFnbTypeLabel, invoiceRetailTypeLabel, type FnbInvoiceType, type RetailInvoiceType } from "@/lib/utils/invoice-list-filters";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -99,7 +100,6 @@ import {
 import {
   invoiceStatusesForKpi,
   isInvoiceKpiSelected,
-  resolveInvoiceDeliveryFilter,
   type InvoiceKpiFilter,
 } from "@/lib/utils/invoice-list-filters";
 import {
@@ -123,11 +123,6 @@ const statusMap: Record<
   cancelled: { label: "Đã hủy", variant: "destructive" },
   delivery_failed: { label: "Giao thất bại", variant: "destructive" },
 };
-
-const invoiceTypeOptions = [
-  { label: "Không giao hàng", value: "no_delivery" },
-  { label: "Giao hàng", value: "delivery" },
-];
 
 const INVOICE_SORT_COLUMNS = ["code", "date", "customerName", "totalAmount", "discount"];
 
@@ -545,14 +540,7 @@ export default function HoaDonPage() {
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>(() =>
     copyDefaultStatuses(DEFAULT_INVOICE_LIST_STATUSES),
   );
-  const [selectedTypes, setSelectedTypes] = useState<string[]>([
-    "no_delivery",
-    "delivery",
-  ]);
-  const deliveryFilter = useMemo(
-    () => resolveInvoiceDeliveryFilter(selectedTypes),
-    [selectedTypes],
-  );
+  const [selectedRetailType, setSelectedRetailType] = useState<RetailInvoiceType>("all");
   const [datePreset, setDatePreset] = useState<DatePresetValue>("this_month");
   const [customDates, setCustomDates] = useState(() => {
     const initial = computeListPresetRange("this_month");
@@ -581,7 +569,7 @@ export default function HoaDonPage() {
         // A direct-open link must not be hidden by remembered list defaults.
         // Server-side tenant and branch guards still define readable scope.
         setSelectedStatuses(filters.statuses ?? []);
-        setSelectedTypes(filters.types ?? ["no_delivery", "delivery"]);
+        setSelectedRetailType("all");
         setInvoiceToOpen(target.code);
       }
     }
@@ -596,6 +584,7 @@ export default function HoaDonPage() {
   const showFnbTypes = isFnb || currentBranch?.branchType === "store";
   const [selectedFnbType, setSelectedFnbType] = useState<FnbInvoiceType>("all");
   const fnbOrderType = showFnbTypes ? selectedFnbType : "all";
+  const retailSaleType = showFnbTypes ? "all" : selectedRetailType;
   const [otherBranchCount, setOtherBranchCount] = useState(0);
   const phamViHienTai = useMemo(
     () => phamViChiNhanhHoaDon({ activeBranchId, viewAllBranches, duocXemToanChuoi }),
@@ -606,6 +595,7 @@ export default function HoaDonPage() {
   useEffect(() => {
     setViewAllBranches(false);
     setSelectedFnbType("all");
+    setSelectedRetailType("all");
   }, [activeBranchId]);
   // Mất quyền (đổi vai trò, thu hồi riêng) thì tự thoát chế độ xem toàn chuỗi
   // ngay, không đợi thao tác nào.
@@ -638,17 +628,13 @@ export default function HoaDonPage() {
     filterChips.push({ key: "fnbOrderType", label: "Hình thức", value: invoiceFnbTypeLabel(fnbOrderType),
       onClear: () => setSelectedFnbType("all") });
   }
-  if (!showFnbTypes && deliveryFilter !== "all") {
-    filterChips.push({
-      key: "delivery",
-      label: "Loại hóa đơn",
-      value: deliveryFilter === "delivery" ? "Giao hàng" : "Không giao hàng",
-      onClear: () => setSelectedTypes(["no_delivery", "delivery"]),
-    });
+  if (retailSaleType !== "all") {
+    filterChips.push({key:"retailSaleType",label:"Loại bán",value:invoiceRetailTypeLabel(retailSaleType),
+      onClear:()=>setSelectedRetailType("all")});
   }
   const clearListFilters = () => {
     setSelectedStatuses(copyDefaultStatuses(DEFAULT_INVOICE_LIST_STATUSES));
-    setSelectedTypes(["no_delivery", "delivery"]);
+    setSelectedRetailType("all");
     setSelectedFnbType("all");
   };
   const emptyState = chuaCoPhamVi
@@ -674,7 +660,8 @@ export default function HoaDonPage() {
     const range = dateRange;
     const commonFilters: Record<string, string | string[]> = {};
     if (selectedStatuses.length > 0) commonFilters.status = selectedStatuses;
-    commonFilters.delivery = showFnbTypes ? "all" : deliveryFilter;
+    commonFilters.delivery = "all";
+    if (!showFnbTypes) commonFilters.retailSaleType = retailSaleType;
     if (showFnbTypes) commonFilters.fnbOrderType = fnbOrderType;
     if (range.from) commonFilters.dateFrom = range.from;
     if (range.to) commonFilters.dateTo = range.to;
@@ -717,7 +704,7 @@ export default function HoaDonPage() {
     } finally {
       if (request === listRequest.current) setLoading(false);
     }
-  }, [page, pageSize, sorting, debouncedSearch, searchField, selectedStatuses, deliveryFilter, showFnbTypes, fnbOrderType, branchScopeReady, deepLinkReady, dateRange, phamViHienTai, toast]);
+  }, [page, pageSize, sorting, debouncedSearch, searchField, selectedStatuses, retailSaleType, showFnbTypes, fnbOrderType, branchScopeReady, deepLinkReady, dateRange, phamViHienTai, toast]);
 
   useEffect(() => {
     fetchData();
@@ -727,7 +714,7 @@ export default function HoaDonPage() {
   useEffect(() => {
     setPage(0);
     setExpandedRow(null);
-  }, [debouncedSearch, selectedStatuses, selectedTypes, fnbOrderType, datePreset, customDates]);
+  }, [debouncedSearch, selectedStatuses, retailSaleType, fnbOrderType, datePreset, customDates]);
 
   useEffect(() => {
     if (!invoiceToOpen || loading) return;
@@ -787,10 +774,11 @@ export default function HoaDonPage() {
       statuses: selectedStatuses,
       search: debouncedSearch,
       searchField,
-      delivery: showFnbTypes ? "all" : deliveryFilter,
+      delivery: "all",
+      retailSaleType,
       fnbOrderType,
     };
-  }, [dateRange, phamViHienTai, selectedStatuses, debouncedSearch, searchField, deliveryFilter, showFnbTypes, fnbOrderType]);
+  }, [dateRange, phamViHienTai, selectedStatuses, debouncedSearch, searchField, retailSaleType, fnbOrderType]);
 
   const locTheoChiSo = useCallback((filter: InvoiceKpiFilter) => {
     setSelectedStatuses(invoiceStatusesForKpi(filter));
@@ -878,7 +866,7 @@ export default function HoaDonPage() {
         format: (v: string) => formatDate(v),
       },
       { header: "Khách hàng", key: "customerName", width: 25 },
-      ...(showFnbTypes ? [{ header: "Hình thức", key: "fnbOrderType", width: 18, format: (v: string) => invoiceFnbTypeLabel(v) }] : []),
+      ...(showFnbTypes ? [{ header: "Hình thức", key: "fnbOrderType", width: 18, format: (v: string) => invoiceFnbTypeLabel(v) }] : [{ header: "Loại bán", key: "retailSaleType", width: 18, format: (v: string) => invoiceRetailTypeLabel(v) }]),
       {
         header: "Tổng tiền",
         key: "totalAmount",
@@ -906,7 +894,9 @@ export default function HoaDonPage() {
   const columns: ColumnDef<Invoice, unknown>[] = [
     ...(showFnbTypes ? [{ id: "fnbOrderType", accessorKey: "fnbOrderType", header: "Hình thức", size: 125, enableSorting: false,
       cell: ({ row }: { row: { original: Invoice } }) => <span className="whitespace-nowrap font-medium">{row.original.source === "fnb" ? invoiceFnbTypeLabel(row.original.fnbOrderType) : "—"}</span>,
-    }] : []),
+    }] : [{id:"retailSaleType",accessorKey:"retailSaleType",header:"Loại bán",size:115,enableSorting:false,
+      cell:({row}:{row:{original:Invoice}})=><span className="whitespace-nowrap font-medium">{row.original.source === "fnb" ? "F&B" : invoiceRetailTypeLabel(row.original.retailSaleType)}</span>,
+    }]),
     {
       id: "star",
       header: "",
@@ -1181,6 +1171,9 @@ export default function HoaDonPage() {
             {showFnbTypes && <FnbInvoiceTypeFilter value={fnbOrderType} onChange={value => {
               setPage(0); setExpandedRow(null); setSelectedFnbType(value);
             }} />}
+            {!showFnbTypes && <RetailInvoiceTypeFilter value={retailSaleType} onChange={value=>{
+              setPage(0); setExpandedRow(null); setSelectedRetailType(value);
+            }}/>}
             <FilterChips
               filters={filterChips}
               onClearAll={filterChips.length > 1 ? clearListFilters : undefined}
@@ -1444,16 +1437,7 @@ export default function HoaDonPage() {
           {dateRangeError && <p role="alert" className="mt-2 text-sm text-destructive">{dateRangeError}</p>}
         </FilterGroup>
 
-        {!showFnbTypes && <FilterGroup
-          label="Loại hóa đơn"
-          activeHint={deliveryFilter === "all" ? undefined : "Đã lọc"}
-        >
-          <CheckboxFilter
-            options={invoiceTypeOptions}
-            selected={selectedTypes}
-            onChange={setSelectedTypes}
-          />
-        </FilterGroup>}
+
 
         <FilterGroup
           label="Trạng thái hóa đơn"

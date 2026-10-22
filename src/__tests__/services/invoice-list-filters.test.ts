@@ -89,8 +89,8 @@ describe("Wiring màn Hóa đơn", () => {
       "src/app/(main)/don-hang/hoa-don/page.tsx",
       "utf8",
     );
-    expect(src).toContain('commonFilters.delivery = showFnbTypes ? "all" : deliveryFilter');
-    expect(src).toContain('delivery: showFnbTypes ? "all" : deliveryFilter');
+    expect(src).toContain('commonFilters.delivery = "all"');
+    expect(src).toContain('delivery: "all"');
     expect(src).not.toContain('label="Trạng thái giao hàng"');
     expect(src).not.toContain('label="Đối tác giao hàng"');
   });
