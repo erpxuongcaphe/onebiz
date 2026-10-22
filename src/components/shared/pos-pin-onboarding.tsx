@@ -25,4 +25,3 @@ export function PosPinOnboarding({ children }: { children: ReactNode }) {
     <Button variant="ghost" onClick={() => void logout()}>Đăng xuất / đổi tài khoản</Button>
   </div></main>}</>;
 }
-
