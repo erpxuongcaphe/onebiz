@@ -53,6 +53,7 @@ export interface Invoice {
   branchName?: string;
   /** Branch UUID để filter / drill-down. */
   branchId?: string;
+  retailSaleType?: "no_delivery" | "delivery" | "internal";
   fnbOrderType?: "dine_in" | "takeaway" | "delivery";
   deliveryType: "no_delivery" | "delivery";
   /**

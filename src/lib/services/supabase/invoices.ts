@@ -18,7 +18,7 @@ import { apDungLocChungTuBan } from "./chung-tu-ban";
 import { readHistoryPages } from "./read-history-pages";
 import { DEFAULT_INVOICE_LIST_STATUSES } from "@/lib/utils/document-list-statuses";
 
-import { resolveFnbInvoiceType, type FnbInvoiceType } from "@/lib/utils/invoice-list-filters";
+import { resolveFnbInvoiceType, resolveRetailInvoiceType, type FnbInvoiceType, type RetailInvoiceType } from "@/lib/utils/invoice-list-filters";
 
 const VALID_INVOICE_LIST_STATUSES = new Set([
   "draft",
@@ -69,7 +69,11 @@ export async function getInvoices(params: QueryParams): Promise<QueryResult<Invo
   const { from, to } = getPaginationRange(params);
   const deliveryFilter = params.filters?.delivery;
   const fnbOrderType = resolveFnbInvoiceType(params.filters?.fnbOrderType);
-  const shipmentPlan = getInvoiceShipmentQueryPlan(fnbOrderType === "all" ? deliveryFilter : "all");
+  const retailSaleType = resolveRetailInvoiceType(params.filters?.retailSaleType);
+  const effectiveDelivery = fnbOrderType !== "all" ? "all"
+    : retailSaleType === "delivery" || retailSaleType === "no_delivery" ? retailSaleType
+    : retailSaleType === "internal" ? "all" : deliveryFilter;
+  const shipmentPlan = getInvoiceShipmentQueryPlan(effectiveDelivery);
   const fnbRelation = params.filters?.fnbOrderType !== undefined
     ? `, fnb_orders:kitchen_orders!kitchen_orders_invoice_id_fkey${fnbOrderType === "all" ? "" : "!inner"}(order_type)`
     : "";
@@ -146,6 +150,11 @@ export async function getInvoices(params: QueryParams): Promise<QueryResult<Invo
     query = query.eq("source", "fnb").eq("fnb_orders.order_type", fnbOrderType)
       .eq("fnb_orders.tenant_id", tenantId);
     if (params.branchId) query = query.eq("fnb_orders.branch_id", params.branchId);
+  }
+
+  if (retailSaleType !== "all" && fnbOrderType === "all") {
+    if (retailSaleType === "internal") query = query.eq("source", "internal");
+    else query = query.or("source.is.null,and(source.neq.internal,source.neq.fnb)");
   }
 
   // Sort & paginate
@@ -728,6 +737,8 @@ function mapInvoice(row: any): Invoice {
     fnbOrderType: row.source === "fnb" && Array.isArray(row.fnb_orders)
       ? row.fnb_orders.find((order: {order_type?: string}) => resolveFnbInvoiceType(order.order_type) !== "all")?.order_type
       : undefined,
+    retailSaleType: row.source === "fnb" ? undefined : row.source === "internal" ? "internal"
+      : Array.isArray(row.shipments) && row.shipments.length > 0 ? "delivery" : "no_delivery",
     deliveryType:
       Array.isArray(row.shipments) && row.shipments.length > 0
         ? "delivery"
@@ -778,6 +789,7 @@ export interface InvoiceListSummaryParams {
   /** 'all' | 'delivery' | 'no_delivery'. K2 luôn 'all' — bộ lọc giao hàng thuộc K3. */
   delivery?: "all" | "delivery" | "no_delivery";
   fnbOrderType?: FnbInvoiceType;
+  retailSaleType?: RetailInvoiceType;
 }
 
 export async function getInvoiceListSummary(
@@ -800,7 +812,9 @@ export async function getInvoiceListSummary(
     p_search: params.search && params.search !== "" ? params.search : null,
     p_search_field: params.searchField ?? "all",
     p_delivery: resolveFnbInvoiceType(params.fnbOrderType) !== "all"
-      ? `fnb_${params.fnbOrderType}` : params.delivery ?? "all",
+      ? `fnb_${params.fnbOrderType}`
+      : resolveRetailInvoiceType(params.retailSaleType) !== "all" ? `retail_${params.retailSaleType}`
+      : params.delivery ?? "all",
   });
   if (error) handleError(error, "getInvoiceListSummary");
 
@@ -830,6 +844,7 @@ export function khoaChiSoHoaDon(params: InvoiceListSummaryParams): string {
     params.searchField ?? "all",
     params.delivery ?? "all",
     resolveFnbInvoiceType(params.fnbOrderType),
+    resolveRetailInvoiceType(params.retailSaleType),
   ]);
 }
 
