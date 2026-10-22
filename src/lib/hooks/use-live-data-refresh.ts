@@ -2,8 +2,9 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { getClient } from "@/lib/services/supabase/base";
 /** Realtime invalidation plus visible-page polling/reconnect recovery. Queries remain tenant/branch scoped. */
-export function useLiveDataRefresh(refresh: () => void | Promise<void>, tenantId: string | undefined, branchId: string | undefined, tables: string[], enabled = true) {
+export function useLiveDataRefresh(refresh: () => void | Promise<void>, tenantId: string | undefined, branchId: string | undefined, tables: string[], enabled = true, pollIntervalMs = 30_000) {
   const tableKey = tables.join(",");
+  const intervalMs = Number.isFinite(pollIntervalMs) ? Math.max(30_000, pollIntervalMs) : 30_000;
   const instanceId = useId();
   const subscriptionGeneration = useRef(0);
   const scope = `${tenantId}:${branchId}:${tableKey}`;
@@ -22,7 +23,7 @@ export function useLiveDataRefresh(refresh: () => void | Promise<void>, tenantId
       channel.on("postgres_changes", { event: "*", schema: "public", table, ...(filter ? { filter } : {}) }, schedule);
     }
     channel.subscribe((status) => { if (disposed) return; setConnection({ scope, connected: status === "SUBSCRIBED" }); if (status === "SUBSCRIBED") schedule(); });
-    const interval = setInterval(run, 30_000);
+    const interval = setInterval(run, intervalMs);
     window.addEventListener("focus", schedule);
     window.addEventListener("online", schedule);
     window.addEventListener("fnb-open-orders-changed", schedule);
@@ -33,6 +34,6 @@ export function useLiveDataRefresh(refresh: () => void | Promise<void>, tenantId
       window.removeEventListener("fnb-open-orders-changed", schedule); document.removeEventListener("visibilitychange", schedule);
       void client.removeChannel(channel);
     };
-  }, [refresh, tenantId, branchId, tableKey, enabled, scope, instanceId]);
+  }, [refresh, tenantId, branchId, tableKey, enabled, scope, instanceId, intervalMs]);
   return connection.scope === scope && connection.connected && enabled;
 }

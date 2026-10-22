@@ -36,6 +36,52 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe("F&B live refresh recovery", () => {
+  it("keeps the default POS cadence while a report uses a slower fallback", () => {
+    const pos = vi.fn();
+    const report = vi.fn();
+    renderHook(() => {
+      useLiveDataRefresh(pos, "tenant", "branch", ["kitchen_orders"]);
+      useLiveDataRefresh(report, "tenant", undefined, ["dashboard_live_signals"], true, 120_000);
+    });
+    act(() => { vi.advanceTimersByTime(30_000); });
+    expect(pos).toHaveBeenCalledTimes(1);
+    expect(report).not.toHaveBeenCalled();
+    act(() => { vi.advanceTimersByTime(90_000); });
+    expect(pos).toHaveBeenCalledTimes(4);
+    expect(report).toHaveBeenCalledTimes(1);
+  });
+
+  it("still refreshes a slower report on live changes, reconnect and focus", () => {
+    const refresh = vi.fn();
+    renderHook(() => useLiveDataRefresh(refresh, "tenant", undefined, ["dashboard_live_signals"], true, 120_000));
+    act(() => { mocks.events[0](); vi.advanceTimersByTime(350); });
+    act(() => { mocks.status?.("SUBSCRIBED"); vi.advanceTimersByTime(350); });
+    act(() => { window.dispatchEvent(new Event("focus")); vi.advanceTimersByTime(350); });
+    expect(refresh).toHaveBeenCalledTimes(3);
+  });
+
+  it("replaces the polling timer when cadence changes and removes it on unmount", () => {
+    const refresh = vi.fn();
+    const { rerender, unmount } = renderHook(({ interval }) => useLiveDataRefresh(refresh, "tenant", undefined, ["dashboard_live_signals"], true, interval), { initialProps: { interval: 30_000 } });
+    rerender({ interval: 120_000 });
+    act(() => { vi.advanceTimersByTime(30_000); });
+    expect(refresh).not.toHaveBeenCalled();
+    act(() => { vi.advanceTimersByTime(90_000); });
+    expect(refresh).toHaveBeenCalledTimes(1);
+    unmount();
+    act(() => { vi.advanceTimersByTime(120_000); });
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([0, -100, Number.NaN, Number.POSITIVE_INFINITY])("does not create rapid fallback polling for invalid cadence %s", interval => {
+    const refresh = vi.fn();
+    renderHook(() => useLiveDataRefresh(refresh, "tenant", undefined, ["dashboard_live_signals"], true, interval));
+    act(() => { vi.advanceTimersByTime(29_999); });
+    expect(refresh).not.toHaveBeenCalled();
+    act(() => { vi.advanceTimersByTime(1); });
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
   it("refreshes catalog prices using tenant filters rather than nonexistent branch columns", () => {
     const refresh = vi.fn();
     const tables = ["products", "product_variants", "product_platform_prices", "categories"];
@@ -102,6 +148,10 @@ describe("F&B live refresh recovery", () => {
 });
 
 describe("F&B live data wiring", () => {
+  it("uses a slower fallback only for the financial report", () => {
+    const report = readFileSync("src/app/(main)/phan-tich/bao-cao-tai-chinh/page.tsx", "utf8");
+    expect(report).toContain('["dashboard_live_signals"], isReady, 120_000)');
+  });
   it("refreshes online catalog and variant prices without repricing existing bills", () => {
     const source = readFileSync("src/app/pos/fnb/page.tsx", "utf8");
     expect(source).toContain("useLiveDataRefresh(refreshLiveCatalog, tenantId, undefined");
