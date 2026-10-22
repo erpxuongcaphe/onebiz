@@ -1,8 +1,29 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { useEffect } from "react";
 import { useReportState } from "@/lib/hooks/use-report-state";
 
 describe("useReportState URL persistence", () => {
+  it("only exposes a ready range after restoring the URL", () => {
+    window.history.replaceState({}, "", "/phan-tich?branch=all&preset=custom&from=2026-07-01&to=2026-07-15");
+    const query = vi.fn();
+    renderHook(() => {
+      const report = useReportState();
+      useEffect(() => { if (report.isReady) query(report.range); }, [report.isReady, report.range]);
+    });
+    expect(query).toHaveBeenCalledExactlyOnceWith({ from: "2026-07-01", to: "2026-07-15" });
+  });
+
+  it("does not invalidate the range when applying the same custom dates", () => {
+    window.history.replaceState({}, "", "/phan-tich?preset=custom&from=2026-07-01&to=2026-07-15");
+    const { result } = renderHook(() => useReportState());
+    const previous = result.current.range;
+    act(() => result.current.setCustomRange({ from: "2026-07-01", to: "2026-07-15" }));
+    expect(result.current.range).toBe(previous);
+    act(() => result.current.setCustomRange({ from: "2026-07-02", to: "2026-07-15" }));
+    expect(result.current.range).toEqual({ from: "2026-07-02", to: "2026-07-15" });
+  });
+
   beforeEach(() => {
     window.history.replaceState({}, "", "/phan-tich");
   });

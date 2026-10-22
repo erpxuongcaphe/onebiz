@@ -15,6 +15,7 @@ interface UseReportStateOptions {
 }
 
 export interface UseReportStateReturn {
+  isReady: boolean;
   preset: DatePreset;
   range: DateRange;
   viewMode: ReportViewMode;
@@ -107,7 +108,7 @@ export function useReportState(
   }, []);
 
   const setCustomRange = useCallback((next: DateRange) => {
-    setCustomRangeState(next);
+    setCustomRangeState((current) => current?.from === next.from && current.to === next.to ? current : next);
     setPresetState("custom");
   }, []);
 
@@ -119,6 +120,7 @@ export function useReportState(
   );
 
   return {
+    isReady: urlReady,
     preset,
     range,
     viewMode,

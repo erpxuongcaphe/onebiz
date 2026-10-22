@@ -163,6 +163,7 @@ export default function BaoCaoTaiChinhPage() {
   const { toast } = useToast();
   const { tenant } = useAuth();
   const {
+    isReady: periodReady,
     preset,
     range,
     setPreset,
@@ -228,7 +229,7 @@ export default function BaoCaoTaiChinhPage() {
   const [dso, setDso] = useState<DSOResult | null>(null);
 
   const fetchData = useCallback(async () => {
-    if (!isReady) return;
+    if (!isReady || !periodReady) return;
     if (requestState.current.scope === scopeKey && requestState.current.inFlight) {
       requestState.current.queued = true;
       return;
@@ -243,18 +244,19 @@ export default function BaoCaoTaiChinhPage() {
       // Ở chế độ "Tất cả" mới load 2 report nội bộ; khi chọn 1 branch cụ thể
       // các số liệu consolidated/so sánh branch không có ý nghĩa → skip.
       const fetchConsolidated = !activeBranchId;
+      const needsConsolidated = fetchConsolidated && ceoView;
       const previousRange = managementComparisonRange(range);
       if (!previousRange) throw new Error("Khoảng thời gian không hợp lệ");
       const [pnlRes, detailsRes, consolidatedRes, branchPnLRes, previousBranchPnLRes] =
         await Promise.all([
-          getProfitAndLoss(bid, range),
+          needsConsolidated ? Promise.resolve(null) : getProfitAndLoss(bid, range),
           getFinancialAnalysisDetails(
             bid,
             range,
             fetchConsolidated && ceoView,
             50_000,
           ),
-          fetchConsolidated
+          needsConsolidated
             ? getConsolidatedPnL(range)
             : Promise.resolve(null),
           fetchConsolidated
@@ -299,10 +301,10 @@ export default function BaoCaoTaiChinhPage() {
         if (queued) queueMicrotask(() => void fetchRef.current());
       }
     }
-  }, [activeBranchId, ceoView, isReady, range, toast, scopeKey]);
+  }, [activeBranchId, ceoView, isReady, periodReady, range, toast, scopeKey]);
 
   useEffect(() => { fetchRef.current = fetchData; }, [fetchData]);
-  useLiveDataRefresh(fetchData, tenant?.id, activeBranchId, ["dashboard_live_signals"], isReady, 120_000);
+  useLiveDataRefresh(fetchData, tenant?.id, activeBranchId, ["dashboard_live_signals"], isReady && periodReady, 120_000);
 
   const loadMoreCogs = async () => {
     if (loadingMoreCogs || cogsItems.length >= cogsTotalCount) return;
