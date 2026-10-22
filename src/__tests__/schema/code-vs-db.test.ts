@@ -51,6 +51,10 @@ const RPC_CHO_MIGRATION = new Map<string, string>([
   // vì không có service-role credential. Xóa các dòng này ngay lần dump schema kế tiếp.
 ]);
 const COT_CHO_MIGRATION = new Map<string, string>([
+  ["shifts.close_kind", "202610220002_fnb_shift_totals_reconciliation.sql"],
+  ["shifts.expected_transfer", "202610220002_fnb_shift_totals_reconciliation.sql"],
+  ["shifts.actual_transfer", "202610220002_fnb_shift_totals_reconciliation.sql"],
+  ["shifts.transfer_difference", "202610220002_fnb_shift_totals_reconciliation.sql"],
 ]);
 const BANG_CHO_MIGRATION = new Map<string, string>([
 ]);

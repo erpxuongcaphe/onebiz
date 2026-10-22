@@ -22,6 +22,7 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
+  DialogBody,
   DialogDescription,
   DialogFooter,
   DialogHeader,
@@ -39,6 +40,9 @@ import {
   type PendingShift,
   type ShiftPreview,
 } from "@/lib/services/supabase/shifts";
+import type { ShiftCloseKind } from "@/lib/types/shift";
+import { ShiftTotalsFields } from "./shift-totals-fields";
+import { shiftTotalsDraft, SHIFT_CLOSE_LABELS } from "@/lib/shift-reconciliation";
 import { formatPaymentMethod } from "@/lib/constants/payment-methods";
 
 // ─── Wrapper: Section to mount in POS (Retail + FnB) ────────
@@ -229,7 +233,8 @@ export function ReconcileShiftDialog({
   onDone: () => void;
 }) {
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user,branches } = useAuth();
+  const fnbReconciliation=branches.some(branch=>branch.id===shift.branchId&&branch.branchType==="store");
   // CEO 05/06/2026 chốt: quản lý chi nhánh chịu trách nhiệm chi nhánh
   // của mình. KHÔNG block self-reconcile. Owner đối chiếu thu/doanh số
   // qua báo cáo + audit log (reconciled_by, reason ghi đầy đủ).
@@ -239,31 +244,36 @@ export function ReconcileShiftDialog({
   const [preview, setPreview] = useState<ShiftPreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [actualCash, setActualCash] = useState("");
+  const [actualTransfer,setActualTransfer]=useState("");
+  const [closeKind,setCloseKind]=useState<ShiftCloseKind>("end_of_day");
+  const [refreshVersion,setRefreshVersion]=useState(0);
   const [reason, setReason] = useState("");
   const [note, setNote] = useState("");
   const [loading, setLoading] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
   useEffect(() => {
-    previewShiftClose(shift.id)
-      .then(setPreview)
-      .catch((err: unknown) => {
-        setPreviewError(err instanceof Error ? err.message : "Lỗi tải tổng quan");
-      });
-  }, [shift.id]);
+    let cancelled=false;
+    setPreview(null);setPreviewError(null);
+    previewShiftClose(shift.id).then(value=>{if(!cancelled)setPreview(value);})
+      .catch((err:unknown)=>{if(!cancelled)setPreviewError(err instanceof Error?err.message:"Lỗi tải tổng quan");});
+    return ()=>{cancelled=true;};
+  }, [shift.id,refreshVersion]);
 
+  const draft=shiftTotalsDraft(preview,actualCash,actualTransfer,closeKind,note||reason);
   const actualCashNum = Number(actualCash) || 0;
   const variance = preview ? actualCashNum - preview.expectedCash : 0;
   const reasonValid = reason.trim().length >= 3;
 
   const handleConfirm = async () => {
-    if (!reasonValid) return;
+    if (!reasonValid || (fnbReconciliation&&!draft.valid)) return;
     setLoading(true);
     try {
       await reconcilePendingShift({
         shiftId: shift.id,
         actualCash: actualCashNum,
         reason: reason.trim(),
+        reconciliation:fnbReconciliation?draft.input:undefined,
         note: note.trim() || undefined,
       });
       toast({
@@ -287,7 +297,7 @@ export function ReconcileShiftDialog({
   return (
     <>
       <Dialog open onOpenChange={(o) => !o && !loading && onClose()}>
-        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Icon name="fact_check" className="text-primary" />
@@ -299,6 +309,7 @@ export function ReconcileShiftDialog({
             </DialogDescription>
           </DialogHeader>
 
+          <DialogBody>
           {!preview && !previewError && (
             <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
               <Icon name="progress_activity" className="animate-spin mr-2" />
@@ -437,14 +448,14 @@ export function ReconcileShiftDialog({
 
               {/* Actual cash + variance */}
               <div>
-                <Label className="font-semibold">Tiền mặt thực tế đếm được *</Label>
+                <Label htmlFor="pending-counted-cash" className="font-semibold">Tiền mặt thực tế đếm được *</Label>
                 <Input
                   type="number"
                   min={0}
                   inputMode="numeric"
                   value={actualCash}
                   onChange={(e) => setActualCash(e.target.value)}
-                  placeholder="Nhập số tiền đếm trong két..."
+                  id="pending-counted-cash" disabled={loading} placeholder="Nhập số tiền đếm trong két..."
                   className="mt-1 text-lg h-11"
                   /* autoFocus bỏ — mobile keyboard jump làm mất tóm tắt ca ở trên */
                 />
@@ -472,6 +483,7 @@ export function ReconcileShiftDialog({
                 )}
               </div>
 
+              {fnbReconciliation&&<ShiftTotalsFields id="pending-shift" expectedTransfer={draft.expectedTransfer} actualTransfer={actualTransfer} onTransfer={setActualTransfer} closeKind={closeKind} onKind={setCloseKind} disabled={loading}/>}
               {/* Lý do — bắt buộc */}
               <div>
                 <Label className="font-semibold">Lý do đối chiếu muộn *</Label>
@@ -502,6 +514,8 @@ export function ReconcileShiftDialog({
             </div>
           )}
 
+          <Button type="button" variant="outline" disabled={loading} onClick={()=>{setShowConfirm(false);setRefreshVersion(v=>v+1);}}>Tải lại tổng quan</Button>
+          </DialogBody>
           <DialogFooter>
             <Button variant="outline" onClick={onClose} disabled={loading}>
               Để sau
@@ -515,6 +529,7 @@ export function ReconcileShiftDialog({
                 !preview ||
                 actualCash === "" ||
                 !reasonValid ||
+                (fnbReconciliation&&!draft.valid) ||
                 loading
               }
               className="bg-status-success text-on-success hover:bg-status-success/90"
@@ -538,6 +553,7 @@ export function ReconcileShiftDialog({
             </DialogDescription>
           </DialogHeader>
           <div className="py-3 space-y-2 text-sm">
+            {fnbReconciliation&&<div className="rounded-md border p-2"><b>{SHIFT_CLOSE_LABELS[closeKind]}</b><p>Chuyển khoản thực nhận: {formatCurrency(draft.actualTransfer??0)}đ · theo ca: {formatCurrency(draft.expectedTransfer)}đ</p></div>}
             <div className="flex justify-between">
               <span className="text-muted-foreground">Cashier:</span>
               <span className="font-bold">{shift.cashierName}</span>

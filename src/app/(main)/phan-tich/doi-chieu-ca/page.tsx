@@ -159,6 +159,10 @@ function ShiftDetailDialog({
                 </div>
               </div>
 
+              <section className="rounded-md border p-3 text-sm space-y-1">
+                <h3 className="font-semibold">Kết quả chốt chuyển khoản</h3>
+                {row.actualTransfer==null?<p className="text-muted-foreground">Ca cũ chưa ghi nhận số chuyển khoản thực đối chiếu.</p>:<><p>{row.closeKind==='end_of_day'?'Chốt cuối ngày — không bàn giao':'Kết thúc ca / bàn giao ca sau'}</p><p>Theo ca: <b>{formatCurrency(row.expectedTransfer??0)}đ</b> · Thực nhận: <b>{formatCurrency(row.actualTransfer)}đ</b> · Chênh lệch: <b>{formatCurrency(row.transferDifference??0)}đ</b></p></>}
+              </section>
               <section>
                 <div className="mb-2 flex items-center justify-between">
                   <h3 className="text-sm font-semibold">Hóa đơn trong ca</h3>
@@ -365,7 +369,11 @@ export default function ReconciledShiftReportPage() {
       { label: "Doanh thu", key: "totalSales", width: 18, format: "currency" },
       { label: "Tiền mặt dự kiến", key: "expectedCash", width: 18, format: "currency" },
       { label: "Tiền mặt thực tế", key: "actualCash", width: 18, format: "currency" },
-      { label: "Chênh lệch", key: "variance", width: 18, format: "currency" },
+      { label: "Chênh lệch tiền mặt", key: "variance", width: 18, format: "currency" },
+      { label: "CK theo ca",key:"expectedTransfer",width:18,format:"currency" },
+      { label: "CK thực nhận",key:"actualTransfer",width:18,format:"currency" },
+      { label: "Chênh CK",key:"transferDifference",width:18,format:"currency" },
+      { label: "Cách chốt",key:"closeKind",width:30 },
       { label: "Tự đối chiếu", key: "self", width: 14 },
       { label: "Quên đóng ca", key: "autoPending", width: 14 },
       { label: "Lý do", key: "reason", width: 36 },
@@ -381,6 +389,8 @@ export default function ReconciledShiftReportPage() {
       expectedCash: row.expectedCash,
       actualCash: row.actualCash,
       variance: row.variance,
+      expectedTransfer:row.expectedTransfer??"",actualTransfer:row.actualTransfer??"",transferDifference:row.transferDifference??"",
+      closeKind:row.closeKind==="end_of_day"?"Cuối ngày - không bàn giao":row.closeKind==="shift_change"?"Kết thúc ca":"Chưa ghi nhận",
       self: isSelfReconcile(row) ? "Có" : "Không",
       autoPending: row.wasAutoMarkedPending ? "Có" : "Không",
       reason: row.reason ?? "",
@@ -520,7 +530,7 @@ export default function ReconciledShiftReportPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-surface-container-low text-xs font-semibold uppercase text-muted-foreground">
-                    <th className="px-3 py-2 text-left">Đóng lúc</th><th className="px-3 py-2 text-left">Chi nhánh</th><th className="px-3 py-2 text-left">Thu ngân</th><th className="px-3 py-2 text-left">Người đối chiếu</th><th className="px-3 py-2 text-right">Số đơn</th><th className="px-3 py-2 text-right">Doanh thu</th><th className="px-3 py-2 text-right">Dự kiến</th><th className="px-3 py-2 text-right">Thực tế</th><th className="px-3 py-2 text-right">Chênh lệch</th><th className="px-3 py-2 text-center">Cờ</th><th className="px-3 py-2 text-left">Lý do</th><th className="px-3 py-2 text-right">Chứng từ</th>
+                    <th className="px-3 py-2 text-left">Đóng lúc</th><th className="px-3 py-2 text-left">Chi nhánh</th><th className="px-3 py-2 text-left">Thu ngân</th><th className="px-3 py-2 text-left">Người đối chiếu</th><th className="px-3 py-2 text-right">Số đơn</th><th className="px-3 py-2 text-right">Doanh thu</th><th className="px-3 py-2 text-right">Dự kiến</th><th className="px-3 py-2 text-right">Thực tế</th><th className="px-3 py-2 text-right">Chênh lệch</th><th className="px-3 py-2 text-right">Chuyển khoản</th><th className="px-3 py-2 text-center">Cờ</th><th className="px-3 py-2 text-left">Lý do</th><th className="px-3 py-2 text-right">Chứng từ</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -538,6 +548,7 @@ export default function ReconciledShiftReportPage() {
                         <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(row.expectedCash)}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(row.actualCash)}</td>
                         <td className={cn("px-3 py-2 text-right font-medium tabular-nums", row.variance === 0 ? "text-status-success" : row.variance > 0 ? "text-status-warning" : "text-status-error")}>{row.variance > 0 && "+"}{formatCurrency(row.variance)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">{row.actualTransfer==null?<span className="text-muted-foreground">Chưa ghi nhận</span>:<><b>{formatCurrency(row.actualTransfer)}đ</b><p className={row.transferDifference===0?"text-xs text-status-success":"text-xs text-status-error"}>Theo ca {formatCurrency(row.expectedTransfer??0)}đ · Lệch {formatCurrency(row.transferDifference??0)}đ</p></>}</td>
                         <td className="px-3 py-2">
                           <div className="flex flex-wrap items-center justify-center gap-1">
                             {self && <span className="inline-flex items-center gap-0.5 rounded-md bg-status-warning/10 px-1.5 py-0.5 text-xs font-medium text-status-warning" title="Người đối chiếu trùng thu ngân"><Icon name="person" size={12} />Tự</span>}

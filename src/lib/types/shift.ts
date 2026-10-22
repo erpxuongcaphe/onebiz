@@ -1,5 +1,10 @@
 /** Shift management types */
 
+export type ShiftCloseKind = "end_of_day" | "shift_change";
+export interface ShiftTotalsInput {
+  actualTransfer: number; expectedCash: number; expectedTransfer: number; closeKind: ShiftCloseKind;
+}
+
 export interface Shift {
   id: string;
   tenantId: string;
@@ -17,6 +22,10 @@ export interface Shift {
   totalOrders: number;
   salesByMethod: Record<string, number>;
   note: string | null;
+  closeKind?: ShiftCloseKind | null;
+  expectedTransfer?: number | null;
+  actualTransfer?: number | null;
+  transferDifference?: number | null;
 }
 
 export interface OpenShiftInput {
@@ -30,4 +39,5 @@ export interface CloseShiftInput {
   shiftId: string;
   actualCash: number;
   note?: string;
+  reconciliation?: ShiftTotalsInput;
 }

@@ -5,7 +5,7 @@
  */
 
 import { getClient, handleError, getCurrentTenantId } from "./base";
-import type { Shift, OpenShiftInput, CloseShiftInput } from "@/lib/types/shift";
+import type { Shift, OpenShiftInput, CloseShiftInput, ShiftTotalsInput } from "@/lib/types/shift";
 import { applyDateRangeFilter } from "@/lib/utils/list-date-preset-range";
 import { summarizeShiftCashRows, type ShiftCashEntry, type ShiftCashRow } from "@/lib/shift-cash-preview";
 
@@ -29,6 +29,10 @@ function mapShift(row: Record<string, unknown>): Shift {
     totalOrders: Number(row.total_orders ?? 0),
     salesByMethod: (row.sales_by_method as Record<string, number>) ?? {},
     note: (row.note as string) ?? null,
+    closeKind: (row.close_kind as Shift["closeKind"]) ?? null,
+    expectedTransfer: row.expected_transfer == null ? null : Number(row.expected_transfer),
+    actualTransfer: row.actual_transfer == null ? null : Number(row.actual_transfer),
+    transferDifference: row.transfer_difference == null ? null : Number(row.transfer_difference),
   };
 }
 
@@ -149,11 +153,29 @@ export interface ShiftReport extends Shift {
  *
  * YÊU CẦU: migration 00030_shift_integrity.sql đã chạy.
  */
+async function reconcileFnbShift(shiftId: string, actualCash: number, totals: ShiftTotalsInput, note?: string, reason?: string) {
+  const {data,error} = await (getClient().rpc as any)("fnb_reconcile_shift_totals_20261022", {
+    p_shift_id:shiftId,p_actual_cash:actualCash,p_actual_transfer:totals.actualTransfer,
+    p_expected_cash:totals.expectedCash,p_expected_transfer:totals.expectedTransfer,p_close_kind:totals.closeKind,
+    p_note:note??null,p_reason:reason??null,
+  });
+  if(error) {
+    if(error.message?.includes("SHIFT_STATE_CHANGED")||error.message?.includes("SHIFT_NOT_OPEN")) throw new Error("Ca đã được chốt hoặc đổi trạng thái ở thiết bị khác. Tải lại trạng thái ca trước khi tiếp tục.");
+    if(error.message?.includes("SHIFT_TOTALS_CHANGED")) throw new Error("Số tiền của ca vừa thay đổi. Tải lại tổng quan, đối chiếu lại rồi xác nhận; ca chưa được chốt.");
+    if(error.message?.includes("SHIFT_DIFFERENCE_REASON_REQUIRED")) throw new Error("Nhập lý do chênh lệch tiền mặt hoặc chuyển khoản trước khi chốt ca.");
+    if(error.code==="PGRST202") throw new Error("Chưa cập nhật chức năng đối soát ca. Tải lại sau khi quản trị hoàn tất cập nhật.");
+    handleError(error,"reconcileFnbShift");
+  }
+  return {data,error};
+}
+
 export async function closeShift(input: CloseShiftInput): Promise<ShiftReport> {
   const supabase = getClient();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase.rpc as any)("close_shift_atomic", {
+  const { data, error } = input.reconciliation
+    ? await reconcileFnbShift(input.shiftId,input.actualCash,input.reconciliation,input.note)
+    : await (supabase.rpc as any)("close_shift_atomic", {
     p_shift_id: input.shiftId,
     p_actual_cash: input.actualCash,
     p_note: input.note ?? null,
@@ -161,6 +183,7 @@ export async function closeShift(input: CloseShiftInput): Promise<ShiftReport> {
 
   if (error) handleError(error, "closeShift");
   if (!data) throw new Error("Không đóng được ca");
+  if(input.reconciliation&&data.shift)return {...mapShift(data.shift),cashIn:Number(data.cash_in??0),cashOut:Number(data.cash_out??0)};
 
   // Load full shift record (with cashier name) để map về UI
   const tenantId = await getCurrentTenantId();
@@ -261,10 +284,13 @@ export async function reconcilePendingShift(input: {
   actualCash: number;
   reason: string;
   note?: string;
+  reconciliation?: ShiftTotalsInput;
 }): Promise<ShiftReport> {
   const supabase = getClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase.rpc as any)(
+  const { data, error } = input.reconciliation
+    ? await reconcileFnbShift(input.shiftId,input.actualCash,input.reconciliation,input.note,input.reason)
+    : await (supabase.rpc as any)(
     "reconcile_pending_shift",
     {
       p_shift_id: input.shiftId,
@@ -275,6 +301,7 @@ export async function reconcilePendingShift(input: {
   );
   if (error) handleError(error, "reconcilePendingShift");
   if (!data) throw new Error("Không đối chiếu được ca");
+  if(input.reconciliation&&data.shift)return {...mapShift(data.shift),cashIn:Number(data.cash_in??0),cashOut:Number(data.cash_out??0)};
 
   // Load full shift để return cùng shape với closeShift
   const tenantId = await getCurrentTenantId();
@@ -411,6 +438,8 @@ export interface ReconciledShiftRow {
   startingCash: number;
   expectedCash: number;
   actualCash: number;
+  closeKind?: Shift["closeKind"];
+  expectedTransfer?: number | null; actualTransfer?: number | null; transferDifference?: number | null;
   /** actualCash - expectedCash. >0 thừa, <0 thiếu. */
   variance: number;
   totalSales: number;
@@ -437,7 +466,7 @@ export async function getReconciledShifts(
   let query = (supabase as any)
     .from("shifts")
     .select(
-      "id, branch_id, cashier_id, reconciled_by, opened_at, closed_at, reconciled_at, auto_marked_pending_at, starting_cash, expected_cash, actual_cash, cash_difference, total_sales, total_orders, reconcile_reason, note, status, " +
+      "id, branch_id, cashier_id, reconciled_by, opened_at, closed_at, reconciled_at, auto_marked_pending_at, starting_cash, expected_cash, actual_cash, cash_difference, total_sales, total_orders, reconcile_reason, note, status, close_kind, expected_transfer, actual_transfer, transfer_difference, " +
         "cashier:profiles!shifts_cashier_id_fkey(full_name), " +
         "branch:branches(name)",
     )
@@ -478,6 +507,10 @@ export async function getReconciledShifts(
         startingCash: Number(r.starting_cash ?? 0),
         expectedCash,
         actualCash,
+        closeKind: r.close_kind ?? null,
+        expectedTransfer: r.expected_transfer == null ? null : Number(r.expected_transfer),
+        actualTransfer: r.actual_transfer == null ? null : Number(r.actual_transfer),
+        transferDifference: r.transfer_difference == null ? null : Number(r.transfer_difference),
         variance,
         totalSales: Number(r.total_sales ?? 0),
         totalOrders: Number(r.total_orders ?? 0),

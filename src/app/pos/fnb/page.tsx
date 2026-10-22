@@ -104,6 +104,7 @@ import {
   giuDuocCaDaBiet,
   type CatalogStatus,
 } from "./shift-catalog-guards";
+import type { ShiftTotalsInput } from "@/lib/types/shift";
 import { printShiftReport } from "@/lib/print-shift-report";
 import type { RestaurantTable, FnbOrderLine, KitchenOrderItem, KitchenOrder, OrderType } from "@/lib/types/fnb";
 import type { Shift } from "@/lib/types/shift";
@@ -2980,9 +2981,10 @@ function FnbPosPageInner() {
   );
 
   const handleCloseShift = useCallback(
-    async (actualCash: number, note?: string) => {
+    async (actualCash: number, note?: string, reconciliation?: ShiftTotalsInput) => {
       if (!currentShift) return;
-      const report = await closeShift({ shiftId: currentShift.id, actualCash, note });
+      if(!reconciliation)throw new Error("Đối chiếu tổng chuyển khoản trước khi chốt ca.");
+      const report = await closeShift({ shiftId: currentShift.id, actualCash, note, reconciliation });
 
       // In báo cáo Z tự động sau khi đóng ca thành công
       try {
@@ -2993,7 +2995,7 @@ function FnbPosPageInner() {
           storeAddress: settings.print.showStoreAddress ? currentBranch?.address : undefined,
           storePhone: settings.print.showStorePhone ? currentBranch?.phone : undefined,
           branchName: currentBranch?.name,
-          cashierName: report.cashierName ?? user?.fullName,
+          cashierName: report.cashierName ?? currentShift.cashierName ?? user?.fullName,
           openedAt: report.openedAt,
           closedAt: report.closedAt,
           startingCash: report.startingCash,
@@ -3005,6 +3007,7 @@ function FnbPosPageInner() {
           totalSales: report.totalSales,
           totalOrders: report.totalOrders,
           salesByMethod: report.salesByMethod,
+          closeKind:report.closeKind,expectedTransfer:report.expectedTransfer,actualTransfer:report.actualTransfer,transferDifference:report.transferDifference,
           note: report.note,
           paperSize: settings.print.paperSize === "58mm" ? "58mm" : "80mm",
         });
@@ -3025,14 +3028,8 @@ function FnbPosPageInner() {
 
       toast({
         title: "Đã đóng ca",
-        description: `Chênh lệch: ${
-          (report.cashDifference ?? 0) === 0
-            ? "KHỚP"
-            : (report.cashDifference ?? 0) > 0
-              ? `THỪA ${formatNumber(report.cashDifference ?? 0)}`
-              : `THIẾU ${formatNumber(Math.abs(report.cashDifference ?? 0))}`
-        }`,
-        variant: (report.cashDifference ?? 0) === 0 ? "success" : "warning",
+        description: `Tiền mặt: ${formatNumber(report.cashDifference??0)}đ; chuyển khoản: ${formatNumber(report.transferDifference??0)}đ chênh lệch.`,
+        variant: (report.cashDifference??0)===0&&(report.transferDifference??0)===0 ? "success":"warning",
       });
     },
     [currentShift, settings, currentBranch, user, toast]
@@ -4032,6 +4029,7 @@ function FnbPosPageInner() {
             open={closeShiftDialogOpen}
             onOpenChange={setCloseShiftDialogOpen}
             currentShift={currentShift}
+            reconcileTransfer
             onConfirm={handleCloseShift}
           />
         </Suspense>
