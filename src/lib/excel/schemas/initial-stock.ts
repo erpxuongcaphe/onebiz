@@ -22,6 +22,8 @@ export interface InitialStockImportRow {
 export const initialStockExcelSchema: ExcelSchema<InitialStockImportRow> = {
   name: "Tồn kho ban đầu",
   fileName: "Ton-kho-ban-dau",
+  normalizeHeaders: true,
+  headerRowSearchLimit: 20,
   description:
     "Khởi tạo tồn hoặc bổ sung giá vốn ban đầu. Mỗi file một chi nhánh. Mã phải có sẵn; lượng và giá vốn theo đơn vị tồn Onebiz. Xem trước rồi xác nhận cả đợt. Mã đã phát sinh vận hành cần kiểm kê nếu muốn thay đổi lượng; không nhập lại số dư mỗi tháng.",
   columns: [
