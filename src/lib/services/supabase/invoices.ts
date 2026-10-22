@@ -70,13 +70,15 @@ export async function getInvoices(params: QueryParams): Promise<QueryResult<Invo
   const deliveryFilter = params.filters?.delivery;
   const fnbOrderType = resolveFnbInvoiceType(params.filters?.fnbOrderType);
   const shipmentPlan = getInvoiceShipmentQueryPlan(fnbOrderType === "all" ? deliveryFilter : "all");
-  const fnbRelation = `fnb_orders:kitchen_orders!kitchen_orders_invoice_id_fkey${fnbOrderType === "all" ? "" : "!inner"}(order_type)`;
+  const fnbRelation = params.filters?.fnbOrderType !== undefined
+    ? `, fnb_orders:kitchen_orders!kitchen_orders_invoice_id_fkey${fnbOrderType === "all" ? "" : "!inner"}(order_type)`
+    : "";
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase as any)
     .from("invoices")
     .select(
-      `*, profiles!invoices_created_by_fkey(full_name), branches!invoices_branch_id_fkey(name), customers!invoices_customer_id_fkey(code, phone, address, debt), ${shipmentPlan.relation}, ${fnbRelation}`,
+      `*, profiles!invoices_created_by_fkey(full_name), branches!invoices_branch_id_fkey(name), customers!invoices_customer_id_fkey(code, phone, address, debt), ${shipmentPlan.relation}${fnbRelation}`,
       { count: "exact" },
     )
     .eq("tenant_id", tenantId)

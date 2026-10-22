@@ -40,6 +40,7 @@ describe("F&B invoice administration",()=>{
    state.rows=[{id:"old",source:"fnb",status:"completed",shipments:[],fnb_orders:[]}];
    const r=await getInvoices({page:0,pageSize:15,filters:{delivery:"delivery"}});
    expect(state.calls.find(call=>call[0]==="invoices.select")?.[1]).toContain("shipping_orders_invoice_id_fkey!inner");
+   expect(state.calls.find(call=>call[0]==="invoices.select")?.[1]).not.toContain("fnb_orders:");
    expect(r.data[0].fnbOrderType).toBeUndefined();expect(invoiceFnbTypeLabel()).toBe("Chưa ghi nhận");
  });
  it("separates cached summary totals for the three POS types",()=>{

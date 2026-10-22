@@ -675,7 +675,7 @@ export default function HoaDonPage() {
     const commonFilters: Record<string, string | string[]> = {};
     if (selectedStatuses.length > 0) commonFilters.status = selectedStatuses;
     commonFilters.delivery = showFnbTypes ? "all" : deliveryFilter;
-    commonFilters.fnbOrderType = fnbOrderType;
+    if (showFnbTypes) commonFilters.fnbOrderType = fnbOrderType;
     if (range.from) commonFilters.dateFrom = range.from;
     if (range.to) commonFilters.dateTo = range.to;
     // mode "none" = chưa có chi nhánh và chưa chủ động xem toàn chuỗi → hàm
