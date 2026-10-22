@@ -31,6 +31,16 @@ try {
  await db.exec(extract('supabase/migrations/00322_atomic_fnb_merge_orders.sql','merge_kitchen_orders_atomic'));
  await db.exec(fs.readFileSync('supabase/migrations/202610200005_fnb_multiple_table_bills.sql','utf8'));
  await db.exec(fs.readFileSync('supabase/migrations/202610210002_fnb_multi_bill_merge.sql','utf8'));
+ await db.exec(`create table roles(id uuid primary key,name text);
+ create table role_permissions(role_id uuid,permission_code text,unique(role_id,permission_code));
+ insert into roles values('${id(80)}','Thu ngân F&B'),('${id(81)}','Phục vụ');`);
+ const permissionMigration=fs.readFileSync('supabase/migrations/202610220001_fnb_cashier_merge_permission.sql','utf8');
+ const definitionBefore=(await db.query("select pg_get_functiondef('merge_kitchen_orders_atomic(uuid,uuid[])'::regprocedure) d")).rows[0].d;
+ await db.exec(permissionMigration);
+ await db.exec(permissionMigration); // retry does not duplicate grants or change the function again
+ assert.deepEqual((await db.query('select * from role_permissions')).rows,[{role_id:id(80),permission_code:'pos_fnb.merge_bills'}]);
+ const definitionAfter=(await db.query("select pg_get_functiondef('merge_kitchen_orders_atomic(uuid,uuid[])'::regprocedure) d")).rows[0].d;
+ assert.equal(definitionAfter.replace("if not coalesce(public.user_has_permission(v_actor, 'pos_fnb.merge_bills'), false)\n     and not coalesce(public.user_has_permission(v_actor, 'pos_fnb.manage_tables'), false) then", "if not public.user_has_permission(v_actor, 'pos_fnb.manage_tables') then"),definitionBefore,'the permission guard is the only change to merge behavior');
  const one=async(sql,args=[]) => (await db.query(sql,args)).rows[0];
  const send=async(table,key)=> (await one("select _fnb_send_to_kitchen_impl_00303($1,$2,'dine_in',null,$3,$4) result",[id(3),table,key,JSON.stringify([{productId:id(7),quantity:1,unitPrice:22000}])])).result;
  const a=(await send(id(4),'first')).kitchen_order_id;
@@ -93,6 +103,28 @@ try {
  const empty=await takeaway('rollback-empty');await db.query('delete from kitchen_order_items where kitchen_order_id=$1',[empty]);
  await assert.rejects(()=>db.query('select merge_kitchen_orders_atomic($1,$2)',[take,[valid,empty]]),/SOURCE_EMPTY/);
  assert.equal((await one('select merged_into_id from kitchen_orders where id=$1',[valid])).merged_into_id,null,'late item failure also rolls back every earlier source');
- await db.exec("set test.permission='false'");await assert.rejects(()=>db.query('select merge_kitchen_orders_atomic($1,$2)',[take,[valid]]),/PERMISSION_REQUIRED/);
+ // Effective-permission fixture: a cashier can merge without managing tables.
+ const permissionTarget=await takeaway('cashier-merge-target'),permissionSource=await takeaway('cashier-merge-source');
+ await db.exec(`create or replace function user_has_permission(uuid,text) returns boolean language sql stable as $$
+ select case when $2='pos_fnb.merge_bills' then nullif(current_setting('test.merge',true),'')::boolean
+ when $2='pos_fnb.manage_tables' then nullif(current_setting('test.manage',true),'')::boolean
+ else coalesce(current_setting('test.permission',true),'true')='true' end $$;
+ set test.merge='true';set test.manage='false';`);
+ assert.equal((await one("select user_has_permission(auth.uid(),'pos_fnb.manage_tables') allowed")).allowed,false);
+ await db.query('select merge_kitchen_orders_atomic($1,$2)',[permissionTarget,[permissionSource]]);
+ assert.equal((await one('select merged_into_id from kitchen_orders where id=$1',[permissionSource])).merged_into_id,permissionTarget);
+ await db.exec("set test.merge='false';set test.manage='false'");
+ await assert.rejects(()=>db.query('select merge_kitchen_orders_atomic($1,$2)',[take,[valid]]),/PERMISSION_REQUIRED/);
+ await db.exec("set test.merge='';set test.manage=''");
+ await assert.rejects(()=>db.query('select merge_kitchen_orders_atomic($1,$2)',[take,[valid]]),/PERMISSION_REQUIRED/,'NULL permission is denied');
+ await db.exec("set test.merge='false';set test.manage='true'");
+ await db.query('select merge_kitchen_orders_atomic($1,$2)',[take,[valid]]);
+ await db.exec("set test.merge='true';set test.manage='false'");
+ await assert.rejects(()=>db.query('select merge_kitchen_orders_atomic($1,$2)',[take,[paid]]),/SOURCE_NOT_ELIGIBLE/);
+ await assert.rejects(()=>db.query('select merge_kitchen_orders_atomic($1,$2)',[take,[foreign]]),/SOURCE_NOT_ELIGIBLE/);
+ await assert.rejects(()=>db.query('select merge_kitchen_orders_atomic($1,$2)',[take,[delivery]]),/SOURCE_NOT_ELIGIBLE/);
+ await db.query('update kitchen_orders set branch_id=$1 where id=$2',[id(90),take]);
+ await assert.rejects(()=>db.query('select merge_kitchen_orders_atomic($1,$2)',[take,[empty]]),/BRANCH_DENIED/);
+ console.log('PASS: cashier merge-only grant; revoked/NULL denied; legacy managers preserved; migration idempotent; no extra role grants; function behavior unchanged outside permission guard');
  console.log('PASS: multi-bill dine-in/takeaway merge preserves item and batch identities, discounts, notes; mixed types retain target; table siblings and final release; paid/delivery/cross-branch/duplicate/retry/permission guards; invalid batch rolls back all bills');
 } catch(error){console.error(error.message,error.where??''); process.exitCode=1;}finally{await db.close();}

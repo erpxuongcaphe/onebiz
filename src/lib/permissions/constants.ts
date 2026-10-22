@@ -28,6 +28,7 @@ export const PERMISSIONS = {
   POS_FNB_VIEW_ORDERS: "pos_fnb.view_orders",
   POS_FNB_VIEW_SALES_SUMMARY: "pos_fnb.view_sales_summary",
   POS_FNB_MANAGE_TABLES: "pos_fnb.manage_tables",
+  POS_FNB_MERGE_BILLS: "pos_fnb.merge_bills",
   POS_FNB_SPLIT_BILL: "pos_fnb.split_bill",
   POS_FNB_TRANSFER_TABLE: "pos_fnb.transfer_table",
   // CEO 22/05/2026 (Phase 1): cashier không được sửa đơn giá ad-hoc
@@ -214,6 +215,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { code: PERMISSIONS.POS_FNB_VIEW_ORDERS, label: "Xem đơn bếp" },
       { code: PERMISSIONS.POS_FNB_VIEW_SALES_SUMMARY, label: "Xem tổng bill và tổng thu F&B (quản lý được cấp quyền)" },
       { code: PERMISSIONS.POS_FNB_MANAGE_TABLES, label: "Quản lý bàn" },
+      { code: PERMISSIONS.POS_FNB_MERGE_BILLS, label: "Gộp bill chưa thanh toán" },
       { code: PERMISSIONS.POS_FNB_SPLIT_BILL, label: "Tách bill" },
       { code: PERMISSIONS.POS_FNB_TRANSFER_TABLE, label: "Chuyển bàn" },
     ],
@@ -462,6 +464,7 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
       PERMISSIONS.POS_FNB_CHECKOUT,
       PERMISSIONS.POS_FNB_VIEW_ORDERS,
       PERMISSIONS.POS_FNB_SPLIT_BILL,
+      PERMISSIONS.POS_FNB_MERGE_BILLS,
       PERMISSIONS.POS_FNB_TRANSFER_TABLE,
       PERMISSIONS.FINANCE_VIEW_CASH_BOOK,
       PERMISSIONS.PRODUCTS_VIEW,

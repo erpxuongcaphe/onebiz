@@ -488,6 +488,7 @@ function FnbPosPageInner() {
   // Day 1 16/05: Tách permission void bill ĐÃ thanh toán riêng — không gộp với
   // "cancel_unpaid_order" vì void paid phải hoàn kho + tạo phiếu chi.
   const canManageTables = hasPermission(PERMISSIONS.POS_FNB_MANAGE_TABLES);
+  const canMergeBills = canManageTables || hasPermission(PERMISSIONS.POS_FNB_MERGE_BILLS);
   const canTransferTables = hasPermission(PERMISSIONS.POS_FNB_TRANSFER_TABLE);
   const canCheckout = hasPermission(PERMISSIONS.POS_FNB_CHECKOUT);
   const canSplitBill = hasPermission(PERMISSIONS.POS_FNB_SPLIT_BILL);
@@ -3220,7 +3221,7 @@ function FnbPosPageInner() {
 
   // One server transaction for every selected bill; no pair-by-pair loop.
   const handleMergeBills = useCallback(async (targetId: string, ids: string[]) => {
-    if (mergeBillsLock.current || !branchId || !canManageTables || !networkStatus.isOnline || openOrders.loading || openOrders.error) return;
+    if (mergeBillsLock.current || !branchId || !canMergeBills || !networkStatus.isOnline || openOrders.loading || openOrders.error) return;
     const plan = getFnbMergePlan(openOrders.orders, ids, targetId, branchId, pos.tabs.filter(tab => tab.lines.length > 0 && tab.kitchenOrderId).map(tab => tab.kitchenOrderId!));
     if (plan.error) { toast({ title: "Chưa gộp được bill", description: plan.error, variant: "warning" }); return; }
     const selectedBranch = branchId;
@@ -3251,7 +3252,7 @@ function FnbPosPageInner() {
       void openOrders.refresh();
       toast({ title: "Chưa xác nhận được kết quả gộp", description: error instanceof Error ? error.message : "Làm mới danh sách để kiểm tra kết quả trước khi thử lại.", variant: "error" });
     } finally { mergeBillsLock.current = false; setMergeBillsBusy(false); }
-  }, [branchId, canManageTables, networkStatus.isOnline, openOrders, pos, toast, hydrateKitchenOrderIntoTab]);
+  }, [branchId, canMergeBills, networkStatus.isOnline, openOrders, pos, toast, hydrateKitchenOrderIntoTab]);
 
   // ── Customer selection ──
   const customerSelectionLock = useRef(false);
@@ -3805,7 +3806,7 @@ function FnbPosPageInner() {
                     : undefined
                 }
                 onMergeTable={
-                  canManageTables && networkStatus.isOnline
+                  canMergeBills && networkStatus.isOnline
                     ? (table) => {
                         setMergeIntent({ initialId: table.currentOrderId ?? undefined });
                         void openOrders.refresh();
@@ -3908,7 +3909,7 @@ function FnbPosPageInner() {
           onCancelSentLine={networkStatus.isOnline ? line => { setCancelSentItemId(line.kitchenOrderItemId); setCancelSentLine(line); setCancelSentMode("items"); } : undefined}
           voidKitchenOrderLabel={canCancelUnpaidOrder ? "Hủy đơn chưa thanh toán" : "Xin duyệt hủy đơn"}
           onTransferTable={canTransferTables && canTransferFnbTab(pos.activeTab, tables) ? () => setTransferTableOpen(true) : undefined}
-          onMergeTable={canManageTables ? () => { setMergeIntent({ initialId: pos.activeTab?.kitchenOrderId }); void openOrders.refresh(); } : undefined}
+          onMergeTable={canMergeBills ? () => { setMergeIntent({ initialId: pos.activeTab?.kitchenOrderId }); void openOrders.refresh(); } : undefined}
           auditHistoryHref={activeBillAuditHref}
           onOrderHistory={canViewOrderHistory ? () => setOrderHistoryOpen(true) : undefined}
           onApplyCoupon={handleApplyCoupon}
@@ -4129,7 +4130,7 @@ function FnbPosPageInner() {
           onCancelSentLine={networkStatus.isOnline ? line => { setCancelSentItemId(line.kitchenOrderItemId); setCancelSentLine(line); setCancelSentMode("items"); } : undefined}
           voidKitchenOrderLabel={canCancelUnpaidOrder ? "Hủy đơn chưa thanh toán" : "Xin duyệt hủy đơn"}
               onTransferTable={canTransferTables && canTransferFnbTab(pos.activeTab, tables) ? () => setTransferTableOpen(true) : undefined}
-          onMergeTable={canManageTables ? () => { setMergeIntent({ initialId: pos.activeTab?.kitchenOrderId }); void openOrders.refresh(); } : undefined}
+          onMergeTable={canMergeBills ? () => { setMergeIntent({ initialId: pos.activeTab?.kitchenOrderId }); void openOrders.refresh(); } : undefined}
               auditHistoryHref={activeBillAuditHref}
           onOrderHistory={canViewOrderHistory ? () => setOrderHistoryOpen(true) : undefined}
               onApplyCoupon={handleApplyCoupon}
@@ -4401,7 +4402,7 @@ function FnbPosPageInner() {
         }}
       />
 
-      <FnbOpenOrdersDialog onMerge={canManageTables ? () => { setMergeIntent({}); void openOrders.refresh(); } : undefined} activeOrderId={pos.activeTab?.kitchenOrderId} updatedAt={openOrders.updatedAt} open={openOrdersDialog} onOpenChange={setOpenOrdersDialog} orders={openOrders.orders} drafts={pos.tabs.filter((tab) => !tab.kitchenOrderId)} onOpenOrder={handleOpenSharedOrder} onOpenDraft={(id) => { pos.switchTab(id); setOpenOrdersDialog(false); setMobileCartOpen(true); setShowFloorPlan(false); }} loading={openOrders.loading} error={openOrders.error} connected={openOrders.connected} busy={openingSharedOrder} onRefresh={() => { void openOrders.refresh(); }} />
+      <FnbOpenOrdersDialog onMerge={canMergeBills ? () => { setMergeIntent({}); void openOrders.refresh(); } : undefined} activeOrderId={pos.activeTab?.kitchenOrderId} updatedAt={openOrders.updatedAt} open={openOrdersDialog} onOpenChange={setOpenOrdersDialog} orders={openOrders.orders} drafts={pos.tabs.filter((tab) => !tab.kitchenOrderId)} onOpenOrder={handleOpenSharedOrder} onOpenDraft={(id) => { pos.switchTab(id); setOpenOrdersDialog(false); setMobileCartOpen(true); setShowFloorPlan(false); }} loading={openOrders.loading} error={openOrders.error} connected={openOrders.connected} busy={openingSharedOrder} onRefresh={() => { void openOrders.refresh(); }} />
 
       <Dialog open={Boolean(selectDineInTabId)} onOpenChange={(open) => { if (!open) setSelectDineInTabId(null); }}>
         <DialogContent className="sm:max-w-md">
@@ -4424,7 +4425,7 @@ function FnbPosPageInner() {
 
       {tableBillsId && <Suspense fallback={null}><TableBillsDialog open tableLabel={tables.find(table => table.id === tableBillsId) ? getTableLabel(tables.find(table => table.id === tableBillsId)!) : "Bàn"}
         orders={openOrders.orders.filter(order => order.tableId === tableBillsId && isUnpaidFnbOrder(order))} drafts={pos.tabs.filter(tab => tab.tableId === tableBillsId && !tab.kitchenOrderId)}
-        loading={openOrders.loading} error={openOrders.error} opening={openingSharedOrder} busy={mergeBillsBusy} canMerge={canManageTables}
+        loading={openOrders.loading} error={openOrders.error} opening={openingSharedOrder} busy={mergeBillsBusy} canMerge={canMergeBills}
         onOpenChange={open => { if (!open) setTableBillsId(null); }} onRefresh={() => { void openOrders.refresh(); }} onMerge={() => { setMergeIntent({ initialId: openOrders.orders.find(order => order.tableId === tableBillsId && branchId && canMergeFnbOrder(order, branchId))?.id }); void openOrders.refresh(); }}
         onOpenOrder={order => { void handleOpenSharedOrder(order).then(opened => { if (opened) setTableBillsId(null); }); }}
         onOpenDraft={id => { handleSwitchOrderTab(id); setTableBillsId(null); setShowFloorPlan(false); setMobileCartOpen(true); }}
@@ -4469,7 +4470,7 @@ function FnbPosPageInner() {
         </DialogContent>
       </Dialog>
 
-      {mergeIntent && branchId && canManageTables && <FnbMergeBillsDialog key={branchId} branchId={branchId}
+      {mergeIntent && branchId && canMergeBills && <FnbMergeBillsDialog key={branchId} branchId={branchId}
         orders={openOrders.orders} initialId={mergeIntent.initialId}
         pendingIds={pos.tabs.filter(tab => tab.lines.length > 0 && tab.kitchenOrderId).map(tab => tab.kitchenOrderId!)}
         busy={mergeBillsBusy} loading={openOrders.loading} error={openOrders.error} online={networkStatus.isOnline}
