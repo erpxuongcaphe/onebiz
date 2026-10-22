@@ -2,18 +2,6 @@
 
 import { Input } from "@/components/ui/input";
 
-/**
- * ReportDateRangePicker — dropdown 16 preset KiotViet + custom range.
- *
- * Pattern KiotViet (CEO 06/05/2026 ảnh 5):
- * - Dropdown popup với 5 cột chia theo group (Theo ngày / Tuần / Tháng / Quý / Năm)
- * - Mỗi cột stack vertical các preset cùng group
- * - Active preset highlight bg-primary
- * - "Tùy chỉnh" với 2 input date Từ/Đến (compact, dùng native input[type=date])
- *
- * Trigger compact: hiển thị label preset hiện tại + chevron, max-w 200px.
- */
-
 import { useId, useState } from "react";
 import {
   DropdownMenu,
@@ -48,6 +36,12 @@ export function ReportDateRangePicker({
   const [open, setOpen] = useState(false);
   const fromInputId = useId();
   const toInputId = useId();
+  const errorId = useId();
+  const rangeError = !customFrom || !customTo
+    ? "Chọn đủ ngày."
+    : customFrom > customTo
+      ? "Ngày kết thúc không trước ngày bắt đầu."
+      : null;
   const handleOpenChange = (nextOpen: boolean) => {
     setOpen(nextOpen);
     if (nextOpen) {
@@ -62,11 +56,13 @@ export function ReportDateRangePicker({
 
   const handlePresetClick = (next: DatePreset) => {
     onPresetChange(next);
+    setOpen(false);
   };
 
   const applyCustomRange = () => {
     if (customFrom && customTo && customFrom <= customTo) {
       onCustomRangeChange({ from: customFrom, to: customTo });
+      setOpen(false);
     }
   };
 
@@ -88,10 +84,21 @@ export function ReportDateRangePicker({
       <DropdownMenuContent
         align="end"
         sideOffset={6}
-        className="w-[min(760px,calc(100vw-2rem))] min-w-0 p-3"
+        aria-label="Thời gian báo cáo"
+        className="flex max-h-[min(36rem,var(--available-height),calc(100dvh-1rem))] w-[min(760px,calc(100vw-2rem))] min-w-0 flex-col overflow-hidden p-0"
       >
-        {/* 5-column preset grid */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="flex shrink-0 items-center justify-between border-b border-primary/15 bg-primary/5 px-3 py-1.5">
+          <span className="text-sm font-semibold text-primary">Thời gian</span>
+          <button
+            type="button"
+            aria-label="Đóng bộ chọn thời gian"
+            onClick={() => setOpen(false)}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary pointer-coarse:h-11 pointer-coarse:w-11"
+          >
+            <Icon name="close" size={16} />
+          </button>
+        </div>
+        <div role="group" aria-label="Kỳ nhanh" className="grid min-h-0 flex-1 grid-cols-2 gap-3 overflow-y-auto overscroll-contain p-3 sm:grid-cols-3 lg:grid-cols-5">
           {PRESET_GROUPS.map((group) => (
             <div key={group.key} className="flex flex-col gap-1">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-2 mb-1">
@@ -103,7 +110,7 @@ export function ReportDateRangePicker({
                   key={p.key}
                   onClick={() => handlePresetClick(p.key)}
                   className={cn(
-                    "px-2 py-1.5 rounded-lg text-xs text-left whitespace-nowrap transition-colors press-scale-sm",
+                    "min-h-9 rounded-md px-2 py-1.5 text-left text-sm whitespace-normal transition-colors press-scale-sm sm:text-xs sm:whitespace-nowrap pointer-coarse:min-h-11",
                     preset === p.key
                       ? "bg-primary text-primary-foreground font-medium"
                       : "text-foreground hover:bg-surface-container",
@@ -116,40 +123,45 @@ export function ReportDateRangePicker({
           ))}
         </div>
 
-        {/* Custom range input */}
-        <div className="mt-3 pt-3 border-t border-border">
+        <div role="group" aria-label="Khoảng ngày tùy chỉnh" className="shrink-0 border-t border-border bg-popover p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
             Tùy chỉnh
           </p>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-            <div className="flex-1">
+            <div className="min-w-0 flex-1">
               <label htmlFor={fromInputId} className="text-xs text-muted-foreground">Từ ngày</label>
               <Input
                 id={fromInputId}
                 type="date"
                 value={customFrom}
                 onChange={(e) => setCustomFrom(e.target.value)}
-                className="w-full px-2 py-1.5 text-xs rounded-lg border border-border bg-surface-container-lowest outline-none focus:ring-1 focus:ring-primary"
+                aria-invalid={rangeError !== null}
+                aria-describedby={rangeError ? errorId : undefined}
+                className="h-11 w-full min-w-0 rounded-md border border-border bg-surface-container-lowest px-2 py-1.5 text-base outline-none focus:ring-1 focus:ring-primary sm:h-8 sm:text-xs"
               />
             </div>
-            <div className="flex-1">
+            <div className="min-w-0 flex-1">
               <label htmlFor={toInputId} className="text-xs text-muted-foreground">Đến ngày</label>
               <Input
                 id={toInputId}
                 type="date"
                 value={customTo}
                 onChange={(e) => setCustomTo(e.target.value)}
-                className="w-full px-2 py-1.5 text-xs rounded-lg border border-border bg-surface-container-lowest outline-none focus:ring-1 focus:ring-primary"
+                aria-invalid={rangeError !== null}
+                aria-describedby={rangeError ? errorId : undefined}
+                className="h-11 w-full min-w-0 rounded-md border border-border bg-surface-container-lowest px-2 py-1.5 text-base outline-none focus:ring-1 focus:ring-primary sm:h-8 sm:text-xs"
               />
             </div>
             <button
               type="button"
               onClick={applyCustomRange}
-              className="h-8 px-3 rounded-lg bg-primary text-primary-foreground text-xs font-medium press-scale-sm hover:bg-primary/90"
+              disabled={rangeError !== null}
+              className="h-11 shrink-0 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground press-scale-sm hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 sm:h-8 sm:text-xs"
             >
               Áp dụng
             </button>
           </div>
+          {rangeError && <p id={errorId} role="alert" className="mt-2 text-xs text-destructive">{rangeError}</p>}
         </div>
       </DropdownMenuContent>
     </DropdownMenu>
