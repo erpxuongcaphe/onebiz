@@ -2,13 +2,13 @@ import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 
-const state = vi.hoisted(() => ({ branchId: "fnb", range: { from: "2026-10-01", to: "2026-10-18" }, refresh: undefined as (() => void) | undefined, pnl: vi.fn(), consolidated: vi.fn(), details: vi.fn(), exportExcel: vi.fn(), toast: vi.fn() }));
+const state = vi.hoisted(() => ({ periodReady: true, branchId: "fnb", range: { from: "2026-10-01", to: "2026-10-18" }, refresh: undefined as (() => void) | undefined, pnl: vi.fn(), consolidated: vi.fn(), details: vi.fn(), exportExcel: vi.fn(), toast: vi.fn() }));
 vi.mock("@/lib/contexts", () => ({
   useAuth: () => ({ tenant: { id: "onebiz" } }),
   useBranchFilter: () => ({ activeBranchId: state.branchId || undefined, branches: [], isReady: true }),
   useToast: () => ({ toast: state.toast }),
 }));
-vi.mock("@/lib/hooks/use-report-state", () => ({ useReportState: () => ({ preset: "custom", range: state.range, setPreset: vi.fn(), setCustomRange: vi.fn() }) }));
+vi.mock("@/lib/hooks/use-report-state", () => ({ useReportState: () => ({ isReady: state.periodReady, preset: "custom", range: state.range, setPreset: vi.fn(), setCustomRange: vi.fn() }) }));
 vi.mock("@/lib/hooks/use-live-data-refresh", () => ({ useLiveDataRefresh: (refresh: () => void) => { state.refresh = refresh; } }));
 vi.mock("@/lib/services", () => ({ getProfitAndLoss: state.pnl, getFinancialAnalysisDetails: state.details, getConsolidatedPnL: state.consolidated, getBranchPnLComparison: async () => [] }));
 vi.mock("@/app/(main)/phan-tich/_components", () => ({ KpiCard: ({ label, value }: { label: string; value: string }) => <div>{label}: {value}</div>, ChartCard: ({ title }: { title: string; children: ReactNode }) => <h2>{title}</h2> }));
@@ -22,6 +22,8 @@ function result(value: number) {
 }
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; }
 beforeEach(() => {
+  state.periodReady = true;
+  state.range = { from: "2026-10-01", to: "2026-10-18" };
   state.branchId = "fnb";
   state.pnl.mockReset().mockResolvedValue(result(123456));
   state.consolidated.mockReset().mockResolvedValue(result(345678));
@@ -32,6 +34,55 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("financial report scope and refresh", () => {
+  it("waits for restored date filters before requesting any report source", async () => {
+    state.periodReady = false;
+    const view = render(<FinancialReport />);
+    expect(state.pnl).not.toHaveBeenCalled();
+    expect(state.details).not.toHaveBeenCalled();
+    expect(state.consolidated).not.toHaveBeenCalled();
+    state.range = { from: "2026-09-01", to: "2026-09-30" };
+    state.periodReady = true;
+    view.rerender(<FinancialReport />);
+    await screen.findByText("Doanh thu thuần: 123,456");
+    expect(state.pnl).toHaveBeenCalledExactlyOnceWith("fnb", state.range);
+    expect(state.details).toHaveBeenCalledExactlyOnceWith("fnb", state.range, false, 50_000);
+  });
+
+  it("only fetches the selected total source when consolidation changes", async () => {
+    state.branchId = "";
+    render(<FinancialReport />);
+    await screen.findByText("Doanh thu thuần: 345,678");
+    expect(state.pnl).not.toHaveBeenCalled();
+    expect(state.consolidated).toHaveBeenCalledTimes(1);
+    const next = deferred<ReturnType<typeof result>>();
+    state.pnl.mockReturnValueOnce(next.promise);
+    act(() => screen.getByRole("checkbox", { name: "Hợp nhất · loại nội bộ" }).click());
+    expect(screen.queryByText("Doanh thu thuần: 345,678")).not.toBeInTheDocument();
+    await waitFor(() => expect(state.pnl).toHaveBeenCalledTimes(1));
+    expect(state.consolidated).toHaveBeenCalledTimes(1);
+    expect(state.details).toHaveBeenLastCalledWith(undefined, state.range, false, 50_000);
+    await act(async () => next.resolve(result(987654)));
+    expect(screen.getByText("Doanh thu thuần: 987,654")).toBeInTheDocument();
+  });
+
+  it("ignores a late result after switching date ranges quickly", async () => {
+    const view = render(<FinancialReport />);
+    await screen.findByText("Doanh thu thuần: 123,456");
+    const old = deferred<ReturnType<typeof result>>();
+    state.pnl.mockReturnValueOnce(old.promise);
+    state.range = { from: "2026-09-01", to: "2026-09-30" };
+    view.rerender(<FinancialReport />);
+    await waitFor(() => expect(state.pnl).toHaveBeenCalledTimes(2));
+    state.range = { from: "2026-08-01", to: "2026-08-31" };
+    state.pnl.mockResolvedValue(result(777777));
+    view.rerender(<FinancialReport />);
+    await screen.findByText("Doanh thu thuần: 777,777");
+    expect(state.details).toHaveBeenLastCalledWith("fnb", state.range, false, 50_000);
+    await act(async () => old.resolve(result(999999)));
+    expect(screen.queryByText("Doanh thu thuần: 999,999")).not.toBeInTheDocument();
+    expect(screen.getByText("Doanh thu thuần: 777,777")).toBeInTheDocument();
+  });
+
   it("keeps the error boundary until a complete retry succeeds", async () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
     render(<FinancialReport />);
