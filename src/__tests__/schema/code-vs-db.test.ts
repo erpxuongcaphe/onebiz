@@ -46,8 +46,6 @@ const RPC = new Set(schema.rpc as string[]);
  * dưới sẽ BẮT XOÁ dòng ngay khi dump đã có (sau `node scripts/dump-db-schema.mjs`).
  */
 const RPC_CHO_MIGRATION = new Map<string, string>([
-  ["ops_library_update_preview", "20261022110000_operations_library_updates.sql"],
-  ["ops_library_update_execute", "20261022110000_operations_library_updates.sql"],
   ["get_operational_sales_dashboard", "202610200007_operational_sales_dashboard.sql"],
   // 00390 đã chạy trên Production; snapshot không thể làm mới tại workspace này
   // vì không có service-role credential. Xóa các dòng này ngay lần dump schema kế tiếp.
