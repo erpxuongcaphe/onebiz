@@ -35,3 +35,18 @@ export function isInvoiceKpiSelected(
     expected.every((status) => selectedStatuses.includes(status))
   );
 }
+
+export const FNB_INVOICE_TYPES = [
+  { value: "all", label: "Tất cả", icon: "receipt_long" },
+  { value: "dine_in", label: "Tại chỗ", icon: "table_restaurant" },
+  { value: "takeaway", label: "Mang về", icon: "takeout_dining" },
+  { value: "delivery", label: "Giao hàng", icon: "local_shipping" },
+] as const;
+export type FnbInvoiceType = (typeof FNB_INVOICE_TYPES)[number]["value"];
+export function resolveFnbInvoiceType(value: unknown): FnbInvoiceType {
+  return FNB_INVOICE_TYPES.some(option => option.value === value) ? value as FnbInvoiceType : "all";
+}
+/** Missing historical order type stays unknown, never guessed as takeaway. */
+export function invoiceFnbTypeLabel(value?: string): string {
+  return FNB_INVOICE_TYPES.find(option => option.value !== "all" && option.value === value)?.label ?? "Chưa ghi nhận";
+}
