@@ -5,8 +5,8 @@ import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/contexts";
 import { changeMyPosPin } from "@/lib/services/supabase/pos-pin";
 
-export async function readMyPinStatus(): Promise<{ userId: string; hasPin: boolean }> {
-  const response = await fetch("/api/auth/pos-pin", { cache: "no-store" });
+export async function readMyPinStatus(signal?: AbortSignal): Promise<{ userId: string; hasPin: boolean }> {
+  const response = await fetch("/api/auth/pos-pin", { cache: "no-store", ...(signal ? { signal } : {}) });
   const body = await response.json();
   if (!response.ok || typeof body.hasPin !== "boolean" || typeof body.userId !== "string") throw new Error(body.message || "Chưa kiểm tra được PIN.");
   return body;
