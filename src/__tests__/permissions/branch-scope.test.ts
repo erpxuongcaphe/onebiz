@@ -8,6 +8,8 @@ describe("branch capabilities", () => {
     expect(canViewAllBranches("manager", new Set())).toBe(false);
     expect(canViewAllBranches("owner", new Set())).toBe(true);
     expect(canViewAllBranches("staff", new Set(["reports.view_all_branches"])) ).toBe(true);
+    expect(canViewAllBranches("staff", new Set(["*"]))).toBe(true);
+    expect(canViewAllBranches("staff", new Set(["system.manage_branches", "reports.view_all_branches"]))).toBe(true);
   });
   it("uses only the server-assigned branch IDs and deduplicates them", () => {
     expect([...parseAccessibleBranchIds([{ branch_id: "premium" }, { branch_id: "premium" }])]).toEqual(["premium"]);

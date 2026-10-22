@@ -491,12 +491,10 @@ export default function HoaDonPage() {
   const txPerms = useTxRowPermissions("invoice");
   // K2 08/08: nút "Xem tất cả chi nhánh" trước đây KHÔNG kiểm quyền — nhân
   // viên chỉ được gán 1 chi nhánh vẫn bấm được và danh sách chạy toàn tenant.
-  // Nay khoá đúng 2 mã quyền mà RPC chỉ số dùng, để bảng và dải chỉ số cùng
-  // một phạm vi. Chỉ chặn ở TẦNG ĐỌC, không đụng dữ liệu.
+  // Branch administration does not grant company-wide data access.
   const { hasAny, hasPermission } = usePermissions();
   const duocXemToanChuoi = hasAny([
     "reports.view_all_branches",
-    "system.manage_branches",
   ]);
   const [data, setData] = useState<Invoice[]>([]);
   const [total, setTotal] = useState(0);

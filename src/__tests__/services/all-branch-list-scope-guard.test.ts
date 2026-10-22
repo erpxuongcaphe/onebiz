@@ -10,17 +10,35 @@ const guardedPages = [
   "src/app/(main)/hang-hoa/san-xuat/page.tsx",
 ];
 
+const companyScopePages = [
+  ...guardedPages,
+  "src/app/(main)/so-quy/page.tsx",
+  "src/app/(main)/don-hang/hoa-don/page.tsx",
+  "src/app/(main)/don-hang/dat-hang/page.tsx",
+  "src/app/(main)/don-hang/tra-hang/page.tsx",
+  "src/app/(main)/hang-hoa/chuyen-kho/page.tsx",
+  "src/app/(main)/hang-hoa/ban-noi-bo/page.tsx",
+  "src/app/(main)/hang-hoa/lo-san-xuat/page.tsx",
+  "src/app/(main)/hang-hoa/hsd/page.tsx",
+];
+
 describe("phạm vi Tất cả chi nhánh của các danh sách kho", () => {
   for (const file of guardedPages) {
     it(`${file} chỉ bỏ lọc chi nhánh khi có quyền hiệu lực`, () => {
       const source = readFileSync(file, "utf8");
       expect(source).toContain('"reports.view_all_branches"');
-      expect(source).toContain('"system.manage_branches"');
+      expect(source).not.toContain('"system.manage_branches"');
       expect(source).toContain("duocXemToanChuoi");
       expect(source).toContain("if (!activeBranchId && !duocXemToanChuoi)");
       expect(source).not.toMatch(/(?<!duocXemToanChuoi && )viewAllBranches \? undefined/);
     });
   }
+
+  it.each(companyScopePages)("%s uses only the dedicated company-read capability", file => {
+    const source = readFileSync(file, "utf8");
+    expect(source).toMatch(/const duocXemToanChuoi = hasAny\(\[\s*"reports\.view_all_branches",?\s*\]\)/);
+    expect(source).not.toContain('"system.manage_branches"');
+  });
 
   it("Hóa đơn đầu vào chốt phạm vi chi nhánh trong RPC workspace", () => {
     const page = readFileSync(

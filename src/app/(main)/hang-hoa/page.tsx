@@ -547,7 +547,6 @@ export default function HangHoaPage() {
   const { hasPermission, hasAny, isLoading: permissionsLoading } = usePermissions();
   const duocXemToanChuoi = hasAny([
     "reports.view_all_branches",
-    "system.manage_branches",
   ]);
   const canDeleteProduct = hasPermission(PERMISSIONS.PRODUCTS_DELETE);
   const canEditTrading = hasPermission(PERMISSIONS.PRODUCTS_EDIT);

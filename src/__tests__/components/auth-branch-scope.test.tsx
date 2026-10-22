@@ -70,4 +70,14 @@ describe("authenticated branch restoration", () => {
     await waitFor(() => expect(read().branches).toEqual(["warehouse", "premium"]));
     expect(read().current).toBeUndefined();
   });
+  it("keeps a branch administrator inside the assigned data scope", async () => {
+    state.permissions = ["system.manage_branches"];
+    localStorage.setItem("active_branch_id", "__all__");
+    render(<AuthProvider><Probe /></AuthProvider>);
+    await waitFor(() => expect(read().current).toBe("premium"));
+    expect(read().branches).toEqual(["premium"]);
+    act(() => screen.getByRole("button", { name: "All" }).click());
+    act(() => screen.getByRole("button", { name: "Warehouse" }).click());
+    expect(read().current).toBe("premium");
+  });
 });

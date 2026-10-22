@@ -444,7 +444,6 @@ export default function DatHangPage() {
   const { hasAny } = usePermissions();
   const duocXemToanChuoi = hasAny([
     "reports.view_all_branches",
-    "system.manage_branches",
   ]);
   const [data, setData] = useState<SalesOrder[]>([]);
   const [total, setTotal] = useState(0);

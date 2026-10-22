@@ -152,7 +152,6 @@ export default function ChuyenKhoPage() {
 
   const duocXemToanChuoi = hasAny([
     "reports.view_all_branches",
-    "system.manage_branches",
   ]);
 
   useEffect(() => {

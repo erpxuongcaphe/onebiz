@@ -345,7 +345,6 @@ export default function InternalSalePage() {
 
   const duocXemToanChuoi = hasAny([
     "reports.view_all_branches",
-    "system.manage_branches",
   ]);
 
   // Đổi chi nhánh ở global switcher → về lại chế độ lọc theo chi nhánh.

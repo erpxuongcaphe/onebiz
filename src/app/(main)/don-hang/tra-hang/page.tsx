@@ -317,7 +317,6 @@ export default function TraHangPage() {
 
   const duocXemToanChuoi = hasAny([
     "reports.view_all_branches",
-    "system.manage_branches",
   ]);
 
   useEffect(() => {
