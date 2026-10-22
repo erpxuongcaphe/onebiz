@@ -253,7 +253,8 @@ function MobileActions({
     !!onImport ||
     !!onExport?.excel ||
     !!onExport?.csv ||
-    !!onExport?.pdf;
+    !!onExport?.pdf ||
+    !!onExport?.items?.length;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -311,6 +312,16 @@ function MobileActions({
                 Import file
               </DropdownMenuItem>
             )}
+            {onExport?.items?.map((item, index) => (
+              <DropdownMenuItem
+                key={`export-${index}`}
+                onClick={item.onClick}
+                title={item.hint}
+              >
+                <Icon name={item.icon ?? "table_view"} size={16} />
+                {item.label}
+              </DropdownMenuItem>
+            ))}
             {onExport?.excel && (
               <DropdownMenuItem onClick={onExport.excel}>
                 <Icon name="table_view" size={16} />

@@ -1,0 +1,40 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { Blob as NodeBlob } from "node:buffer";
+import * as XLSX from "xlsx";
+const { saveAs, getInvoices } = vi.hoisted(() => ({ saveAs: vi.fn(), getInvoices: vi.fn() }));
+vi.mock("file-saver", () => ({ saveAs }));
+vi.mock("@/lib/services/supabase/invoices", () => ({ getInvoices }));
+import { getInvoicesForFilteredExport } from "@/lib/services/supabase/invoice-list-export";
+import { exportToExcel, exportToCsv } from "@/lib/utils/export";
+const invoices = Array.from({ length: 1237 }, (_, i) => ({ id: `id-${i}`, code: `HD${i}`, totalAmount: 25000 + i, discount: 1000 }));
+const columns = [{ header: "Mã HD", key: "code" }, { header: "Tổng tiền", key: "totalAmount" }, { header: "Giảm giá", key: "discount" }];
+beforeEach(() => {
+  vi.stubGlobal("Blob", NodeBlob); saveAs.mockClear();
+  getInvoices.mockImplementation(async (q) => ({ data: invoices.slice(q.page * q.pageSize, (q.page + 1) * q.pageSize), total: invoices.length }));
+});
+afterEach(() => vi.unstubAllGlobals());
+describe("Actual downloaded invoice files", () => {
+  it("XLSX contains all 1237 rows, first/last invoice and exact numeric totals", async () => {
+    const rows = await getInvoicesForFilteredExport({ mode: "all", duocDemChiNhanhKhac: false }, { filters: { retailSaleType: "delivery" } });
+    await exportToExcel(rows, columns, "invoice-fixture");
+    const [blob, name] = saveAs.mock.calls[0];
+    expect(name).toBe("invoice-fixture.xlsx");
+    const book = XLSX.read(new Uint8Array(await blob.arrayBuffer()), { type: "array" });
+    const sheet = book.Sheets.Data;
+    const actual = XLSX.utils.sheet_to_json<Record<string, string | number>>(sheet);
+    expect(actual).toHaveLength(1237); expect(actual[0]["Mã HD"]).toBe("HD0"); expect(actual[1236]["Mã HD"]).toBe("HD1236");
+    expect(sheet.B2.t).toBe("n");
+    expect(actual.reduce((sum, r) => sum + Number(r["Tổng tiền"]), 0)).toBe(invoices.reduce((sum, r) => sum + r.totalAmount, 0));
+  });
+  it("CSV contains all rows and Vietnamese headers", async () => {
+    await exportToCsv(invoices, columns, "invoice-fixture");
+    const [blob] = saveAs.mock.calls[0]; const csv = await blob.text();
+    expect(csv.replace(/^\uFEFF/, "").split("\n")).toHaveLength(1238);
+    expect(csv).toContain("Mã HD"); expect(csv).toContain("HD1236");
+  });
+  it.each(["excel", "csv"] as const)("%s checks cancellation immediately before saving", async format => {
+    const shouldSave = vi.fn(() => false);
+    await (format === "excel" ? exportToExcel : exportToCsv)(invoices, columns, "cancelled", { shouldSave });
+    expect(shouldSave).toHaveBeenCalledTimes(1); expect(saveAs).not.toHaveBeenCalled();
+  });
+});

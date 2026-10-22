@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useInvoiceListExport } from "@/lib/hooks/use-invoice-list-export";
+import type { InvoiceExportQuery } from "@/lib/services/supabase/invoice-list-export";
 import { useDebounce } from "@/lib/utils/use-debounce";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
@@ -63,7 +65,7 @@ import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { useTxRowPermissions, usePermissions } from "@/lib/permissions";
 import { formatCurrency, formatDate, formatNumber, formatUser } from "@/lib/format";
-import { exportToExcel, exportToCsv } from "@/lib/utils/export";
+import { exportToExcel } from "@/lib/utils/export";
 import {
   khoaChiSoHoaDon,
   taoBoNhoChiSo,
@@ -643,6 +645,19 @@ export default function HoaDonPage() {
       ? "no-results"
       : "no-data";
 
+  const listQuery = useMemo<InvoiceExportQuery|null>(() => {
+    if(!dateRange)return null;
+    const range = dateRange;
+    const commonFilters: Record<string,string|string[]> = {};
+    if(selectedStatuses.length)commonFilters.status=selectedStatuses;
+    commonFilters.delivery = "all";
+    if (!showFnbTypes) commonFilters.retailSaleType = retailSaleType;
+    if (showFnbTypes) commonFilters.fnbOrderType = fnbOrderType;
+    if(range.from)commonFilters.dateFrom=range.from;
+    if(range.to)commonFilters.dateTo=range.to;
+    return {search:debouncedSearch,searchField,sortBy:sorting[0]?.id,sortOrder:sorting[0]?.desc?"desc":"asc",filters:commonFilters};
+  },[dateRange,selectedStatuses,showFnbTypes,retailSaleType,fnbOrderType,debouncedSearch,searchField,sorting]);
+
   const fetchData = useCallback(async () => {
     const request = ++listRequest.current;
     if (!branchScopeReady || !deepLinkReady) return;
@@ -657,25 +672,7 @@ export default function HoaDonPage() {
     // Không có try/finally thì truy vấn lỗi là cờ loading không bao giờ tắt →
     // trang treo mãi ở vòng xoay, người dùng không biết vì sao.
     try {
-    const range = dateRange;
-    const commonFilters: Record<string, string | string[]> = {};
-    if (selectedStatuses.length > 0) commonFilters.status = selectedStatuses;
-    commonFilters.delivery = "all";
-    if (!showFnbTypes) commonFilters.retailSaleType = retailSaleType;
-    if (showFnbTypes) commonFilters.fnbOrderType = fnbOrderType;
-    if (range.from) commonFilters.dateFrom = range.from;
-    if (range.to) commonFilters.dateTo = range.to;
-    // mode "none" = chưa có chi nhánh và chưa chủ động xem toàn chuỗi → hàm
-    // này KHÔNG gọi getInvoices, trả rỗng và đợi người dùng chọn chi nhánh.
-    const result = await getInvoicesTheoPhamVi(phamViHienTai, {
-      page,
-      pageSize,
-      search: debouncedSearch,
-      searchField,
-      sortBy: sorting[0]?.id,
-      sortOrder: sorting[0]?.desc ? "desc" : "asc",
-      filters: commonFilters,
-    });
+    const result = await getInvoicesTheoPhamVi(phamViHienTai, {...listQuery!,page,pageSize});
     if (request !== listRequest.current) return;
     setData(result.data);
     setTotal(result.total);
@@ -684,11 +681,7 @@ export default function HoaDonPage() {
     // KHÔNG có quyền xem toàn chuỗi thì tuyệt đối không phát sinh lời gọi
     // getInvoices với branchId undefined — kể cả chỉ để đếm.
     if (result.data.length === 0) {
-      const otherCount = await demHoaDonChiNhanhKhac(phamViHienTai, {
-          search: debouncedSearch,
-          searchField,
-          filters: commonFilters,
-        });
+      const otherCount = await demHoaDonChiNhanhKhac(phamViHienTai, listQuery!);
       if (request !== listRequest.current) return;
       setOtherBranchCount(otherCount);
     } else {
@@ -704,7 +697,7 @@ export default function HoaDonPage() {
     } finally {
       if (request === listRequest.current) setLoading(false);
     }
-  }, [page, pageSize, sorting, debouncedSearch, searchField, selectedStatuses, retailSaleType, showFnbTypes, fnbOrderType, branchScopeReady, deepLinkReady, dateRange, phamViHienTai, toast]);
+  }, [page,pageSize,listQuery,branchScopeReady,deepLinkReady,dateRange,phamViHienTai,toast]);
 
   useEffect(() => {
     fetchData();
@@ -856,40 +849,11 @@ export default function HoaDonPage() {
       ? "Chọn chi nhánh trên thanh phía trên để xem đúng hóa đơn và chỉ số."
       : "Tài khoản chưa được phân quyền chi nhánh. Vui lòng liên hệ quản trị viên.";
 
-  const handleExport = (type: "excel" | "csv") => {
-    const exportColumns = [
-      { header: "Mã HD", key: "code", width: 15 },
-      {
-        header: "Thời gian",
-        key: "date",
-        width: 18,
-        format: (v: string) => formatDate(v),
-      },
-      { header: "Khách hàng", key: "customerName", width: 25 },
-      ...(showFnbTypes ? [{ header: "Hình thức", key: "fnbOrderType", width: 18, format: (v: string) => invoiceFnbTypeLabel(v) }] : [{ header: "Loại bán", key: "retailSaleType", width: 18, format: (v: string) => invoiceRetailTypeLabel(v) }]),
-      {
-        header: "Tổng tiền",
-        key: "totalAmount",
-        width: 15,
-        format: (v: number) => v,
-      },
-      {
-        header: "Giảm giá",
-        key: "discount",
-        width: 15,
-        format: (v: number) => v,
-      },
-      {
-        header: "Trạng thái",
-        key: "status",
-        width: 15,
-        format: (v: Invoice["status"]) => statusMap[v]?.label ?? v,
-      },
-    ];
-    if (type === "excel")
-      exportToExcel(data, exportColumns, "danh-sach-hoa-don");
-    else exportToCsv(data, exportColumns, "danh-sach-hoa-don");
-  };
+  const invoiceExport=useInvoiceListExport({scope:phamViHienTai,query:listQuery,
+    ready:branchScopeReady&&deepLinkReady&&search===debouncedSearch,allowed:txPerms.canExport,fnb:showFnbTypes,
+    onError:message=>toast({title:"Chưa xuất được hóa đơn",description:message,variant:"error"}),
+    onSuccess:count=>toast({title:"Đã xuất hóa đơn",description:`Đã xuất đủ ${formatNumber(count)} hóa đơn theo bộ lọc đã chọn.`}),
+  });
 
   const columns: ColumnDef<Invoice, unknown>[] = [
     ...(showFnbTypes ? [{ id: "fnbOrderType", accessorKey: "fnbOrderType", header: "Hình thức", size: 125, enableSorting: false,
@@ -1052,10 +1016,10 @@ export default function HoaDonPage() {
             setSearchField(v);
             setPage(0);
           }}
-          onExport={{
-            excel: () => handleExport("excel"),
-            csv: () => handleExport("csv"),
-          }}
+          onExport={txPerms.canExport ? {items:[
+            {label:"Excel — tất cả theo bộ lọc",hint:"Xuất toàn bộ kết quả, không chỉ trang đang xem",onClick:()=>void invoiceExport.start("excel")},
+            {label:"CSV — tất cả theo bộ lọc",hint:"Xuất toàn bộ kết quả, không chỉ trang đang xem",onClick:()=>void invoiceExport.start("csv")},
+          ]} : undefined}
           actions={[
             {
               label: "Tạo mới",
@@ -1168,6 +1132,10 @@ export default function HoaDonPage() {
           }
           toolbarFooter={
             <div className="space-y-2">
+            {invoiceExport.progress && <div role="status" aria-live="polite" className="flex flex-wrap items-center gap-2 text-xs text-foreground">
+              <span>Đang xuất theo bộ lọc: {formatNumber(invoiceExport.progress.loaded)}{invoiceExport.progress.total?` / ${formatNumber(invoiceExport.progress.total)}`:""} hóa đơn…</span>
+              <Button type="button" variant="ghost" size="sm" onClick={invoiceExport.cancel}>Hủy xuất</Button>
+            </div>}
             {showFnbTypes && <FnbInvoiceTypeFilter value={fnbOrderType} onChange={value => {
               setPage(0); setExpandedRow(null); setSelectedFnbType(value);
             }} />}
@@ -1222,7 +1190,7 @@ export default function HoaDonPage() {
           selectable
           bulkActions={[
             {
-              label: "Xuất Excel",
+              label: "Xuất Excel dòng đã chọn",
               icon: <Icon name="download" size={16} />,
               onClick: (selectedRows) => {
                 const cols = [
