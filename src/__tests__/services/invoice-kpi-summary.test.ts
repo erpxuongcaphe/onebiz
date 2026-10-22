@@ -33,7 +33,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
   getPaginationRange: () => ({ from: 0, to: 14 }),
 }));
 
-const { getInvoiceListSummary, khoaChiSoHoaDon } = await import(
+const { getInvoiceListSummary, getInvoiceStatuses, khoaChiSoHoaDon } = await import(
   "@/lib/services/supabase/invoices"
 );
 
@@ -50,6 +50,23 @@ beforeEach(() => {
   rpcCalls.length = 0;
   rpcTraVe = { ...SO_MAY_CHU };
   rpcLoi = null;
+});
+
+describe("Invoice status filter options", () => {
+  it("preserves every status label and filter value without fabricated counts", () => {
+    expect(getInvoiceStatuses()).toEqual([
+      { label: "Hoàn thành", value: "completed" },
+      { label: "Đang xử lý", value: "confirmed" },
+      { label: "Phiếu tạm", value: "draft" },
+      { label: "Đã hủy", value: "cancelled" },
+    ]);
+    expect(rpcCalls).toEqual([]);
+  });
+
+  it("does not copy unrelated summary totals into status choices", async () => {
+    await getInvoiceListSummary({ statuses: ["completed"] });
+    expect(getInvoiceStatuses().every((status) => !("count" in status))).toBe(true);
+  });
 });
 
 describe("Đọc đúng số máy chủ trả về", () => {

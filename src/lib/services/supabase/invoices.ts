@@ -232,12 +232,11 @@ export async function getInvoiceById(id: string): Promise<Invoice | null> {
 }
 
 export function getInvoiceStatuses() {
-  // Static statuses - could be enhanced with counts from DB
   return [
-    { label: "Hoàn thành", value: "completed", count: 0 },
-    { label: "Đang xử lý", value: "confirmed", count: 0 },
-    { label: "Phiếu tạm", value: "draft", count: 0 },
-    { label: "Đã hủy", value: "cancelled", count: 0 },
+    { label: "Hoàn thành", value: "completed" },
+    { label: "Đang xử lý", value: "confirmed" },
+    { label: "Phiếu tạm", value: "draft" },
+    { label: "Đã hủy", value: "cancelled" },
   ];
 }
 
