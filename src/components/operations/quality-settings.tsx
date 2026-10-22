@@ -64,16 +64,19 @@ export function RuleFields({
   return (
     <>
       <input type="hidden" name="limitsVersion" value="1" />
+      <p className={s.scopeNotice}>Theo file CEO: điểm cơ sở 100, quỹ QC 2,000,000 đồng, dưới 70 điểm không được thưởng. Các lựa chọn chưa được quy định cần được người có quyền xác nhận; lưu nháp chưa áp dụng chấm điểm.</p>
       <div className={s.formGrid}>
         <section>
           <h3>Điểm QC</h3>
           <div className={s.ruleFields}>
             {number("Điểm cơ sở", "baseScore")}
             {number("Điểm tối thiểu xét thưởng", "minimumScore")}
+            <details className={s.ruleOptions}><summary>Giới hạn điểm và điểm khuyến khích</summary>
             {([['floor', 'Áp dụng sàn điểm', 'floorScore', 'Sàn điểm'], ['ceiling', 'Áp dụng trần điểm', 'capScore', 'Trần điểm'], ['bonus', 'Giới hạn tổng điểm cộng', 'bonusCap', 'Tổng điểm cộng tối đa mỗi kỳ']] as const).map(([key, label, field, inputLabel]) => <section key={key}>
               <label className={s.check}><input type="checkbox" name={`limit:${key}`} checked={rule.limits?.[key] ?? true} onChange={(event) => setRule((current) => ({ ...current, limits: { floor: true, ceiling: true, bonus: true, ...current.limits, [key]: event.target.checked } }))} />{label}</label>
               {number(inputLabel, field, rule.limits?.[key] ?? true)}
             </section>)}
+            </details>
             <SelectField
               label="Lỗi lặp trong kỳ"
               name="repeatMode"
@@ -107,7 +110,7 @@ export function RuleFields({
               }
             />
             {bool("Cho điểm/thưởng vượt 100", "allowAbove100")}
-            <SelectField label="Lỗi chưa khắc phục qua kỳ mới" name="openIssueAcrossPeriods" value={rule.openIssueAcrossPeriods ?? ""} options={{ each_period: "Chấm lại trong mỗi kỳ", once_until_closed: "Không trừ lại cùng lỗi khi chưa khắc phục" }} onChange={(next) => setRule((current) => ({ ...current, openIssueAcrossPeriods: next as QualityRule['openIssueAcrossPeriods'] }))} />
+            <SelectField label="Lỗi chưa khắc phục qua kỳ mới" name="openIssueAcrossPeriods" emptyLabel="Chưa chọn" value={rule.openIssueAcrossPeriods ?? ""} options={{ each_period: "Chấm lại trong mỗi kỳ", once_until_closed: "Không trừ lại cùng lỗi khi chưa khắc phục" }} onChange={(next) => setRule((current) => ({ ...current, openIssueAcrossPeriods: next as QualityRule['openIssueAcrossPeriods'] }))} />
           </div>
         </section>
         <section>
@@ -122,6 +125,7 @@ export function RuleFields({
                   : formatNumber(rule.qcFundCents / 100)
               }
             />
+            <details className={s.ruleOptions} open={rule.businessFundCents !== null || undefined}><summary>Thưởng kinh doanh riêng</summary>
             <TextField
               label="Quỹ thưởng kinh doanh (đồng)"
               name="businessFund"
@@ -155,6 +159,7 @@ export function RuleFields({
               "Vi phạm loại thưởng QC cũng loại thưởng kinh doanh",
               "blockBusinessOnCritical",
             )}
+            </details>
           </div>
           <h3 className={s.section}>Phân bổ quỹ tại chi nhánh</h3>
           {people.map((person) => (
@@ -177,13 +182,24 @@ export function RuleFields({
           ))}
         </section>
       </div>
-      {catalog.some((item) => item.score_type === 'bonus') && <section className={s.section}><h3>Giới hạn điểm cộng từng hạng mục trong kỳ</h3>{catalog.filter((item) => item.score_type === 'bonus').map((item) => {
+      {catalog.some((item) => item.score_type === 'bonus') && <details className={s.ruleOptions}><summary>Giới hạn điểm cộng từng hạng mục trong kỳ</summary>{catalog.filter((item) => item.score_type === 'bonus').map((item) => {
         const limit = rule.bonusLimits?.find((entry) => entry.familyId === item.family_id);
-        return <fieldset key={item.family_id} className={s.ruleFields}><legend>{item.code} · {item.title}</legend><TextField label="Số lần cộng tối đa" name={`bonusAwards:${item.family_id}`} type="number" step="1" value={limit?.maxAwards ?? ''} hint="Không giới hạn khi không đặt mức tối đa" /><TextField label="Số điểm cộng tối đa" name={`bonusPoints:${item.family_id}`} type="number" step="0.01" value={limit?.maxPoints ?? ''} hint="Không giới hạn khi không đặt mức tối đa" /></fieldset>;
-      })}</section>}
+        return <fieldset key={item.family_id} className={s.ruleFields}><legend>{item.title}</legend><TextField label="Số lần cộng tối đa" name={`bonusAwards:${item.family_id}`} type="number" step="1" value={limit?.maxAwards ?? ''} hint="Không giới hạn khi không đặt mức tối đa" /><TextField label="Số điểm cộng tối đa" name={`bonusPoints:${item.family_id}`} type="number" step="0.01" value={limit?.maxPoints ?? ''} hint="Không giới hạn khi không đặt mức tối đa" /></fieldset>;
+      })}</details>}
       {qualityRuleIssues(rule).length > 0 && (
         <p className={s.muted}>Bản nháp: {qualityRuleIssues(rule).join(" ")}</p>
       )}
+      <details className={s.section}><summary>Đối chiếu điều kiện không được thưởng trong file CEO</summary>
+        <ul>
+          <li>Phản hồi xấu đã xác minh về thời gian ra món, thái độ hoặc vệ sinh.</li>
+          <li>Cà phê sai vị do nước, hạt hoặc máy mà không được báo trước.</li>
+          <li>Có dị vật trong đồ uống.</li>
+          <li>Mở cửa muộn hoặc đóng cửa sớm.</li>
+          <li>Quản lý hoặc nhân viên tỏ thái độ với khách.</li>
+          <li>Tổng điểm còn lại dưới 70.</li>
+        </ul>
+        <p>Ngưỡng điểm nằm trong chính sách này. Những vi phạm cụ thể cần đối chiếu tiêu chí QC và bằng chứng; không tự coi mọi lỗi trong một nhóm là lỗi loại thưởng.</p>
+      </details>
     </>
   );
 }

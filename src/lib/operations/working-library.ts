@@ -34,5 +34,5 @@ export type WorkingLibrary = {
 };
 export type LibraryApplication = {
   id: string; library_id: string; library_version: number; branch_id: string;
-  batch_id: string; settings: z.infer<typeof branchSchedule>; created_at: string;
+  batch_id: string; settings: z.infer<typeof branchSchedule> & {libraryUpdateFrom?:string}; created_at: string;
 };

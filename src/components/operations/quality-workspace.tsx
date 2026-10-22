@@ -34,12 +34,13 @@ import type {
 import { requestPageLeave } from "@/lib/hooks/use-unsaved-work";
 import { Icon } from "@/components/ui/icon";
 import { QualityEditorDialog, type QualityEditor } from "./quality-editor";
-import { Field, SelectField } from "./quality-fields";
+import { Field, SelectField, vnToday } from "./quality-fields";
 import { CatalogImport } from "./quality-settings";
 import { QualityBusinessSetup } from "./quality-business-setup";
 import { QualityFilters } from "./quality-filters";
 import { QualityOverview, type QualityFocus, type QualityDestination } from "./quality-overview";
 import { QualityReport } from "./quality-report";
+import { SetupNavigation, type SetupSection } from "./setup-navigation";
 import s from "./quality.module.css";
 
 const views = [
@@ -145,7 +146,7 @@ export function QualityWorkspace({
   period: string;
   assessmentPeriod?: string;
   onAssessmentPeriodChange?: (period: string) => void;
-  configuration?: ReactNode | ((data: QualityData) => ReactNode);
+  configuration?: ReactNode | ((data: QualityData, section?: "standards" | "members") => ReactNode);
   focus?: QualityFocus;
   onNavigate?: (view: QualityDestination, focus?: QualityFocus) => void;
   onLegacySettings: () => void;
@@ -165,6 +166,7 @@ export function QualityWorkspace({
   const [editor, setEditor] = useState<QualityEditor | null>(null);
   const [selectedAudit, setSelectedAudit] = useState<QualityAudit | null>(null);
   const [workMode, setWorkMode] = useState("scheduled");
+  const [setupSection, setSetupSection] = useState<SetupSection>(workspace.isCeo ? "library" : "branch");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [state, setState] = useState(focus?.state ?? "");
@@ -180,7 +182,7 @@ export function QualityWorkspace({
   const [offset, setOffset] = useState(0);
   const [dates, setDates] = useState(() => ({
     ...initialFilters("todo"),
-    preset: (initialView === "issues" && !focus?.periodOnly
+    preset: (initialView === "work" && !focus && calendarPeriod === vnToday().slice(0,7) ? "today" : initialView === "issues" && !focus?.periodOnly
       ? "all"
       : "period") as keyof typeof datePresets,
     dateField: initialView === "qc" ? "created" : "due",
@@ -196,6 +198,10 @@ export function QualityWorkspace({
     setSelectedAudit(null);
     setEditor(null);
     setOffset(0);
+    if(view === "work") {
+      setDates(previous => ({...previous,preset:calendarPeriod === vnToday().slice(0,7) && !focus ? "today" : "period",dateField:"due"}));
+      setOverdue(false);
+    }
   }
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search.trim()), 250);
@@ -237,7 +243,7 @@ export function QualityWorkspace({
     setOffset(0);
     setDates({
       ...initialFilters("todo"),
-      preset: view === "issues" ? "all" : "period",
+      preset: view === "work" && calendarPeriod === vnToday().slice(0,7) ? "today" : view === "issues" ? "all" : "period",
       dateField: view === "qc" || view === "work" && workMode === "adhoc" ? "created" : "due",
     });
   };
@@ -372,9 +378,10 @@ export function QualityWorkspace({
   };
   const q = data?.score;
   const selectedRows = data?.rows ?? [];
-  const runs = selectedRows as unknown as (Run & {
+  const runs = (view === "work" && workMode === "scheduled" ? [...selectedRows] : []) as unknown as (Run & {
     category: keyof typeof categories;
     family_id: string;
+    code?: string;
     frequency: keyof typeof freq;
     manager_ids: string[];
     checks: {
@@ -384,6 +391,8 @@ export function QualityWorkspace({
       created_at: string;
     }[];
   })[];
+  runs.sort((a,b)=>Date.parse(a.current_due_at??a.original_due_at)-Date.parse(b.current_due_at??b.original_due_at)
+    || (a.code??a.title).localeCompare(b.code??b.title,"vi",{numeric:true}));
   const issues = selectedRows as unknown as QualityIssue[];
   const audits = selectedRows as unknown as QualityAudit[];
   const lines = selectedRows as unknown as QualityLine[];
@@ -456,7 +465,7 @@ export function QualityWorkspace({
       )}
       {data && (
         <>
-          {onAssessmentPeriodChange && <div className={s.heading}>
+          {onAssessmentPeriodChange && ["qc", "report"].includes(view) && <div className={s.heading}>
             <SelectField label="Kỳ đánh giá QC và thưởng" value={period} onChange={(next) => requestPageLeave(() => onAssessmentPeriodChange(next))} options={[{id:calendarPeriod,name:`Tháng ${calendarPeriod.slice(5)}/${calendarPeriod.slice(0,4)}`},...(data.periods ?? []).map((item) => ({id:item.key,name:`${item.title} · ${formatShortDate(item.starts_on)} – ${formatShortDate(item.ends_on)}${item.closed ? " · Đã chốt" : ""}`}))]} />
             {data.can.manage && <button onClick={() => edit({kind:"period"})}><Icon name="date_range" size={17}/>Thêm kỳ đánh giá</button>}
           </div>}
@@ -549,11 +558,8 @@ export function QualityWorkspace({
                     )}
                 </>
               )}
-              {view === "settings" && data.can.manage && (
+              {view === "settings" && data.can.manage && setupSection === "reward" && (
                 <>
-                  <button onClick={() => edit({ kind: "catalog" })}>
-                    Thêm tiêu chuẩn QC
-                  </button>
                   <button onClick={() => edit({ kind: "rule" })}>
                     Chính sách mới
                   </button>
@@ -582,9 +588,16 @@ export function QualityWorkspace({
         </>
       )}
       {data && view === "overview" && onNavigate && <QualityOverview data={data} onNavigate={onNavigate}/>}
+      {data && view === "work" && !data.can.work && <p className={s.scopeNotice}>Bạn đang xem kết quả của chi nhánh. Chỉ quản lý được phân công và có quyền ghi kết quả mới có thể tự kiểm tra.</p>}
+      {data && view === "issues" && !data.can.work && <p className={s.scopeNotice}>Bạn đang xem To-do trong phạm vi được phép. Quyền tạo To-do và xử lý công việc được thiết lập tại Người và quyền.</p>}
+      {data && view === "qc" && !data.can.qc && <p className={s.scopeNotice}>Bạn có thể xem các đợt QC. Để tạo và ghi kết quả, cần được phân công quyền QC độc lập tại chi nhánh; quyền quản trị không tự thay thế quyền QC.</p>}
       {["work", "issues", "qc"].includes(view) && (
         <>
         {view === "work" && <div className={s.actions} role="group" aria-label="Loại tự kiểm tra"><button aria-pressed={workMode === "scheduled"} onClick={() => {setWorkMode("scheduled");reset();setDates(value=>({...value,dateField:"due"}));}}>Theo lịch</button><button aria-pressed={workMode === "adhoc"} onClick={() => {setWorkMode("adhoc");reset();setDates(value=>({...value,dateField:"created"}));}}>Phát sinh ngoài lịch</button></div>}
+        {view === "work" && workMode === "scheduled" && <div className={s.quickDates} role="group" aria-label="Xem công việc theo thời gian">
+          {([['today','Hôm nay'],['this_week','Tuần này'],['period','Trong kỳ']] as const).map(([preset,label]) => <button key={preset} type="button" aria-pressed={dates.preset === preset && !overdue} onClick={() => { setDates(previous => ({...previous,preset,dateField:'due'})); setOverdue(false); setOffset(0); }}>{label}</button>)}
+          <button type="button" aria-pressed={overdue && dates.preset === 'all'} onClick={() => {setDates(previous => ({...previous,preset:'all',dateField:'due'}));setOverdue(true);setOffset(0);}}>Việc trễ hạn</button>
+        </div>}
         <QualityFilters activeCount={[state, category, priority, assignee, operator, department, frequency, result, mine, overdue, dates.preset !== "all", search.trim()].filter(Boolean).length}>
           <div className={s.filterGrid}>
             <Field label="Tìm công việc / vấn đề">
@@ -637,6 +650,7 @@ export function QualityWorkspace({
                 }}
               />
             )}
+            {view === "work" && workMode === "scheduled" && <SelectField label="Nhóm tiêu chí" options={data?.groups?.some(group=>group.active)?Object.fromEntries(data.groups.filter(group => group.active).map(group => [`group:${group.id}`,group.title])):categories} value={category} onChange={next => {setCategory(next);setOffset(0);}}/>}
             <SelectField
               label="Khoảng thời gian"
               allowEmpty={false}
@@ -693,10 +707,10 @@ export function QualityWorkspace({
                   setOffset(0);
                 }}
               />
-              {view !== "qc" && workMode !== "adhoc" && (
-                <SelectField
-                  label="Phân loại"
-                  options={view === "work" ? {...categories,...Object.fromEntries((data?.groups ?? []).map(group => [`group:${group.id}`,group.title]))} : categories}
+              {view === "issues" && (
+              <SelectField
+                  label="Phân loại To-do"
+                  options={categories}
                   value={category}
                   onChange={(v) => {
                     setCategory(v);
@@ -829,7 +843,8 @@ export function QualityWorkspace({
               rows={runs.map((r) => (
                 <tr key={r.id}>
                   <td>
-                    <strong>{r.title}</strong>
+                    <strong>{r.code?.match(/^WS-(?:[a-f0-9]{32}-)?(\d+)$/i) ? `${Number(r.code.match(/(\d+)$/)![1])}. ` : ""}{r.title}</strong>
+                    <details className={s.requirement}><summary>Yêu cầu cần đạt</summary>{r.criteria.map(criterion => <p key={criterion.id}>{criterion.title}</p>)}</details>
                     <p className={s.muted}>
                       {
                         ({...categories,...Object.fromEntries((data.groups ?? []).map(group => [`group:${group.id}`,group.title]))})[
@@ -869,7 +884,8 @@ export function QualityWorkspace({
               ))}
               mobile={runs.map((r) => (
                 <article className={s.mobileItem} key={r.id}>
-                  <h3>{r.title}</h3>
+                  <h3>{r.code?.match(/^WS-(?:[a-f0-9]{32}-)?(\d+)$/i) ? `${Number(r.code.match(/(\d+)$/)![1])}. ` : ""}{r.title}</h3>
+                  <details className={s.requirement}><summary>Yêu cầu cần đạt</summary>{r.criteria.map(criterion => <p key={criterion.id}>{criterion.title}</p>)}</details>
                   <Badge value={r.quality} />
                   <p>
                     {freq[r.frequency]} · {formatDate(r.current_due_at ?? r.original_due_at)}
@@ -1094,7 +1110,7 @@ export function QualityWorkspace({
               )}
               <div className={s.pagination}>
                 <span>
-                  {formatNumber(data.total)} hồ sơ · trang {offset / 50 + 1}
+                  {formatNumber(data.total)} {view === "work" && workMode !== "adhoc" ? "lượt thực hiện" : "hồ sơ"} · trang {offset / 50 + 1}
                 </span>
                 <button
                   disabled={offset === 0}
@@ -1113,10 +1129,12 @@ export function QualityWorkspace({
           )}
           {view === "settings" && (
             <>
-              {workspace.isCeo && data.can.manage && <><WorkingLibrary workspace={workspace} onApplied={() => { if (onConfigurationRefresh) onConfigurationRefresh(); else setRevision((current) => current + 1); }}/><details className={s.section}><summary>Các bộ nhập theo chi nhánh trước đây</summary><WorkingImport workspace={workspace} onImported={() => { if (onConfigurationRefresh) onConfigurationRefresh(); else setRevision((current) => current + 1); }}/></details></>}
-              {configuration && <section className={s.section}><h3>Công việc và quyền chi nhánh</h3>{typeof configuration === "function" ? configuration(data) : configuration}</section>}
-              <section className={s.section}><OperationsHistoryPanel branch={branch} period={period}/></section>
-              <section className={s.section}>
+              <SetupNavigation value={setupSection} onChange={setSetupSection} data={data} isCeo={workspace.isCeo && data.can.manage}/>
+              {setupSection === "library" && workspace.isCeo && data.can.manage && <WorkingLibrary workspace={workspace} onApplied={() => { if (onConfigurationRefresh) onConfigurationRefresh(); else setRevision((current) => current + 1); }}/>}
+              {setupSection === "branch" && configuration && <section className={s.section}><h3>Công việc đang áp dụng tại chi nhánh</h3>{typeof configuration === "function" ? configuration(data,"standards") : configuration}</section>}
+              {setupSection === "history" && <section className={s.section}><OperationsHistoryPanel branch={branch} period={period}/></section>}
+              <section className={s.section} hidden={setupSection !== "people"}>
+                {setupSection === "people" && typeof configuration === "function" && configuration(data,"members")}
                 <h3>Phân công và phòng ban</h3>
                 <div className={s.actions}>
                   {data.can.manage && (
@@ -1127,6 +1145,9 @@ export function QualityWorkspace({
                       <button onClick={() => edit({ kind: "assignment" })}>
                         Phân công cùng lịch
                       </button>
+                      {workspace.isCeo && (
+                        <a href="/he-thong/users">Quyền tài khoản OneBiz</a>
+                      )}
                       {workspace.isCeo && (
                         <button onClick={() => edit({ kind: "qc_grant" })}>
                           Cấp / thu hồi QC, kế toán
@@ -1176,13 +1197,14 @@ export function QualityWorkspace({
                   </p>
                 ))}
               </section>
-              <section className={s.section}>
+              <section className={s.section} hidden={setupSection !== "qc"}>
                 <h3>Nhóm tiêu chuẩn QC</h3>
                 {data.can.manage && <button onClick={() => edit({kind:"group"})}>Thêm nhóm QC</button>}
                 {(data.groups ?? []).map((group) => <p key={group.id}>{group.title} · {group.active ? "Hoạt động" : "Ngừng"}{data.can.manage && <button onClick={() => edit({kind:"group",group})}>Sửa nhóm</button>}</p>)}
               </section>
-              <section className={s.section}>
+              <section className={s.section} hidden={setupSection !== "qc"}>
                 <h3>Danh mục QC có phiên bản</h3>
+                {data.can.manage && <button onClick={() => edit({kind:"catalog"})}>Thêm tiêu chuẩn QC</button>}
                 <div className={s.tableScroll}>
                   <table className={s.table}>
                     <thead>
@@ -1199,12 +1221,12 @@ export function QualityWorkspace({
                       {data.catalog.map((c) => (
                         <tr key={c.id}>
                           <td>
-                            {c.code} · {c.title}
+                            <strong>{c.title}</strong><details className={s.requirement}><summary>Mã tiêu chuẩn</summary><code>{c.code}</code></details>
                           </td>
                           <td>{("group_title" in c && typeof c.group_title === "string" ? c.group_title : data.groups?.find(group => `group:${group.id}` === c.category)?.title) ?? categories[c.category as keyof typeof categories] ?? "Chưa phân nhóm"}</td>
                           <td>{c.score_type === "bonus" ? "Cộng" : "Trừ"}</td>
                           <td className={s.numeric}>{formatNumber(c.weight)}</td>
-                          <td>{formatShortDate(c.effective_from)}</td>
+                          <td>{formatShortDate(c.effective_from)}{c.ends_on&&<p>Dùng đến {formatShortDate(c.ends_on)}</p>}</td>
                           {data.can.manage && <td><button onClick={() => edit({kind:"catalog",item:c})}>Sửa bằng phiên bản mới</button></td>}
                         </tr>
                       ))}
@@ -1212,7 +1234,8 @@ export function QualityWorkspace({
                   </table>
                 </div>
               </section>
-              {data.can.manage && (
+              {data.can.manage && setupSection === "qc" && (
+                <details className={s.section}><summary>Nhập và quản lý danh mục nâng cao</summary>
                 <CatalogImport
                   workspace={workspace}
                   catalog={data.catalog}
@@ -1220,9 +1243,12 @@ export function QualityWorkspace({
                   busy={busy}
                   onImport={(rows) => send("catalog_import", { rows })}
                 />
+                {workspace.isCeo && <WorkingImport workspace={workspace} onImported={() => { if(onConfigurationRefresh) onConfigurationRefresh(); else setRevision(current => current + 1); }}/>}
+                </details>
               )}
-              <section className={s.section}>
+              <section className={s.section} hidden={setupSection !== "reward"}>
                 <h3>Chính sách QC và thưởng tách riêng</h3>
+                {!data.rules.length && <p className={s.scopeNotice}>Chưa có chính sách được lưu. Tạo bản nháp, kiểm tra quy tắc tính điểm, điều kiện loại thưởng và phân bổ quỹ trước khi duyệt. Công việc hằng ngày vẫn được thực hiện độc lập.</p>}
                 {data.rules.map((r) => (
                   <div key={r.id} className={s.section}>
                     <strong>{r.title}</strong> <Badge value={r.state} />

@@ -64,6 +64,8 @@ const labels: Record<string, string> = {
   apply_schedule_change: "Áp dụng thay đổi lịch",
   generate_schedule: "Sinh công việc theo lịch",
   apply_working_library: "Áp dụng bộ tiêu chí cho chi nhánh",
+  library_update: "Cập nhật bộ tiêu chí cho chi nhánh",
+  library_remove_criterion: "Ngừng tiêu chí theo bộ chung",
   common_standard: "Tạo công việc chung",
   propose_standard: "Đề xuất công việc",
   request_standard_changes: "Yêu cầu sửa đề xuất",

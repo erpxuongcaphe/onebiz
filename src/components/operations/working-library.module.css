@@ -56,6 +56,28 @@
 @media(max-width:600px){.scheduleList > div{display:grid;gap:4px;}.scheduleList strong{text-align:left;}}
 .empty { padding:16px 0; color:#526172; }
 .notes { white-space:pre-wrap; }
+.columnHeading,.criterion > summary { display:grid; grid-template-columns:minmax(180px,1fr) minmax(220px,2fr) minmax(130px,.65fr); gap:16px; }
+.columnHeading { padding:10px 12px; margin-top:12px; background:#f0f4fa; color:#435472; font-size:12px; font-weight:600; }
+.criterion { border-bottom:1px solid #dce2eb; }
+.criterion > summary { padding:12px; cursor:pointer; list-style:revert; align-items:start; }
+.criterion > summary:hover { background:#f4f8ff; }
+.criterion > summary:focus-visible { outline:2px solid #174bc4; outline-offset:-2px; }
+.criterion > summary small { display:block; margin-top:4px; color:#526172; }
+.criterion[open] { background:#f9fbfe; border-left:3px solid #285fc1; }
+.criterion .row { margin:0 12px 12px; background:#fff; }
+.requirementPreview { font-size:13px; line-height:1.5; overflow-wrap:anywhere; }
+.rowMeta { font-size:12px; display:grid; gap:4px; }
+.rowMeta strong { font-size:13px; }
+.bonus { color:#14745c; }.deduction { color:#a53148; }
+.updateAvailable { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; padding:12px; margin:12px 0; background:#eef7f3; border-left:3px solid #218266; }
+.selectionFields { border:0; margin:0; padding:0; display:grid; gap:12px; }
+.selectionFields legend { font-weight:600; margin-bottom:10px; }
+.updateRow { border-bottom:1px solid #dce2eb; padding:10px 0; }
+.updateRow > summary { cursor:pointer; font-weight:600; color:#244f93; }
+.updateCompare { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; padding:12px 0; }
+.updateCompare > div { min-width:0; overflow-wrap:anywhere; }
+@media(max-width:600px){.updateCompare{grid-template-columns:minmax(0,1fr);gap:10px;}}
+@media(max-width:600px){.columnHeading{display:none;}.criterion > summary{grid-template-columns:minmax(0,1fr) 95px;gap:8px;padding:12px 4px;}.requirementPreview{grid-column:1/-1;grid-row:2;}.rowMeta{text-align:right;}.criterion .row{margin:0 4px 12px;}}
 @media(max-width:800px){.branchFields{grid-template-columns:repeat(2,minmax(0,1fr));}.branchFields > :first-child{grid-column:1/-1;}}
 @media(max-width:600px){.body{padding:12px;}.grid,.branchFields{grid-template-columns:minmax(0,1fr);}.branchFields > :first-child{grid-column:auto;}.row{padding:10px;}.heading{align-items:flex-start;}.table table{min-width:540px;}}
 @media(max-width:600px){
