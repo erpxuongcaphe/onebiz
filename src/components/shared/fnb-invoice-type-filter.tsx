@@ -6,13 +6,13 @@ import { FNB_INVOICE_TYPES, type FnbInvoiceType } from "@/lib/utils/invoice-list
 export function FnbInvoiceTypeFilter({ value, onChange }: {
   value: FnbInvoiceType; onChange: (value: FnbInvoiceType) => void;
 }) {
-  return <div role="group" aria-label="Hình thức bán F&B" className="flex flex-wrap gap-2">
+  return <div role="group" aria-label="Hình thức bán F&B" className="flex flex-wrap gap-1.5">
     {FNB_INVOICE_TYPES.map(option => <Button key={option.value} type="button"
       variant={value === option.value ? "default" : "outline"}
       aria-pressed={value === option.value}
-      className="min-h-11 gap-2 px-3 text-sm font-medium"
+      className="h-8 min-h-8 gap-1.5 px-2.5 text-xs font-medium pointer-coarse:min-h-11"
       onClick={() => onChange(option.value)}>
-      <Icon name={option.icon} size={18} /><span>{option.label}</span>
+      <Icon name={option.icon} size={16} /><span>{option.label}</span>
     </Button>)}
   </div>;
 }
