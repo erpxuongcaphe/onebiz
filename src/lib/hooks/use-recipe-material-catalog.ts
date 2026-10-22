@@ -8,6 +8,7 @@ import type { Product } from "@/lib/types";
 export function useRecipeMaterialCatalog(
   enabled: boolean,
   onData: (products: Product[]) => void,
+  fnbOnly = false,
 ) {
   const request = useRef(0);
   const [loading, setLoading] = useState(false);
@@ -17,7 +18,7 @@ export function useRecipeMaterialCatalog(
     setLoading(true);
     setError(null);
     try {
-      const result = await getProducts({ page: 0, pageSize: 1000, filters: {} });
+      const result = await getProducts({ page: 0, pageSize: 1000, filters: fnbOnly ? { productType: "sku" } : {} });
       if (current !== request.current) return;
       onData(result.data);
     } catch {
@@ -27,7 +28,7 @@ export function useRecipeMaterialCatalog(
     } finally {
       if (current === request.current) setLoading(false);
     }
-  }, [onData]);
+  }, [onData, fnbOnly]);
 
   useEffect(() => {
     if (enabled) void refresh();

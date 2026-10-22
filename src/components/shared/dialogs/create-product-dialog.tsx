@@ -625,6 +625,7 @@ export function CreateProductDialog({
       (channel === "fnb" && (innerTab === "pricing" || innerTab === "bom" || innerTab === "variants") && variantItems.length > 0)
     ),
     setMaterialOptions,
+    usesFnbRecipeCosts,
   );
   const fnbBomCostPending = usesFnbRecipeCosts && hasBom &&
     (!bomDraftSourceReady || (bomItems.length > 0 &&
@@ -4882,7 +4883,7 @@ export function CreateProductDialog({
               // SP đã thêm vào BOM + chính SP đang sửa → loại khỏi list
               const available = materialOptions
                 .filter((product) =>
-                  channel === "fnb" ? isSelectableFnbBomComponent(product) : true,
+                  usesFnbRecipeCosts ? isSelectableFnbBomComponent(product) : true,
                 )
                 .filter((p) => !bomItems.some((it) => it.materialId === p.id))
                 .filter((p) => !initialData || p.id !== initialData.id);

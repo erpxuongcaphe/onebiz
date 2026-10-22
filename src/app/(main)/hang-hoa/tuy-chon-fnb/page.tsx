@@ -842,12 +842,15 @@ function OptionDialog({
           .select("id")
           .eq("tenant_id", tenantId)
           .eq("code", linkedCode.trim())
+          .eq("product_type", "sku")
+          .neq("inventory_role", "fnb_menu_item")
+          .eq("is_active", true)
           .maybeSingle();
         if (!data) {
           toast({
             variant: "warning",
-            title: "Không tìm thấy mã SP",
-            description: `Mã "${linkedCode.trim()}" không có trong hàng hoá. Kiểm tra lại.`,
+            title: "Mã không phù hợp cho tùy chọn F&B",
+            description: `Chỉ dùng SKU nguyên liệu hoặc bán thành phẩm đang hoạt động; không dùng mã NVL Retail hay món menu. Kiểm tra lại mã "${linkedCode.trim()}".`,
           });
           setSaving(false);
           return;
@@ -946,7 +949,7 @@ function OptionDialog({
               disabled={isSweetness}
               value={isSweetness ? "" : linkedCode}
               onChange={(e) => setLinkedCode(e.target.value)}
-              placeholder="VD: NVL-TPV-001"
+              placeholder="Mã SKU nguyên liệu / bán thành phẩm tại quán"
             />
             <p className="mt-1 text-xs text-muted-foreground">
               Mỗi lần chọn sẽ trừ trực tiếp 1 đơn vị của mã này. Topping mới nên là SKU-TPP bán theo phần, có BOM riêng; không liên kết trực tiếp túi nguyên liệu.

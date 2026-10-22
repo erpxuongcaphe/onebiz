@@ -75,6 +75,7 @@ interface ImportExcelDialogProps<TRow> {
   entrySummary?: ReactNode;
   compactInstructions?: boolean;
   showSteps?: boolean;
+  wideEntry?: boolean;
 }
 
 export function ImportExcelDialog<TRow>({
@@ -84,7 +85,7 @@ export function ImportExcelDialog<TRow>({
   onCommit,
   onFinished,
   preparePreview, uploadContent, previewContent, instructions, confirmDisabled, retryOnFailure, entryContent, title, entryModeContent,
-  entryFormId,entrySubmitDisabled,entrySummary,compactInstructions,showSteps,
+  entryFormId,entrySubmitDisabled,entrySummary,compactInstructions,showSteps,wideEntry,
 }: ImportExcelDialogProps<TRow>) {
   const [step, setStep] = useState<Step>("upload");
   const [file, setFile] = useState<File | null>(null);
@@ -219,7 +220,7 @@ export function ImportExcelDialog<TRow>({
 
   return (
     <Dialog open={open} protectUnsavedChanges={step !== "done"} onOpenChange={handleClose}>
-      <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col md:max-w-2xl lg:max-w-3xl xl:max-w-4xl">
+      <DialogContent className={cn("flex max-h-[calc(100dvh-2rem)] flex-col", wideEntry ? "w-[calc(100%-2rem)] sm:max-w-[1440px]" : "md:max-w-2xl lg:max-w-3xl xl:max-w-4xl")}>
         <DialogHeader className="shrink-0">
           <DialogTitle>
             <span className="inline-flex items-center gap-2">

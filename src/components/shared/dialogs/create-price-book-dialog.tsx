@@ -1,5 +1,8 @@
 "use client";
 
+import { useFnbCatalogScope } from "@/lib/hooks/use-fnb-catalog-scope";
+import { applyFnbCatalogScope } from "@/lib/fnb-catalog-scope";
+
 import { useState, useEffect } from "react";
 import {
   Dialog,
@@ -37,6 +40,7 @@ export function CreatePriceBookDialog({
   onSuccess,
 }: CreatePriceBookDialogProps) {
   const { toast } = useToast();
+  const fnbCatalog = useFnbCatalogScope();
   const [productSearch, setProductSearch] = useState("");
   const [showProductDropdown, setShowProductDropdown] = useState(false);
   const [filteredProducts, setFilteredProducts] = useState<ProductResult[]>([]);
@@ -63,17 +67,20 @@ export function CreatePriceBookDialog({
 
   // Live search products
   useEffect(() => {
+    let cancelled = false;
+    setFilteredProducts([]);
     if (!productSearch || productSearch.length < 1) { setFilteredProducts([]); return; }
     const timer = setTimeout(async () => {
       const supabase = getClient();
       const ctx = await getCurrentContext();
-      const { data } = await supabase
+      const { data } = await applyFnbCatalogScope(supabase
         .from("products_scoped")
         .select("id, code, name, unit, sell_price, cost_price")
         .or(`name.ilike.%${productSearch}%,code.ilike.%${productSearch}%`)
         .eq("tenant_id", ctx.tenantId)
-        .eq("is_active", true)
+        .eq("is_active", true), fnbCatalog)
         .limit(8);
+      if (cancelled) return;
       setFilteredProducts((data ?? []).map(p => ({
         id: p.id,
         code: p.code,
@@ -83,8 +90,8 @@ export function CreatePriceBookDialog({
         cost_price: p.cost_price,
       })));
     }, 300);
-    return () => clearTimeout(timer);
-  }, [productSearch]);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [productSearch, fnbCatalog]);
 
   function selectProduct(product: ProductResult) {
     setSelectedProduct(product);

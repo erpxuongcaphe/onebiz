@@ -93,7 +93,7 @@ function applyBranchIndustryScope(query: any, scope: BranchIndustryScope) {
   if (scope.isOutlet) {
     // Danh mục tự động: SKU Retail mới tạo sẽ xuất hiện ngay tại mọi outlet,
     // không cần tạo dòng branch_stock=0 hoặc gán thủ công từng chi nhánh.
-    return query.or("channel.eq.fnb,channel.eq.retail");
+    return query.eq("product_type", "sku").or("channel.eq.fnb,channel.eq.retail");
   }
   return query.or("channel.is.null,channel.neq.fnb");
 }

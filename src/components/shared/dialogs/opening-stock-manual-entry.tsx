@@ -13,7 +13,7 @@ import type { InitialStockImportRow } from "@/lib/excel/schemas";
 
 type Line = OpeningStockCandidate & { quantity: number | null; cost: number | null; lot: string; expiry: string; note: string };
 export type OpeningEntrySummary = { count: number; value: number; incomplete: number };
-const rowGrid = "md:grid md:grid-cols-[minmax(0,1fr)_110px_135px_120px_44px] md:items-start md:gap-3";
+const rowGrid = "md:grid md:grid-cols-[minmax(300px,1fr)_100px_135px_125px_44px_44px] md:items-center md:gap-3";
 
 export function OpeningStockManualEntry({ onPreview, busy, contextContent, onSummary }: {
   onPreview: (rows: InitialStockImportRow[]) => Promise<void>; busy: boolean;
@@ -102,35 +102,38 @@ export function OpeningStockManualEntry({ onPreview, busy, contextContent, onSum
             const added = lines.some(line => line.id === item.id);
             return <button id={`opening-option-${item.id}`} role="option" aria-selected={index === activeResult} aria-disabled={added} type="button" key={item.id} tabIndex={-1} disabled={added || count >= 1000}
               className={`flex min-h-11 w-full items-center justify-between gap-2 border-b px-3 py-2 text-left text-sm hover:bg-primary/5 disabled:opacity-50 ${index === activeResult ? "bg-primary/5" : ""}`} onClick={() => add(item)}>
-              <span><b className="text-primary">{item.code}</b><span className="block text-foreground">{item.name}</span></span><span className="shrink-0 text-muted-foreground">{item.unit} · {added ? "Đã thêm" : "+ Thêm"}</span>
+              <span className="flex min-w-0 items-center gap-2"><b className="shrink-0 text-primary">{item.code}</b><span className="truncate text-foreground" title={item.name}>{item.name}</span></span><span className="shrink-0 text-muted-foreground">{item.unit} · {added ? "Đã thêm" : "+ Thêm"}</span>
             </button>;
           })}</div>
         </div>
-        {count === 0 ? <div className="rounded-md border border-dashed bg-muted/20 py-6 px-4 text-center"><Icon name="inventory_2" size={24} className="mx-auto mb-2 text-primary" /><p className="text-sm font-medium">Thêm hàng để bắt đầu nhập tồn</p><p className="text-sm text-muted-foreground mt-1">Nhập lượng và giá vốn theo đơn vị tồn. Không cần file Excel.</p></div> : <div className="rounded-md border">
-          <div className={`${rowGrid} hidden border-b bg-primary/5 px-3 py-2 text-xs font-semibold text-primary`} aria-hidden="true"><span>Mã / tên hàng</span><span>Số lượng</span><span>Giá vốn / đơn vị</span><span className="text-right">Thành tiền</span><span /></div>
+        {count === 0 ? <div className="rounded-md border border-dashed bg-muted/20 py-6 px-4 text-center"><Icon name="inventory_2" size={24} className="mx-auto mb-2 text-primary" /><p className="text-sm font-medium">Thêm hàng để bắt đầu nhập tồn</p><p className="text-sm text-muted-foreground mt-1">Nhập lượng và giá vốn theo đơn vị tồn. Không cần file Excel.</p></div> : <div className="overflow-x-auto rounded-md border">
+          <div className="md:min-w-[960px]">
+          <div className={`${rowGrid} hidden border-b bg-primary/5 px-3 py-2 text-xs font-semibold text-primary`} aria-hidden="true"><span>Mã / tên hàng · ĐVT</span><span>Số lượng</span><span>Giá vốn / đơn vị</span><span className="text-right">Thành tiền</span><span className="sr-only">Thông tin thêm</span><span /></div>
           {lines.filter(line => showCompleted || line.quantity === null || line.cost === null).map(line => {
             const missing = submitted && (line.quantity === null || line.cost === null);
             return <div key={line.id} className={`border-b last:border-b-0 p-3 ${missing ? "bg-destructive/5" : ""}`}>
               <div className={`${rowGrid} grid grid-cols-2 gap-2`}>
-                <div className="col-span-2 md:col-span-1 min-w-0 pr-10 md:pr-0 relative"><p id={`opening-product-${line.id}`} className="font-semibold text-sm leading-snug">{line.name}</p><p className="mt-0.5 text-xs text-muted-foreground"><span className="text-primary">{line.code}</span> · ĐVT: {line.unit}</p>
+                <div className="col-span-2 md:col-span-1 min-w-0 pr-10 md:pr-0 relative"><p id={`opening-product-${line.id}`} className="font-semibold text-sm leading-snug md:flex md:items-center md:gap-2 md:whitespace-nowrap"><span className="md:order-2 md:min-w-0 md:truncate" title={line.name}>{line.name}</span><span className="text-primary md:order-1 md:shrink-0 font-normal">{line.code}</span><span className="text-muted-foreground md:order-3 md:shrink-0 font-normal"> · {line.unit}</span></p>
                   <Button type="button" size="icon" variant="ghost" className="md:hidden absolute -right-1 -top-1 text-muted-foreground hover:text-destructive" aria-label={`Xóa ${line.code}`} onClick={() => setLines(previous => previous.filter(item => item.id !== line.id))}><Icon name="close" size={18} /></Button>
                 </div>
                 <div><label htmlFor={`opening-qty-${line.id}`} className="text-xs font-medium md:sr-only">Số lượng ({line.unit})</label><NumericInput id={`opening-qty-${line.id}`} value={line.quantity} onChange={quantity => update(line.id, { quantity })} decimals={4} placeholder="Chưa nhập" aria-invalid={submitted && line.quantity === null} aria-describedby={`opening-product-${line.id}${missing?` opening-line-error-${line.id}`:""}`} /></div>
                 <div><label htmlFor={`opening-cost-${line.id}`} className="text-xs font-medium md:sr-only">Giá vốn / {line.unit}</label><NumericInput id={`opening-cost-${line.id}`} value={line.cost} onChange={cost => update(line.id, { cost })} decimals={6} placeholder="Chưa nhập" aria-invalid={submitted && line.cost === null} aria-describedby={`opening-product-${line.id}${missing?` opening-line-error-${line.id}`:""}`} /></div>
                 <p className="col-span-2 md:col-span-1 flex items-center justify-between md:justify-end min-h-8 md:min-h-11 text-sm tabular-nums"><span className="md:hidden text-muted-foreground">Thành tiền</span><b>{line.quantity !== null && line.cost !== null ? formatCurrency(line.quantity * line.cost) : "—"}</b></p>
-                <Button type="button" size="icon" variant="ghost" className="hidden md:flex text-muted-foreground hover:text-destructive" aria-label={`Xóa ${line.code}`} onClick={() => setLines(previous => previous.filter(item => item.id !== line.id))}><Icon name="close" size={18} /></Button>
-              </div>
-              {missing && <p id={`opening-line-error-${line.id}`} className="mt-1 text-xs text-destructive">Còn thiếu {line.quantity === null && line.cost === null ? "số lượng và giá vốn" : line.quantity === null ? "số lượng" : "giá vốn"}.</p>}
-              <details className="mt-1"><summary className="min-h-9 cursor-pointer text-sm text-primary content-center">Lô, hạn sử dụng, ghi chú{line.lot || line.expiry || line.note ? " · Đã bổ sung" : " (tùy chọn)"}</summary>
+                <Button type="button" size="icon" variant="ghost" className="hidden md:flex md:col-start-6 md:row-start-1 text-muted-foreground hover:text-destructive" aria-label={`Xóa ${line.code}`} onClick={() => setLines(previous => previous.filter(item => item.id !== line.id))}><Icon name="close" size={18} /></Button>
+              <details className="col-span-2 md:col-span-1 md:col-start-5 md:row-start-1 md:open:col-span-6 md:open:col-start-1 md:open:row-start-2"><summary className="min-h-11 cursor-pointer text-sm text-primary content-center md:w-11 md:text-center" title="Lô, hạn sử dụng, ghi chú"><span className="md:hidden">Lô, hạn sử dụng, ghi chú{line.lot || line.expiry || line.note ? " · Đã bổ sung" : " (tùy chọn)"}</span><span className="hidden md:inline" aria-hidden="true">{line.lot || line.expiry || line.note ? "●" : "•••"}</span><span className="sr-only hidden md:inline">Lô, hạn sử dụng, ghi chú {line.code}</span></summary>
                 <div className="grid gap-2 sm:grid-cols-2 pt-2">
                   <div><label className="text-xs font-medium" htmlFor={`opening-lot-${line.id}`}>Số lô</label><Input id={`opening-lot-${line.id}`} value={line.lot} maxLength={100} placeholder="Để trống để tạo tự động" onChange={event => update(line.id, { lot: event.target.value })} /></div>
                   <div><label className="text-xs font-medium" htmlFor={`opening-expiry-${line.id}`}>Hạn sử dụng</label><ExpiryDateInput id={`opening-expiry-${line.id}`} value={line.expiry} onValueChange={nextValue => update(line.id, { expiry: nextValue })} /></div>
                   <div className="sm:col-span-2"><label className="text-xs font-medium" htmlFor={`opening-note-${line.id}`}>Ghi chú hàng</label><Input id={`opening-note-${line.id}`} value={line.note} maxLength={500} placeholder="Thông tin cần đối chiếu" onChange={event => update(line.id, { note: event.target.value })} /></div>
                 </div>
               </details>
+              </div>
+              {missing && <p id={`opening-line-error-${line.id}`} className="mt-1 text-xs text-destructive">Còn thiếu {line.quantity === null && line.cost === null ? "số lượng và giá vốn" : line.quantity === null ? "số lượng" : "giá vốn"}.</p>}
+
             </div>;
           })}
           {!showCompleted && incomplete === 0 && <p className="p-4 text-sm text-status-success">Đã điền đủ các hàng. Bấm Hiện tất cả để kiểm tra hoặc Xem trước tồn để đối chiếu.</p>}
+          </div>
         </div>}
         <p className="text-xs text-muted-foreground">Giá vốn cho 1 đơn vị tồn, không phải giá bán. Ô trống chưa được coi là 0.</p>
         {count >= 1000 && <p className="text-sm text-muted-foreground">Đã đủ 1.000 mã cho đợt này; chia thành đợt khác nếu cần.</p>}

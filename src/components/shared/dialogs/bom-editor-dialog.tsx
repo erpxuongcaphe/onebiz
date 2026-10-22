@@ -24,6 +24,8 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { useToast, useBranchFilter } from "@/lib/contexts";
+import { isSelectableFnbBomComponent } from "@/lib/fnb-bom-components";
+import { useFnbCatalogScope } from "@/lib/hooks/use-fnb-catalog-scope";
 import { useAuth } from "@/lib/contexts/auth-context";
 import {
   createBOM,
@@ -97,6 +99,7 @@ export function BOMEditorDialog({
   const canViewCost = hasPermission("products.view_cost");
   const { toast } = useToast();
   const { branches } = useAuth();
+  const fnbCatalog = useFnbCatalogScope();
   const { activeBranchId } = useBranchFilter();
 
   // Outputs (SKU choices)
@@ -550,6 +553,7 @@ export function BOMEditorDialog({
   const pickerOptions = useMemo(() => {
     const query = pickerSearch.trim().toLocaleLowerCase("vi");
     return nvlOptions
+      .filter((product) => !(isFnbRecipe || fnbCatalog) || isSelectableFnbBomComponent(product))
       .filter((product) => product.id !== productId)
       .filter((product) => !items.some((item) => item.materialId === product.id))
       .filter(
@@ -558,7 +562,7 @@ export function BOMEditorDialog({
           product.code.toLocaleLowerCase("vi").includes(query) ||
           product.name.toLocaleLowerCase("vi").includes(query),
       );
-  }, [items, nvlOptions, pickerSearch, productId]);
+  }, [items, nvlOptions, pickerSearch, productId, isFnbRecipe, fnbCatalog]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1026,7 +1030,7 @@ export function BOMEditorDialog({
       >
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>Chọn thành phần (NVL hoặc SKU)</DialogTitle>
+            <DialogTitle>{isFnbRecipe || fnbCatalog ? "Chọn thành phần tại quán (SKU / bán thành phẩm)" : "Chọn thành phần (NVL hoặc SKU)"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-2">
             <div className="relative">
