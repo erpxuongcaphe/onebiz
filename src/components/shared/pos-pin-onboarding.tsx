@@ -1,10 +1,11 @@
 "use client";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/contexts";
 import { PERMISSIONS } from "@/lib/permissions/constants";
 import { Button } from "@/components/ui/button";
-import { MyPosPin, readMyPinStatus } from "./my-pos-pin";
+import { MyPosPin } from "./my-pos-pin";
+import { usePosPinStatus } from "@/lib/hooks/use-pos-pin-status";
 
 export function PosPinOnboarding({ children }: { children: ReactNode }) {
   const { user, isLoading, hasPermission, logout } = useAuth();
@@ -12,32 +13,7 @@ export function PosPinOnboarding({ children }: { children: ReactNode }) {
   const userId = user?.id;
   const publicPage = /^\/(dang-nhap|quen-mat-khau|dat-lai-mat-khau|auth)(\/|$)/.test(pathname);
   const needsCheck = !publicPage && Boolean(user) && (hasPermission(PERMISSIONS.POS_FNB_SEND_KITCHEN) || hasPermission(PERMISSIONS.POS_RETAIL_CHECKOUT));
-  const [state, setState] = useState<{ userId: string; hasPin?: boolean; error?: string } | null>(null);
-  const check = useCallback(async () => {
-    if (!needsCheck || !userId) return;
-    try {
-      const status = await readMyPinStatus();
-      if (status.userId !== userId) throw new Error("Phiên tài khoản vừa thay đổi. Vui lòng đăng nhập lại.");
-      setState(status);
-    } catch (e) { setState({ userId, error: e instanceof Error ? e.message : "Chưa kiểm tra được PIN." }); }
-  }, [needsCheck, userId]);
-  useEffect(() => {
-    let active = true;
-    const load = async () => {
-      if (!needsCheck || !userId) return;
-      try {
-        const status = await readMyPinStatus();
-        if (active) setState(status.userId === userId ? status : { userId, error: "Phiên tài khoản vừa thay đổi. Vui lòng đăng nhập lại." });
-      }
-      catch (e) { if (active) setState({ userId, error: e instanceof Error ? e.message : "Chưa kiểm tra được PIN." }); }
-    };
-    void load();
-    window.addEventListener("onebiz:pin-updated", load);
-    // Recheck on return from another device or after a manager resets a PIN.
-    const onVisible = () => { if (document.visibilityState === "visible") void load(); };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => { active = false; window.removeEventListener("onebiz:pin-updated", load); document.removeEventListener("visibilitychange", onVisible); };
-  }, [needsCheck, userId]);
+  const { state, check } = usePosPinStatus(needsCheck, userId);
   const ready = !needsCheck || isLoading || (state?.userId === user?.id && state?.hasPin === true);
   const setupRequired = state?.userId === userId && state?.hasPin === false && !state.error;
   // Keep the application mounted when a manager resets a PIN while a cart is
@@ -49,3 +25,4 @@ export function PosPinOnboarding({ children }: { children: ReactNode }) {
     <Button variant="ghost" onClick={() => void logout()}>Đăng xuất / đổi tài khoản</Button>
   </div></main>}</>;
 }
+
