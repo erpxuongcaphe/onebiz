@@ -84,7 +84,7 @@ begin
   end if;
   for v_shift in select s.id,s.status,s.close_kind from public.shifts s
     join public.branches b on b.id=s.branch_id and b.tenant_id=s.tenant_id
-    where s.id in (new.shift_id,v_old_shift) and b.cascade_mode='outlet'
+    where s.id in (new.shift_id,v_old_shift) and s.tenant_id=new.tenant_id and b.cascade_mode='outlet'
     order by s.id for update of s
   loop
     if v_shift.status='closed' and v_shift.close_kind is not null then
