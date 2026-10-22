@@ -18,6 +18,8 @@ import { apDungLocChungTuBan } from "./chung-tu-ban";
 import { readHistoryPages } from "./read-history-pages";
 import { DEFAULT_INVOICE_LIST_STATUSES } from "@/lib/utils/document-list-statuses";
 
+import { resolveFnbInvoiceType, type FnbInvoiceType } from "@/lib/utils/invoice-list-filters";
+
 const VALID_INVOICE_LIST_STATUSES = new Set([
   "draft",
   "confirmed",
@@ -66,13 +68,17 @@ export async function getInvoices(params: QueryParams): Promise<QueryResult<Invo
   const tenantId = await getCurrentTenantId();
   const { from, to } = getPaginationRange(params);
   const deliveryFilter = params.filters?.delivery;
-  const shipmentPlan = getInvoiceShipmentQueryPlan(deliveryFilter);
+  const fnbOrderType = resolveFnbInvoiceType(params.filters?.fnbOrderType);
+  const shipmentPlan = getInvoiceShipmentQueryPlan(fnbOrderType === "all" ? deliveryFilter : "all");
+  const fnbRelation = params.filters?.fnbOrderType !== undefined
+    ? `, fnb_orders:kitchen_orders!kitchen_orders_invoice_id_fkey${fnbOrderType === "all" ? "" : "!inner"}(order_type)`
+    : "";
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase as any)
     .from("invoices")
     .select(
-      `*, profiles!invoices_created_by_fkey(full_name), branches!invoices_branch_id_fkey(name), customers!invoices_customer_id_fkey(code, phone, address, debt), ${shipmentPlan.relation}`,
+      `*, profiles!invoices_created_by_fkey(full_name), branches!invoices_branch_id_fkey(name), customers!invoices_customer_id_fkey(code, phone, address, debt), ${shipmentPlan.relation}${fnbRelation}`,
       { count: "exact" },
     )
     .eq("tenant_id", tenantId)
@@ -134,6 +140,12 @@ export async function getInvoices(params: QueryParams): Promise<QueryResult<Invo
   // Filter: branch
   if (params.branchId) {
     query = query.eq("branch_id", params.branchId);
+  }
+
+  if (fnbOrderType !== "all") {
+    query = query.eq("source", "fnb").eq("fnb_orders.order_type", fnbOrderType)
+      .eq("fnb_orders.tenant_id", tenantId);
+    if (params.branchId) query = query.eq("fnb_orders.branch_id", params.branchId);
   }
 
   // Sort & paginate
@@ -713,6 +725,9 @@ function mapInvoice(row: any): Invoice {
     fulfilledById: row.fulfilled_by_id ?? undefined,
     branchId: row.branch_id ?? undefined,
     branchName: branch?.name ?? undefined,
+    fnbOrderType: row.source === "fnb" && Array.isArray(row.fnb_orders)
+      ? row.fnb_orders.find((order: {order_type?: string}) => resolveFnbInvoiceType(order.order_type) !== "all")?.order_type
+      : undefined,
     deliveryType:
       Array.isArray(row.shipments) && row.shipments.length > 0
         ? "delivery"
@@ -762,6 +777,7 @@ export interface InvoiceListSummaryParams {
   searchField?: string;
   /** 'all' | 'delivery' | 'no_delivery'. K2 luôn 'all' — bộ lọc giao hàng thuộc K3. */
   delivery?: "all" | "delivery" | "no_delivery";
+  fnbOrderType?: FnbInvoiceType;
 }
 
 export async function getInvoiceListSummary(
@@ -783,7 +799,8 @@ export async function getInvoiceListSummary(
     p_statuses: statuses,
     p_search: params.search && params.search !== "" ? params.search : null,
     p_search_field: params.searchField ?? "all",
-    p_delivery: params.delivery ?? "all",
+    p_delivery: resolveFnbInvoiceType(params.fnbOrderType) !== "all"
+      ? `fnb_${params.fnbOrderType}` : params.delivery ?? "all",
   });
   if (error) handleError(error, "getInvoiceListSummary");
 
@@ -812,6 +829,7 @@ export function khoaChiSoHoaDon(params: InvoiceListSummaryParams): string {
     params.search ?? "",
     params.searchField ?? "all",
     params.delivery ?? "all",
+    resolveFnbInvoiceType(params.fnbOrderType),
   ]);
 }
 

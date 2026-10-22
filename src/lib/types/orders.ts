@@ -53,6 +53,7 @@ export interface Invoice {
   branchName?: string;
   /** Branch UUID để filter / drill-down. */
   branchId?: string;
+  fnbOrderType?: "dine_in" | "takeaway" | "delivery";
   deliveryType: "no_delivery" | "delivery";
   /**
    * Trạng thái giao hàng khớp với `ShippingStatus` (shipping_orders.status).
