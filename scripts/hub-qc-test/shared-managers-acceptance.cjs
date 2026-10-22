@@ -27,7 +27,8 @@ const rows = require(root+'/src/lib/operations/ceo-workbook.json').rows.map(r=>(
   await actor(owner);
   const save={id:null,version:null,title:'Shared manager acceptance',rows,notes:'',sourceKey:null,reason:'Kiểm tra cô lập nhiều quản lý'};
   const lib=await exec('save',save);
-  const day=await value("select (now() at time zone 'Asia/Ho_Chi_Minh')::date::text value");
+  // A newly approved schedule deliberately skips deadlines already passed today.
+  const day=await value("select ((now() at time zone 'Asia/Ho_Chi_Minh')::date+1)::text value");
   const schedule={branchId:branch,assigneeIds:[manager,manager2],effectiveFrom:day,dueTime:'17:30',weeklyDay:1};
   const apply={id:lib.id,version:1,assignments:[schedule]};
   for(const ids of [[],[manager,manager],[manager,null],[manager,other],['not-a-uuid']]) await denied(()=>exec('apply',{...apply,assignments:[{...schedule,assigneeIds:ids}]}),'OPS_INVALID_ASSIGNEE');
@@ -53,13 +54,14 @@ const rows = require(root+'/src/lib/operations/ceo-workbook.json').rows.map(r=>(
   // Generate one real shared schedule in the isolated database and use both actor paths.
   await db.query('select ops_generate_internal($1,$2)',[branch,day]);
   const period=day.slice(0,7);
-  const read=()=>value('select ops_quality_read($1,$2,$3,$4) value',[branch,period,'work',JSON.stringify({mine:'true'})]);
+  const read=()=>value('select ops_quality_read($1,$2,$3,$4) value',[branch,period,'work',JSON.stringify({mine:'true',search:`WS-${lib.id.replaceAll('-','')}-`})]);
   await actor(manager);const first=await read();
   await actor(manager2);const second=await read();
   const getRows=x=>x.rows??x.items??[];
   const firstIds=new Set(getRows(first).map(r=>r.id));
   check(getRows(second).some(r=>firstIds.has(r.id)&&r.manager_ids.includes(manager)&&r.manager_ids.includes(manager2)),'both managers see the same run IDs under mine filter');
   const sharedRun=getRows(second).find(r=>firstIds.has(r.id)&&r.manager_ids.includes(manager)&&r.manager_ids.includes(manager2)&&r.code?.startsWith('WS-'));
+  check(!!sharedRun,'the created library has a visible shared run before recording results');
   const runRow=await value('select to_jsonb(r)||jsonb_build_object(\'criteria\',s.criteria) value from ops_runs r join ops_standards s on s.id=r.standard_id where r.id=$1',[sharedRun.id]);
   const record={branchId:branch,id:sharedRun.id,version:runRow.version,observations:runRow.criteria.map(c=>({criterionId:c.id,slot:'1',value:1})),issues:[],note:'Quản lý thứ hai ghi kết quả'};
   await value('select ops_quality_execute($1,$2,$3) value',['check',JSON.stringify(record),randomUUID()]);

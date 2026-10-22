@@ -41,3 +41,5 @@ jobs:
         run: HUB_PGLITE_DIR="$RUNNER_TEMP/hub-quality-runtime/node_modules/@electric-sql/pglite" node scripts/hub-qc-test/recurrence-acceptance.cjs
       - name: Verify reviewed schedule changes and original deadline preservation
         run: HUB_PGLITE_DIR="$RUNNER_TEMP/hub-quality-runtime/node_modules/@electric-sql/pglite" node scripts/hub-qc-test/lifecycle-acceptance.cjs
+      - name: Verify library update preview, atomic release and result preservation
+        run: HUB_PGLITE_DIR="$RUNNER_TEMP/hub-quality-runtime/node_modules/@electric-sql/pglite" node scripts/hub-qc-test/library-update-acceptance.cjs

@@ -71,6 +71,7 @@ import { scheduleState, scheduleStateLabels } from "@/lib/operations/schedule-li
 import { filterPeople } from "@/lib/operations/people-filters";
 import type { QualityWorkspace as QualityData } from "@/lib/operations/quality-contracts";
 import { settingsStandards, standardCategoryOptions } from "@/lib/operations/settings-standards";
+import { MonthScope } from "./month-scope";
 
 const tabs = [
   { key: "overview", label: "Tổng quan", icon: "dashboard" },
@@ -488,12 +489,9 @@ export default function OperationsWorkspace() {
               </option>
             ))}
           </select>
-          <input
-            aria-label="Kỳ đánh giá"
-            type="month"
+          <MonthScope
             value={period}
-            onChange={(e) => {
-              const next = e.target.value;
+            onChange={(next) => {
               requestPageLeave(() => { setEditor(null); setPeriod(next); setAssessmentPeriod(""); });
             }}
           />
@@ -551,7 +549,7 @@ export default function OperationsWorkspace() {
           {loading && !data && <Empty label="Đang tải dữ liệu…" />}
           {data && (
             <>
-              {!legacy && <QualityWorkspace key={`${branch}:${tab}:${qualityNavigation}`} workspace={data} onConfigurationRefresh={() => void load()} branch={branch || data.todos[0]?.branch_id || ""} period={period} assessmentPeriod={assessmentPeriod} onAssessmentPeriodChange={setAssessmentPeriod} focus={qualityFocus} onNavigate={navigateQuality} configuration={qualityData => <SettingsView data={data} qualityData={qualityData} error={error} canConfigure={can("approve_policy")} canPropose={canProposeStandard(data, branch)} canManageMembers={can("manage_members")} busy={busy} onEdit={setEditor} onSave={send} onScheduleChanged={() => void load()} includeRewardPolicies={false} />} initialView={tab === "overview" ? "overview" : tab === "todo" ? "issues" : tab === "qc" ? "qc" : tab === "kpi" ? "report" : tab === "settings" ? "settings" : "work"} onLegacySettings={() => requestPageLeave(() => {setLegacy(true);setTab("settings");})} />}
+              {!legacy && <QualityWorkspace key={`${branch}:${tab}:${qualityNavigation}`} workspace={data} onConfigurationRefresh={() => void load()} branch={branch || data.todos[0]?.branch_id || ""} period={period} assessmentPeriod={assessmentPeriod} onAssessmentPeriodChange={setAssessmentPeriod} focus={qualityFocus} onNavigate={navigateQuality} configuration={(qualityData,section) => <SettingsView data={data} qualityData={qualityData} onlyTarget={section} error={error} canConfigure={can("approve_policy")} canPropose={canProposeStandard(data, branch)} canManageMembers={can("manage_members")} busy={busy} onEdit={setEditor} onSave={send} onScheduleChanged={() => void load()} includeRewardPolicies={false} />} initialView={tab === "overview" ? "overview" : tab === "todo" ? "issues" : tab === "qc" ? "qc" : tab === "kpi" ? "report" : tab === "settings" ? "settings" : "work"} onLegacySettings={() => requestPageLeave(() => {setLegacy(true);setTab("settings");})} />}
               {legacy && <>
               <div className={styles.notice}>Cấu hình và lịch sử Hub hiện có <button onClick={() => requestPageLeave(() => {setLegacy(false);setTab("work");})}>Về Hub mới</button></div>
               <div className={styles.metrics}>
@@ -1081,6 +1079,7 @@ export function SettingsView({
   onSave,
   onScheduleChanged,
   includeRewardPolicies = true,
+  onlyTarget,
 }: {
   data: Workspace;
   qualityData?: Pick<QualityData, "assignments" | "catalog" | "groups">;
@@ -1093,8 +1092,10 @@ export function SettingsView({
   onSave: (action: string, payload: Record<string, unknown>) => Promise<void>;
   onScheduleChanged?: () => void;
   includeRewardPolicies?: boolean;
+  onlyTarget?: "standards" | "members";
 }) {
-  const [target, setTarget] = useState<"standards" | "policies" | "members">("standards");
+  const [selectedTarget, setTarget] = useState<"standards" | "policies" | "members">("standards");
+  const target=onlyTarget??selectedTarget;
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState(() => initialFilters("settings"));
   const name = (id: string) =>
@@ -1110,13 +1111,13 @@ export function SettingsView({
   return (
     <>
       <div className={styles.toolbar}>
-        {((canConfigure && data.isCeo) || canPropose) && (
+        {target === "standards" && ((canConfigure && data.isCeo) || canPropose) && (
           <button onClick={() => onEdit({ kind: "standard", proposal: canPropose })}>
             <Icon name="add" size={16} />
             {canPropose ? "Đề xuất công việc" : "Standard Working"}
           </button>
         )}
-        {canConfigure && (
+        {canConfigure && target !== "members" && (
           <>
             {includeRewardPolicies && <button onClick={() => onEdit({ kind: "policy" })}>
               <Icon name="add" size={16} />
@@ -1131,7 +1132,7 @@ export function SettingsView({
             </button>
           </>
         )}
-        {canManageMembers && (
+        {canManageMembers && target === "members" && (
           <button onClick={() => onEdit({ kind: "member" })}>
             <Icon name="add" size={16} />
             Phân công
@@ -1139,7 +1140,7 @@ export function SettingsView({
         )}
       </div>
       <div className={styles.toolbar}>
-        <label className={styles.field}><span>Danh mục thiết lập</span><select aria-label="Danh mục thiết lập" value={target} onChange={event => { setTarget(event.target.value as typeof target); setFilters(initialFilters("settings")); setSearch(""); }}><option value="standards">Standard Working</option>{includeRewardPolicies && <option value="policies">Chính sách thưởng</option>}<option value="members">Phân công chi nhánh</option></select></label>
+        {!onlyTarget && <label className={styles.field}><span>Danh mục thiết lập</span><select aria-label="Danh mục thiết lập" value={target} onChange={event => { setTarget(event.target.value as typeof target); setFilters(initialFilters("settings")); setSearch(""); }}><option value="standards">Standard Working</option>{includeRewardPolicies && <option value="policies">Chính sách thưởng</option>}<option value="members">Phân công chi nhánh</option></select></label>}
         <label className={styles.field}><span>Tìm trong thiết lập</span><input aria-label="Tìm trong thiết lập" type="search" maxLength={200} value={search} onChange={event => setSearch(event.target.value)} placeholder={target === "members" ? "Tên tài khoản" : "Tên mẫu hoặc chính sách"} /></label>
       </div>
       <OperationsFilterBar kind="settings" settingsTarget={target} value={filters} onChange={setFilters} people={filterPeople({ ...data, standards: configuredStandards })} period={data.period} standardCategories={standardCategoryOptions(configuredStandards)} />

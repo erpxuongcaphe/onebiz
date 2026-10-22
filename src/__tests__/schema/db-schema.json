@@ -835,6 +835,7 @@
    "criteria",
    "critical",
    "effective_from",
+   "ends_on",
    "family_id",
    "group_title",
    "id",
@@ -3711,6 +3712,8 @@
   "ops_manager",
   "ops_measurement_signature",
   "ops_measurements_for",
+  "ops_library_update_execute",
+  "ops_library_update_preview",
   "ops_mkt_link",
   "ops_mkt_links_read",
   "ops_person_eligible",
@@ -3894,6 +3897,6 @@
   "void_internal_export_atomic"
  ],
  "soBang": 238,
- "soCot": 2805,
- "soRpc": 608
+ "soCot": 2806,
+ "soRpc": 610
 }

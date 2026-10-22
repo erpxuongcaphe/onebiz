@@ -117,6 +117,7 @@ export const draftQualityRule: QualityRule = {
   allocations: [],
 };
 export interface QualityItem {
+  ends_on?: string | null;
   group_title?: string | null;
   id: string;
   family_id: string;
