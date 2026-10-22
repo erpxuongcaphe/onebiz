@@ -170,6 +170,7 @@ export default function BaoCaoTaiChinhPage() {
   } = useReportState({ defaultPreset: "thisMonth", forceTable: true });
   const selectedPeriodLabel = formatSelectedPeriodLabel(preset, range);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [exporting, setExporting] = useState(false);
   const { activeBranchId, branches, isReady } = useBranchFilter();
   const branchId = activeBranchId ?? "all";
@@ -234,10 +235,10 @@ export default function BaoCaoTaiChinhPage() {
     }
     requestState.current = { scope: scopeKey, inFlight: true, queued: false };
     const requestId = ++requestIdRef.current;
+    setRefreshing(true);
     setLoadingMoreCogs(false);
     try {
       setLoading(loadedScopeRef.current !== scopeKey);
-      setLoadError(null);
       const bid = activeBranchId;
       // Ở chế độ "Tất cả" mới load 2 report nội bộ; khi chọn 1 branch cụ thể
       // các số liệu consolidated/so sánh branch không có ý nghĩa → skip.
@@ -276,6 +277,7 @@ export default function BaoCaoTaiChinhPage() {
       setConsolidated(consolidatedRes);
       setBranchPnL(branchPnLRes);
       setPreviousBranchPnL(previousBranchPnLRes);
+      setLoadError(null);
       setLoadedScope(scopeKey);
       loadedScopeRef.current = scopeKey;
       setUpdatedAt(new Date().toISOString());
@@ -283,9 +285,6 @@ export default function BaoCaoTaiChinhPage() {
       if (requestId !== requestIdRef.current || scopeRef.current !== scopeKey) return;
       console.error("Failed to fetch P&L data:", err);
       setLoadError(err instanceof Error ? err.message : "Không tải được báo cáo kết quả kinh doanh.");
-      setPnl(null);
-      setConsolidated(null);
-      setCogsItems([]);
       toast({
         title: "Lỗi tải báo cáo kết quả vận hành",
         description: err instanceof Error ? err.message : "Vui lòng thử lại",
@@ -294,6 +293,7 @@ export default function BaoCaoTaiChinhPage() {
     } finally {
       if (requestId === requestIdRef.current && scopeRef.current === scopeKey) {
         setLoading(false);
+        setRefreshing(false);
         const queued = requestState.current.queued;
         requestState.current.inFlight = false;
         if (queued) queueMicrotask(() => void fetchRef.current());
@@ -636,7 +636,19 @@ export default function BaoCaoTaiChinhPage() {
     );
   }
 
-  if (loadError) return <div role="alert" className="p-6 text-sm text-destructive">{loadError}<button type="button" className="ml-3 underline" onClick={fetchData}>Thử lại</button></div>;
+  if (loadError) return (
+    <div role="alert" className="p-6 text-sm text-destructive">
+      <p>{loadError}</p>
+      <button
+        type="button"
+        disabled={refreshing}
+        onClick={fetchData}
+        className="mt-3 min-h-11 rounded-md border border-border bg-background px-3 font-medium text-foreground hover:bg-muted disabled:cursor-wait disabled:opacity-60"
+      >
+        {refreshing ? "Đang tải lại..." : "Thử lại"}
+      </button>
+    </div>
+  );
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] overflow-y-auto">

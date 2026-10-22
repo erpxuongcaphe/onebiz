@@ -32,6 +32,42 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("financial report scope and refresh", () => {
+  it("keeps the error boundary until a complete retry succeeds", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    render(<FinancialReport />);
+    await screen.findByText("Doanh thu thuần: 123,456");
+    state.details.mockRejectedValueOnce(new Error("Không tải được chi tiết"));
+    await act(async () => { state.refresh?.(); });
+    await screen.findByRole("alert");
+    const retry = deferred<object>();
+    state.details.mockReturnValueOnce(retry.promise);
+    state.pnl.mockResolvedValue(result(987654));
+    act(() => screen.getByRole("button", { name: "Thử lại" }).click());
+    expect(screen.getByRole("alert")).toHaveTextContent("Không tải được chi tiết");
+    expect(screen.getByRole("button", { name: "Đang tải lại..." })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Xuất đầy đủ" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Doanh thu thuần:/)).not.toBeInTheDocument();
+    await act(async () => retry.resolve({ cogsItems: [], cogsTotalCount: 0, marginTrend: [], reconciliation: { invoiceCount: 0, returnCount: 0 }, granularity: "day", turnover: {}, dso: {} }));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByText("Doanh thu thuần: 987,654")).toBeInTheDocument();
+    log.mockRestore();
+  });
+
+  it("keeps failed repeated retries hidden and allows another retry", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    render(<FinancialReport />);
+    await screen.findByText("Doanh thu thuần: 123,456");
+    state.details.mockRejectedValue(new Error("Nguồn chi tiết tạm lỗi"));
+    await act(async () => { state.refresh?.(); });
+    await screen.findByRole("alert");
+    await act(async () => screen.getByRole("button", { name: "Thử lại" }).click());
+    expect(screen.getByRole("alert")).toHaveTextContent("Nguồn chi tiết tạm lỗi");
+    expect(screen.getByRole("button", { name: "Thử lại" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Xuất bảng" })).not.toBeInTheDocument();
+    expect(state.exportExcel).not.toHaveBeenCalled();
+    log.mockRestore();
+  });
+
   it("coalesces live events and exports the same fractional values and comparison dates", async () => {
     const first = deferred<ReturnType<typeof result>>();
     state.pnl.mockReturnValueOnce(first.promise);
