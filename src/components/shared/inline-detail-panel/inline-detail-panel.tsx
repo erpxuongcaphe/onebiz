@@ -17,6 +17,7 @@ interface InlineDetailPanelProps {
   editLabel?: string;
   /** Label tùy chỉnh cho nút Xóa (mặc định "Xóa"). */
   deleteLabel?: string;
+  actionLayout?: "overlay" | "separate";
 }
 
 /**
@@ -35,6 +36,7 @@ export function InlineDetailPanel({
   onDelete,
   editLabel = "Sửa",
   deleteLabel = "Xóa",
+  actionLayout = "overlay",
 }: InlineDetailPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -58,7 +60,17 @@ export function InlineDetailPanel({
       )}
     >
       <div className="relative">
-        <div className="absolute right-3 top-3 z-10 flex items-center gap-2">
+        <div
+          role="group"
+          aria-label="Thao tác chi tiết"
+          data-slot="inline-detail-actions"
+          className={cn(
+            "flex items-center gap-2",
+            actionLayout === "separate"
+              ? "min-w-0 flex-wrap justify-end border-b border-outline-variant bg-surface px-3 py-2"
+              : "absolute right-3 top-3 z-10",
+          )}
+        >
           {onEdit && (
             <button
               type="button"
@@ -66,11 +78,12 @@ export function InlineDetailPanel({
                 e.stopPropagation();
                 onEdit();
               }}
-              className="inline-flex items-center gap-2 rounded-lg border border-outline-variant bg-surface px-3 py-1 text-[12px] font-medium text-on-surface hover:bg-surface-container-high transition-colors"
+              className={cn("inline-flex items-center gap-2 rounded-lg border border-outline-variant bg-surface px-3 py-1 text-[12px] font-medium text-on-surface hover:bg-surface-container-high transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                actionLayout === "separate" && "min-h-11 min-w-0 max-w-full")}
               aria-label={editLabel}
             >
               <Icon name="edit" size={14} />
-              <span>{editLabel}</span>
+              <span className="min-w-0 break-words text-left">{editLabel}</span>
             </button>
           )}
           {onDelete && (
@@ -80,11 +93,12 @@ export function InlineDetailPanel({
                 e.stopPropagation();
                 onDelete();
               }}
-              className="inline-flex items-center gap-2 rounded-lg border border-error/30 bg-error-container/40 px-3 py-1 text-[12px] font-medium text-error hover:bg-error-container/70 transition-colors"
+              className={cn("inline-flex items-center gap-2 rounded-lg border border-error/30 bg-error-container/40 px-3 py-1 text-[12px] font-medium text-error hover:bg-error-container/70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                actionLayout === "separate" && "min-h-11 min-w-0 max-w-full")}
               aria-label={deleteLabel}
             >
               <Icon name="delete" size={14} />
-              <span>{deleteLabel}</span>
+              <span className="min-w-0 break-words text-left">{deleteLabel}</span>
             </button>
           )}
           <button
@@ -93,8 +107,10 @@ export function InlineDetailPanel({
               e.stopPropagation();
               onClose();
             }}
-            className="rounded-lg p-1 hover:bg-muted transition-colors"
+            className={cn("inline-flex shrink-0 items-center justify-center rounded-lg p-1 hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              actionLayout === "separate" && "size-11")}
             aria-label="Đóng"
+            title="Đóng chi tiết"
           >
             <Icon name="close" size={16} className="text-muted-foreground" />
           </button>
