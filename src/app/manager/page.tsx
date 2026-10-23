@@ -97,6 +97,7 @@ export default function ManagerPwaPage() {
   const [error, setError] = useState("");
   const { activeBranchId, currentBranch, isReady } = useBranchFilter();
   const { user } = useAuth();
+  const actorId = user?.id;
 
   // Phase 6 (CEO 12/05): Manager portal cần permission `reports.dashboard`.
   // Trước đây mọi user đăng nhập đều vào được — cashier vào sẽ thấy doanh thu
@@ -105,6 +106,7 @@ export default function ManagerPwaPage() {
   const canViewManager = hasPermission(PERMISSIONS.REPORTS_DASHBOARD);
 
   const loadData = useCallback(async () => {
+    if (!isReady || permLoading || !canViewManager || !actorId) return;
     setLoading(true);
     setError("");
     try {
@@ -127,7 +129,7 @@ export default function ManagerPwaPage() {
         getManagerLowStockProducts({ branchId: activeBranchId, limit: 8, productType: "sku" }),
         getStockoutForecast({ branchId: activeBranchId, days: 30, limit: 8, productType: "sku" }).catch(() => [] as StockForecastRow[]),
         getRecentActivities(10),
-        getFinancialAlerts().catch(() => [] as FinancialAlert[]),
+        getFinancialAlerts(activeBranchId).catch(() => [] as FinancialAlert[]),
       ]);
 
       setData({
@@ -147,16 +149,20 @@ export default function ManagerPwaPage() {
     } finally {
       setLoading(false);
     }
-  }, [activeBranchId]);
+  }, [activeBranchId, isReady, permLoading, canViewManager, actorId]);
 
   useEffect(() => {
-    if (!isReady) return;
+    if (!isReady || permLoading || !canViewManager || !actorId) return;
     loadData();
-  }, [isReady, loadData]);
+  }, [isReady, permLoading, canViewManager, actorId, loadData]);
 
   const firstName = user?.fullName?.split(" ").pop() ?? "admin";
   const today = formatShortDate(new Date());
   const branchName = currentBranch?.name ?? "Tất cả chi nhánh";
+
+  if (permLoading || !isReady || !actorId) {
+    return <main className="min-h-dvh bg-surface-container-low p-4"><ManagerSkeleton /></main>;
+  }
 
   // Permission gate (CEO 12/05): chưa có quyền → màn hình "Không có quyền"
   // thay vì render dashboard. Owner luôn bypass qua usePermissions hook.
