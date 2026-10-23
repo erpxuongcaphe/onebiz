@@ -23,4 +23,9 @@ describe('warehouse order bridge client',()=>{
  it('reports server errors without falling back to unlinked PO creation',async()=>{
   mocks.rpc.mockResolvedValue({error:new Error('server rollback')});await expect(submitWarehouseOrder(input)).rejects.toThrow('server rollback');expect(mocks.rpc).toHaveBeenCalledTimes(1);
  });
+ it('explains an unavailable backend without exposing SQL/RPC internals',async()=>{
+  mocks.rpc.mockResolvedValue({error:{code:'PGRST202',message:'Could not find function public.get_fnb_warehouse_order_context'}});
+  await expect(getWarehouseOrderContext('store')).rejects.toThrow('Chức năng đặt kho tổng chưa được bật');
+  await expect(submitWarehouseOrder(input)).rejects.toThrow('Chức năng đặt kho tổng chưa được bật');
+ });
 });

@@ -22,6 +22,7 @@ export function CreateFnbWarehouseOrderDialog({ open, onOpenChange, onSuccess, b
   const [note, setNote] = useState('');
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   const [error, setError] = useState('');
+  const [catalogError, setCatalogError] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const submitLock = useRef(false);
@@ -33,7 +34,7 @@ export function CreateFnbWarehouseOrderDialog({ open, onOpenChange, onSuccess, b
   useEffect(() => {
     if (!open) return;
     setItems([]); setNote(''); setSearch(''); setWarehouseId('');
-    setRequestId(crypto.randomUUID()); setError('');
+    setRequestId(crypto.randomUUID()); setError(''); setCatalogError('');
   }, [open, branchId]);
 
   const { clearDraft } = useDurableFormDraft({
@@ -49,20 +50,20 @@ export function CreateFnbWarehouseOrderDialog({ open, onOpenChange, onSuccess, b
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    setProducts([]); setLoading(true); setError('');
+    setProducts([]); setLoading(true); setCatalogError('');
     const timer = setTimeout(() => {
       getWarehouseOrderContext(branchId, search).then(result => {
         if (cancelled) return;
         setWarehouses(result.warehouses); setProducts(result.products);
         setWarehouseId(id => id || (result.warehouses.length === 1 ? result.warehouses[0].id : ''));
-      }).catch(e => { if (!cancelled) setError(e instanceof Error ? e.message : 'Không tải được kho tổng.'); })
+      }).catch(e => { if (!cancelled) setCatalogError(e instanceof Error ? e.message : 'Không tải được kho tổng.'); })
         .finally(() => { if (!cancelled) setLoading(false); });
     }, search ? 250 : 0);
     return () => { cancelled = true; clearTimeout(timer); };
   }, [open, branchId, search]);
 
   async function send() {
-    if (submitLock.current) return;
+    if (submitLock.current || catalogError) return;
     if (!warehouses.some(w => w.id === warehouseId) || !items.length || items.some(i => !Number.isFinite(i.quantity) || i.quantity <= 0)) {
       setError('Chọn kho tổng, thêm hàng và nhập số lượng lớn hơn 0.'); return;
     }
@@ -94,7 +95,7 @@ export function CreateFnbWarehouseOrderDialog({ open, onOpenChange, onSuccess, b
           <div>
             <label htmlFor="fnb-supply-search" className="text-sm font-medium">Thêm hàng cần đặt</label>
             <Input id="fnb-supply-search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm tên hoặc mã hàng" className="mt-1" />
-            {search && <div aria-live="polite" className="mt-1 max-h-48 overflow-y-auto rounded-md border">
+            {search && !catalogError && <div aria-live="polite" className="mt-1 max-h-48 overflow-y-auto rounded-md border">
               {loading ? <p className="p-3 text-sm">Đang tìm hàng…</p> : products.length ? products.map(p => <button type="button" disabled={saving} key={p.id} className="block w-full p-3 text-left text-sm hover:bg-accent" onClick={() => {
                 setItems(lines => lines.some(i => i.id === p.id) ? lines.map(i => i.id === p.id ? { ...i, quantity: i.quantity + 1 } : i) : [...lines, { ...p, quantity: 1 }]); setSearch('');
               }}><span className="font-medium">{p.name}</span><span className="ml-2 text-muted-foreground">{p.code} · {p.unit}</span></button>) : <p className="p-3 text-sm">Không tìm thấy. Anh/chị có thể đề nghị mặt hàng mới ở ô ghi chú.</p>}
@@ -110,12 +111,12 @@ export function CreateFnbWarehouseOrderDialog({ open, onOpenChange, onSuccess, b
           <label className="block text-sm font-medium" htmlFor="fnb-supply-note">Ghi chú cho kho tổng / đề nghị mặt hàng mới</label>
           <textarea id="fnb-supply-note" value={note} maxLength={10000} onChange={e => setNote(e.target.value)} rows={3} className="w-full rounded-md border p-3 text-sm" placeholder="Ghi nhu cầu thêm, mặt hàng chưa có, quy cách hoặc lưu ý giao hàng…" />
         </fieldset>
-        {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+        {(catalogError || error) && <p role="alert" className="text-sm text-destructive">{catalogError || error}</p>}
       </div>
       <DialogFooter className="border-t pt-3">
         <span className="mr-auto text-sm text-muted-foreground">{items.length} mặt hàng · Mã PO cấp khi gửi thành công</span>
         <Button variant="outline" disabled={saving} onClick={() => onOpenChange(false)}>Đóng</Button>
-        <Button disabled={saving || !warehouseId || !items.length} onClick={send}>{saving ? 'Đang gửi…' : 'Gửi đặt hàng'}</Button>
+        <Button disabled={saving || !!catalogError || !warehouseId || !items.length} onClick={send}>{saving ? 'Đang gửi…' : 'Gửi đặt hàng'}</Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>;

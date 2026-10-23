@@ -9,6 +9,12 @@ export interface SupplyOrderInput {
 export interface SupplyOrderResult {
   purchaseOrderId: string; code: string; salesOrderId: string; salesOrderCode: string; total: number;
 }
+function handleWarehouseError(error: { message: string; code?: string }, context: string): never {
+  if (error.code === 'PGRST202' || error.code === '42883') {
+    throw new Error('Chức năng đặt kho tổng chưa được bật trên môi trường này. Vui lòng liên hệ quản trị.');
+  }
+  return handleError(error, context);
+}
 export interface SupplyOrderLink { purchaseOrderId: string; salesOrderCode: string; processed: boolean; cancelled: boolean }
 export async function getWarehouseOrderLinks(ids: string[]): Promise<SupplyOrderLink[]> {
   if (!ids.length) return [];
@@ -25,7 +31,7 @@ export async function getWarehouseOrderContext(branchId: string, search = '') {
   const { data, error } = await (getClient().rpc as any)('get_fnb_warehouse_order_context', {
     p_branch_id: branchId, p_search: search,
   });
-  if (error) handleError(error, 'getWarehouseOrderContext');
+  if (error) handleWarehouseError(error, 'getWarehouseOrderContext');
   if (!data || !Array.isArray(data.warehouses) || !Array.isArray(data.products)) {
     throw new Error('Không đọc được danh mục đặt kho tổng.');
   }
@@ -41,7 +47,7 @@ export async function submitWarehouseOrder(input: SupplyOrderInput): Promise<Sup
     p_branch_id: input.branchId, p_warehouse_id: input.warehouseId,
     p_request_id: input.requestId, p_items: input.items, p_note: input.note || null,
   });
-  if (error) handleError(error, 'submitWarehouseOrder');
+  if (error) handleWarehouseError(error, 'submitWarehouseOrder');
   if (!data?.purchaseOrderId || !data?.salesOrderId || !data?.code || !data?.salesOrderCode) {
     throw new Error('Chưa nhận được xác nhận gửi đơn. Bấm gửi lại để kiểm tra cùng đơn này.');
   }

@@ -58,4 +58,11 @@ describe('F&B warehouse order form',()=>{
   render(<CreateFnbWarehouseOrderDialog open onOpenChange={vi.fn()} branchId="store"/>);
   expect(mocks.draft).toHaveBeenCalledWith(expect.objectContaining({form:'fnb-warehouse-purchase-order',branchId:'store'}));
  });
+ it('does not misreport a failed catalog request as an empty product search',async()=>{
+  mocks.context.mockRejectedValue(new Error('Chức năng đặt kho tổng chưa được bật trên môi trường này.'));
+  render(<CreateFnbWarehouseOrderDialog open onOpenChange={vi.fn()} branchId="store"/>);
+  await screen.findByRole('alert');fireEvent.change(screen.getByLabelText('Thêm hàng cần đặt'),{target:{value:'Sữa'}});
+  await waitFor(()=>expect(screen.getByRole('alert')).toHaveTextContent('chưa được bật'));
+  expect(screen.queryByText(/Không tìm thấy\./)).not.toBeInTheDocument();expect(screen.getByRole('button',{name:'Gửi đặt hàng'})).toBeDisabled();
+ });
 });
