@@ -25,5 +25,24 @@
       { "name": "p_actual_cash", "optional": false },
       { "name": "p_note", "optional": true }
     ] }
+  ],
+  "additionalMigrations": [
+    {
+      "migration": "shift_reconciliation_readers_20261023",
+      "migrationSha256": "137f6e518de5a5b1c2257ae874f7914d6796dfbd04cdb7fa7ace01332505fcfd",
+      "functions": [
+        { "name": "get_shift_close_preview_scoped", "params": [
+          { "name": "p_shift_id", "optional": false }
+        ] },
+        { "name": "get_reconciled_shifts_scoped", "params": [
+          { "name": "p_branch_id", "optional": true },
+          { "name": "p_from", "optional": true },
+          { "name": "p_to_exclusive", "optional": true },
+          { "name": "p_type", "optional": true },
+          { "name": "p_offset", "optional": true },
+          { "name": "p_limit", "optional": true }
+        ] }
+      ]
+    }
   ]
 }

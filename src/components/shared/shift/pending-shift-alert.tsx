@@ -416,7 +416,7 @@ export function ReconcileShiftDialog({
 
               <details className="border-t border-border pt-2 text-sm">
                 <summary className="cursor-pointer font-semibold">
-                  Phiếu thu/chi tiền mặt ({preview.cashEntries.length})
+                  Phiếu thu/chi tiền mặt ({preview.cashEntryCount ?? preview.cashEntries.length})
                 </summary>
                 {preview.cashEntries.length === 0 ? (
                   <p className="pt-2 text-muted-foreground">Không có phiếu tiền mặt trong ca.</p>
@@ -437,7 +437,7 @@ export function ReconcileShiftDialog({
                         </span>
                       </div>
                     ))}
-                    {preview.cashEntries.length > 100 && (
+                    {(preview.cashEntryCount ?? preview.cashEntries.length) > 100 && (
                       <p className="py-2 text-xs text-muted-foreground">
                         Đang hiện 100 phiếu gần nhất. Tổng thu/chi ở trên đã tính toàn bộ phiếu trong ca.
                       </p>
