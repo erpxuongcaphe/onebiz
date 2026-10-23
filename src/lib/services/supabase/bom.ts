@@ -250,67 +250,35 @@ export async function getActiveBOMForBranch(
   return getBOMById(bomId as string);
 }
 
-/**
- * Day 18/05/2026 (CEO): Clone BOM (thường là BOM global) sang 1 chi nhánh
- * cụ thể. Source BOM giữ nguyên, BOM mới có `branch_id = targetBranchId`,
- * code thêm suffix `-${branchSlug}`, items copy y nguyên.
- */
+/** Copy the complete global recipe atomically; the shared code must stay unchanged. */
 export async function cloneBOMForBranch(
   sourceBomId: string,
   targetBranchId: string,
 ): Promise<BOM> {
-  const tenantId = await getCurrentTenantId();
-
-  // 1. Load source full
-  const source = await getBOMById(sourceBomId);
-
-  // 2. Load branch info để gen suffix code
-  const { data: branch } = await supabase
-    .from("branches")
-    .select("code, name")
-    .eq("id", targetBranchId)
-    .single();
-  const suffix = (branch?.code as string) ?? targetBranchId.slice(0, 6);
-
-  // 3. Insert BOM header mới
-  const { data: cloned, error: insErr } = await supabase
-    .from("bom")
-    .insert({
-      tenant_id: tenantId,
-      product_id: source.productId,
-      variant_id: source.variantId ?? null,
-      branch_id: targetBranchId,
-      code: source.code ? `${source.code}-${suffix}` : null,
-      name: `${source.name} (${branch?.name ?? suffix})`,
-      version: 1,
-      is_active: true,
-      batch_size: source.batchSize,
-      yield_qty: source.yieldQty,
-      yield_unit: source.yieldUnit,
-      note: source.note ?? null,
-    })
-    .select("id")
-    .single();
-
-  if (insErr) throw insErr;
-
-  // 4. Copy items
-  if (source.items && source.items.length > 0) {
-    const { error: itemsErr } = await supabase.from("bom_items").insert(
-      source.items.map((it, idx) => ({
-        bom_id: cloned.id,
-        material_id: it.materialId,
-        quantity: it.inputQuantity ?? it.quantity,
-        unit: it.inputUnit ?? it.unit,
-        waste_percent: it.wastePercent ?? 0,
-        sort_order: it.sortOrder ?? idx,
-        note: it.note ?? null,
-      })),
-    );
-    if (itemsErr) throw itemsErr;
+  // Types are refreshed after the additive RPC migration is installed.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)("clone_bom_for_branch_atomic", {
+    p_source_bom_id: sourceBomId,
+    p_target_branch_id: targetBranchId,
+  });
+  if (error) {
+    const messages: Record<string, string> = {
+      BOM_CLONE_TARGET_EXISTS: "Chi nhánh đã có BOM riêng cho món/size này. Mở công thức hiện có để sửa; hệ thống không ghi đè.",
+      BOM_CLONE_PERMISSION_DENIED: "Anh/chị chưa có quyền quản lý công thức.",
+      BOM_CLONE_BRANCH_DENIED: "Chọn chi nhánh đang hoạt động và thuộc phạm vi được phân quyền.",
+      BOM_CLONE_SOURCE_NOT_FOUND: "Không tìm thấy công thức nguồn trong phạm vi được phép.",
+      BOM_CLONE_GLOBAL_ACTIVE_REQUIRED: "Chỉ sao chép từ công thức chung đang hoạt động. Tải lại danh sách rồi chọn lại.",
+      BOM_CLONE_SOURCE_LINK_REQUIRED: "Công thức nguồn chưa có liên kết món. Kiểm tra mã BOM trước khi sao chép.",
+      BOM_CLONE_LINK_MISMATCH: "Mã BOM nguồn chưa khớp món/size. Chưa tạo bản sao; kiểm tra lại liên kết công thức.",
+      BOM_CLONE_UOM_CHANGED: "Đơn vị nguyên liệu đã thay đổi. Chưa tạo bản sao; kiểm tra lại quy đổi của công thức nguồn.",
+      FNB_EXACT_RECIPE_OPTION_TENANT_MISMATCH: "Một lựa chọn của công thức nguồn không còn hoạt động hoặc không hợp lệ. Chưa tạo bản sao; kiểm tra tùy chọn trước khi thử lại.",
+      FNB_EXACT_RECIPE_BOM_ITEM_TARGET_MISMATCH: "Liên kết tùy chọn với nguyên liệu nguồn chưa khớp. Chưa tạo bản sao; kiểm tra lại công thức nguồn.",
+      BOM_CLONE_EMPTY_RECIPE: "Công thức nguồn chưa có nguyên liệu nên chưa thể sao chép.",
+    };
+    throw new Error(messages[error.message] ?? `Chưa sao chép được BOM: ${error.message}`);
   }
-
-  return getBOMById(cloned.id);
+  if (!data?.id) throw new Error("Chưa nhận được xác nhận tạo BOM. Tải lại danh sách để kiểm tra trước khi thử lại.");
+  return mapBOM(data as Record<string, unknown>);
 }
 
 export async function getBOMById(id: string): Promise<BOM> {
