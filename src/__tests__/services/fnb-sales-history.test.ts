@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const mock=vi.hoisted(()=>({tables:{} as Record<string,Record<string,unknown>[]>,calls:[] as {table:string;op:string;args:unknown[]}[],fail:"",rpc:vi.fn()}));
-vi.mock("@/lib/services/supabase/base",()=>({getCurrentTenantId:async()=>"tenant",handleError:(error:{message:string})=>{throw new Error(error.message);},getClient:()=>({rpc:mock.rpc,from:(table:string)=>{
+vi.mock("@/lib/services/supabase/base",()=>({getCurrentTenantId:async()=>"tenant",handleError:(error:{message:string})=>{throw new Error(error.message);},getClient:()=>({rpc:(name:string,...args:unknown[])=>{const r=mock.rpc(name,...args);const q:Record<string,unknown>={order:()=>q,range:()=>q,then:(resolve:(v:unknown)=>unknown)=>Promise.resolve(r).then(resolve)};return q;},from:(table:string)=>{
  let rows=[...(mock.tables[table]??[])],from=0,to=Infinity,single=false;
  const q:Record<string,unknown>={};
  for(const op of ["select","eq","is","in","gte","lt","order","range","single"]) q[op]=(...args:unknown[])=>{
@@ -58,7 +58,7 @@ describe("F&B sales history boundaries",()=>{
   mock.rpc.mockResolvedValue({data:[{invoice_item_id:"a",note:"Ít đá"}],error:null});
   const row=(await getFnbDayHistory("xtb","2026-10-20")).rows[0];
   expect((await getFnbHistoryItems(row,"xtb")).map(i=>i.note)).toEqual(["Ít đá","Saved"]);
-  expect(mock.rpc).toHaveBeenCalledWith("get_fnb_invoice_item_notes_20261023",{p_invoice_id:"paid"});
+  expect(mock.rpc).toHaveBeenCalledWith("get_fnb_invoice_item_details_20261023",{p_invoice_ids:["paid"]},{count:"exact"});
   mock.rpc.mockClear();mock.tables.kitchen_orders=[ko("open")];mock.tables.kitchen_order_items=[{id:"k",kitchen_order_id:"open",product_name:"Trà",quantity:1,unit_price:30000,note:"Pending"}];
   const pending=(await getFnbDayHistory("xtb","2026-10-20")).rows.find(r=>!r.invoiceId)!;
   expect((await getFnbHistoryItems(pending,"xtb"))[0].note).toBe("Pending");expect(mock.rpc).not.toHaveBeenCalled();
