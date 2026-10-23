@@ -13,4 +13,10 @@ describe("compact invoice item note",()=>{
   const v=render(<InvoiceItemName name="Trà" note="   "/>);expect(v.container.querySelector("p")).toBeNull();
   v.rerender(<InvoiceItemName name="Trà" note={'<script>alert(1)</script>'}/>);expect(v.container.querySelector("script")).toBeNull();expect(screen.getByText(/<script>/)).toBeInTheDocument();
  });
+ it("shows recorded size once and separates cold/hot, sweetness, ice from notes",()=>{
+  render(<InvoiceItemName name="Bạc Sỉu (Size L)" size="Size L" note="Để riêng" options={[{groupName:"Đá/Nóng",options:[{label:"Nóng"}]},{groupName:"Mức ngọt",options:[{label:"100% (bình thường)"}]},{groupName:"Mức đá",options:[{label:"Không đá"}]}]}/>);
+  expect(screen.getByText(/· Size L/)).toBeInTheDocument();expect(screen.queryByText(/Size L.*Size L/)).toBeNull();
+  expect(screen.getByText("Nóng · Ngọt: 100% · Không đá")).toHaveClass("text-[13px]");expect(screen.getByText("Ghi chú: Để riêng")).toBeInTheDocument();
+ });
+
 });

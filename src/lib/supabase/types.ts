@@ -2528,6 +2528,7 @@ export interface Database {
           unit_price: number;
           note: string | null;
           toppings: unknown;
+          modifier_selections: Json | null;
           status: "pending" | "preparing" | "ready";
           started_at: string | null;
           completed_at: string | null;
@@ -2544,6 +2545,7 @@ export interface Database {
           unit_price?: number;
           note?: string | null;
           toppings?: unknown;
+          modifier_selections?: Json | null;
           status?: "pending" | "preparing" | "ready";
           cancelled_qty?: number;
         };
@@ -2553,6 +2555,7 @@ export interface Database {
           unit_price?: number;
           note?: string | null;
           toppings?: unknown;
+          modifier_selections?: Json | null;
           status?: "pending" | "preparing" | "ready";
           started_at?: string | null;
           completed_at?: string | null;
@@ -2898,6 +2901,10 @@ export interface Database {
       };
     };
     Functions: {
+      get_fnb_invoice_item_details_20261023: {
+        Args: { p_invoice_ids: string[] };
+        Returns: { invoice_id:string;invoice_item_id:string;note:string|null;modifier_selections:Json;variant_label:string|null;detail_source:string }[];
+      };
       get_fnb_invoice_item_notes_20261023: {
         Args: { p_invoice_id: string };
         Returns: { invoice_item_id: string; note: string | null }[];

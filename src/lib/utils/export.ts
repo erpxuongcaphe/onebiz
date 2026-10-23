@@ -53,7 +53,7 @@ export async function exportToExcel<T extends Record<string, any>>(
   data: T[],
   columns: ExportColumn[],
   fileName: string,
-  options?: { financialTable?: boolean; onPrepared?: (blob: Blob, fileName: string) => void; shouldSave?: () => boolean },
+  options?: { financialTable?: boolean; onPrepared?: (blob: Blob, fileName: string) => void; shouldSave?: () => boolean; additionalSheets?: {name:string;data:Record<string,unknown>[];columns:ExportColumn[]}[] },
 ): Promise<void> {
   // Lazy import — xlsx chỉ tải khi function thực sự được gọi.
   const { XLSX, saveAs } = await loadXlsxAndSaver();
@@ -89,6 +89,12 @@ export async function exportToExcel<T extends Record<string, any>>(
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Data");
+  for(const extra of options?.additionalSheets ?? []) {
+    const rows=extra.data.map(item=>Object.fromEntries(extra.columns.map(col=>[col.header,normalizeExportValue(col.format?col.format(item[col.key]):item[col.key] as string|number|null|undefined,col.precision)])));
+    const sheet=XLSX.utils.json_to_sheet(rows);sheet["!cols"]=extra.columns.map(col=>({wch:col.width??15}));
+    if(sheet["!ref"])sheet["!autofilter"]={ref:sheet["!ref"]};
+    XLSX.utils.book_append_sheet(wb,sheet,extra.name);
+  }
 
   const excelBuffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
   const blob = new Blob([excelBuffer], {
