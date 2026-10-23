@@ -129,7 +129,7 @@ export default function ManagerPwaPage() {
         getManagerLowStockProducts({ branchId: activeBranchId, limit: 8, productType: "sku" }),
         getStockoutForecast({ branchId: activeBranchId, days: 30, limit: 8, productType: "sku" }).catch(() => [] as StockForecastRow[]),
         getRecentActivities(10),
-        getFinancialAlerts().catch(() => [] as FinancialAlert[]),
+        getFinancialAlerts(activeBranchId).catch(() => [] as FinancialAlert[]),
       ]);
 
       setData({

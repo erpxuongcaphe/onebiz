@@ -52,5 +52,6 @@ describe("manager data access gate", () => {
     view.rerender(<ManagerPwaPage />);
     await waitFor(() => expect(state.read).toHaveBeenCalledTimes(9));
     expect(state.read).toHaveBeenCalledWith("kpis", "branch-a");
+    expect(state.read).toHaveBeenCalledWith("alerts", "branch-a");
   });
 });
