@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "migration": "shift_operational_sources_20261023",
-  "migrationSha256": "78a0fa19b56ef778809c53ee2892de47ba2843ee4aae19d2ee5216254fb365e6",
+  "migrationSha256": "9ebf669e8d8efcc20944f617d3280607ef4e4051a7150f55fa457c8679a4c92e",
   "functions": [
     { "name": "get_document_payment_history_scoped", "params": [
       { "name": "p_reference_type", "optional": false },

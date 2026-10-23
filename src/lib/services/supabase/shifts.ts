@@ -221,6 +221,7 @@ async function resolveShiftCloseResult(input: CloseShiftInput, data: unknown, re
     const payload = context as unknown as { mode?: string; shift?: Record<string, unknown> } | null;
     const shift = payload?.shift;
     if (!fetchError && payload?.mode === "reconciliation" && shift && shift.id === input.shiftId && shift.status === "closed"
+      && typeof shift.tenant_id === "string" && typeof shift.branch_id === "string"
       && Number(shift.actual_cash) === input.actualCash
       && [shift.starting_cash, shift.expected_cash, shift.actual_cash, shift.cash_difference,
         shift.total_sales, shift.total_orders].every(isNumeric)) {

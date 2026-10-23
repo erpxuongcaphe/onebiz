@@ -40,20 +40,23 @@ describe("atomic shift outcome", () => {
     expect(result.shiftId).toBe(input.shiftId);
     expect(result.closedAt).toBe(receipt.closed_at);
     expect(result.report?.cashIn).toBe(200);
+    expect(result.report?.tenantId).toBe("test-tenant");
+    expect(result.report?.branchId).toBe("test-branch");
     expect(state.rpc).toHaveBeenCalledWith("close_shift_operational", {
       p_shift_id: input.shiftId, p_actual_cash: 100, p_note: "Counted",
     });
   });
 
-  it.each(["query-error", "network", "missing", "stale", "masked", "different-count"])(
+  it.each(["query-error", "network", "missing", "stale", "masked", "different-count", "missing-tenant", "missing-branch"])(
     "retains confirmed closed state when report load fails: %s", async (failure) => {
       if (failure === "query-error") state.single.mockResolvedValue({ data: null, error: { message: "denied" } });
       if (failure === "network") state.single.mockRejectedValue(new Error("offline"));
-      if (failure === "session") state.tenant.mockRejectedValue(new Error("session expired"));
       if (failure === "missing") state.single.mockResolvedValue({ data: null, error: null });
       if (failure === "stale") state.single.mockResolvedValue({ data: { ...row, status: "open" }, error: null });
       if (failure === "masked") state.single.mockResolvedValue({ data: { ...row, total_sales: null }, error: null });
       if (failure === "different-count") state.single.mockResolvedValue({ data: { ...row, actual_cash: 999 }, error: null });
+      if (failure === "missing-tenant") state.single.mockResolvedValue({ data: { ...row, tenant_id: null }, error: null });
+      if (failure === "missing-branch") state.single.mockResolvedValue({ data: { ...row, branch_id: null }, error: null });
       expect(await closeShift(input)).toMatchObject({ shiftId: input.shiftId, actualCash: 100, report: null });
       expect(state.rpc.mock.calls.filter(([name]) => name === "close_shift_operational")).toHaveLength(1);
       expect(state.from).not.toHaveBeenCalled();
