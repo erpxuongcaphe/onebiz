@@ -43,6 +43,17 @@ const checks=`
  const physical=async()=>(await db.query('select * from branch_stock order by product_id')).rows;
  let version=await stamp(),before=await physical();
  const beforeAudit=(await db.query('select count(*) n from audit_log')).rows[0].n;
+ // Separate explicit correction/cancellation rights; create/complete do not imply correction.
+ await db.exec(\`create or replace function user_has_permission(uuid,text) returns boolean language sql stable as $$select $2<>'production.correct_order'$$;\`);
+ await assert.rejects(()=>preview(),/PRODUCTION_CORRECTION_PERMISSION_REQUIRED/);
+ await assert.rejects(()=>db.query('select correct_production_order_quantities($1,$2,$3,800,$4,$5,false)',[usedOrder,version,crypto.randomUUID(),input(),'Bypass attempt']),/PRODUCTION_CORRECTION_PERMISSION_REQUIRED/);
+ await db.exec(\`create or replace function user_has_permission(uuid,text) returns boolean language sql stable as $$select $2 in ('production.view','production.correct_order')$$;\`);
+ const correctionOnly=await preview();assert.equal(correctionOnly.usedQuantity,400,'explicit per-user/role correction right is sufficient without create/complete');
+ await assert.rejects(()=>db.query('select correct_production_order_quantities($1,$2,$3,0,$4,$5,true)',[usedOrder,version,crypto.randomUUID(),'[]','No cancel permission']),/PRODUCTION_CORRECTION_PERMISSION_REQUIRED/);
+ await db.exec(\`create or replace function user_has_permission(uuid,text) returns boolean language sql stable as $$select $2 in ('production.view','production.cancel_order')$$;\`);
+ await assert.rejects(()=>preview(),/PRODUCTION_CORRECTION_PERMISSION_REQUIRED/,'cancel does not grant correction');
+ await assert.rejects(()=>db.query('select correct_production_order_quantities($1,$2,$3,0,$4,$5,true)',[usedOrder,version,crypto.randomUUID(),'[]','Cancel used lot']),/PRODUCTION_CORRECTION_OUTPUT_USED/,'cancel permission still enforces physical lot safety');
+ await db.exec(\`create or replace function user_has_permission(uuid,text) returns boolean language sql stable as $$select true$$;\`);
  let plan=await preview();
  assert.equal(plan.usedQuantity,400);assert.equal(plan.remainingAfter,400);assert.equal(plan.stockDelta,-200);
  assert.deepEqual(await physical(),before,'preview is read-only');assert.equal((await db.query('select count(*) n from audit_log')).rows[0].n,beforeAudit);

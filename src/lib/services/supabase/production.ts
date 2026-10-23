@@ -765,7 +765,7 @@ const PRODUCTION_ADJUSTMENT_ERRORS: Record<string,string> = {
   PRODUCTION_CORRECTION_LOT_RECONCILIATION_REQUIRED: "Sổ lô và lượng đã xuất chưa khớp tồn kho. Cần đối soát trước khi điều chỉnh; kho chưa thay đổi.",
   PRODUCTION_CORRECTION_STOCK_REQUIRED: "Không đủ tồn để điều chỉnh lượng thành phẩm hoặc nguyên liệu. Chưa thay đổi kho.",
   PRODUCTION_CORRECTION_COST_REQUIRED: "Tồn và sổ giá vốn chưa đủ căn cứ hoặc chưa khớp. Cần đối soát trước khi điều chỉnh.",
-  PRODUCTION_CORRECTION_PERMISSION_REQUIRED: "Tài khoản cần quyền tạo và hoàn thành lệnh sản xuất để điều chỉnh mẻ.",
+  PRODUCTION_CORRECTION_PERMISSION_REQUIRED: "Tài khoản cần quyền Xem sản xuất và Sửa/điều chỉnh mẻ đã hoàn thành tại chi nhánh này.",
   PRODUCTION_ADJUSTMENT_COMPLETED_REQUIRED: "Chỉ dùng điều chỉnh này cho mẻ đã hoàn thành.",
   PRODUCTION_ADJUSTMENT_VARIANT_COST_REQUIRED: "Mẻ có biến thể cần đối soát giá vốn theo biến thể trước khi điều chỉnh.",
   PRODUCTION_ADJUSTMENT_NO_CHANGE: "Chưa có thay đổi số lượng thành phẩm hoặc nguyên liệu.",

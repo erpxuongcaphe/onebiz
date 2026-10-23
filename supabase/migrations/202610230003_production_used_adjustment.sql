@@ -39,7 +39,7 @@ begin
  if tenant is null then raise exception 'AUTH_REQUIRED' using errcode='42501'; end if;
  select * into po from production_orders where id=p_order_id and tenant_id=tenant for update;
  if not found or not user_has_branch_access(actor,po.branch_id) then raise exception 'PRODUCTION_BRANCH_ACCESS_DENIED' using errcode='42501'; end if;
- if not user_has_permission(actor,'production.create_order') or not user_has_permission(actor,'production.complete_order') then
+ if not coalesce(user_has_permission(actor,'production.view'),false) or not coalesce(user_has_permission(actor,'production.correct_order'),false) then
   raise exception 'PRODUCTION_CORRECTION_PERMISSION_REQUIRED' using errcode='42501'; end if;
  if nullif(trim(p_reason),'') is null or length(p_reason)>1000 or (p_apply and p_request_id is null) then raise exception 'PRODUCTION_CORRECTION_REASON_REQUIRED'; end if;
  if p_apply then
@@ -184,6 +184,7 @@ create or replace function public.apply_production_used_adjustment(p_order_id uu
  returns jsonb language sql security definer set search_path=public as $$select public._production_used_adjustment($1,$2,$3,$4,$5,true,$6,$7)$$;
 revoke all on function public.preview_production_used_adjustment(uuid,timestamptz,numeric,jsonb,text),public.apply_production_used_adjustment(uuid,timestamptz,numeric,jsonb,text,uuid,text) from public,anon;
 grant execute on function public.preview_production_used_adjustment(uuid,timestamptz,numeric,jsonb,text),public.apply_production_used_adjustment(uuid,timestamptz,numeric,jsonb,text,uuid,text) to authenticated;
+-- No role/user grants are seeded. Owners keep their existing bypass; others require an explicit grant.
 -- Keep the existing cancel path usable if an adjustment corrected a mistaken
 -- ingredient to zero. Preserve all other #765 guards and refuse concurrent replacement.
 do $cancel_zero$
@@ -193,10 +194,16 @@ begin
  if position('old_qty<=0' in body)>0 then
   if (select md5(replace(btrim(prosrc),E'\r','')) from pg_proc where oid='public.correct_production_order_quantities(uuid,timestamptz,uuid,numeric,jsonb,text,boolean)'::regprocedure)<>'6bf564e2aa3f696bccc40e8b519cae1b' then
    raise exception 'PRODUCTION_CORRECTION_FUNCTION_CHANGED'; end if;
+  body:=replace(body,E'\r','');
+  body:=replace(body,
+   'if not user_has_permission(actor,case when p_cancel then ''production.cancel_order'' else ''production.create_order'' end)'
+   || E'\n    or (po.status=''completed'' and not p_cancel and not user_has_permission(actor,''production.complete_order'')) then',
+   'if not coalesce(user_has_permission(actor,case when p_cancel then ''production.cancel_order'' when po.status=''completed'' then ''production.correct_order'' else ''production.create_order'' end),false) then');
+  if position('''production.correct_order''' in body)=0 then raise exception 'PRODUCTION_CORRECTION_PERMISSION_GUARD_CHANGED'; end if;
   body:=replace(body,'if old_qty is null or old_qty<=0 then',
    'if old_qty is null or old_qty<0 or (old_qty=0 and not (po.status=''completed'' and exists(select 1 from production_used_adjustments where tenant_id=tenant and production_order_id=po.id))) then');
   execute body;
- elsif position('exists(select 1 from production_used_adjustments' in body)=0 then
+ elsif position('exists(select 1 from production_used_adjustments' in body)=0 or position('''production.correct_order''' in body)=0 then
   raise exception 'PRODUCTION_CORRECTION_FUNCTION_CHANGED';
  end if;
 end;
