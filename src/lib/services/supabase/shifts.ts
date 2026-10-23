@@ -661,34 +661,78 @@ export async function getReconciledShiftDetail(
   if (!shiftId) throw new Error("Thiếu mã ca cần đối soát.");
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
+  const { data: context, error: contextError } = await supabase.rpc(
+    "get_shift_context_scoped" as never, { p_shift_id: shiftId } as never,
+  );
+  if (contextError) handleError(contextError, "getReconciledShiftDetail.context");
+  const payload = context as unknown as { mode?: string; shift?: Record<string, unknown> } | null;
+  const shift = payload?.shift;
+  if (payload?.mode !== "reconciliation" || !shift || shift.id !== shiftId
+    || shift.tenant_id !== tenantId || typeof shift.branch_id !== "string" || !shift.branch_id) {
+    throw new Error("Không có quyền đối chiếu ca hoặc chưa xác nhận được phạm vi chi nhánh.");
+  }
 
-  const [invoiceResult, cashResult] = await Promise.all([
-    supabase
+  // Keep the legacy table consumers branch-bound until their server readers replace them.
+  async function readAllPages<T extends { id: string }>(
+    read: (offset: number, pageSize: number) => PromiseLike<{
+      data: T[] | null; error: { message: string } | null; count: number | null;
+    }>,
+  ): Promise<T[]> {
+    const pageSize = 500;
+    const rows: T[] = [];
+    const seen = new Set<string>();
+    let total: number | null = null;
+    for (;;) {
+      const { data, error, count } = await read(rows.length, pageSize);
+      if (error) handleError(error, "getReconciledShiftDetail.documents");
+      if (!Array.isArray(data) || !Number.isSafeInteger(count) || count! < 0
+        || (total !== null && count !== total) || data.length > pageSize
+        || rows.length + data.length > count!) {
+        throw new Error("Dữ liệu đối chiếu ca đã thay đổi hoặc chưa đầy đủ. Tải lại để đối chiếu.");
+      }
+      total = count!;
+      for (const row of data) {
+        if (!row || typeof row.id !== "string" || !row.id || seen.has(row.id)) {
+          throw new Error("Dữ liệu đối chiếu ca bị trùng hoặc không hợp lệ. Tải lại để đối chiếu.");
+        }
+        seen.add(row.id);
+        rows.push(row);
+      }
+      if (rows.length === total) return rows;
+      if (data.length === 0) {
+        throw new Error("Dữ liệu đối chiếu ca chưa đầy đủ. Tải lại để đối chiếu.");
+      }
+    }
+  }
+
+  const [invoiceRows, cashRows] = await Promise.all([
+    readAllPages((offset, pageSize) => supabase
       .from("invoices")
       .select(
         "id, code, customer_name, status, total, paid, payment_method, source, created_at, void_reason",
+        { count: "exact" },
       )
       .eq("tenant_id", tenantId)
+      .eq("branch_id", shift.branch_id as string)
       .eq("shift_id", shiftId)
-      .order("created_at", { ascending: true }),
-    supabase
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(offset, offset + pageSize - 1)),
+    readAllPages((offset, pageSize) => supabase
       .from("cash_transactions")
       .select(
         "id, code, type, category, amount, payment_method, status, reference_type, reference_id, note, transaction_date",
+        { count: "exact" },
       )
       .eq("tenant_id", tenantId)
+      .eq("branch_id", shift.branch_id as string)
       .eq("shift_id", shiftId)
-      .order("transaction_date", { ascending: true }),
+      .order("transaction_date", { ascending: true })
+      .order("id", { ascending: true })
+      .range(offset, offset + pageSize - 1)),
   ]);
 
-  if (invoiceResult.error) {
-    handleError(invoiceResult.error, "getReconciledShiftDetail.invoices");
-  }
-  if (cashResult.error) {
-    handleError(cashResult.error, "getReconciledShiftDetail.cash");
-  }
-
-  const invoices: ReconciledShiftInvoiceDetail[] = (invoiceResult.data ?? []).map((row) => ({
+  const invoices: ReconciledShiftInvoiceDetail[] = invoiceRows.map((row) => ({
     id: row.id,
     code: row.code,
     customerName: row.customer_name || "Khách lẻ",
@@ -700,7 +744,7 @@ export async function getReconciledShiftDetail(
     createdAt: row.created_at,
     voidReason: row.void_reason ?? null,
   }));
-  const transactions: ReconciledShiftCashDetail[] = (cashResult.data ?? []).map((row) => ({
+  const transactions: ReconciledShiftCashDetail[] = cashRows.map((row) => ({
     id: row.id,
     code: row.code,
     type: row.type,
