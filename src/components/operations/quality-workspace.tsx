@@ -41,6 +41,7 @@ import { QualityFilters } from "./quality-filters";
 import { QualityOverview, type QualityFocus, type QualityDestination } from "./quality-overview";
 import { QualityReport } from "./quality-report";
 import { SetupNavigation, type SetupSection } from "./setup-navigation";
+import { compareCriteriaBySource, criterionGroup, criterionTitle } from "@/lib/operations/criterion-presentation";
 import s from "./quality.module.css";
 
 const views = [
@@ -380,6 +381,7 @@ export function QualityWorkspace({
   const selectedRows = data?.rows ?? [];
   const runs = (view === "work" && workMode === "scheduled" ? [...selectedRows] : []) as unknown as (Run & {
     category: keyof typeof categories;
+    group_title?: string | null;
     family_id: string;
     code?: string;
     frequency: keyof typeof freq;
@@ -392,7 +394,8 @@ export function QualityWorkspace({
     }[];
   })[];
   runs.sort((a,b)=>Date.parse(a.current_due_at??a.original_due_at)-Date.parse(b.current_due_at??b.original_due_at)
-    || (a.code??a.title).localeCompare(b.code??b.title,"vi",{numeric:true}));
+    || compareCriteriaBySource(a,b));
+  const catalog = [...(data?.catalog ?? [])].sort(compareCriteriaBySource);
   const issues = selectedRows as unknown as QualityIssue[];
   const audits = selectedRows as unknown as QualityAudit[];
   const lines = selectedRows as unknown as QualityLine[];
@@ -650,7 +653,7 @@ export function QualityWorkspace({
                 }}
               />
             )}
-            {view === "work" && workMode === "scheduled" && <SelectField label="Nhóm tiêu chí" options={data?.groups?.some(group=>group.active)?Object.fromEntries(data.groups.filter(group => group.active).map(group => [`group:${group.id}`,group.title])):categories} value={category} onChange={next => {setCategory(next);setOffset(0);}}/>}
+            {view === "work" && workMode === "scheduled" && <SelectField label="Nhóm công việc" options={data?.groups?.some(group=>group.active)?Object.fromEntries(data.groups.filter(group => group.active).map(group => [`group:${group.id}`,group.title])):categories} value={category} onChange={next => {setCategory(next);setOffset(0);}}/>}
             <SelectField
               label="Khoảng thời gian"
               allowEmpty={false}
@@ -834,6 +837,7 @@ export function QualityWorkspace({
             <Table
               heads={[
                 "Công việc",
+                "Nhóm công việc",
                 "Tần suất / đến hạn",
                 "Người được phân công",
                 "Kết quả hiện tại",
@@ -843,17 +847,10 @@ export function QualityWorkspace({
               rows={runs.map((r) => (
                 <tr key={r.id}>
                   <td>
-                    <strong>{r.code?.match(/^WS-(?:[a-f0-9]{32}-)?(\d+)$/i) ? `${Number(r.code.match(/(\d+)$/)![1])}. ` : ""}{r.title}</strong>
+                    <strong>{criterionTitle(r)}</strong>
                     <details className={s.requirement}><summary>Yêu cầu cần đạt</summary>{r.criteria.map(criterion => <p key={criterion.id}>{criterion.title}</p>)}</details>
-                    <p className={s.muted}>
-                      {
-                        ({...categories,...Object.fromEntries((data.groups ?? []).map(group => [`group:${group.id}`,group.title]))})[
-                          (r as Run & { category: keyof typeof categories })
-                            .category
-                        ]
-                      }
-                    </p>
                   </td>
+                  <td className={s.groupCell}>{criterionGroup(r,data.groups ?? [])}</td>
                   <td>
                     {freq[r.frequency]}
                     <p>{formatDate(r.current_due_at ?? r.original_due_at)}</p>
@@ -884,7 +881,8 @@ export function QualityWorkspace({
               ))}
               mobile={runs.map((r) => (
                 <article className={s.mobileItem} key={r.id}>
-                  <h3>{r.code?.match(/^WS-(?:[a-f0-9]{32}-)?(\d+)$/i) ? `${Number(r.code.match(/(\d+)$/)![1])}. ` : ""}{r.title}</h3>
+                  <h3>{criterionTitle(r)}</h3>
+                  <p className={s.groupLabel}><span>Nhóm công việc</span>{criterionGroup(r,data.groups ?? [])}</p>
                   <details className={s.requirement}><summary>Yêu cầu cần đạt</summary>{r.criteria.map(criterion => <p key={criterion.id}>{criterion.title}</p>)}</details>
                   <Badge value={r.quality} />
                   <p>
@@ -1188,14 +1186,10 @@ export function QualityWorkspace({
                       : "Đã thu hồi"}
                   </p>
                 ))}
-                {data.assignments.map((a) => (
-                  <p key={a.family_id}>
-                    {workspace.standards.find(
-                      (v) => v.family_id === a.family_id,
-                    )?.title ?? "Công việc"}
-                    : {a.manager_ids.map(name).join(", ")}
-                  </p>
-                ))}
+                {!!data.assignments.length && <div className={s.assignmentSummary}>
+                  <span>Đã phân công quản lý cho {formatNumber(data.assignments.length)} công việc.</span>
+                  <button type="button" onClick={() => requestPageLeave(() => setSetupSection("branch"))}>Xem công việc chi nhánh<Icon name="arrow_forward" size={16}/></button>
+                </div>}
               </section>
               <section className={s.section} hidden={setupSection !== "qc"}>
                 <h3>Nhóm tiêu chuẩn QC</h3>
@@ -1203,36 +1197,34 @@ export function QualityWorkspace({
                 {(data.groups ?? []).map((group) => <p key={group.id}>{group.title} · {group.active ? "Hoạt động" : "Ngừng"}{data.can.manage && <button onClick={() => edit({kind:"group",group})}>Sửa nhóm</button>}</p>)}
               </section>
               <section className={s.section} hidden={setupSection !== "qc"}>
-                <h3>Danh mục QC có phiên bản</h3>
+                <h3>Tiêu chí QC theo công việc</h3>
                 {data.can.manage && <button onClick={() => edit({kind:"catalog"})}>Thêm tiêu chuẩn QC</button>}
-                <div className={s.tableScroll}>
-                  <table className={s.table}>
-                    <thead>
-                      <tr>
-                        <th>Mã / tiêu chuẩn</th>
-                        <th>Nhóm QC</th>
-                        <th>Loại điểm</th>
-                        <th className={s.numeric}>Trọng số</th>
-                        <th>Hiệu lực</th>
-                        {data.can.manage && <th>Thao tác</th>}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.catalog.map((c) => (
+                <Table
+                  heads={["Công việc", "Nhóm công việc", "Loại điểm", "Trọng số", "Hiệu lực", ...(data.can.manage ? ["Thao tác"] : [])]}
+                  rows={catalog.map((c) => (
                         <tr key={c.id}>
                           <td>
-                            <strong>{c.title}</strong><details className={s.requirement}><summary>Mã tiêu chuẩn</summary><code>{c.code}</code></details>
+                            <strong>{criterionTitle(c)}</strong>
+                            <details className={s.requirement}><summary>Yêu cầu cần đạt</summary>{c.criteria.map(criterion => <p key={criterion.id}>{criterion.title}</p>)}</details>
+                            <details className={s.requirement}><summary>Mã tiêu chuẩn</summary><code>{c.code}</code></details>
                           </td>
-                          <td>{("group_title" in c && typeof c.group_title === "string" ? c.group_title : data.groups?.find(group => `group:${group.id}` === c.category)?.title) ?? categories[c.category as keyof typeof categories] ?? "Chưa phân nhóm"}</td>
+                          <td className={s.groupCell}>{criterionGroup(c,data.groups ?? [])}</td>
                           <td>{c.score_type === "bonus" ? "Cộng" : "Trừ"}</td>
                           <td className={s.numeric}>{formatNumber(c.weight)}</td>
-                          <td>{formatShortDate(c.effective_from)}{c.ends_on&&<p>Dùng đến {formatShortDate(c.ends_on)}</p>}</td>
-                          {data.can.manage && <td><button onClick={() => edit({kind:"catalog",item:c})}>Sửa bằng phiên bản mới</button></td>}
+                          <td className={s.dateCell}>{formatShortDate(c.effective_from)}{c.ends_on&&<p>Dùng đến {formatShortDate(c.ends_on)}</p>}</td>
+                          {data.can.manage && <td className={s.catalogAction}><button onClick={() => edit({kind:"catalog",item:c})}>Sửa bằng phiên bản mới</button></td>}
                         </tr>
                       ))}
-                    </tbody>
-                  </table>
-                </div>
+                  mobile={catalog.map(c => <article className={s.mobileItem} key={c.id}>
+                    <h3>{criterionTitle(c)}</h3>
+                    <p className={s.groupLabel}><span>Nhóm công việc</span>{criterionGroup(c,data.groups ?? [])}</p>
+                    <details className={s.requirement}><summary>Yêu cầu cần đạt</summary>{c.criteria.map(criterion => <p key={criterion.id}>{criterion.title}</p>)}</details>
+                    <p>{c.score_type === "bonus" ? "Cộng" : "Trừ"} {formatNumber(c.weight)} điểm · Hiệu lực {formatShortDate(c.effective_from)}</p>
+                    {c.ends_on && <p>Dùng đến {formatShortDate(c.ends_on)}</p>}
+                    <details className={s.requirement}><summary>Mã tiêu chuẩn</summary><code>{c.code}</code></details>
+                    {data.can.manage && <button onClick={() => edit({kind:"catalog",item:c})}>Sửa bằng phiên bản mới</button>}
+                  </article>)}
+                />
               </section>
               {data.can.manage && setupSection === "qc" && (
                 <details className={s.section}><summary>Nhập và quản lý danh mục nâng cao</summary>

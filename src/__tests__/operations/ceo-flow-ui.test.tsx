@@ -4,6 +4,7 @@ import {render,screen,fireEvent,waitFor,cleanup,within} from '@testing-library/r
 import {QualityWorkspace} from '@/components/operations/quality-workspace';
 import type {Workspace} from '@/lib/operations/contracts';
 import type {QualityWorkspace as QualityData} from '@/lib/operations/quality-contracts';
+import source from '@/lib/operations/ceo-workbook.json';
 vi.mock('@/components/ui/icon',()=>({Icon:()=>null}));
 const branch='11111111-1111-4111-8111-111111111111';
 const workspace={userId:'owner',isCeo:true,branches:[{id:branch,name:'Quán thử',capabilities:['approve_policy']}],people:[],members:[],standards:[],runs:[],todos:[]} as unknown as Workspace;
@@ -62,5 +63,50 @@ describe('CEO and manager Hub journey',()=>{
   fireEvent.click(within(nav).getByRole('button',{name:'5. Điểm và thưởng'}));
   expect(await screen.findByRole('button',{name:'Chính sách mới'})).toBeInTheDocument();
   await waitFor(()=>expect(fetchMock.mock.calls.every(([,init])=>!init?.method)).toBe(true));
+ });
+ it('places the work group in its own adjacent column, not below the work title',async()=>{
+  fetchMock.mockResolvedValue({ok:true,json:async()=>({...data,total:1,groups:[{id:'space',title:'Không gian và trải nghiệm'}],rows:[{id:'run',title:'Khu vực pha chế',code:'WS-0001',category:'group:space',frequency:'daily',manager_ids:[],quality:'unknown',state:'pending',original_due_at:'2026-10-22T16:59:00Z',criteria:[],checks:[]}]})});
+  show();
+  const heading=await screen.findByRole('columnheader',{name:'Nhóm công việc'});
+  expect(heading.previousElementSibling).toHaveTextContent('Công việc');
+  const table=screen.getByRole('table');
+  const row=within(table).getByText('1. Khu vực pha chế').closest('tr')!;
+  const cells=within(row).getAllByRole('cell');
+  expect(cells[0]).not.toHaveTextContent('Không gian và trải nghiệm');
+  expect(cells[1]).toHaveTextContent('Không gian và trải nghiệm');
+  expect(screen.getAllByText('Nhóm công việc').length).toBeGreaterThan(1);
+ });
+ it('removes only the repeated assignment list and keeps its branch-work navigation',async()=>{
+  const assignment={family_id:'family-one',manager_ids:['manager']};
+  fetchMock.mockImplementation(async(url:string)=>({ok:true,json:async()=>url==='/api/operations/library'?{libraries:[],applications:[]}:{...data,assignments:[assignment]}}));
+  const localWorkspace={...workspace,people:[{id:'manager',name:'Người phụ trách thử'}],standards:[{family_id:'family-one',title:'Thái độ'}]} as unknown as Workspace;
+  show('settings',{workspace:localWorkspace,configuration:(_data,target)=><p>{target==='members'?'Người tại chi nhánh':'Danh sách công việc có phân công'}</p>});
+  const nav=await screen.findByRole('navigation',{name:'Các bước thiết lập Hub'});
+  fireEvent.click(within(nav).getByRole('button',{name:'3. Người và quyền'}));
+  expect(screen.getByText('Đã phân công quản lý cho 1 công việc.')).toBeInTheDocument();
+  expect(screen.queryByText(/Thái độ:.*Người phụ trách thử/)).toBeNull();
+  fireEvent.click(screen.getByRole('button',{name:'Xem công việc chi nhánh'}));
+  expect(screen.getByText('Danh sách công việc có phân công')).toBeInTheDocument();
+  expect(assignment.manager_ids).toEqual(['manager']);
+  expect(fetchMock.mock.calls.every(([,init])=>!init?.method)).toBe(true);
+ });
+ it('shows all 34 QC criteria in Excel order with the original groups and requirements',async()=>{
+  const catalog=source.rows.map(row=>({id:`c${row.number}`,family_id:`f${row.number}`,standard_id:`s${row.number}`,code:`WS-00000000000000000000000000000000-${String(row.number).padStart(4,'0')}`,title:row.title,group_title:row.group,category:'group:source',score_type:row.points>0?'bonus':'deduct',weight:Math.abs(row.points),criteria:[{id:`requirement${row.number}`,title:row.requirement}],effective_from:'2026-10-20',version:1})).reverse();
+  fetchMock.mockImplementation(async(url:string)=>({ok:true,json:async()=>url==='/api/operations/library'?{libraries:[],applications:[]}:{...data,catalog}}));
+  show('settings');
+  const nav=await screen.findByRole('navigation',{name:'Các bước thiết lập Hub'});
+  fireEvent.click(within(nav).getByRole('button',{name:'4. Tiêu chí QC'}));
+  const table=screen.getByRole('table');
+  const rows=within(table).getAllByRole('row').slice(1);
+  expect(rows).toHaveLength(34);
+  source.rows.forEach((item,index)=>{
+   const cells=within(rows[index]).getAllByRole('cell');
+   expect(cells[0]).toHaveTextContent(`${item.number}. ${item.title}`);
+   expect(cells[0]).toHaveTextContent(item.requirement);
+   expect(cells[1]).toHaveTextContent(item.group);
+  });
+  expect(catalog[0].code).toMatch(/0034$/);
+  expect(screen.queryByRole('button',{name:'Tạo đợt QC'})).toBeNull();
+  expect(fetchMock.mock.calls.every(([,init])=>!init?.method)).toBe(true);
  });
 });
