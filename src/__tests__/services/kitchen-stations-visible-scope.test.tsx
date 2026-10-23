@@ -48,7 +48,7 @@ describe("phạm vi trạm chế biến nhìn thấy", () => {
   it("hiện chi nhánh trong hộp tạo trạm và đóng không ghi dữ liệu", async () => {
     render(<KitchenStationsCard branchId="a" />);
     await waitFor(() => expect(mocks.stations).toHaveBeenCalledWith("a"));
-    fireEvent.click(screen.getByRole("button", { name: "Tạo trạm đầu tiên" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Tạo trạm đầu tiên" }));
     expect(screen.getByRole("dialog")).toHaveAccessibleDescription("Chi nhánh: Quán A");
     expect(screen.getByRole("textbox", { name: "Tên trạm" })).toBeInTheDocument();
     expect(screen.getByRole("switch", { name: "Tự động in phiếu" })).toBeChecked();

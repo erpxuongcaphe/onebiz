@@ -13,6 +13,12 @@
 .requirement { margin:6px 0; max-width:520px; }
 .requirement summary { color:#1856a7; cursor:pointer; min-height:28px; padding-block:4px; font-size:13px; }
 .requirement p { font-size:13px; line-height:1.5; white-space:normal; overflow-wrap:anywhere; }
+.groupCell { min-width:150px; max-width:220px; color:#43536a; }
+.dateCell { min-width:112px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.catalogAction { min-width:190px; }
+.groupLabel { display:grid; gap:3px; margin:8px 0; color:#43536a; font-size:13px; }
+.groupLabel > span { color:#657085; font-size:12px; }
+.assignmentSummary { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-top:12px; padding-top:12px; border-top:1px solid #dce2eb; }
 .ruleOptions { border-block:1px solid #dce2eb; padding:10px 0; }
 .ruleOptions > summary { cursor:pointer; color:#244f93; font-weight:600; padding-block:4px; }
 .ruleOptions[open] > summary { margin-bottom:12px; }
