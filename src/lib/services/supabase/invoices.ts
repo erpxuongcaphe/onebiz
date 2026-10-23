@@ -1,3 +1,4 @@
+import {getFnbInvoiceItemNotes} from "./fnb-invoice-item-notes";
 import type {FnbServiceFilterOptions} from "@/components/shared/fnb-invoice-service-filter";
 import type {FnbInvoiceContext as PaidFnbContext} from "@/lib/utils/fnb-invoice-context";
 import {readFnbInvoiceContext, FNB_ORDER_CONTEXT_SELECT} from "@/lib/utils/fnb-invoice-context";
@@ -653,7 +654,7 @@ export async function getInvoiceItems(
   // không có tenant_id direct, dùng FK qua invoice).
   const { data: inv } = await supabase
     .from("invoices")
-    .select("id")
+    .select("id, source")
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
     .maybeSingle();
@@ -673,6 +674,8 @@ export async function getInvoiceItems(
     return [];
   }
 
+  const notes=inv.source === "fnb" && data?.length ? await getFnbInvoiceItemNotes(invoiceId) : new Map<string,string>();
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((row: any) => ({
     id: row.id,
@@ -689,7 +692,7 @@ export async function getInvoiceItems(
     vatAmount: Number(row.vat_amount ?? 0),
     total: Number(row.total ?? 0),
     unit: row.unit ?? undefined,
-    note: row.note ?? undefined, // 00208
+    note: row.note ?? notes.get(row.id) ?? undefined,
   }));
 }
 

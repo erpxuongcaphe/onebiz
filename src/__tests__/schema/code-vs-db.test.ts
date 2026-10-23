@@ -47,6 +47,7 @@ const RPC = new Set(schema.rpc as string[]);
  * dưới sẽ BẮT XOÁ dòng ngay khi dump đã có (sau `node scripts/dump-db-schema.mjs`).
  */
 const RPC_CHO_MIGRATION = new Map<string, string>([
+  ["get_fnb_invoice_item_notes_20261023", "202610230006_fnb_invoice_item_notes.sql"],
   ["get_fnb_invoice_filter_options_20261023", "202610230005_fnb_invoice_service_filters.sql"],
   ["get_invoice_list_summary_fnb_context_20261023", "202610230005_fnb_invoice_service_filters.sql"],
   ["fnb_reconcile_shift_totals_20261022", "202610220002_fnb_shift_totals_reconciliation.sql"],

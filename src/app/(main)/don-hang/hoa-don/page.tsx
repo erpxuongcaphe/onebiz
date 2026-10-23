@@ -1,4 +1,5 @@
 "use client";
+import {InvoiceItemName} from "@/components/shared/invoice-item-name";
 import {FnbInvoiceServiceFilter,type FnbServiceFilterOptions} from "@/components/shared/fnb-invoice-service-filter";
 import {getFnbInvoiceFilterOptions} from "@/lib/services/supabase/invoices";
 import {FnbInvoiceContext} from "@/components/shared/fnb-invoice-context";
@@ -246,7 +247,7 @@ function InvoiceDetail({
             label: "Thông tin",
             content: (
               <div className="space-y-4">
-                {invoice.source === "fnb" && <div className="rounded-lg border p-3"><FnbInvoiceContext value={invoice}/></div>}
+                {invoice.source === "fnb" && <div className="rounded-md border px-3 py-2"><FnbInvoiceContext value={invoice}/></div>}
                 <DetailHeader
                   title={invoice.customerName}
                   code={invoice.code}
@@ -347,7 +348,7 @@ function InvoiceDetail({
                   <DetailItemsTable
                     columns={[
                       { header: "Mã hàng", accessor: "productCode" as never },
-                      { header: "Tên hàng", accessor: "productName" as never },
+                      { header: "Tên hàng", accessor: (item: Record<string, unknown>) => <InvoiceItemName name={String(item.productName ?? "")} note={item.note as string | undefined}/> },
                       {
                         header: "Đơn vị",
                         accessor: (item: Record<string, unknown>) =>

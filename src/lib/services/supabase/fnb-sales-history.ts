@@ -1,3 +1,4 @@
+import {getFnbInvoiceItemNotes} from "./fnb-invoice-item-notes";
 import {readFnbInvoiceContext, FNB_ORDER_CONTEXT_SELECT} from "@/lib/utils/fnb-invoice-context";
 import { getClient, getCurrentTenantId, handleError } from "./base";
 import { readHistoryPages } from "./read-history-pages";
@@ -89,9 +90,10 @@ export async function getFnbHistoryItems(row:FnbSaleRow,branchId:string):Promise
   if(parent.error) handleError(parent.error,"fnbHistory.detail");
   const result=row.invoiceId ? await db.from("invoice_items_scoped").select("id,product_name,quantity,unit_price,total,note").eq("invoice_id",row.invoiceId) : await db.from("kitchen_order_items").select("id,product_name,quantity,unit_price,note,variant_label,cancelled_qty").eq("kitchen_order_id",row.id);
   if(result.error) handleError(result.error,"fnbHistory.items");
+  const notes=row.invoiceId && result.data?.length ? await getFnbInvoiceItemNotes(row.invoiceId) : new Map<string,string>();
   return (result.data ?? []).map(value=>{
     const item=value as unknown as Record<string,unknown>;
     const quantity=Number(item.quantity ?? 0), price=Number(item.unit_price ?? 0);
-    return {id:String(item.id),name:String(item.product_name ?? "—"),quantity,unitPrice:price,total:Number(item.total ?? quantity*price),note:[item.variant_label,item.note,Number(item.cancelled_qty ?? 0)>0 ? `Đã hủy ${item.cancelled_qty}` : null].filter(Boolean).join(" · ")};
+    return {id:String(item.id),name:String(item.product_name ?? "—"),quantity,unitPrice:price,total:Number(item.total ?? quantity*price),note:[item.variant_label,item.note ?? notes.get(String(item.id)),Number(item.cancelled_qty ?? 0)>0 ? `Đã hủy ${item.cancelled_qty}` : null].filter(Boolean).join(" · ")};
   });
 }

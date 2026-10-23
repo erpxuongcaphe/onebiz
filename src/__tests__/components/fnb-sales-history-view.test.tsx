@@ -13,7 +13,7 @@ describe("cashier sales history",()=>{
   render(<FnbSalesHistoryView {...props()}/>);await screen.findByText("25 kết quả · 1/2");
   expect(mock.items).not.toHaveBeenCalled();fireEvent.click(screen.getByRole("button",{name:"Trang sau"}));expect(screen.getByText("25 kết quả · 2/2")).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("Tìm đơn bán hàng"),{target:{value:"HD24"}});expect(screen.getByText("1 kết quả · 1/1")).toBeInTheDocument();expect(screen.getByRole("button",{name:/Đã thanh toán 25/})).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button",{name:/HD24/}));await screen.findByText("Cà phê");expect(mock.items).toHaveBeenCalledTimes(1);expect(screen.getByText("Ít đường")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button",{name:/HD24/}));await screen.findByText("Cà phê");expect(mock.items).toHaveBeenCalledTimes(1);expect(screen.getByText("Ghi chú: Ít đường")).toBeInTheDocument();
   fireEvent.click(screen.getByLabelText("Quay lại danh sách"));expect(screen.queryByRole("region",{name:"Chi tiết đơn bán hàng"})).not.toBeInTheDocument();expect(mock.history).toHaveBeenCalledTimes(1);
  });
  it("does not treat lack of cash permission as zero or block order history",async()=>{
