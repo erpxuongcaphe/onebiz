@@ -27,6 +27,12 @@ beforeAll(async () => {
 }, 30000);
 
 describe("real application CSS color fallback", () => {
+  it("resolves the build plugin independently of Turbopack generated config location", async () => {
+    const config = (await import(path.resolve("postcss.config.mjs"))).default;
+    const pluginPath = Object.keys(config.plugins).find(key => key.endsWith("postcss-fnb-legacy-colors.cjs"));
+    expect(path.isAbsolute(pluginPath!)).toBe(true);
+    expect(typeof require(pluginPath!)).toBe("function");
+  });
   it("keeps every original rule/declaration unchanged, adds a single support gate", () => {
     const root = postcss.parse(result);
     expect(root.last.name).toBe("supports");
@@ -65,3 +71,4 @@ describe("real application CSS color fallback", () => {
     expect(processed.css).toBe(css);
   });
 });
+

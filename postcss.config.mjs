@@ -1,7 +1,10 @@
+import path from "node:path";
+
 const config = {
   plugins: {
     "@tailwindcss/postcss": {},
-    "./scripts/postcss-fnb-legacy-colors.cjs": {},
+    // Turbopack loads PostCSS from .next/build; resolve local plugins from the project.
+    [path.resolve(process.cwd(), "scripts/postcss-fnb-legacy-colors.cjs")]: {},
   },
 };
 
