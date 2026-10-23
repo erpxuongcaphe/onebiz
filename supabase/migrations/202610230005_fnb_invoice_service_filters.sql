@@ -1,5 +1,6 @@
 -- Read-only service filters: identical predicates for lists, KPI and exports.
 begin;
+create index if not exists kitchen_orders_invoice_context_20261023_idx on public.kitchen_orders(tenant_id,branch_id,invoice_id) where invoice_id is not null;
 create or replace function public.fnb_table_label_20261023(public.invoices)
 returns text language sql stable set search_path=public as $$
  select case when ($1).source is distinct from 'fnb' then null
