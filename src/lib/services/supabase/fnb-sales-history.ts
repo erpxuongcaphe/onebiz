@@ -1,4 +1,4 @@
-import {getFnbInvoiceItemNotes} from "./fnb-invoice-item-notes";
+import {getFnbInvoiceItemDetails,type FnbInvoiceItemDetail} from "./fnb-invoice-item-details";
 import {readFnbInvoiceContext, FNB_ORDER_CONTEXT_SELECT} from "@/lib/utils/fnb-invoice-context";
 import { getClient, getCurrentTenantId, handleError } from "./base";
 import { readHistoryPages } from "./read-history-pages";
@@ -82,18 +82,19 @@ export async function getFnbDayCash(branchId:string,day:string):Promise<FnbDayCa
   return data as unknown as FnbDayCash;
 }
 
-export interface FnbHistoryItem {id:string;name:string;quantity:number;unitPrice:number;total:number;note:string}
+export interface FnbHistoryItem {id:string;name:string;quantity:number;unitPrice:number;total:number;note:string;fnbOptions?:unknown;variantLabel?:string;fnbDetailsUnavailable?:boolean}
 export async function getFnbHistoryItems(row:FnbSaleRow,branchId:string):Promise<FnbHistoryItem[]> {
   const db=getClient(),tenant=await getCurrentTenantId();
   // Verify the selected record is still in this branch before fetching scoped children.
   const parent=await db.from(row.invoiceId ? "invoices" : "kitchen_orders").select("id").eq("id",row.id).eq("tenant_id",tenant).eq("branch_id",branchId).single();
   if(parent.error) handleError(parent.error,"fnbHistory.detail");
-  const result=row.invoiceId ? await db.from("invoice_items_scoped").select("id,product_name,quantity,unit_price,total,note").eq("invoice_id",row.invoiceId) : await db.from("kitchen_order_items").select("id,product_name,quantity,unit_price,note,variant_label,cancelled_qty").eq("kitchen_order_id",row.id);
+  const result=row.invoiceId ? await db.from("invoice_items_scoped").select("id,product_name,quantity,unit_price,total,note").eq("invoice_id",row.invoiceId) : await db.from("kitchen_order_items").select("id,product_name,quantity,unit_price,note,variant_label,cancelled_qty,modifier_selections").eq("kitchen_order_id",row.id);
   if(result.error) handleError(result.error,"fnbHistory.items");
-  const notes=row.invoiceId && result.data?.length ? await getFnbInvoiceItemNotes(row.invoiceId) : new Map<string,string>();
+  let details=new Map<string,FnbInvoiceItemDetail>();let detailsUnavailable=false;
+  if(row.invoiceId && result.data?.length){try{details=await getFnbInvoiceItemDetails([row.invoiceId]);if(result.data.some(item=>!details.has(String(item.id))))throw new Error("Chưa tải đủ tùy chọn món.");}catch(error){console.warn("[fnbHistory.options]",error);detailsUnavailable=true;}}
   return (result.data ?? []).map(value=>{
     const item=value as unknown as Record<string,unknown>;
     const quantity=Number(item.quantity ?? 0), price=Number(item.unit_price ?? 0);
-    return {id:String(item.id),name:String(item.product_name ?? "—"),quantity,unitPrice:price,total:Number(item.total ?? quantity*price),note:[item.variant_label,item.note ?? notes.get(String(item.id)),Number(item.cancelled_qty ?? 0)>0 ? `Đã hủy ${item.cancelled_qty}` : null].filter(Boolean).join(" · ")};
+    return {id:String(item.id),name:String(item.product_name ?? "—"),quantity,unitPrice:price,total:Number(item.total ?? quantity*price),note:[item.note ?? details.get(String(item.id))?.note,Number(item.cancelled_qty ?? 0)>0 ? `Đã hủy ${item.cancelled_qty}` : null].filter(Boolean).join(" · "),fnbOptions:row.invoiceId?details.get(String(item.id))?.modifier_selections:item.modifier_selections,fnbDetailsUnavailable:detailsUnavailable,variantLabel:String(details.get(String(item.id))?.variant_label??item.variant_label??"")};
   });
 }

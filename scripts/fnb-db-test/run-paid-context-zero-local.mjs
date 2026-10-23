@@ -146,9 +146,37 @@ try {
  const exact=(await db.query(`select count(*) n,coalesce(sum(total),0) total from invoices i where branch_id=$1 and status='completed' and fnb_table_label_20261023(i)='TN 03' and fnb_area_label_20261023(i)='Trong nhà'`,[id(3)])).rows[0];
  assert(Number(filtered.so_dong_theo_bo_loc)===Number(exact.n) && Number(filtered.gia_tri_hoan_thanh)===Number(exact.total),'KPI uses identical service predicate as paginated list/export');
  let denied=false;try{await db.query('select get_fnb_invoice_filter_options_20261023($1)',[id(999)]);}catch(e){denied=/BRANCH_ACCESS_DENIED/.test(e.message);}assert(denied,'options reject foreign branch');
+
+ // Invoice option snapshots + warehouse reconciliation read contract.
+ const beforeOptionInstall=(await db.query('select to_jsonb(i) row from invoices i order by id')).rows;
+ const optionMigration=fs.readFileSync('supabase/migrations/202610230007_fnb_invoice_option_details.sql','utf8');
+ await db.exec(optionMigration);await db.exec(optionMigration);
+ assert(Number((await db.query('select count(*) n from fnb_invoice_item_options_20261023')).rows[0].n)===0,'option install never backfills old bills');
+ assert(JSON.stringify(beforeOptionInstall)===JSON.stringify((await db.query('select to_jsonb(i) row from invoices i order by id')).rows),'option install preserves historical invoice money');
+ await create(410);await db.exec(`update kitchen_order_items set variant_label='Size L',modifier_selections='[{"groupName":"Đá/Nóng","options":[{"label":"Nóng"}]}]'::jsonb where id='${id(411)}';`);
+ const optionStockBefore=await stock();const optionPaid=await pay(410);
+ const optionDetails=(await db.query('select * from get_fnb_invoice_item_details_20261023($1)',[[optionPaid.invoice_id]])).rows;
+ assert(optionDetails.length===1&&optionDetails[0].variant_label==='Size L'&&optionDetails[0].modifier_selections[0].options[0].label==='Nóng'&&optionDetails[0].detail_source==='snapshot','real checkout snapshots size and original options');
+ await db.exec(`update kitchen_order_items set modifier_selections='[{"groupName":"Đá/Nóng","options":[{"label":"Đá"}]}]'::jsonb,variant_label='Renamed' where id='${id(411)}';`);
+ assert(JSON.stringify((await db.query('select * from get_fnb_invoice_item_details_20261023($1)',[[optionPaid.invoice_id]])).rows)===JSON.stringify(optionDetails),'later kitchen/menu edits cannot rewrite captured choices');
+ const optionStock=await stock();await pay(410);
+ assert(JSON.stringify(optionStock)===JSON.stringify(await stock())&&JSON.stringify(optionStockBefore)!==JSON.stringify(optionStock),'snapshot preserves original stock posting and payment replay');
+ assert(Number((await db.query('select count(*) n from fnb_invoice_item_options_20261023')).rows[0].n)===1,'payment retry never duplicates option snapshot');
+ const legacyOptions=(await db.query('select * from get_fnb_invoice_item_details_20261023($1)',[[paid.invoice_id]])).rows;
+ assert(legacyOptions[0].detail_source==='legacy'&&legacyOptions[0].modifier_selections===null,'legacy missing choices are not guessed');
+ assert(!(await db.query("select has_table_privilege('authenticated','fnb_invoice_item_options_20261023','insert') ok")).rows[0].ok,'clients cannot edit captured choices');
+ assert(!(await db.query("select has_function_privilege('anon','get_fnb_invoice_item_details_20261023(uuid[])','execute') ok")).rows[0].ok,'anonymous cannot read choices');
+ await db.exec(`create or replace function user_has_permission(uuid,text) returns boolean language sql as $$select $2='inventory.view'$$;`);
+ assert((await db.query('select get_fnb_invoice_filter_options_20261023($1) result',[id(3)])).rows[0].result.areas.length>0,'warehouse branch user can read invoice service filters');
+ assert((await db.query('select * from get_fnb_invoice_item_notes_20261023($1)',[paid.invoice_id])).rows.length>0,'warehouse branch user can read notes');
+ assert((await db.query('select * from get_fnb_invoice_item_details_20261023($1)',[[optionPaid.invoice_id]])).rows.length===1,'warehouse branch user can read recorded options');
+ denied=false;try{await db.query('select * from get_fnb_invoice_item_details_20261023($1)',[[optionPaid.invoice_id,id(900)]]);}catch(e){denied=/INVOICE_ACCESS_DENIED/.test(e.message);}assert(denied,'mixed allowed/foreign batch fails closed');
+ denied=false;try{await db.query('select * from get_invoice_list_summary_fnb_context_20261023($1)',[id(3)]);}catch(e){denied=/FNB_SALES_SUMMARY_PERMISSION_DENIED/.test(e.message);}assert(denied,'warehouse read never grants sales summary');
+ denied=false;try{await db.query('select * from get_fnb_invoice_item_details_20261023($1)',[[]]);}catch(e){denied=/INVOICE_IDS_INVALID/.test(e.message);}assert(denied,'unbounded/empty detail requests rejected');
  await db.exec(`create or replace function user_has_permission(uuid,text) returns boolean language sql as $$select false$$;`);
  denied=false;try{await db.query('select get_fnb_invoice_filter_options_20261023($1)',[id(3)]);}catch(e){denied=/INVOICE_VIEW_REQUIRED/.test(e.message);}assert(denied,'options enforce invoice/POS viewing permission');
  denied=false;try{await db.query('select * from get_fnb_invoice_item_notes_20261023($1)',[withNotes.invoice_id]);}catch(e){denied=/INVOICE_VIEW_REQUIRED/.test(e.message);}assert(denied,'note reader enforces view permission');
- console.log('PASS: item notes snapshot + exact legacy resolver/no backfill/auth/branch,  real payment/BOM chain, zero bill stock posting/no cash, active shift/invalid/empty guards, sibling and final table release, payment replay, frozen table/zone/times/POS note, no old invoice backfill. Auth adapters remain bounded fixture stubs.');
+ denied=false;try{await db.query('select * from get_fnb_invoice_item_details_20261023($1)',[[optionPaid.invoice_id]]);}catch(e){denied=/INVOICE_VIEW_REQUIRED/.test(e.message);}assert(denied,'options reader still rejects users without document/warehouse permission');
+ console.log('PASS: warehouse invoice filters/options, immutable checkout choices + size, legacy exact-source/no guessed defaults, no write/summary/foreign-branch access, item notes snapshot + exact legacy resolver/no backfill/auth/branch,  real payment/BOM chain, zero bill stock posting/no cash, active shift/invalid/empty guards, sibling and final table release, payment replay, frozen table/zone/times/POS note, no old invoice backfill. Auth adapters remain bounded fixture stubs.');
 } catch(e){console.error(e.message,e.where??'');process.exitCode=1;} finally {await db.close();fs.rmSync(temporary,{recursive:true,force:true});}
 

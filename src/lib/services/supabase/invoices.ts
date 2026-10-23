@@ -1,4 +1,4 @@
-import {getFnbInvoiceItemNotes} from "./fnb-invoice-item-notes";
+import {getFnbInvoiceItemDetails,type FnbInvoiceItemDetail} from "./fnb-invoice-item-details";
 import type {FnbServiceFilterOptions} from "@/components/shared/fnb-invoice-service-filter";
 import type {FnbInvoiceContext as PaidFnbContext} from "@/lib/utils/fnb-invoice-context";
 import {readFnbInvoiceContext, FNB_ORDER_CONTEXT_SELECT} from "@/lib/utils/fnb-invoice-context";
@@ -640,6 +640,9 @@ export interface InvoiceItemRow {
   vatAmount: number;
   total: number;
   unit?: string;
+  fnbOptions?:unknown;
+  variantLabel?:string;
+  fnbDetailsUnavailable?:boolean;
   /** 00208: ghi chú từng món — in ra phiếu. */
   note?: string;
 }
@@ -652,12 +655,13 @@ export async function getInvoiceItems(
 
   // Verify invoice thuộc tenant trước (defense-in-depth — invoice_items
   // không có tenant_id direct, dùng FK qua invoice).
-  const { data: inv } = await supabase
+  const { data: inv, error: invoiceError } = await supabase
     .from("invoices")
     .select("id, source")
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
     .maybeSingle();
+  if(invoiceError)handleError(invoiceError,"getInvoiceItems.invoice");
   if (!inv) return [];
 
   // Schema invoice_items không có cột product_code — phải join `products:products_scoped(code)`.
@@ -670,11 +674,14 @@ export async function getInvoiceItems(
     .eq("invoice_id", invoiceId);
 
   if (error) {
-    console.warn("[getInvoiceItems]", error.message);
-    return [];
+    handleError(error,"getInvoiceItems");
   }
 
-  const notes=inv.source === "fnb" && data?.length ? await getFnbInvoiceItemNotes(invoiceId) : new Map<string,string>();
+  let details=new Map<string,FnbInvoiceItemDetail>();let detailsUnavailable=false;
+  if(inv.source === "fnb" && data?.length) {
+    try {details=await getFnbInvoiceItemDetails([invoiceId]);if(data.some(row=>!details.has(row.id)))throw new Error("Chưa tải đủ tùy chọn món.");}
+    catch(error){console.warn("[getInvoiceItems.options]",error);detailsUnavailable=true;}
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((row: any) => ({
@@ -692,7 +699,10 @@ export async function getInvoiceItems(
     vatAmount: Number(row.vat_amount ?? 0),
     total: Number(row.total ?? 0),
     unit: row.unit ?? undefined,
-    note: row.note ?? notes.get(row.id) ?? undefined,
+    note: row.note ?? details.get(row.id)?.note ?? undefined,
+    fnbOptions: details.get(row.id)?.modifier_selections,
+    variantLabel: details.get(row.id)?.variant_label ?? undefined,
+    fnbDetailsUnavailable: detailsUnavailable,
   }));
 }
 
