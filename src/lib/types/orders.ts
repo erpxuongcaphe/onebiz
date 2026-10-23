@@ -1,7 +1,8 @@
+import type { FnbInvoiceContext } from "@/lib/utils/fnb-invoice-context";
 import type { BaseLineItem, StatusChange } from "./common";
 
 // Mục trong danh sách hóa đơn
-export interface Invoice {
+export interface Invoice extends FnbInvoiceContext {
   id: string;
   code: string;
   /** Mã đơn gốc (DH đặt hàng / NH nháp) trước khi hoàn tất — truy vết (00169). */

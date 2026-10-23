@@ -180,7 +180,7 @@ export function FnbPaymentDialog({
     setSubmitting(true);
     setSubmitError(false);
     const payload: FnbPaymentConfirmPayload = {
-      paymentMethod: method, paid: totalPaid,
+      paymentMethod: method, paid: isFreeOrder ? 0 : totalPaid,
       customerName: customerName.trim() || "Khách lẻ",
     };
     if (tipAmount > 0) {
@@ -189,7 +189,7 @@ export function FnbPaymentDialog({
     if (allowDebt) {
       payload.allowDebt = true;
     }
-    if (method === "mixed") {
+    if (method === "mixed" && !isFreeOrder) {
       payload.paymentBreakdown = { cash: cashAmount, transfer: transferAmount, card: cardAmount };
     }
     try {

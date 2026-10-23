@@ -17,6 +17,7 @@ describe("Invoice export interaction", () => {
     const [exported, columns] = writer.mock.calls[0];
     expect(exported).toHaveLength(437); expect(exported[436].invoiceTypeLabel).toBe("Mang về");
     expect(exported[436].totalAmount).toBe(50000); expect(columns.map((c: {key:string}) => c.key)).toContain("invoiceTypeLabel");
+    expect(columns.map((c: {key:string})=>c.key)).toEqual(expect.arrayContaining(["tableName","tableNumber","areaName","openedAt","paidAt","posNote"]));
     expect(opts.onSuccess).toHaveBeenCalledWith(437); expect(result.current.progress).toBeNull();
   });
   it.each(["cancel", "branch change", "filter change", "unmount"])("does not save stale or partial files after %s", async change => {

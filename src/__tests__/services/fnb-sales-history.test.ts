@@ -39,6 +39,11 @@ describe("F&B sales history boundaries",()=>{
   mock.tables.invoices=[inv("paid")];mock.tables.kitchen_orders=[{...ko("ko","paid","completed"),created_at:"2026-10-19T01:00:00.000Z",restaurant_tables:{name:"TN08"}}];
   expect((await getFnbDayHistory("xtb","2026-10-20")).rows[0].tableName).toBe("TN08");
  });
+ it("preserves paid table/area/times/POS note snapshot after order changes",async()=>{
+  const snapshot={version:1,table_name:"TN 03",table_number:3,area_name:"Trong nhà",opened_at:"2026-10-19T14:00:00Z",paid_at:"2026-10-20T01:00:00Z",pos_note:"Lấy thêm ly"};
+  mock.tables.invoices=[{...inv("paid"),fnb_context:snapshot}];mock.tables.kitchen_orders=[{...ko("ko","paid","completed"),note:"Edited",restaurant_tables:{name:"Renamed"}}];
+  expect((await getFnbDayHistory("xtb","2026-10-20")).rows[0]).toMatchObject({tableName:"TN 03",tableNumber:"3",areaName:"Trong nhà",openedAt:snapshot.opened_at,paidAt:snapshot.paid_at,posNote:"Lấy thêm ly"});
+ });
  it("loads aggregate data only through the guarded server RPC",async()=>{
   const summary={received:100,refunded:25,net:75,methods:{cash:60,transfer:15},completed:1,pending:0,cancelled:1,invoiceValue:100};
   mock.rpc.mockResolvedValue({data:summary,error:null});
