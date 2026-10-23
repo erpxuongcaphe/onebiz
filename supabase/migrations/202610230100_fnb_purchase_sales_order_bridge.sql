@@ -8,7 +8,7 @@ set local lock_timeout='2s';
 do $warehouse_price_records$
 declare definition text; marker text; initialized text;
 begin
- definition:=pg_get_functiondef('public.resolve_sale_price_00363(uuid,uuid,uuid,uuid,text,text,numeric,timestamptz)'::regprocedure);
+ definition:=replace(pg_get_functiondef('public.resolve_sale_price_00363(uuid,uuid,uuid,uuid,text,text,numeric,timestamptz)'::regprocedure),E'\r\n',E'\n');
  marker:=E'begin\n  if auth.uid() is null or v_tenant is null then';
  initialized:=E'begin\n  select null::uuid as id, null::numeric as sell_price into v_variant;\n  select null::uuid as id, null::numeric as price, null::uuid as variant_id, null::numeric as min_qty into v_tier_item;\n  select null::uuid as id, null::numeric as override_price, null::uuid as variant_id into v_platform_price;\n  if auth.uid() is null or v_tenant is null then';
  if position(initialized in definition)=0 then
@@ -52,8 +52,7 @@ begin
  select coalesce(jsonb_agg(x),'[]') into products_json from (
  select p.id,p.code,p.name,p.unit from products p where p.tenant_id=tenant and p.is_active
  and p.product_type='sku' and p.channel is distinct from 'fnb' and p.inventory_role is distinct from 'fnb_menu_item'
- and (not exists(select 1 from fnb_supply_branch_scopes s where s.tenant_id=tenant and s.branch_id=p_branch_id and s.enforcement_enabled)
- or exists(select 1 from fnb_supply_catalog c where c.tenant_id=tenant and c.branch_id=p_branch_id and c.product_id=p.id))
+ -- Recipe approval does not restrict physical supplies requested from Retail.
  and length(trim(p_search))>0 and strpos(lower(p.name||' '||coalesce(p.code,'')),lower(trim(p_search)))>0
  order by p.name,p.id limit 20) x;
  return jsonb_build_object('warehouses',warehouses,'products',products_json);
@@ -95,8 +94,6 @@ begin
  select * into product from products where id=(item->>'productId')::uuid and tenant_id=tenant and is_active
  and product_type='sku' and channel is distinct from 'fnb' and inventory_role is distinct from 'fnb_menu_item' for share;
  if not found then raise exception 'Mặt hàng không còn được phép đặt kho tổng.'; end if;
- if exists(select 1 from fnb_supply_branch_scopes s where s.tenant_id=tenant and s.branch_id=p_branch_id and s.enforcement_enabled)
- and not exists(select 1 from fnb_supply_catalog c where c.tenant_id=tenant and c.branch_id=p_branch_id and c.product_id=product.id) then raise exception 'Mặt hàng chưa thuộc danh mục cấp cho chi nhánh.'; end if;
  price_result:=resolve_sale_price_00363(product.id,null,p_warehouse_id,customer.id,'retail','direct',qty,now());
  price:=(price_result->>'unit_price')::numeric;
  if price is null or price::text in ('NaN','Infinity','-Infinity') or price<0 or (price=0 and not coalesce(product.allow_free_sale,false)) then raise exception 'Mặt hàng chưa có giá bán nội bộ hợp lệ.'; end if;

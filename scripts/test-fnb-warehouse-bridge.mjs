@@ -82,6 +82,9 @@ await test('price initialization is repeatable and rejects an unreviewed resolve
  const definition=await scalar("select pg_get_functiondef('resolve_sale_price_00363(uuid,uuid,uuid,uuid,text,text,numeric,timestamptz)'::regprocedure)");
  await db.exec(patch);
  assert.equal(await scalar("select pg_get_functiondef('resolve_sale_price_00363(uuid,uuid,uuid,uuid,text,text,numeric,timestamptz)'::regprocedure)"),definition);
+ await db.exec(pricingDefinition.replace(/\r?\n/g,'\r\n'));
+ await db.exec(patch);
+ assert.equal((await price()).unit_price,125000);
  await db.exec(pricingDefinition.replace('v_variant record;','v_variant RECORD;'));
  await rejects(()=>db.exec(patch),/WAREHOUSE_ORDER_PRICE_RESOLVER_DEFINITION_CHANGED/);
  await db.exec(definition);
@@ -137,7 +140,14 @@ for(const quantity of [0,-1,'NaN','Infinity',1.00001])await test(`invalid quanti
 await test('duplicate products rejected',()=>rejects(()=>submit(id(111),[...input(),...input()]),/trùng/));
 await test('inactive product rejected',async()=>{await db.exec(`update products set is_active=false where id='${product}'`);await rejects(()=>submit(id(112)),/Mặt hàng/);await db.exec(`update products set is_active=true where id='${product}'`);});
 await test('menu SKU rejected',async()=>{await db.exec(`update products set channel='fnb' where id='${product}'`);await rejects(()=>submit(id(113)),/Mặt hàng/);await db.exec(`update products set channel='retail' where id='${product}'`);});
-await test('opt-in supply catalog enforced in search and submit',async()=>{await db.exec(`insert into fnb_supply_branch_scopes values('${tenant}','${store}',true)`);await rejects(()=>submit(id(114)),/danh mục/);assert.equal((await scalar('select get_fnb_warehouse_order_context($1,$2)',[store,'Sữa'])).products.length,0);await db.exec('delete from fnb_supply_branch_scopes');});
+await test('recipe opt-in does not hide or block physical warehouse supplies',async()=>{
+ await db.exec(`insert into fnb_supply_branch_scopes values('${tenant}','${store}',true)`);
+ assert.equal((await scalar('select get_fnb_warehouse_order_context($1,$2)',[store,'Sữa'])).products.length,2);
+ const requested=await submit(id(114));assert.ok(requested.salesOrderId);
+ assert.equal(await scalar('select count(*)::int from fnb_supply_catalog'),0);
+ assert.equal(await scalar('select count(*)::int from effects'),0);
+ await db.exec('delete from fnb_supply_branch_scopes');
+});
 await test('missing or ambiguous internal customer rejected',async()=>{await db.exec(`update customers set is_active=false`);await rejects(()=>submit(id(115)),/khách nội bộ/);await db.exec(`update customers set is_active=true;insert into customers(id,tenant_id,branch_id,is_internal,is_active,name) select '${id(116)}',tenant_id,branch_id,is_internal,is_active,name from customers`);await rejects(()=>submit(id(115)),/khách nội bộ/);await db.exec(`delete from customers where id='${id(116)}'`);});
 await test('cross-tenant product rejected',async()=>{await db.exec(`update products set tenant_id='${id(999)}' where id='${product}'`);await rejects(()=>submit(id(117)),/Mặt hàng/);await db.exec(`update products set tenant_id='${tenant}' where id='${product}'`);});
 await test('failure after PO creation rolls back PO, both codes and order',async()=>{
