@@ -213,7 +213,7 @@ function ReconciliationCloseShiftDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={next=>{if(!loading)onOpenChange(next);}}>
-        <DialogContent className={cn("flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden [&>button]:size-11",reconcileTransfer?"sm:max-w-3xl":"sm:max-w-xl")}>
+        <DialogContent className={cn("flex w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)] flex-col overflow-hidden [&>button]:size-11",reconcileTransfer?"sm:max-w-3xl":"sm:max-w-xl")}>
           <DialogHeader className="pr-10">
             <DialogTitle className="flex items-center gap-2">
               <Icon name="check_circle" className="text-status-success" />
