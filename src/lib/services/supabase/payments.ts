@@ -394,28 +394,49 @@ export async function getOpenPurchasesBySupplier(
 /**
  * Get payment history for an invoice or purchase order.
  */
+interface DocumentPaymentHistoryRow {
+  id: string;
+  code: string;
+  type: "receipt" | "payment";
+  amount: number;
+  payment_method: string;
+  note: string | null;
+  created_at: string;
+  occurred_at: string | null;
+  transaction_date: string;
+  time_source: string | null;
+  time_reason: string | null;
+  status: string;
+}
+
 export async function getPaymentHistory(
   referenceType: "invoice" | "purchase_order",
   referenceId: string,
 ) {
   const supabase = getClient();
-  const ctx = await getCurrentContext();
+  let branchId: string | undefined;
+  const data = await readHistoryPages<DocumentPaymentHistoryRow>(async (offset, size) => {
+    const { data: response, error } = await supabase.rpc("get_document_payment_history_scoped" as never, {
+      p_reference_type: referenceType, p_reference_id: referenceId, p_offset: offset, p_limit: size,
+    } as never);
+    if (error) handleError(error, "getPaymentHistory");
+    const page = response as unknown as {
+      reference_type?: string; reference_id?: string; branch_id?: string;
+      offset?: number; limit?: number; total_count?: number; rows?: DocumentPaymentHistoryRow[];
+    } | null;
+    if (!page || page.reference_type !== referenceType || page.reference_id !== referenceId
+      || typeof page.branch_id !== "string" || !page.branch_id
+      || (branchId !== undefined && branchId !== page.branch_id)
+      || page.offset !== offset || page.limit !== size
+      || typeof page.total_count !== "number" || !Number.isSafeInteger(page.total_count)
+      || page.total_count < 0 || !Array.isArray(page.rows)) {
+      throw new Error("Chưa xác nhận được lịch sử thanh toán. Vui lòng tải lại.");
+    }
+    branchId = page.branch_id;
+    return { data: page.rows, error: null, count: page.total_count };
+  });
 
-  // 20/07: lấy cả status — phiếu ĐÃ HỦY vẫn hiện (giữ vết đối soát) nhưng
-  // UI gắn badge và không cộng vào tổng (vụ HD001438 hủy PT000117).
-  // Cast any: generated types chưa biết cột status của cash_transactions.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase.from("cash_transactions") as any)
-    .select("id, code, type, amount, payment_method, note, created_at, occurred_at, transaction_date, time_source, time_reason, status")
-    .eq("tenant_id", ctx.tenantId)
-    .eq("reference_type", referenceType)
-    .eq("reference_id", referenceId)
-    .order("created_at", { ascending: false });
-
-  if (error) handleError(error, "getPaymentHistory");
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return ((data ?? []) as any[]).map((row) => ({
+  return data.map((row) => ({
     id: row.id,
     code: row.code,
     type: row.type as "receipt" | "payment",

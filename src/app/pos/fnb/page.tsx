@@ -2983,11 +2983,15 @@ function FnbPosPageInner() {
   const handleCloseShift = useCallback(
     async (actualCash: number, note?: string, reconciliation?: ShiftTotalsInput) => {
       if (!currentShift) return;
-      if(!reconciliation)throw new Error("Đối chiếu tổng chuyển khoản trước khi chốt ca.");
-      const report = await closeShift({ shiftId: currentShift.id, actualCash, note, reconciliation });
+      const canReconcileShift = hasPermission(PERMISSIONS.SHIFTS_RECONCILE_ANY)
+        || hasPermission(PERMISSIONS.SHIFTS_RECONCILE_OWN_BRANCH);
+      if (canReconcileShift && !reconciliation) throw new Error("Đối chiếu tổng chuyển khoản trước khi chốt ca.");
+      const closed = await closeShift({ shiftId: currentShift.id, actualCash, note,
+        reconciliation: canReconcileShift ? reconciliation : undefined });
+      const report = closed.report;
 
       // In báo cáo Z tự động sau khi đóng ca thành công
-      try {
+      if (canReconcileShift && report) try {
         printShiftReport({
           branchId: branchId ?? undefined,
           type: "Z",
@@ -3028,11 +3032,13 @@ function FnbPosPageInner() {
 
       toast({
         title: "Đã đóng ca",
-        description: `Tiền mặt: ${formatNumber(report.cashDifference??0)}đ; chuyển khoản: ${formatNumber(report.transferDifference??0)}đ chênh lệch.`,
-        variant: (report.cashDifference??0)===0&&(report.transferDifference??0)===0 ? "success":"warning",
+        description: canReconcileShift && report
+          ? `Chênh lệch tiền mặt: ${formatNumber(report.cashDifference)}đ; chuyển khoản: ${report.transferDifference == null ? "chưa đối soát" : `${formatNumber(report.transferDifference)}đ`}.`
+          : canReconcileShift ? "Ca đã đóng. Báo cáo chưa tải được; xem lại tại Lịch sử ca." : "Đã ghi nhận tiền thực đếm để đối chiếu.",
+        variant: !canReconcileShift || (report && report.cashDifference === 0 && report.transferDifference === 0) ? "success" : "warning",
       });
     },
-    [currentShift, settings, currentBranch, user, toast]
+    [currentShift, settings, currentBranch, user, toast, hasPermission]
   );
 
   // ── Void kitchen order (trước khi thanh toán) ──

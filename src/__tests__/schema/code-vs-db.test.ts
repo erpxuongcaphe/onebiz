@@ -27,6 +27,7 @@ import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import schema from "./db-schema.json";
+import privateContracts from "../../../supabase/contracts/private-rpcs.json";
 
 const ROOT = path.resolve(__dirname, "../../..");
 const SRC = path.join(ROOT, "src");
@@ -46,6 +47,9 @@ const RPC = new Set(schema.rpc as string[]);
  * dưới sẽ BẮT XOÁ dòng ngay khi dump đã có (sau `node scripts/dump-db-schema.mjs`).
  */
 const RPC_CHO_MIGRATION = new Map<string, string>([
+  ["fnb_reconcile_shift_totals_20261022", "202610220002_fnb_shift_totals_reconciliation.sql"],
+  ...privateContracts.functions.filter(({name}) => !(schema.rpc as string[]).includes(name))
+    .map(({name}): [string, string] => [name, privateContracts.migration]),
   ["clone_bom_for_branch_atomic", "202610230001_atomic_branch_bom_clone.sql"],
   ["get_operational_sales_dashboard", "202610200007_operational_sales_dashboard.sql"],
   // 00390 đã chạy trên Production; snapshot không thể làm mới tại workspace này
