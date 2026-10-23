@@ -8,7 +8,7 @@ import { getClient, handleError, getCurrentTenantId } from "./base";
 import type { Shift, OpenShiftInput, CloseShiftInput, ShiftTotalsInput } from "@/lib/types/shift";
 import { normalizeCreatedAtRange } from "@/lib/utils/list-date-preset-range";
 import type { ShiftCashEntry } from "@/lib/shift-cash-preview";
-import { parseShiftPreview, readReconciledShiftPages } from "./shift-readers";
+import { parseShiftPreview, readReconciledShiftPages, readShiftRecordPages } from "./shift-readers";
 
 // ── Mappers ──
 
@@ -20,7 +20,7 @@ function mapShift(row: Record<string, unknown>): Shift {
     cashierId: row.cashier_id as string,
     cashierName: typeof row.cashier_name === "string" ? row.cashier_name
       : (row.profiles as { full_name?: string } | null)?.full_name ?? undefined,
-    status: row.status as "open" | "closed",
+    status: row.status as Shift["status"],
     openedAt: row.opened_at as string,
     closedAt: (row.closed_at as string) ?? null,
     startingCash: row.starting_cash != null ? Number(row.starting_cash) : null,
@@ -274,40 +274,34 @@ export interface PendingShift {
   cashierId: string;
   cashierName: string;
   openedAt: string;
-  autoMarkedPendingAt: string;
+  autoMarkedPendingAt: string | null;
   startingCash: number;
   shiftDurationHours: number;
 }
 
 /**
  * Get pending shifts cho 1 branch (filter cho POS popup) hoặc all (admin overview).
- * Dùng view `pending_shifts_view` đã create ở migration 00127.
+ * Nguồn máy chủ kiểm tra quyền đối chiếu và phạm vi từng chi nhánh.
  */
 export async function getPendingShifts(branchId?: string): Promise<PendingShift[]> {
-  const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let query = (supabase as any)
-    .from("pending_shifts_view")
-    .select("*")
-    .eq("tenant_id", tenantId)
-    .order("opened_at", { ascending: true });
-  if (branchId) query = query.eq("branch_id", branchId);
-
-  const { data, error } = await query;
-  if (error) handleError(error, "getPendingShifts");
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((row: any) => ({
-    id: row.id,
-    branchId: row.branch_id,
-    branchName: row.branch_name ?? "—",
-    cashierId: row.cashier_id,
-    cashierName: row.cashier_name ?? "—",
-    openedAt: row.opened_at,
-    autoMarkedPendingAt: row.auto_marked_pending_at,
-    startingCash: Number(row.starting_cash ?? 0),
-    shiftDurationHours: Number(row.shift_duration_hours ?? 0),
+  const { rows, asOf } = await loadShiftRecords({ kind: "pending", tenantId, branchId: branchId ?? null });
+  return rows.map(row => ({
+    id: row.id as string, branchId: row.branch_id as string,
+    branchName: typeof row.branch_name === "string" ? row.branch_name : "—",
+    cashierId: row.cashier_id as string, cashierName: typeof row.cashier_name === "string" ? row.cashier_name : "—",
+    openedAt: row.opened_at as string, autoMarkedPendingAt: row.auto_marked_pending_at as string | null,
+    startingCash: Number(row.starting_cash),
+    shiftDurationHours: Math.max(0, (Date.parse(asOf) - Date.parse(row.opened_at as string)) / 3_600_000),
   }));
+}
+
+async function loadShiftRecords(scope: Parameters<typeof readShiftRecordPages>[0]) {
+  return readShiftRecordPages(scope, async args => {
+    const { data, error } = await getClient().rpc("get_shift_records_scoped" as never, args as never);
+    if (error) handleError(error, "loadShiftRecords");
+    return data;
+  });
 }
 
 /**
@@ -613,16 +607,8 @@ export async function getShiftHistory(
   branchId: string,
   limit = 20
 ): Promise<Shift[]> {
-  const supabase = getClient();
+  if (!branchId || !Number.isSafeInteger(limit) || limit < 1) throw new Error("Phạm vi lịch sử ca không hợp lệ.");
   const tenantId = await getCurrentTenantId();
-  const { data, error } = await supabase
-    .from("shifts")
-    .select("*, profiles(full_name)")
-    .eq("tenant_id", tenantId)
-    .eq("branch_id", branchId)
-    .order("opened_at", { ascending: false })
-    .limit(limit);
-
-  if (error) handleError(error, "getShiftHistory");
-  return (data ?? []).map((row) => mapShift(row as unknown as Record<string, unknown>));
+  const { rows } = await loadShiftRecords({ kind: "history", tenantId, branchId, maxRows: limit });
+  return rows.map(mapShift);
 }

@@ -63,8 +63,7 @@ function CaChoDoiSoatPage() {
     }
     setLoading(true);
     try {
-      // Owner/Admin xem all; Manager view chỉ chi nhánh mình (lọc client-side
-      // bằng RLS / permission code đã ràng buộc ở DB).
+      // Máy chủ giới hạn kết quả theo quyền và các chi nhánh được giao.
       const rows = await getPendingShifts();
       setShifts(rows);
     } catch (err) {
@@ -115,7 +114,7 @@ function CaChoDoiSoatPage() {
             <p className="font-medium">Ca pending là gì?</p>
             <p className="text-muted-foreground text-xs">
               Khi cashier mở ca và quên đóng quá giờ chốt (mặc định 3h sáng), hệ thống tự
-              chuyển ca sang "Chờ đối chiếu". Manager/Admin đếm tiền mặt thực tế + nhập
+              chuyển ca sang &quot;Chờ đối chiếu&quot;. Manager/Admin đếm tiền mặt thực tế + nhập
               lý do để chốt số liệu.{" "}
               <Link href="/he-thong/chi-nhanh" className="text-primary hover:underline">
                 Đổi giờ chốt ca per chi nhánh
@@ -188,7 +187,7 @@ function CaChoDoiSoatPage() {
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Tự pending:</span>
                     <span className="font-medium text-xs">
-                      {formatDate(s.autoMarkedPendingAt)}
+                      {s.autoMarkedPendingAt ? formatDate(s.autoMarkedPendingAt) : "Chưa ghi nhận thời điểm"}
                     </span>
                   </div>
                 </div>

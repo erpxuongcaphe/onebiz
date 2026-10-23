@@ -128,3 +128,62 @@ export async function readReconciledShiftPages(
     if (page.rows.length === 0) throw new Error("Danh sách đối chiếu ca chưa đầy đủ. Tải lại báo cáo.");
   }
 }
+
+const SHIFT_FINANCIAL_FIELDS = ["starting_cash", "expected_cash", "actual_cash", "cash_difference",
+  "total_sales", "total_orders", "sales_by_method", "expected_transfer", "actual_transfer", "transfer_difference"];
+
+export async function readShiftRecordPages(
+  scope: { kind: "pending" | "history"; tenantId: string; branchId: string | null; maxRows?: number },
+  read: (args: { p_kind: string; p_branch_id: string | null; p_offset: number; p_limit: number }) => Promise<unknown>,
+): Promise<{ rows: Row[]; asOf: string }> {
+  const rows: Row[] = [];
+  const ids = new Set<string>();
+  let total: number | null = null;
+  let revision: string | null = null;
+  let actor: string | null = null;
+  let mode: string | null = null;
+  let asOf = "";
+  for (;;) {
+    const limit = Math.min(200, scope.maxRows === undefined ? 200 : scope.maxRows - rows.length);
+    const page = record(await read({ p_kind: scope.kind, p_branch_id: scope.branchId, p_offset: rows.length, p_limit: limit }));
+    const pageTotal = count(page.total_count);
+    const pageRevision = identifier(page.revision);
+    const pageActor = identifier(page.actor_id);
+    const pageAsOf = date(page.as_of);
+    if (page.tenant_id !== scope.tenantId || page.branch_id !== scope.branchId || page.kind !== scope.kind
+      || (page.mode !== "reconciliation" && page.mode !== "blind")
+      || (scope.kind === "pending" && page.mode !== "reconciliation")
+      || page.offset !== rows.length || page.limit !== limit || !Array.isArray(page.rows)
+      || page.rows.length > limit || rows.length + page.rows.length > pageTotal
+      || (total !== null && pageTotal !== total) || (revision !== null && revision !== pageRevision)
+      || (actor !== null && actor !== pageActor) || (mode !== null && mode !== page.mode)) {
+      throw new Error("Danh sách ca đã thay đổi hoặc chưa đầy đủ. Tải lại để kiểm tra.");
+    }
+    total = pageTotal; revision = pageRevision; actor = pageActor; mode = page.mode;
+    asOf ||= pageAsOf;
+    for (const value of page.rows) {
+      const row = record(value);
+      const id = identifier(row.id);
+      identifier(row.branch_id); identifier(row.cashier_id); date(row.opened_at);
+      if (row.closed_at !== null) date(row.closed_at);
+      if (row.tenant_id !== scope.tenantId || (scope.branchId !== null && row.branch_id !== scope.branchId)
+        || !["open", "closed", "pending_reconcile"].includes(String(row.status)) || ids.has(id)
+        || (scope.kind === "pending" && row.status !== "pending_reconcile")
+        || (mode === "blind" && (row.cashier_id !== actor || SHIFT_FINANCIAL_FIELDS.some(key => key in row)))) {
+        throw new Error("Sai phạm vi hoặc dữ liệu danh sách ca không hợp lệ.");
+      }
+      if (mode === "reconciliation") {
+        for (const field of SHIFT_FINANCIAL_FIELDS.filter(key => key !== "sales_by_method")) {
+          if (field in row && row[field] !== null) number(row[field]);
+        }
+      }
+      if (scope.kind === "pending") {
+        number(row.starting_cash);
+        if (row.auto_marked_pending_at !== null) date(row.auto_marked_pending_at);
+      }
+      ids.add(id); rows.push(row);
+    }
+    if (rows.length === Math.min(total, scope.maxRows ?? total)) return { rows, asOf };
+    if (page.rows.length === 0) throw new Error("Danh sách ca chưa đầy đủ. Tải lại để kiểm tra.");
+  }
+}

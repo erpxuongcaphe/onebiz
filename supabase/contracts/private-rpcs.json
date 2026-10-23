@@ -43,6 +43,18 @@
           { "name": "p_limit", "optional": true }
         ] }
       ]
+    },
+    {
+      "migration": "shift_record_readers_20261023",
+      "migrationSha256": "17721ddec56118e7c868cab0a2998bde871f0c0b66d74266eeaa4d53f06a02b4",
+      "functions": [
+        { "name": "get_shift_records_scoped", "params": [
+          { "name": "p_kind", "optional": false },
+          { "name": "p_branch_id", "optional": true },
+          { "name": "p_offset", "optional": true },
+          { "name": "p_limit", "optional": true }
+        ] }
+      ]
     }
   ]
 }
