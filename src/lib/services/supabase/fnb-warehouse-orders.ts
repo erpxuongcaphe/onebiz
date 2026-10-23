@@ -4,7 +4,7 @@ export interface SupplyProduct { id: string; code: string; name: string; unit: s
 export interface SupplyWarehouse { id: string; name: string; supplierId: string }
 export interface SupplyOrderInput {
   branchId: string; warehouseId: string; requestId: string;
-  items: Array<{ productId: string; quantity: number }>; note: string;
+  items: Array<{ productId: string; quantity: number; note?: string }>; note: string;
 }
 export interface SupplyOrderResult {
   purchaseOrderId: string; code: string; salesOrderId: string; salesOrderCode: string; total: number;
@@ -40,6 +40,9 @@ export async function getWarehouseOrderContext(branchId: string, search = '') {
 export async function submitWarehouseOrder(input: SupplyOrderInput): Promise<SupplyOrderResult> {
   if (!input.items.length || input.items.some(i => !Number.isFinite(i.quantity) || i.quantity <= 0)) {
     throw new Error('Nhập số lượng hợp lệ cho từng mặt hàng.');
+  }
+  if (input.items.some(i => i.note !== undefined && (typeof i.note !== 'string' || i.note.length > 2000))) {
+    throw new Error('Ghi chú mỗi mặt hàng tối đa 2000 ký tự.');
   }
   // The durable request ID is reused on retry, including a lost success response.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -20,6 +20,16 @@ describe('warehouse order bridge client',()=>{
  it('does not treat an incomplete response as success',async()=>{
   mocks.rpc.mockResolvedValue({data:{code:'PO1'}});await expect(submitWarehouseOrder(input)).rejects.toThrow('Chưa nhận được xác nhận');
  });
+ it('keeps literal notes per SKU separate from the document note',async()=>{
+  mocks.rpc.mockResolvedValue({data:{purchaseOrderId:'po',code:'PO1',salesOrderId:'order',salesOrderCode:'DH1'}});
+  const items=[{productId:'milk',quantity:3,note:'  Nguyên thùng\nGiữ lạnh  '},{productId:'tea',quantity:2,note:'Trà mới'}];
+  await submitWarehouseOrder({...input,items});
+  expect(mocks.rpc.mock.calls[0][1]).toMatchObject({p_items:items,p_note:input.note});
+ });
+ it('rejects oversized line notes before calling the backend',async()=>{
+  await expect(submitWarehouseOrder({...input,items:[{productId:'milk',quantity:1,note:'x'.repeat(2001)}]})).rejects.toThrow('2000');
+  expect(mocks.rpc).not.toHaveBeenCalled();
+ });
  it('reports server errors without falling back to unlinked PO creation',async()=>{
   mocks.rpc.mockResolvedValue({error:new Error('server rollback')});await expect(submitWarehouseOrder(input)).rejects.toThrow('server rollback');expect(mocks.rpc).toHaveBeenCalledTimes(1);
  });

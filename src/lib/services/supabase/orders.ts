@@ -633,10 +633,10 @@ export async function getDraftOrderItems(
     .maybeSingle();
   if (!inv) return [];
 
-  // 00208: select("*") để lấy cả note mà không vỡ khi cột chưa migrate.
+  // Keep literal line notes and resolve the SKU code, as in invoice detail.
   const { data, error } = await supabase
     .from("invoice_items_scoped")
-    .select("*")
+    .select("*, products:products_scoped!invoice_items_product_id_fkey(code)")
     .eq("invoice_id", invoiceId);
 
   if (error) {
@@ -647,7 +647,7 @@ export async function getDraftOrderItems(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((row: any) => ({
     id: row.id,
-    productCode: "",
+    productCode: row.products?.code ?? "",
     productName: row.product_name ?? "",
     unit: row.unit ?? "",
     quantity: Number(row.quantity ?? 0),

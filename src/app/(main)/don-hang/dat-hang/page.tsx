@@ -370,6 +370,7 @@ function OrderDetail({
                         ),
                         align: "right",
                       },
+                      { header: "Ghi chú mã hàng", accessor: "note" as never, className: "min-w-32 max-w-56 whitespace-pre-wrap break-words text-xs text-muted-foreground" },
                     ]}
                     items={items as unknown as Record<string, unknown>[]}
                     summary={[
