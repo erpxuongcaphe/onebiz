@@ -2598,6 +2598,8 @@ function FnbPosPageInner() {
           shiftId: currentShift?.id ?? null,
           tipAmount: payload.tipAmount,
           promotionId: paymentPromotionId,
+          // Keep the final POS note even if it was edited after the last kitchen send.
+          note: tab.orderNote ?? "",
           couponCode: paymentCouponCode,
         }, networkStatus.isOnline);
 

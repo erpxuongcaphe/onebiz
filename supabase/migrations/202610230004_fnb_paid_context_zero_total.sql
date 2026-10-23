@@ -1,7 +1,7 @@
 -- New paid F&B invoices freeze service context; existing invoices are never backfilled.
 begin;
 alter table public.invoices add column if not exists fnb_context jsonb;
-create or replace function public._fnb_paid_context_20261023(p_order uuid)
+create or replace function public._fnb_paid_context_20261023(p_order uuid,p_note text default null)
 returns jsonb language sql stable set search_path=public as $$
  select jsonb_build_object('version',1,'order_id',k.id,'order_number',k.order_number,
    'order_type',k.order_type,
@@ -9,13 +9,13 @@ returns jsonb language sql stable set search_path=public as $$
    'paid_at',coalesce(nullif(current_setting('onebiz.fnb_paid_occurred_at',true),'')::timestamptz,transaction_timestamp()),
    'paid_time_source',case when nullif(current_setting('onebiz.fnb_paid_occurred_at',true),'') is null then 'system' else 'offline' end,
    'table_number',t.table_number,'table_name',t.name,
-   'area_name',coalesce(nullif(z.name,''),nullif(t.zone,'')),'pos_note',k.note)
+   'area_name',coalesce(nullif(z.name,''),nullif(t.zone,'')),'pos_note',coalesce(p_note,k.note))
  from kitchen_orders k
  left join restaurant_tables t on t.id=k.table_id and t.tenant_id=k.tenant_id and t.branch_id=k.branch_id
  left join floor_plan_zones z on z.id=t.zone_id and z.tenant_id=k.tenant_id and z.branch_id=k.branch_id
  where k.id=p_order;
 $$;
-revoke all on function public._fnb_paid_context_20261023(uuid) from public,anon,authenticated;
+revoke all on function public._fnb_paid_context_20261023(uuid,text) from public,anon,authenticated;
 -- A later table rename, note edit, void or retry must not rewrite the paid snapshot.
 create or replace function public._keep_fnb_paid_context_20261023()
 returns trigger language plpgsql set search_path=public as $$
@@ -39,7 +39,7 @@ begin
   d:=replace(d,old_fragment,old_fragment||', fnb_context');
   old_fragment:='v_payment_method_effective, ''fnb'', v_note, p_created_by, p_shift_id, v_tip';
   if position(old_fragment in d)=0 then raise exception 'FNB_CONTEXT_INSERT_VALUES_CHANGED';end if;
-  d:=replace(d,old_fragment,old_fragment||', public._fnb_paid_context_20261023(p_kitchen_order_id)');
+  d:=replace(d,old_fragment,old_fragment||', public._fnb_paid_context_20261023(p_kitchen_order_id,p_note)');
   execute d;
  end if;
  d:=pg_get_functiondef('public._fnb_complete_payment_impl_00343(uuid,uuid,text,text,jsonb,numeric,boolean,numeric,uuid,text,text,uuid,numeric,uuid,text)'::regprocedure);

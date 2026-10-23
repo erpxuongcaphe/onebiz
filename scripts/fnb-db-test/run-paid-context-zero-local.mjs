@@ -88,6 +88,10 @@ try {
  assert(!(await db.query("select current_setting('onebiz.fnb_paid_occurred_at',true) value")).rows[0].value,'offline time scope restored');
  await db.query("select fnb_complete_payment_timed_v1($1,'2026-10-23T04:00:00Z')",[JSON.stringify(payload)]);
  assert(JSON.stringify((await db.query('select fnb_context from invoices where id=$1',[offline.invoice_id])).rows[0].fnb_context)===JSON.stringify(offlineContext),'offline replay does not rewrite paid history');
+ await create(380);const lateNote=(await db.query("select fnb_complete_payment_atomic_v3($1,null,'UAT','cash',null,0,false,0,null,null,'Ghi chú sửa sau khi gửi bếp',$2) result",[id(380),id(7)])).rows[0].result;
+ assert((await db.query('select fnb_context from invoices where id=$1',[lateNote.invoice_id])).rows[0].fnb_context.pos_note==='Ghi chú sửa sau khi gửi bếp','final checkout note wins over stale kitchen note');
+ await create(390);const clearNote=(await db.query("select fnb_complete_payment_atomic_v3($1,null,'UAT','cash',null,0,false,0,null,null,'',$2) result",[id(390),id(7)])).rows[0].result;
+ assert((await db.query('select fnb_context from invoices where id=$1',[clearNote.invoice_id])).rows[0].fnb_context.pos_note==='','explicitly cleared POS note stays empty');
  await db.exec(`alter table invoices add column if not exists deleted_at timestamptz,add column if not exists issued_at timestamptz,add column if not exists order_code text,add column if not exists promotion_discount numeric default 0;
  alter table branches add tenant_id uuid,add branch_type text default 'store';update branches set tenant_id='${id(2)}';
  create table shipping_orders(id uuid primary key,invoice_id uuid,tenant_id uuid);
