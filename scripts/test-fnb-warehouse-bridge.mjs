@@ -52,6 +52,22 @@ insert into customers values('${customer}','${tenant}','${store}',true,true,'Chi
 insert into products values('${product}','${tenant}',true,'sku','retail',null,false,'Thùng','A','Sữa A',125000),('${substitute}','${tenant}',true,'sku','retail',null,false,'Thùng','B','Sữa B',130000);
 set test.actor='${actor}';set test.branch='${store}';
 `);
+// Execute the actual shared price resolver, including its existing 00395
+// free-sale opt-in. A stub previously concealed unassigned optional records.
+await db.exec(`
+alter table customers add column price_tier_id uuid;
+create table price_tiers(id uuid primary key,tenant_id uuid,is_active boolean,scope text);
+create table price_tier_items(id uuid,price_tier_id uuid,product_id uuid,variant_id uuid,price numeric,min_qty numeric,created_at timestamptz default now());
+create table product_variants(id uuid,tenant_id uuid,product_id uuid,is_active boolean,sell_price numeric);
+create table product_platform_prices(id uuid,tenant_id uuid,product_id uuid,variant_id uuid,platform text,override_price numeric,set_at timestamptz default now());
+`);
+const pricingSource=readFileSync('supabase/migrations/00363_unified_sale_pricing.sql','utf8');
+const pricingStart=pricingSource.indexOf('create or replace function public.resolve_sale_price_00363(');
+let pricingDefinition=pricingSource.slice(pricingStart,pricingSource.indexOf('$function$;',pricingSource.indexOf('as $function$',pricingStart))+12);
+pricingDefinition=pricingDefinition.replace('select p.id, p.sell_price into v_product','select p.id, p.sell_price, p.allow_free_sale into v_product')
+ .replace("p_channel = 'fnb' and coalesce(v_unit_price, 0) <= 0","p_channel = 'fnb' and (v_unit_price is null or v_unit_price < 0 or (v_unit_price = 0 and not v_product.allow_free_sale))");
+await db.exec(pricingDefinition);
+await assert.rejects(db.query('select resolve_sale_price_00363($1,null,null,null,\'retail\',\'direct\',1,now())',[product]),/v_variant.*not assigned/);
 await db.exec(readFileSync('supabase/migrations/202610230100_fnb_purchase_sales_order_bridge.sql','utf8'));
 let passed=0;
 async function test(name,fn){await fn(); passed++;console.log(`PASS ${name}`);}
@@ -59,6 +75,45 @@ async function scalar(sql,params=[]){return Object.values((await db.query(sql,pa
 const input=(quantity=10,pid=product)=>[{productId:pid,quantity}];
 const submit=(key,items=input(),note='Giao buổi sáng\nCần thêm hàng mới')=>scalar('select submit_fnb_warehouse_order($1,$2,$3,$4::jsonb,$5)',[store,warehouse,key,JSON.stringify(items),note]);
 async function rejects(fn,pattern){await assert.rejects(fn,pattern);}
+const price=(pid=product,variant=null,channel='retail',platform='direct',quantity=1,cid=null)=>scalar('select resolve_sale_price_00363($1,$2,null,$3,$4,$5,$6,now())',[pid,variant,cid,channel,platform,quantity]);
+await test('price initialization is repeatable and rejects an unreviewed resolver shape',async()=>{
+ const sql=readFileSync('supabase/migrations/202610230100_fnb_purchase_sales_order_bridge.sql','utf8');
+ const patch=sql.match(/do \$warehouse_price_records\$[\s\S]*?end \$warehouse_price_records\$;/)[0];
+ const definition=await scalar("select pg_get_functiondef('resolve_sale_price_00363(uuid,uuid,uuid,uuid,text,text,numeric,timestamptz)'::regprocedure)");
+ await db.exec(patch);
+ assert.equal(await scalar("select pg_get_functiondef('resolve_sale_price_00363(uuid,uuid,uuid,uuid,text,text,numeric,timestamptz)'::regprocedure)"),definition);
+ await db.exec(pricingDefinition.replace('v_variant record;','v_variant RECORD;'));
+ await rejects(()=>db.exec(patch),/WAREHOUSE_ORDER_PRICE_RESOLVER_DEFINITION_CHANGED/);
+ await db.exec(definition);
+});
+await test('real resolver: plain Retail SKU without variant, tier or platform uses catalogue price',async()=>{
+ const r=await price();assert.equal(r.unit_price,125000);assert.equal(r.price_tier_item_id,null);assert.equal(r.platform_price_id,null);
+});
+await test('real resolver: active Retail customer tier and quantity breaks retain precedence',async()=>{
+ await db.query('insert into price_tiers values($1,$2,true,\'retail\')',[id(800),tenant]);
+ await db.query('update customers set price_tier_id=$1 where id=$2',[id(800),customer]);
+ await db.query('insert into price_tier_items(id,price_tier_id,product_id,price,min_qty) values($1,$2,$3,120000,1),($4,$2,$3,110000,10)',[id(801),id(800),product,id(802)]);
+ assert.equal((await price(product,null,'retail','direct',1,customer)).unit_price,120000);
+ assert.equal((await price(product,null,'retail','direct',10,customer)).unit_price,110000);
+ await db.query('update customers set price_tier_id=null');
+});
+await test('real resolver: FnB direct catalogue and variant prices are unchanged',async()=>{
+ await db.query('insert into product_variants values($1,$2,$3,true,150000)',[id(803),tenant,product]);
+ assert.equal((await price(product,null,'fnb')).unit_price,125000);
+ assert.equal((await price(product,id(803),'fnb')).unit_price,150000);
+});
+await test('real resolver: FnB platform-specific price retains priority',async()=>{
+ await db.query('insert into product_platform_prices(id,tenant_id,product_id,platform,override_price) values($1,$2,$3,\'grab_food\',160000)',[id(804),tenant,product]);
+ assert.equal((await price(product,null,'fnb','grab_food')).unit_price,160000);
+ assert.equal((await price(product,null,'fnb','shopee_food')).unit_price,125000);
+});
+await test('real resolver: FnB zero price still requires the existing free-sale opt-in',async()=>{
+ await db.query('update products set sell_price=0 where id=$1',[product]);
+ await rejects(()=>price(product,null,'fnb'),/SALE_PRICE_FNB_NOT_POSITIVE/);
+ await db.query('update products set allow_free_sale=true where id=$1',[product]);
+ assert.equal((await price(product,null,'fnb')).unit_price,0);
+ await db.query('update products set sell_price=125000,allow_free_sale=false where id=$1',[product]);
+});
 await test('opening/searching consumes no code and includes active zero-stock SKU',async()=>{
  const ctx=await scalar('select get_fnb_warehouse_order_context($1,$2)',[store,'Sữa']);assert.equal(ctx.products.length,2);assert.equal(await scalar('select count(*)::int from codes'),0);
 });
@@ -83,7 +138,7 @@ await test('duplicate products rejected',()=>rejects(()=>submit(id(111),[...inpu
 await test('inactive product rejected',async()=>{await db.exec(`update products set is_active=false where id='${product}'`);await rejects(()=>submit(id(112)),/Mặt hàng/);await db.exec(`update products set is_active=true where id='${product}'`);});
 await test('menu SKU rejected',async()=>{await db.exec(`update products set channel='fnb' where id='${product}'`);await rejects(()=>submit(id(113)),/Mặt hàng/);await db.exec(`update products set channel='retail' where id='${product}'`);});
 await test('opt-in supply catalog enforced in search and submit',async()=>{await db.exec(`insert into fnb_supply_branch_scopes values('${tenant}','${store}',true)`);await rejects(()=>submit(id(114)),/danh mục/);assert.equal((await scalar('select get_fnb_warehouse_order_context($1,$2)',[store,'Sữa'])).products.length,0);await db.exec('delete from fnb_supply_branch_scopes');});
-await test('missing or ambiguous internal customer rejected',async()=>{await db.exec(`update customers set is_active=false`);await rejects(()=>submit(id(115)),/khách nội bộ/);await db.exec(`update customers set is_active=true;insert into customers select '${id(116)}',tenant_id,branch_id,is_internal,is_active,name from customers`);await rejects(()=>submit(id(115)),/khách nội bộ/);await db.exec(`delete from customers where id='${id(116)}'`);});
+await test('missing or ambiguous internal customer rejected',async()=>{await db.exec(`update customers set is_active=false`);await rejects(()=>submit(id(115)),/khách nội bộ/);await db.exec(`update customers set is_active=true;insert into customers(id,tenant_id,branch_id,is_internal,is_active,name) select '${id(116)}',tenant_id,branch_id,is_internal,is_active,name from customers`);await rejects(()=>submit(id(115)),/khách nội bộ/);await db.exec(`delete from customers where id='${id(116)}'`);});
 await test('cross-tenant product rejected',async()=>{await db.exec(`update products set tenant_id='${id(999)}' where id='${product}'`);await rejects(()=>submit(id(117)),/Mặt hàng/);await db.exec(`update products set tenant_id='${tenant}' where id='${product}'`);});
 await test('failure after PO creation rolls back PO, both codes and order',async()=>{
  const before=await scalar('select count(*)::int from purchase_orders');const counter=await scalar("select n from codes where entity='PO'");

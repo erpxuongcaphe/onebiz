@@ -2,6 +2,23 @@
 -- This migration does not backfill old documents or change stock/cash.
 begin;
 set local lock_timeout='2s';
+-- The existing resolver returns optional record fields even when that lookup
+-- was skipped (plain SKU, no tier, or direct sale). Give those records a known
+-- NULL shape; leave every price lookup, precedence and free-sale rule intact.
+do $warehouse_price_records$
+declare definition text; marker text; initialized text;
+begin
+ definition:=pg_get_functiondef('public.resolve_sale_price_00363(uuid,uuid,uuid,uuid,text,text,numeric,timestamptz)'::regprocedure);
+ marker:=E'begin\n  if auth.uid() is null or v_tenant is null then';
+ initialized:=E'begin\n  select null::uuid as id, null::numeric as sell_price into v_variant;\n  select null::uuid as id, null::numeric as price, null::uuid as variant_id, null::numeric as min_qty into v_tier_item;\n  select null::uuid as id, null::numeric as override_price, null::uuid as variant_id into v_platform_price;\n  if auth.uid() is null or v_tenant is null then';
+ if position(initialized in definition)=0 then
+  if position(marker in definition)=0 or position('v_variant record;' in definition)=0
+   or position('v_tier_item record;' in definition)=0 or position('v_platform_price record;' in definition)=0 then
+   raise exception 'WAREHOUSE_ORDER_PRICE_RESOLVER_DEFINITION_CHANGED';
+  end if;
+  execute replace(definition,marker,initialized);
+ end if;
+end $warehouse_price_records$;
 create table public.fnb_purchase_sales_order_links (
  tenant_id uuid not null references public.tenants(id),
  purchase_order_id uuid primary key references public.purchase_orders(id),
