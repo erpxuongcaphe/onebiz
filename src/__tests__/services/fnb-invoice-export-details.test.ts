@@ -10,7 +10,7 @@ vi.mock("@/lib/services/supabase/base",()=>({getClient:()=>({from:(table:string)
 import {getFnbInvoiceExportDetails} from "@/lib/services/supabase/fnb-invoice-export-details";
 const parents=[{id:"a",code:"HD-A",source:"fnb",totalAmount:50000,posNote:"Giao riêng",tableName:"TN 03"},{id:"b",code:"HD-B",source:"fnb",totalAmount:25000}] as Invoice[];
 beforeEach(()=>{vi.clearAllMocks();mock.calls=[];mock.fail=false;mock.lines=Array.from({length:1001},(_,i)=>({id:`line-${i}`,invoice_id:i%2?"a":"b",product_name:"Bạc Sỉu (Size L)",quantity:1,returned_qty:0,unit:"Ly",unit_price:25000,total:25000,note:null,products:{code:"SKU-CAP"}}));
- mock.details.mockImplementation(async()=>new Map(mock.lines.map((r,i)=>[r.id,{invoice_id:r.invoice_id,invoice_item_id:r.id,variant_label:"Size L",note:"Để riêng",modifier_selections:[{groupName:"Đá/Nóng",options:[{label:i%2?"Nóng":"Đá"}]}]}])));
+ mock.details.mockImplementation(async(ids:string[])=>new Map(mock.lines.map((r,i):Record<string,unknown>=>({...r,index:i})).filter(r=>ids.includes(String(r.invoice_id))).map((r)=>[r.id,{invoice_id:r.invoice_id,invoice_item_id:r.id,variant_label:"Size L",note:"Để riêng",modifier_selections:[{groupName:"Đá/Nóng",options:[{label:Number(r.index)%2?"Nóng":"Đá"}]}]}])));
 });
 describe("complete FNB option export",()=>{
  it("reads all 1001 item lines despite a 50-row server cap, retaining exact size and hot/cold per duplicate product",async()=>{
@@ -24,4 +24,10 @@ describe("complete FNB option export",()=>{
   const ctl=new AbortController();ctl.abort();await expect(getFnbInvoiceExportDetails(parents,ctl.signal)).rejects.toThrow("hủy");expect(mock.details).not.toHaveBeenCalled();
   expect((await getFnbInvoiceExportDetails([{...parents[0],source:"pos"}])).items).toEqual([]);
  });
+ it("exports only matching item lines and keeps full parent invoice money",async()=>{
+ const {choiceKey}=await import("@/lib/utils/fnb-invoice-choice-filter");
+ const result=await getFnbInvoiceExportDetails([parents[0]],undefined,{size:"Size L",groups:{[choiceKey("Đá/Nóng")]:"Nóng"}});
+ expect(result.items).toHaveLength(500);expect(result.items.every(r=>r.temperature==="Nóng")).toBe(true);expect(result.summaries.has("b")).toBe(false);expect(parents[0].totalAmount).toBe(50000);
+ });
+
 });

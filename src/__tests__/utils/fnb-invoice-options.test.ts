@@ -9,4 +9,9 @@ describe("historical invoice options",()=>{
   expect(readFnbInvoiceSize("Matcha Latte")).toBe("");expect(readFnbInvoiceSize("Bạc Sỉu (Size L)")).toBe("Size L");expect(readFnbInvoiceSize("Bạc Sỉu (Size M)","Size L")).toBe("Size L");
  });
  it("ignores malformed option records safely",()=>{expect(readFnbInvoiceOptions([null,{groupName:1},{groupName:"X",options:[{label:null}]}]).temperature).toBe("");});
+ it("places tea-specific sweetness groups in the sweetness column while preserving original export labels",()=>{
+  const result=readFnbInvoiceOptions([{groupName:"Mức ngọt - Hồng Trà",options:[{label:"120%"}]},{groupName:"Mức ngọt - Ô Long",options:[{label:"80%"}]}]);
+  expect(result.sweetness).toBe("120% / 80%");expect(result.other).toBe("");expect(result.full).toContain("Mức ngọt - Hồng Trà: 120%");
+ });
+
 });

@@ -4,9 +4,10 @@ export function readFnbInvoiceOptions(value:unknown) {
   if(!raw || typeof raw!=="object" || typeof raw.groupName!=="string" || !Array.isArray(raw.options))return [];
   return [{groupName:raw.groupName,options:raw.options.filter((o:unknown):o is {label:string}=>!!o&&typeof o==="object"&&typeof (o as {label?:unknown}).label==="string")}];
  }):[];
- const values=(name:string)=>groups.filter(g=>g.groupName===name).map(g=>g.options.length?g.options.map(o=>o.label).join(" / "):"Không chọn").join(" / ");
+ const isSweetness=(name:string)=>name==="Mức ngọt"||name.startsWith("Mức ngọt - ");
+ const values=(name:string)=>groups.filter(g=>g.groupName===name||(name==="Mức ngọt"&&isSweetness(g.groupName))).map(g=>g.options.length?g.options.map(o=>o.label).join(" / "):"Không chọn").join(" / ");
  const temperature=values("Đá/Nóng"),sweetness=values("Mức ngọt"),ice=values("Mức đá");
- const other=groups.filter(g=>!["Đá/Nóng","Mức ngọt","Mức đá"].includes(g.groupName)).map(g=>`${g.groupName}: ${g.options.length?g.options.map(o=>o.label).join(" / "):"Không chọn"}`).join(" · ");
+ const other=groups.filter(g=>!["Đá/Nóng","Mức đá"].includes(g.groupName)&&!isSweetness(g.groupName)).map(g=>`${g.groupName}: ${g.options.length?g.options.map(o=>o.label).join(" / "):"Không chọn"}`).join(" · ");
  const summary=[temperature,sweetness?`Ngọt: ${sweetness.replace(/\s*\(bình thường\)/g,"")}`:"",ice,other].filter(Boolean).join(" · ");
  const full=groups.map(g=>`${g.groupName}: ${g.options.length?g.options.map(o=>o.label).join(" / "):"Không chọn"}`).join(" · ");
  return {temperature,sweetness,ice,other,summary,full};

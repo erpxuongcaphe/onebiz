@@ -38,6 +38,8 @@ interface DetailItemsTableProps<T> {
   summary?: { label: string; value: ReactNode; className?: string }[];
   className?: string;
   pageSize?: number;
+  mobileItem?: (item:T)=>ReactNode;
+  optionalColumns?: string[];
 }
 
 export function DetailItemsTable<T>({
@@ -46,8 +48,12 @@ export function DetailItemsTable<T>({
   summary,
   className,
   pageSize,
+  mobileItem,
+  optionalColumns,
 }: DetailItemsTableProps<T>) {
   const [page, setPage] = useState(0);
+  const [hiddenColumns,setHiddenColumns]=useState<string[]>([]);
+  const effectiveColumns=columns.filter(c=>!hiddenColumns.includes(c.header));
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -95,11 +101,11 @@ export function DetailItemsTable<T>({
     } catch (err) { setExportError(err instanceof Error ? err.message : "Không xuất được lịch sử."); }
     finally { setExporting(false); }
   };
-  const columnAlignments = useMemo(() => columns.map(col => resolveTableColumnAlignment(
+  const columnAlignments = useMemo(() => effectiveColumns.map(col => resolveTableColumnAlignment(
     col.align,
     typeof col.accessor === "function" ? "" : String(col.accessor),
     col.align ? [] : items.map(item => typeof col.accessor === "function" ? col.accessor(item) : item[col.accessor]),
-  )), [columns, items]);
+  )), [effectiveColumns, items]);
 
   return (
     <div className={cn("min-w-0 border rounded-lg overflow-hidden", className)}>
@@ -118,11 +124,13 @@ export function DetailItemsTable<T>({
         {invalidDates && <p role="alert" className="w-full text-sm text-destructive">Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.</p>}
         {exportError && <p role="alert" className="w-full text-sm text-destructive">{exportError}</p>}
       </div>}
-      <div className="max-h-[480px] overflow-auto">
+      {optionalColumns&&<details className="hidden border-b px-3 py-2 text-xs md:block"><summary className="w-fit cursor-pointer">Cột chi tiết món</summary><div className="flex flex-wrap gap-3 pt-2">{optionalColumns.map(header=><label key={header} className="flex min-h-9 items-center gap-2"><input type="checkbox" checked={!hiddenColumns.includes(header)} onChange={e=>setHiddenColumns(v=>e.target.checked?v.filter(x=>x!==header):[...v,header])}/>{header}</label>)}</div></details>}
+      {mobileItem&&<div className="divide-y md:hidden">{visible.map((item,index)=><div key={index} className="p-3">{mobileItem(item)}</div>)}</div>}
+      <div className={cn("max-h-[480px] overflow-auto",mobileItem&&"hidden md:block")}>
       <table className="w-full text-sm">
         <thead className="sticky top-0 z-10 bg-muted">
           <tr className="bg-muted/50">
-            {columns.map((col, idx) => (
+            {effectiveColumns.map((col, idx) => (
               <th
                 key={idx}
                 className={cn(
@@ -141,7 +149,7 @@ export function DetailItemsTable<T>({
         <tbody>
           {visible.map((item, rowIdx) => (
             <tr key={rowIdx} className="border-t">
-              {columns.map((col, colIdx) => {
+              {effectiveColumns.map((col, colIdx) => {
                 const value =
                   typeof col.accessor === "function"
                     ? col.accessor(item)
@@ -166,7 +174,7 @@ export function DetailItemsTable<T>({
           {visible.length === 0 && (
             <tr>
               <td
-                colSpan={columns.length}
+                colSpan={effectiveColumns.length}
                 className="px-3 py-6 text-center text-muted-foreground"
               >
                 Không có dữ liệu

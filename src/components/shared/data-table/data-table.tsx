@@ -113,6 +113,8 @@ interface DataTableProps<TData, TValue> {
   columnToggleToolbar?: boolean;
   /** Chỉ số đặt ở trái dải công cụ gọn; khi có sẽ thay hàng "Hiển thị cột" riêng. */
   toolbarMetrics?: ReactNode;
+  compactMobileToolbar?: boolean;
+  renderMobileRow?: (row:TData)=>ReactNode;
   /** Nút lọc hoặc công cụ của trang, đặt trước menu hiển thị cột. */
   toolbarActions?: ReactNode;
   /** Nội dung một hàng ngay dưới dải công cụ, thường là các điều kiện lọc đang áp dụng. */
@@ -349,6 +351,8 @@ export function DataTable<TData, TValue>({
   columnToggle = false,
   columnToggleToolbar = true,
   toolbarMetrics,
+  compactMobileToolbar=false,
+  renderMobileRow,
   toolbarActions,
   toolbarFooter,
   density = "compact",
@@ -624,6 +628,7 @@ export function DataTable<TData, TValue>({
         <>
           <ListStrip
             metrics={toolbarMetrics}
+            compactMobile={compactMobileToolbar}
             tools={
               <>
                 {toolbarActions}
@@ -955,8 +960,8 @@ export function DataTable<TData, TValue>({
                 )}
 
                 {/* Mobile: data fields */}
-                <div className="space-y-1">
-                  {row.getVisibleCells().map((cell) => {
+                <div className="min-w-0 space-y-1">
+                  {renderMobileRow ? renderMobileRow(row.original) : row.getVisibleCells().map((cell) => {
                     if (
                       cell.column.id === "select" ||
                       cell.column.id === "row_actions" ||
@@ -990,7 +995,7 @@ export function DataTable<TData, TValue>({
 
               {/* Mobile inline detail */}
               {renderDetail && expandedRowIdx === rowIndex && (
-                <div className="bg-white border rounded-lg -mt-1 overflow-hidden">
+                <div className="min-w-0 bg-card border rounded-lg -mt-1 overflow-hidden">
                   {renderDetail(row.original, () => setExpandedRowIdx(null))}
                 </div>
               )}
