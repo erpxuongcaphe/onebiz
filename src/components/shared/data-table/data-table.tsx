@@ -11,7 +11,7 @@ import {
   RowSelectionState,
   VisibilityState,
 } from "@tanstack/react-table";
-import { useState, useMemo, useEffect, ReactNode, Fragment } from "react";
+import { useState, useMemo, useEffect, useRef, ReactNode, Fragment } from "react";
 import {
   Table,
   TableBody,
@@ -114,6 +114,7 @@ interface DataTableProps<TData, TValue> {
   /** Chỉ số đặt ở trái dải công cụ gọn; khi có sẽ thay hàng "Hiển thị cột" riêng. */
   toolbarMetrics?: ReactNode;
   compactMobileToolbar?: boolean;
+  fitDetailToViewport?: boolean;
   renderMobileRow?: (row:TData)=>ReactNode;
   /** Nút lọc hoặc công cụ của trang, đặt trước menu hiển thị cột. */
   toolbarActions?: ReactNode;
@@ -352,6 +353,7 @@ export function DataTable<TData, TValue>({
   columnToggleToolbar = true,
   toolbarMetrics,
   compactMobileToolbar=false,
+  fitDetailToViewport=false,
   renderMobileRow,
   toolbarActions,
   toolbarFooter,
@@ -609,6 +611,19 @@ export function DataTable<TData, TValue>({
       </DropdownMenu>
     ) : null;
 
+  const detailViewport=useRef<HTMLDivElement>(null);
+  const [detailWidth,setDetailWidth]=useState<number|undefined>();
+  useEffect(()=>{
+    if(!fitDetailToViewport||!detailViewport.current)return;
+    const element=detailViewport.current;
+    const measure=()=>setDetailWidth(element.clientWidth>2?element.clientWidth-2:undefined);
+    measure();
+    const observer=typeof ResizeObserver!=="undefined"?new ResizeObserver(measure):undefined;
+    observer?.observe(element);
+    if(!observer)window.addEventListener("resize",measure);
+    return()=>{observer?.disconnect();if(!observer)window.removeEventListener("resize",measure);};
+  },[fitDetailToViewport]);
+
   const handleRowClick = (row: TData, index: number) => {
     if (renderDetail) {
       setExpandedRowIdx(expandedRowIdx === index ? null : index);
@@ -712,7 +727,7 @@ export function DataTable<TData, TValue>({
       {/* Desktop table — min-h-0 critical: cho flex-1 shrink đúng trong
           flex-col parent → pagination footer luôn hiện. overflow-auto cho
           cả ngang lẫn dọc khi columns vượt viewport. */}
-      <div className="hidden md:block flex-1 min-h-0 overflow-auto">
+      <div ref={detailViewport} className="hidden md:block flex-1 min-h-0 overflow-auto">
         {/* CEO 27/05/2026: containerClassName="overflow-visible" để wrapper
             của <Table> KHÔNG tạo scroll context riêng. OUTER div này
             (overflow-auto, height-constrained qua flex-1 min-h-0) handle CẢ
@@ -859,9 +874,11 @@ export function DataTable<TData, TValue>({
                         colSpan={totalColSpan}
                         className="p-0 border-l-2 border-l-primary"
                       >
+                        <div data-slot="detail-viewport" style={fitDetailToViewport&&detailWidth?{width:detailWidth,maxWidth:"100%"}:undefined}>
                         {renderDetail(row.original, () =>
                           setExpandedRowIdx(null)
                         )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   )}

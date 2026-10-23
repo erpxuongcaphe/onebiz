@@ -1092,6 +1092,7 @@ export default function HoaDonPage() {
         <DataTable
           key={isFnbBranch ? "fnb-invoices" : "erp-invoices"}
           compactMobileToolbar
+          fitDetailToViewport
           renderMobileRow={invoice=><InvoiceMobileRow invoice={invoice} statusLabel={statusMap[invoice.status]?.label??invoice.status}/>}
 
           defaultColumnVisibility={isFnbBranch ? {star: false, returnCode: false, customerCode: false, discount: false, debt: false} : {paid: false, invoiceStatus: false}}
