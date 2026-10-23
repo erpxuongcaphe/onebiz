@@ -1,4 +1,5 @@
 "use client";
+import {fnbContextExportColumns} from "@/lib/utils/fnb-invoice-context";
 import {useCallback,useEffect,useRef,useState} from "react";
 import type {PhamViChiNhanh} from "@/lib/services/supabase/invoice-list-scope";
 import {getInvoicesForFilteredExport,type InvoiceExportQuery,type InvoiceExportProgress} from "@/lib/services/supabase/invoice-list-export";
@@ -31,6 +32,7 @@ export function useInvoiceListExport(options:{
         {header:"Thời gian",key:"date",width:18,format:(v:string)=>formatDate(v)},
         {header:"Khách hàng",key:"customerName",width:25},
         {header:options.fnb?"Hình thức":"Loại bán",key:"invoiceTypeLabel",width:18},
+        ...((options.fnb || rows.some(row=>row.source==="fnb")) ? fnbContextExportColumns : []),
         {header:"Tổng tiền",key:"totalAmount",width:15},
         {header:"Giảm giá",key:"discount",width:15},
         {header:"Trạng thái",key:"status",width:15,format:(v:string)=>statusLabels[v]??v},

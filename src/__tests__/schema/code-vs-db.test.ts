@@ -47,6 +47,8 @@ const RPC = new Set(schema.rpc as string[]);
  * dưới sẽ BẮT XOÁ dòng ngay khi dump đã có (sau `node scripts/dump-db-schema.mjs`).
  */
 const RPC_CHO_MIGRATION = new Map<string, string>([
+  ["get_fnb_invoice_filter_options_20261023", "202610230005_fnb_invoice_service_filters.sql"],
+  ["get_invoice_list_summary_fnb_context_20261023", "202610230005_fnb_invoice_service_filters.sql"],
   ["fnb_reconcile_shift_totals_20261022", "202610220002_fnb_shift_totals_reconciliation.sql"],
   ...privateContracts.functions.filter(({name}) => !(schema.rpc as string[]).includes(name))
     .map(({name}): [string, string] => [name, privateContracts.migration]),
@@ -56,6 +58,7 @@ const RPC_CHO_MIGRATION = new Map<string, string>([
   // vì không có service-role credential. Xóa các dòng này ngay lần dump schema kế tiếp.
 ]);
 const COT_CHO_MIGRATION = new Map<string, string>([
+  ["invoices.fnb_context", "202610230004_fnb_paid_context_zero_total.sql"],
   ["shifts.close_kind", "202610220002_fnb_shift_totals_reconciliation.sql"],
   ["shifts.expected_transfer", "202610220002_fnb_shift_totals_reconciliation.sql"],
   ["shifts.actual_transfer", "202610220002_fnb_shift_totals_reconciliation.sql"],

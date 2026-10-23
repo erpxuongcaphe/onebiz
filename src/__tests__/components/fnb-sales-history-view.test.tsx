@@ -45,6 +45,13 @@ describe("cashier sales history",()=>{
   await act(async()=>{resolveCash({net:2000,received:2200,refunded:200,methods:{cash:2000},completed:25,pending:0,cancelled:0,invoiceValue:2500});});
   expect(mock.items).toHaveBeenCalledTimes(1);
  });
+ it("filters paid history by table/area while preserving explicit whole-day cash totals",async()=>{
+  mock.history.mockResolvedValue({rows:[{...row(1),tableName:"TN 03",areaName:"Trong nhà",posNote:"Khách lấy thêm ly"},{...row(2),tableName:"NS 01",areaName:"Ngoài sân"}]});
+  render(<FnbSalesHistoryView {...props()}/>);await screen.findByText("2 kết quả · 1/1");
+  fireEvent.change(screen.getByLabelText("Lọc khu vực"),{target:{value:"Trong nhà"}});
+  expect(screen.getByText("1 kết quả · 1/1")).toBeInTheDocument();expect(screen.queryByRole("button",{name:/HD2/})).toBeNull();
+  expect(screen.getByText(/Khách lấy thêm ly/)).toBeInTheDocument();expect(screen.getByText("Thực thu F&B cả ngày")).toBeInTheDocument();
+ });
  it("does not expose destructive actions as row buttons; cancelled bills have no print/void actions",async()=>{
   mock.history.mockResolvedValue({rows:[{...row(1),status:"cancelled"}],completed:0,pending:0,cancelled:1,invoiceValue:0});render(<FnbSalesHistoryView {...props()}/>);await screen.findByText("1 kết quả · 1/1");fireEvent.click(screen.getByRole("button",{name:/HD1/}));await screen.findByText("Cà phê");
   const detail=screen.getByRole("region",{name:"Chi tiết đơn bán hàng"});expect(within(detail).queryByLabelText("In lại hóa đơn")).toBeNull();expect(within(detail).queryByText("Xin duyệt hủy")).toBeNull();

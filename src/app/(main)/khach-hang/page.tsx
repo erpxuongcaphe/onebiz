@@ -1,4 +1,5 @@
 "use client";
+import {FnbInvoiceContext} from "@/components/shared/fnb-invoice-context";
 
 import { PartyCashHistory } from "@/components/shared/party-cash-history";
 import { standardizeWalkInCustomerCode } from "@/lib/services/supabase/customers";
@@ -1349,9 +1350,7 @@ function CustomerDetailPanel({
                 {
                   header: "Mã HĐ",
                   accessor: (r) => (
-                    <span className="font-mono text-primary text-xs">
-                      {r.code}
-                    </span>
+                    <div><span className="font-mono text-primary text-xs">{r.code}</span>{r.source === "fnb" && <FnbInvoiceContext value={r} compact/>}</div>
                   ),
                 },
                 {

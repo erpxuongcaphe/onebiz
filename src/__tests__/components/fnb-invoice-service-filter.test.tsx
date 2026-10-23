@@ -1,0 +1,4 @@
+import {describe,it,expect,vi} from "vitest";import {render,screen,fireEvent} from "@testing-library/react";import {FnbInvoiceServiceFilter} from "@/components/shared/fnb-invoice-service-filter";
+describe("compact table and area filter",()=>{
+ it("shows only tables in chosen area and clears table when area changes",()=>{const change=vi.fn();render(<FnbInvoiceServiceFilter options={{tables:[{label:"TN 03",area:"Trong nhà"},{label:"NS 01",area:"Ngoài sân"}],areas:["Trong nhà","Ngoài sân"]}} table="TN 03" area="Trong nhà" onChange={change}/>);expect(screen.queryByRole("option",{name:"NS 01"})).toBeNull();fireEvent.change(screen.getByLabelText("Lọc khu vực"),{target:{value:"Ngoài sân"}});expect(change).toHaveBeenCalledWith("","Ngoài sân");});
+});

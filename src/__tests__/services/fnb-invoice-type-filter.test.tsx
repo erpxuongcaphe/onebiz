@@ -26,7 +26,7 @@ describe("F&B invoice administration",()=>{
  it.each(["dine_in","takeaway","delivery"])("filters %s on server before pagination without requiring shipment",async(type)=>{
    await getInvoices({page:1,pageSize:15,branchId:"branch-a",filters:{fnbOrderType:type}});
    const select=state.calls.find(call=>call[0]==="invoices.select");
-   expect(select?.[1]).toContain("fnb_orders:kitchen_orders!kitchen_orders_invoice_id_fkey!inner(order_type)");
+   expect(select?.[1]).toContain("fnb_orders:kitchen_orders!kitchen_orders_invoice_id_fkey!inner(");
    expect(select?.[1]).not.toContain("shipping_orders_invoice_id_fkey!inner");
    expect(state.calls).toContainEqual(["invoices.eq","source","fnb"]);
    expect(state.calls).toContainEqual(["invoices.eq","fnb_orders.order_type",type]);
@@ -40,8 +40,16 @@ describe("F&B invoice administration",()=>{
    state.rows=[{id:"old",source:"fnb",status:"completed",shipments:[],fnb_orders:[]}];
    const r=await getInvoices({page:0,pageSize:15,filters:{delivery:"delivery"}});
    expect(state.calls.find(call=>call[0]==="invoices.select")?.[1]).toContain("shipping_orders_invoice_id_fkey!inner");
-   expect(state.calls.find(call=>call[0]==="invoices.select")?.[1]).not.toContain("fnb_orders:");
+   expect(state.calls.find(call=>call[0]==="invoices.select")?.[1]).toContain("fnb_orders:");
    expect(r.data[0].fnbOrderType).toBeUndefined();expect(invoiceFnbTypeLabel()).toBe("Chưa ghi nhận");
+ });
+ it("applies table and area before pagination and passes identical filters to dedicated totals",async()=>{
+  await getInvoices({page:1,pageSize:15,branchId:"branch-a",filters:{fnbOrderType:"all",fnbTable:"TN 03",fnbArea:"Trong nhà"}});
+  expect(state.calls).toContainEqual(["invoices.eq","fnb_table_label_20261023","TN 03"]);
+  expect(state.calls).toContainEqual(["invoices.eq","fnb_area_label_20261023","Trong nhà"]);
+  await getInvoiceListSummary({branchId:"branch-a",fnbTable:"TN 03",fnbArea:"Trong nhà"});
+  expect(state.rpc[0]).toMatchObject({name:"get_invoice_list_summary_fnb_context_20261023",args:{p_table:"TN 03",p_area:"Trong nhà",p_branch_id:"branch-a"}});
+  expect(khoaChiSoHoaDon({fnbTable:"TN 03"})).not.toBe(khoaChiSoHoaDon({fnbTable:"TN 04"}));
  });
  it("separates cached summary totals for the three POS types",()=>{
    expect(new Set(["dine_in","takeaway","delivery"].map(type=>khoaChiSoHoaDon({fnbOrderType:type as "dine_in"})))).toHaveProperty("size",3);
