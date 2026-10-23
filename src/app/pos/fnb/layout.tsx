@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { FnbLegacyColors } from "./components/fnb-legacy-colors";
 
 export const metadata: Metadata = {
   title: "FnB POS — Quầy thu ngân",
@@ -10,5 +11,10 @@ export default function FnbPosLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <>{children}</>;
+  return (
+    <>
+      <FnbLegacyColors />
+      {children}
+    </>
+  );
 }
