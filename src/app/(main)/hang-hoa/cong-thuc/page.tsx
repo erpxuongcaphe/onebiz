@@ -805,11 +805,11 @@ export default function CongThucPage() {
             </DialogTitle>
             <DialogDescription className="space-y-2">
               <span className="block">
-                Sao chép BOM <b>{cloneSourceBom?.name}</b> sang 1 chi nhánh
-                cụ thể. Chi nhánh đó sẽ dùng BOM mới (override BOM global).
+                Sao chép BOM <b>{cloneSourceBom?.name}</b> sang chi nhánh được chọn,
+                gồm nguyên liệu và định lượng theo từng tùy chọn.
               </span>
               <span className="block text-xs text-on-surface-variant">
-                BOM global gốc giữ nguyên, các chi nhánh khác vẫn dùng global.
+                Giữ nguyên mã liên kết món/size. Công thức chung và các chi nhánh khác không thay đổi.
               </span>
             </DialogDescription>
           </DialogHeader>
@@ -817,6 +817,7 @@ export default function CongThucPage() {
             <label className="text-sm font-medium">Chọn chi nhánh đích</label>
             <Select
               value={cloneTargetBranchId || null}
+              disabled={cloneLoading}
               onValueChange={(v) => setCloneTargetBranchId(v ?? "")}
               items={branches.map((b) => ({
                 value: b.id,
@@ -870,6 +871,8 @@ export default function CongThucPage() {
                   setCloneSourceBom(null);
                   setCloneTargetBranchId("");
                   await fetchData();
+                  setEditingId(cloned.id);
+                  setEditorOpen(true);
                 } catch (err) {
                   toast({
                     variant: "error",
