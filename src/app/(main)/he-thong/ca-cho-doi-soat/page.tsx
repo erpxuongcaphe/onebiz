@@ -142,7 +142,7 @@ function CaChoDoiSoatPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),1fr))]">
           {shifts.map((s) => (
             <Card
               key={s.id}
@@ -164,29 +164,29 @@ function CaChoDoiSoatPage() {
 
                 {/* Thông tin ca */}
                 <div className="space-y-1.5 text-xs">
-                  <div className="flex justify-between">
+                  <div className="flex items-start justify-between gap-2">
                     <span className="text-muted-foreground">Mở ca:</span>
                     <span className="font-medium">
                       {formatDate(s.openedAt)}
                     </span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex items-start justify-between gap-2">
                     <span className="text-muted-foreground">Kéo dài:</span>
                     <span className="font-medium text-status-warning">
                       {Math.round(s.shiftDurationHours)}h
                     </span>
                   </div>
                   {s.startingCash > 0 && (
-                    <div className="flex justify-between">
+                    <div className="flex items-start justify-between gap-2">
                       <span className="text-muted-foreground">Đầu ca:</span>
                       <span className="font-medium tabular-nums">
                         {formatCurrency(s.startingCash)}đ
                       </span>
                     </div>
                   )}
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Tự pending:</span>
-                    <span className="font-medium text-xs">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-muted-foreground shrink-0">Tự pending:</span>
+                    <span className="font-medium text-xs text-right min-w-0">
                       {s.autoMarkedPendingAt ? formatDate(s.autoMarkedPendingAt) : "Chưa ghi nhận thời điểm"}
                     </span>
                   </div>
