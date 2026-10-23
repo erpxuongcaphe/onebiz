@@ -58,7 +58,9 @@ import { bulkImportPurchaseOrders } from "@/lib/services/supabase/excel-import";
 import { useBranchFilter, useToast } from "@/lib/contexts";
 import { usePermissions } from "@/lib/permissions";
 import { DocumentNoteBox } from "@/components/shared/document-note-box";
-import type { PurchaseOrderEntry } from "@/lib/types";
+import type { PurchaseOrderEntry as BasePurchaseOrderEntry } from "@/lib/types";
+import { getWarehouseOrderLinks, type SupplyOrderLink } from "@/lib/services/supabase/fnb-warehouse-orders";
+type PurchaseOrderEntry = BasePurchaseOrderEntry & { warehouseOrder?: SupplyOrderLink };
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 
@@ -85,7 +87,7 @@ function PurchaseOrderEntryDetail({
   onClose: () => void;
   onDelete?: () => void;
 }) {
-  const st = statusMap[item.status];
+  const st = item.warehouseOrder ? { label: item.warehouseOrder.cancelled ? "Kho đã hủy xử lý" : item.warehouseOrder.processed ? "Kho đã xử lý" : "Đã gửi kho tổng", variant: "outline" as const } : statusMap[item.status];
   const tabs: DetailTab[] = [
     {
       id: "info",
@@ -121,6 +123,9 @@ function PurchaseOrderEntryDetail({
           />
 
           {/* 06/08: ghi chú phiếu đặt NCC — trước đây không hiện trong chi tiết. */}
+          {item.warehouseOrder && <div className="rounded-md border bg-blue-50 p-3 text-sm">
+            Đơn kho tổng: <strong>{item.warehouseOrder.salesOrderCode}</strong>. Đây là nhu cầu đã gửi; kho được điều chỉnh hàng thực xuất. Nhận hàng tại phiếu giao nội bộ, không nhập lại từ PO này.
+          </div>}
           <DocumentNoteBox note={item.note} />
         </div>
       ),
@@ -188,7 +193,8 @@ const columns: ColumnDef<PurchaseOrderEntry, unknown>[] = [
     header: "Trạng thái",
     size: 130,
     cell: ({ row }) => {
-      const { label, variant } = statusMap[row.original.status];
+      const link = row.original.warehouseOrder;
+      const { label, variant } = link ? { label: link.cancelled ? "Kho đã hủy xử lý" : link.processed ? "Kho đã xử lý" : "Đã gửi kho tổng", variant: "outline" as const } : statusMap[row.original.status];
       return <Badge variant={variant}>{label}</Badge>;
     },
   },
@@ -261,7 +267,8 @@ export default function DatHangNhapPage() {
       amountMax: amountMax ? Number(amountMax) : undefined,
       branchId: activeBranchId,
     });
-    setData(result.data);
+    const links = new Map((await getWarehouseOrderLinks(result.data.map(row => row.id))).map(link => [link.purchaseOrderId, link]));
+    setData(result.data.map(row => ({ ...row, warehouseOrder: links.get(row.id) })));
     setTotal(result.total);
     setSummary(result.summary);
     } catch (e) {
@@ -451,7 +458,8 @@ export default function DatHangNhapPage() {
             icon: <Icon name="cancel" size={16} />,
             variant: "destructive",
             onClick: async (selectedRows) => {
-              const cancellable = selectedRows.filter((r) => r.status === "pending");
+              const cancellable = selectedRows.filter((r) => r.status === "pending")
+                .filter((r) => !r.warehouseOrder);
               if (cancellable.length === 0) {
                 toast({
                   title: "Không có đơn nào có thể hủy",
@@ -494,7 +502,7 @@ export default function DatHangNhapPage() {
             item={item}
             onClose={onClose}
             onDelete={
-              item.status === "pending"
+              item.status === "pending" && !item.warehouseOrder
                 ? () => setCancellingItem(item)
                 : undefined
             }
@@ -519,7 +527,7 @@ export default function DatHangNhapPage() {
               });
             },
             // Workflow: chuyển sang nhập hàng
-            workflowActions: [
+            workflowActions: row.warehouseOrder ? [] : [
               {
                 label: "Nhập hàng",
                 icon: <Icon name="add_box" size={16} />,
@@ -533,7 +541,7 @@ export default function DatHangNhapPage() {
             onAuditLog: () => setAuditDialogTarget(row),
             // Chỉ hủy đơn chưa nhận hàng; đơn partial phải đóng phần còn thiếu.
             onCancel:
-              row.status === "pending"
+              row.status === "pending" && !row.warehouseOrder
                 ? () => setCancellingItem(row)
                 : undefined,
           })
