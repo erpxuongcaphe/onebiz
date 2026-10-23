@@ -366,7 +366,7 @@ function ReconciliationCloseShiftDialog({
 
           </DialogBody>
           <DialogFooter>
-            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
+            <Button className="h-11 min-h-11" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
               Hủy
             </Button>
             <Button
@@ -374,7 +374,7 @@ function ReconciliationCloseShiftDialog({
               // BUG FIX: cho phép nhập 0 (két trống thật) — string "" thay vì
               // !actualCash (đề phòng JS coerce). Cashier có thể đếm ra 0đ.
               disabled={loading || !preview || actualCash === "" || (reconcileTransfer&&!draft.valid)}
-              className="bg-status-success text-on-success hover:bg-status-success/90"
+              className="h-11 min-h-11 bg-status-success text-on-success hover:bg-status-success/90"
             >
               Đóng ca
             </Button>
@@ -384,8 +384,8 @@ function ReconciliationCloseShiftDialog({
 
       {/* CEO 05/06/2026: Popup xác nhận trước khi đóng (không thể hoàn tác) */}
       <Dialog open={showConfirm} onOpenChange={(o) => !loading && setShowConfirm(o)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-md [&>button]:size-11">
+          <DialogHeader className="pr-10">
             <DialogTitle className="flex items-center gap-2">
               <Icon name="warning" className="text-status-warning" />
               Xác nhận đóng ca
@@ -430,10 +430,10 @@ function ReconciliationCloseShiftDialog({
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowConfirm(false)} disabled={loading}>
+            <Button className="h-11 min-h-11" variant="outline" onClick={() => setShowConfirm(false)} disabled={loading}>
               Xem lại
             </Button>
-            <Button onClick={handleConfirm} disabled={loading}>
+            <Button className="h-11 min-h-11" onClick={handleConfirm} disabled={loading}>
               {loading && <Icon name="progress_activity" size={16} className="mr-1 animate-spin" />}
               Xác nhận đóng ca
             </Button>
