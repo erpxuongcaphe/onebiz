@@ -14,6 +14,7 @@ describe("used batch service boundaries",()=>{
   await expect(applyProductionUsedAdjustment({...input,requestId:"request",previewToken:"quoted"})).rejects.toThrow("Xem trước lại");expect(mock.rpc).toHaveBeenCalledOnce();
   expect(mock.rpc.mock.calls[0][1]).toMatchObject({p_request_id:"request",p_preview_token:"quoted"});
  });
+ it("does not report success when apply returns no receipt",async()=>{mock.rpc.mockResolvedValue({data:null,error:null});await expect(applyProductionUsedAdjustment({...input,requestId:"same-request",previewToken:"quoted"})).rejects.toThrow("Chưa xác nhận");expect(mock.rpc).toHaveBeenCalledOnce();});
  it("rejects incomplete preview responses",async()=>{mock.rpc.mockResolvedValue({data:{},error:null});await expect(previewProductionUsedAdjustment(input)).rejects.toThrow("hợp lệ");});
  it("explains that output cannot be less than already used without guessing a stock repair",async()=>{
   mock.rpc.mockResolvedValue({data:null,error:{message:"PRODUCTION_ADJUSTMENT_BELOW_USED"}});await expect(previewProductionUsedAdjustment(input)).rejects.toThrow("nhỏ hơn lượng đã dùng");

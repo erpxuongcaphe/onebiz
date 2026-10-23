@@ -797,5 +797,6 @@ export async function applyProductionUsedAdjustment(input: ProductionAdjustmentI
     if (["55P03","40P01","57014"].includes(error.code)) throw new Error("Kho đang có thao tác khác. Đợi vài giây rồi thử lại; hệ thống không ghi điều chỉnh dở dang.");
     throw new Error(PRODUCTION_ADJUSTMENT_ERRORS[error.message] ?? error.message);
   }
+  if (!data?.id) throw new Error("Chưa xác nhận được kết quả lưu. Thử lại cùng lần xác nhận để hệ thống kiểm tra, không tạo điều chỉnh mới.");
   return data as {id:string;orderId:string;preview:ProductionAdjustmentPreview};
 }

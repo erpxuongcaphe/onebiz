@@ -71,8 +71,8 @@ begin
  select * into lot from product_lots where tenant_id=tenant and branch_id=po.branch_id and production_order_id=po.id for update;
  if not found or (select count(*) from product_lots where tenant_id=tenant and production_order_id=po.id)<>1
   or lot.product_id is distinct from po.product_id or lot.variant_id is distinct from po.variant_id
-  or lot.status not in ('active','expired','consumed') or po.completed_qty is null or po.completed_qty<=0
-  or abs(lot.initial_qty-po.completed_qty)>.0001 or lot.current_qty<0 or lot.current_qty>lot.initial_qty then
+  or lot.status not in ('active','expired','consumed') or po.completed_qty is null or po.completed_qty::text in ('NaN','Infinity','-Infinity') or po.completed_qty<=0
+  or abs(lot.initial_qty-po.completed_qty)>.0001 or lot.current_qty::text in ('NaN','Infinity','-Infinity') or lot.current_qty<0 or lot.current_qty>lot.initial_qty then
   raise exception 'PRODUCTION_CORRECTION_LOT_RECONCILIATION_REQUIRED'; end if;
  perform 1 from lot_allocations where tenant_id=tenant and lot_id=lot.id order by id for update;
  select coalesce(sum(quantity),0) into allocation_qty from lot_allocations where tenant_id=tenant and lot_id=lot.id and reverted_at is null;
@@ -89,11 +89,11 @@ begin
  state:=jsonb_build_object('order',to_jsonb(po),'lot',to_jsonb(lot),'materials',old_materials,'output_stock',to_jsonb(bs),'product',to_jsonb(p),
   'allocations',(select coalesce(jsonb_agg(to_jsonb(a) order by id),'[]') from lot_allocations a where tenant_id=tenant and lot_id=lot.id));
  for m in select x.*,v.unit stock_unit,v.name,v.code from production_order_materials x join products v on v.id=x.product_id and v.tenant_id=tenant where x.production_order_id=po.id order by x.product_id loop
-  if m.product_id=po.product_id or m.actual_qty is null or m.actual_qty<0 or m.unit is distinct from m.stock_unit or m.unit_cost is null or m.unit_cost<0 then raise exception 'PRODUCTION_CORRECTION_HISTORY_INVALID'; end if;
+  if m.product_id=po.product_id or m.actual_qty is null or m.actual_qty<0 or m.unit is distinct from m.stock_unit or m.unit_cost is null or m.unit_cost::text in ('NaN','Infinity','-Infinity') or m.unit_cost<0 then raise exception 'PRODUCTION_CORRECTION_HISTORY_INVALID'; end if;
   select value into item from jsonb_array_elements(p_materials) where value->>'productId'=m.product_id::text;
   if (item->>'quantity')::numeric is null or (item->>'quantity')::numeric::text in ('NaN','Infinity','-Infinity') or (item->>'quantity')::numeric<0 then raise exception 'PRODUCTION_CORRECTION_QUANTITY_INVALID'; end if;
   factor:=resolve_product_uom_factor(tenant,m.product_id,item->>'unit');
-  if factor is null or factor<=0 or not(item ? 'expectedFactor') or round((item->>'expectedFactor')::numeric,12) is distinct from round(factor,12) then raise exception 'UOM_CONVERSION_CHANGED'; end if;
+  if factor is null or factor::text in ('NaN','Infinity','-Infinity') or factor<=0 or not(item ? 'expectedFactor') or round((item->>'expectedFactor')::numeric,12) is distinct from round(factor,12) then raise exception 'UOM_CONVERSION_CHANGED'; end if;
   q:=round((item->>'quantity')::numeric*factor,4); d:=q-m.actual_qty;
   select * into bs from branch_stock where tenant_id=tenant and branch_id=po.branch_id and product_id=m.product_id and variant_id is null;
   if not found or bs.quantity-d<0 or (select stock from products where id=m.product_id and tenant_id=tenant)-d<0 then raise exception 'PRODUCTION_CORRECTION_STOCK_REQUIRED'; end if;
@@ -112,7 +112,7 @@ begin
  end loop;
  if jsonb_array_length(snapshots)<>jsonb_array_length(old_materials) then raise exception 'PRODUCTION_CORRECTION_MATERIALS_INVALID'; end if;
  old_cost:=po.cogs_amount; new_cost:=round(new_cost,2);
- if old_cost is null or old_cost<0 then raise exception 'PRODUCTION_CORRECTION_HISTORY_INVALID'; end if;
+ if old_cost is null or old_cost::text in ('NaN','Infinity','-Infinity') or old_cost<0 then raise exception 'PRODUCTION_CORRECTION_HISTORY_INVALID'; end if;
  old_remaining_cost:=round(old_cost*lot.current_qty/po.completed_qty,4);
  new_remaining_cost:=round(new_cost*remain_qty/output_qty,4);
  inventory_delta:=new_remaining_cost-old_remaining_cost;
