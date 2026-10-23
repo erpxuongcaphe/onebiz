@@ -348,7 +348,7 @@ function InvoiceDetail({
                   <DetailItemsTable
                     columns={[
                       { header: "Mã hàng", accessor: "productCode" as never },
-                      { header: "Tên hàng", accessor: (item: Record<string, unknown>) => <InvoiceItemName name={String(item.productName ?? "")} note={item.note as string | undefined}/> },
+                      { header: "Tên hàng", className: "min-w-[180px] max-w-[320px]", accessor: (item: Record<string, unknown>) => <InvoiceItemName name={String(item.productName ?? "")} note={item.note as string | undefined}/> },
                       {
                         header: "Đơn vị",
                         accessor: (item: Record<string, unknown>) =>
