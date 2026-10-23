@@ -98,6 +98,46 @@ try {
  create function get_user_tenant_id() returns uuid language sql stable as $$select tenant_id from profiles where id=auth.uid()$$;
  create function get_user_accessible_branches(uuid) returns table(branch_id uuid) language sql stable as $$select '${id(3)}'::uuid$$;`);
  const filterMigration=fs.readFileSync('supabase/migrations/202610230005_fnb_invoice_service_filters.sql','utf8');await db.exec(filterMigration);await db.exec(filterMigration);
+ // Item-note regression: use real checkout chain; never backfill historical rows.
+ await db.exec('alter table invoice_items add column if not exists note text');
+ const beforeNotes=(await db.query('select to_jsonb(ii) row from invoice_items ii order by id')).rows;
+ const itemNoteMigration=fs.readFileSync('supabase/migrations/202610230006_fnb_invoice_item_notes.sql','utf8');
+ await db.exec(itemNoteMigration);await db.exec(itemNoteMigration);
+ assert((await db.query("select has_function_privilege('anon','get_fnb_invoice_item_notes_20261023(uuid)','execute') ok")).rows[0].ok===false,'anonymous cannot call note reader');
+ assert((await db.query("select has_function_privilege('authenticated','get_fnb_invoice_item_notes_20261023(uuid)','execute') ok")).rows[0].ok===true,'authenticated can call guarded note reader');
+
+ assert(JSON.stringify(beforeNotes)===JSON.stringify((await db.query('select to_jsonb(ii) row from invoice_items ii order by id')).rows),'note install never rewrites historical invoice lines');
+ await create(400,10000);await db.exec(`update kitchen_order_items set note='Ít đá, mang riêng' where id='${id(401)}';
+ insert into kitchen_order_items(id,kitchen_order_id,product_id,product_name,quantity,unit_price,note,cancelled_qty) values('${id(402)}','${id(400)}','${id(10)}','Extra cup',1,10000,'Không đá',0);`);
+ const withNotes=await pay(400,20000);
+ const noteLines=(await db.query('select id,note from invoice_items where invoice_id=$1 order by note',[withNotes.invoice_id])).rows;
+ assert(noteLines.length===2 && noteLines.some(r=>r.note==='Ít đá, mang riêng') && noteLines.some(r=>r.note==='Không đá'),'duplicate product lines retain their own note at payment');
+ await db.exec(`update kitchen_order_items set note='Later edit' where kitchen_order_id='${id(400)}';`);
+ const noteStock=await stock();const noteInvoices=(await db.query('select to_jsonb(i) row from invoices i order by id')).rows;
+ const resolved=(await db.query('select * from get_fnb_invoice_item_notes_20261023($1)',[withNotes.invoice_id])).rows;
+ assert(resolved.some(r=>r.note==='Ít đá, mang riêng') && resolved.some(r=>r.note==='Không đá'),'paid snapshots win over later kitchen edits');
+ await pay(400,20000);assert(JSON.stringify(noteStock)===JSON.stringify(await stock()),'note checkout retry never reposts stock');
+ // Simulate an exact-linked legacy null note; another identical-product line has no source link.
+ await db.exec(`update invoice_items set note=null where id='${noteLines[0].id}';
+ update kitchen_order_items set note='Legacy exact note' where id=(select kitchen_order_item_id from fnb_invoice_kitchen_line_sources where invoice_item_id='${noteLines[0].id}');
+ delete from fnb_invoice_kitchen_line_sources where invoice_item_id='${noteLines[1].id}';
+ update invoice_items set note=null where id='${noteLines[1].id}';`);
+ const legacy=(await db.query('select * from get_fnb_invoice_item_notes_20261023($1)',[withNotes.invoice_id])).rows;
+ assert(legacy.find(r=>r.invoice_item_id===noteLines[0].id).note==='Legacy exact note' && legacy.find(r=>r.invoice_item_id===noteLines[1].id).note===null,'legacy fallback uses exact ID, never guesses duplicate product identity');
+ await db.query("update invoice_items set note='' where id=$1",[noteLines[0].id]);
+ assert((await db.query('select * from get_fnb_invoice_item_notes_20261023($1)',[withNotes.invoice_id])).rows.find(r=>r.invoice_item_id===noteLines[0].id).note==='','explicit cleared snapshot stays empty');
+ assert(JSON.stringify(noteStock)===JSON.stringify(await stock()) && JSON.stringify(noteInvoices)===JSON.stringify((await db.query('select to_jsonb(i) row from invoices i order by id')).rows),'note reads never alter stock or invoice money');
+ const actor=(await db.query('select auth.uid() id')).rows[0].id;
+ await db.exec(`update profiles set is_active=false where id='${actor}';`);
+ let inactiveDenied=false;try{await db.query('select * from get_fnb_invoice_item_notes_20261023($1)',[withNotes.invoice_id]);}catch(e){inactiveDenied=/AUTH_REQUIRED/.test(e.message);}assert(inactiveDenied,'inactive profile cannot read notes');
+ await db.exec(`update profiles set is_active=true where id='${actor}';`);
+
+ await db.exec(`insert into invoices(id,tenant_id,branch_id,source,status,total,paid) values('${id(900)}','${id(2)}','${id(999)}','fnb','completed',0,0);
+ create or replace function user_has_permission(uuid,text) returns boolean language sql as $$select $2 in ('invoices.view','pos_fnb.view_orders')$$;
+ create or replace function user_has_branch_access(uuid,uuid) returns boolean language sql as $$select $2='${id(3)}'::uuid$$;`);
+ let noteDenied=false;try{await db.query('select * from get_fnb_invoice_item_notes_20261023($1)',[id(900)]);}catch(e){noteDenied=/BRANCH_ACCESS_DENIED/.test(e.message);}assert(noteDenied,'note reader denies unassigned branch');
+ await db.exec(`create or replace function user_has_permission(uuid,text) returns boolean language sql as $$select true$$;`);
+
  assert((await db.query('select fnb_table_label_20261023(i) label,fnb_area_label_20261023(i) area from invoices i where id=$1',[paid.invoice_id])).rows[0].label==='TN 03','filter uses frozen table name, not renamed table');
  assert((await db.query('select fnb_area_label_20261023(i) area from invoices i where id=$1',[paid.invoice_id])).rows[0].area==='Trong nhà','filter uses frozen area name');
  const opts=(await db.query('select get_fnb_invoice_filter_options_20261023($1) result',[id(3)])).rows[0].result;
@@ -108,6 +148,7 @@ try {
  let denied=false;try{await db.query('select get_fnb_invoice_filter_options_20261023($1)',[id(999)]);}catch(e){denied=/BRANCH_ACCESS_DENIED/.test(e.message);}assert(denied,'options reject foreign branch');
  await db.exec(`create or replace function user_has_permission(uuid,text) returns boolean language sql as $$select false$$;`);
  denied=false;try{await db.query('select get_fnb_invoice_filter_options_20261023($1)',[id(3)]);}catch(e){denied=/INVOICE_VIEW_REQUIRED/.test(e.message);}assert(denied,'options enforce invoice/POS viewing permission');
- console.log('PASS: real payment/BOM chain, zero bill stock posting/no cash, active shift/invalid/empty guards, sibling and final table release, payment replay, frozen table/zone/times/POS note, no old invoice backfill. Auth adapters remain bounded fixture stubs.');
+ denied=false;try{await db.query('select * from get_fnb_invoice_item_notes_20261023($1)',[withNotes.invoice_id]);}catch(e){denied=/INVOICE_VIEW_REQUIRED/.test(e.message);}assert(denied,'note reader enforces view permission');
+ console.log('PASS: item notes snapshot + exact legacy resolver/no backfill/auth/branch,  real payment/BOM chain, zero bill stock posting/no cash, active shift/invalid/empty guards, sibling and final table release, payment replay, frozen table/zone/times/POS note, no old invoice backfill. Auth adapters remain bounded fixture stubs.');
 } catch(e){console.error(e.message,e.where??'');process.exitCode=1;} finally {await db.close();fs.rmSync(temporary,{recursive:true,force:true});}
 

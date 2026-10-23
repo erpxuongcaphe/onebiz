@@ -2898,6 +2898,10 @@ export interface Database {
       };
     };
     Functions: {
+      get_fnb_invoice_item_notes_20261023: {
+        Args: { p_invoice_id: string };
+        Returns: { invoice_item_id: string; note: string | null }[];
+      };
       split_kitchen_order_quantities_20261020: {
         Args: { p_order_id: string; p_items: Json; p_request_id: string };
         Returns: Json;
