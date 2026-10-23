@@ -26,6 +26,7 @@ const KIND_BY_REFERENCE: Record<string, StockDocumentKind> = {
   purchase_entry: "purchase_order",
   input_invoice: "input_invoice",
   production_order: "production_order",
+  production_correction: "production_order",
   production_reconcile: "production_order",
   production_complete: "production_order",
   production_consume: "production_order",

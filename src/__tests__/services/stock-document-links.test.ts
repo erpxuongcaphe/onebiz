@@ -14,6 +14,7 @@ describe("stock document links", () => {
     ["purchase_order", "purchase_order"],
     ["purchase_order_revert", "purchase_order"],
     ["production_reconcile", "production_order"],
+    ["production_correction", "production_order"],
     ["inventory_check", "inventory_check"],
     ["disposal_export", "disposal_export"],
     ["return_bom_restore", "sales_return"],

@@ -66,6 +66,7 @@ export const PERMISSIONS = {
   PRODUCTION_CREATE_ORDER: "production.create_order",
   PRODUCTION_COMPLETE_ORDER: "production.complete_order",
   PRODUCTION_CANCEL_ORDER: "production.cancel_order",
+  PRODUCTION_CORRECT_ORDER: "production.correct_order",
   PRODUCTION_MANAGE_BOM: "production.manage_bom",
 
   // Finance
@@ -250,7 +251,8 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { code: PERMISSIONS.PRODUCTION_VIEW, label: "Xem dashboard + lệnh + lô sản xuất" },
       { code: PERMISSIONS.PRODUCTION_CREATE_ORDER, label: "Tạo lệnh sản xuất" },
       { code: PERMISSIONS.PRODUCTION_COMPLETE_ORDER, label: "Hoàn thành SX (trừ NVL + nhập kho)" },
-      { code: PERMISSIONS.PRODUCTION_CANCEL_ORDER, label: "Huỷ lệnh sản xuất" },
+      { code: PERMISSIONS.PRODUCTION_CANCEL_ORDER, label: "Hủy lệnh sản xuất và hoàn kho" },
+      { code: PERMISSIONS.PRODUCTION_CORRECT_ORDER, label: "Sửa/điều chỉnh mẻ đã hoàn thành (kho và giá vốn)" },
       { code: PERMISSIONS.PRODUCTION_MANAGE_BOM, label: "Quản lý công thức (BOM)" },
     ],
   },
@@ -426,7 +428,7 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
         (c) => c.startsWith("inventory.") && c !== PERMISSIONS.INVENTORY_LOCK,
       ),
       // Production full (CEO 25/05/2026)
-      ...ALL_PERMISSION_CODES.filter((c) => c.startsWith("production.")),
+      ...ALL_PERMISSION_CODES.filter((c) => c.startsWith("production.") && c !== PERMISSIONS.PRODUCTION_CORRECT_ORDER),
       // Finance view + create
       PERMISSIONS.FINANCE_VIEW_CASH_BOOK,
       PERMISSIONS.FINANCE_CREATE_TRANSACTION,

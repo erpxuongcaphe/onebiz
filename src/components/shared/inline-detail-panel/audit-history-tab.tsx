@@ -7,6 +7,8 @@ import {
   localizeAuditData,
   type AuditLogEntry,
 } from "@/lib/services";
+import { ProductionAdjustmentSummary } from "@/components/shared/production-adjustment-summary";
+import type { ProductionAdjustmentPreview } from "@/lib/services/supabase/production";
 import { formatDate } from "@/lib/format";
 import { Icon } from "@/components/ui/icon";
 
@@ -171,6 +173,15 @@ function DiffSummary({
   newData: Record<string, unknown> | null;
   action: string;
 }) {
+  if (action === "production_used_adjustment" && newData) {
+    const preview = newData.preview as ProductionAdjustmentPreview | undefined;
+    if (!preview || !Array.isArray(preview.materials)) return <p>Đã ghi điều chỉnh mẻ.</p>;
+    return <details className="mt-2 rounded-lg border p-3">
+      <summary className="cursor-pointer font-medium text-foreground">Xem chênh lệch kho và giá vốn</summary>
+      <p className="my-2 text-sm text-foreground"><strong>Lý do:</strong> {String(newData.reason ?? "")}</p>
+      <ProductionAdjustmentSummary preview={preview} />
+    </details>;
+  }
   if (action === "create" && newData) {
     const codeOrName = newData["code"] ?? newData["name"] ?? null;
     if (codeOrName) {

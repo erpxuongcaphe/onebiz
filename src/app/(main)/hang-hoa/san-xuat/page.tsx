@@ -270,6 +270,7 @@ export default function SanXuatPage() {
   const { activeBranchId, currentBranch } = useBranchFilter();
   const { hasAny, isLoading: permissionsLoading } = usePermissions();
   const txPerms = useTxRowPermissions("production");
+  const canCorrectCompleted = hasAny(["production.correct_order"]);
   const [data, setData] = useState<ProductionOrder[]>([]);
   const units=useProductUom(data.map(order=>order.productId));
   const [total, setTotal] = useState(0);
@@ -639,7 +640,7 @@ export default function SanXuatPage() {
               <div><h2 className="font-semibold">Tiến độ sản xuất</h2><p className="text-xs text-muted-foreground">Toàn bộ lệnh theo bộ lọc. Chọn thẻ để xem chi tiết; hoàn thành cần xác nhận lượng thực dùng và thực nhận.</p></div>
               <select aria-label="Sắp xếp lệnh trên bảng" className="h-9 rounded-md border bg-background px-2 text-sm" value={boardSort} onChange={event => setBoardSort(event.target.value)}><option value="due">Ưu tiên quá hạn / đến hạn</option><option value="oldest">Cũ nhất trước</option><option value="newest">Mới nhất trước</option></select>
             </div>
-            {loading ? <p role="status" className="py-8 text-center text-sm text-muted-foreground">Đang tải bảng tiến độ…</p> : boardOrder ? <ProductionOrderDetail orderId={boardOrder.id} onClose={() => setBoardOrderId(null)} onEdit={boardOrder.status !== "cancelled" && txPerms.canEdit && (boardOrder.status !== "completed" || hasAny(["production.complete_order"])) ? () => setCorrectingItem({order:boardOrder,cancel:false}) : undefined} onDelete={boardOrder.status !== "cancelled" && txPerms.canCancel ? () => boardOrder.status === "completed" ? setCorrectingItem({order:boardOrder,cancel:true}) : setCancellingItem(boardOrder) : undefined} /> : <KanbanBoard
+            {loading ? <p role="status" className="py-8 text-center text-sm text-muted-foreground">Đang tải bảng tiến độ…</p> : boardOrder ? <ProductionOrderDetail orderId={boardOrder.id} onClose={() => setBoardOrderId(null)} onEdit={boardOrder.status !== "cancelled" && (boardOrder.status === "completed" ? canCorrectCompleted : txPerms.canEdit) ? () => setCorrectingItem({order:boardOrder,cancel:false}) : undefined} onDelete={boardOrder.status !== "cancelled" && txPerms.canCancel ? () => boardOrder.status === "completed" ? setCorrectingItem({order:boardOrder,cancel:true}) : setCancellingItem(boardOrder) : undefined} /> : <KanbanBoard
             className="h-[calc(100dvh-22rem)]"
             columns={kanbanColumns}
               getItemId={(o) => o.id}
@@ -711,7 +712,7 @@ export default function SanXuatPage() {
               <ProductionOrderDetail
                 orderId={item.id}
                 onClose={onClose}
-                onEdit={item.status !== "cancelled" && txPerms.canEdit && (item.status !== "completed" || hasAny(["production.complete_order"])) ? ()=>setCorrectingItem({order:item,cancel:false}):undefined}
+                onEdit={item.status !== "cancelled" && (item.status === "completed" ? canCorrectCompleted : txPerms.canEdit) ? ()=>setCorrectingItem({order:item,cancel:false}):undefined}
                 onDelete={
                   item.status !== "cancelled" && txPerms.canCancel
                     ? () => item.status === "completed" ? setCorrectingItem({order:item,cancel:true}) : setCancellingItem(item)
@@ -725,7 +726,7 @@ export default function SanXuatPage() {
                 row,
                 kind: "production",
                 permissions: txPerms,
-                onEdit: row.status !== "cancelled" && (row.status !== "completed" || hasAny(["production.complete_order"])) ? () => setCorrectingItem({order:row,cancel:false}) : undefined,
+                onEdit: row.status !== "cancelled" && row.status !== "completed" ? () => setCorrectingItem({order:row,cancel:false}) : undefined,
                 onPrint: () =>
                   printDocumentWithTemplate({
                     channel: "backoffice",
@@ -748,6 +749,10 @@ export default function SanXuatPage() {
                       createdBy: row.createdBy ?? "",
                     }),
                   }),
+                extraActions: row.status === "completed" && canCorrectCompleted ? [{
+                  label: "Điều chỉnh mẻ / đã sử dụng", icon: <Icon name="edit_note" size={16} />,
+                  onClick: () => setCorrectingItem({order:row,cancel:false}),
+                }] : [],
                 // Workflow: "Hoàn thành" specific cho production
                 workflowActions:
                   row.status !== "completed" && row.status !== "cancelled" && hasAny(["production.complete_order"])

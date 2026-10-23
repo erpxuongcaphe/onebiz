@@ -247,7 +247,7 @@ export async function correctProductionOrderQuantities(input: {
   });
   if (error) {
     const messages: Record<string,string> = {
-      PRODUCTION_CORRECTION_OUTPUT_USED: "Lô thành phẩm của chính mẻ này đã được dùng hoặc xuất kho. Cần xử lý các chứng từ dùng lô này trước khi sửa/hủy; tồn kho chưa thay đổi.",
+      PRODUCTION_CORRECTION_OUTPUT_USED: "Lô thành phẩm của chính mẻ này đã được dùng hoặc xuất kho. Để sửa số lượng, chọn Sửa / Điều chỉnh mẻ; hủy mẻ cần đối soát phần đã dùng. Tồn kho chưa thay đổi.",
       PRODUCTION_CORRECTION_LOT_RECONCILIATION_REQUIRED: "Sổ lô của mẻ và tồn kho chưa khớp hoặc thiếu liên kết. Cần đối soát lô trước khi sửa/hủy; chưa thay đổi tồn kho.",
       PRODUCTION_CORRECTION_STALE: "Lệnh vừa được người khác cập nhật. Đóng rồi mở lại để lấy số mới.",
       PRODUCTION_CORRECTION_LEGACY_ISSUE: "Lệnh cũ đã xuất nguyên liệu trước khi hoàn thành. Dùng Hủy lệnh để hoàn nguyên trước khi tạo lại.",
@@ -742,4 +742,61 @@ function mapProductionOrder(row: Record<string, unknown>): ProductionOrder {
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   };
+}
+export interface ProductionAdjustmentMaterial {
+  productId: string; quantity: number; unit: string; expectedFactor: number;
+}
+export interface ProductionAdjustmentPreview {
+  token: string; orderCode: string; productName: string; unit: string;
+  outputBefore: number; outputAfter: number; usedQuantity: number;
+  remainingBefore: number; remainingAfter: number; stockBefore: number; stockAfter: number; stockDelta: number;
+  batchCostBefore: number; batchCostAfter: number; inventoryCostDelta: number; usedCostDelta: number;
+  materials: {productId: string; productName: string; unit: string; before: number; after: number;
+    stockBefore: number; stockAfter: number; stockDelta: number; costDelta: number}[];
+}
+export interface ProductionAdjustmentInput {
+  orderId: string; expectedUpdatedAt: string; outputQuantity: number;
+  materials: ProductionAdjustmentMaterial[]; reason: string;
+}
+const PRODUCTION_ADJUSTMENT_ERRORS: Record<string,string> = {
+  PRODUCTION_ADJUSTMENT_BELOW_USED: "Lượng thành phẩm đúng nhỏ hơn lượng đã dùng của mẻ. Cần đối soát mẻ và các lần xuất; chưa điều chỉnh kho.",
+  PRODUCTION_ADJUSTMENT_PREVIEW_STALE: "Kho, lô hoặc giá vốn vừa thay đổi. Bấm Xem trước lại để kiểm tra số mới trước khi xác nhận.",
+  PRODUCTION_CORRECTION_STALE: "Mẻ vừa được cập nhật. Đóng rồi mở lại để lấy số mới; chưa ghi điều chỉnh này.",
+  PRODUCTION_CORRECTION_LOT_RECONCILIATION_REQUIRED: "Sổ lô và lượng đã xuất chưa khớp tồn kho. Cần đối soát trước khi điều chỉnh; kho chưa thay đổi.",
+  PRODUCTION_CORRECTION_STOCK_REQUIRED: "Không đủ tồn để điều chỉnh lượng thành phẩm hoặc nguyên liệu. Chưa thay đổi kho.",
+  PRODUCTION_CORRECTION_COST_REQUIRED: "Tồn và sổ giá vốn chưa đủ căn cứ hoặc chưa khớp. Cần đối soát trước khi điều chỉnh.",
+  PRODUCTION_CORRECTION_PERMISSION_REQUIRED: "Tài khoản cần quyền Xem sản xuất và Sửa/điều chỉnh mẻ đã hoàn thành tại chi nhánh này.",
+  PRODUCTION_ADJUSTMENT_COMPLETED_REQUIRED: "Chỉ dùng điều chỉnh này cho mẻ đã hoàn thành.",
+  PRODUCTION_ADJUSTMENT_VARIANT_COST_REQUIRED: "Mẻ có biến thể cần đối soát giá vốn theo biến thể trước khi điều chỉnh.",
+  PRODUCTION_ADJUSTMENT_NO_CHANGE: "Chưa có thay đổi số lượng thành phẩm hoặc nguyên liệu.",
+  PRODUCTION_CORRECTION_HISTORY_INVALID: "Lịch sử định lượng hoặc giá vốn của mẻ chưa đủ để điều chỉnh an toàn.",
+  PRODUCTION_CORRECTION_REQUEST_CHANGED: "Nội dung xác nhận khác lần gửi trước. Mở lại mẻ để kiểm tra lịch sử trước khi điều chỉnh tiếp.",
+  UOM_CONVERSION_CHANGED: "Quy đổi đơn vị vừa thay đổi. Mở lại mẻ để kiểm tra số mới.",
+  PRODUCTION_CORRECTION_QUANTITY_INVALID: "Số lượng chưa hợp lệ. Thành phẩm phải lớn hơn 0; nguyên liệu không được âm.",
+};
+export async function previewProductionUsedAdjustment(input: ProductionAdjustmentInput): Promise<ProductionAdjustmentPreview> {
+  const {data,error} = await (supabase.rpc as any)("preview_production_used_adjustment", {
+    p_order_id:input.orderId,p_expected_updated_at:input.expectedUpdatedAt,p_output_quantity:input.outputQuantity,
+    p_materials:input.materials,p_reason:input.reason.trim(),
+  });
+  if(error) {
+    if (["PGRST202","42883"].includes(error.code)) throw new Error("Chức năng điều chỉnh mẻ chưa sẵn sàng trên máy chủ. Chưa thay đổi kho; thử lại sau khi phát hành hoàn tất.");
+    if (["55P03","40P01","57014"].includes(error.code)) throw new Error("Kho đang có thao tác khác. Đợi vài giây rồi thử lại; hệ thống không ghi điều chỉnh dở dang.");
+    throw new Error(PRODUCTION_ADJUSTMENT_ERRORS[error.message] ?? error.message);
+  }
+  if(!data?.token) throw new Error("Chưa nhận được bản xem trước hợp lệ. Chưa điều chỉnh kho.");
+  return data as ProductionAdjustmentPreview;
+}
+export async function applyProductionUsedAdjustment(input: ProductionAdjustmentInput & {requestId:string;previewToken:string}) {
+  const {data,error}=await (supabase.rpc as any)("apply_production_used_adjustment", {
+    p_order_id:input.orderId,p_expected_updated_at:input.expectedUpdatedAt,p_output_quantity:input.outputQuantity,
+    p_materials:input.materials,p_reason:input.reason.trim(),p_request_id:input.requestId,p_preview_token:input.previewToken,
+  });
+  if(error) {
+    if (["PGRST202","42883"].includes(error.code)) throw new Error("Chức năng điều chỉnh mẻ chưa sẵn sàng trên máy chủ. Chưa thay đổi kho; thử lại sau khi phát hành hoàn tất.");
+    if (["55P03","40P01","57014"].includes(error.code)) throw new Error("Kho đang có thao tác khác. Đợi vài giây rồi thử lại; hệ thống không ghi điều chỉnh dở dang.");
+    throw new Error(PRODUCTION_ADJUSTMENT_ERRORS[error.message] ?? error.message);
+  }
+  if (!data?.id) throw new Error("Chưa xác nhận được kết quả lưu. Thử lại cùng lần xác nhận để hệ thống kiểm tra, không tạo điều chỉnh mới.");
+  return data as {id:string;orderId:string;preview:ProductionAdjustmentPreview};
 }

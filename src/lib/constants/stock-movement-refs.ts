@@ -25,6 +25,7 @@ export const REFERENCE_TYPE_LABELS: Record<string, string> = {
   invoice: "Hóa đơn",
   purchase_order: "Đơn nhập hàng",
   production_order: "Lệnh sản xuất",
+  production_correction: "Điều chỉnh mẻ sản xuất",
   inventory_check: "Phiếu kiểm kho",
   disposal: "Phiếu xuất hủy",
   internal_export: "Xuất nội bộ",
@@ -114,6 +115,7 @@ export function mapInBucket(referenceType: string | null): XntInBucket {
     return "return";
   if (rt === "transfer" || rt === "stock_transfer") return "transfer";
   if (
+    rt === "production_correction" ||
     rt === "production_order" ||
     rt === "production_complete" ||
     rt === "production_reconcile" ||
@@ -150,6 +152,7 @@ export function mapOutBucket(referenceType: string | null): XntOutBucket {
     return "check";
   if (rt === "transfer" || rt === "stock_transfer") return "transfer";
   if (
+    rt === "production_correction" ||
     rt === "production_order" ||
     rt === "production_complete" ||
     rt === "production_reconcile" ||
