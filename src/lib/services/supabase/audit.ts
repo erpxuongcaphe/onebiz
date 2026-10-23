@@ -59,6 +59,7 @@ export interface AuditFilters {
 /* ------------------------------------------------------------------ */
 
 const ACTION_LABELS: Record<string, string> = {
+  production_used_adjustment: "Điều chỉnh mẻ đã hoàn thành / sử dụng",
   fnb_cancel_request_reject: "Từ chối yêu cầu hủy F&B",
   employee_benefit_group_save: "Lưu nhóm ưu đãi nội bộ",
   create: "Tạo mới",

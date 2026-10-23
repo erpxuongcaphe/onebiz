@@ -725,7 +725,7 @@ export default function SanXuatPage() {
                 row,
                 kind: "production",
                 permissions: txPerms,
-                onEdit: row.status !== "cancelled" && (row.status !== "completed" || hasAny(["production.complete_order"])) ? () => setCorrectingItem({order:row,cancel:false}) : undefined,
+                onEdit: row.status !== "cancelled" && row.status !== "completed" ? () => setCorrectingItem({order:row,cancel:false}) : undefined,
                 onPrint: () =>
                   printDocumentWithTemplate({
                     channel: "backoffice",
@@ -748,6 +748,10 @@ export default function SanXuatPage() {
                       createdBy: row.createdBy ?? "",
                     }),
                   }),
+                extraActions: row.status === "completed" && txPerms.canEdit && hasAny(["production.complete_order"]) ? [{
+                  label: "Điều chỉnh mẻ / đã sử dụng", icon: <Icon name="edit_note" size={16} />,
+                  onClick: () => setCorrectingItem({order:row,cancel:false}),
+                }] : [],
                 // Workflow: "Hoàn thành" specific cho production
                 workflowActions:
                   row.status !== "completed" && row.status !== "cancelled" && hasAny(["production.complete_order"])
