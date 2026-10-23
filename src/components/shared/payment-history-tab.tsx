@@ -38,26 +38,40 @@ const METHOD_LABELS: Record<string, string> = {
   ewallet: "Ví điện tử",
 };
 
-export function PaymentHistoryTab({
+export function PaymentHistoryTab(props: PaymentHistoryTabProps) {
+  return <PaymentHistoryContent key={`${props.referenceType}:${props.referenceId}`} {...props} />;
+}
+
+function PaymentHistoryContent({
   referenceType,
   referenceId,
 }: PaymentHistoryTabProps) {
-  const [rows, setRows] = useState<PaymentRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [attempt, setAttempt] = useState(0);
+  const scope = `${referenceType}:${referenceId}:${attempt}`;
+  const [result, setResult] = useState<{
+    scope: string;
+    rows: PaymentRow[];
+    loading: boolean;
+    failed: boolean;
+  }>({ scope, rows: [], loading: true, failed: false });
+  const current = result.scope === scope
+    ? result
+    : { rows: [], loading: true, failed: false };
+  const { rows, loading, failed } = current;
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
     getPaymentHistory(referenceType, referenceId)
       .then((data) => {
-        if (!cancelled) setRows(data);
+        if (!cancelled) setResult({ scope, rows: data, loading: false, failed: false });
       })
-      .catch(() => !cancelled && setRows([]))
-      .finally(() => !cancelled && setLoading(false));
+      .catch(() => {
+        if (!cancelled) setResult({ scope, rows: [], loading: false, failed: true });
+      });
     return () => {
       cancelled = true;
     };
-  }, [referenceType, referenceId]);
+  }, [referenceType, referenceId, scope]);
 
   // 20/07: phiếu đã hủy vẫn hiện (giữ vết) nhưng KHÔNG cộng vào tổng
   const activeRows = rows.filter((r) => !r.cancelled);
@@ -73,6 +87,21 @@ export function PaymentHistoryTab({
   }
 
   if (rows.length === 0) {
+    if (failed) {
+      return (
+        <div role="alert" className="flex flex-col items-center gap-3 py-12 text-center">
+          <p className="text-sm text-destructive">Không tải được lịch sử thanh toán.</p>
+          <button
+            type="button"
+            onClick={() => setAttempt((value) => value + 1)}
+            className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted focus-visible:outline-2 focus-visible:outline-primary"
+          >
+            <Icon name="refresh" size={16} />
+            Tải lại
+          </button>
+        </div>
+      );
+    }
     return (
       <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">
         <Icon name="payments" size={32} className="opacity-40" />

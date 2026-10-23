@@ -34,6 +34,8 @@ import { formatPaymentMethod } from "@/lib/constants/payment-methods";
 import { ShiftTotalsFields } from "@/components/shared/shift/shift-totals-fields";
 import { shiftTotalsDraft, SHIFT_CLOSE_LABELS } from "@/lib/shift-reconciliation";
 import { shiftSalesEmptyMessage } from "@/lib/shift-cash-preview";
+import { usePermissions, PERMISSIONS } from "@/lib/permissions";
+import { BlindCloseShiftDialog } from "@/components/shared/shift/blind-close-shift-dialog";
 
 // R4: Quick-pick denominations cho mở/đóng ca — VND tiền mặt phổ biến.
 // Cashier tap pill thay vì gõ số → ít sai sót khi mở ca vội buổi sáng.
@@ -138,7 +140,16 @@ interface CloseShiftDialogProps {
   reconcileTransfer?: boolean;
 }
 
-export function CloseShiftDialog({
+export function CloseShiftDialog(props: CloseShiftDialogProps) {
+  const { hasAny, isLoading } = usePermissions();
+  if (!props.currentShift || isLoading) return null;
+  const canReconcile = hasAny([PERMISSIONS.SHIFTS_RECONCILE_ANY, PERMISSIONS.SHIFTS_RECONCILE_OWN_BRANCH]);
+  return canReconcile
+    ? <ReconciliationCloseShiftDialog key={props.currentShift.id} {...props} />
+    : <BlindCloseShiftDialog key={props.currentShift.id} open={props.open} onOpenChange={props.onOpenChange} onConfirm={props.onConfirm} />;
+}
+
+function ReconciliationCloseShiftDialog({
   open,
   onOpenChange,
   currentShift,

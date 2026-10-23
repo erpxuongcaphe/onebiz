@@ -3,6 +3,10 @@ import {afterEach,beforeEach,describe,expect,it,vi} from "vitest";
 import {shiftTotalsDraft,countedAmount} from "@/lib/shift-reconciliation";
 const api=vi.hoisted(()=>({previewShiftClose:vi.fn()}));
 vi.mock("@/lib/services/supabase/shifts",()=>api);
+vi.mock("@/lib/permissions", async (original) => ({
+  ...await original<typeof import("@/lib/permissions")>(),
+  usePermissions: () => ({ hasAny: () => true, isLoading: false }),
+}));
 import {CloseShiftDialog} from "@/app/pos/fnb/components/shift-dialog";
 const preview={startingCash:100,cashIn:200,cashOut:0,expectedCash:300,totalSales:700,totalOrders:2,salesByMethod:{cash:200,transfer:500},cashEntries:[]};
 const shift={id:"s1",openedAt:"2026-10-22T00:00:00Z",cashierId:"cashier"} as any;

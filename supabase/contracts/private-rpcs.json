@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "migration": "shift_operational_sources_20261023",
+  "migrationSha256": "78a0fa19b56ef778809c53ee2892de47ba2843ee4aae19d2ee5216254fb365e6",
+  "functions": [
+    { "name": "get_document_payment_history_scoped", "params": [
+      { "name": "p_reference_type", "optional": false },
+      { "name": "p_reference_id", "optional": false },
+      { "name": "p_offset", "optional": true },
+      { "name": "p_limit", "optional": true }
+    ] },
+    { "name": "get_shift_context_scoped", "params": [
+      { "name": "p_shift_id", "optional": false }
+    ] },
+    { "name": "get_open_shift_status_scoped", "params": [
+      { "name": "p_branch_id", "optional": false }
+    ] },
+    { "name": "open_shift_operational", "params": [
+      { "name": "p_branch_id", "optional": false },
+      { "name": "p_starting_cash", "optional": true },
+      { "name": "p_channel", "optional": true }
+    ] },
+    { "name": "close_shift_operational", "params": [
+      { "name": "p_shift_id", "optional": false },
+      { "name": "p_actual_cash", "optional": false },
+      { "name": "p_note", "optional": true }
+    ] }
+  ]
+}

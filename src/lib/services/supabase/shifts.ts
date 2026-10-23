@@ -17,17 +17,18 @@ function mapShift(row: Record<string, unknown>): Shift {
     tenantId: row.tenant_id as string,
     branchId: row.branch_id as string,
     cashierId: row.cashier_id as string,
-    cashierName: (row.profiles as { full_name?: string } | null)?.full_name ?? undefined,
+    cashierName: typeof row.cashier_name === "string" ? row.cashier_name
+      : (row.profiles as { full_name?: string } | null)?.full_name ?? undefined,
     status: row.status as "open" | "closed",
     openedAt: row.opened_at as string,
     closedAt: (row.closed_at as string) ?? null,
-    startingCash: Number(row.starting_cash ?? 0),
+    startingCash: row.starting_cash != null ? Number(row.starting_cash) : null,
     expectedCash: row.expected_cash != null ? Number(row.expected_cash) : null,
     actualCash: row.actual_cash != null ? Number(row.actual_cash) : null,
     cashDifference: row.cash_difference != null ? Number(row.cash_difference) : null,
-    totalSales: Number(row.total_sales ?? 0),
-    totalOrders: Number(row.total_orders ?? 0),
-    salesByMethod: (row.sales_by_method as Record<string, number>) ?? {},
+    totalSales: row.total_sales != null ? Number(row.total_sales) : null,
+    totalOrders: row.total_orders != null ? Number(row.total_orders) : null,
+    salesByMethod: (row.sales_by_method as Record<string, number>) ?? null,
     note: (row.note as string) ?? null,
     closeKind: (row.close_kind as Shift["closeKind"]) ?? null,
     expectedTransfer: row.expected_transfer == null ? null : Number(row.expected_transfer),
@@ -36,71 +37,73 @@ function mapShift(row: Record<string, unknown>): Shift {
   };
 }
 
+function mapOperationalShift(row: Record<string, unknown>): Shift {
+  return {
+    ...mapShift(row), startingCash: null, expectedCash: null, actualCash: null,
+    cashDifference: null, totalSales: null, totalOrders: null, salesByMethod: null,
+  };
+}
+
 // ── Queries ──
+
+async function readOpenShiftStatus(branchId: string): Promise<Record<string, unknown>> {
+  const { data, error } = await getClient().rpc("get_open_shift_status_scoped" as never,
+    { p_branch_id: branchId } as never);
+  if (error) handleError(error, "readOpenShiftStatus");
+  const result = data as unknown as Record<string, unknown> | null;
+  if (!result || result.branch_id !== branchId) throw new Error("Chưa xác nhận được trạng thái ca.");
+  return result;
+}
+
+function readOperationalRow(value: unknown, branchId: string, cashierId?: string): Shift | null {
+  if (value === null) return null;
+  const row = value as Record<string, unknown> | undefined;
+  if (!row || typeof row.id !== "string" || typeof row.tenant_id !== "string"
+    || typeof row.cashier_id !== "string" || row.branch_id !== branchId || row.status !== "open"
+    || typeof row.opened_at !== "string" || !Number.isFinite(Date.parse(row.opened_at))
+    || (cashierId !== undefined && row.cashier_id !== cashierId)) {
+    throw new Error("Chưa xác nhận được trạng thái ca.");
+  }
+  return mapOperationalShift(row);
+}
 
 /** Get current open shift for a cashier at a branch */
 export async function getOpenShift(branchId: string, cashierId: string): Promise<Shift | null> {
-  const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-  const { data, error } = await supabase
-    .from("shifts")
-    .select("*, profiles(full_name)")
-    .eq("tenant_id", tenantId)
-    .eq("branch_id", branchId)
-    .eq("cashier_id", cashierId)
-    .eq("status", "open")
-    .maybeSingle();
-
-  if (error) handleError(error, "getOpenShift");
-  if (!data) return null;
-  return mapShift(data as unknown as Record<string, unknown>);
+  const result = await readOpenShiftStatus(branchId);
+  return readOperationalRow(result.own, branchId, cashierId);
 }
 
 /** Get any open shift at a branch (for checking if someone else is on shift) */
 export async function getAnyOpenShift(branchId: string): Promise<Shift | null> {
-  const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-  const { data, error } = await supabase
-    .from("shifts")
-    .select("*, profiles(full_name)")
-    .eq("tenant_id", tenantId)
-    .eq("branch_id", branchId)
-    .eq("status", "open")
-    .limit(1)
-    .maybeSingle();
-
-  if (error) handleError(error, "getAnyOpenShift");
-  if (!data) return null;
-  return mapShift(data as unknown as Record<string, unknown>);
+  const result = await readOpenShiftStatus(branchId);
+  return readOperationalRow(result.active, branchId);
 }
 
 async function openShiftWithRpc(
   input: OpenShiftInput,
-  rpcName: "open_shift_atomic" | "fnb_open_shift_atomic",
+  channel: "retail" | "fnb",
 ): Promise<Shift & { alreadyOpen?: boolean }> {
+  if (!Number.isFinite(input.startingCash) || input.startingCash < 0) {
+    throw new Error("Số tiền đầu ca không hợp lệ.");
+  }
   const supabase = getClient();
   // Actor and tenant are derived by the RPC. If another tab already opened
   // the shift, it returns that row instead of raising idx_shifts_open.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase.rpc as any)(rpcName, {
+  const { data, error } = await (supabase.rpc as any)("open_shift_operational", {
     p_branch_id: input.branchId,
     p_starting_cash: input.startingCash,
+    p_channel: channel,
   });
 
   if (error) {
-    if (
-      error.code === "PGRST202" ||
-      /open_shift_atomic|fnb_open_shift_atomic|schema cache/i.test(error.message)
-    ) {
-      throw new Error("Chưa cập nhật SQL mở/đóng ca mới nhất.");
-    }
     handleError(error, "openShift");
   }
   if (!data) throw new Error("Không mở được ca");
 
   const row = data as Record<string, unknown>;
   return {
-    ...mapShift(row),
+    ...readOperationalRow(row, input.branchId, input.cashierId)!,
     alreadyOpen: Boolean(row.already_open),
   };
 }
@@ -109,27 +112,14 @@ async function openShiftWithRpc(
 export async function openShift(
   input: OpenShiftInput,
 ): Promise<Shift & { alreadyOpen?: boolean }> {
-  return openShiftWithRpc(input, "open_shift_atomic");
+  return openShiftWithRpc(input, "retail");
 }
 
 /** Open an FnB POS shift. Server requires pos_fnb.checkout. */
 export async function openFnbShift(
   input: OpenShiftInput,
 ): Promise<Shift & { alreadyOpen?: boolean }> {
-  try {
-    return await openShiftWithRpc(input, "fnb_open_shift_atomic");
-  } catch (error) {
-    // Rolling-deploy compatibility: the web can arrive just before migration
-    // 00374. Only a missing RPC may use the old guarded FnB entry point;
-    // permission denials and all other errors must remain denied.
-    if (
-      error instanceof Error &&
-      error.message === "Chưa cập nhật SQL mở/đóng ca mới nhất."
-    ) {
-      return openShiftWithRpc(input, "open_shift_atomic");
-    }
-    throw error;
-  }
+  return openShiftWithRpc(input, "fnb");
 }
 
 /**
@@ -137,12 +127,26 @@ export async function openFnbShift(
  * Trả về thêm `cashIn`/`cashOut` so với `Shift` interface.
  */
 export interface ShiftReport extends Shift {
+  startingCash: number;
+  expectedCash: number;
+  actualCash: number;
+  cashDifference: number;
+  totalSales: number;
+  totalOrders: number;
+  salesByMethod: Record<string, number>;
   cashIn: number;
   cashOut: number;
 }
 
+export interface ShiftCloseResult {
+  shiftId: string;
+  closedAt: string;
+  actualCash: number;
+  report: ShiftReport | null;
+}
+
 /**
- * Đóng ca với cash reconciliation — ATOMIC qua RPC `close_shift_atomic`.
+ * Đóng ca qua nguồn vận hành; máy chủ gọi chung hàm chốt tiền hiện tại.
  *
  * Khác biệt so với implementation cũ:
  *   - Filter `cash_transactions` + `invoices` theo `shift_id` (KHÔNG theo
@@ -151,14 +155,14 @@ export interface ShiftReport extends Shift {
  *   - All-or-nothing: update shift + tính toán trong cùng 1 transaction.
  *   - Return chi tiết cash_in / cash_out / sales_by_method để in báo cáo X/Z.
  *
- * YÊU CẦU: migration 00030_shift_integrity.sql đã chạy.
+ * Nguồn vận hành phải được phát hành trước giao diện.
  */
 async function reconcileFnbShift(shiftId: string, actualCash: number, totals: ShiftTotalsInput, note?: string, reason?: string) {
-  const {data,error} = await (getClient().rpc as any)("fnb_reconcile_shift_totals_20261022", {
+  const {data,error} = await getClient().rpc("fnb_reconcile_shift_totals_20261022" as never, {
     p_shift_id:shiftId,p_actual_cash:actualCash,p_actual_transfer:totals.actualTransfer,
     p_expected_cash:totals.expectedCash,p_expected_transfer:totals.expectedTransfer,p_close_kind:totals.closeKind,
     p_note:note??null,p_reason:reason??null,
-  });
+  } as never);
   if(error) {
     if(error.message?.includes("SHIFT_STATE_CHANGED")||error.message?.includes("SHIFT_NOT_OPEN")) throw new Error("Ca đã được chốt hoặc đổi trạng thái ở thiết bị khác. Tải lại trạng thái ca trước khi tiếp tục.");
     if(error.message?.includes("SHIFT_TOTALS_CHANGED")) throw new Error("Số tiền của ca vừa thay đổi. Tải lại tổng quan, đối chiếu lại rồi xác nhận; ca chưa được chốt.");
@@ -169,45 +173,74 @@ async function reconcileFnbShift(shiftId: string, actualCash: number, totals: Sh
   return {data,error};
 }
 
-export async function closeShift(input: CloseShiftInput): Promise<ShiftReport> {
+export async function closeShift(input: CloseShiftInput): Promise<ShiftCloseResult> {
+  if (!Number.isFinite(input.actualCash) || input.actualCash < 0) {
+    throw new Error("Số tiền kiểm đếm không hợp lệ.");
+  }
   const supabase = getClient();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = input.reconciliation
     ? await reconcileFnbShift(input.shiftId,input.actualCash,input.reconciliation,input.note)
-    : await (supabase.rpc as any)("close_shift_atomic", {
+    : await supabase.rpc("close_shift_operational" as never, {
     p_shift_id: input.shiftId,
     p_actual_cash: input.actualCash,
     p_note: input.note ?? null,
-  });
+  } as never);
 
   if (error) handleError(error, "closeShift");
-  if (!data) throw new Error("Không đóng được ca");
-  if(input.reconciliation&&data.shift)return {...mapShift(data.shift),cashIn:Number(data.cash_in??0),cashOut:Number(data.cash_out??0)};
+  return resolveShiftCloseResult(input, data, Boolean(input.reconciliation));
+}
 
-  // Load full shift record (with cashier name) để map về UI
-  const tenantId = await getCurrentTenantId();
-  const { data: shift, error: fetchError } = await supabase
-    .from("shifts")
-    .select("*, profiles(full_name)")
-    .eq("tenant_id", tenantId)
-    .eq("id", input.shiftId)
-    .single();
-  if (fetchError || !shift) throw new Error("Không đọc được ca sau khi đóng");
-
-  const base = mapShift(shift as unknown as Record<string, unknown>);
-
-  // Ép kiểu JSON từ RPC
-  const rpcResult = data as {
-    cash_in?: number | string;
-    cash_out?: number | string;
+async function resolveShiftCloseResult(input: CloseShiftInput, data: unknown, reconciliation = false): Promise<ShiftCloseResult> {
+  const supabase = getClient();
+  const isNumeric = (value: unknown) => (typeof value === "number" || (typeof value === "string" && value.trim() !== ""))
+    && Number.isFinite(Number(value));
+  const response = data as Record<string, unknown> | null;
+  const embeddedShift = reconciliation && response?.shift && typeof response.shift === "object"
+    ? response.shift as Record<string, unknown> : null;
+  const receipt = embeddedShift ? { ...response, shift_id: embeddedShift.id,
+    closed_at: embeddedShift.closed_at, actual_cash: embeddedShift.actual_cash } : response;
+  if (!receipt || receipt.shift_id !== input.shiftId
+    || typeof receipt.closed_at !== "string" || !Number.isFinite(Date.parse(receipt.closed_at))
+    || !isNumeric(receipt.actual_cash) || Number(receipt.actual_cash) !== input.actualCash) {
+    throw new Error("Chưa xác nhận được trạng thái đóng ca. Tải lại trạng thái ca trước khi thử tiếp.");
+  }
+  const result: ShiftCloseResult = {
+    shiftId: input.shiftId,
+    closedAt: receipt.closed_at,
+    actualCash: input.actualCash,
+    report: null,
   };
+  if (!isNumeric(receipt.cash_in) || !isNumeric(receipt.cash_out)) return result;
 
-  return {
-    ...base,
-    cashIn: Number(rpcResult.cash_in ?? 0),
-    cashOut: Number(rpcResult.cash_out ?? 0),
-  };
+  // The atomic receipt confirms the close; report loading cannot undo it.
+  try {
+    const { data: context, error: fetchError } = embeddedShift
+      ? { data: { mode: "reconciliation", shift: embeddedShift }, error: null }
+      : await supabase.rpc("get_shift_context_scoped" as never, { p_shift_id: input.shiftId } as never);
+    const payload = context as unknown as { mode?: string; shift?: Record<string, unknown> } | null;
+    const shift = payload?.shift;
+    if (!fetchError && payload?.mode === "reconciliation" && shift && shift.id === input.shiftId && shift.status === "closed"
+      && Number(shift.actual_cash) === input.actualCash
+      && [shift.starting_cash, shift.expected_cash, shift.actual_cash, shift.cash_difference,
+        shift.total_sales, shift.total_orders].every(isNumeric)) {
+      result.report = {
+        ...mapShift(shift as unknown as Record<string, unknown>),
+        startingCash: Number(shift.starting_cash),
+        expectedCash: Number(shift.expected_cash),
+        actualCash: Number(shift.actual_cash),
+        cashDifference: Number(shift.cash_difference),
+        totalSales: Number(shift.total_sales),
+        totalOrders: Number(shift.total_orders),
+        salesByMethod: (shift.sales_by_method as Record<string, number>) ?? {},
+        cashIn: Number(receipt.cash_in),
+        cashOut: Number(receipt.cash_out),
+      };
+    }
+  } catch {
+    // Reporting is read-only recovery work, never a second close attempt.
+  }
+  return result;
 }
 
 // ============================================================
@@ -285,40 +318,24 @@ export async function reconcilePendingShift(input: {
   reason: string;
   note?: string;
   reconciliation?: ShiftTotalsInput;
-}): Promise<ShiftReport> {
+}): Promise<ShiftCloseResult> {
+  if (!Number.isFinite(input.actualCash) || input.actualCash < 0) {
+    throw new Error("Số tiền kiểm đếm không hợp lệ.");
+  }
   const supabase = getClient();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = input.reconciliation
     ? await reconcileFnbShift(input.shiftId,input.actualCash,input.reconciliation,input.note,input.reason)
-    : await (supabase.rpc as any)(
-    "reconcile_pending_shift",
+    : await supabase.rpc(
+    "reconcile_pending_shift" as never,
     {
       p_shift_id: input.shiftId,
       p_actual_cash: input.actualCash,
       p_reason: input.reason,
       p_note: input.note ?? null,
-    },
+    } as never,
   );
   if (error) handleError(error, "reconcilePendingShift");
-  if (!data) throw new Error("Không đối chiếu được ca");
-  if(input.reconciliation&&data.shift)return {...mapShift(data.shift),cashIn:Number(data.cash_in??0),cashOut:Number(data.cash_out??0)};
-
-  // Load full shift để return cùng shape với closeShift
-  const tenantId = await getCurrentTenantId();
-  const { data: shift } = await supabase
-    .from("shifts")
-    .select("*, profiles(full_name)")
-    .eq("tenant_id", tenantId)
-    .eq("id", input.shiftId)
-    .single();
-  const base = mapShift((shift ?? {}) as Record<string, unknown>);
-
-  const rpcResult = data as { cash_in?: number; cash_out?: number };
-  return {
-    ...base,
-    cashIn: Number(rpcResult.cash_in ?? 0),
-    cashOut: Number(rpcResult.cash_out ?? 0),
-  };
+  return resolveShiftCloseResult(input, data, Boolean(input.reconciliation));
 }
 
 // ============================================================
