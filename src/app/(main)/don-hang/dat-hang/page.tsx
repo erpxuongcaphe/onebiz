@@ -348,7 +348,6 @@ function OrderDetail({
                     columns={[
                       { header: "Mã hàng", accessor: "productCode" as never },
                       { header: "Tên hàng", accessor: "productName" as never },
-                      { header: "Ghi chú mã hàng", accessor: "note" as never, className: "min-w-48 max-w-md whitespace-pre-wrap break-words" },
                       { header: "Đơn vị", accessor: "unit" as never },
                       {
                         header: "SL",
@@ -371,6 +370,7 @@ function OrderDetail({
                         ),
                         align: "right",
                       },
+                      { header: "Ghi chú mã hàng", accessor: "note" as never, className: "min-w-32 max-w-56 whitespace-pre-wrap break-words text-xs text-muted-foreground" },
                     ]}
                     items={items as unknown as Record<string, unknown>[]}
                     summary={[
