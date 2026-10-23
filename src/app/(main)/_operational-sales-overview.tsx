@@ -55,7 +55,8 @@ function useSalesQuery(scope: string, branchId: string | undefined, from: string
     void refresh();
     return () => { request.current += 1; };
   }, [refresh]);
-  return { data: enabled && result?.key === key ? result.data : null, error: enabled && failure?.key === key ? failure.message : null, at: result?.key === key ? result.at : null, loading: enabled && loading, refresh };
+  const error = enabled && failure?.key === key ? failure.message : null;
+  return { data: enabled && !error && result?.key === key ? result.data : null, error, at: !error && result?.key === key ? result.at : null, loading: enabled && loading, refresh };
 }
 
 export default function OperationalSalesOverview() {
@@ -129,6 +130,7 @@ export default function OperationalSalesOverview() {
             <p className="mt-1 text-xs text-foreground/70">Sau giảm giá và hàng trả</p>
             <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
               <span><strong className="text-foreground">{formatNumber(data.orders)}</strong> hóa đơn hoàn tất</span>
+              <span title="Giá trị hóa đơn hoàn tất sau giảm giá, trước hàng trả phát sinh trong ngày.">Bình quân / HĐ <strong className="text-foreground tabular-nums" data-testid="average-order-value">{data.orders > 0 ? formatCurrency((data.sales + data.returns) / data.orders) : "—"}</strong></span>
               <span className="text-amber-700 dark:text-amber-400">Giảm giá {formatCurrency(data.discounts)}</span>
               {data.returns !== 0 && <span className="text-rose-700 dark:text-rose-400">Hàng trả {formatCurrency(data.returns)}</span>}
             </div>
