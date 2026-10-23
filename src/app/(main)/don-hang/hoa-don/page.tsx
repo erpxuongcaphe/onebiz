@@ -1,7 +1,9 @@
 "use client";
 import {getFnbInvoiceExportDetails,fnbInvoiceItemExportColumns} from "@/lib/services/supabase/fnb-invoice-export-details";
 import {InvoiceMobileRow} from "@/components/shared/invoice-mobile-row";
-import {fnbItemColumns} from "@/components/shared/fnb-invoice-items";
+import {InvoiceDisplayMenu} from "@/components/shared/invoice-display-menu";
+import {useInvoiceDisplay,type InvoiceDisplay} from "@/lib/hooks/use-invoice-display";
+import {fnbItemColumns,FnbInvoiceMobileItem} from "@/components/shared/fnb-invoice-items";
 import {InvoiceItemName} from "@/components/shared/invoice-item-name";
 import {FnbInvoiceChoiceFilter} from "@/components/shared/fnb-invoice-choice-filter";
 import {choiceGroupLabel,choiceValueLabel,hasFnbChoiceFilter,type FnbChoiceFilter} from "@/lib/utils/fnb-invoice-choice-filter";
@@ -98,7 +100,7 @@ import {
   type TenantBusinessInfo,
 } from "@/lib/services";
 import { DocumentNoteBox } from "@/components/shared/document-note-box";
-import { useToast, useBranchFilter } from "@/lib/contexts";
+import { useToast, useBranchFilter, useAuth } from "@/lib/contexts";
 import { buildInvoicePrintData, toPrintLines } from "@/lib/print-templates";
 import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
 import type { Invoice, ShippingOrder } from "@/lib/types";
@@ -140,6 +142,7 @@ const INVOICE_SORT_COLUMNS = ["code", "date", "customerName", "totalAmount", "di
 
 function InvoiceDetail({
   invoice,
+  display,
   onClose,
   onEdit,
   onDelete,
@@ -147,6 +150,7 @@ function InvoiceDetail({
   onDataChanged,
 }: {
   invoice: Invoice;
+  display: InvoiceDisplay;
   onClose: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
@@ -357,7 +361,7 @@ function InvoiceDetail({
                 ) : (<>
                   {items.some(item=>item.fnbDetailsUnavailable) && <div role="alert" className="mb-2 flex flex-wrap items-center gap-2 text-xs text-foreground"><span>Đã tải món; chưa tải được tùy chọn/ghi chú F&B.</span><Button size="sm" variant="outline" onClick={()=>setItemsRevision(v=>v+1)}>Thử tải lại tùy chọn</Button></div>}
                   <DetailItemsTable
-                    columns={invoice.source==="fnb"?fnbItemColumns():[
+                    columns={invoice.source==="fnb"?fnbItemColumns(display):[
                       { header: "Mã hàng", accessor: "productCode" as never },
                       { header: "Tên hàng", className: "min-w-[180px] max-w-[320px]", accessor: (item: Record<string, unknown>) => <InvoiceItemName name={String(item.productName ?? "")} note={item.note as string | undefined} options={item.fnbOptions} size={item.variantLabel as string|undefined}/> },
                       {
@@ -393,8 +397,7 @@ function InvoiceDetail({
                         align: "right",
                       },
                     ]}
-                    optionalColumns={invoice.source==="fnb"?["Mã hàng","Mức ngọt","Mức đá","Tùy chọn khác","ĐVT","Giảm"]:undefined}
-                    mobileItem={invoice.source==="fnb" ? (item:Record<string,unknown>)=><div className="min-w-0 space-y-2"><div className="flex items-start justify-between gap-3"><div className="min-w-0 text-sm font-medium"><InvoiceItemName name={String(item.productName??"")} note={item.note as string} options={item.fnbOptions} size={item.variantLabel as string}/></div><b className="shrink-0 text-primary">{formatCurrency(Number(item.total??0))}</b></div><p className="text-xs text-muted-foreground">{String(item.productCode??"")} · {formatNumber(Number(item.quantity??0))} {String(item.unit??"")} × {formatCurrency(Number(item.unitPrice??0))}</p></div> : undefined}
+                    mobileItem={invoice.source==="fnb" ? (item:Record<string,unknown>)=><FnbInvoiceMobileItem item={item} display={display}/> : undefined}
                     items={items as unknown as Record<string, unknown>[]}
                     summary={[
                       {
@@ -505,6 +508,8 @@ function InvoiceDetail({
 }
 
 export default function HoaDonPage() {
+  const {user,tenant}=useAuth();
+  const [invoiceDisplay,setInvoiceDisplay]=useInvoiceDisplay(tenant?.id,user?.id);
   const { toast } = useToast();
   const { activeBranchId, currentBranch, branches, isReady: branchScopeReady } = useBranchFilter();
   const router = useRouter();
@@ -1109,6 +1114,10 @@ export default function HoaDonPage() {
           hideAggregateCounts={!canViewSalesSummary}
           density="compact"
           columnToggle
+          columnToggleLabel="Hiển thị"
+          controlledColumnVisibility={invoiceDisplay.listColumns}
+          onColumnVisibilityChange={listColumns=>setInvoiceDisplay({...invoiceDisplay,listColumns})}
+          columnToggleExtra={<InvoiceDisplayMenu value={invoiceDisplay} onChange={setInvoiceDisplay}/>}
           toolbarMetrics={canViewSalesSummary ?
             <>
               <ListMetric
@@ -1325,6 +1334,7 @@ export default function HoaDonPage() {
           onExpandedRowChange={setExpandedRow}
           renderDetail={(invoice, onClose) => (
             <InvoiceDetail
+              display={invoiceDisplay}
               invoice={invoice}
               onClose={onClose}
               onDataChanged={taiLaiSauKhiDoiDuLieu}
