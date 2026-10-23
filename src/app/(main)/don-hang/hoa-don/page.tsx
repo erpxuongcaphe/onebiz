@@ -228,12 +228,14 @@ function InvoiceDetail({
   return (
     <InlineDetailPanel
       open
+      actionLayout="separate"
       onClose={onClose}
       onEdit={onEdit}
       onDelete={onDelete}
       deleteLabel={deleteLabel}
     >
       <DetailTabs
+        persistenceKey={`invoice:${invoice.id}`}
         tabs={[
           {
             id: "info",
