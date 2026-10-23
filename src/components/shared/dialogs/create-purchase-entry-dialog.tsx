@@ -24,7 +24,8 @@ import {
 import { formatCurrency, formatNumber } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
-import { nextEntityCode } from "@/lib/services/supabase/stock-adjustments";
+import { useAuth } from "@/lib/contexts/auth-context";
+import { CreateFnbWarehouseOrderDialog } from "./create-fnb-warehouse-order-dialog";
 import { savePurchaseOrderAtomic } from "@/lib/services/supabase/purchase-orders";
 import { Icon } from "@/components/ui/icon";
 import { useDurableFormDraft } from "@/lib/hooks/use-durable-form-draft";
@@ -81,7 +82,15 @@ function getItemsTax(items: LineItem[]) {
   return items.reduce((sum, item) => sum + lineTax(item), 0);
 }
 
-export function CreatePurchaseEntryDialog({
+export function CreatePurchaseEntryDialog(props: CreatePurchaseEntryDialogProps) {
+  const { activeBranchId, currentBranch, branches } = useAuth();
+  const branch = branches.find(item => item.id === activeBranchId) ?? currentBranch;
+  return branch?.branchType === "store"
+    ? <CreateFnbWarehouseOrderDialog key={branch.id} {...props} branchId={branch.id} />
+    : <CreateLegacyPurchaseEntryDialog {...props} />;
+}
+
+function CreateLegacyPurchaseEntryDialog({
   open,
   onOpenChange,
   onSuccess,
@@ -107,9 +116,7 @@ export function CreatePurchaseEntryDialog({
   useEffect(() => {
     if (!open) return;
 
-    nextEntityCode("purchase_order")
-      .then((c) => setCode(c))
-      .catch(() => setCode(`DHN${Date.now()}`));
+    setCode("");
 
     getCurrentContext()
       .then((ctx) => setCurrentTenantId(ctx.tenantId))
@@ -151,7 +158,7 @@ export function CreatePurchaseEntryDialog({
       draft.shippingFee > 0 ||
       draft.otherCost > 0,
     restore: (draft) => {
-      setCode(draft.code);
+      setCode("");
       setSupplierSearch(draft.supplierSearch);
       setSelectedSupplier(draft.selectedSupplier);
       setItems(draft.items);
@@ -326,10 +333,10 @@ export function CreatePurchaseEntryDialog({
             <div className="flex flex-wrap items-center gap-3">
               <DialogTitle className="text-xl">Tạo đơn đặt hàng nhập</DialogTitle>
               <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
-                Đã đặt
+                Chưa gửi
               </span>
               <span className="ml-auto mr-8 max-w-none whitespace-nowrap rounded-lg border bg-primary/5 px-3 py-1.5 text-sm font-bold text-primary sm:text-base">
-                {code}
+                {code || "Mã được cấp khi lưu"}
               </span>
             </div>
           </DialogHeader>
