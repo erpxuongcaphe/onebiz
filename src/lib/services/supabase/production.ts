@@ -247,7 +247,8 @@ export async function correctProductionOrderQuantities(input: {
   });
   if (error) {
     const messages: Record<string,string> = {
-      PRODUCTION_CORRECTION_OUTPUT_USED: "Thành phẩm đã được dùng hoặc xuất khỏi kho. Cần đối soát các chứng từ liên quan trước khi sửa/hủy mẻ; tồn kho chưa thay đổi.",
+      PRODUCTION_CORRECTION_OUTPUT_USED: "Lô thành phẩm của chính mẻ này đã được dùng hoặc xuất kho. Cần xử lý các chứng từ dùng lô này trước khi sửa/hủy; tồn kho chưa thay đổi.",
+      PRODUCTION_CORRECTION_LOT_RECONCILIATION_REQUIRED: "Sổ lô của mẻ và tồn kho chưa khớp hoặc thiếu liên kết. Cần đối soát lô trước khi sửa/hủy; chưa thay đổi tồn kho.",
       PRODUCTION_CORRECTION_STALE: "Lệnh vừa được người khác cập nhật. Đóng rồi mở lại để lấy số mới.",
       PRODUCTION_CORRECTION_LEGACY_ISSUE: "Lệnh cũ đã xuất nguyên liệu trước khi hoàn thành. Dùng Hủy lệnh để hoàn nguyên trước khi tạo lại.",
       PRODUCTION_CORRECTION_STOCK_REQUIRED: "Không đủ tồn cho lượng nguyên liệu bổ sung. Chưa lưu điều chỉnh.",
