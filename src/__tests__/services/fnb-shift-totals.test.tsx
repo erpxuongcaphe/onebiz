@@ -39,8 +39,8 @@ describe("F&B shift totals",()=>{
   fireEvent.change(screen.getByLabelText("Tiền mặt thực đếm trong ngăn kéo *"),{target:{value:"300"}});
   fireEvent.click(screen.getByRole("button",{name:"Đã nhận đủ 500đ"}));fireEvent.click(screen.getByRole("button",{name:"Đóng ca"}));
   fireEvent.click(screen.getByRole("button",{name:"Xác nhận đóng ca"}));await screen.findByRole("alert");
-  expect(screen.getByLabelText("Tiền mặt thực đếm trong ngăn kéo *")).toHaveValue(300);
-  expect(screen.getByLabelText("Tổng chuyển khoản thực nhận *")).toHaveValue(500);
+  expect(screen.getByLabelText("Tiền mặt thực đếm trong ngăn kéo *")).toHaveValue("300");
+  expect(screen.getByLabelText("Tổng chuyển khoản thực nhận *")).toHaveValue("500");
   api.previewShiftClose.mockResolvedValue({...preview,expectedCash:310});fireEvent.click(screen.getByRole("button",{name:"Tải lại tổng quan"}));
   await waitFor(()=>expect(api.previewShiftClose).toHaveBeenCalledTimes(2));
   await screen.findByText("Nhập lý do chênh lệch trong ghi chú (ít nhất 3 ký tự).");
@@ -53,5 +53,18 @@ describe("F&B shift totals",()=>{
   expect(screen.queryByLabelText("Tổng chuyển khoản thực nhận *")).toBeNull();
   fireEvent.change(screen.getByLabelText("Tiền mặt thực đếm trong ngăn kéo *"),{target:{value:"0"}});
   expect(screen.getByRole("button",{name:"Đóng ca"})).toBeEnabled();
+ });
+ it("formats both counted amounts without changing their submitted values",async()=>{
+  const confirm=vi.fn().mockResolvedValue(undefined);
+  render(<CloseShiftDialog open currentShift={shift} onOpenChange={()=>{}} onConfirm={confirm} reconcileTransfer/>);
+  const cash=await screen.findByLabelText("Tiền mặt thực đếm trong ngăn kéo *");
+  const transfer=screen.getByLabelText("Tổng chuyển khoản thực nhận *");
+  fireEvent.change(cash,{target:{value:"1234567"}});fireEvent.blur(cash);
+  fireEvent.change(transfer,{target:{value:"2345678"}});fireEvent.blur(transfer);
+  expect(cash).toHaveValue("1,234,567");expect(transfer).toHaveValue("2,345,678");
+  fireEvent.change(screen.getByLabelText("Lý do chênh lệch *"),{target:{value:"Kiem dem"}});
+  fireEvent.click(screen.getByRole("button",{name:"Đóng ca"}));
+  fireEvent.click(screen.getByRole("button",{name:"Xác nhận đóng ca"}));
+  await waitFor(()=>expect(confirm).toHaveBeenCalledWith(1234567,"Kiem dem",expect.objectContaining({actualTransfer:2345678})));
  });
 });

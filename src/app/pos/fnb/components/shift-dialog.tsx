@@ -16,6 +16,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NumericInput } from "@/components/ui/numeric-input";
 import {
   Dialog,
   DialogContent,
@@ -212,8 +213,8 @@ function ReconciliationCloseShiftDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={next=>{if(!loading)onOpenChange(next);}}>
-        <DialogContent className={cn("flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden",reconcileTransfer?"sm:max-w-3xl":"sm:max-w-xl")}>
-          <DialogHeader>
+        <DialogContent className={cn("flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden [&>button]:size-11",reconcileTransfer?"sm:max-w-3xl":"sm:max-w-xl")}>
+          <DialogHeader className="pr-10">
             <DialogTitle className="flex items-center gap-2">
               <Icon name="check_circle" className="text-status-success" />
               Đóng ca làm việc
@@ -305,12 +306,11 @@ function ReconciliationCloseShiftDialog({
                 <Label htmlFor="shift-counted-cash" className="font-semibold">Tiền mặt thực đếm trong ngăn kéo *</Label>
                 <div className="relative mt-1">
                   <Icon name="attach_money" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    type="number"
+                  <NumericInput
                     min={0}
-                    inputMode="numeric"
-                    value={actualCash}
-                    onChange={(e) => setActualCash(e.target.value)}
+                    decimals={0}
+                    value={actualCash === "" ? null : Number(actualCash)}
+                    onChange={(value) => setActualCash(value === null ? "" : String(value))}
                     id="shift-counted-cash" disabled={loading} placeholder="Đếm tiền mặt thực tế và nhập vào đây..."
                     className="pl-9 text-lg h-11"
                     /* autoFocus bỏ — mobile keyboard jump làm mất tóm tắt ca */
