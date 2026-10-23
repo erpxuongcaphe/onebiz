@@ -16,6 +16,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NumericInput } from "@/components/ui/numeric-input";
 import {
   Dialog,
   DialogContent,
@@ -34,6 +35,8 @@ import { formatPaymentMethod } from "@/lib/constants/payment-methods";
 import { ShiftTotalsFields } from "@/components/shared/shift/shift-totals-fields";
 import { shiftTotalsDraft, SHIFT_CLOSE_LABELS } from "@/lib/shift-reconciliation";
 import { shiftSalesEmptyMessage } from "@/lib/shift-cash-preview";
+import { usePermissions, PERMISSIONS } from "@/lib/permissions";
+import { BlindCloseShiftDialog } from "@/components/shared/shift/blind-close-shift-dialog";
 
 // R4: Quick-pick denominations cho mở/đóng ca — VND tiền mặt phổ biến.
 // Cashier tap pill thay vì gõ số → ít sai sót khi mở ca vội buổi sáng.
@@ -138,7 +141,16 @@ interface CloseShiftDialogProps {
   reconcileTransfer?: boolean;
 }
 
-export function CloseShiftDialog({
+export function CloseShiftDialog(props: CloseShiftDialogProps) {
+  const { hasAny, isLoading } = usePermissions();
+  if (!props.currentShift || isLoading) return null;
+  const canReconcile = hasAny([PERMISSIONS.SHIFTS_RECONCILE_ANY, PERMISSIONS.SHIFTS_RECONCILE_OWN_BRANCH]);
+  return canReconcile
+    ? <ReconciliationCloseShiftDialog key={props.currentShift.id} {...props} />
+    : <BlindCloseShiftDialog key={props.currentShift.id} open={props.open} onOpenChange={props.onOpenChange} onConfirm={props.onConfirm} />;
+}
+
+function ReconciliationCloseShiftDialog({
   open,
   onOpenChange,
   currentShift,
@@ -201,8 +213,8 @@ export function CloseShiftDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={next=>{if(!loading)onOpenChange(next);}}>
-        <DialogContent className={cn("flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden",reconcileTransfer?"sm:max-w-3xl":"sm:max-w-xl")}>
-          <DialogHeader>
+        <DialogContent className={cn("flex w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)] flex-col overflow-hidden [&>button]:size-11",reconcileTransfer?"sm:max-w-3xl":"sm:max-w-xl")}>
+          <DialogHeader className="pr-10">
             <DialogTitle className="flex items-center gap-2">
               <Icon name="check_circle" className="text-status-success" />
               Đóng ca làm việc
@@ -294,12 +306,11 @@ export function CloseShiftDialog({
                 <Label htmlFor="shift-counted-cash" className="font-semibold">Tiền mặt thực đếm trong ngăn kéo *</Label>
                 <div className="relative mt-1">
                   <Icon name="attach_money" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    type="number"
+                  <NumericInput
                     min={0}
-                    inputMode="numeric"
-                    value={actualCash}
-                    onChange={(e) => setActualCash(e.target.value)}
+                    decimals={0}
+                    value={actualCash === "" ? null : Number(actualCash)}
+                    onChange={(value) => setActualCash(value === null ? "" : String(value))}
                     id="shift-counted-cash" disabled={loading} placeholder="Đếm tiền mặt thực tế và nhập vào đây..."
                     className="pl-9 text-lg h-11"
                     /* autoFocus bỏ — mobile keyboard jump làm mất tóm tắt ca */
@@ -355,7 +366,7 @@ export function CloseShiftDialog({
 
           </DialogBody>
           <DialogFooter>
-            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
+            <Button className="h-11 min-h-11" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
               Hủy
             </Button>
             <Button
@@ -363,7 +374,7 @@ export function CloseShiftDialog({
               // BUG FIX: cho phép nhập 0 (két trống thật) — string "" thay vì
               // !actualCash (đề phòng JS coerce). Cashier có thể đếm ra 0đ.
               disabled={loading || !preview || actualCash === "" || (reconcileTransfer&&!draft.valid)}
-              className="bg-status-success text-on-success hover:bg-status-success/90"
+              className="h-11 min-h-11 bg-status-success text-on-success hover:bg-status-success/90"
             >
               Đóng ca
             </Button>
@@ -373,8 +384,8 @@ export function CloseShiftDialog({
 
       {/* CEO 05/06/2026: Popup xác nhận trước khi đóng (không thể hoàn tác) */}
       <Dialog open={showConfirm} onOpenChange={(o) => !loading && setShowConfirm(o)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-md [&>button]:size-11">
+          <DialogHeader className="pr-10">
             <DialogTitle className="flex items-center gap-2">
               <Icon name="warning" className="text-status-warning" />
               Xác nhận đóng ca
@@ -419,10 +430,10 @@ export function CloseShiftDialog({
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowConfirm(false)} disabled={loading}>
+            <Button className="h-11 min-h-11" variant="outline" onClick={() => setShowConfirm(false)} disabled={loading}>
               Xem lại
             </Button>
-            <Button onClick={handleConfirm} disabled={loading}>
+            <Button className="h-11 min-h-11" onClick={handleConfirm} disabled={loading}>
               {loading && <Icon name="progress_activity" size={16} className="mr-1 animate-spin" />}
               Xác nhận đóng ca
             </Button>

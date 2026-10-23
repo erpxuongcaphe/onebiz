@@ -5,6 +5,7 @@
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { extname, join, relative } from "node:path";
+import { readPrivateRpcContracts } from "./private-rpc-contracts.mjs";
 
 const cwd = process.cwd();
 const sourceRoots = ["src/app", "src/lib"];
@@ -52,6 +53,12 @@ for (const file of migrationFiles) {
   }
 }
 
+const privateContracts = readPrivateRpcContracts(cwd);
+for (const definition of privateContracts) {
+  if (definitions.has(definition.name)) throw new Error(`RPC has both public and private declarations: ${definition.name}`);
+  definitions.set(definition.name, [definition.file]);
+}
+
 const missing = [...calls.keys()]
   .filter((name) => !definitions.has(name))
   .sort()
@@ -59,7 +66,9 @@ const missing = [...calls.keys()]
 
 const result = {
   rpcCallCount: calls.size,
-  migrationFunctionCount: definitions.size,
+  migrationFunctionCount: definitions.size - privateContracts.length,
+  declaredFunctionCount: definitions.size,
+  privateContractCount: privateContracts.length,
   missingCount: missing.length,
   rpcNames: [...calls.keys()].sort(),
   missing,

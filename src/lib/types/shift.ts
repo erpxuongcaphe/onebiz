@@ -14,13 +14,13 @@ export interface Shift {
   status: "open" | "closed";
   openedAt: string;
   closedAt: string | null;
-  startingCash: number;
+  startingCash: number | null;
   expectedCash: number | null;
   actualCash: number | null;
   cashDifference: number | null;
-  totalSales: number;
-  totalOrders: number;
-  salesByMethod: Record<string, number>;
+  totalSales: number | null;
+  totalOrders: number | null;
+  salesByMethod: Record<string, number> | null;
   note: string | null;
   closeKind?: ShiftCloseKind | null;
   expectedTransfer?: number | null;

@@ -17,6 +17,20 @@ const fnbDrawer = readFileSync(
 const navConfig = readFileSync("src/components/shared/nav-config.ts", "utf8");
 
 describe("FnB employee navigation permissions", () => {
+  it("keeps cashier operations without granting cashbook access by default", () => {
+    const role = DEFAULT_ROLE_TEMPLATES.find((item) => item.legacyRole === "cashier");
+
+    expect(role).toBeDefined();
+    expect(role?.permissions).not.toContain(PERMISSIONS.FINANCE_VIEW_CASH_BOOK);
+    expect(role?.permissions).toEqual(expect.arrayContaining([
+      PERMISSIONS.POS_FNB_CHECKOUT,
+      PERMISSIONS.POS_FNB_SEND_KITCHEN,
+      PERMISSIONS.POS_FNB_VIEW_ORDERS,
+      PERMISSIONS.POS_FNB_SPLIT_BILL,
+      PERMISSIONS.POS_FNB_TRANSFER_TABLE,
+    ]));
+  });
+
   it("provides a least-privilege kitchen and bar role template", () => {
     const role = DEFAULT_ROLE_TEMPLATES.find((item) => item.name === "Bếp / Bar");
 

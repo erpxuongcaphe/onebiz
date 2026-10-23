@@ -6,6 +6,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { extname, join, relative } from "node:path";
 import ts from "typescript";
+import { readPrivateRpcContracts } from "./private-rpc-contracts.mjs";
 
 const cwd = process.cwd();
 const sourceRoots = ["src/app", "src/lib"];
@@ -173,6 +174,11 @@ for (const file of migrationFiles) {
     entries.push(definition);
     definitionsByName.set(definition.name, entries);
   }
+}
+
+for (const definition of readPrivateRpcContracts(cwd)) {
+  if (definitionsByName.has(definition.name)) throw new Error(`RPC has both public and private declarations: ${definition.name}`);
+  definitionsByName.set(definition.name, [definition]);
 }
 
 const calls = [];

@@ -1228,10 +1228,13 @@ function PosPageInner() {
     async (actualCash: number, note?: string) => {
       if (!currentShift) return;
       try {
-        const report = await closeShift({ shiftId: currentShift.id, actualCash, note });
+        const closed = await closeShift({ shiftId: currentShift.id, actualCash, note });
+        const report = closed.report;
+        const canReconcileShift = hasPermission(PERMISSIONS.SHIFTS_RECONCILE_ANY)
+          || hasPermission(PERMISSIONS.SHIFTS_RECONCILE_OWN_BRANCH);
 
         // Auto-print Z report
-        try {
+        if (canReconcileShift && report) try {
           printShiftReport({
             type: "Z",
             storeName: settings.print.showStoreName ? settings.store.name : undefined,
@@ -1260,19 +1263,20 @@ function PosPageInner() {
         setCurrentShift(null);
         setCloseShiftDialogOpen(false);
 
-        const diff = report.cashDifference ?? 0;
+        const diff = report?.cashDifference ?? 0;
         toast({
           title: "Đã đóng ca",
-          description: `Chênh lệch: ${
+          description: canReconcileShift && report ? `Chênh lệch: ${
             diff === 0 ? "KHỚP" : diff > 0 ? `THỪA ${formatNumber(diff)}` : `THIẾU ${formatNumber(Math.abs(diff))}`
-          }`,
-          variant: diff === 0 ? "success" : "warning",
+          }` : canReconcileShift ? "Ca đã đóng. Báo cáo chưa tải được; xem lại tại Lịch sử ca." : "Đã ghi nhận tiền thực đếm để đối chiếu.",
+          variant: !canReconcileShift || (report && diff === 0) ? "success" : "warning",
         });
       } catch (err: any) {
         toast({ title: "Không đóng được ca", description: err?.message ?? "Vui lòng thử lại.", variant: "error" });
+        throw err;
       }
     },
-    [currentShift, settings, currentBranch, user, toast]
+    [currentShift, settings, currentBranch, user, toast, hasPermission]
   );
 
   // Handle product click — if variants exist, open picker; else add directly

@@ -20,7 +20,7 @@ const tableAccessPreflight = readFileSync(
 );
 
 describe("recent production contract audit", () => {
-  it("maps every literal web RPC to a versioned migration function", () => {
+  it("maps every literal web RPC to a versioned migration or private contract", () => {
     const output = execFileSync(
       process.execPath,
       ["scripts/audit-client-rpc-contracts.mjs"],
@@ -35,7 +35,7 @@ describe("recent production contract audit", () => {
     expect(result.missingCount).toBe(0);
   }, 60_000);
 
-  it("matches literal RPC named arguments to a versioned function signature", () => {
+  it("matches literal RPC named arguments to a declared function signature", () => {
     const output = execFileSync(
       process.execPath,
       ["scripts/audit-rpc-signatures.mjs"],

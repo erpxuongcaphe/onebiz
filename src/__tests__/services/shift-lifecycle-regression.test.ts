@@ -39,7 +39,8 @@ describe("shift lifecycle regression", () => {
   });
 
   it("uses the atomic open RPC from the web service", () => {
-    expect(service).toContain('"open_shift_atomic"');
+    expect(service).toContain('"open_shift_operational"');
+    expect(service).toContain('p_channel: channel');
     expect(service).not.toContain('.from("shifts")\n    .insert({');
   });
 
