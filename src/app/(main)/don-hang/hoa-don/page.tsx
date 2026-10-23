@@ -455,7 +455,7 @@ function InvoiceDetail({
                     Sửa được CHỈ khi hóa đơn còn nháp + chưa thu tiền — đúng
                     guard của RPC update_draft_invoice_atomic (00271:52);
                     hóa đơn hoàn thành: chỉ xem (như bản in). */}
-                <DocumentNoteBox
+                {(invoice.source !== "fnb" || invoice.status === "processing" || (invoice.note?.trim() && invoice.note !== invoice.posNote)) ? <DocumentNoteBox
                   note={invoice.note}
                   editable={invoice.status === "processing" && Number(invoice.paid) === 0}
                   onSave={async (note) => {
@@ -471,7 +471,7 @@ function InvoiceDetail({
                       });
                     }
                   }}
-                />
+                /> : null}
               </div>
             ),
           },
