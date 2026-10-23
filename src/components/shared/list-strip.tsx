@@ -8,6 +8,7 @@ interface ListStripProps {
   tools?: ReactNode;
   className?: string;
   ariaLabel?: string;
+  compactMobile?: boolean;
 }
 
 /**
@@ -17,6 +18,7 @@ interface ListStripProps {
 export function ListStrip({
   metrics,
   tools,
+  compactMobile=false,
   className,
   ariaLabel = "Chỉ số và công cụ danh sách",
 }: ListStripProps) {
@@ -25,10 +27,11 @@ export function ListStrip({
       aria-label={ariaLabel}
       className={cn(
         "flex flex-col gap-1 border-b bg-surface-container-lowest px-3 py-2 md:h-12 md:min-h-12 md:flex-row md:items-center md:gap-2 md:py-0",
+        compactMobile && "max-md:flex-row max-md:items-center max-md:gap-1 max-md:py-1",
         className,
       )}
     >
-      <div className="grid w-full min-w-0 grid-cols-2 gap-x-2 gap-y-1 md:flex md:flex-1 md:items-center md:gap-1.5 md:overflow-x-auto md:whitespace-nowrap">
+      <div tabIndex={compactMobile?0:undefined} aria-label={compactMobile?"Chỉ số — vuốt ngang để xem thêm":undefined} className={cn("grid w-full min-w-0 grid-cols-2 gap-x-2 gap-y-1 md:flex md:flex-1 md:items-center md:gap-1.5 md:overflow-x-auto md:whitespace-nowrap",compactMobile&&"max-md:flex max-md:flex-1 max-md:overflow-x-auto max-md:whitespace-nowrap [&>*]:max-md:shrink-0")}>
         {metrics}
       </div>
       {tools && (

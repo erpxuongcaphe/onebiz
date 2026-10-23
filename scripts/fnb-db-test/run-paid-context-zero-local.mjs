@@ -177,6 +177,33 @@ try {
  denied=false;try{await db.query('select get_fnb_invoice_filter_options_20261023($1)',[id(3)]);}catch(e){denied=/INVOICE_VIEW_REQUIRED/.test(e.message);}assert(denied,'options enforce invoice/POS viewing permission');
  denied=false;try{await db.query('select * from get_fnb_invoice_item_notes_20261023($1)',[withNotes.invoice_id]);}catch(e){denied=/INVOICE_VIEW_REQUIRED/.test(e.message);}assert(denied,'note reader enforces view permission');
  denied=false;try{await db.query('select * from get_fnb_invoice_item_details_20261023($1)',[[optionPaid.invoice_id]]);}catch(e){denied=/INVOICE_VIEW_REQUIRED/.test(e.message);}assert(denied,'options reader still rejects users without document/warehouse permission');
+
+ // Read-only item filters: same-row AND, frozen size/options, scoped catalog, unchanged stock.
+ const filter8=fs.readFileSync('supabase/migrations/202610230008_fnb_invoice_option_filters.sql','utf8');
+ const preFilterStock=await stock(),preFilterInvoices=(await db.query('select to_jsonb(i) row from invoices i order by id')).rows;
+ await db.exec(filter8);await db.exec(filter8);
+ assert(JSON.stringify(preFilterStock)===JSON.stringify(await stock())&&JSON.stringify(preFilterInvoices)===JSON.stringify((await db.query('select to_jsonb(i) row from invoices i order by id')).rows),'filter installation never changes operational data');
+ await db.exec(`create or replace function user_has_permission(uuid,text) returns boolean language sql as $$select $2='inventory.view'$$;`);
+ const hotKey=(await db.query("select fnb_choice_key_20261023('Đá/Nóng') k")).rows[0].k;
+ const groupFilter={size:'Size L',groups:{[hotKey]:'Nóng'}};
+ assert((await db.query('select count(*) n from invoices i cross join lateral fnb_invoice_option_items_20261023(i) r where i.id=$1 and fnb_item_matches_choices_20261023(r.size,r.choices,$2)',[optionPaid.invoice_id,JSON.stringify(groupFilter)])).rows[0].n===1,'original snapshot L+hot still matches after kitchen changes');
+ assert((await db.query('select count(*) n from invoices i cross join lateral fnb_invoice_option_items_20261023(i) r where i.id=$1',[id(900)])).rows[0].n===0,'foreign branch computed relationship returns no rows');
+ await db.exec(`insert into invoice_items select (jsonb_populate_record(null::invoice_items,to_jsonb(ii)||jsonb_build_object('id','${id(905)}','invoice_id','${id(900)}'))).* from invoice_items ii limit 1;`);
+ assert(Number((await db.query("select count(*) n from fnb_invoice_option_items_20261023(jsonb_populate_record(null::invoices,jsonb_build_object('id',$1::text,'tenant_id',$2::text,'branch_id',$3::text,'source','fnb')))",[id(900),id(2),id(3)])).rows[0].n)===0,'forged composite cannot redirect an authorized branch row to a foreign invoice');
+ const catalog=(await db.query('select get_fnb_invoice_choice_catalog_20261023($1) result',[id(3)])).rows[0].result;
+ assert(catalog.sizes.includes('Size L')&&catalog.groups.some(g=>g.key===hotKey&&g.values.includes('Nóng')),'catalog uses recorded choices with stable group keys');
+ assert(!(await db.query("select has_table_privilege('authenticated','fnb_invoice_choice_rows_20261023','select') ok")).rows[0].ok,'private projection cannot be read directly');
+ denied=false;try{await db.query('select * from get_invoice_list_summary_fnb_choices_20261023($1)',[id(3)]);}catch(e){denied=/FNB_SALES_SUMMARY_PERMISSION_DENIED/.test(e.message);}assert(denied,'option summary still enforces sales permission');
+ await db.exec(`create or replace function user_has_permission(uuid,text) returns boolean language sql as $$select $2 in ('invoices.view','pos_fnb.view_sales_summary','pos_fnb.checkout','pos_fnb.view_orders')$$;`);
+ const sumFiltered=(await db.query("select * from get_invoice_list_summary_fnb_choices_20261023($1,null,null,null,null,'all','all',null,null,$2)",[id(3),JSON.stringify(groupFilter)])).rows[0];
+ assert(Number(sumFiltered.tat_ca_hoa_don)===1&&Number(sumFiltered.gia_tri_hoan_thanh)===Number((await db.query('select total from invoices where id=$1',[optionPaid.invoice_id])).rows[0].total),'summary uses matching invoices once, exact full-invoice money');
+ await create(430,10000);await db.exec(`update kitchen_order_items set variant_label='Size L',modifier_selections='[{"groupName":"Đá/Nóng","options":[{"label":"Đá"}]}]' where id='${id(431)}';
+ insert into kitchen_order_items(id,kitchen_order_id,product_id,product_name,quantity,unit_price,cancelled_qty,variant_label,modifier_selections) values('${id(432)}','${id(430)}','${id(10)}','Extra',1,10000,0,'Size M','[{"groupName":"Đá/Nóng","options":[{"label":"Nóng"}]}]');`);
+ const splitChoice=await pay(430,20000);
+ assert(Number((await db.query('select count(*) n from invoices i where i.id=$1 and exists(select 1 from fnb_invoice_option_items_20261023(i) r where fnb_item_matches_choices_20261023(r.size,r.choices,$2))',[splitChoice.invoice_id,JSON.stringify(groupFilter)])).rows[0].n)===0,'L cold plus M hot on separate lines never matches L hot');
+ assert((await db.query("select fnb_item_matches_choices_20261023('__missing__','{}',$1) ok",[JSON.stringify({size:'__missing__',groups:{[hotKey]:'__missing__'}})])).rows[0].ok,'missing is distinct from a recorded option');
+ assert((await db.query('select fnb_choice_values_20261023($1) value',[JSON.stringify([{groupName:'Đá/Nóng',options:[]}])])).rows[0].value[hotKey][0]==='__empty__','explicit deselection stays distinct from missing');
+ console.log('PASS: option filters same-row AND, recorded catalog, immutable history, scoped warehouse reads, summary totals and missing/deselected semantics.');
  console.log('PASS: warehouse invoice filters/options, immutable checkout choices + size, legacy exact-source/no guessed defaults, no write/summary/foreign-branch access, item notes snapshot + exact legacy resolver/no backfill/auth/branch,  real payment/BOM chain, zero bill stock posting/no cash, active shift/invalid/empty guards, sibling and final table release, payment replay, frozen table/zone/times/POS note, no old invoice backfill. Auth adapters remain bounded fixture stubs.');
 } catch(e){console.error(e.message,e.where??'');process.exitCode=1;} finally {await db.close();fs.rmSync(temporary,{recursive:true,force:true});}
 

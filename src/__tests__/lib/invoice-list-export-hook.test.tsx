@@ -62,4 +62,13 @@ describe("Invoice export interaction", () => {
     mocks.excel.mockClear();mocks.details.mockRejectedValue(new Error("Chưa tải đủ tùy chọn"));await act(async()=>{await result.current.start("excel");});expect(mocks.excel).not.toHaveBeenCalled();expect(opts.onError).toHaveBeenCalled();
   });
 
+  it("passes option filters to all detail pages and distinguishes whole-invoice totals from matched line export",async()=>{
+    const opts={...options(),query:{filters:{fnbOptions:JSON.stringify({size:"Size L"})}}};
+    mocks.details.mockResolvedValue({items:[{invoiceCode:"HD0",size:"Size L",temperature:"Nóng"}],summaries:new Map()});
+    const {result}=renderHook(()=>useInvoiceListExport(opts));await act(async()=>{await result.current.start("excel");});
+    expect(mocks.details.mock.calls[0][2]).toEqual({size:"Size L"});
+    expect(mocks.excel.mock.calls[0][3].additionalSheets[0].name).toBe("Món khớp bộ lọc");
+    expect(mocks.excel.mock.calls[0][1].find((c:{key:string})=>c.key==="totalAmount").header).toBe("Tổng toàn hóa đơn");
+  });
+
 });

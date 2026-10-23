@@ -1,3 +1,4 @@
+import {parseFnbChoiceFilter,hasFnbChoiceFilter} from "@/lib/utils/fnb-invoice-choice-filter";
 import {getFnbInvoiceItemDetails,type FnbInvoiceItemDetail} from "./fnb-invoice-item-details";
 import type {FnbServiceFilterOptions} from "@/components/shared/fnb-invoice-service-filter";
 import type {FnbInvoiceContext as PaidFnbContext} from "@/lib/utils/fnb-invoice-context";
@@ -78,6 +79,8 @@ export async function getInvoices(params: QueryParams): Promise<QueryResult<Invo
     : retailSaleType === "delivery" || retailSaleType === "no_delivery" ? retailSaleType
     : retailSaleType === "internal" ? "all" : deliveryFilter;
   const shipmentPlan = getInvoiceShipmentQueryPlan(effectiveDelivery);
+  const choiceFilter=parseFnbChoiceFilter(params.filters?.fnbOptions);
+  const optionRelation=hasFnbChoiceFilter(choiceFilter)?", fnb_option_rows:fnb_invoice_option_items_20261023!inner(id)":"";
   const fnbRelation = params.filters?.fnbOrderType !== undefined
     ? `, fnb_orders:kitchen_orders!kitchen_orders_invoice_id_fkey${fnbOrderType === "all" ? "" : "!inner"}(${FNB_ORDER_CONTEXT_SELECT})`
     : retailSaleType !== "all" ? "" : `, fnb_orders:kitchen_orders!kitchen_orders_invoice_id_fkey(${FNB_ORDER_CONTEXT_SELECT})`;
@@ -86,7 +89,7 @@ export async function getInvoices(params: QueryParams): Promise<QueryResult<Invo
   let query = (supabase as any)
     .from("invoices")
     .select(
-      `*, profiles!invoices_created_by_fkey(full_name), branches!invoices_branch_id_fkey(name), customers!invoices_customer_id_fkey(code, phone, address, debt), ${shipmentPlan.relation}${fnbRelation}`,
+      `*, profiles!invoices_created_by_fkey(full_name), branches!invoices_branch_id_fkey(name), customers!invoices_customer_id_fkey(code, phone, address, debt), ${shipmentPlan.relation}${fnbRelation}${optionRelation}`,
       { count: "exact" },
     )
     .eq("tenant_id", tenantId)
@@ -166,6 +169,15 @@ export async function getInvoices(params: QueryParams): Promise<QueryResult<Invo
     if(typeof value === "string" && value) query=query.eq(column,value);
   }
 
+  if(hasFnbChoiceFilter(choiceFilter)) {
+    query=query.eq("source","fnb");
+    if(choiceFilter.productId)query=query.eq("fnb_option_rows.product_id",choiceFilter.productId);
+    if(choiceFilter.size)query=query.eq("fnb_option_rows.size",choiceFilter.size);
+    for(const [key,value] of Object.entries(choiceFilter.groups??{})) {
+      if(value==="__missing__")query=query.is(`fnb_option_rows.choices->${key}`,null);
+      else query=query.contains("fnb_option_rows.choices",{[key]:[value]});
+    }
+  }
   // Sort & paginate
   const sortColumn = getInvoiceListSort(params.sortBy, cotNgay);
   query = query
@@ -817,6 +829,7 @@ export interface InvoiceListSummaryParams {
   retailSaleType?: RetailInvoiceType;
   fnbTable?: string;
   fnbArea?: string;
+  fnbOptions?: string;
 }
 
 export async function getInvoiceListSummary(
@@ -831,8 +844,11 @@ export async function getInvoiceListSummary(
   });
 
   const statuses = getEffectiveInvoiceListStatuses(params.statuses);
-  const { data, error } = await supabase.rpc(params.fnbTable || params.fnbArea ? "get_invoice_list_summary_fnb_context_20261023" : "get_invoice_list_summary", {
-    ...((params.fnbTable || params.fnbArea) ? {p_table:params.fnbTable || null,p_area:params.fnbArea || null} : {}),
+  const choices=parseFnbChoiceFilter(params.fnbOptions);
+  const hasChoices=hasFnbChoiceFilter(choices);
+  const { data, error } = await supabase.rpc(hasChoices ? "get_invoice_list_summary_fnb_choices_20261023" : params.fnbTable || params.fnbArea ? "get_invoice_list_summary_fnb_context_20261023" : "get_invoice_list_summary", {
+    ...(hasChoices ? {p_options:choices} : {}),
+    ...((hasChoices || params.fnbTable || params.fnbArea) ? {p_table:params.fnbTable || null,p_area:params.fnbArea || null} : {}),
     p_branch_id: params.branchId ?? null,
     p_date_from: from ?? null,
     p_date_to_exclusive: toExclusive ?? null,
@@ -873,7 +889,7 @@ export function khoaChiSoHoaDon(params: InvoiceListSummaryParams): string {
     params.delivery ?? "all",
     resolveFnbInvoiceType(params.fnbOrderType),
     resolveRetailInvoiceType(params.retailSaleType),
-    params.fnbTable ?? "",params.fnbArea ?? "",
+    params.fnbTable ?? "",params.fnbArea ?? "",params.fnbOptions ?? "",
   ]);
 }
 
