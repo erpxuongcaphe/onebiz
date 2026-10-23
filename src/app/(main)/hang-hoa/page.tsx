@@ -2110,6 +2110,7 @@ export default function HangHoaPage() {
 
         <DataTable
           compactMobileToolbar
+          fitDetailToViewport
           renderMobileRow={product=>{
             const available=branchStockView&&product.hasBom&&!product.isFnbStockItem?bomAvailability.get(product.id):undefined;
             const quantity=branchStockView?(product.branchStock??0):product.stock;
