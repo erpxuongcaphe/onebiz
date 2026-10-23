@@ -21,6 +21,6 @@ it("shows the full cash-entry count when only the latest 100 entries are loaded"
    category:"Sale",note:null,createdAt:"2026-10-22T01:00:00Z"}))});
  render(<ReconcileShiftDialog shift={{id:"s",branchId:"b",cashierId:"cashier",cashierName:"Demo",
   branchName:"Demo",openedAt:"2026-10-22T00:00:00Z"} as any} onClose={()=>{}} onDone={()=>{}}/>);
- expect(await screen.findByText("Phiếu thu/chi tiền mặt (1201)")).toBeInTheDocument();
+ expect(await screen.findByText("Phiếu thu/chi tiền mặt (1,201)")).toBeInTheDocument();
  expect(screen.getByText("Đang hiện 100 phiếu gần nhất. Tổng thu/chi ở trên đã tính toàn bộ phiếu trong ca.")).toBeInTheDocument();
 });

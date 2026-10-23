@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
 import { useAuth, useToast } from "@/lib/contexts";
 import { usePermissions } from "@/lib/permissions";
 import {
@@ -372,7 +372,7 @@ export function ReconcileShiftDialog({
                   </div>
                 )}
                 <div className="text-xs text-muted-foreground">
-                  {preview.totalOrders} đơn hoàn thành
+                  {formatNumber(preview.totalOrders)} đơn hoàn thành
                 </div>
               </div>
 
@@ -416,7 +416,7 @@ export function ReconcileShiftDialog({
 
               <details className="border-t border-border pt-2 text-sm">
                 <summary className="cursor-pointer font-semibold">
-                  Phiếu thu/chi tiền mặt ({preview.cashEntryCount ?? preview.cashEntries.length})
+                  Phiếu thu/chi tiền mặt ({formatNumber(preview.cashEntryCount ?? preview.cashEntries.length)})
                 </summary>
                 {preview.cashEntries.length === 0 ? (
                   <p className="pt-2 text-muted-foreground">Không có phiếu tiền mặt trong ca.</p>
