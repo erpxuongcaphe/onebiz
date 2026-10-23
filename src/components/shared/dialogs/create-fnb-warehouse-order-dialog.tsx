@@ -10,7 +10,7 @@ import { useDurableFormDraft } from '@/lib/hooks/use-durable-form-draft';
 import { getWarehouseOrderContext, submitWarehouseOrder, type SupplyProduct, type SupplyWarehouse } from '@/lib/services/supabase/fnb-warehouse-orders';
 
 interface Props { open: boolean; onOpenChange: (open: boolean) => void; onSuccess?: () => void; branchId: string }
-type Line = SupplyProduct & { quantity: number };
+type Line = SupplyProduct & { quantity: number; note?: string };
 
 export function CreateFnbWarehouseOrderDialog({ open, onOpenChange, onSuccess, branchId }: Props) {
   const { toast } = useToast();
@@ -71,7 +71,7 @@ export function CreateFnbWarehouseOrderDialog({ open, onOpenChange, onSuccess, b
     const submittedBranch = branchId;
     try {
       const result = await submitWarehouseOrder({ branchId, warehouseId, requestId, note,
-        items: items.map(i => ({ productId: i.id, quantity: i.quantity })) });
+        items: items.map(i => ({ productId: i.id, quantity: i.quantity, ...(i.note ? { note: i.note } : {}) })) });
       if (!mounted.current || branchRef.current !== submittedBranch) return;
       clearDraft(); onOpenChange(false); onSuccess?.();
       toast({ title: `Đã gửi ${result.code}`, description: `Kho tổng nhận đơn ${result.salesOrderCode} trong Xử lý đặt hàng POS Retail.`, variant: 'success' });
@@ -81,18 +81,19 @@ export function CreateFnbWarehouseOrderDialog({ open, onOpenChange, onSuccess, b
   }
 
   return <Dialog open={open} onOpenChange={next => { if (!submitLock.current) onOpenChange(next); }}>
-    <DialogContent className="flex max-h-[92dvh] flex-col sm:max-w-3xl">
+    <DialogContent className="flex h-[94dvh] max-h-[94dvh] w-[calc(100%-1rem)] max-w-none flex-col sm:w-[96vw] sm:max-w-7xl">
       <DialogHeader><DialogTitle>Đặt hàng nhập từ kho tổng</DialogTitle></DialogHeader>
-      <div className="min-h-0 space-y-4 overflow-y-auto">
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain">
         <p className="text-sm text-muted-foreground">Gửi nhu cầu để kho tổng chuẩn bị hàng. Kho có thể điều chỉnh hàng thực giao; chi nhánh xác nhận khi nhận hàng.</p>
         <fieldset disabled={saving} className="space-y-4">
+          <div className="sticky top-0 z-10 grid gap-3 bg-popover pb-3 md:grid-cols-3">
           <label className="block text-sm font-medium">Kho cung cấp
             <select aria-label="Kho cung cấp" value={warehouseId} onChange={e => setWarehouseId(e.target.value)} className="mt-1 h-10 w-full rounded-md border bg-background px-3">
               <option value="">Chọn kho tổng</option>
               {warehouses.map(w => <option key={w.supplierId} value={w.id}>{w.name}</option>)}
             </select>
           </label>
-          <div>
+          <div className="md:col-span-2">
             <label htmlFor="fnb-supply-search" className="text-sm font-medium">Thêm hàng cần đặt</label>
             <Input id="fnb-supply-search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm tên hoặc mã hàng" className="mt-1" />
             {search && !catalogError && <div aria-live="polite" className="mt-1 max-h-48 overflow-y-auto rounded-md border">
@@ -101,11 +102,18 @@ export function CreateFnbWarehouseOrderDialog({ open, onOpenChange, onSuccess, b
               }}><span className="font-medium">{p.name}</span><span className="ml-2 text-muted-foreground">{p.code} · {p.unit}</span></button>) : <p className="p-3 text-sm">Không tìm thấy. Anh/chị có thể đề nghị mặt hàng mới ở ô ghi chú.</p>}
             </div>}
           </div>
+          </div>
           <div className="divide-y rounded-md border">
-            {!items.length ? <p className="p-4 text-sm text-muted-foreground">Chưa có mặt hàng. Tìm hàng phía trên để thêm.</p> : items.map(item => <div key={item.id} className="flex flex-wrap items-center gap-3 p-3">
-              <div className="min-w-40 flex-1"><p className="font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{item.code} · {item.unit}</p></div>
-              <NumericInput aria-label={`Số lượng ${item.name}`} className="w-28 text-right" value={item.quantity} min={0} decimals={4} onChange={value => setItems(lines => lines.map(i => i.id === item.id ? { ...i, quantity: value ?? 0 } : i))} />
-              <Button variant="ghost" aria-label={`Bỏ ${item.name}`} onClick={() => setItems(lines => lines.filter(i => i.id !== item.id))}>Bỏ</Button>
+            {items.length > 0 && <div aria-hidden="true" className="hidden gap-3 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground md:grid md:grid-cols-[2rem_minmax(0,1fr)_6rem_2.5rem_minmax(10rem,15rem)]"><span>STT</span><span>Mặt hàng / ĐVT</span><span>Số lượng</span><span /><span>Ghi chú</span></div>}
+            {!items.length ? <p className="p-4 text-sm text-muted-foreground">Chưa có mặt hàng. Tìm hàng phía trên để thêm.</p> : items.map((item, index) => <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_6rem_2.5rem] items-start gap-x-3 gap-y-2 px-3 py-2 md:grid-cols-[2rem_minmax(0,1fr)_6rem_2.5rem_minmax(10rem,15rem)]">
+              <span className="hidden pt-2 text-sm tabular-nums text-muted-foreground md:block">{index + 1}</span>
+              <div className="min-w-0"><p className="break-words font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{item.code} · {item.unit}</p></div>
+              <NumericInput aria-label={`Số lượng ${item.name}`} className="h-9 w-24 text-right" value={item.quantity} min={0} decimals={4} onChange={value => setItems(lines => lines.map(i => i.id === item.id ? { ...i, quantity: value ?? 0 } : i))} />
+              <Button variant="ghost" className="col-start-3 row-start-1 h-9 px-1 text-xs text-muted-foreground md:col-start-4" aria-label={`Bỏ ${item.name}`} onClick={() => setItems(lines => lines.filter(i => i.id !== item.id))}>Bỏ</Button>
+              <div className="col-span-3 row-start-2 min-w-0 md:col-span-1 md:col-start-5 md:row-start-1">
+                <label className="mb-1 block text-xs text-muted-foreground md:sr-only" htmlFor={`fnb-line-note-${item.id}`}>Ghi chú {item.code}</label>
+                <textarea id={`fnb-line-note-${item.id}`} aria-label={`Ghi chú ${item.code}`} title={item.note || 'Ghi chú riêng cho mã hàng này'} value={item.note ?? ''} maxLength={2000} rows={1} className="h-9 min-h-9 w-full resize-none overflow-hidden rounded-md border border-border/60 bg-muted/15 px-2 py-2 text-xs leading-[18px] placeholder:text-muted-foreground/60 focus:min-h-20 focus:resize-y focus:overflow-y-auto focus:bg-background focus:outline-none focus:ring-2 focus:ring-primary/30" placeholder="Ghi chú…" onChange={e => setItems(lines => lines.map(i => i.id === item.id ? { ...i, note: e.target.value } : i))} />
+              </div>
             </div>)}
           </div>
           <label className="block text-sm font-medium" htmlFor="fnb-supply-note">Ghi chú cho kho tổng / đề nghị mặt hàng mới</label>

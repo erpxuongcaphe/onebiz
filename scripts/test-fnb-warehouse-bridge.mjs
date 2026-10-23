@@ -20,7 +20,7 @@ create table fnb_supply_catalog(tenant_id uuid,branch_id uuid,product_id uuid);
 create table purchase_orders(id uuid primary key default gen_random_uuid(),tenant_id uuid,branch_id uuid,code text,total numeric,status text,note text);
 create table purchase_order_items(id uuid primary key default gen_random_uuid(),purchase_order_id uuid,product_id uuid,quantity numeric);
 create table invoices(id uuid primary key default gen_random_uuid(),tenant_id uuid,branch_id uuid,code text,customer_id uuid,customer_name text,status text,source text,subtotal numeric,discount_amount numeric,tax_amount numeric,delivery_fee numeric,total numeric,paid numeric,debt numeric,payment_method text,note text,created_by uuid,auto_saved boolean,source_order_id uuid,client_session_id uuid,fulfilled_by_id uuid);
-create table invoice_items(id uuid primary key default gen_random_uuid(),invoice_id uuid,product_id uuid,product_name text,unit text,quantity numeric,unit_price numeric,discount numeric,total numeric);
+create table invoice_items(id uuid primary key default gen_random_uuid(),invoice_id uuid,product_id uuid,product_name text,unit text,quantity numeric,unit_price numeric,discount numeric,total numeric,note text);
 create table input_invoices(id uuid primary key default gen_random_uuid(),purchase_order_id uuid);
 create table audit_log(tenant_id uuid,user_id uuid,action text,entity_type text,entity_id uuid,new_data jsonb);
 create table codes(entity text primary key,n integer not null);
@@ -210,5 +210,49 @@ await test('anonymous callers cannot invoke bridge and authenticated cannot invo
  assert.equal(await scalar("select has_function_privilege('anon','submit_fnb_warehouse_order(uuid,uuid,uuid,jsonb,text)','execute')"),false);
  assert.equal(await scalar("select has_function_privilege('authenticated','_checkout_internal_pos_before_fnb_bridge_20261023(jsonb)','execute')"),false);
  assert.equal(await scalar("select has_table_privilege('authenticated','fnb_purchase_sales_order_links','insert')"),false);
+});
+await db.exec(readFileSync('supabase/migrations/202610230101_fnb_warehouse_request_line_notes.sql','utf8'));
+await test('line-note migration preserves old requests, canonical retries and prices',async()=>{
+ assert.deepEqual(await submit(key),saved);
+ assert.deepEqual(await submit(key,[{productId:product,quantity:10,note:''}]),saved);
+ assert.equal(await scalar('select note from purchase_order_items where purchase_order_id=$1',[saved.purchaseOrderId]),null);
+});
+let withNotes;
+const lineNotes=[{productId:product,quantity:2,note:'  Nguyên thùng\nHSD trên 3 tháng  '},{productId:substitute,quantity:3,note:'Nhãn B riêng'}];
+await test('each literal SKU note reaches both immutable PO and Retail order lines',async()=>{
+ withNotes=await submit(id(400),lineNotes,'Ghi chú chung, không ghép dòng');
+ for(const line of lineNotes){
+  assert.equal(await scalar('select note from purchase_order_items where purchase_order_id=$1 and product_id=$2',[withNotes.purchaseOrderId,line.productId]),line.note);
+  assert.equal(await scalar('select note from invoice_items where invoice_id=$1 and product_id=$2',[withNotes.salesOrderId,line.productId]),line.note);
+ }
+ assert.equal(await scalar('select note from invoices where id=$1',[withNotes.salesOrderId]),'Ghi chú chung, không ghép dòng');
+ assert.equal(Number(withNotes.total),640000);
+});
+await test('reordered line-note retry returns same pair; changed notes cannot overwrite accepted demand',async()=>{
+ assert.deepEqual(await submit(id(400),[...lineNotes].reverse(),'Ghi chú chung, không ghép dòng'),withNotes);
+ await rejects(()=>submit(id(400),[{...lineNotes[0],note:'Đổi ghi chú'},lineNotes[1]],'Ghi chú chung, không ghép dòng'),/nội dung khác/);
+ await rejects(()=>db.query('update invoice_items set note=$1 where invoice_id=$2',['Tamper',withNotes.salesOrderId]),/Không sửa/);
+ await rejects(()=>db.query('update purchase_order_items set note=$1 where purchase_order_id=$2',['Tamper',withNotes.purchaseOrderId]),/Không sửa/);
+});
+await test('invalid/oversized per-line notes create no order, code or financial effects',async()=>{
+ const before=(await db.query('select * from codes order by entity')).rows;
+ const orders=await scalar('select count(*)::int from invoices');
+ for(const note of [123,{},[],true,'x'.repeat(2001)])await rejects(()=>submit(id(401),[{productId:product,quantity:1,note}]),/Ghi chú/);
+ assert.deepEqual((await db.query('select * from codes order by entity')).rows,before);
+ assert.equal(await scalar('select count(*)::int from invoices'),orders);
+});
+await test('empty/null notes keep legacy idempotency shape without inventing text',async()=>{
+ const r=await submit(id(402),[{productId:product,quantity:1,note:null}]);
+ assert.deepEqual(await submit(id(402),[{productId:product,quantity:1}]),r);
+ assert.equal(await scalar('select note from invoice_items where invoice_id=$1',[r.salesOrderId]),null);
+});
+await test('failure while writing PO line notes rolls back documents and both counters',async()=>{
+ const before=(await db.query('select * from codes order by entity')).rows;
+ const count=await scalar('select count(*)::int from purchase_orders');
+ await db.exec("create function fail_line_note_test() returns trigger language plpgsql as $$begin raise exception 'simulated note failure';end$$;create trigger fail_line_note_test before update of note on purchase_order_items for each row execute function fail_line_note_test()");
+ await rejects(()=>submit(id(405),lineNotes),/simulated note failure/);
+ await db.exec('drop trigger fail_line_note_test on purchase_order_items');
+ assert.deepEqual((await db.query('select * from codes order by entity')).rows,before);
+ assert.equal(await scalar('select count(*)::int from purchase_orders'),count);
 });
 console.log(`${passed} isolated PostgreSQL checks passed.`);await db.close();

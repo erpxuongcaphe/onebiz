@@ -348,6 +348,7 @@ function OrderDetail({
                     columns={[
                       { header: "Mã hàng", accessor: "productCode" as never },
                       { header: "Tên hàng", accessor: "productName" as never },
+                      { header: "Ghi chú mã hàng", accessor: "note" as never, className: "min-w-48 max-w-md whitespace-pre-wrap break-words" },
                       { header: "Đơn vị", accessor: "unit" as never },
                       {
                         header: "SL",
