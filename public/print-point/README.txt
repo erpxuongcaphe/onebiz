@@ -82,3 +82,17 @@ GIỚI HẠN
 Điểm in nhận phiếu nhiệt F&B; chứng từ A4/A5 dùng phương thức trực tiếp.
 Không tự mở ngăn kéo tiền. Quyền tài khoản/chi nhánh kiểm tra ở server.
 Nút Dừng lệnh không thu hồi giấy đã in.
+
+PHỤC HỒI NHẬN LỆNH - 24/10/2026
+RPC giới hạn 15 giây gồm đọc nội dung phản hồi; không tự retry claim.
+Vòng nhận lệnh không tiến triển 90 giây sẽ thoát để run.ps1 chạy lại.
+run.ps1 tự phục hồi child bị thoát, chờ tăng dần 5-60 giây, chỉ một task.
+Không tự gửi lại phiếu sending/unknown. Không cần khởi động lại Windows.
+Server giữ phiếu queued quá 5 phút ở "Phiếu cũ · chờ xác nhận"; quản lý
+kiểm giấy rồi xác nhận in hoặc dừng. Không âm thầm xóa nội dung phiếu.
+Nâng cấp cần thay đủ chương trình gồm recovery.mjs, giữ JSON cũ và token,
+không bấm cấp mã mới/cài lại task. Chỉ cập nhật lúc phù hợp sau đối chiếu
+cloud queue và Windows queue. Không chạy hai agent. Không tự đổi LAN/USB.
+Đây không phải tự cập nhật từ web; máy quầy cần được cập nhật một lần.
+Không cam kết chạy bộ cài/USB worker hiện hành trên Windows7/PowerShell2;
+quản trị phải xác minh runtime thực tế trước khi thay chương trình quầy.

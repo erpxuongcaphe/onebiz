@@ -84,3 +84,18 @@ describe("branch scoped printer setup", () => {
     await screen.findByText("Lưu thay đổi trước khi kiểm tra kết nối."); expect(mock.check).not.toHaveBeenCalled();
   });
 });
+
+describe("held old print tickets", () => {
+  it("shows review action without raw marker and cannot act for read-only users", async () => {
+    const { PrintJobList } = await import("@/components/shared/branch-print-setup");
+    const jobs = [{id:"held",label:"Bill cũ",route_label:"Quầy",status:"failed" as const,created_at:"2026-10-24T01:00:00Z",actor_name:"Thu ngân",message:"[PRINT_QUEUE_STALE] Phiếu chờ quá 5 phút."}];
+    const action = vi.fn();
+    const view=render(<PrintJobList jobs={jobs} onAction={action}/>);
+    expect(screen.getByText("Phiếu cũ · chờ xác nhận")).toBeInTheDocument();
+    expect(screen.getByText("Phiếu chờ quá 5 phút.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button",{name:"Xác nhận in phiếu cũ"}));
+    expect(action).toHaveBeenCalledWith("held","retry");
+    view.rerender(<PrintJobList jobs={jobs}/>);
+    expect(screen.queryByRole("button",{name:"Xác nhận in phiếu cũ"})).not.toBeInTheDocument();
+  });
+});

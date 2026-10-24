@@ -7,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseDestination, isConnectionProbe } from './destination.mjs';
 import { sendNetworkPrint } from './network.mjs';
 import { createUsbWorker } from './usb-worker.mjs';
+import { createAgentRpc, createProgressWatchdog } from './recovery.mjs';
 
 export function validateRaster(bytes, paper) {
   if (!['58mm', '80mm'].includes(paper) || bytes.length > 1800000) throw new Error('INVALID_RASTER');
@@ -45,11 +46,7 @@ export async function runAgent(configPath) {
   if(process.platform!=='win32') throw new Error('Điểm in này hiện hỗ trợ Windows.');
   const config=JSON.parse(await readFile(configPath,'utf8')), url=new URL(config.url);
   if(url.protocol!=='https:' || !/^[0-9a-f-]{36}$/.test(config.pointId) || !/^[0-9a-f]{64}$/.test(config.token) || !config.publicKey) throw new Error('Tệp cấu hình không hợp lệ.');
-  const call=async(action,data={})=>{
-    const response=await fetch(new URL('/rest/v1/rpc/fnb_print_agent_v1',url),{method:'POST',headers:{'Content-Type':'application/json',apikey:config.publicKey},body:JSON.stringify({p_point:config.pointId,p_token:config.token,p_action:action,p_data:data}),signal:AbortSignal.timeout(15000)});
-    if(!response.ok) throw new Error(`Điểm in chưa kết nối được (${response.status}). Kiểm tra mạng hoặc cấp lại mã kết nối.`);
-    return response.json();
-  };
+  const call=createAgentRpc(config);
   const sleep=ms=>new Promise(r=>setTimeout(r,ms));
   const discover=()=>new Promise(done=>{
     const child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-Command','[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); @(Get-CimInstance Win32_Printer | Select-Object -ExpandProperty Name) | ConvertTo-Json -Compress'],{windowsHide:true,stdio:['ignore','pipe','pipe']});
@@ -63,12 +60,19 @@ export async function runAgent(configPath) {
   void usbWorker.warm().catch(error => console.error(error.message));
   let stopped=false;
   process.on('SIGINT',()=>{stopped=true;}); process.on('SIGTERM',()=>{stopped=true;});
+  const watchdog = createProgressWatchdog(() => {
+    console.error('PRINT_QUEUE_STALLED_RESTARTING_CHECK_UNCERTAIN_JOBS');
+    usbWorker.close();
+    process.exit(75); // Supervisor restarts; the cloud never reclaims an ambiguous send.
+  });
   console.log('Onebiz · Điểm in đang chạy. Giữ máy bật.');
   while(!stopped) {
     try {
       void refreshPrinters();
+      watchdog.pulse();
       const claimStarted = Date.now();
       const job=await call('claim');
+      watchdog.pulse();
       if(!job){await sleep(1000);continue;}
       const sendStarted = Date.now();
       let status='failed',message='Không dựng được dữ liệu in.',attempted=false,tempPath;
@@ -95,6 +99,7 @@ export async function runAgent(configPath) {
         }
       }catch(error){status=attempted?'unknown':'failed';message=error.message;}
       finally{if(tempPath)await unlink(tempPath).catch(()=>{});}
+      watchdog.pulse();
       const acknowledgementStarted = Date.now();
       // Retry acknowledgement only. Never repeat the physical send.
       for(let attempt=0;attempt<3;attempt++){
@@ -102,8 +107,9 @@ export async function runAgent(configPath) {
         catch(error){console.error(error.message);await sleep(2500);}
       }
       console.log(`${new Date().toISOString()} · ${job.id} · ${status} · lấy lệnh ${sendStarted-claimStarted}ms · gửi máy ${acknowledgementStarted-sendStarted}ms · xác nhận ${Date.now()-acknowledgementStarted}ms`);
-    }catch(error){console.error(error.message);await sleep(5000);}
+    }catch(error){console.error(`${new Date().toISOString()} · ${error.message}`);watchdog.pulse();await sleep(5000);}
   }
+  watchdog.close();
   usbWorker.close();
 }
 if(process.argv[1] && pathToFileURL(resolve(process.argv[1])).href===import.meta.url){

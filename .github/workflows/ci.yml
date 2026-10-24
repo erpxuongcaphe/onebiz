@@ -103,7 +103,7 @@ jobs:
           PGPASSWORD: postgres
         run: |
           createdb fnb_print_queue_test
-          PGDATABASE=fnb_print_queue_test psql -v ON_ERROR_STOP=1 -f supabase/tests/branch_print_queue.integration.sql
+          PGDATABASE=fnb_print_queue_test psql -v ON_ERROR_STOP=1 -f supabase/tests/fnb_print_recovery.integration.sql
 
       - name: Verify invoice code allocation in an isolated database
         env:
@@ -670,7 +670,11 @@ jobs:
         run: npm run test:run
 
       - name: Verify USB worker lifecycle without a physical printer
-        run: node --test scripts/test-usb-worker.mjs
+        run: node --test scripts/test-usb-worker.mjs scripts/test-print-recovery.mjs
+
+      - name: Verify print supervisor recovery with fake processes
+        shell: pwsh
+        run: ./scripts/test-print-supervisor.ps1
 
       - name: Build
         run: npm run build
