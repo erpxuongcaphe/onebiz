@@ -28,7 +28,7 @@ interface CreateSupplierDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
-  initialData?: Supplier;
+  initialData?: Omit<Supplier, "currentDebt" | "totalPurchases">;
 }
 
 function generateSupplierCode() {

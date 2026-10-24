@@ -33,7 +33,7 @@ interface CreateCustomerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
-  initialData?: Customer;
+  initialData?: Omit<Customer, "currentDebt" | "totalSales" | "totalSalesMinusReturns">;
 }
 
 // Customer groups load từ DB (có UUID thật) — KHÔNG hardcode chuỗi

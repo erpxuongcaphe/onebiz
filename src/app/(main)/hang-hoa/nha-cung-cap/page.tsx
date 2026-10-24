@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { useRevalidateOnFocus } from "@/lib/hooks/use-revalidate-on-focus";
 import { useListWorkspaceQuery } from "@/lib/hooks/use-list-workspace-query";
@@ -9,6 +9,8 @@ import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
 import { ListMetric } from "@/components/shared/list-metric";
 import { ListWorkspaceError } from "@/components/shared/list-workspace-error";
+import { getScopedSupplierDirectory } from "@/lib/services/supabase/party-directory-workspace";
+import { supplierDirectoryModel, supplierEditProfile, directoryScopeLabel, type DirectorySupplier as Supplier } from "@/lib/services/supabase/party-directory-model";
 import {
   FilterChips,
   type ListFilterChip,
@@ -56,7 +58,6 @@ import { exportToCsv } from "@/lib/utils/export";
 import { exportToExcelFromSchema } from "@/lib/excel";
 import type { SupplierImportRow } from "@/lib/excel/schemas";
 import {
-  getSupplierListWorkspace,
   deleteSupplier,
   getPurchaseOrdersForSupplier,
   getPurchaseOrderStatusMeta,
@@ -65,23 +66,28 @@ import { OtpApprovalDialog } from "@/components/shared/dialogs/otp-approval-dial
 import { useAuth } from "@/lib/contexts/auth-context";
 import { PERMISSIONS } from "@/lib/permissions/constants";
 import { useToast, useBranchFilter } from "@/lib/contexts";
-import type { Supplier, PurchaseOrder } from "@/lib/types";
+import type { PurchaseOrder } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { PartyCashHistory } from "@/components/shared/party-cash-history";
 import { getSupplierReturnHistory, type SupplierReturnHistoryRow } from "@/lib/services/supabase/supplier-return-history";
+const money = (value: number | null) => value === null ? "—" : formatCurrency(value);
 
 /* ------------------------------------------------------------------ */
 /*  Inline detail                                                      */
 /* ------------------------------------------------------------------ */
 function SupplierDetail({
   supplier,
+  canViewActivity,
+  canViewDebt,
   onClose,
   onEdit,
   onDelete,
   onChanged,
 }: {
   supplier: Supplier;
+  canViewActivity: boolean;
+  canViewDebt: boolean;
   onClose: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
@@ -94,13 +100,14 @@ function SupplierDetail({
   const [ordersError, setOrdersError] = useState<string | null>(null);
   const [historyRevision, setHistoryRevision] = useState(0);
   const { activeBranchId } = useBranchFilter();
+  const { hasPermission } = useAuth();
   const statusMeta = getPurchaseOrderStatusMeta();
 
   useEffect(() => {
     let cancelled = false;
     setOrdersLoading(true);
     setOrdersError(null); setReturnsError(null); setOrders([]); setReturns([]);
-    Promise.allSettled([getPurchaseOrdersForSupplier(supplier.id, null, activeBranchId),getSupplierReturnHistory(supplier.id,activeBranchId)])
+    if (canViewActivity) Promise.allSettled([getPurchaseOrdersForSupplier(supplier.id, null, activeBranchId),getSupplierReturnHistory(supplier.id,activeBranchId)])
       .then(([rows,returned]) => {
         if (cancelled) return;
         if (rows.status === "fulfilled") setOrders(rows.value);
@@ -116,10 +123,11 @@ function SupplierDetail({
         if (cancelled) return;
         setOrdersLoading(false);
       });
+    else setOrdersLoading(false);
     return () => {
       cancelled = true;
     };
-  }, [supplier.id, activeBranchId, historyRevision, supplier.currentDebt]);
+  }, [supplier.id, activeBranchId, historyRevision, supplier.currentDebt, canViewActivity]);
 
   const outstandingOrders = orders.filter((o) => ["completed", "partial"].includes(o.status) && o.amountOwed > 0);
   const totalOrders = orders.length;
@@ -162,24 +170,24 @@ function SupplierDetail({
               value: supplier.address || "",
               fullWidth: true,
             },
-            {
-              label: supplier.currentDebt < 0 ? "NCC đang giữ" : "Còn phải trả",
+            ...(canViewDebt ? [{
+              label: (supplier.currentDebt ?? 0) < 0 ? "NCC đang giữ" : "Còn phải trả",
               value: (
                 <span
                   className={
-                    supplier.currentDebt > 0
+                    (supplier.currentDebt ?? 0) > 0
                       ? "text-destructive"
                       : "text-muted-foreground"
                   }
                 >
-                  {formatCurrency(Math.abs(supplier.currentDebt))}
+                  {supplier.currentDebt === null ? "—" : formatCurrency(Math.abs(supplier.currentDebt))}
                 </span>
               ),
-            },
-            {
+            }] : []),
+            ...(canViewActivity ? [{
               label: "Tổng mua",
-              value: formatCurrency(supplier.totalPurchases),
-            },
+              value: money(supplier.totalPurchases),
+            }] : []),
             { label: "Ngày tạo", value: formatDate(supplier.createdAt) },
           ]}
         />
@@ -212,15 +220,15 @@ function SupplierDetail({
               align: "right",
               accessor: (o) => formatCurrency(o.total),
             },
-            {
+            ...(canViewDebt ? [{
               header: "Đã trả",
-              align: "right",
-              accessor: (o) => formatCurrency(o.paid),
+              align: "right" as const,
+              accessor: (o: PurchaseOrder) => formatCurrency(o.paid),
             },
             {
               header: "Còn nợ",
-              align: "right",
-              accessor: (o) => (
+              align: "right" as const,
+              accessor: (o: PurchaseOrder) => (
                 <span
                   className={
                     o.amountOwed > 0
@@ -231,7 +239,7 @@ function SupplierDetail({
                   {formatCurrency(o.amountOwed)}
                 </span>
               ),
-            },
+            }] : []),
             {
               header: "Trạng thái",
               align: "center",
@@ -245,7 +253,7 @@ function SupplierDetail({
                     label: "Giá trị phiếu đã nhập",
                     value: formatCurrency(totalOrderValue),
                   },
-                  {
+                  ...(canViewDebt ? [{
                     label: "Đã trả cho phiếu đã nhập",
                     value: formatCurrency(totalPaidAll),
                   },
@@ -262,7 +270,7 @@ function SupplierDetail({
                         {formatCurrency(totalOwedAll)}
                       </span>
                     ),
-                  },
+                  }] : []),
                 ]
               : undefined
           }
@@ -278,26 +286,26 @@ function SupplierDetail({
             columns={2}
             fields={[
               {
-                label: supplier.currentDebt < 0 ? "NCC đang giữ" : "Còn phải trả",
+                label: (supplier.currentDebt ?? 0) < 0 ? "NCC đang giữ" : "Còn phải trả",
                 value: (
                   <span
                     className={
-                      supplier.currentDebt > 0
+                      (supplier.currentDebt ?? 0) > 0
                         ? "text-destructive"
                         : "text-muted-foreground"
                     }
                   >
-                    {formatCurrency(Math.abs(supplier.currentDebt))}
+                    {supplier.currentDebt === null ? "—" : formatCurrency(Math.abs(supplier.currentDebt))}
                   </span>
                 ),
               },
-              {
+              ...(canViewActivity ? [{
                 label: "Tổng mua",
-                value: formatCurrency(supplier.totalPurchases),
-              },
+                value: money(supplier.totalPurchases),
+              }] : []),
             ]}
           />
-          {ordersError ? <p role="alert" className="text-sm text-destructive">{ordersError}</p> : ordersLoading ? (
+          {canViewActivity && (ordersError ? <p role="alert" className="text-sm text-destructive">{ordersError}</p> : ordersLoading ? (
             <div className="text-sm text-muted-foreground py-4 text-center">
               Đang tải danh sách đơn còn nợ...
             </div>
@@ -351,7 +359,7 @@ function SupplierDetail({
             <div className="text-sm text-muted-foreground py-4 text-center">
               Không có đơn còn nợ
             </div>
-          )}
+          ))}
         </div>
       ),
     },
@@ -386,7 +394,8 @@ function SupplierDetail({
           subtitle={supplier.phone}
           meta={<span>Ngày tạo: {formatDate(supplier.createdAt)}</span>}
         />
-        <DetailTabs tabs={tabs} defaultTab="info" />
+        <DetailTabs tabs={tabs.filter(tab => (!["purchase_history", "return_history"].includes(tab.id) || canViewActivity) &&
+          (tab.id !== "debt" || canViewDebt) && (tab.id !== "cash" || canViewDebt && hasPermission(PERMISSIONS.FINANCE_VIEW_CASH_BOOK)))} defaultTab="info" />
       </div>
     </InlineDetailPanel>
   );
@@ -468,6 +477,7 @@ export default function NhaCungCapPage() {
       header: "Số dư công nợ",
       cell: ({ row }) => {
         const debt = row.original.currentDebt;
+        if (debt === null) return "—";
         return (
           <span
             className={debt > 0 ? "text-destructive tabular-nums" : debt < 0 ? "text-status-success tabular-nums" : "text-muted-foreground tabular-nums"}
@@ -481,19 +491,20 @@ export default function NhaCungCapPage() {
     {
       accessorKey: "totalPurchases",
       header: "Tổng mua",
-      cell: ({ row }) => formatCurrency(row.original.totalPurchases),
+      cell: ({ row }) => money(row.original.totalPurchases),
     },
   ];
 
   /* ---- Fetch data ---- */
-  const loadWorkspace = useCallback(async () => {
+  const loadWorkspace = useCallback(async (exportAll = false, signal?: AbortSignal) => {
       const presetRange = computeListPresetRange(datePreset);
       const effectiveDateFrom =
         datePreset === "custom" ? dateFrom : presetRange.from;
       const effectiveDateTo = datePreset === "custom" ? dateTo : presetRange.to;
-      return getSupplierListWorkspace({
+      return getScopedSupplierDirectory({
         page,
         pageSize,
+        branchId: listBranchId ?? null,
         search,
         searchField,
         statuses: selectedStatuses,
@@ -504,7 +515,7 @@ export default function NhaCungCapPage() {
         dateFrom: effectiveDateFrom,
         dateTo: effectiveDateTo,
         province: provinceFilter,
-      });
+      }, { exportAll, signal }).then(supplierDirectoryModel);
   }, [
     page,
     pageSize,
@@ -519,6 +530,7 @@ export default function NhaCungCapPage() {
     totalBuyFrom,
     totalBuyTo,
     provinceFilter,
+    listBranchId,
   ]);
   const { data: workspace, error: workspaceError, loading, fetching, refresh: fetchData } = useListWorkspaceQuery(
     loadWorkspace, branchScopeReady && !!user?.id && !!tenant?.id, `${tenant?.id}:${user?.id}:${listBranchId ?? "all"}`,
@@ -526,6 +538,10 @@ export default function NhaCungCapPage() {
   const data = workspace?.data ?? [];
   const total = workspace?.total ?? 0;
   const summary = workspace?.summary ?? { totalPurchases: 0, totalDebt: 0, suppliersWithDebt: 0 };
+  const canShowActivity = workspace?.canViewActivity === true;
+  const canShowDebt = workspace?.canViewDebt === true && hasPermission(PERMISSIONS.SUPPLIERS_VIEW_DEBT);
+  const exportRequest = useRef<AbortController | null>(null);
+  useEffect(() => () => { exportRequest.current?.abort(); exportRequest.current = null; }, [loadWorkspace, listBranchId, user?.id, tenant?.id]);
 
   // CEO 23/05/2026: refetch khi tab visible/focus lại → fix bug F5 stale
   useRevalidateOnFocus(fetchData);
@@ -550,8 +566,8 @@ export default function NhaCungCapPage() {
   ]);
 
   /* ---- Summary ---- */
-  const pageTotalDebt = data.reduce((sum, s) => sum + s.currentDebt, 0);
-  const pageTotalPurchases = data.reduce((sum, s) => sum + s.totalPurchases, 0);
+  const pageTotalDebt = data.reduce((sum, s) => sum + (s.currentDebt ?? 0), 0);
+  const pageTotalPurchases = data.reduce((sum, s) => sum + (s.totalPurchases ?? 0), 0);
   const datePresetLabel = useMemo(() => {
     if (datePreset === "all") return "Tất cả thời gian";
     if (datePreset === "custom")
@@ -643,13 +659,17 @@ export default function NhaCungCapPage() {
     search.trim() || filterChips.length > 0 ? "no-results" : "no-data";
 
   /* ---- Export ---- */
-  const handleExport = (type: "excel" | "csv") => {
-    if (!workspace || fetching) {
+  const handleExport = async (type: "excel" | "csv") => {
+    if (!workspace || fetching || exportRequest.current) {
       toast({ title: "Chưa thể xuất dữ liệu", description: "Chờ tải xong danh sách hoặc bấm Thử lại.", variant: "error" });
       return;
     }
+    const controller = new AbortController(); exportRequest.current = controller;
+    try {
+    const exported = await loadWorkspace(true, controller.signal);
+    if (controller.signal.aborted) return;
     if (type === "excel") {
-      const rows: SupplierImportRow[] = data.map((s) => ({
+      const rows: SupplierImportRow[] = exported.data.map((s) => ({
         code: s.code,
         name: s.name,
         phone: s.phone,
@@ -657,7 +677,7 @@ export default function NhaCungCapPage() {
         address: s.address,
         taxCode: s.taxCode,
         note: s.note,
-        isActive: true,
+        isActive: s.isActive,
       }));
       exportToExcelFromSchema(rows, supplierExcelSchema);
       return;
@@ -667,26 +687,33 @@ export default function NhaCungCapPage() {
       { header: "Tên NCC", key: "name", width: 25 },
       { header: "Điện thoại", key: "phone", width: 15 },
       { header: "Email", key: "email", width: 25 },
-      {
+      ...(exported.canViewDebt && hasPermission(PERMISSIONS.SUPPLIERS_VIEW_DEBT) ? [{
         header: "Số dư công nợ",
         key: "currentDebt",
         width: 18,
         format: (v: number) => v,
-      },
-      {
+      }] : []),
+      ...(exported.canViewActivity ? [{
         header: "Tổng mua",
         key: "totalPurchases",
         width: 15,
         format: (v: number) => v,
-      },
+      }] : []),
     ];
-    exportToCsv(data, exportColumns, "danh-sach-nha-cung-cap");
+    exportToCsv(exported.data, exportColumns, "danh-sach-nha-cung-cap");
+    } catch (error) {
+      if (!controller.signal.aborted) toast({ title: "Không xuất được dữ liệu", description: error instanceof Error ? error.message : "Vui lòng thử lại.", variant: "error" });
+    } finally {
+      if (exportRequest.current === controller) exportRequest.current = null;
+    }
   };
 
   /* ---- Inline detail renderer ---- */
   const renderDetail = (supplier: Supplier, onClose: () => void) => (
     <SupplierDetail
       supplier={supplier}
+      canViewActivity={canShowActivity}
+      canViewDebt={canShowDebt}
       onChanged={() => { void fetchData({ background: true }); }}
       onClose={onClose}
       onEdit={() => {
@@ -745,7 +772,8 @@ export default function NhaCungCapPage() {
 
         <ListWorkspaceError label="danh sách nhà cung cấp" error={workspaceError} onRetry={() => void fetchData()} />
         <DataTable
-          columns={columns}
+          columns={columns.filter(column => !("accessorKey" in column) ||
+            (column.accessorKey !== "currentDebt" || canShowDebt) && (column.accessorKey !== "totalPurchases" || canShowActivity))}
           data={data}
           loading={loading}
           total={total}
@@ -753,6 +781,7 @@ export default function NhaCungCapPage() {
           columnToggle
           toolbarMetrics={
             <>
+              {workspace && <span className="px-2 text-xs font-medium text-muted-foreground">{directoryScopeLabel(workspace.scope)}</span>}
               <ListMetric
                 icon={<Icon name="local_shipping" size={15} />}
                 label="Kết quả"
@@ -760,25 +789,25 @@ export default function NhaCungCapPage() {
                 loading={loading}
                 hint="Tổng số NCC theo bộ lọc"
               />
-              <ListMetric
+              {canShowActivity && <ListMetric
                 icon={<Icon name="trending_up" size={15} />}
                 label="Tổng mua"
-                value={workspace ? formatCurrency(summary.totalPurchases) : "—"}
+                value={workspace ? money(summary.totalPurchases) : "—"}
                 loading={loading}
                 hint="Toàn bộ kết quả đang lọc"
-              />
-              <ListMetric
+              />}
+              {canShowDebt && <ListMetric
                 icon={<Icon name="account_balance_wallet" size={15} />}
                 label="Số dư công nợ"
-                value={workspace ? formatCurrency(summary.totalDebt) : "—"}
+                value={workspace ? money(summary.totalDebt) : "—"}
                 loading={loading}
                 hint={
-                  !workspace ? undefined : summary.suppliersWithDebt > 0
+                  !workspace ? undefined : (summary.suppliersWithDebt ?? 0) > 0
                     ? `${summary.suppliersWithDebt} NCC còn nợ`
-                    : summary.totalDebt < 0 ? "NCC đang giữ tiền" : "Không có nợ"
+                    : (summary.totalDebt ?? 0) < 0 ? "NCC đang giữ tiền" : "Không có nợ"
                 }
-                tone={summary.totalDebt > 0 ? "danger" : "default"}
-              />
+                tone={(summary.totalDebt ?? 0) > 0 ? "danger" : "default"}
+              />}
               <ListMetric
                 icon={<Icon name="verified" size={15} />}
                 label="Đang hiển thị"
@@ -845,8 +874,8 @@ export default function NhaCungCapPage() {
           }}
           selectable
           summaryRow={workspace ? {
-            currentDebt: formatCurrency(pageTotalDebt),
-            totalPurchases: formatCurrency(pageTotalPurchases),
+            ...(canShowDebt && { currentDebt: formatCurrency(pageTotalDebt) }),
+            ...(canShowActivity && { totalPurchases: formatCurrency(pageTotalPurchases) }),
           } : {}}
           expandedRow={expandedRow}
           onExpandedRowChange={setExpandedRow}
@@ -878,7 +907,7 @@ export default function NhaCungCapPage() {
           onClearAll={clearListFilters}
           title="Bộ lọc nhà cung cấp"
         >
-          <FilterGroup label="Tổng mua">
+          {canShowActivity && <FilterGroup label="Tổng mua">
             <RangeFilter
               fromValue={totalBuyFrom}
               toValue={totalBuyTo}
@@ -887,7 +916,7 @@ export default function NhaCungCapPage() {
               fromPlaceholder="Giá trị"
               toPlaceholder="Giá trị"
             />
-          </FilterGroup>
+          </FilterGroup>}
           <FilterGroup label="Thời gian" activeHint={datePresetLabel}>
             <DatePresetFilter
               value={datePreset}
@@ -899,7 +928,7 @@ export default function NhaCungCapPage() {
               presets={STANDARD_LIST_PRESETS_WITH_ALL}
             />
           </FilterGroup>
-          <FilterGroup label="Nợ hiện tại">
+          {canShowDebt && <FilterGroup label="Nợ hiện tại">
             <RangeFilter
               fromValue={debtFrom}
               toValue={debtTo}
@@ -908,7 +937,7 @@ export default function NhaCungCapPage() {
               fromPlaceholder="Nhập giá trị"
               toPlaceholder="Nhập giá trị"
             />
-          </FilterGroup>
+          </FilterGroup>}
           <FilterGroup
             label="Tỉnh / Thành phố"
             activeHint={provinceFilter !== "all" ? provinceFilter : undefined}
@@ -943,7 +972,7 @@ export default function NhaCungCapPage() {
           if (!open) setEditingSupplier(null);
         }}
         onSuccess={fetchData}
-        initialData={editingSupplier ?? undefined}
+        initialData={editingSupplier ? supplierEditProfile(editingSupplier) : undefined}
       />
 
       <ConfirmDialog

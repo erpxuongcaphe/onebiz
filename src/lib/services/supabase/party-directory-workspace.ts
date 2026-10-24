@@ -37,10 +37,11 @@ async function readDirectory(kind: PartyDirectoryKind, params: DirectoryParams, 
     options.signal?.throwIfAborted();
     // Staged source: callers switch only after the scoped RPC is installed and accepted.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await (getClient().rpc as any)(rpcName, {
+    const query = (getClient().rpc as any)(rpcName, {
       ...filters, p_branch_id: request.branchId, p_page: request.page, p_page_size: request.pageSize,
       p_for_export: options.exportAll === true,
     });
+    const { data, error } = await (options.signal && typeof query.abortSignal === "function" ? query.abortSignal(options.signal) : query);
     options.signal?.throwIfAborted();
     if (error) handleError(error, rpcName);
     return data as unknown;

@@ -16,7 +16,7 @@ import { changeCustomerCode } from "@/lib/services/supabase/customers";
 import type { Customer } from "@/lib/types";
 
 interface ChangeCustomerCodeDialogProps {
-  customer: Customer | null;
+  customer: Pick<Customer, "id" | "code" | "name"> | null;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void | Promise<void>;
 }
