@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { parsePartyDirectoryPage, partyDirectoryExportRows } from "@/lib/services/supabase/party-directory-reader";
+import { describe, expect, it, vi } from "vitest";
+import { parsePartyDirectoryPage, partyDirectoryExportRows, readPartyDirectoryPages } from "@/lib/services/supabase/party-directory-reader";
 
 const request = { branchId: "branch-a", page: 0, pageSize: 15 };
 function payload(activity = true, debt = true) {
@@ -81,5 +81,63 @@ describe("party directory contract", () => {
       canViewActivity: true, canViewDebt: true, totalPurchases: 50, totalDebt: -10, suppliersWithDebt: 0 } };
     const page = parsePartyDirectoryPage("supplier", input, { ...request, branchId: null });
     expect(page.contacts[0]).toMatchObject({ activity: 50, debt: -10, orders: null, returns: null, lastPurchaseAt: null });
+  });
+});
+
+describe("complete party directory traversal", () => {
+  const pageData = (page: number) => {
+    const input = payload(); input.total = 453;
+    input.items = Array.from({ length: Math.min(200, 453 - page * 200) }, (_, index) => ({
+      ...input.items[0], id: `customer-${page * 200 + index}`,
+    }));
+    return input;
+  };
+  it("loads and exports all 453 contacts without dropping the final page", async () => {
+    const read = vi.fn(async ({ page }: { page: number }) => pageData(page));
+    const result = await readPartyDirectoryPages("customer", "branch-a", read);
+    expect(result.contacts).toHaveLength(453);
+    expect(partyDirectoryExportRows(result)).toHaveLength(453);
+    expect(read.mock.calls.map(([args]) => args.page)).toEqual([0, 1, 2]);
+  });
+  it.each(["scope", "total", "amount", "capability", "duplicate", "missing"])("rejects changed or incomplete traversal: %s", async failure => {
+    const read = vi.fn(async ({ page }: { page: number }) => {
+      const input = pageData(page);
+      if (page === 1) {
+        if (failure === "scope") input.summary.scope.branchIds = ["branch-b"];
+        if (failure === "total") input.total++;
+        if (failure === "amount") input.summary.totalDebt = 50;
+        if (failure === "capability") input.summary.canViewDebt = false;
+        if (failure === "duplicate") input.items[0].id = "customer-0";
+        if (failure === "missing") input.items.pop();
+      }
+      return input;
+    });
+    await expect(readPartyDirectoryPages("customer", "branch-a", read)).rejects.toThrow();
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+  it("propagates read failures without returning a partial export", async () => {
+    const read = vi.fn(async ({ page }: { page: number }) => {
+      if (page) throw new Error("permission changed");
+      return pageData(page);
+    });
+    await expect(readPartyDirectoryPages("customer", "branch-a", read)).rejects.toThrow("permission changed");
+  });
+  it("does not request more pages after cancellation", async () => {
+    const controller = new AbortController();
+    const read = vi.fn(async () => { controller.abort(); return pageData(0); });
+    await expect(readPartyDirectoryPages("customer", "branch-a", read, controller.signal)).rejects.toThrow();
+    expect(read).toHaveBeenCalledTimes(1);
+  });
+  it("does not query at all when already cancelled", async () => {
+    const controller = new AbortController(); controller.abort(); const read = vi.fn();
+    await expect(readPartyDirectoryPages("customer", "branch-a", read, controller.signal)).rejects.toThrow();
+    expect(read).not.toHaveBeenCalled();
+  });
+  it("returns a valid empty result with one query", async () => {
+    const input = payload(); input.total = 0; input.items = [];
+    input.summary.totalSales = 0; input.summary.totalReturns = 0; input.summary.netSales = 0; input.summary.totalDebt = 0;
+    const read = vi.fn(async () => input);
+    expect((await readPartyDirectoryPages("customer", "branch-a", read)).contacts).toEqual([]);
+    expect(read).toHaveBeenCalledTimes(1);
   });
 });

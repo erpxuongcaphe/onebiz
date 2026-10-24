@@ -126,3 +126,37 @@ export function partyDirectoryExportRows(page: PartyDirectoryPage): Record<strin
     ...(page.canViewDebt ? { debt: contact.debt } : {}),
   }));
 }
+
+export async function readPartyDirectoryPages(
+  kind: PartyDirectoryKind,
+  branchId: string | null,
+  read: (request: { branchId: string | null; page: number; pageSize: number }) => Promise<unknown>,
+  signal?: AbortSignal,
+): Promise<PartyDirectoryPage> {
+  const pageSize = 200;
+  let result: PartyDirectoryPage | null = null;
+  let signature: string | null = null;
+  const ids = new Set<string>();
+  for (let page = 0; ; page++) {
+    signal?.throwIfAborted();
+    const request = { branchId, page, pageSize };
+    const next = parsePartyDirectoryPage(kind, await read(request), request);
+    signal?.throwIfAborted();
+    // Detect observable scope/summary changes; this is not a database snapshot.
+    const nextSignature = JSON.stringify({
+      total: next.total, scope: next.scope.scope, branches: [...next.scope.branchIds].sort(),
+      canViewActivity: next.canViewActivity, canViewDebt: next.canViewDebt,
+      activity: next.activity, debt: next.debt, returns: next.returns,
+      netSales: next.netSales, partiesWithDebt: next.partiesWithDebt,
+    });
+    if (signature !== null && signature !== nextSignature) throw new Error("PARTY_DIRECTORY_CHANGED_DURING_READ");
+    signature = nextSignature;
+    for (const contact of next.contacts) {
+      if (ids.has(contact.id)) throw new Error("PARTY_DIRECTORY_DUPLICATE_CONTACT");
+      ids.add(contact.id);
+    }
+    if (result === null) result = { ...next, contacts: [] };
+    result.contacts.push(...next.contacts);
+    if (result.contacts.length === next.total) return result;
+  }
+}
