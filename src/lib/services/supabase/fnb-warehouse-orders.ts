@@ -1,6 +1,6 @@
 import { getClient, handleError } from './base';
 
-export interface SupplyProduct { id: string; code: string; name: string; unit: string }
+export interface SupplyProduct { id: string; code: string; name: string; unit: string; matchKind?: import('@/lib/smart-search').SearchMatchKind }
 export interface SupplyWarehouse { id: string; name: string; supplierId: string }
 export interface SupplyOrderInput {
   branchId: string; warehouseId: string; requestId: string;

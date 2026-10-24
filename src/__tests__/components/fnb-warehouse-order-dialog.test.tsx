@@ -92,4 +92,26 @@ describe('F&B warehouse order form',()=>{
   await waitFor(()=>expect(screen.getByRole('alert')).toHaveTextContent('chưa được bật'));
   expect(screen.queryByText(/Không tìm thấy\./)).not.toBeInTheDocument();expect(screen.getByRole('button',{name:'Gửi đặt hàng'})).toBeDisabled();
  });
+ it('labels near results without replacing the query or selecting any SKU',async()=>{
+  mocks.context.mockResolvedValue({warehouses:[warehouse],products:[{...milk,matchKind:'near'}]});
+  render(<CreateFnbWarehouseOrderDialog open onOpenChange={vi.fn()} branchId="store"/>);
+  fireEvent.change(screen.getByLabelText('Thêm hàng cần đặt'),{target:{value:'sau'}});
+  expect(await screen.findByText('Gần đúng')).toBeInTheDocument();
+  expect(screen.getByLabelText('Thêm hàng cần đặt')).toHaveValue('sau');
+  expect(screen.getByRole('button',{name:'Gửi đặt hàng'})).toBeDisabled();
+  expect(mocks.submit).not.toHaveBeenCalled();
+ });
+ it('discards a delayed response after a newer query has completed',async()=>{
+  let resolveOld:(value:unknown)=>void=()=>{};
+  mocks.context.mockImplementation(async(_b:string,search:string)=>search==='old'?new Promise(resolve=>{resolveOld=resolve;}):{warehouses:[warehouse],products:search==='new'?[milk]:[]});
+  render(<CreateFnbWarehouseOrderDialog open onOpenChange={vi.fn()} branchId="store"/>);
+  fireEvent.change(screen.getByLabelText('Thêm hàng cần đặt'),{target:{value:'old'}});
+  await waitFor(()=>expect(mocks.context).toHaveBeenCalledWith('store','old'));
+  fireEvent.change(screen.getByLabelText('Thêm hàng cần đặt'),{target:{value:'new'}});
+  await screen.findByRole('button',{name:/Sữa A.*SKU-A/});
+  const {act}=await import('@testing-library/react');
+  await act(async()=>resolveOld({warehouses:[warehouse],products:[{...milk,id:'stale',name:'Kết quả cũ'}]}));
+  expect(screen.queryByText('Kết quả cũ')).not.toBeInTheDocument();
+  expect(screen.getByRole('button',{name:/Sữa A.*SKU-A/})).toBeInTheDocument();
+ });
 });

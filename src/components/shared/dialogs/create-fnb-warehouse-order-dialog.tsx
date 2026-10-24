@@ -99,7 +99,7 @@ export function CreateFnbWarehouseOrderDialog({ open, onOpenChange, onSuccess, b
             {search && !catalogError && <div aria-live="polite" className="mt-1 max-h-48 overflow-y-auto rounded-md border">
               {loading ? <p className="p-3 text-sm">Đang tìm hàng…</p> : products.length ? products.map(p => <button type="button" disabled={saving} key={p.id} className="block w-full p-3 text-left text-sm hover:bg-accent" onClick={() => {
                 setItems(lines => lines.some(i => i.id === p.id) ? lines.map(i => i.id === p.id ? { ...i, quantity: i.quantity + 1 } : i) : [...lines, { ...p, quantity: 1 }]); setSearch('');
-              }}><span className="font-medium">{p.name}</span><span className="ml-2 text-muted-foreground">{p.code} · {p.unit}</span></button>) : <p className="p-3 text-sm">Không tìm thấy. Anh/chị có thể đề nghị mặt hàng mới ở ô ghi chú.</p>}
+              }}><span className="font-medium">{p.name}</span><span className="ml-2 text-muted-foreground">{p.code} · {p.unit}</span>{p.matchKind === 'near' && <span className="ml-2 inline-block rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">Gần đúng</span>}</button>) : <p className="p-3 text-sm">Không tìm thấy. Anh/chị có thể đề nghị mặt hàng mới ở ô ghi chú.</p>}
             </div>}
           </div>
           </div>
