@@ -4,15 +4,19 @@ import {FnbInvoiceContext} from "@/components/shared/fnb-invoice-context";
 import { PartyCashHistory } from "@/components/shared/party-cash-history";
 import { standardizeWalkInCustomerCode } from "@/lib/services/supabase/customers";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useRevalidateOnFocus } from "@/lib/hooks/use-revalidate-on-focus";
 import { useListWorkspaceQuery } from "@/lib/hooks/use-list-workspace-query";
-import { ColumnDef } from "@tanstack/react-table";
+import { ColumnDef, type SortingState } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
 import { ListMetric } from "@/components/shared/list-metric";
 import { ListWorkspaceError } from "@/components/shared/list-workspace-error";
+import { getScopedCustomerDirectory } from "@/lib/services/supabase/party-directory-workspace";
+import { getScopedPartyHistory } from "@/lib/services/supabase/party-history-workspace";
+import { partyHistoryModel, type PartyHistoryDocument } from "@/lib/services/supabase/party-history-reader";
+import { customerDirectoryModel, customerEditProfile, directoryScopeLabel, type DirectoryCustomer as Customer } from "@/lib/services/supabase/party-directory-model";
 import {
   FilterChips,
   type ListFilterChip,
@@ -70,17 +74,13 @@ import { exportToCsv } from "@/lib/utils/export";
 import { exportToExcelFromSchema } from "@/lib/excel";
 import type { CustomerImportRow } from "@/lib/excel/schemas";
 import {
-  getCustomerListWorkspace,
   getCustomerGroupsAsync,
   deleteCustomer,
-  getInvoicesForCustomer,
-  getReturnsForCustomer,
-  getLoyaltyTransactions,
-  type CustomerReturn,
 } from "@/lib/services";
-import type { Customer, Invoice, LoyaltyTransaction } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
+
+const money = (value: number | null) => value === null ? "—" : formatCurrency(value);
 
 /* ------------------------------------------------------------------ */
 /*  Starred set (local state — could be persisted to backend later)   */
@@ -125,6 +125,7 @@ export default function KhachHangPage() {
   const [searchField, setSearchField] = useState("all");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
+  const [sorting, setSorting] = useState<SortingState>([]);
   const [filterOpen, setFilterOpen] = useState(false);
 
   // Filters
@@ -236,6 +237,7 @@ export default function KhachHangPage() {
             header: "Nợ hiện tại",
             cell: ({ row }: { row: { original: Customer } }) => {
               const debt = row.original.currentDebt;
+              if (debt === null) return "—";
               return (
                 <span
                   className={
@@ -252,12 +254,12 @@ export default function KhachHangPage() {
     {
       accessorKey: "totalSales",
       header: "Tổng bán",
-      cell: ({ row }) => formatCurrency(row.original.totalSales),
+      cell: ({ row }) => money(row.original.totalSales),
     },
     {
       accessorKey: "totalSalesMinusReturns",
       header: "Tổng bán trừ trả hàng",
-      cell: ({ row }) => formatCurrency(row.original.totalSalesMinusReturns),
+      cell: ({ row }) => money(row.original.totalSalesMinusReturns),
     },
     {
       accessorKey: "loyaltyPoints",
@@ -292,15 +294,17 @@ export default function KhachHangPage() {
   ];
 
   /* ---- Fetch data ---- */
-  const loadWorkspace = useCallback(async () => {
+  const loadWorkspace = useCallback(async (exportAll = false, signal?: AbortSignal) => {
       const presetRange = computeListPresetRange(datePreset);
       const effectiveDateFrom =
         datePreset === "custom" ? dateFrom : presetRange.from;
       const effectiveDateTo = datePreset === "custom" ? dateTo : presetRange.to;
-      return getCustomerListWorkspace({
+      return getScopedCustomerDirectory({
         page,
         pageSize,
-        branchId: activeBranchId ?? undefined,
+        sortBy: sorting[0]?.id,
+        sortDesc: sorting[0]?.desc,
+        branchId: activeBranchId ?? null,
         search,
         searchField,
         groupIds: selectedGroups,
@@ -315,10 +319,11 @@ export default function KhachHangPage() {
         dateFrom: effectiveDateFrom,
         dateTo: effectiveDateTo,
         province: provinceFilter,
-      });
+      }, { exportAll, signal }).then(customerDirectoryModel);
   }, [
     page,
     pageSize,
+    sorting,
     activeBranchId,
     search,
     searchField,
@@ -343,6 +348,10 @@ export default function KhachHangPage() {
   const data = workspace?.data ?? [];
   const total = workspace?.total ?? 0;
   const summary = workspace?.summary ?? { totalSales: 0, totalReturns: 0, netSales: 0, totalDebt: 0, customersWithDebt: 0, canViewDebt: false };
+  const canShowDebt = canViewDebt && workspace?.canViewDebt === true;
+  const canShowActivity = workspace?.canViewActivity === true;
+  const exportRequest = useRef<AbortController | null>(null);
+  useEffect(() => () => { exportRequest.current?.abort(); exportRequest.current = null; }, [loadWorkspace, user?.id, tenant?.id]);
 
   // CEO 23/05/2026: refetch khi tab visible/focus lại → fix bug F5 stale
   useRevalidateOnFocus(fetchData);
@@ -510,14 +519,21 @@ export default function KhachHangPage() {
     search.trim() || filterChips.length > 0 ? "no-results" : "no-data";
 
   /* ---- Export ---- */
-  const handleExport = (type: "excel" | "csv") => {
-    if (!workspace || fetching) {
+  const handleExport = async (type: "excel" | "csv", selectedIds?: string[]) => {
+    if (!workspace || fetching || exportRequest.current) {
       toast({ title: "Chưa thể xuất dữ liệu", description: "Chờ tải xong danh sách hoặc bấm Thử lại.", variant: "error" });
       return;
     }
+    const controller = new AbortController(); exportRequest.current = controller;
+    try {
+    const exported = await loadWorkspace(true, controller.signal);
+    if (controller.signal.aborted) return;
+    const selected = selectedIds ? new Set(selectedIds) : null;
+    const exportData = selected ? exported.data.filter(row => selected.has(row.id)) : exported.data;
+    if (selected && exportData.length !== selected.size) throw new Error("Danh sách đã thay đổi. Chọn lại các dòng cần xuất.");
     if (type === "excel") {
       // Xuất theo schema import → user edit rồi upload lại không mất field
-      const rows: CustomerImportRow[] = data.map((c) => ({
+      const rows: CustomerImportRow[] = exportData.map((c) => ({
         code: c.code,
         name: c.name,
         phone: c.phone,
@@ -526,7 +542,7 @@ export default function KhachHangPage() {
         customerType: c.type,
         gender: c.gender,
         groupCode: c.groupName, // bulk service match nhóm theo TÊN (không có code)
-        isActive: true,
+        isActive: c.isActive,
       }));
       exportToExcelFromSchema(rows, customerExcelSchema);
       return;
@@ -536,27 +552,34 @@ export default function KhachHangPage() {
       { header: "Tên khách hàng", key: "name", width: 25 },
       { header: "SĐT", key: "phone", width: 15 },
       { header: "Email", key: "email", width: 25 },
-      {
+      ...(exported.canViewDebt && canViewDebt ? [{
         header: "Nợ hiện tại",
         key: "currentDebt",
         width: 15,
         format: (v: number) => v,
-      },
-      {
+      }] : []),
+      ...(exported.canViewActivity ? [{
         header: "Tổng bán",
         key: "totalSales",
         width: 15,
         format: (v: number) => v,
-      },
+      }] : []),
       { header: "Nhóm", key: "groupName", width: 20 },
     ];
-    exportToCsv(data, exportColumns, "danh-sach-khach-hang");
+    exportToCsv(exportData, exportColumns, "danh-sach-khach-hang");
+    } catch (error) {
+      if (!controller.signal.aborted) toast({ title: "Không xuất được dữ liệu", description: error instanceof Error ? error.message : "Vui lòng thử lại.", variant: "error" });
+    } finally {
+      if (exportRequest.current === controller) exportRequest.current = null;
+    }
   };
 
   /* ---- Inline detail renderer ---- */
   const renderDetail = (customer: Customer, onClose: () => void) => (
     <CustomerDetailPanel
       customer={customer}
+      canViewActivity={canShowActivity}
+      canViewDebt={canShowDebt}
       onChanged={() => { void fetchData({ background: true }); }}
       onClose={onClose}
       onEdit={() => {
@@ -647,7 +670,11 @@ export default function KhachHangPage() {
 
         <ListWorkspaceError label="danh sách khách hàng" error={workspaceError} onRetry={() => void fetchData()} />
         <DataTable
-          columns={columns}
+          sorting={sorting}
+          onSortingChange={(updater) => { setSorting(previous => typeof updater === "function" ? updater(previous) : updater); setPage(0); }}
+          columns={columns.filter(column => !("accessorKey" in column) ||
+            (column.accessorKey !== "currentDebt" || canShowDebt) &&
+            (!["totalSales", "totalSalesMinusReturns"].includes(String(column.accessorKey)) || canShowActivity))}
           data={data}
           loading={loading}
           total={total}
@@ -655,6 +682,7 @@ export default function KhachHangPage() {
           columnToggle
           toolbarMetrics={
             <>
+              {workspace && <span className="px-2 text-xs font-medium text-muted-foreground">{directoryScopeLabel(workspace.scope)}</span>}
               <ListMetric
                 icon={<Icon name="group" size={15} />}
                 label="Kết quả"
@@ -662,32 +690,32 @@ export default function KhachHangPage() {
                 loading={loading}
                 hint="Toàn bộ khách theo bộ lọc"
               />
-              <ListMetric
+              {canShowActivity && <ListMetric
                 icon={<Icon name="point_of_sale" size={15} />}
                 label="Doanh số"
-                value={workspace ? formatCurrency(summary.totalSales) : "—"}
+                value={workspace ? money(summary.totalSales) : "—"}
                 loading={loading}
                 hint="Toàn bộ kết quả đang lọc"
-              />
-              <ListMetric
+              />}
+              {canShowActivity && <ListMetric
                 icon={<Icon name="sell" size={15} />}
                 label="Doanh số ròng"
-                value={workspace ? formatCurrency(summary.netSales) : "—"}
+                value={workspace ? money(summary.netSales) : "—"}
                 loading={loading}
-                hint={workspace ? `Đã trừ ${formatCurrency(summary.totalReturns)} trả hàng` : undefined}
-              />
-              {canViewDebt && (
+                hint={workspace ? `Đã trừ ${money(summary.totalReturns)} trả hàng` : undefined}
+              />}
+              {canShowDebt && (
                 <ListMetric
                   icon={<Icon name="account_balance" size={15} />}
                   label="Công nợ"
-                  value={workspace ? formatCurrency(summary.totalDebt) : "—"}
+                  value={workspace ? money(summary.totalDebt) : "—"}
                   loading={loading}
                   hint={
-                    !workspace ? undefined : summary.customersWithDebt > 0
+                    !workspace ? undefined : (summary.customersWithDebt ?? 0) > 0
                       ? `${summary.customersWithDebt} khách còn nợ`
                       : "Không có nợ"
                   }
-                  tone={summary.totalDebt > 0 ? "danger" : "default"}
+                  tone={(summary.totalDebt ?? 0) > 0 ? "danger" : "default"}
                 />
               )}
             </>
@@ -753,26 +781,7 @@ export default function KhachHangPage() {
             {
               label: "Xuất Excel",
               icon: <Icon name="download" size={16} />,
-              onClick: (selectedRows) => {
-                if (!workspace || fetching) return;
-                const rows: CustomerImportRow[] = selectedRows.map((c) => ({
-                  code: c.code,
-                  name: c.name,
-                  phone: c.phone,
-                  email: c.email,
-                  address: c.address,
-                  customerType: c.type,
-                  gender: c.gender,
-                  groupCode: c.groupName,
-                  isActive: true,
-                }));
-                exportToExcelFromSchema(rows, customerExcelSchema);
-                toast({
-                  title: "Đã xuất Excel",
-                  description: `${selectedRows.length} khách hàng`,
-                  variant: "success",
-                });
-              },
+              onClick: selectedRows => { void handleExport("excel", selectedRows.map(row => row.id)); },
             },
             {
               label: "Xóa hàng loạt",
@@ -806,20 +815,20 @@ export default function KhachHangPage() {
             },
           ]}
           summaryRow={workspace ? {
-            ...(canViewDebt && {
+            ...(canShowDebt && {
               currentDebt: formatCurrency(
-                data.reduce((sum, customer) => sum + customer.currentDebt, 0),
+                data.reduce((sum, customer) => sum + (customer.currentDebt ?? 0), 0),
               ),
             }),
-            totalSales: formatCurrency(
-              data.reduce((sum, customer) => sum + customer.totalSales, 0),
+            ...(canShowActivity && { totalSales: formatCurrency(
+              data.reduce((sum, customer) => sum + (customer.totalSales ?? 0), 0),
             ),
             totalSalesMinusReturns: formatCurrency(
               data.reduce(
-                (sum, customer) => sum + customer.totalSalesMinusReturns,
+                (sum, customer) => sum + (customer.totalSalesMinusReturns ?? 0),
                 0,
               ),
-            ),
+            ) }),
           } : {}}
           expandedRow={expandedRow}
           onExpandedRowChange={setExpandedRow}
@@ -895,7 +904,7 @@ export default function KhachHangPage() {
               onChange={setGenderFilter}
             />
           </FilterGroup>
-          {canViewDebt && (
+          {canShowDebt && (
             <FilterGroup label="Công nợ">
               <ChipToggleFilter
                 options={[
@@ -908,7 +917,7 @@ export default function KhachHangPage() {
               />
             </FilterGroup>
           )}
-          <FilterGroup label="Tổng chi tiêu">
+          {canShowActivity && <><FilterGroup label="Tổng chi tiêu">
             <ChipToggleFilter
               options={[
                 { label: "Tất cả", value: "all" },
@@ -949,6 +958,7 @@ export default function KhachHangPage() {
               onChange={setLastPurchaseFilter}
             />
           </FilterGroup>
+          </>}
           <FilterGroup label="Sinh nhật tháng">
             <SelectFilter
               value={birthdayMonthFilter}
@@ -1014,7 +1024,7 @@ export default function KhachHangPage() {
           if (!open) setEditingCustomer(null);
         }}
         onSuccess={fetchData}
-        initialData={editingCustomer ?? undefined}
+        initialData={editingCustomer ? customerEditProfile(editingCustomer) : undefined}
       />
 
       <ConfirmDialog
@@ -1161,66 +1171,32 @@ export default function KhachHangPage() {
 /* ------------------------------------------------------------------ */
 function CustomerDetailPanel({
   customer,
+  canViewActivity,
+  canViewDebt,
   onClose,
   onEdit,
   onDelete,
   onChanged,
 }: {
   customer: Customer;
+  canViewActivity: boolean;
+  canViewDebt: boolean;
   onClose: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
   onChanged?: () => void;
 }) {
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [returns, setReturns] = useState<CustomerReturn[]>([]);
-  const [loyalty, setLoyalty] = useState<LoyaltyTransaction[]>([]);
-  const [salesLoading, setSalesLoading] = useState(true);
-  const [salesError, setSalesError] = useState<string | null>(null);
   const [historyRevision, setHistoryRevision] = useState(0);
   const { activeBranchId } = useBranchFilter();
-  const [loyaltyLoading, setLoyaltyLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    setSalesLoading(true);
-    setSalesError(null);
-    setInvoices([]); setReturns([]);
-    Promise.all([
-      getInvoicesForCustomer(customer.id, null, activeBranchId),
-      getReturnsForCustomer(customer.id, null, activeBranchId),
-    ])
-      .then(([inv, ret]) => {
-        if (cancelled) return;
-        setInvoices(inv);
-        setReturns(ret);
-      })
-      .catch(err => { if (!cancelled) setSalesError(err instanceof Error ? err.message : "Không tải được lịch sử bán/trả hàng."); })
-      .finally(() => {
-        if (!cancelled) setSalesLoading(false);
-      });
-
-    setLoyaltyLoading(true);
-    getLoyaltyTransactions({
-      page: 0,
-      pageSize: 30,
-      customerId: customer.id,
-    })
-      .then((res) => {
-        if (cancelled) return;
-        setLoyalty(res.data);
-      })
-      .catch(() => {
-        if (!cancelled) setLoyalty([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoyaltyLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
+  const { hasPermission } = usePermissions();
+  const { user, tenant } = useAuth();
+  const historyLoader = useCallback(() => {
+    void historyRevision; void customer.currentDebt;
+    return getScopedPartyHistory("customer", customer.id, activeBranchId ?? null);
   }, [customer.id, activeBranchId, historyRevision, customer.currentDebt]);
+  const history = useListWorkspaceQuery(historyLoader, canViewActivity, `${tenant?.id ?? ""}:${user?.id ?? ""}:${canViewDebt}`);
+  const { documents: invoices, returns, loyalty } = partyHistoryModel(history.data);
+  const salesLoading = history.loading, salesError = history.error, loyaltyLoading = history.loading;
 
   const outstandingInvoices = invoices.filter((i) => i.status === "completed" && (i.debt ?? 0) > 0);
   const totalOutstanding = outstandingInvoices.reduce(
@@ -1296,14 +1272,14 @@ function CustomerDetailPanel({
                 </span>
               ),
             },
-            {
+            ...(canViewActivity ? [{
               label: "Mua gần nhất",
               // Tính từ invoices đã fetch (ở tab Lịch sử) — invoices[0]
               // đã sort DESC theo created_at trong getInvoicesForCustomer.
               value: invoices[0]?.date
                 ? formatDate(invoices[0].date)
                 : "— Chưa có giao dịch —",
-            },
+            }] : []),
             { label: "Ngày tạo", value: formatDate(customer.createdAt) },
           ]}
         />
@@ -1350,15 +1326,15 @@ function CustomerDetailPanel({
                   align: "right",
                   accessor: (r) => formatCurrency(r.totalAmount),
                 },
-                {
+                ...(canViewDebt ? [{
                   header: "Đã trả",
-                  align: "right",
-                  accessor: (r) => formatCurrency(r.paid),
+                  align: "right" as const,
+                  accessor: (r: PartyHistoryDocument) => money(r.paid),
                 },
                 {
                   header: "Còn nợ",
-                  align: "right",
-                  accessor: (r) =>
+                  align: "right" as const,
+                  accessor: (r: PartyHistoryDocument) =>
                     (r.debt ?? 0) > 0 ? (
                       <span className="text-destructive font-semibold">
                         {formatCurrency(r.debt ?? 0)}
@@ -1366,7 +1342,7 @@ function CustomerDetailPanel({
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     ),
-                },
+                }] : []),
                 {
                   header: "Trạng thái",
                   accessor: (r) => (
@@ -1458,19 +1434,19 @@ function CustomerDetailPanel({
                 value: (
                   <span
                     className={
-                      customer.currentDebt > 0
+                      (customer.currentDebt ?? 0) > 0
                         ? "text-destructive"
                         : "text-muted-foreground"
                     }
                   >
-                    {formatCurrency(customer.currentDebt)}
+                    {money(customer.currentDebt)}
                   </span>
                 ),
               },
-              {
+              ...(canViewActivity ? [{
                 label: "Tổng bán",
-                value: formatCurrency(customer.totalSales),
-              },
+                value: money(customer.totalSales),
+              }] : []),
             ]}
           />
           {!salesLoading && outstandingInvoices.length > 0 && (
@@ -1502,7 +1478,7 @@ function CustomerDetailPanel({
                   {
                     header: "Đã trả",
                     align: "right",
-                    accessor: (r) => formatCurrency(r.paid),
+                    accessor: (r) => money(r.paid),
                   },
                   {
                     header: "Còn nợ",
@@ -1527,7 +1503,7 @@ function CustomerDetailPanel({
               />
             </div>
           )}
-          {!salesLoading && !salesError && outstandingInvoices.length === 0 && (
+          {canViewActivity && !salesLoading && !salesError && outstandingInvoices.length === 0 && (
             <div className="text-sm text-muted-foreground py-2 text-center">
               Không có hoá đơn nào còn nợ.
             </div>
@@ -1538,7 +1514,7 @@ function CustomerDetailPanel({
     {
       id: "points",
       label: `Lịch sử tích điểm${loyalty.length > 0 ? ` (${loyalty.length})` : ""}`,
-      content: loyaltyLoading ? (
+      content: salesError ? <ListWorkspaceError label="lịch sử tích điểm" error={salesError} onRetry={() => setHistoryRevision(v => v + 1)} /> : loyaltyLoading ? (
         <div className="text-sm text-muted-foreground py-4 text-center">
           Đang tải điểm tích luỹ...
         </div>
@@ -1596,7 +1572,7 @@ function CustomerDetailPanel({
             {
               header: "Tồn",
               align: "right",
-              accessor: (r) => r.balanceAfter,
+              accessor: (r) => r.balanceAfter ?? "—",
             },
             {
               header: "Ghi chú",
@@ -1632,7 +1608,9 @@ function CustomerDetailPanel({
           subtitle={customer.groupName}
           meta={<span>Ngày tạo: {formatDate(customer.createdAt)}</span>}
         />
-        <DetailTabs tabs={tabs} defaultTab="info" />
+        <DetailTabs tabs={tabs.filter(tab => (!["sales-history", "points"].includes(tab.id) || canViewActivity) &&
+          (tab.id !== "audit" || hasPermission(PERMISSIONS.SYSTEM_VIEW_AUDIT) && hasPermission(PERMISSIONS.REPORTS_VIEW_ALL_BRANCHES)) &&
+          (tab.id !== "debt" || canViewDebt) && (tab.id !== "cash" || canViewDebt && hasPermission(PERMISSIONS.FINANCE_VIEW_CASH_BOOK)))} defaultTab="info" />
       </div>
     </InlineDetailPanel>
   );

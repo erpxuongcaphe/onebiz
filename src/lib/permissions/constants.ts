@@ -91,6 +91,7 @@ export const PERMISSIONS = {
 
   // Customers
   CUSTOMERS_VIEW: "customers.view",
+  CUSTOMERS_VIEW_SALES: "customers.view_sales",
   CUSTOMERS_CREATE: "customers.create",
   CUSTOMERS_EDIT: "customers.edit",
   CUSTOMERS_DELETE: "customers.delete",
@@ -100,6 +101,7 @@ export const PERMISSIONS = {
 
   // Suppliers
   SUPPLIERS_VIEW: "suppliers.view",
+  SUPPLIERS_VIEW_PURCHASES: "suppliers.view_purchases",
   SUPPLIERS_CREATE: "suppliers.create",
   SUPPLIERS_EDIT: "suppliers.edit",
   SUPPLIERS_DELETE: "suppliers.delete",
@@ -285,6 +287,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     group: "Khách hàng",
     permissions: [
       { code: PERMISSIONS.CUSTOMERS_VIEW, label: "Xem khách hàng" },
+      { code: PERMISSIONS.CUSTOMERS_VIEW_SALES, label: "Xem doanh số khách hàng" },
       { code: PERMISSIONS.CUSTOMERS_CREATE, label: "Thêm khách hàng" },
       { code: PERMISSIONS.CUSTOMERS_EDIT, label: "Sửa khách hàng" },
       { code: PERMISSIONS.CUSTOMERS_DELETE, label: "Xóa khách hàng" },
@@ -297,6 +300,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     group: "Nhà cung cấp",
     permissions: [
       { code: PERMISSIONS.SUPPLIERS_VIEW, label: "Xem NCC" },
+      { code: PERMISSIONS.SUPPLIERS_VIEW_PURCHASES, label: "Xem tổng mua NCC" },
       { code: PERMISSIONS.SUPPLIERS_CREATE, label: "Thêm NCC" },
       { code: PERMISSIONS.SUPPLIERS_EDIT, label: "Sửa NCC" },
       { code: PERMISSIONS.SUPPLIERS_DELETE, label: "Xóa NCC" },
@@ -432,7 +436,6 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
       // Finance view + create
       PERMISSIONS.FINANCE_VIEW_CASH_BOOK,
       PERMISSIONS.FINANCE_CREATE_TRANSACTION,
-      PERMISSIONS.FINANCE_VIEW_REPORTS,
       // Cost and profit require an explicit grant for managers.
       ...ALL_PERMISSION_CODES.filter((c) => c.startsWith("products.") && c !== PERMISSIONS.PRODUCTS_VIEW_COST && c !== PERMISSIONS.PRODUCTS_VIEW_PROFIT),
       // Customers full
@@ -447,7 +450,6 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
       PERMISSIONS.REPORTS_DASHBOARD,
       PERMISSIONS.REPORTS_ANALYTICS,
       PERMISSIONS.REPORTS_FNB,
-      PERMISSIONS.REPORTS_VIEW_PROFIT,
       PERMISSIONS.REPORTS_EXPORT,
       PERMISSIONS.REPORTS_VIEW_DETAIL,
       PERMISSIONS.REPORTS_EXPORT_DETAIL,
