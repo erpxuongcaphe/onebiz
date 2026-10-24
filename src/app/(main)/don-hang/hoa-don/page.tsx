@@ -509,7 +509,7 @@ function InvoiceDetail({
 
 export default function HoaDonPage() {
   const {user,tenant}=useAuth();
-  const [invoiceDisplay,setInvoiceDisplay]=useInvoiceDisplay(tenant?.id,user?.id);
+  const [invoiceDisplay,setInvoiceDisplay,displaySync]=useInvoiceDisplay(tenant?.id,user?.id);
   const { toast } = useToast();
   const { activeBranchId, currentBranch, branches, isReady: branchScopeReady } = useBranchFilter();
   const router = useRouter();
@@ -1117,7 +1117,7 @@ export default function HoaDonPage() {
           columnToggleLabel="Hiển thị"
           controlledColumnVisibility={invoiceDisplay.listColumns}
           onColumnVisibilityChange={listColumns=>setInvoiceDisplay({...invoiceDisplay,listColumns})}
-          columnToggleExtra={<InvoiceDisplayMenu value={invoiceDisplay} onChange={setInvoiceDisplay}/>}
+          columnToggleExtra={<InvoiceDisplayMenu sync={displaySync} value={invoiceDisplay} onChange={setInvoiceDisplay}/>}
           toolbarMetrics={canViewSalesSummary ?
             <>
               <ListMetric
