@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, cleanup, act } from "@testing-library/react";
 const mock = vi.hoisted(() => ({ state: vi.fn(), update: vi.fn(), toast: vi.fn() }));
 vi.mock("@/lib/contexts/auth-context", () => ({ useAuth: () => ({ tenant: { id: "tenant" } }) }));
 vi.mock("@/lib/contexts/settings-context", () => ({ useSettings: () => ({ settings: { print: { backend: "qz-tray", fnbBranchQueue: false, autoPrintKitchen: true, autoPrintReceipt: false } }, updateSettings: mock.update }) }));
 vi.mock("@/lib/contexts/toast-context", () => ({ useToast: () => ({ toast: mock.toast }) }));
-vi.mock("@/lib/printer/branch-queue", () => ({ getBranchPrintState: mock.state }));
+vi.mock("@/lib/printer/branch-queue", () => ({ getBranchPrintState: mock.state, getBranchPrintJobState: mock.state }));
 import { FnbBranchPrintControl } from "@/components/shared/fnb-branch-print-control";
 beforeEach(() => { cleanup(); vi.clearAllMocks(); });
 describe("personal-phone branch print selection", () => {
@@ -46,4 +46,20 @@ describe("personal-phone branch print selection", () => {
     expect(screen.getByRole("button", { name: "Dùng điểm in chi nhánh" })).toBeDisabled();
     expect(mock.update).not.toHaveBeenCalled();
   });
+});
+
+describe("POS print feedback without opening history",()=>{
+ it("shows pending then error badge for an accepted bill without any physical retry",async()=>{
+  vi.useFakeTimers();
+  try{
+   mock.state.mockResolvedValue({point:{connected:true},jobs:[{id:"live",label:"Bill test",route_label:"Quầy",status:"failed",created_at:new Date().toISOString(),actor_name:"Thu ngân",message:"Không kết nối được máy in."}]});
+   render(<FnbBranchPrintControl branchId="branch" compact/>);
+   act(()=>{window.dispatchEvent(new CustomEvent("onebiz-print-result",{detail:{queued:{id:"live",branchId:"branch",label:"Bill test",routeLabel:"Quầy"}}}));});
+   expect(screen.getByText("1 chờ")).toBeVisible();
+   await act(async()=>{await vi.advanceTimersByTimeAsync(1);});
+   expect(screen.getByText("! 1")).toBeVisible();
+   expect(mock.toast).toHaveBeenCalledWith(expect.objectContaining({title:"Có phiếu chưa gửi được",variant:"error"}));
+   expect(mock.state).toHaveBeenCalledExactlyOnceWith("branch",["live"]);
+  }finally{vi.useRealTimers();}
+ });
 });

@@ -43,3 +43,6 @@ export async function enqueueBranchPrint(args: { branchId: string; routeKey: str
   args.onProgress?.("Đang gửi phiếu tới máy quầy… Chờ kết quả, chưa bấm in lại.");
   return rpc("fnb_print_enqueue_v1", { p_branch: args.branchId, p_id: args.jobId, p_route: args.routeKey, p_label: args.label, p_paper: route.paper, p_bytes: bytesToBase64(bytes) });
 }
+
+/** Exact job IDs: never infer a receipt result from the latest 50 other tickets. */
+export const getBranchPrintJobState = (branchId: string, ids: string[]) => rpc<{ point: Pick<PrintPoint, "enabled" | "connected" | "last_seen_at"> | null; jobs: BranchPrintJob[] }>("fnb_print_jobs_status_v1", { p_branch: branchId, p_ids: ids });

@@ -24,7 +24,7 @@ export async function sendPrintJob(args: { html: string; bytes?: Uint8Array; pap
     try {
       const { enqueueBranchPrint } = await import("./branch-queue");
       const job = await enqueueBranchPrint({ branchId: args.branchId, routeKey: args.stationId ?? args.role ?? "cashier", label: args.label ?? "Phiếu F&B", html: args.html, paper: args.paperSize, buildHtml: args.buildHtml, jobId: args.jobId ?? crypto.randomUUID() });
-      result = { success: true, backend: "branch-queue", queued: { id: job.id, routeLabel: job.route_label } };
+      result = { success: true, backend: "branch-queue", queued: { id: job.id, routeLabel: job.route_label, branchId: args.branchId, label: args.label ?? "Phiếu F&B" } };
     } catch (error) { result = { success: false, backend: "branch-queue", warning: `${error instanceof Error ? error.message : "Chưa gửi được phiếu."} Nếu mạng ngắt trong lúc gửi, xem lịch sử lệnh trước khi gửi lại.` }; }
     reportPrintResult(result); return result;
   }
