@@ -56,9 +56,7 @@ import { downloadTemplate } from "@/lib/excel";
 import { supplierExcelSchema } from "@/lib/excel/schemas";
 import { bulkImportSuppliers } from "@/lib/services/supabase/excel-import";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
-import { exportToCsv } from "@/lib/utils/export";
-import { exportToExcelFromSchema } from "@/lib/excel";
-import type { SupplierImportRow } from "@/lib/excel/schemas";
+import { exportToCsv, exportToExcel } from "@/lib/utils/export";
 import {
   deleteSupplier,
   getPurchaseOrderStatusMeta,
@@ -649,25 +647,13 @@ export default function NhaCungCapPage() {
     try {
     const exported = await loadWorkspace(true, controller.signal);
     if (controller.signal.aborted) return;
-    if (type === "excel") {
-      const rows: SupplierImportRow[] = exported.data.map((s) => ({
-        code: s.code,
-        name: s.name,
-        phone: s.phone,
-        email: s.email,
-        address: s.address,
-        taxCode: s.taxCode,
-        note: s.note,
-        isActive: s.isActive,
-      }));
-      exportToExcelFromSchema(rows, supplierExcelSchema);
-      return;
-    }
     const exportColumns = [
       { header: "Mã NCC", key: "code", width: 12 },
       { header: "Tên NCC", key: "name", width: 25 },
       { header: "Điện thoại", key: "phone", width: 15 },
       { header: "Email", key: "email", width: 25 },
+      { header: "Địa chỉ", key: "address", width: 35 },
+      { header: "Mã số thuế", key: "taxCode", width: 18 },
       ...(exported.canViewDebt && hasPermission(PERMISSIONS.SUPPLIERS_VIEW_DEBT) ? [{
         header: "Số dư công nợ",
         key: "currentDebt",
@@ -680,8 +666,13 @@ export default function NhaCungCapPage() {
         width: 15,
         format: (v: number) => v,
       }] : []),
+      { header: "Ghi chú", key: "note", width: 35 },
+      { header: "Trạng thái", key: "isActive", width: 18, format: (v: boolean) => v ? "Đang giao dịch" : "Ngừng giao dịch" },
+      { header: "Ngày tạo", key: "createdAt", width: 22, format: (v: string) => formatDate(v) },
     ];
-    exportToCsv(exported.data, exportColumns, "danh-sach-nha-cung-cap");
+    const options = { shouldSave: () => !controller.signal.aborted };
+    if (type === "excel") await exportToExcel(exported.data, exportColumns, "danh-sach-nha-cung-cap", { ...options, financialTable: true });
+    else await exportToCsv(exported.data, exportColumns, "danh-sach-nha-cung-cap", options);
     } catch (error) {
       if (!controller.signal.aborted) toast({ title: "Không xuất được dữ liệu", description: error instanceof Error ? error.message : "Vui lòng thử lại.", variant: "error" });
     } finally {
@@ -754,7 +745,7 @@ export default function NhaCungCapPage() {
         <ListWorkspaceError label="danh sách nhà cung cấp" error={workspaceError} onRetry={() => void fetchData()} />
         <DataTable
           sorting={sorting}
-          onSortingChange={(updater) => { setSorting(previous => typeof updater === "function" ? updater(previous) : updater); setPage(0); }}
+          onSortingChange={(updater) => { setExpandedRow(null); setSorting(previous => typeof updater === "function" ? updater(previous) : updater); setPage(0); }}
           columns={columns.filter(column => !("accessorKey" in column) ||
             (column.accessorKey !== "currentDebt" || canShowDebt) && (column.accessorKey !== "totalPurchases" || canShowActivity))}
           data={data}
@@ -764,7 +755,7 @@ export default function NhaCungCapPage() {
           columnToggle
           toolbarMetrics={
             <>
-              {workspace && <span className="px-2 text-xs font-medium text-muted-foreground">{directoryScopeLabel(workspace.scope)}</span>}
+              {workspace && <span className="col-span-2 px-2 text-xs font-medium text-muted-foreground">{directoryScopeLabel(workspace.scope)}</span>}
               <ListMetric
                 icon={<Icon name="local_shipping" size={15} />}
                 label="Kết quả"
@@ -850,7 +841,7 @@ export default function NhaCungCapPage() {
           pageIndex={page}
           pageSize={pageSize}
           pageCount={Math.ceil(total / pageSize)}
-          onPageChange={setPage}
+          onPageChange={(next) => { setExpandedRow(null); setPage(next); }}
           onPageSizeChange={(size) => {
             setPageSize(size);
             setPage(0);

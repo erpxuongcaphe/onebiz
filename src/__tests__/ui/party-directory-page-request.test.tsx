@@ -35,7 +35,7 @@ vi.mock("@/lib/services/supabase/customers", () => ({ standardizeWalkInCustomerC
 vi.mock("@/lib/services/supabase/excel-import", () => ({ bulkImportCustomers: vi.fn(), bulkImportSuppliers: vi.fn() }));
 vi.mock("@/lib/services/supabase/supplier-return-history", () => ({ getSupplierReturnHistory: vi.fn() }));
 vi.mock("@/lib/excel", () => ({ downloadTemplate: vi.fn(), exportToExcelFromSchema: state.excel }));
-vi.mock("@/lib/utils/export", () => ({ exportToCsv: state.csv }));
+vi.mock("@/lib/utils/export", () => ({ exportToCsv: state.csv, exportToExcel: state.excel }));
 import CustomerPage from "@/app/(main)/khach-hang/page";
 import SupplierPage from "@/app/(main)/hang-hoa/nha-cung-cap/page";
 
@@ -108,6 +108,33 @@ describe.each([
     await waitFor(() => expect(state.excel).toHaveBeenCalledTimes(1));
     expect(state.excel.mock.calls[0][0]).toHaveLength(453);
     expect(state.excel.mock.calls[0][0][0].isActive).toBe(false);
+    const keys = state.excel.mock.calls[0][1].map((column: {key:string}) => column.key);
+    expect(keys).toContain("currentDebt");
+    expect(keys).toContain(Page === CustomerPage ? "totalSalesMinusReturns" : "totalPurchases");
+  });
+  it("uses the same authorized columns for Excel and CSV and cancels preparation on scope change", async () => {
+    render(<Page />); await screen.findByText(contact);
+    let complete!: () => void;
+    state.excel.mockImplementationOnce(() => new Promise<void>(resolve => { complete = resolve; }));
+    fireEvent.click(screen.getByRole("button", { name: "Xuất Excel" }));
+    await waitFor(() => expect(state.excel).toHaveBeenCalledTimes(1));
+    const options = state.excel.mock.calls[0][3];
+    expect(options.shouldSave()).toBe(true);
+    fireEvent.change(screen.getByRole("textbox", { name: "Tìm danh sách" }), { target: { value: "changed" } });
+    await waitFor(() => expect(options.shouldSave()).toBe(false));
+    await act(async () => complete());
+  });
+  it("keeps Excel and CSV columns identical for contact-only access", async () => {
+    read.mockResolvedValue(payload(contact, false, false));
+    render(<Page />); await screen.findByText(contact);
+    fireEvent.click(screen.getByRole("button", { name: "Xuất Excel" }));
+    await waitFor(() => expect(state.excel).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: "Xuất CSV" }));
+    await waitFor(() => expect(state.csv).toHaveBeenCalledTimes(1));
+    const excelKeys = state.excel.mock.calls[0][1].map((column: {key:string}) => column.key);
+    const csvKeys = state.csv.mock.calls[0][1].map((column: {key:string}) => column.key);
+    expect(excelKeys).toEqual(csvKeys);
+    for (const key of ["currentDebt", "totalSales", "totalSalesMinusReturns", "totalPurchases"]) expect(excelKeys).not.toContain(key);
   });
   it("discards an export if filters change before it completes", async () => {
     render(<Page />); await screen.findByText(contact);

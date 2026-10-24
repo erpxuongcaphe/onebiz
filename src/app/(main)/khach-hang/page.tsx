@@ -70,9 +70,7 @@ import { PERMISSIONS } from "@/lib/permissions/constants";
 import { OtpApprovalDialog } from "@/components/shared/dialogs/otp-approval-dialog";
 import { OTP_ACTION_CODES } from "@/lib/services/supabase/manager-otp";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
-import { exportToCsv } from "@/lib/utils/export";
-import { exportToExcelFromSchema } from "@/lib/excel";
-import type { CustomerImportRow } from "@/lib/excel/schemas";
+import { exportToCsv, exportToExcel } from "@/lib/utils/export";
 import {
   getCustomerGroupsAsync,
   deleteCustomer,
@@ -531,27 +529,13 @@ export default function KhachHangPage() {
     const selected = selectedIds ? new Set(selectedIds) : null;
     const exportData = selected ? exported.data.filter(row => selected.has(row.id)) : exported.data;
     if (selected && exportData.length !== selected.size) throw new Error("Danh sách đã thay đổi. Chọn lại các dòng cần xuất.");
-    if (type === "excel") {
-      // Xuất theo schema import → user edit rồi upload lại không mất field
-      const rows: CustomerImportRow[] = exportData.map((c) => ({
-        code: c.code,
-        name: c.name,
-        phone: c.phone,
-        email: c.email,
-        address: c.address,
-        customerType: c.type,
-        gender: c.gender,
-        groupCode: c.groupName, // bulk service match nhóm theo TÊN (không có code)
-        isActive: c.isActive,
-      }));
-      exportToExcelFromSchema(rows, customerExcelSchema);
-      return;
-    }
     const exportColumns = [
       { header: "Mã KH", key: "code", width: 12 },
       { header: "Tên khách hàng", key: "name", width: 25 },
       { header: "SĐT", key: "phone", width: 15 },
       { header: "Email", key: "email", width: 25 },
+      { header: "Địa chỉ", key: "address", width: 35 },
+      { header: "Mã số thuế", key: "taxCode", width: 18 },
       ...(exported.canViewDebt && canViewDebt ? [{
         header: "Nợ hiện tại",
         key: "currentDebt",
@@ -563,10 +547,18 @@ export default function KhachHangPage() {
         key: "totalSales",
         width: 15,
         format: (v: number) => v,
+      }, {
+        header: "Doanh số ròng", key: "totalSalesMinusReturns", width: 18,
       }] : []),
       { header: "Nhóm", key: "groupName", width: 20 },
+      { header: "Điểm", key: "loyaltyPoints", width: 12 },
+      { header: "Hạng", key: "loyaltyTierName", width: 18 },
+      { header: "Trạng thái", key: "isActive", width: 18, format: (v: boolean) => v ? "Đang hoạt động" : "Ngừng hoạt động" },
+      { header: "Ngày tạo", key: "createdAt", width: 22, format: (v: string) => formatDate(v) },
     ];
-    exportToCsv(exportData, exportColumns, "danh-sach-khach-hang");
+    const options = { shouldSave: () => !controller.signal.aborted };
+    if (type === "excel") await exportToExcel(exportData, exportColumns, "danh-sach-khach-hang", { ...options, financialTable: true });
+    else await exportToCsv(exportData, exportColumns, "danh-sach-khach-hang", options);
     } catch (error) {
       if (!controller.signal.aborted) toast({ title: "Không xuất được dữ liệu", description: error instanceof Error ? error.message : "Vui lòng thử lại.", variant: "error" });
     } finally {
@@ -671,7 +663,7 @@ export default function KhachHangPage() {
         <ListWorkspaceError label="danh sách khách hàng" error={workspaceError} onRetry={() => void fetchData()} />
         <DataTable
           sorting={sorting}
-          onSortingChange={(updater) => { setSorting(previous => typeof updater === "function" ? updater(previous) : updater); setPage(0); }}
+          onSortingChange={(updater) => { setExpandedRow(null); setSorting(previous => typeof updater === "function" ? updater(previous) : updater); setPage(0); }}
           columns={columns.filter(column => !("accessorKey" in column) ||
             (column.accessorKey !== "currentDebt" || canShowDebt) &&
             (!["totalSales", "totalSalesMinusReturns"].includes(String(column.accessorKey)) || canShowActivity))}
@@ -682,7 +674,7 @@ export default function KhachHangPage() {
           columnToggle
           toolbarMetrics={
             <>
-              {workspace && <span className="px-2 text-xs font-medium text-muted-foreground">{directoryScopeLabel(workspace.scope)}</span>}
+              {workspace && <span className="col-span-2 px-2 text-xs font-medium text-muted-foreground">{directoryScopeLabel(workspace.scope)}</span>}
               <ListMetric
                 icon={<Icon name="group" size={15} />}
                 label="Kết quả"
@@ -758,7 +750,7 @@ export default function KhachHangPage() {
           pageIndex={page}
           pageSize={pageSize}
           pageCount={Math.ceil(total / pageSize)}
-          onPageChange={setPage}
+          onPageChange={(next) => { setExpandedRow(null); setPage(next); }}
           onPageSizeChange={(size) => {
             setPageSize(size);
             setPage(0);
