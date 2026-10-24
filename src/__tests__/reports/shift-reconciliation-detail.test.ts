@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { formatShortDate } from "@/lib/format";
 
 import {
   summarizeReconciledShiftDetail,
@@ -41,6 +42,13 @@ const transaction = (
 });
 
 describe("shift reconciliation document drill-down", () => {
+  it("shows a ledger document date without inventing a transaction time", () => {
+    expect(formatShortDate("2026-10-24")).toBe("24/10/2026");
+    const page = readFileSync("src/app/(main)/phan-tich/doi-chieu-ca/page.tsx", "utf8");
+    expect(page).toContain("formatShortDate(transaction.transactionDate)");
+    expect(page).not.toContain("formatDate(transaction.transactionDate)");
+    expect(page).toContain("formatDate(invoice.createdAt)");
+  });
   it("separates effective and cancelled invoices", () => {
     const summary = summarizeReconciledShiftDetail(
       [

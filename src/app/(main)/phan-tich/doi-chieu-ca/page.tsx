@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuth, useBranchFilter, useToast } from "@/lib/contexts";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatShortDate } from "@/lib/format";
 import { useReportState } from "@/lib/hooks/use-report-state";
 import { usePermissions } from "@/lib/permissions";
 import {
@@ -237,7 +237,7 @@ function ShiftDetailDialog({
                       {detail.transactions.map((transaction) => (
                         <tr key={transaction.id} className={transaction.status === "cancelled" ? "text-muted-foreground line-through" : undefined}>
                           <td className="px-3 py-2 font-mono text-xs">{transaction.code}</td>
-                          <td className="whitespace-nowrap px-3 py-2">{formatDate(transaction.transactionDate)}</td>
+                          <td className="whitespace-nowrap px-3 py-2">{formatShortDate(transaction.transactionDate)}</td>
                           <td className="px-3 py-2">{transaction.type === "receipt" ? "Thu" : "Chi"}</td>
                           <td className="px-3 py-2">{transaction.category}</td>
                           <td className="px-3 py-2">{PAYMENT_METHOD_LABELS[transaction.paymentMethod] ?? transaction.paymentMethod}</td>
