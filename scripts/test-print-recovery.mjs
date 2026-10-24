@@ -61,6 +61,7 @@ test('public ZIP includes matching recovery/supervisor files and no point creden
   }
   assert.equal(entries.has('onebiz-print-point.json'),false);
   for(const name of ['agent.mjs','recovery.mjs','run.ps1','usb-worker.mjs','README.txt']){
-    assert.deepEqual(entries.get(name),await readFile(new URL('../public/print-point/'+name,import.meta.url)));
+    // Git checks out LF on Linux and CRLF on Windows; compare text, not platform newlines.
+    assert.equal(entries.get(name)?.toString('utf8').replace(/\r\n/g,'\n'),(await readFile(new URL('../public/print-point/'+name,import.meta.url),'utf8')).replace(/\r\n/g,'\n'));
   }
 });
