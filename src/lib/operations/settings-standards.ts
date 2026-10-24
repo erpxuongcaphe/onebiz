@@ -12,6 +12,7 @@ export function settingsStandards(standards: Standard[], quality?: SettingsQuali
     const group = quality?.groups?.find(item => `group:${item.id}` === catalog?.category);
     return {
       ...standard,
+      code: catalog?.code,
       manager_ids: assignment ? assignment.manager_ids : [standard.assignee_id],
       category: catalog?.category ?? "",
       categoryLabel: catalog?.group_title || group?.title
