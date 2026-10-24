@@ -674,7 +674,7 @@ export default function KhachHangPage() {
           columnToggle
           toolbarMetrics={
             <>
-              {workspace && <span className="px-2 text-xs font-medium text-muted-foreground">{directoryScopeLabel(workspace.scope)}</span>}
+              {workspace && <span className="col-span-2 px-2 text-xs font-medium text-muted-foreground">{directoryScopeLabel(workspace.scope)}</span>}
               <ListMetric
                 icon={<Icon name="group" size={15} />}
                 label="Kết quả"
