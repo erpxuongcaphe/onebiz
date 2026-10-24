@@ -28,6 +28,7 @@ import { EvidenceFiles } from "./evidence-files";
 import { OperationsMktLinks } from "./mkt-links";
 import { QualityReferences } from "./quality-references";
 import { scoringPeriodSchema } from "@/lib/operations/quality-periods";
+import { criterionTitle, compareCriteriaBySource } from "@/lib/operations/criterion-presentation";
 import s from "./quality.module.css";
 
 export type QualityEditor =
@@ -48,7 +49,7 @@ export type QualityEditor =
         version?: number;
       };
     }
-  | { kind: "assignment" }
+  | { kind: "assignment"; familyId?: string }
   | { kind: "qc_grant" }
   | { kind: "catalog"; item?: import("@/lib/operations/quality-contracts").QualityItem }
   | { kind: "rule"; rule?: QualityRule }
@@ -68,7 +69,7 @@ const titles: Record<QualityEditor["kind"], string> = {
   qc_line: "Ghi kết quả QC",
   qc_correct: "Đính chính kết quả QC",
   department: "Bộ phận phối hợp",
-  assignment: "Phân công quản lý cùng lịch",
+  assignment: "Phân công theo công việc",
   qc_grant: "Quyền QC và số liệu kế toán",
   catalog: "Phiên bản tiêu chuẩn QC",
   rule: "Chính sách điểm và thưởng",
@@ -323,6 +324,7 @@ export function QualityEditorDialog({
   const [newIssue, setNewIssue] = useState(false);
   const [issueCount, setIssueCount] = useState(1);
   const [standardId, setStandardId] = useState('');
+  const [assignmentFamily, setAssignmentFamily] = useState(editor.kind === "assignment" ? editor.familyId ?? "" : "");
   const [excluded, setExcluded] = useState(false);
   const [localError, setLocalError] = useState("");
   const [accountingId, setAccountingId] = useState("");
@@ -432,6 +434,7 @@ export function QualityEditorDialog({
         payload = {
           familyId: get("familyId"),
           managerIds: f.getAll("managerIds").map(String),
+          note: get("note"),
         };
       else if (editor.kind === "qc_grant")
         payload = {
@@ -536,6 +539,7 @@ export function QualityEditorDialog({
                         criteria={criteria}
                         observations={observations}
                         onChange={setObservations}
+                        booleanPassLabel={editor.kind === "check" || editor.kind === "adhoc" ? "Đã làm / Đạt" : "Đạt"}
                       />
                     )}
                     {"line" in editor &&
@@ -839,22 +843,32 @@ export function QualityEditorDialog({
             )}
             {editor.kind === "assignment" && (
               <div className={s.formGrid}>
+                <p className={s.scopeNotice}>Chọn một hoặc nhiều quản lý cho công việc này tại chi nhánh đang xem. Các công việc khác giữ nguyên. Phân công có hiệu lực ngay cho công việc này, không chỉ một lần thực hiện; kết quả đã ghi vẫn được giữ lại.</p>
                 <SelectField
-                  label="Hạng mục công việc"
+                  label="Công việc cần phân công"
                   name="familyId"
+                  value={assignmentFamily}
+                  onChange={setAssignmentFamily}
                   options={workspace.standards
-                    .filter((x) => x.status === "approved")
-                    .map((x) => ({ id: x.family_id, name: x.title }))}
+                    .filter((x) => x.status === "approved" && x.branch_id === branch)
+                    .filter((x, index, rows) => rows.findIndex(item => item.family_id === x.family_id) === index)
+                    .map(x => ({ ...x, code: quality.catalog?.find(item => item.standard_id === x.id)?.code }))
+                    .sort(compareCriteriaBySource)
+                    .map((x) => ({ id: x.family_id, name: criterionTitle(x) }))}
                   required
                 />
                 <SelectField
-                  label="Quản lý được cùng thực hiện"
+                  key={assignmentFamily}
+                  label="Người phụ trách công việc này"
                   name="managerIds"
+                  value={quality.assignments.find(item => item.family_id === assignmentFamily)?.manager_ids
+                    ?? [workspace.standards.find(item => item.family_id === assignmentFamily && item.branch_id === branch)?.assignee_id ?? ""].filter(Boolean)}
                   userPurpose="manager"
                   options={managers}
                   multiple
                   required
                 />
+                <Notes label="Lý do phân công / thay đổi" required />
               </div>
             )}
             {editor.kind === "qc_grant" && (

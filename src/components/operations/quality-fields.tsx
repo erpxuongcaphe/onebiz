@@ -167,11 +167,14 @@ export function ObservationFields({
   criteria,
   observations,
   onChange,
+  booleanPassLabel = "Đạt",
 }: {
   criteria: Criterion[];
   observations: Observation[];
   onChange: (v: Observation[]) => void;
+  booleanPassLabel?: string;
 }) {
+  const groupId = useId();
   function update(c: Criterion, slot: string, value: Partial<Observation>) {
     const old = observations.find(
       (o) => o.criterionId === c.id && o.slot === slot,
@@ -189,7 +192,7 @@ export function ObservationFields({
       {criteria.map((c) => (
         <section key={c.id} className={s.criterion}>
           <h3>{c.title}</h3>
-          <p className={s.muted}>
+            {c.kind !== "boolean" && <p className={s.muted}>
             {c.measurementScope} ·{" "}
             {c.operator === "lt"
               ? "Nhỏ hơn"
@@ -200,7 +203,7 @@ export function ObservationFields({
                   : "Bằng"}{" "}
             {formatNumber(c.threshold)}
             {c.kind === "percent" ? "%" : ""}
-          </p>
+            </p>}
           {Array.from({ length: c.samples }, (_, i) => String(i + 1)).map(
             (slot) => {
               const o = observations.find(
@@ -209,20 +212,13 @@ export function ObservationFields({
               return (
                 <div key={slot} className={s.ruleFields}>
                   {c.kind === "boolean" ? (
-                    <SelectField
-                      label={`Lần ${slot}${c.measurementTimes?.[Number(slot) - 1] ? ` · ${c.measurementTimes[Number(slot) - 1]}` : ""}`}
-                      options={{
-                        "1": c.threshold === 1 ? "Đạt" : "Không đạt",
-                        "0": c.threshold === 0 ? "Đạt" : "Không đạt",
-                      }}
-                      value={o?.value === undefined ? "" : String(o.value)}
-                      required
-                      onChange={(v) =>
-                        update(c, slot, {
-                          value: v === "" ? undefined : Number(v),
-                        })
-                      }
-                    />
+                    <fieldset className={s.resultChoices}>
+                      <legend>{`Lần ${slot}${c.measurementTimes?.[Number(slot) - 1] ? ` · ${c.measurementTimes[Number(slot) - 1]}` : ""}`}</legend>
+                      {[{label:booleanPassLabel,value:c.threshold},{label:"Không đạt",value:c.threshold === 1 ? 0 : 1}].map(choice => <label key={choice.value} className={s.resultChoice} data-selected={o?.value === choice.value}>
+                        <input type="radio" name={`${groupId}-${c.id}-${slot}`} value={choice.value} checked={o?.value === choice.value} required onChange={() => update(c,slot,{value:choice.value})}/>
+                        {choice.label}
+                      </label>)}
+                    </fieldset>
                   ) : c.kind === "percent" ? (
                     <>
                       <Field label={`Lần ${slot} · Số hao hụt`}>
