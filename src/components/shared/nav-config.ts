@@ -238,7 +238,7 @@ export const sidebarNavGroups: SidebarGroup[] = [
         label: "Nhà cung cấp",
         icon: "apartment",
         items: [
-          { label: "Danh sách nhà cung cấp", href: "/doi-tac/ncc", icon: "apartment" },
+          { label: "Danh sách nhà cung cấp", href: "/hang-hoa/nha-cung-cap", icon: "apartment" },
           { label: "Đối tác giao hàng", href: "/doi-tac/giao-hang", icon: "local_shipping" },
         ],
       },
