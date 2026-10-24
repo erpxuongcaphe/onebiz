@@ -3,7 +3,7 @@ import {describe,it,expect,vi,beforeEach,afterEach} from "vitest";
 const api=vi.hoisted(()=>({get:vi.fn(),save:vi.fn()}));
 vi.mock("@/lib/services/supabase/invoice-display-preferences",()=>({getInvoiceDisplayPreferences:api.get,saveInvoiceDisplayPreferences:api.save}));
 import {useInvoiceDisplay,DEFAULT_INVOICE_DISPLAY} from "@/lib/hooks/use-invoice-display";
-import {applyDisplayPatch,mergeDisplayPatch} from "@/lib/utils/invoice-display";
+import {applyDisplayPatch,mergeDisplayPatch,acknowledgeDisplayPatch} from "@/lib/utils/invoice-display";
 const record=(split=false)=>({value:{...DEFAULT_INVOICE_DISPLAY,splitOptions:split},revision:1});
 beforeEach(()=>{localStorage.clear();api.get.mockReset().mockResolvedValue(record());api.save.mockReset().mockImplementation(async(_t,_u,p)=>({value:applyDisplayPatch(DEFAULT_INVOICE_DISPLAY,p),revision:2}));});
 afterEach(()=>{cleanup();vi.restoreAllMocks()});
@@ -21,5 +21,27 @@ describe("account display synchronization",()=>{
   const stored=JSON.parse(localStorage.getItem("onebiz:invoice-display:v2:t:u")!);expect(stored.pending).toEqual({splitOptions:true,detailVisibility:{Size:false}});
  });
  it("ignores old account responses and sends expected identity to the server",async()=>{let done!:(r:ReturnType<typeof record>)=>void;api.get.mockImplementationOnce(()=>new Promise(r=>done=r));const h=renderHook(({user})=>useInvoiceDisplay("t",user),{initialProps:{user:"a"}});h.rerender({user:"b"});await waitFor(()=>expect(h.result.current[2].state).toBe("synced"));await act(async()=>done(record(true)));expect(h.result.current[0].splitOptions).toBe(false);act(()=>h.result.current[1]({...DEFAULT_INVOICE_DISPLAY,splitOptions:true}));await waitFor(()=>expect(api.save).toHaveBeenCalledWith("t","b",{splitOptions:true}));});
+ it("does not let a second passive tab erase another tab's offline queue",async()=>{
+  const a=renderHook(()=>useInvoiceDisplay("t","u")),b=renderHook(()=>useInvoiceDisplay("t","u"));
+  await waitFor(()=>expect(a.result.current[2].state).toBe("synced"));await waitFor(()=>expect(b.result.current[2].state).toBe("synced"));
+  api.get.mockRejectedValue(Error("offline"));
+  act(()=>a.result.current[1]({...DEFAULT_INVOICE_DISPLAY,splitOptions:true}));await waitFor(()=>expect(a.result.current[2].state).toBe("offline"));
+  act(()=>b.result.current[2].retry());await waitFor(()=>expect(b.result.current[2].state).toBe("offline"));
+  a.unmount();b.unmount();
+  const stored=JSON.parse(localStorage.getItem("onebiz:invoice-display:v2:t:u")!);expect(stored.pending.splitOptions).toBe(true);
+  const reopened=renderHook(()=>useInvoiceDisplay("t","u"));await waitFor(()=>expect(reopened.result.current[2].state).toBe("offline"));expect(reopened.result.current[0].splitOptions).toBe(true);
+ });
+ it("a remaining tab can recover another closed tab's offline choice when online returns",async()=>{
+  const a=renderHook(()=>useInvoiceDisplay("t","u")),b=renderHook(()=>useInvoiceDisplay("t","u"));
+  await waitFor(()=>expect(a.result.current[2].state).toBe("synced"));await waitFor(()=>expect(b.result.current[2].state).toBe("synced"));
+  api.get.mockRejectedValue(Error("offline"));act(()=>a.result.current[1]({...DEFAULT_INVOICE_DISPLAY,splitOptions:true}));await waitFor(()=>expect(a.result.current[2].state).toBe("offline"));a.unmount();
+  api.get.mockResolvedValue(record());act(()=>b.result.current[2].retry());await waitFor(()=>expect(b.result.current[0].splitOptions).toBe(true));await waitFor(()=>expect(b.result.current[2].state).toBe("synced"));
+  expect(api.save).toHaveBeenLastCalledWith("t","u",{splitOptions:true});expect(JSON.parse(localStorage.getItem("onebiz:invoice-display:v2:t:u")!).pending).toEqual({});
+ });
+ it("acknowledges only matching fields and leaves another tab's newer fields queued",()=>{
+  const pending={splitOptions:false,detailVisibility:{Size:false,"Mức đá":false},listColumns:{date:true,customerName:false}};
+  expect(acknowledgeDisplayPatch(pending,{splitOptions:true,detailVisibility:{Size:false},listColumns:{date:false}})).toEqual({splitOptions:false,detailVisibility:{"Mức đá":false},listColumns:{date:true,customerName:false}});
+  expect(pending.detailVisibility.Size).toBe(false);
+ });
  it("keeps later values when merging rapid edits from the same control",()=>{expect(mergeDisplayPatch({detailVisibility:{Size:false,"Mức đá":false}},{detailVisibility:{Size:true},listColumns:{date:false}})).toEqual({detailVisibility:{Size:true,"Mức đá":false},listColumns:{date:false}});});
 });

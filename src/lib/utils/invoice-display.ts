@@ -31,3 +31,14 @@ export function parseDisplayPatch(value:unknown):InvoiceDisplayPatch {
  return {...(typeof p.splitOptions==="boolean"?{splitOptions:p.splitOptions}:{}),...(p.detailVisibility?{detailVisibility:Object.fromEntries(Object.entries(p.detailVisibility).filter(([k,v])=>INVOICE_DETAIL_FIELDS.includes(k as typeof INVOICE_DETAIL_FIELDS[number])&&typeof v==="boolean"))}:{}),...(p.listColumns?{listColumns:bools(p.listColumns)}:{})};
 }
 export function hasDisplayPatch(p:InvoiceDisplayPatch){return p.splitOptions!==undefined||Object.keys(p.detailVisibility??{}).length>0||Object.keys(p.listColumns??{}).length>0;}
+
+/** A server response acknowledges only values it actually saved, never a newer pending choice. */
+export function acknowledgeDisplayPatch(pending:InvoiceDisplayPatch,saved:InvoiceDisplayPatch):InvoiceDisplayPatch {
+ const result:InvoiceDisplayPatch={...pending};
+ if(saved.splitOptions!==undefined&&pending.splitOptions===saved.splitOptions)delete result.splitOptions;
+ for(const group of ["detailVisibility","listColumns"] as const){
+  const left=Object.fromEntries(Object.entries(pending[group]??{}).filter(([key,value])=>saved[group]?.[key]!==value));
+  if(Object.keys(left).length)result[group]=left;else delete result[group];
+ }
+ return result;
+}
