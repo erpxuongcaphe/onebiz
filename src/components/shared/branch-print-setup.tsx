@@ -20,11 +20,11 @@ export function PrintJobList({ jobs, onAction }: { jobs: BranchPrintJob[]; onAct
   return <div className="divide-y border-y" aria-label="Lịch sử gửi phiếu">
     {!jobs.length && <p className="py-3 text-sm text-muted-foreground">Chưa có lệnh in.</p>}
     {jobs.map(job => <div key={job.id} className="py-2 space-y-1">
-      <div className="flex flex-wrap justify-between gap-2 text-sm"><strong>{job.label} · {job.route_label}</strong><span className={job.status === "unknown" || job.status === "failed" ? "font-semibold text-status-error" : job.status === "handed_off" ? "text-status-success" : "text-primary"}>{PRINT_STATUS[job.status]}</span></div>
+      <div className="flex flex-wrap justify-between gap-2 text-sm"><strong>{job.label} · {job.route_label}</strong><span className={job.status === "unknown" || job.status === "failed" ? "font-semibold text-status-error" : job.status === "handed_off" ? "text-status-success" : "text-primary"}>{job.status === "failed" && job.message?.startsWith("[PRINT_QUEUE_STALE]") ? "Phiếu cũ · chờ xác nhận" : PRINT_STATUS[job.status]}</span></div>
       <p className="text-sm text-muted-foreground">{job.actor_name} · {new Date(job.created_at).toLocaleString("vi-VN")}</p>
-      {job.message && <p className="text-sm">{job.message}</p>}
+      {job.message && <p className="text-sm">{job.message.replace(/^\[PRINT_QUEUE_STALE\]\s*/, "")}</p>}
       {onAction && ["queued", "failed", "unknown"].includes(job.status) && <div className="flex gap-2">
-        {job.status !== "queued" && <Button className="min-h-11" size="sm" variant="outline" onClick={() => onAction(job.id, "retry")}>In lại có xác nhận</Button>}
+        {job.status !== "queued" && <Button className="min-h-11" size="sm" variant="outline" onClick={() => onAction(job.id, "retry")}>{job.status === "failed" && job.message?.startsWith("[PRINT_QUEUE_STALE]") ? "Xác nhận in phiếu cũ" : "In lại có xác nhận"}</Button>}
         <Button className="min-h-11" size="sm" variant="outline" onClick={() => onAction(job.id, "cancel")}>Dừng lệnh</Button>
       </div>}
     </div>)}

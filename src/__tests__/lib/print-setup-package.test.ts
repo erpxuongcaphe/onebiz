@@ -23,6 +23,7 @@ describe("private branch print setup archive", () => {
     try {
       const files = await getPrintSetupFiles();
       expect(files.map(file => file.name)).toContain("usb-worker.mjs");
+      expect(files.map(file => file.name)).toContain("recovery.mjs");
       expect(fetchMock).toHaveBeenCalledWith("/print-point/usb-worker.mjs", { cache: "no-store" });
     } finally { vi.unstubAllGlobals(); }
   });
