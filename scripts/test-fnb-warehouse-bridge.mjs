@@ -255,4 +255,49 @@ await test('failure while writing PO line notes rolls back documents and both co
  assert.deepEqual((await db.query('select * from codes order by entity')).rows,before);
  assert.equal(await scalar('select count(*)::int from purchase_orders'),count);
 });
+await db.exec(`alter table products add column is_fnb_stock_item boolean default false; alter table products add column barcode text; alter table products add column has_bom boolean default false;`);
+await db.exec(readFileSync('supabase/migrations/202610240200_warehouse_catalog_search.sql','utf8'));
+const contextSearch=q=>scalar('select get_fnb_warehouse_order_context($1,$2)',[store,q]).then(r=>r.products);
+await test('warehouse search handles unaccented/decomposed/wrong accents and ranks literal barcode first',async()=>{
+ await db.query('update products set name=$1,barcode=$2 where id=$3',['Sữa Đặc Lamosa','012345',product]);
+ for(const q of ['sua dac','sưã đạc','Su\u031b\u0303a đặc','lamosa sua'])assert.equal((await contextSearch(q))[0].id,product);
+ assert.equal((await contextSearch('012345'))[0].matchKind,'identifier');
+ assert.equal((await contextSearch('sau dak'))[0].matchKind,'near');
+ assert.equal((await contextSearch('sau'))[0].matchKind,'near');
+ assert.equal((await contextSearch('012346')).length,0);
+ assert.equal((await contextSearch("%'_" )).length,0);
+});
+await test('BTP role and independent flag are excluded from selection AND new submissions without reserving codes',async()=>{
+ for(const classification of ["inventory_role='fnb_stock_item',is_fnb_stock_item=false","inventory_role='retail_stock_item',is_fnb_stock_item=true"]){
+  await db.exec('begin'); await db.query(`update products set ${classification} where id=$1`,[product]);
+  assert.equal((await contextSearch('012345')).length,0);
+  assert.deepEqual(await submit(key),saved,'accepted request replay must not recreate or rewrite historical demand');
+  const before=(await db.query('select * from codes order by entity')).rows;
+  await db.exec('savepoint denied_submit');
+  await rejects(()=>submit(id(991)),/không còn được phép/);
+  await db.exec('rollback to savepoint denied_submit');
+  assert.deepEqual((await db.query('select * from codes order by entity')).rows,before);
+  await db.exec('rollback');
+ }
+});
+await test('sale SKU with BOM remains requestable and accepted old request can replay without new effects',async()=>{
+ await db.exec('begin'); await db.query('update products set has_bom=true where id=$1',[product]);
+ assert.equal((await contextSearch('012345'))[0].id,product);
+ assert.ok((await submit(id(992))).purchaseOrderId); await db.exec('rollback');
+ assert.deepEqual(await submit(key),saved);
+});
+await test('search ranks across the authorized catalogue before limiting, and never leaks another tenant or inactive item',async()=>{
+ await db.exec('begin');
+ for(let i=0;i<25;i++)await db.query("insert into products(id,tenant_id,is_active,product_type,channel,code,name,unit,sell_price) values($1,$2,true,'sku','retail',$3,$4,'Túi',1)",[id(800+i),tenant,'CAT-'+i,'Sữa Đặc '+i]);
+ await db.query("update products set code='SUA-DAC' where id=$1",[product]);
+ assert.equal((await contextSearch('SUA-DAC'))[0].id,product);
+ await db.query('update products set is_active=false where id=$1',[product]);assert.equal((await contextSearch('012345')).length,0);
+ await db.query('update products set is_active=true,tenant_id=$1 where id=$2',[id(999),product]);assert.equal((await contextSearch('012345')).length,0);
+ await db.exec('rollback');
+});
+await test('new search retains branch/permission denial and private helper ACL',async()=>{
+ await db.exec("set test.denied='yes'");await rejects(()=>contextSearch('sua'),/quyền/);await db.exec("set test.denied='no'");
+ assert.equal(await scalar("select has_function_privilege('anon','catalog_search_rank(text,text,text,text)','execute')"),false);
+});
+
 console.log(`${passed} isolated PostgreSQL checks passed.`);await db.close();
