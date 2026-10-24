@@ -9,6 +9,12 @@
 .setupNav button[aria-current="step"],.quickDates button[aria-pressed="true"] { background:#e8f1ff; color:#1649a1; border-color:#93b5ef; font-weight:600; }
 .setupStatus { display:flex; gap:8px 20px; flex-wrap:wrap; font-size:13px; color:#526172; padding-block:8px; }
 .scopeNotice { padding:10px 12px; background:#eff7f6; border-left:3px solid #238475; color:#26564d; }
+.formGrid > .scopeNotice { grid-column: 1 / -1; }
+.resultChoices { display:flex; flex-wrap:wrap; gap:8px; min-width:0; border:0; padding:0; margin:0; }
+.resultChoices legend { font-weight:500; margin-bottom:6px; }
+.resultChoice { display:flex; align-items:center; gap:8px; min-height:44px; padding:8px 12px; border:1px solid #ccd6e0; border-radius:6px; cursor:pointer; background:#fff; }
+.resultChoice[data-selected="true"] { border-color:#247b58; background:#ecf8f0; color:#185a3c; }
+.dialog .resultChoice input[type="radio"] { accent-color:#247b58; flex:none; width:17px; min-width:17px; max-width:17px; height:17px; min-height:17px; padding:0; margin:0; }
 .quickDates { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0; }
 .requirement { margin:6px 0; max-width:520px; }
 .requirement summary { color:#1856a7; cursor:pointer; min-height:28px; padding-block:4px; font-size:13px; }

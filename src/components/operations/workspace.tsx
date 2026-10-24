@@ -19,6 +19,7 @@ import {
 import { Icon } from "@/components/ui/icon";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { formatNumber, formatDate, formatShortDate } from "@/lib/format";
+import { criterionTitle, compareCriteriaBySource } from "@/lib/operations/criterion-presentation";
 import {
   categories,
   priorities,
@@ -549,7 +550,7 @@ export default function OperationsWorkspace() {
           {loading && !data && <Empty label="Đang tải dữ liệu…" />}
           {data && (
             <>
-              {!legacy && <QualityWorkspace key={`${branch}:${tab}:${qualityNavigation}`} workspace={data} onConfigurationRefresh={() => void load()} branch={branch || data.todos[0]?.branch_id || ""} period={period} assessmentPeriod={assessmentPeriod} onAssessmentPeriodChange={setAssessmentPeriod} focus={qualityFocus} onNavigate={navigateQuality} configuration={(qualityData,section) => <SettingsView data={data} qualityData={qualityData} onlyTarget={section} error={error} canConfigure={can("approve_policy")} canPropose={canProposeStandard(data, branch)} canManageMembers={can("manage_members")} busy={busy} onEdit={setEditor} onSave={send} onScheduleChanged={() => void load()} includeRewardPolicies={false} />} initialView={tab === "overview" ? "overview" : tab === "todo" ? "issues" : tab === "qc" ? "qc" : tab === "kpi" ? "report" : tab === "settings" ? "settings" : "work"} onLegacySettings={() => requestPageLeave(() => {setLegacy(true);setTab("settings");})} />}
+              {!legacy && <QualityWorkspace key={`${branch}:${tab}:${qualityNavigation}`} workspace={data} onConfigurationRefresh={() => void load()} branch={branch || data.todos[0]?.branch_id || ""} period={period} assessmentPeriod={assessmentPeriod} onAssessmentPeriodChange={setAssessmentPeriod} focus={qualityFocus} onNavigate={navigateQuality} configuration={(qualityData,section,onAssign) => <SettingsView data={data} qualityData={qualityData} onAssign={onAssign} onlyTarget={section} error={error} canConfigure={can("approve_policy")} canPropose={canProposeStandard(data, branch)} canManageMembers={can("manage_members")} busy={busy} onEdit={setEditor} onSave={send} onScheduleChanged={() => void load()} includeRewardPolicies={false} />} initialView={tab === "overview" ? "overview" : tab === "todo" ? "issues" : tab === "qc" ? "qc" : tab === "kpi" ? "report" : tab === "settings" ? "settings" : "work"} onLegacySettings={() => requestPageLeave(() => {setLegacy(true);setTab("settings");})} />}
               {legacy && <>
               <div className={styles.notice}>Cấu hình và lịch sử Hub hiện có <button onClick={() => requestPageLeave(() => {setLegacy(false);setTab("work");})}>Về Hub mới</button></div>
               <div className={styles.metrics}>
@@ -1078,6 +1079,7 @@ export function SettingsView({
   onEdit,
   onSave,
   onScheduleChanged,
+  onAssign,
   includeRewardPolicies = true,
   onlyTarget,
 }: {
@@ -1091,6 +1093,7 @@ export function SettingsView({
   onEdit: (editor: Editor) => void;
   onSave: (action: string, payload: Record<string, unknown>) => Promise<void>;
   onScheduleChanged?: () => void;
+  onAssign?: (familyId: string) => void;
   includeRewardPolicies?: boolean;
   onlyTarget?: "standards" | "members";
 }) {
@@ -1105,7 +1108,7 @@ export function SettingsView({
     try { return matchesConfiguration(item, filters, search, data.period); } catch { return false; }
   };
   const configuredStandards = settingsStandards(data.standards, qualityData);
-  const standards = configuredStandards.filter(matches);
+  const standards = configuredStandards.filter(matches).sort(compareCriteriaBySource);
   const policies = data.policies.filter(matches);
   const members = data.members.filter(member => matches({ ...member, title: name(member.user_id) }));
   return (
@@ -1150,7 +1153,7 @@ export function SettingsView({
         {standards.map((s) => (
           <article className={styles.row} key={s.id}>
             <div>
-              <h2>{s.title}</h2>
+              <h2>{criterionTitle(s)}</h2>
               <p>
                 {s.manager_ids.map(name).join(", ") || "Chưa phân công"} ·{" "}
                 {frequencyLabels[s.frequency as Frequency]}{" "}
@@ -1160,6 +1163,7 @@ export function SettingsView({
               <p>Từ {formatShortDate(`${s.effective_from}T00:00:00+07:00`)}{(s.stop_after || s.effective_until) && ` · Ngày cuối ${formatShortDate(`${s.stop_after || s.effective_until}T00:00:00+07:00`)}`}</p>
             </div>
             <Badge value={s.status === "pending" ? "pending_approval" : scheduleState(s, today(), data.standards)} />
+            {onAssign && canConfigure && s.status === "approved" && !["ended", "superseded"].includes(scheduleState(s, today(), data.standards)) && <button type="button" disabled={busy} onClick={() => onAssign(s.family_id)} aria-label={`Phân công: ${criterionTitle(s)}`}><Icon name="person_add" size={16} />Phân công</button>}
             <button onClick={() => onEdit({ kind: "standard_details", standard: s })}><Icon name="search" size={16} />Xem chi tiết</button>
             {canConfigure && data.isCeo && s.status === "approved" && !["ended","superseded"].includes(scheduleState(s,today(),data.standards)) && !["once","event"].includes(s.frequency) && <ScheduleReview standard={s} branch={s.branch_id} mode="end" busy={busy} onSaved={onScheduleChanged}/>}
             {canConfigure && data.isCeo && s.status === "draft" && !s.workbook_batch_id && <StandardLifecycle standard={s} busy={busy} error={error} onSave={onSave}/>}

@@ -50,7 +50,7 @@ const views = [
   { key: "issues", label: "To-do & phối hợp", icon: "checklist" },
   { key: "qc", label: "QC độc lập", icon: "verified_user" },
   { key: "report", label: "Điểm & thưởng", icon: "monitoring" },
-  { key: "settings", label: "Cấu hình QC", icon: "tune" },
+  { key: "settings", label: "Thiết lập vận hành", icon: "tune" },
 ] as const;
 type View = (typeof views)[number]["key"];
 const statusNames: Record<string, string> = {
@@ -147,7 +147,7 @@ export function QualityWorkspace({
   period: string;
   assessmentPeriod?: string;
   onAssessmentPeriodChange?: (period: string) => void;
-  configuration?: ReactNode | ((data: QualityData, section?: "standards" | "members") => ReactNode);
+  configuration?: ReactNode | ((data: QualityData, section?: "standards" | "members", onAssign?: (familyId: string) => void) => ReactNode);
   focus?: QualityFocus;
   onNavigate?: (view: QualityDestination, focus?: QualityFocus) => void;
   onLegacySettings: () => void;
@@ -836,8 +836,8 @@ export function QualityWorkspace({
           {view === "work" && workMode !== "adhoc" && (
             <Table
               heads={[
-                "Công việc",
                 "Nhóm công việc",
+                "Công việc",
                 "Tần suất / đến hạn",
                 "Người được phân công",
                 "Kết quả hiện tại",
@@ -846,11 +846,11 @@ export function QualityWorkspace({
               ]}
               rows={runs.map((r) => (
                 <tr key={r.id}>
+                  <td className={s.groupCell}>{criterionGroup(r,data.groups ?? [])}</td>
                   <td>
                     <strong>{criterionTitle(r)}</strong>
                     <details className={s.requirement}><summary>Yêu cầu cần đạt</summary>{r.criteria.map(criterion => <p key={criterion.id}>{criterion.title}</p>)}</details>
                   </td>
-                  <td className={s.groupCell}>{criterionGroup(r,data.groups ?? [])}</td>
                   <td>
                     {freq[r.frequency]}
                     <p>{formatDate(r.current_due_at ?? r.original_due_at)}</p>
@@ -873,16 +873,17 @@ export function QualityWorkspace({
                     {data.can.work &&
                       r.manager_ids.includes(workspace.userId) && (
                         <button onClick={() => edit({ kind: "check", run: r })}>
-                          Ghi kết quả
+                          <Icon name="check_circle" size={16}/> Ghi kết quả
                         </button>
                       )}
+                    {!(data.can.work && r.manager_ids.includes(workspace.userId)) && <span className={s.muted}>{!data.can.work ? "Chỉ xem · cần quyền quản lý để ghi kết quả" : "Không được phân công việc này"}</span>}
                   </td>
                 </tr>
               ))}
               mobile={runs.map((r) => (
                 <article className={s.mobileItem} key={r.id}>
-                  <h3>{criterionTitle(r)}</h3>
                   <p className={s.groupLabel}><span>Nhóm công việc</span>{criterionGroup(r,data.groups ?? [])}</p>
+                  <h3>{criterionTitle(r)}</h3>
                   <details className={s.requirement}><summary>Yêu cầu cần đạt</summary>{r.criteria.map(criterion => <p key={criterion.id}>{criterion.title}</p>)}</details>
                   <Badge value={r.quality} />
                   <p>
@@ -896,10 +897,11 @@ export function QualityWorkspace({
                   {data.can.work &&
                     r.manager_ids.includes(workspace.userId) && (
                       <button onClick={() => edit({ kind: "check", run: r })}>
-                        Ghi kết quả
+                        <Icon name="check_circle" size={16}/> Ghi kết quả
                       </button>
                     )}
-                </article>
+                  {!(data.can.work && r.manager_ids.includes(workspace.userId)) && <p className={s.muted}>{!data.can.work ? "Chỉ xem · cần quyền quản lý để ghi kết quả" : "Không được phân công việc này"}</p>}
+                  </article>
               ))}
             />
           )}
@@ -1129,7 +1131,7 @@ export function QualityWorkspace({
             <>
               <SetupNavigation value={setupSection} onChange={setSetupSection} data={data} isCeo={workspace.isCeo && data.can.manage}/>
               {setupSection === "library" && workspace.isCeo && data.can.manage && <WorkingLibrary workspace={workspace} onApplied={() => { if (onConfigurationRefresh) onConfigurationRefresh(); else setRevision((current) => current + 1); }}/>}
-              {setupSection === "branch" && configuration && <section className={s.section}><h3>Công việc đang áp dụng tại chi nhánh</h3>{typeof configuration === "function" ? configuration(data,"standards") : configuration}</section>}
+              {setupSection === "branch" && configuration && <section className={s.section}><h3>Công việc đang áp dụng tại chi nhánh</h3>{typeof configuration === "function" ? configuration(data,"standards",data.can.manage ? familyId => edit({ kind: "assignment", familyId }) : undefined) : configuration}</section>}
               {setupSection === "history" && <section className={s.section}><OperationsHistoryPanel branch={branch} period={period}/></section>}
               <section className={s.section} hidden={setupSection !== "people"}>
                 {setupSection === "people" && typeof configuration === "function" && configuration(data,"members")}
@@ -1141,7 +1143,7 @@ export function QualityWorkspace({
                         Thêm bộ phận
                       </button>
                       <button onClick={() => edit({ kind: "assignment" })}>
-                        Phân công cùng lịch
+                          Phân công theo công việc
                       </button>
                       {workspace.isCeo && (
                         <a href="/he-thong/users">Quyền tài khoản OneBiz</a>

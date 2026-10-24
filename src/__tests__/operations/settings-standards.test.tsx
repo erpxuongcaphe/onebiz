@@ -10,7 +10,7 @@ import { filterPeople } from "@/lib/operations/people-filters";
 
 vi.mock("@/components/ui/icon", () => ({ Icon: () => null }));
 afterEach(cleanup);
-const standard = { id: "standard", family_id: "family", branch_id: "premium", title: "Khu vực pha chế", assignee_id: "thu", status: "approved", frequency: "daily", effective_from: "2026-10-20", revision: 1, scope: "common", criteria: [] } as unknown as Standard;
+const standard = { id: "standard", family_id: "family", branch_id: "premium", title: "Khu vực pha chế", assignee_id: "thu", status: "approved", frequency: "daily", due_time: "23:59", effective_from: "2026-10-20", revision: 1, scope: "common", criteria: [] } as unknown as Standard;
 const quality = {
   assignments: [{ family_id: "family", manager_ids: ["tien", "thu"] }],
   catalog: [{ standard_id: "standard", family_id: "family", category: "group:space", group_title: "Không gian và trải nghiệm" }],
@@ -23,6 +23,17 @@ const workspace = {
 } as unknown as Workspace;
 
 describe("shared manager and Excel classification regression", () => {
+  it("opens assignment for only the selected work and hides it from non-configurators", () => {
+    const onAssign = vi.fn();
+    const props = { data: workspace, qualityData: quality, canConfigure: true, canPropose: false, canManageMembers: true, busy: false, onEdit: vi.fn(), onSave: vi.fn(), includeRewardPolicies: false, onAssign };
+    const view = render(<SettingsView {...props}/>);
+    fireEvent.click(screen.getByRole("button", { name: "Phân công: Khu vực pha chế" }));
+    expect(onAssign).toHaveBeenCalledExactlyOnceWith("family");
+    expect(quality.assignments[0].manager_ids).toEqual(["tien", "thu"]);
+    expect(props.onSave).not.toHaveBeenCalled();
+    view.rerender(<SettingsView {...props} canConfigure={false}/>);
+    expect(screen.queryByRole("button", { name: "Phân công: Khu vực pha chế" })).toBeNull();
+  });
   it("matches every assigned manager, not only the legacy primary assignee", () => {
     const [item] = settingsStandards([standard], quality);
     for (const id of ["tien", "thu"]) expect(matchesConfiguration(item, { ...initialFilters("settings"), assignee: id }, "", "2026-10")).toBe(true);

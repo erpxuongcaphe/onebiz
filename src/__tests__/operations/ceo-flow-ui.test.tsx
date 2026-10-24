@@ -64,17 +64,29 @@ describe('CEO and manager Hub journey',()=>{
   expect(await screen.findByRole('button',{name:'Chính sách mới'})).toBeInTheDocument();
   await waitFor(()=>expect(fetchMock.mock.calls.every(([,init])=>!init?.method)).toBe(true));
  });
- it('places the work group in its own adjacent column, not below the work title',async()=>{
+ it('places the work group before work and explains why an owner cannot record manager results',async()=>{
   fetchMock.mockResolvedValue({ok:true,json:async()=>({...data,total:1,groups:[{id:'space',title:'Không gian và trải nghiệm'}],rows:[{id:'run',title:'Khu vực pha chế',code:'WS-0001',category:'group:space',frequency:'daily',manager_ids:[],quality:'unknown',state:'pending',original_due_at:'2026-10-22T16:59:00Z',criteria:[],checks:[]}]})});
   show();
   const heading=await screen.findByRole('columnheader',{name:'Nhóm công việc'});
-  expect(heading.previousElementSibling).toHaveTextContent('Công việc');
+  expect(heading.nextElementSibling).toHaveTextContent('Công việc');
   const table=screen.getByRole('table');
   const row=within(table).getByText('1. Khu vực pha chế').closest('tr')!;
   const cells=within(row).getAllByRole('cell');
-  expect(cells[0]).not.toHaveTextContent('Không gian và trải nghiệm');
-  expect(cells[1]).toHaveTextContent('Không gian và trải nghiệm');
+  expect(cells[0]).toHaveTextContent('Không gian và trải nghiệm');
+  expect(cells[1]).not.toHaveTextContent('Không gian và trải nghiệm');
+  expect(cells[6]).toHaveTextContent('Chỉ xem');
   expect(screen.getAllByText('Nhóm công việc').length).toBeGreaterThan(1);
+ });
+ it('shows recording only for the assigned manager on desktop and mobile',async()=>{
+  const row={id:'run',title:'Khu vực pha chế',frequency:'daily',manager_ids:['manager'],quality:'unknown',state:'pending',original_due_at:'2026-10-22T16:59:00Z',criteria:[],checks:[]};
+  fetchMock.mockResolvedValue({ok:true,json:async()=>({...data,can:{...data.can,work:true},total:1,rows:[row]})});
+  const view=show('work',{workspace:{...workspace,userId:'manager',isCeo:false}});
+  await screen.findAllByRole('button',{name:'Ghi kết quả'});
+  expect(screen.getAllByRole('button',{name:'Ghi kết quả'})).toHaveLength(2);
+  view.unmount();
+  show('work',{workspace:{...workspace,userId:'other-manager',isCeo:false}});
+  expect((await screen.findAllByText('Không được phân công việc này')).length).toBe(2);
+  expect(screen.queryByRole('button',{name:'Ghi kết quả'})).toBeNull();
  });
  it('removes only the repeated assignment list and keeps its branch-work navigation',async()=>{
   const assignment={family_id:'family-one',manager_ids:['manager']};
