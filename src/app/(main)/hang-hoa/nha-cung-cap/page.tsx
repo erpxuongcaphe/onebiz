@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { ColumnDef } from "@tanstack/react-table";
+import { ColumnDef, type SortingState } from "@tanstack/react-table";
 import { useRevalidateOnFocus } from "@/lib/hooks/use-revalidate-on-focus";
 import { useListWorkspaceQuery } from "@/lib/hooks/use-list-workspace-query";
 import { PageHeader } from "@/components/shared/page-header";
@@ -10,6 +10,8 @@ import { DataTable } from "@/components/shared/data-table";
 import { ListMetric } from "@/components/shared/list-metric";
 import { ListWorkspaceError } from "@/components/shared/list-workspace-error";
 import { getScopedSupplierDirectory } from "@/lib/services/supabase/party-directory-workspace";
+import { getScopedPartyHistory } from "@/lib/services/supabase/party-history-workspace";
+import { partyHistoryModel, type PartyHistoryDocument } from "@/lib/services/supabase/party-history-reader";
 import { supplierDirectoryModel, supplierEditProfile, directoryScopeLabel, type DirectorySupplier as Supplier } from "@/lib/services/supabase/party-directory-model";
 import {
   FilterChips,
@@ -59,7 +61,6 @@ import { exportToExcelFromSchema } from "@/lib/excel";
 import type { SupplierImportRow } from "@/lib/excel/schemas";
 import {
   deleteSupplier,
-  getPurchaseOrdersForSupplier,
   getPurchaseOrderStatusMeta,
 } from "@/lib/services";
 import { OtpApprovalDialog } from "@/components/shared/dialogs/otp-approval-dialog";
@@ -70,7 +71,6 @@ import type { PurchaseOrder } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { PartyCashHistory } from "@/components/shared/party-cash-history";
-import { getSupplierReturnHistory, type SupplierReturnHistoryRow } from "@/lib/services/supabase/supplier-return-history";
 const money = (value: number | null) => value === null ? "—" : formatCurrency(value);
 
 /* ------------------------------------------------------------------ */
@@ -93,51 +93,27 @@ function SupplierDetail({
   onDelete?: () => void;
   onChanged?: () => void;
 }) {
-  const [orders, setOrders] = useState<PurchaseOrder[]>([]);
-  const [returns, setReturns] = useState<SupplierReturnHistoryRow[]>([]);
-  const [returnsError, setReturnsError] = useState<string | null>(null);
-  const [ordersLoading, setOrdersLoading] = useState(true);
-  const [ordersError, setOrdersError] = useState<string | null>(null);
   const [historyRevision, setHistoryRevision] = useState(0);
   const { activeBranchId } = useBranchFilter();
-  const { hasPermission } = useAuth();
+  const { hasPermission, user, tenant } = useAuth();
   const statusMeta = getPurchaseOrderStatusMeta();
+  const historyLoader = useCallback(() => {
+    void historyRevision; void supplier.currentDebt;
+    return getScopedPartyHistory("supplier", supplier.id, activeBranchId ?? null);
+  }, [supplier.id, activeBranchId, historyRevision, supplier.currentDebt]);
+  const history = useListWorkspaceQuery(historyLoader, canViewActivity, `${tenant?.id ?? ""}:${user?.id ?? ""}:${canViewDebt}`);
+  const { documents: orders, returns } = partyHistoryModel(history.data);
+  const ordersLoading = history.loading, ordersError = history.error, returnsError = history.error;
 
-  useEffect(() => {
-    let cancelled = false;
-    setOrdersLoading(true);
-    setOrdersError(null); setReturnsError(null); setOrders([]); setReturns([]);
-    if (canViewActivity) Promise.allSettled([getPurchaseOrdersForSupplier(supplier.id, null, activeBranchId),getSupplierReturnHistory(supplier.id,activeBranchId)])
-      .then(([rows,returned]) => {
-        if (cancelled) return;
-        if (rows.status === "fulfilled") setOrders(rows.value);
-        else setOrdersError(rows.reason instanceof Error ? rows.reason.message : "Không tải được lịch sử mua hàng.");
-        if (returned.status === "fulfilled") setReturns(returned.value);
-        else setReturnsError(returned.reason instanceof Error ? returned.reason.message : "Không tải được lịch sử trả hàng nhập.");
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setOrdersError(err instanceof Error ? err.message : "Không tải được lịch sử mua hàng.");
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setOrdersLoading(false);
-      });
-    else setOrdersLoading(false);
-    return () => {
-      cancelled = true;
-    };
-  }, [supplier.id, activeBranchId, historyRevision, supplier.currentDebt, canViewActivity]);
-
-  const outstandingOrders = orders.filter((o) => ["completed", "partial"].includes(o.status) && o.amountOwed > 0);
+  const outstandingOrders = orders.filter((o) => ["completed", "partial"].includes(o.status) && (o.amountOwed ?? 0) > 0);
   const totalOrders = orders.length;
   const postedOrders = orders.filter(o => ["completed", "partial"].includes(o.status));
   const totalOrderValue = postedOrders.reduce((sum, o) => sum + o.total, 0);
-  const totalPaidAll = postedOrders.reduce((sum, o) => sum + o.paid, 0);
-  const totalOwedAll = outstandingOrders.reduce((sum, o) => sum + o.amountOwed, 0);
+  const totalPaidAll = postedOrders.reduce((sum, o) => sum + (o.paid ?? 0), 0);
+  const totalOwedAll = outstandingOrders.reduce((sum, o) => sum + (o.amountOwed ?? 0), 0);
 
-  const statusBadge = (status: PurchaseOrder["status"]) => {
-    const meta = statusMeta[status];
+  const statusBadge = (status: string) => {
+    const meta = statusMeta[status as PurchaseOrder["status"]];
     if (!meta) return <span className="text-muted-foreground">{status}</span>;
     return (
       <Badge
@@ -201,7 +177,7 @@ function SupplierDetail({
           Đang tải lịch sử mua hàng...
         </div>
       ) : (
-        <DetailItemsTable<PurchaseOrder>
+        <DetailItemsTable<PartyHistoryDocument>
           pageSize={25}
           items={orders}
           columns={[
@@ -223,20 +199,20 @@ function SupplierDetail({
             ...(canViewDebt ? [{
               header: "Đã trả",
               align: "right" as const,
-              accessor: (o: PurchaseOrder) => formatCurrency(o.paid),
+              accessor: (o: PartyHistoryDocument) => money(o.paid),
             },
             {
               header: "Còn nợ",
               align: "right" as const,
-              accessor: (o: PurchaseOrder) => (
+              accessor: (o: PartyHistoryDocument) => (
                 <span
                   className={
-                    o.amountOwed > 0
+                    (o.amountOwed ?? 0) > 0
                       ? "text-destructive font-medium"
                       : "text-muted-foreground"
                   }
                 >
-                  {formatCurrency(o.amountOwed)}
+                  {money(o.amountOwed)}
                 </span>
               ),
             }] : []),
@@ -314,7 +290,7 @@ function SupplierDetail({
               <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                 Đơn còn nợ NCC
               </div>
-              <DetailItemsTable<PurchaseOrder>
+              <DetailItemsTable<PartyHistoryDocument>
                 pageSize={25}
                 items={outstandingOrders}
                 columns={[
@@ -336,14 +312,14 @@ function SupplierDetail({
                   {
                     header: "Đã trả",
                     align: "right",
-                    accessor: (o) => formatCurrency(o.paid),
+                    accessor: (o) => money(o.paid),
                   },
                   {
                     header: "Còn nợ",
                     align: "right",
                     accessor: (o) => (
                       <span className="text-destructive font-medium">
-                        {formatCurrency(o.amountOwed)}
+                        {money(o.amountOwed)}
                       </span>
                     ),
                   },
@@ -395,6 +371,7 @@ function SupplierDetail({
           meta={<span>Ngày tạo: {formatDate(supplier.createdAt)}</span>}
         />
         <DetailTabs tabs={tabs.filter(tab => (!["purchase_history", "return_history"].includes(tab.id) || canViewActivity) &&
+          (tab.id !== "audit" || hasPermission(PERMISSIONS.SYSTEM_VIEW_AUDIT) && hasPermission(PERMISSIONS.REPORTS_VIEW_ALL_BRANCHES)) &&
           (tab.id !== "debt" || canViewDebt) && (tab.id !== "cash" || canViewDebt && hasPermission(PERMISSIONS.FINANCE_VIEW_CASH_BOOK)))} defaultTab="info" />
       </div>
     </InlineDetailPanel>
@@ -415,6 +392,7 @@ export default function NhaCungCapPage() {
   const [searchField, setSearchField] = useState("all");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
+  const [sorting, setSorting] = useState<SortingState>([]);
 
   // Inline detail
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
@@ -504,6 +482,8 @@ export default function NhaCungCapPage() {
       return getScopedSupplierDirectory({
         page,
         pageSize,
+        sortBy: sorting[0]?.id,
+        sortDesc: sorting[0]?.desc,
         branchId: listBranchId ?? null,
         search,
         searchField,
@@ -519,6 +499,7 @@ export default function NhaCungCapPage() {
   }, [
     page,
     pageSize,
+    sorting,
     search,
     searchField,
     selectedStatuses,
@@ -772,6 +753,8 @@ export default function NhaCungCapPage() {
 
         <ListWorkspaceError label="danh sách nhà cung cấp" error={workspaceError} onRetry={() => void fetchData()} />
         <DataTable
+          sorting={sorting}
+          onSortingChange={(updater) => { setSorting(previous => typeof updater === "function" ? updater(previous) : updater); setPage(0); }}
           columns={columns.filter(column => !("accessorKey" in column) ||
             (column.accessorKey !== "currentDebt" || canShowDebt) && (column.accessorKey !== "totalPurchases" || canShowActivity))}
           data={data}

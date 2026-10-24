@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const state = vi.hoisted(() => ({ branch: "branch-a", toast: vi.fn(), customer: vi.fn(), supplier: vi.fn(), excel: vi.fn(), csv: vi.fn(), invoices: vi.fn(), orders: vi.fn() }));
+const state = vi.hoisted(() => ({ branch: "branch-a", toast: vi.fn(), customer: vi.fn(), supplier: vi.fn(), excel: vi.fn(), csv: vi.fn(), invoices: vi.fn(), orders: vi.fn(), history: vi.fn() }));
 vi.mock("@/lib/contexts", () => ({
   useAuth: () => ({ user: { id: "user-a" }, tenant: { id: "tenant-a" }, hasPermission: () => true }),
   useBranchFilter: () => ({ activeBranchId: state.branch, isReady: true }), useToast: () => ({ toast: state.toast }),
@@ -30,6 +30,7 @@ vi.mock("@/lib/services", () => ({ getCustomerListWorkspace: state.customer, get
   getCustomerGroupsAsync: async () => [], deleteCustomer: vi.fn(), deleteSupplier: vi.fn(), getInvoicesForCustomer: state.invoices,
   getReturnsForCustomer: async () => [], getLoyaltyTransactions: async () => ({ data: [] }), getPurchaseOrdersForSupplier: state.orders, getPurchaseOrderStatusMeta: () => ({}) }));
 vi.mock("@/lib/services/supabase/party-directory-workspace", () => ({ getScopedCustomerDirectory: state.customer, getScopedSupplierDirectory: state.supplier }));
+vi.mock("@/lib/services/supabase/party-history-workspace", () => ({ getScopedPartyHistory: state.history }));
 vi.mock("@/lib/services/supabase/customers", () => ({ standardizeWalkInCustomerCode: vi.fn() }));
 vi.mock("@/lib/services/supabase/excel-import", () => ({ bulkImportCustomers: vi.fn(), bulkImportSuppliers: vi.fn() }));
 vi.mock("@/lib/services/supabase/supplier-return-history", () => ({ getSupplierReturnHistory: vi.fn() }));
@@ -51,6 +52,7 @@ beforeEach(() => {
   state.customer.mockReset().mockResolvedValue(payload("Customer A"));
   state.supplier.mockReset().mockResolvedValue(payload("Supplier A"));
   state.invoices.mockResolvedValue([]); state.orders.mockResolvedValue([]);
+  state.history.mockReset().mockResolvedValue({ rows: [], canViewDebt: false });
 });
 describe.each([
   { name: "customer", Page: CustomerPage, read: state.customer, contact: "Customer A" },
@@ -122,6 +124,13 @@ describe.each([
     fireEvent.click(screen.getByRole("button", { name: "Mở chi tiết" }));
     await act(async () => {});
     expect(state.invoices).not.toHaveBeenCalled(); expect(state.orders).not.toHaveBeenCalled();
+    expect(state.history).not.toHaveBeenCalled();
     expect(screen.queryByRole("tab", { name: /Lịch sử mua hàng|Lịch sử bán hàng|Nợ cần thu|Công nợ|Thu chi/ })).not.toBeInTheDocument();
+  });
+  it("reads detail history through the scoped facade, never broad document readers", async () => {
+    render(<Page />); await screen.findByText(contact);
+    fireEvent.click(screen.getByRole("button", { name: "Mở chi tiết" }));
+    await waitFor(() => expect(state.history).toHaveBeenCalledWith(Page === CustomerPage ? "customer" : "supplier", contact, "branch-a"));
+    expect(state.invoices).not.toHaveBeenCalled(); expect(state.orders).not.toHaveBeenCalled();
   });
 });

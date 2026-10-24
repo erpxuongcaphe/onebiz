@@ -6,6 +6,7 @@ import { parsePartyDirectoryPage, readPartyDirectoryPages, type PartyDirectoryKi
 
 interface ReadOptions { exportAll?: boolean; signal?: AbortSignal }
 type DirectoryParams = { page: number; pageSize: number; branchId: string | null };
+type SortParams = { sortBy?: string; sortDesc?: boolean };
 type RpcArgs = Record<string, string | number | boolean | string[] | null>;
 
 function optional(value: string | undefined): string | null {
@@ -51,14 +52,14 @@ async function readDirectory(kind: PartyDirectoryKind, params: DirectoryParams, 
 }
 
 export function getScopedCustomerDirectory(
-  params: Omit<CustomerListWorkspaceParams, "branchId"> & { branchId: string | null }, options: ReadOptions = {},
+  params: Omit<CustomerListWorkspaceParams, "branchId"> & { branchId: string | null } & SortParams, options: ReadOptions = {},
 ) {
   const birthdayMonth = optional(params.birthdayMonth) === null ? null : Number(params.birthdayMonth);
   if (birthdayMonth !== null && (!Number.isInteger(birthdayMonth) || birthdayMonth < 1 || birthdayMonth > 12)) {
     throw new Error("Tháng sinh không hợp lệ.");
   }
   return readDirectory("customer", params, {
-    ...dateFilters(params), p_search: params.search?.trim() || null, p_search_field: params.searchField || "all",
+    ...dateFilters(params), ...sortFilters("customer", params), p_search: params.search?.trim() || null, p_search_field: params.searchField || "all",
     p_group_ids: params.groupIds?.length ? [...params.groupIds] : null,
     p_customer_type: optional(params.customerType), p_gender: optional(params.gender),
     p_debt_filter: optional(params.debtFilter), p_sales_range: optional(params.salesRange),
@@ -69,14 +70,22 @@ export function getScopedCustomerDirectory(
 }
 
 export function getScopedSupplierDirectory(
-  params: SupplierListWorkspaceParams & { branchId: string | null }, options: ReadOptions = {},
+  params: SupplierListWorkspaceParams & { branchId: string | null } & SortParams, options: ReadOptions = {},
 ) {
   const debtMin = numberFilter(params.debtFrom), debtMax = numberFilter(params.debtTo);
   const purchasesMin = numberFilter(params.totalPurchaseFrom), purchasesMax = numberFilter(params.totalPurchaseTo);
   range(debtMin, debtMax); range(purchasesMin, purchasesMax);
   return readDirectory("supplier", params, {
-    ...dateFilters(params), p_search: params.search?.trim() || null, p_search_field: params.searchField || "all",
+    ...dateFilters(params), ...sortFilters("supplier", params), p_search: params.search?.trim() || null, p_search_field: params.searchField || "all",
     p_statuses: params.statuses?.length ? [...params.statuses] : null, p_province: optional(params.province),
     p_debt_min: debtMin, p_debt_max: debtMax, p_total_purchase_min: purchasesMin, p_total_purchase_max: purchasesMax,
   }, options);
+}
+function sortFilters(kind: PartyDirectoryKind, params: SortParams): RpcArgs {
+  const allowed = kind === "customer" ? ["createdAt", "code", "name", "phone", "currentDebt", "totalSales", "totalSalesMinusReturns", "loyaltyPoints"]
+    : ["createdAt", "code", "name", "phone", "email", "currentDebt", "totalPurchases"];
+  if (params.sortBy !== undefined && !allowed.includes(params.sortBy) || params.sortDesc !== undefined && typeof params.sortDesc !== "boolean") {
+    throw new Error("Chỉ tiêu sắp xếp không hợp lệ.");
+  }
+  return { p_sort_by: params.sortBy ?? "createdAt", p_sort_desc: params.sortDesc ?? true };
 }

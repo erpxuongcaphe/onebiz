@@ -55,6 +55,66 @@
           { "name": "p_limit", "optional": true }
         ] }
       ]
+    },
+    {
+      "migration": "party_directory_readers_20261024",
+      "migrationSha256": "20a1887441542cd333a84602a4dd7797a19e2f0a45dfb14c4431b1984a1457c3",
+      "functions": [
+        { "name": "get_party_history_scoped", "params": [
+          { "name": "p_mode", "optional": false },
+          { "name": "p_party_id", "optional": false },
+          { "name": "p_branch_id", "optional": true },
+          { "name": "p_offset", "optional": true },
+          { "name": "p_limit", "optional": true }
+        ] },
+        { "name": "get_customer_list_workspace_scoped", "params": [
+          { "name": "p_page", "optional": true },
+          { "name": "p_page_size", "optional": true },
+          { "name": "p_search", "optional": true },
+          { "name": "p_search_field", "optional": true },
+          { "name": "p_group_ids", "optional": true },
+          { "name": "p_customer_type", "optional": true },
+          { "name": "p_gender", "optional": true },
+          { "name": "p_debt_filter", "optional": true },
+          { "name": "p_sales_range", "optional": true },
+          { "name": "p_orders_range", "optional": true },
+          { "name": "p_last_purchase", "optional": true },
+          { "name": "p_birthday_month", "optional": true },
+          { "name": "p_tags", "optional": true },
+          { "name": "p_created_from", "optional": true },
+          { "name": "p_created_to_exclusive", "optional": true },
+          { "name": "p_province", "optional": true },
+          { "name": "p_branch_id", "optional": true },
+          { "name": "p_for_export", "optional": true },
+          { "name": "p_sort_by", "optional": true },
+          { "name": "p_sort_desc", "optional": true }
+        ] },
+        { "name": "get_supplier_list_workspace_scoped", "params": [
+          { "name": "p_page", "optional": true },
+          { "name": "p_page_size", "optional": true },
+          { "name": "p_search", "optional": true },
+          { "name": "p_search_field", "optional": true },
+          { "name": "p_statuses", "optional": true },
+          { "name": "p_created_from", "optional": true },
+          { "name": "p_created_to_exclusive", "optional": true },
+          { "name": "p_province", "optional": true },
+          { "name": "p_debt_min", "optional": true },
+          { "name": "p_debt_max", "optional": true },
+          { "name": "p_total_purchase_min", "optional": true },
+          { "name": "p_total_purchase_max", "optional": true },
+          { "name": "p_branch_id", "optional": true },
+          { "name": "p_for_export", "optional": true },
+          { "name": "p_sort_by", "optional": true },
+          { "name": "p_sort_desc", "optional": true }
+        ] },
+        { "name": "get_pos_customer_contacts_scoped", "params": [
+          { "name": "p_branch_id", "optional": false },
+          { "name": "p_search", "optional": true },
+          { "name": "p_customer_id", "optional": true },
+          { "name": "p_internal", "optional": true },
+          { "name": "p_limit", "optional": true }
+        ] }
+      ]
     }
   ]
 }

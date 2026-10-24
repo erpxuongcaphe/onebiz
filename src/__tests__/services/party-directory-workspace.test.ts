@@ -24,6 +24,7 @@ describe("staged scoped directory workspace", () => {
       birthdayMonth: "10", tags: ["VIP"], province: "Dong Nai", dateFrom: "2026-10-01", dateTo: "2026-10-24" });
     expect(api.rpc).toHaveBeenCalledWith("get_customer_list_workspace_scoped", {
       p_branch_id: "branch-a", p_page: 0, p_page_size: 15, p_for_export: false,
+      p_sort_by: "createdAt", p_sort_desc: true,
       p_search: "Customer", p_search_field: "name", p_group_ids: ["group-a"], p_customer_type: "company", p_gender: "female",
       p_debt_filter: "has_debt", p_sales_range: "tier_vip", p_orders_range: "frequent", p_last_purchase: "month",
       p_birthday_month: 10, p_tags: ["VIP"], p_province: "Dong Nai",
@@ -39,6 +40,17 @@ describe("staged scoped directory workspace", () => {
       p_branch_id: null, p_statuses: ["active"], p_debt_min: -100, p_debt_max: 0,
       p_total_purchase_min: 0, p_total_purchase_max: 900,
     }));
+  });
+  it("passes the selected sort to both list and full export requests", async () => {
+    api.rpc.mockResolvedValue({ data: empty("supplier"), error: null });
+    for (const exportAll of [false, true]) {
+      await getScopedSupplierDirectory({ branchId: "branch-a", page: 0, pageSize: 15, sortBy: "totalPurchases", sortDesc: false }, { exportAll });
+      expect(api.rpc).toHaveBeenLastCalledWith("get_supplier_list_workspace_scoped", expect.objectContaining({ p_sort_by: "totalPurchases", p_sort_desc: false, p_for_export: exportAll }));
+    }
+  });
+  it("rejects unsupported sort keys before making a request", () => {
+    expect(() => getScopedCustomerDirectory({ branchId: null, page: 0, pageSize: 15, sortBy: "unit_cost" })).toThrow();
+    expect(api.rpc).not.toHaveBeenCalled();
   });
   it.each(["permission denied", "function unavailable"])("does not fall back to shared table/cache: %s", async message => {
     api.rpc.mockResolvedValue({ data: null, error: { message } });

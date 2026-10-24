@@ -7,13 +7,15 @@ import { standardizeWalkInCustomerCode } from "@/lib/services/supabase/customers
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useRevalidateOnFocus } from "@/lib/hooks/use-revalidate-on-focus";
 import { useListWorkspaceQuery } from "@/lib/hooks/use-list-workspace-query";
-import { ColumnDef } from "@tanstack/react-table";
+import { ColumnDef, type SortingState } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
 import { ListMetric } from "@/components/shared/list-metric";
 import { ListWorkspaceError } from "@/components/shared/list-workspace-error";
 import { getScopedCustomerDirectory } from "@/lib/services/supabase/party-directory-workspace";
+import { getScopedPartyHistory } from "@/lib/services/supabase/party-history-workspace";
+import { partyHistoryModel, type PartyHistoryDocument } from "@/lib/services/supabase/party-history-reader";
 import { customerDirectoryModel, customerEditProfile, directoryScopeLabel, type DirectoryCustomer as Customer } from "@/lib/services/supabase/party-directory-model";
 import {
   FilterChips,
@@ -74,12 +76,7 @@ import type { CustomerImportRow } from "@/lib/excel/schemas";
 import {
   getCustomerGroupsAsync,
   deleteCustomer,
-  getInvoicesForCustomer,
-  getReturnsForCustomer,
-  getLoyaltyTransactions,
-  type CustomerReturn,
 } from "@/lib/services";
-import type { Invoice, LoyaltyTransaction } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 
@@ -128,6 +125,7 @@ export default function KhachHangPage() {
   const [searchField, setSearchField] = useState("all");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
+  const [sorting, setSorting] = useState<SortingState>([]);
   const [filterOpen, setFilterOpen] = useState(false);
 
   // Filters
@@ -304,6 +302,8 @@ export default function KhachHangPage() {
       return getScopedCustomerDirectory({
         page,
         pageSize,
+        sortBy: sorting[0]?.id,
+        sortDesc: sorting[0]?.desc,
         branchId: activeBranchId ?? null,
         search,
         searchField,
@@ -323,6 +323,7 @@ export default function KhachHangPage() {
   }, [
     page,
     pageSize,
+    sorting,
     activeBranchId,
     search,
     searchField,
@@ -669,6 +670,8 @@ export default function KhachHangPage() {
 
         <ListWorkspaceError label="danh sách khách hàng" error={workspaceError} onRetry={() => void fetchData()} />
         <DataTable
+          sorting={sorting}
+          onSortingChange={(updater) => { setSorting(previous => typeof updater === "function" ? updater(previous) : updater); setPage(0); }}
           columns={columns.filter(column => !("accessorKey" in column) ||
             (column.accessorKey !== "currentDebt" || canShowDebt) &&
             (!["totalSales", "totalSalesMinusReturns"].includes(String(column.accessorKey)) || canShowActivity))}
@@ -1183,57 +1186,17 @@ function CustomerDetailPanel({
   onDelete?: () => void;
   onChanged?: () => void;
 }) {
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [returns, setReturns] = useState<CustomerReturn[]>([]);
-  const [loyalty, setLoyalty] = useState<LoyaltyTransaction[]>([]);
-  const [salesLoading, setSalesLoading] = useState(true);
-  const [salesError, setSalesError] = useState<string | null>(null);
   const [historyRevision, setHistoryRevision] = useState(0);
   const { activeBranchId } = useBranchFilter();
   const { hasPermission } = usePermissions();
-  const [loyaltyLoading, setLoyaltyLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    setSalesLoading(true);
-    setSalesError(null);
-    setInvoices([]); setReturns([]);
-    if (canViewActivity) Promise.all([
-      getInvoicesForCustomer(customer.id, null, activeBranchId),
-      getReturnsForCustomer(customer.id, null, activeBranchId),
-    ])
-      .then(([inv, ret]) => {
-        if (cancelled) return;
-        setInvoices(inv);
-        setReturns(ret);
-      })
-      .catch(err => { if (!cancelled) setSalesError(err instanceof Error ? err.message : "Không tải được lịch sử bán/trả hàng."); })
-      .finally(() => {
-        if (!cancelled) setSalesLoading(false);
-      });
-    else setSalesLoading(false);
-
-    setLoyaltyLoading(true);
-    getLoyaltyTransactions({
-      page: 0,
-      pageSize: 30,
-      customerId: customer.id,
-    })
-      .then((res) => {
-        if (cancelled) return;
-        setLoyalty(res.data);
-      })
-      .catch(() => {
-        if (!cancelled) setLoyalty([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoyaltyLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [customer.id, activeBranchId, historyRevision, customer.currentDebt, canViewActivity]);
+  const { user, tenant } = useAuth();
+  const historyLoader = useCallback(() => {
+    void historyRevision; void customer.currentDebt;
+    return getScopedPartyHistory("customer", customer.id, activeBranchId ?? null);
+  }, [customer.id, activeBranchId, historyRevision, customer.currentDebt]);
+  const history = useListWorkspaceQuery(historyLoader, canViewActivity, `${tenant?.id ?? ""}:${user?.id ?? ""}:${canViewDebt}`);
+  const { documents: invoices, returns, loyalty } = partyHistoryModel(history.data);
+  const salesLoading = history.loading, salesError = history.error, loyaltyLoading = history.loading;
 
   const outstandingInvoices = invoices.filter((i) => i.status === "completed" && (i.debt ?? 0) > 0);
   const totalOutstanding = outstandingInvoices.reduce(
@@ -1366,12 +1329,12 @@ function CustomerDetailPanel({
                 ...(canViewDebt ? [{
                   header: "Đã trả",
                   align: "right" as const,
-                  accessor: (r: Invoice) => formatCurrency(r.paid),
+                  accessor: (r: PartyHistoryDocument) => money(r.paid),
                 },
                 {
                   header: "Còn nợ",
                   align: "right" as const,
-                  accessor: (r: Invoice) =>
+                  accessor: (r: PartyHistoryDocument) =>
                     (r.debt ?? 0) > 0 ? (
                       <span className="text-destructive font-semibold">
                         {formatCurrency(r.debt ?? 0)}
@@ -1515,7 +1478,7 @@ function CustomerDetailPanel({
                   {
                     header: "Đã trả",
                     align: "right",
-                    accessor: (r) => formatCurrency(r.paid),
+                    accessor: (r) => money(r.paid),
                   },
                   {
                     header: "Còn nợ",
@@ -1551,7 +1514,7 @@ function CustomerDetailPanel({
     {
       id: "points",
       label: `Lịch sử tích điểm${loyalty.length > 0 ? ` (${loyalty.length})` : ""}`,
-      content: loyaltyLoading ? (
+      content: salesError ? <ListWorkspaceError label="lịch sử tích điểm" error={salesError} onRetry={() => setHistoryRevision(v => v + 1)} /> : loyaltyLoading ? (
         <div className="text-sm text-muted-foreground py-4 text-center">
           Đang tải điểm tích luỹ...
         </div>
@@ -1609,7 +1572,7 @@ function CustomerDetailPanel({
             {
               header: "Tồn",
               align: "right",
-              accessor: (r) => r.balanceAfter,
+              accessor: (r) => r.balanceAfter ?? "—",
             },
             {
               header: "Ghi chú",
@@ -1645,7 +1608,8 @@ function CustomerDetailPanel({
           subtitle={customer.groupName}
           meta={<span>Ngày tạo: {formatDate(customer.createdAt)}</span>}
         />
-        <DetailTabs tabs={tabs.filter(tab => (tab.id !== "sales-history" || canViewActivity) &&
+        <DetailTabs tabs={tabs.filter(tab => (!["sales-history", "points"].includes(tab.id) || canViewActivity) &&
+          (tab.id !== "audit" || hasPermission(PERMISSIONS.SYSTEM_VIEW_AUDIT) && hasPermission(PERMISSIONS.REPORTS_VIEW_ALL_BRANCHES)) &&
           (tab.id !== "debt" || canViewDebt) && (tab.id !== "cash" || canViewDebt && hasPermission(PERMISSIONS.FINANCE_VIEW_CASH_BOOK)))} defaultTab="info" />
       </div>
     </InlineDetailPanel>
