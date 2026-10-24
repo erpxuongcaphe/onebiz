@@ -82,7 +82,7 @@ export interface PrintReceiptPayload {
 }
 
 export interface PrintResult {
-  queued?: { id: string; routeLabel: string };
+  queued?: { id: string; routeLabel: string; branchId?: string; label?: string };
   success: boolean;
   backend: PrinterBackend;
   /** true = đã fallback sang browser vì USB fail */
