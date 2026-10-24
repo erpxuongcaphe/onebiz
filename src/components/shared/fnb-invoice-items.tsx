@@ -2,7 +2,7 @@
 import {type ItemColumn} from "./inline-detail-panel/detail-items-table";
 import {InvoiceItemName} from "./invoice-item-name";
 import {readFnbInvoiceOptions,readFnbInvoiceSize,invoiceNameWithoutSize} from "@/lib/utils/fnb-invoice-options";
-import {DEFAULT_INVOICE_DISPLAY,type InvoiceDisplay} from "@/lib/hooks/use-invoice-display";
+import {DEFAULT_INVOICE_DISPLAY,type InvoiceDisplay} from "@/lib/utils/invoice-display";
 import {formatCurrency,formatNumber} from "@/lib/format";
 type Row=Record<string,unknown>;
 export function FnbInvoiceItemLabel({item,display=DEFAULT_INVOICE_DISPLAY,mobile=false}:{item:Row;display?:InvoiceDisplay;mobile?:boolean}) {

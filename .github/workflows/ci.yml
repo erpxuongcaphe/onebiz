@@ -626,6 +626,16 @@ jobs:
           createdb branch_boundaries_test
           PGDATABASE=branch_boundaries_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00567_transaction_branch_boundaries.integration.sql
 
+      - name: Verify own-account invoice display preferences
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          createdb invoice_display_preferences_test
+          PGDATABASE=invoice_display_preferences_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/202610240001_invoice_display_account_preferences.integration.sql
+
       - name: Verify concurrent F&B shift totals close and cash posting
         env:
           PGHOST: localhost

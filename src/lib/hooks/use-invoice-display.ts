@@ -1,24 +1,47 @@
 "use client";
-import {useCallback,useEffect,useState} from "react";
-export const INVOICE_DETAIL_FIELDS=["Mã hàng","Size","Đá/Nóng","Mức ngọt","Mức đá","Tùy chọn khác","ĐVT","Đơn giá","Giảm"] as const;
-export interface InvoiceDisplay {splitOptions:boolean;hiddenFields:string[];listColumns:Record<string,boolean>}
-export const DEFAULT_INVOICE_DISPLAY:InvoiceDisplay={splitOptions:false,hiddenFields:["Mã hàng","ĐVT","Giảm"],listColumns:{}};
-export function parseInvoiceDisplay(raw:unknown):InvoiceDisplay {
- if(!raw||typeof raw!=="object")return DEFAULT_INVOICE_DISPLAY;
- const value=raw as Record<string,unknown>;
- return {splitOptions:value.splitOptions===true,
-  hiddenFields:Array.isArray(value.hiddenFields)?value.hiddenFields.filter((s):s is string=>typeof s==="string"&&INVOICE_DETAIL_FIELDS.includes(s as typeof INVOICE_DETAIL_FIELDS[number])):DEFAULT_INVOICE_DISPLAY.hiddenFields,
-  listColumns:value.listColumns&&typeof value.listColumns==="object"?Object.fromEntries(Object.entries(value.listColumns).filter(([k,v])=>k.length<100&&!["__proto__","constructor","prototype"].includes(k)&&typeof v==="boolean")):{} };
-}
-/** Read-only presentation memory, separated by tenant/account; never stores invoice data. */
+import {useCallback,useEffect,useRef,useState} from "react";
+import {getInvoiceDisplayPreferences,saveInvoiceDisplayPreferences} from "@/lib/services/supabase/invoice-display-preferences";
+import {DEFAULT_INVOICE_DISPLAY,parseInvoiceDisplay,displayPatch,mergeDisplayPatch,applyDisplayPatch,parseDisplayPatch,hasDisplayPatch,type InvoiceDisplay,type InvoiceDisplayPatch} from "@/lib/utils/invoice-display";
+export {INVOICE_DETAIL_FIELDS,DEFAULT_INVOICE_DISPLAY,parseInvoiceDisplay,type InvoiceDisplay} from "@/lib/utils/invoice-display";
+export type DisplaySyncState="loading"|"saving"|"synced"|"offline";
+type Session={key:string;tenant:string;user:string;view:InvoiceDisplay;pending:InvoiceDisplayPatch;inFlight:InvoiceDisplayPatch;disposed:boolean;busy:boolean};
+/** Only display preferences sync. Invoice reads, filters, exports and checkout never depend on this request. */
 export function useInvoiceDisplay(tenantId?:string,userId?:string) {
- const key=tenantId&&userId?`onebiz:invoice-display:v1:${tenantId}:${userId}`:undefined;
- const [state,setState]=useState<{key:string|undefined;value:InvoiceDisplay}>({key:undefined,value:DEFAULT_INVOICE_DISPLAY});
- const value=state.key===key?state.value:DEFAULT_INVOICE_DISPLAY;
+ const key=tenantId&&userId?`onebiz:invoice-display:v2:${tenantId}:${userId}`:undefined;
+ const current=useRef<Session|null>(null);
+ const [state,setState]=useState<{key?:string;value:InvoiceDisplay;sync:DisplaySyncState}>({value:DEFAULT_INVOICE_DISPLAY,sync:"loading"});
+ const publish=useCallback((s:Session,sync:DisplaySyncState)=>{
+  if(s.disposed||current.current!==s)return;
+  setState({key:s.key,value:s.view,sync});
+  try{localStorage.setItem(s.key,JSON.stringify({value:s.view,pending:mergeDisplayPatch(s.inFlight,s.pending)}));}catch{/* Storage restrictions never block invoice viewing. */}
+ },[]);
+ const refresh=useCallback(async(s:Session)=>{
+  if(s.disposed||s.busy)return;s.busy=true;
+  try{
+   let record=await getInvoiceDisplayPreferences(s.tenant,s.user);if(s.disposed)return;
+   if(!record){record=await saveInvoiceDisplayPreferences(s.tenant,s.user,displayPatch(undefined,s.view),true);if(s.disposed)return;}
+   s.view=applyDisplayPatch(record.value,s.pending);publish(s,hasDisplayPatch(s.pending)?"saving":"synced");
+   while(hasDisplayPatch(s.pending)&&!s.disposed){
+    const patch=s.pending;s.inFlight=patch;s.pending={};
+    try{const saved=await saveInvoiceDisplayPreferences(s.tenant,s.user,patch);if(s.disposed)return;s.inFlight={};s.view=applyDisplayPatch(saved.value,s.pending);publish(s,hasDisplayPatch(s.pending)?"saving":"synced");}
+    catch(error){s.pending=mergeDisplayPatch(patch,s.pending);s.inFlight={};throw error;}
+   }
+  }catch{publish(s,"offline");}finally{s.busy=false;}
+ },[publish]);
  useEffect(()=>{
-  const read=()=>{let next=DEFAULT_INVOICE_DISPLAY;try{if(key)next=parseInvoiceDisplay(JSON.parse(localStorage.getItem(key)??"null"));}catch{/* Privacy/quota restrictions must not block invoices. */}setState({key,value:next});};
-  read();const sync=(event:StorageEvent)=>{if(event.key===key||event.key===null)read();};window.addEventListener("storage",sync);return()=>window.removeEventListener("storage",sync);
- },[key]);
- const update=useCallback((next:InvoiceDisplay)=>{const safe=parseInvoiceDisplay(next);setState({key,value:safe});try{if(key)localStorage.setItem(key,JSON.stringify(safe));}catch{/* View remains usable without persistence. */}},[key]);
- return [value,update] as const;
+  if(!key||!tenantId||!userId){current.current=null;return;}
+  let view=DEFAULT_INVOICE_DISPLAY,pending:InvoiceDisplayPatch={};
+  try{const cached=JSON.parse(localStorage.getItem(key)??"null");if(cached){view=parseInvoiceDisplay(cached.value);pending=parseDisplayPatch(cached.pending);}else{view=parseInvoiceDisplay(JSON.parse(localStorage.getItem(key.replace(":v2:",":v1:"))??"null"));}}catch{/* Cloud can still restore preferences. */}
+  const s:Session={key,tenant:tenantId,user:userId,view,pending,inFlight:{},disposed:false,busy:false};current.current=s;publish(s,"loading");void refresh(s);
+  const resume=()=>{if(document.visibilityState!=="hidden")void refresh(s);};
+  window.addEventListener("focus",resume);window.addEventListener("online",resume);document.addEventListener("visibilitychange",resume);
+  const timer=setInterval(resume,30000);
+  return()=>{s.disposed=true;clearInterval(timer);window.removeEventListener("focus",resume);window.removeEventListener("online",resume);document.removeEventListener("visibilitychange",resume);};
+ },[key,tenantId,userId,publish,refresh]);
+ const update=useCallback((next:InvoiceDisplay)=>{
+  const s=current.current;if(!s||s.key!==key||s.disposed)return;
+  const safe=parseInvoiceDisplay(next);s.pending=mergeDisplayPatch(s.pending,displayPatch(s.view,safe));s.view=safe;publish(s,"saving");void refresh(s);
+ },[key,publish,refresh]);
+ const retry=useCallback(()=>{if(current.current)void refresh(current.current);},[refresh]);
+ return [state.key===key?state.value:DEFAULT_INVOICE_DISPLAY,update,{state:state.key===key?state.sync:"loading",retry}] as const;
 }
