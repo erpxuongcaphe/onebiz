@@ -9,71 +9,61 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getCustomers } from "@/lib/services/supabase";
-import type { Customer } from "@/lib/types";
+import { getFnbCustomerContacts, type PosCustomerIdentity } from "@/lib/services/supabase/pos-customer-contacts";
 import { useDebounce } from "@/lib/utils/use-debounce";
 import { cn } from "@/lib/utils";
-import { formatCurrency } from "@/lib/format";
 import { Icon } from "@/components/ui/icon";
 
 interface FnbCustomerPickerProps {
   open: boolean;
-  onSelect: (customer: Customer | null) => void; // null = Khách lẻ
+  branchId: string;
+  onSelect: (customer: PosCustomerIdentity | null) => void; // null = Khách lẻ
   onClose: () => void;
 }
 
+const EMPTY_CONTACTS: PosCustomerIdentity[] = [];
+
 export function FnbCustomerPicker({
   open,
+  branchId,
   onSelect,
   onClose,
 }: FnbCustomerPickerProps) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [response, setResponse] = useState<{ key: string; rows: PosCustomerIdentity[]; failed: boolean } | null>(null);
+  const [retry, setRetry] = useState(0);
   const [highlighted, setHighlighted] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
 
   const debouncedQuery = useDebounce(query, 200);
+  const requestKey = `${branchId}:${debouncedQuery.trim()}:${retry}`;
+  const currentResponse = response?.key === requestKey && query.trim() === debouncedQuery.trim() ? response : null;
+  const results = currentResponse?.rows ?? EMPTY_CONTACTS;
 
   useEffect(() => {
-    if (open) {
-      setTimeout(() => inputRef.current?.focus(), 0);
-    } else {
-      setQuery("");
-      setResults([]);
-      setHighlighted(0);
-    }
+    if (!open) return;
+    const timer = setTimeout(() => inputRef.current?.focus(), 0);
+    return () => clearTimeout(timer);
   }, [open]);
 
   useEffect(() => {
     if (!open) return;
-    let cancelled = false;
-    setLoading(true);
-    getCustomers({
-      page: 0,
-      pageSize: 10,
-      search: debouncedQuery.trim() || "",
-      filters: {},
-      sortBy: "name",
-      sortOrder: "asc",
-    })
+    const controller = new AbortController();
+    getFnbCustomerContacts({ branchId, search: debouncedQuery, signal: controller.signal })
       .then((res) => {
-        if (cancelled) return;
-        setResults(res.data);
+        if (controller.signal.aborted) return;
+        setResponse({ key: requestKey, rows: res, failed: false });
         setHighlighted(0);
       })
       .catch(() => {
-        if (cancelled) return;
-        setResults([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (controller.signal.aborted) return;
+        setResponse({ key: requestKey, rows: [], failed: true });
       });
     return () => {
-      cancelled = true;
+      controller.abort();
     };
-  }, [debouncedQuery, open]);
+  }, [branchId, debouncedQuery, requestKey, open, retry]);
 
   useEffect(() => {
     if (!listRef.current) return;
@@ -141,7 +131,7 @@ export function FnbCustomerPicker({
               placeholder="Tìm tên / SĐT / mã khách hàng..."
               className="flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
             />
-            {loading && (
+            {!currentResponse && (
               <Icon name="progress_activity" size={16} className="animate-spin text-muted-foreground" />
             )}
             <kbd className="font-mono text-xs bg-muted border border-border rounded px-2 py-0.5 text-muted-foreground">
@@ -198,15 +188,19 @@ export function FnbCustomerPicker({
                       {c.phone || c.code || "—"}
                     </div>
                   </div>
-                  {c.currentDebt > 0 && (
-                    <div className="text-xs text-status-error font-medium shrink-0">
-                      Nợ {formatCurrency(c.currentDebt)} ₫
-                    </div>
-                  )}
                 </li>
               );
             })}
           </ul>
+          {currentResponse?.failed && (
+            <div role="alert" className="flex items-center justify-between gap-3 border-t border-border px-4 py-3 text-sm text-status-error">
+              <span>Chưa tải được khách.</span>
+              <button type="button" onClick={() => setRetry(value => value + 1)} className="min-h-10 px-2 font-medium">Thử lại</button>
+            </div>
+          )}
+          {currentResponse && !currentResponse.failed && results.length === 0 && (
+            <p className="border-t border-border px-4 py-3 text-sm text-muted-foreground">Không tìm thấy khách.</p>
+          )}
 
           <div className="hidden sm:flex items-center justify-between px-4 h-8 bg-muted/50 border-t border-border text-xs text-muted-foreground">
             <div className="flex items-center gap-3">

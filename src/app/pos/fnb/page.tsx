@@ -108,7 +108,7 @@ import type { ShiftTotalsInput } from "@/lib/types/shift";
 import { printShiftReport } from "@/lib/print-shift-report";
 import type { RestaurantTable, FnbOrderLine, KitchenOrderItem, KitchenOrder, OrderType } from "@/lib/types/fnb";
 import type { Shift } from "@/lib/types/shift";
-import type { Customer } from "@/lib/types";
+import type { PosCustomerIdentity } from "@/lib/services/supabase/pos-customer-contacts";
 import { formatCurrency, formatNumber, formatStockQuantity } from "@/lib/format";
 import { getFnbBenefitDisplay } from "@/lib/fnb-benefit-display";
 import { previewFnbSettlement } from "@/lib/fnb-settlement-preview";
@@ -3261,7 +3261,7 @@ function FnbPosPageInner() {
 
   // ── Customer selection ──
   const customerSelectionLock = useRef(false);
-  const handleCustomerSelect = useCallback(async (customer: Customer | null) => {
+  const handleCustomerSelect = useCallback(async (customer: PosCustomerIdentity | null) => {
     const tab = pos.activeTab;
     if (!tab || customerSelectionLock.current) return;
     const selectedBranch = branchId;
@@ -4063,9 +4063,11 @@ function FnbPosPageInner() {
       )}
 
       {/* Customer picker (F4) — lazy loaded */}
-      {customerPickerOpen && (
+      {customerPickerOpen && branchId && (
         <Suspense fallback={null}>
           <FnbCustomerPicker
+            key={`${tenantId}:${userId}:${branchId}`}
+            branchId={branchId}
             open={customerPickerOpen}
             onSelect={handleCustomerSelect}
             onClose={() => setCustomerPickerOpen(false)}
