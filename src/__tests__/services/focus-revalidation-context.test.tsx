@@ -6,11 +6,9 @@ import { useRevalidateOnFocus } from "@/lib/hooks/use-revalidate-on-focus";
 
 const backgroundRefreshPages = [
   "src/app/(main)/so-quy/page.tsx",
-  "src/app/(main)/khach-hang/page.tsx",
   "src/app/(main)/hang-hoa/page.tsx",
   "src/app/(main)/hang-hoa/ton-kho/page.tsx",
   "src/app/(main)/hang-hoa/nhom/page.tsx",
-  "src/app/(main)/hang-hoa/nha-cung-cap/page.tsx",
   "src/app/(main)/hang-hoa/lich-su-kho/page.tsx",
   "src/app/(main)/don-hang/dat-hang/page.tsx",
 ];
@@ -36,6 +34,15 @@ describe("focus revalidation keeps page context", () => {
       expect(source).toContain("if (!background) setLoading(true);");
     },
   );
+
+  it.each([
+    "src/app/(main)/khach-hang/page.tsx",
+    "src/app/(main)/hang-hoa/nha-cung-cap/page.tsx",
+  ])("%s delegates background refresh to the tested scoped query hook", file => {
+    const source = readFileSync(resolve(process.cwd(), file), "utf8");
+    expect(source).toContain("refresh: fetchData } = useListWorkspaceQuery(");
+    expect(source).toContain("useRevalidateOnFocus(fetchData);");
+  });
 
   it("passes the background context through the sales-order KPI refresh", () => {
     const source = readFileSync(

@@ -3,10 +3,12 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { useRevalidateOnFocus } from "@/lib/hooks/use-revalidate-on-focus";
+import { useListWorkspaceQuery } from "@/lib/hooks/use-list-workspace-query";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
 import { ListMetric } from "@/components/shared/list-metric";
+import { ListWorkspaceError } from "@/components/shared/list-workspace-error";
 import {
   FilterChips,
   type ListFilterChip,
@@ -394,13 +396,11 @@ function SupplierDetail({
 /*  Page                                                               */
 /* ------------------------------------------------------------------ */
 export default function NhaCungCapPage() {
-  const { hasPermission } = useAuth();
+  const { hasPermission, user, tenant } = useAuth();
+  const { activeBranchId: listBranchId, isReady: branchScopeReady } = useBranchFilter();
   const canDeleteSupplier = hasPermission(PERMISSIONS.SUPPLIERS_DELETE);
   const [otpSupplier, setOtpSupplier] = useState<Supplier | null>(null);
   const { toast } = useToast();
-  const [data, setData] = useState<Supplier[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   // CEO 04/07: ô "Tìm theo" — "all" = gộp mã+tên+SĐT như cũ.
   const [searchField, setSearchField] = useState("all");
@@ -436,11 +436,6 @@ export default function NhaCungCapPage() {
   // Day 17/05/2026: filter Tỉnh/TP
   const [provinceFilter, setProvinceFilter] = useState("all");
   const [filterOpen, setFilterOpen] = useState(false);
-  const [summary, setSummary] = useState({
-    totalPurchases: 0,
-    totalDebt: 0,
-    suppliersWithDebt: 0,
-  });
 
   /* ---- Columns ---- */
   const columns: ColumnDef<Supplier, unknown>[] = [
@@ -491,16 +486,12 @@ export default function NhaCungCapPage() {
   ];
 
   /* ---- Fetch data ---- */
-  const fetchData = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
-    if (!background) setLoading(true);
-    // Không có try/finally thì truy vấn lỗi là cờ loading không bao giờ tắt →
-    // trang treo mãi ở vòng xoay, người dùng không biết vì sao.
-    try {
+  const loadWorkspace = useCallback(async () => {
       const presetRange = computeListPresetRange(datePreset);
       const effectiveDateFrom =
         datePreset === "custom" ? dateFrom : presetRange.from;
       const effectiveDateTo = datePreset === "custom" ? dateTo : presetRange.to;
-      const result = await getSupplierListWorkspace({
+      return getSupplierListWorkspace({
         page,
         pageSize,
         search,
@@ -514,18 +505,6 @@ export default function NhaCungCapPage() {
         dateTo: effectiveDateTo,
         province: provinceFilter,
       });
-      setData(result.data);
-      setTotal(result.total);
-      setSummary(result.summary);
-    } catch (e) {
-      toast({
-        variant: "error",
-        title: "Không tải được danh sách nhà cung cấp",
-        description: e instanceof Error ? e.message : "Lỗi không xác định",
-      });
-    } finally {
-      setLoading(false);
-    }
   }, [
     page,
     pageSize,
@@ -540,12 +519,13 @@ export default function NhaCungCapPage() {
     totalBuyFrom,
     totalBuyTo,
     provinceFilter,
-    toast,
   ]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const { data: workspace, error: workspaceError, loading, fetching, refresh: fetchData } = useListWorkspaceQuery(
+    loadWorkspace, branchScopeReady && !!user?.id && !!tenant?.id, `${tenant?.id}:${user?.id}:${listBranchId ?? "all"}`,
+  );
+  const data = workspace?.data ?? [];
+  const total = workspace?.total ?? 0;
+  const summary = workspace?.summary ?? { totalPurchases: 0, totalDebt: 0, suppliersWithDebt: 0 };
 
   // CEO 23/05/2026: refetch khi tab visible/focus lại → fix bug F5 stale
   useRevalidateOnFocus(fetchData);
@@ -555,6 +535,9 @@ export default function NhaCungCapPage() {
     setExpandedRow(null);
   }, [
     search,
+    listBranchId,
+    user?.id,
+    tenant?.id,
     selectedStatuses,
     datePreset,
     dateFrom,
@@ -661,6 +644,10 @@ export default function NhaCungCapPage() {
 
   /* ---- Export ---- */
   const handleExport = (type: "excel" | "csv") => {
+    if (!workspace || fetching) {
+      toast({ title: "Chưa thể xuất dữ liệu", description: "Chờ tải xong danh sách hoặc bấm Thử lại.", variant: "error" });
+      return;
+    }
     if (type === "excel") {
       const rows: SupplierImportRow[] = data.map((s) => ({
         code: s.code,
@@ -756,6 +743,7 @@ export default function NhaCungCapPage() {
           ]}
         />
 
+        <ListWorkspaceError label="danh sách nhà cung cấp" error={workspaceError} onRetry={() => void fetchData()} />
         <DataTable
           columns={columns}
           data={data}
@@ -768,21 +756,24 @@ export default function NhaCungCapPage() {
               <ListMetric
                 icon={<Icon name="local_shipping" size={15} />}
                 label="Kết quả"
-                value={formatNumber(total)}
+                value={workspace ? formatNumber(total) : "—"}
+                loading={loading}
                 hint="Tổng số NCC theo bộ lọc"
               />
               <ListMetric
                 icon={<Icon name="trending_up" size={15} />}
                 label="Tổng mua"
-                value={formatCurrency(summary.totalPurchases)}
+                value={workspace ? formatCurrency(summary.totalPurchases) : "—"}
+                loading={loading}
                 hint="Toàn bộ kết quả đang lọc"
               />
               <ListMetric
                 icon={<Icon name="account_balance_wallet" size={15} />}
                 label="Số dư công nợ"
-                value={formatCurrency(summary.totalDebt)}
+                value={workspace ? formatCurrency(summary.totalDebt) : "—"}
+                loading={loading}
                 hint={
-                  summary.suppliersWithDebt > 0
+                  !workspace ? undefined : summary.suppliersWithDebt > 0
                     ? `${summary.suppliersWithDebt} NCC còn nợ`
                     : summary.totalDebt < 0 ? "NCC đang giữ tiền" : "Không có nợ"
                 }
@@ -791,7 +782,8 @@ export default function NhaCungCapPage() {
               <ListMetric
                 icon={<Icon name="verified" size={15} />}
                 label="Đang hiển thị"
-                value={formatNumber(data.length)}
+                value={workspace ? formatNumber(data.length) : "—"}
+                loading={loading}
                 hint={`Trang ${page + 1}`}
               />
             </>
@@ -833,12 +825,12 @@ export default function NhaCungCapPage() {
           }
           emptyState={emptyState}
           emptyTitle={
-            emptyState === "no-results"
+            workspaceError ? "Chưa tải được danh sách" : emptyState === "no-results"
               ? "Không tìm thấy nhà cung cấp"
               : "Chưa có nhà cung cấp"
           }
           emptyDescription={
-            emptyState === "no-results"
+            workspaceError ? "Bấm Thử lại để tải dữ liệu theo bộ lọc hiện tại." : emptyState === "no-results"
               ? "Thử thay đổi tổng mua, thời gian, công nợ, tỉnh thành, trạng thái hoặc nội dung tìm kiếm."
               : 'Bấm "Tạo mới" để thêm nhà cung cấp hoặc dùng "Nhập Excel" để nhập danh sách.'
           }
@@ -852,10 +844,10 @@ export default function NhaCungCapPage() {
             setPage(0);
           }}
           selectable
-          summaryRow={{
+          summaryRow={workspace ? {
             currentDebt: formatCurrency(pageTotalDebt),
             totalPurchases: formatCurrency(pageTotalPurchases),
-          }}
+          } : {}}
           expandedRow={expandedRow}
           onExpandedRowChange={setExpandedRow}
           renderDetail={renderDetail}
