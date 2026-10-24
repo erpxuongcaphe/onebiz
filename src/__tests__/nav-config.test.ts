@@ -29,6 +29,23 @@ describe("navigation tab policy", () => {
 });
 
 describe("isHrefActive — longest match wins", () => {
+  it("links suppliers directly to their implemented route and not products", () => {
+    const catalog = sidebarNavGroups.find((group) => group.label === "Danh mục");
+    const suppliers = catalog?.subGroups?.find((group) => group.label === "Nhà cung cấp");
+    const leaf = suppliers?.items.find((item) => item.label === "Danh sách nhà cung cấp");
+    expect(leaf?.href).toBe("/hang-hoa/nha-cung-cap");
+    expect(isHrefActive("/hang-hoa/nha-cung-cap", leaf!.href)).toBe(true);
+    expect(isHrefActive("/hang-hoa/nha-cung-cap", "/hang-hoa")).toBe(false);
+    expect(isGroupActive("/hang-hoa/nha-cung-cap", catalog!)).toBe(true);
+  });
+
+  it("keeps the supplier leaf active on its nested routes only", () => {
+    expect(isHrefActive("/hang-hoa/nha-cung-cap/detail", "/hang-hoa/nha-cung-cap")).toBe(true);
+    expect(isHrefActive("/hang-hoa/nha-cung-cap/detail", "/hang-hoa")).toBe(false);
+    expect(isHrefActive("/hang-hoa/nha-cung-cap-khac", "/hang-hoa/nha-cung-cap")).toBe(false);
+    expect(isHrefActive("/hang-hoa", "/hang-hoa")).toBe(true);
+  });
+
   it("exact match always active", () => {
     expect(isHrefActive("/hang-hoa", "/hang-hoa")).toBe(true);
     expect(isHrefActive("/hang-hoa/nhom", "/hang-hoa/nhom")).toBe(true);
