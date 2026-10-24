@@ -1,4 +1,5 @@
 "use client";
+import {FnbInvoiceContext} from "@/components/shared/fnb-invoice-context";
 
 /**
  * ShiftInvoiceDrawer — drawer hiện list 50 đơn gần nhất trong ca hiện tại.
@@ -203,6 +204,7 @@ export function ShiftInvoiceDrawer({
                   <div className="text-xs text-muted-foreground truncate mt-0.5">
                     {inv.customerName ?? "Khách lẻ"}
                   </div>
+                  {inv.source === "fnb" && <FnbInvoiceContext value={inv} compact/>}
                   <div className="text-sm font-semibold text-primary mt-1">
                     {formatCurrency(inv.totalAmount)}
                   </div>

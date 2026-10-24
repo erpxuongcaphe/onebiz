@@ -11,7 +11,7 @@ import {
   RowSelectionState,
   VisibilityState,
 } from "@tanstack/react-table";
-import { useState, useMemo, useEffect, ReactNode, Fragment } from "react";
+import { useState, useMemo, useEffect, useRef, ReactNode, Fragment } from "react";
 import {
   Table,
   TableBody,
@@ -109,10 +109,17 @@ interface DataTableProps<TData, TValue> {
   rowActions?: (row: TData) => RowAction[];
   bulkActions?: BulkAction<TData>[];
   columnToggle?: boolean;
+  columnToggleExtra?: ReactNode;
+  columnToggleLabel?: string;
+  controlledColumnVisibility?: VisibilityState;
+  onColumnVisibilityChange?: (value: VisibilityState) => void;
   /** Ẩn hàng riêng chứa nút hiển thị cột khi nút được đặt ở dải công cụ ngoài. */
   columnToggleToolbar?: boolean;
   /** Chỉ số đặt ở trái dải công cụ gọn; khi có sẽ thay hàng "Hiển thị cột" riêng. */
   toolbarMetrics?: ReactNode;
+  compactMobileToolbar?: boolean;
+  fitDetailToViewport?: boolean;
+  renderMobileRow?: (row:TData)=>ReactNode;
   /** Nút lọc hoặc công cụ của trang, đặt trước menu hiển thị cột. */
   toolbarActions?: ReactNode;
   /** Nội dung một hàng ngay dưới dải công cụ, thường là các điều kiện lọc đang áp dụng. */
@@ -347,8 +354,15 @@ export function DataTable<TData, TValue>({
   rowActions,
   bulkActions,
   columnToggle = false,
+  columnToggleExtra,
+  columnToggleLabel,
+  controlledColumnVisibility,
+  onColumnVisibilityChange,
   columnToggleToolbar = true,
   toolbarMetrics,
+  compactMobileToolbar=false,
+  fitDetailToViewport=false,
+  renderMobileRow,
   toolbarActions,
   toolbarFooter,
   density = "compact",
@@ -388,8 +402,8 @@ export function DataTable<TData, TValue>({
     [columns, currentBp],
   );
   const mergedVisibility = useMemo(
-    () => ({ ...breakpointHidden, ...columnVisibility }),
-    [breakpointHidden, columnVisibility],
+    () => ({ ...breakpointHidden, ...columnVisibility, ...controlledColumnVisibility }),
+    [breakpointHidden, columnVisibility, controlledColumnVisibility],
   );
   const [internalExpanded, setInternalExpanded] = useState<number | null>(null);
 
@@ -491,7 +505,14 @@ export function DataTable<TData, TValue>({
     enableSorting: !serverPaged || Boolean(onSortingChange),
     onSortingChange: onSortingChange ?? setSorting,
     onRowSelectionChange: setRowSelection,
-    onColumnVisibilityChange: setColumnVisibility,
+    onColumnVisibilityChange: (updater) => {
+      const next=typeof updater === "function"?updater(mergedVisibility):updater;
+      if(onColumnVisibilityChange) {
+        // Persist only explicit changes; responsive hidden columns must not become a device-wide preference.
+        const changed=Object.fromEntries(Object.entries(next).filter(([key,value])=>value!==mergedVisibility[key]));
+        onColumnVisibilityChange({...controlledColumnVisibility,...changed});
+      } else setColumnVisibility(next);
+    },
     manualPagination: true,
     pageCount,
     state: {
@@ -581,12 +602,12 @@ export function DataTable<TData, TValue>({
   const columnToggleMenu =
     columnToggle && toggleableColumns.length > 0 ? (
       <DropdownMenu>
-        <DropdownMenuTrigger aria-label="Chọn cột hiển thị" className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs font-medium hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-[44px]">
+        <DropdownMenuTrigger aria-label={columnToggleLabel ?? "Chọn cột hiển thị"} className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs font-medium hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-[44px]">
           <Icon name="tune" size={15} />
-          <span className="hidden lg:inline">Hiển thị cột</span>
+          <span className={columnToggleLabel ? "" : "hidden lg:inline"}>{columnToggleLabel ?? "Hiển thị cột"}</span>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" side="bottom" sideOffset={4}>
-          <DropdownMenuLabel>Chọn cột hiển thị</DropdownMenuLabel>
+        <DropdownMenuContent align="end" side="bottom" sideOffset={4} style={columnToggleExtra ? {width:"18rem",maxWidth:"calc(100vw - 24px)",maxHeight:"min(var(--available-height), 70vh)"} : undefined}>
+          <DropdownMenuLabel>{columnToggleExtra ? "Danh sách hóa đơn" : "Chọn cột hiển thị"}</DropdownMenuLabel>
           <DropdownMenuSeparator />
           {toggleableColumns.map((column) => {
             const headerDef = column.columnDef.header;
@@ -595,15 +616,30 @@ export function DataTable<TData, TValue>({
               <DropdownMenuCheckboxItem
                 key={column.id}
                 checked={column.getIsVisible()}
+                onSelect={columnToggleExtra ? event => event.preventDefault() : undefined}
                 onCheckedChange={(value) => column.toggleVisibility(!!value)}
               >
                 {label}
               </DropdownMenuCheckboxItem>
             );
           })}
+          {columnToggleExtra}
         </DropdownMenuContent>
       </DropdownMenu>
     ) : null;
+
+  const detailViewport=useRef<HTMLDivElement>(null);
+  const [detailWidth,setDetailWidth]=useState<number|undefined>();
+  useEffect(()=>{
+    if(!fitDetailToViewport||!detailViewport.current)return;
+    const element=detailViewport.current;
+    const measure=()=>setDetailWidth(element.clientWidth>2?element.clientWidth-2:undefined);
+    measure();
+    const observer=typeof ResizeObserver!=="undefined"?new ResizeObserver(measure):undefined;
+    observer?.observe(element);
+    if(!observer)window.addEventListener("resize",measure);
+    return()=>{observer?.disconnect();if(!observer)window.removeEventListener("resize",measure);};
+  },[fitDetailToViewport]);
 
   const handleRowClick = (row: TData, index: number) => {
     if (renderDetail) {
@@ -624,6 +660,7 @@ export function DataTable<TData, TValue>({
         <>
           <ListStrip
             metrics={toolbarMetrics}
+            compactMobile={compactMobileToolbar}
             tools={
               <>
                 {toolbarActions}
@@ -707,7 +744,7 @@ export function DataTable<TData, TValue>({
       {/* Desktop table — min-h-0 critical: cho flex-1 shrink đúng trong
           flex-col parent → pagination footer luôn hiện. overflow-auto cho
           cả ngang lẫn dọc khi columns vượt viewport. */}
-      <div className="hidden md:block flex-1 min-h-0 overflow-auto">
+      <div ref={detailViewport} className="hidden md:block flex-1 min-h-0 overflow-auto">
         {/* CEO 27/05/2026: containerClassName="overflow-visible" để wrapper
             của <Table> KHÔNG tạo scroll context riêng. OUTER div này
             (overflow-auto, height-constrained qua flex-1 min-h-0) handle CẢ
@@ -854,9 +891,11 @@ export function DataTable<TData, TValue>({
                         colSpan={totalColSpan}
                         className="p-0 border-l-2 border-l-primary"
                       >
+                        <div data-slot="detail-viewport" style={fitDetailToViewport&&detailWidth?{width:detailWidth,maxWidth:"100%"}:undefined}>
                         {renderDetail(row.original, () =>
                           setExpandedRowIdx(null)
                         )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   )}
@@ -955,8 +994,8 @@ export function DataTable<TData, TValue>({
                 )}
 
                 {/* Mobile: data fields */}
-                <div className="space-y-1">
-                  {row.getVisibleCells().map((cell) => {
+                <div className="min-w-0 space-y-1">
+                  {renderMobileRow ? renderMobileRow(row.original) : row.getVisibleCells().map((cell) => {
                     if (
                       cell.column.id === "select" ||
                       cell.column.id === "row_actions" ||
@@ -990,7 +1029,7 @@ export function DataTable<TData, TValue>({
 
               {/* Mobile inline detail */}
               {renderDetail && expandedRowIdx === rowIndex && (
-                <div className="bg-white border rounded-lg -mt-1 overflow-hidden">
+                <div className="min-w-0 bg-card border rounded-lg -mt-1 overflow-hidden">
                   {renderDetail(row.original, () => setExpandedRowIdx(null))}
                 </div>
               )}

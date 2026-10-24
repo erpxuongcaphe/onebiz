@@ -58,6 +58,7 @@ jobs:
           node scripts/fnb-db-test/run-expiry-time-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
           node scripts/fnb-db-test/run-delivery-policy-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
           node scripts/fnb-db-test/run-selected-discount-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
+          node scripts/fnb-db-test/run-paid-context-zero-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
           node scripts/fnb-db-test/run-split-quantities-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
           node scripts/fnb-db-test/run-multiple-bills-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
           node scripts/fnb-db-test/run-delivery-dispatch-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
@@ -624,6 +625,16 @@ jobs:
         run: |
           createdb branch_boundaries_test
           PGDATABASE=branch_boundaries_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00567_transaction_branch_boundaries.integration.sql
+
+      - name: Verify own-account invoice display preferences
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          createdb invoice_display_preferences_test
+          PGDATABASE=invoice_display_preferences_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/202610240001_invoice_display_account_preferences.integration.sql
 
       - name: Verify concurrent F&B shift totals close and cash posting
         env:

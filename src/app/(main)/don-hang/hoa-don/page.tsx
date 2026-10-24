@@ -1,4 +1,16 @@
 "use client";
+import {getFnbInvoiceExportDetails,fnbInvoiceItemExportColumns} from "@/lib/services/supabase/fnb-invoice-export-details";
+import {InvoiceMobileRow} from "@/components/shared/invoice-mobile-row";
+import {InvoiceDisplayMenu} from "@/components/shared/invoice-display-menu";
+import {useInvoiceDisplay,type InvoiceDisplay} from "@/lib/hooks/use-invoice-display";
+import {fnbItemColumns,FnbInvoiceMobileItem} from "@/components/shared/fnb-invoice-items";
+import {InvoiceItemName} from "@/components/shared/invoice-item-name";
+import {FnbInvoiceChoiceFilter} from "@/components/shared/fnb-invoice-choice-filter";
+import {choiceGroupLabel,choiceValueLabel,hasFnbChoiceFilter,type FnbChoiceFilter} from "@/lib/utils/fnb-invoice-choice-filter";
+import {FnbInvoiceServiceFilter,type FnbServiceFilterOptions} from "@/components/shared/fnb-invoice-service-filter";
+import {getFnbInvoiceFilterOptions} from "@/lib/services/supabase/invoices";
+import {FnbInvoiceContext} from "@/components/shared/fnb-invoice-context";
+import {fnbContextExportColumns} from "@/lib/utils/fnb-invoice-context";
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useInvoiceListExport } from "@/lib/hooks/use-invoice-list-export";
@@ -88,7 +100,7 @@ import {
   type TenantBusinessInfo,
 } from "@/lib/services";
 import { DocumentNoteBox } from "@/components/shared/document-note-box";
-import { useToast, useBranchFilter } from "@/lib/contexts";
+import { useToast, useBranchFilter, useAuth } from "@/lib/contexts";
 import { buildInvoicePrintData, toPrintLines } from "@/lib/print-templates";
 import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
 import type { Invoice, ShippingOrder } from "@/lib/types";
@@ -130,6 +142,7 @@ const INVOICE_SORT_COLUMNS = ["code", "date", "customerName", "totalAmount", "di
 
 function InvoiceDetail({
   invoice,
+  display,
   onClose,
   onEdit,
   onDelete,
@@ -137,6 +150,7 @@ function InvoiceDetail({
   onDataChanged,
 }: {
   invoice: Invoice;
+  display: InvoiceDisplay;
   onClose: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
@@ -150,6 +164,8 @@ function InvoiceDetail({
   // Lazy fetch line items thay vì hardcode "Sản phẩm mẫu" (P0 audit fix).
   const [items, setItems] = useState<InvoiceItemRow[]>([]);
   const [itemsLoading, setItemsLoading] = useState(true);
+  const [itemsError,setItemsError]=useState("");
+  const [itemsRevision,setItemsRevision]=useState(0);
   // CEO 08/07: vận đơn gắn hóa đơn — khối "Giao hàng" trong chi tiết + nút
   // "Tạo vận đơn" cho đơn CHƯA có (kể cả completed cũ, như KiotViet).
   const [shipment, setShipment] = useState<ShippingOrder | null>(null);
@@ -164,7 +180,7 @@ function InvoiceDetail({
   }, [loadShipment]);
   useEffect(() => {
     let cancelled = false;
-    setItemsLoading(true);
+    setItemsLoading(true);setItemsError("");
     getInvoiceItems(invoice.id)
       .then((rows) => {
         if (!cancelled) setItems(rows);
@@ -176,7 +192,7 @@ function InvoiceDetail({
         const msg = err instanceof Error ? err.message : "Lỗi tải chi tiết";
         console.error("[InvoiceDetail] getInvoiceItems lỗi:", err);
         if (!cancelled) {
-          setItems([]);
+          setItems([]);setItemsError(msg);
           toast({
             title: "Không tải được chi tiết hoá đơn",
             description: msg,
@@ -190,7 +206,7 @@ function InvoiceDetail({
     return () => {
       cancelled = true;
     };
-  }, [invoice.id, toast]);
+  }, [invoice.id, toast,itemsRevision]);
 
   const subtotal = items.reduce((s, it) => s + it.unitPrice * it.quantity, 0);
   const itemDiscountSum = items.reduce((s, it) => s + it.discount, 0);
@@ -242,6 +258,7 @@ function InvoiceDetail({
             label: "Thông tin",
             content: (
               <div className="space-y-4">
+                {invoice.source === "fnb" && <div className="rounded-md border px-3 py-2"><FnbInvoiceContext value={invoice}/></div>}
                 <DetailHeader
                   title={invoice.customerName}
                   code={invoice.code}
@@ -334,15 +351,19 @@ function InvoiceDetail({
                   <div className="text-sm text-muted-foreground py-4 text-center">
                     Đang tải sản phẩm...
                   </div>
-                ) : items.length === 0 ? (
-                  <div className="text-sm text-muted-foreground py-4 text-center">
-                    Hóa đơn này không có sản phẩm hoặc dữ liệu lô bị mất.
+                ) : itemsError ? (
+                  <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive">
+                    <span>Chưa tải được sản phẩm của hóa đơn. Bấm thử lại để xem.</span>
+                    <Button size="sm" variant="outline" onClick={()=>setItemsRevision(v=>v+1)}>Thử tải lại món</Button>
                   </div>
-                ) : (
+                ) : items.length === 0 ? (
+                  <div className="text-sm text-muted-foreground py-4 text-center">Hóa đơn chưa có dòng sản phẩm.</div>
+                ) : (<>
+                  {items.some(item=>item.fnbDetailsUnavailable) && <div role="alert" className="mb-2 flex flex-wrap items-center gap-2 text-xs text-foreground"><span>Đã tải món; chưa tải được tùy chọn/ghi chú F&B.</span><Button size="sm" variant="outline" onClick={()=>setItemsRevision(v=>v+1)}>Thử tải lại tùy chọn</Button></div>}
                   <DetailItemsTable
-                    columns={[
+                    columns={invoice.source==="fnb"?fnbItemColumns(display):[
                       { header: "Mã hàng", accessor: "productCode" as never },
-                      { header: "Tên hàng", accessor: "productName" as never },
+                      { header: "Tên hàng", className: "min-w-[180px] max-w-[320px]", accessor: (item: Record<string, unknown>) => <InvoiceItemName name={String(item.productName ?? "")} note={item.note as string | undefined} options={item.fnbOptions} size={item.variantLabel as string|undefined}/> },
                       {
                         header: "Đơn vị",
                         accessor: (item: Record<string, unknown>) =>
@@ -376,6 +397,7 @@ function InvoiceDetail({
                         align: "right",
                       },
                     ]}
+                    mobileItem={invoice.source==="fnb" ? (item:Record<string,unknown>)=><FnbInvoiceMobileItem item={item} display={display}/> : undefined}
                     items={items as unknown as Record<string, unknown>[]}
                     summary={[
                       {
@@ -442,14 +464,14 @@ function InvoiceDetail({
                         : []),
                     ]}
                   />
-                )}
+                </>)}
 
                 {/* 06/08 (CEO phát hiện trên HD001512): trước đây là <textarea>
                     trần — không hiện note đã lưu, gõ vào cũng không lưu.
                     Sửa được CHỈ khi hóa đơn còn nháp + chưa thu tiền — đúng
                     guard của RPC update_draft_invoice_atomic (00271:52);
                     hóa đơn hoàn thành: chỉ xem (như bản in). */}
-                <DocumentNoteBox
+                {(invoice.source !== "fnb" || invoice.status === "processing" || (invoice.note?.trim() && invoice.note !== invoice.posNote)) ? <DocumentNoteBox
                   note={invoice.note}
                   editable={invoice.status === "processing" && Number(invoice.paid) === 0}
                   onSave={async (note) => {
@@ -465,7 +487,7 @@ function InvoiceDetail({
                       });
                     }
                   }}
-                />
+                /> : null}
               </div>
             ),
           },
@@ -486,6 +508,8 @@ function InvoiceDetail({
 }
 
 export default function HoaDonPage() {
+  const {user,tenant}=useAuth();
+  const [invoiceDisplay,setInvoiceDisplay,displaySync]=useInvoiceDisplay(tenant?.id,user?.id);
   const { toast } = useToast();
   const { activeBranchId, currentBranch, branches, isReady: branchScopeReady } = useBranchFilter();
   const router = useRouter();
@@ -586,6 +610,14 @@ export default function HoaDonPage() {
   const { isFnb } = useFnbSubdomain();
   const isFnbBranch = !viewAllBranches && currentBranch?.branchType === "store";
   const showFnbTypes = isFnb || currentBranch?.branchType === "store";
+  const [fnbTable,setFnbTable]=useState("");
+  const [fnbChoices,setFnbChoices]=useState<FnbChoiceFilter>({});
+  const fnbChoiceJson=showFnbTypes&&hasFnbChoiceFilter(fnbChoices)?JSON.stringify(fnbChoices):"";
+  const [fnbArea,setFnbArea]=useState("");
+  const [serviceOptions,setServiceOptions]=useState<FnbServiceFilterOptions>({tables:[],areas:[]});
+  const [serviceOptionsError,setServiceOptionsError]=useState("");
+  const [serviceOptionsRevision,setServiceOptionsRevision]=useState(0);
+  const [serviceOptionsLoading,setServiceOptionsLoading]=useState(false);
   const [selectedFnbType, setSelectedFnbType] = useState<FnbInvoiceType>("all");
   const fnbOrderType = showFnbTypes ? selectedFnbType : "all";
   const retailSaleType = showFnbTypes ? "all" : selectedRetailType;
@@ -594,6 +626,19 @@ export default function HoaDonPage() {
     () => phamViChiNhanhHoaDon({ activeBranchId, viewAllBranches, duocXemToanChuoi }),
     [activeBranchId, viewAllBranches, duocXemToanChuoi],
   );
+  useEffect(()=>{setServiceOptions({tables:[],areas:[]});setFnbTable("");setFnbArea("");setFnbChoices({});},[showFnbTypes,branchScopeReady,phamViHienTai]);
+  useEffect(()=>{
+    let stale=false;
+    setServiceOptionsError("");
+    if(showFnbTypes && branchScopeReady && phamViHienTai.mode!=="none") {
+      setServiceOptionsLoading(true);
+      getFnbInvoiceFilterOptions(phamViHienTai.mode==="branch" ? phamViHienTai.branchId : undefined)
+        .then(result=>{if(!stale)setServiceOptions(result);})
+        .catch(error=>{if(!stale){console.warn("[invoice.serviceFilters]",error);setServiceOptionsError("Chưa tải được bộ lọc bàn/khu vực.");}})
+        .finally(()=>{if(!stale)setServiceOptionsLoading(false);});
+    }
+    return()=>{stale=true;};
+  },[showFnbTypes,branchScopeReady,phamViHienTai,serviceOptionsRevision]);
   const chuaCoPhamVi = branchScopeReady && phamViHienTai.mode === "none";
   // Đổi chi nhánh ở global switcher → về lại chế độ lọc theo chi nhánh.
   useEffect(() => {
@@ -636,7 +681,12 @@ export default function HoaDonPage() {
     filterChips.push({key:"retailSaleType",label:"Loại bán",value:invoiceRetailTypeLabel(retailSaleType),
       onClear:()=>setSelectedRetailType("all")});
   }
+  if(showFnbTypes && fnbTable)filterChips.push({key:"fnbTable",label:"Bàn",value:fnbTable,onClear:()=>setFnbTable("")});
+  if(showFnbTypes && fnbArea)filterChips.push({key:"fnbArea",label:"Khu vực",value:fnbArea,onClear:()=>setFnbArea("")});
+  if(fnbChoiceJson)filterChips.push({key:"fnbOptions",label:"Tùy chọn món",value:[fnbChoices.productId?"Món đã chọn":"",fnbChoices.size?`Size: ${choiceValueLabel(fnbChoices.size)}`:"",...Object.entries(fnbChoices.groups??{}).map(([key,value])=>`${choiceGroupLabel(key)}: ${choiceValueLabel(value)}`)].filter(Boolean).join(" · "),onClear:()=>setFnbChoices({})});
   const clearListFilters = () => {
+    setFnbChoices({});
+    setFnbTable("");setFnbArea("");
     setSelectedStatuses(copyDefaultStatuses(DEFAULT_INVOICE_LIST_STATUSES));
     setSelectedRetailType("all");
     setSelectedFnbType("all");
@@ -654,11 +704,11 @@ export default function HoaDonPage() {
     if(selectedStatuses.length)commonFilters.status=selectedStatuses;
     commonFilters.delivery = "all";
     if (!showFnbTypes) commonFilters.retailSaleType = retailSaleType;
-    if (showFnbTypes) commonFilters.fnbOrderType = fnbOrderType;
+    if (showFnbTypes) {commonFilters.fnbOrderType = fnbOrderType;if(fnbChoiceJson)commonFilters.fnbOptions=fnbChoiceJson;if(fnbTable)commonFilters.fnbTable=fnbTable;if(fnbArea)commonFilters.fnbArea=fnbArea;}
     if(range.from)commonFilters.dateFrom=range.from;
     if(range.to)commonFilters.dateTo=range.to;
     return {search:debouncedSearch,searchField,sortBy:sorting[0]?.id,sortOrder:sorting[0]?.desc?"desc":"asc",filters:commonFilters};
-  },[dateRange,selectedStatuses,showFnbTypes,retailSaleType,fnbOrderType,debouncedSearch,searchField,sorting]);
+  },[dateRange,selectedStatuses,showFnbTypes,retailSaleType,fnbOrderType,fnbTable,fnbArea,fnbChoiceJson,debouncedSearch,searchField,sorting]);
 
   const fetchData = useCallback(async () => {
     const request = ++listRequest.current;
@@ -709,7 +759,7 @@ export default function HoaDonPage() {
   useEffect(() => {
     setPage(0);
     setExpandedRow(null);
-  }, [debouncedSearch, selectedStatuses, retailSaleType, fnbOrderType, datePreset, customDates]);
+  }, [debouncedSearch, selectedStatuses, retailSaleType, fnbOrderType, fnbTable, fnbArea, fnbChoiceJson, datePreset, customDates]);
 
   useEffect(() => {
     if (!invoiceToOpen || loading) return;
@@ -772,8 +822,9 @@ export default function HoaDonPage() {
       delivery: "all",
       retailSaleType,
       fnbOrderType,
+      fnbOptions:fnbChoiceJson||undefined,fnbTable:showFnbTypes?fnbTable:undefined,fnbArea:showFnbTypes?fnbArea:undefined,
     };
-  }, [dateRange, phamViHienTai, selectedStatuses, debouncedSearch, searchField, retailSaleType, fnbOrderType]);
+  }, [dateRange, phamViHienTai, selectedStatuses, debouncedSearch, searchField, retailSaleType, fnbOrderType, fnbTable, fnbArea, fnbChoiceJson, showFnbTypes]);
 
   const locTheoChiSo = useCallback((filter: InvoiceKpiFilter) => {
     setSelectedStatuses(invoiceStatusesForKpi(filter));
@@ -879,7 +930,7 @@ export default function HoaDonPage() {
     {
       accessorKey: "code",
       header: "Mã hóa đơn",
-      size: 130,
+      size: showFnbTypes ? 310 : 130,
       cell: ({ row }) => {
         // BATCH 3R: badge trả hàng — suy từ returnedAmount vs totalAmount.
         const returned = row.original.returnedAmount ?? 0;
@@ -893,6 +944,7 @@ export default function HoaDonPage() {
         return (
           <div className="flex flex-col gap-0.5">
             <span className="font-medium text-primary">{row.original.code}</span>
+            {row.original.source === "fnb" && <FnbInvoiceContext value={row.original} compact/>}
             {returnBadge && (
               <Badge variant="outline" className={`h-4 px-1.5 text-[10px] ${returnBadge.cls}`}>
                 {returnBadge.label}
@@ -1003,6 +1055,7 @@ export default function HoaDonPage() {
     <>
       <ListPageLayout sidebar={null}>
         <PageHeader
+          mobileCompact
           title="Hóa đơn"
           density="compact"
           searchPlaceholder="Theo mã hóa đơn"
@@ -1043,6 +1096,10 @@ export default function HoaDonPage() {
 
         <DataTable
           key={isFnbBranch ? "fnb-invoices" : "erp-invoices"}
+          compactMobileToolbar
+          fitDetailToViewport
+          renderMobileRow={invoice=><InvoiceMobileRow invoice={invoice} statusLabel={statusMap[invoice.status]?.label??invoice.status}/>}
+
           defaultColumnVisibility={isFnbBranch ? {star: false, returnCode: false, customerCode: false, discount: false, debt: false} : {paid: false, invoiceStatus: false}}
           columns={columns}
           data={data}
@@ -1057,6 +1114,10 @@ export default function HoaDonPage() {
           hideAggregateCounts={!canViewSalesSummary}
           density="compact"
           columnToggle
+          columnToggleLabel="Hiển thị"
+          controlledColumnVisibility={invoiceDisplay.listColumns}
+          onColumnVisibilityChange={listColumns=>setInvoiceDisplay({...invoiceDisplay,listColumns})}
+          columnToggleExtra={<InvoiceDisplayMenu sync={displaySync} value={invoiceDisplay} onChange={setInvoiceDisplay}/>}
           toolbarMetrics={canViewSalesSummary ?
             <>
               <ListMetric
@@ -1144,6 +1205,10 @@ export default function HoaDonPage() {
             {!showFnbTypes && <RetailInvoiceTypeFilter value={retailSaleType} onChange={value=>{
               setPage(0); setExpandedRow(null); setSelectedRetailType(value);
             }}/>}
+            {showFnbTypes && <FnbInvoiceChoiceFilter value={fnbChoices} onChange={value=>{setFnbChoices(value);setPage(0);setExpandedRow(null);}} ready={branchScopeReady&&phamViHienTai.mode!=="none"} branchId={phamViHienTai.mode==="branch"?phamViHienTai.branchId:undefined}/>}
+            {showFnbTypes && <FnbInvoiceServiceFilter disabled={serviceOptionsLoading||!branchScopeReady} options={serviceOptions} table={fnbTable} area={fnbArea} onChange={(table,area)=>{setPage(0);setExpandedRow(null);setFnbTable(table);setFnbArea(area);}}/>}
+            {showFnbTypes && serviceOptionsError && <div role="alert" className="flex flex-wrap items-center gap-2 text-xs text-destructive"><span>{serviceOptionsError}</span><Button size="sm" variant="outline" disabled={serviceOptionsLoading} onClick={()=>setServiceOptionsRevision(v=>v+1)}>Thử lại bộ lọc</Button></div>}
+            {fnbChoiceJson&&<p className="text-xs text-foreground">Bill có món khớp · Tổng tiền tính toàn bill; file chi tiết chỉ lấy món khớp.</p>}
             <FilterChips
               filters={filterChips}
               onClearAll={filterChips.length > 1 ? clearListFilters : undefined}
@@ -1194,7 +1259,8 @@ export default function HoaDonPage() {
             {
               label: "Xuất Excel dòng đã chọn",
               icon: <Icon name="download" size={16} />,
-              onClick: (selectedRows) => {
+              onClick: async (selectedRows) => {
+                try {
                 const cols = [
                   { header: "Mã HD", key: "code", width: 15 },
                   {
@@ -1204,8 +1270,9 @@ export default function HoaDonPage() {
                     format: (v: string) => formatDate(v),
                   },
                   { header: "Khách hàng", key: "customerName", width: 25 },
+                  ...(selectedRows.some(row=>row.source==="fnb") ? fnbContextExportColumns : []),
                   {
-                    header: "Tổng tiền",
+                    header: fnbChoiceJson?"Tổng toàn hóa đơn":"Tổng tiền",
                     key: "totalAmount",
                     width: 15,
                     format: (v: number) => v,
@@ -1224,12 +1291,14 @@ export default function HoaDonPage() {
                       statusMap[v]?.label ?? v,
                   },
                 ];
-                exportToExcel(selectedRows, cols, "hoa-don-da-chon");
+                const details=await getFnbInvoiceExportDetails(selectedRows,undefined,fnbChoices);
+                await exportToExcel(selectedRows, cols, "hoa-don-da-chon",{additionalSheets:details.items.length?[{name:fnbChoiceJson?"Món khớp bộ lọc":"Chi tiết món",data:details.items,columns:fnbInvoiceItemExportColumns}]:[]});
                 toast({
                   title: "Đã xuất Excel",
                   description: `${selectedRows.length} hoá đơn`,
                   variant: "success",
                 });
+                }catch(error){toast({title:"Chưa xuất được hóa đơn",description:error instanceof Error?error.message:"Vui lòng thử lại.",variant:"error"});}
               },
             },
             {
@@ -1265,6 +1334,7 @@ export default function HoaDonPage() {
           onExpandedRowChange={setExpandedRow}
           renderDetail={(invoice, onClose) => (
             <InvoiceDetail
+              display={invoiceDisplay}
               invoice={invoice}
               onClose={onClose}
               onDataChanged={taiLaiSauKhiDoiDuLieu}

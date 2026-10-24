@@ -1,3 +1,5 @@
+import {getFnbInvoiceItemDetails,type FnbInvoiceItemDetail} from "./fnb-invoice-item-details";
+import {readFnbInvoiceContext, FNB_ORDER_CONTEXT_SELECT} from "@/lib/utils/fnb-invoice-context";
 import { getClient, getCurrentTenantId, handleError } from "./base";
 import { readHistoryPages } from "./read-history-pages";
 import type { FnbRecentInvoice } from "./invoices";
@@ -18,17 +20,17 @@ export interface FnbSaleRow extends FnbRecentInvoice {
   recordedAt: string;
   cashierName: string;
 }
-interface InvoiceRow { id: string; code: string; customer_name: string; total: number; paid: number; tip_amount: number; payment_method: string; ngay_chung_tu: string; created_at: string; status: string; discount_amount: number; note: string | null; created_by: string }
-interface KitchenRow { id: string; invoice_id: string | null; order_number: string; order_type: string; status: string; created_at: string; customer_name: string | null; note: string | null; created_by: string; merged_into_id: string | null; restaurant_tables: { name: string; table_number: string } | null }
+interface InvoiceRow { id: string; code: string; customer_name: string; total: number; paid: number; tip_amount: number; payment_method: string; ngay_chung_tu: string; created_at: string; status: string; discount_amount: number; note: string | null; created_by: string; fnb_context?: unknown }
+interface KitchenRow { id: string; invoice_id: string | null; order_number: string; order_type: string; status: string; created_at: string; customer_name: string | null; note: string | null; created_by: string; merged_into_id: string | null; restaurant_tables: { name: string; table_number: string; zone?: string; floor_plan_zones?: {name:string} | null } | null }
 export interface FnbDayHistory { rows: FnbSaleRow[] }
 /** One business day, explicit tenant + branch, all headers (not a 50-row subtotal). No writes. */
 export async function getFnbDayHistory(branchId: string, day: string): Promise<FnbDayHistory> {
   if (!branchId) throw new Error("Chọn chi nhánh trước khi xem lịch sử.");
   const db = getClient(), tenant = await getCurrentTenantId(), range = fnbDayRange(day);
-  const kitchenSelect = "id,invoice_id,order_number,order_type,status,created_at,customer_name,note,created_by,merged_into_id,restaurant_tables!kitchen_orders_table_id_fkey(name,table_number)";
+  const kitchenSelect = `${FNB_ORDER_CONTEXT_SELECT},status,customer_name,created_by,merged_into_id`;
   const [invoices, kitchenDay] = await Promise.all([
     readHistoryPages<InvoiceRow>(async (offset, size) => {
-      const result = await db.from("invoices").select("id,code,customer_name,total,paid,tip_amount,payment_method,ngay_chung_tu,created_at,status,discount_amount,note,created_by", {count:"exact"})
+      const result = await db.from("invoices").select("id,code,customer_name,total,paid,tip_amount,payment_method,ngay_chung_tu,created_at,status,discount_amount,note,created_by,fnb_context", {count:"exact"})
         .eq("tenant_id", tenant).eq("branch_id", branchId).eq("source", "fnb").is("deleted_at", null)
         .in("status", ["completed", "cancelled"]).gte("ngay_chung_tu", range.from).lt("ngay_chung_tu", range.to)
         .order("ngay_chung_tu", {ascending:false}).order("id").range(offset, offset + size - 1);
@@ -57,13 +59,14 @@ export async function getFnbDayHistory(branchId: string, day: string): Promise<F
   const byInvoice=new Map([...kitchen.values()].filter(row=>row.invoice_id).map(row=>[row.invoice_id,row]));
   const rows: FnbSaleRow[]=invoices.map(row=>{
     const ko=byInvoice.get(row.id);
-    return {id:row.id,invoiceId:row.id,code:row.code,customerName:row.customer_name || "Khách lẻ",total:Number(row.total),paid:Number(row.paid),tipAmount:Number(row.tip_amount ?? 0),paymentMethod:row.payment_method,
-      createdAt:row.ngay_chung_tu,recordedAt:row.created_at,kitchenOrderId:ko?.id ?? null,kitchenOrderNumber:ko?.order_number ?? null,tableName:ko?.restaurant_tables?.name ?? ko?.restaurant_tables?.table_number ?? null,orderType:ko?.order_type ?? "takeaway",
+    const context=readFnbInvoiceContext({...row,source:"fnb"},ko);
+    return {...context,id:row.id,invoiceId:row.id,code:row.code,customerName:row.customer_name || "Khách lẻ",total:Number(row.total),paid:Number(row.paid),tipAmount:Number(row.tip_amount ?? 0),paymentMethod:row.payment_method,
+      createdAt:row.ngay_chung_tu,recordedAt:row.created_at,kitchenOrderId:ko?.id ?? null,kitchenOrderNumber:ko?.order_number ?? null,tableName:context.tableName ?? (context.tableNumber ? `Bàn ${context.tableNumber}` : null),orderType:ko?.order_type ?? "takeaway",
       status:row.status as "completed"|"cancelled",discount:Number(row.discount_amount ?? 0),note:row.note,cashierName:staff.get(row.created_by) ?? "—"};
   });
   for(const ko of kitchenDay) {
     if(ko.invoice_id || ko.merged_into_id || ko.status === "completed") continue;
-    rows.push({id:ko.id,invoiceId:null,code:ko.order_number,customerName:ko.customer_name || "Khách lẻ",total:0,paid:0,tipAmount:0,paymentMethod:"",createdAt:ko.created_at,recordedAt:ko.created_at,kitchenOrderId:ko.id,kitchenOrderNumber:ko.order_number,tableName:ko.restaurant_tables?.name ?? ko.restaurant_tables?.table_number ?? null,orderType:ko.order_type,status:ko.status === "cancelled" ? "cancelled" : "pending",discount:0,note:ko.note,cashierName:staff.get(ko.created_by) ?? "—"});
+    rows.push({...readFnbInvoiceContext({source:"fnb"},ko),id:ko.id,invoiceId:null,code:ko.order_number,customerName:ko.customer_name || "Khách lẻ",total:0,paid:0,tipAmount:0,paymentMethod:"",createdAt:ko.created_at,recordedAt:ko.created_at,kitchenOrderId:ko.id,kitchenOrderNumber:ko.order_number,tableName:ko.restaurant_tables?.name ?? ko.restaurant_tables?.table_number ?? null,orderType:ko.order_type,status:ko.status === "cancelled" ? "cancelled" : "pending",discount:0,note:ko.note,cashierName:staff.get(ko.created_by) ?? "—"});
   }
   rows.sort((a,b)=>b.createdAt.localeCompare(a.createdAt)||a.id.localeCompare(b.id));
   return {rows};
@@ -79,17 +82,19 @@ export async function getFnbDayCash(branchId:string,day:string):Promise<FnbDayCa
   return data as unknown as FnbDayCash;
 }
 
-export interface FnbHistoryItem {id:string;name:string;quantity:number;unitPrice:number;total:number;note:string}
+export interface FnbHistoryItem {id:string;name:string;quantity:number;unitPrice:number;total:number;note:string;fnbOptions?:unknown;variantLabel?:string;fnbDetailsUnavailable?:boolean}
 export async function getFnbHistoryItems(row:FnbSaleRow,branchId:string):Promise<FnbHistoryItem[]> {
   const db=getClient(),tenant=await getCurrentTenantId();
   // Verify the selected record is still in this branch before fetching scoped children.
   const parent=await db.from(row.invoiceId ? "invoices" : "kitchen_orders").select("id").eq("id",row.id).eq("tenant_id",tenant).eq("branch_id",branchId).single();
   if(parent.error) handleError(parent.error,"fnbHistory.detail");
-  const result=row.invoiceId ? await db.from("invoice_items_scoped").select("id,product_name,quantity,unit_price,total,note").eq("invoice_id",row.invoiceId) : await db.from("kitchen_order_items").select("id,product_name,quantity,unit_price,note,variant_label,cancelled_qty").eq("kitchen_order_id",row.id);
+  const result=row.invoiceId ? await db.from("invoice_items_scoped").select("id,product_name,quantity,unit_price,total,note").eq("invoice_id",row.invoiceId) : await db.from("kitchen_order_items").select("id,product_name,quantity,unit_price,note,variant_label,cancelled_qty,modifier_selections").eq("kitchen_order_id",row.id);
   if(result.error) handleError(result.error,"fnbHistory.items");
+  let details=new Map<string,FnbInvoiceItemDetail>();let detailsUnavailable=false;
+  if(row.invoiceId && result.data?.length){try{details=await getFnbInvoiceItemDetails([row.invoiceId]);if(result.data.some(item=>!details.has(String(item.id))))throw new Error("Chưa tải đủ tùy chọn món.");}catch(error){console.warn("[fnbHistory.options]",error);detailsUnavailable=true;}}
   return (result.data ?? []).map(value=>{
     const item=value as unknown as Record<string,unknown>;
     const quantity=Number(item.quantity ?? 0), price=Number(item.unit_price ?? 0);
-    return {id:String(item.id),name:String(item.product_name ?? "—"),quantity,unitPrice:price,total:Number(item.total ?? quantity*price),note:[item.variant_label,item.note,Number(item.cancelled_qty ?? 0)>0 ? `Đã hủy ${item.cancelled_qty}` : null].filter(Boolean).join(" · ")};
+    return {id:String(item.id),name:String(item.product_name ?? "—"),quantity,unitPrice:price,total:Number(item.total ?? quantity*price),note:[item.note ?? details.get(String(item.id))?.note,Number(item.cancelled_qty ?? 0)>0 ? `Đã hủy ${item.cancelled_qty}` : null].filter(Boolean).join(" · "),fnbOptions:row.invoiceId?details.get(String(item.id))?.modifier_selections:item.modifier_selections,fnbDetailsUnavailable:detailsUnavailable,variantLabel:String(details.get(String(item.id))?.variant_label??item.variant_label??"")};
   });
 }

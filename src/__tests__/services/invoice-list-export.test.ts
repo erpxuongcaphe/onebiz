@@ -14,7 +14,7 @@ beforeEach(() => {
 describe("Full filtered invoice export", () => {
   it.each(["retailSaleType", "fnbOrderType"])("exports 1237 rows with the same %s, branch, date, status, search and sorting on every page", async key => {
     const query = { search: "Trang", searchField: "customerName", sortBy: "date", sortOrder: "desc" as const,
-      filters: { [key]: "delivery", delivery: "all", status: ["completed"], dateFrom: "2026-10-01", dateTo: "2026-10-22" } };
+      filters: { [key]: "delivery", delivery: "all", fnbTable:"TN 03", fnbArea:"Trong nhà", status: ["completed"], dateFrom: "2026-10-01", dateTo: "2026-10-22" } };
     const progress = vi.fn();
     const result = await getInvoicesForFilteredExport(scope, query, { onProgress: progress });
     expect(result).toEqual(rows);

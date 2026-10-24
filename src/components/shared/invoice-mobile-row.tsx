@@ -1,0 +1,7 @@
+import type {Invoice} from "@/lib/types";
+import {formatCurrency,formatDate} from "@/lib/format";
+import {invoiceFnbTypeLabel,invoiceRetailTypeLabel} from "@/lib/utils/invoice-list-filters";
+const time=(value?:string)=>value&&!Number.isNaN(Date.parse(value))?new Intl.DateTimeFormat("vi-VN",{hour:"2-digit",minute:"2-digit",hour12:false,timeZone:"Asia/Ho_Chi_Minh"}).format(new Date(value)):"—";
+export function InvoiceMobileRow({invoice,statusLabel}:{invoice:Invoice;statusLabel:string}) {
+ return <div className="min-w-0 space-y-1.5 text-sm"><div className="flex items-start justify-between gap-2"><b className="text-primary">{invoice.code}</b><b className="shrink-0">{formatCurrency(invoice.totalAmount)}</b></div><div className="flex flex-wrap gap-x-3 gap-y-1 text-xs"><span>{invoice.source==="fnb"?invoiceFnbTypeLabel(invoice.fnbOrderType):invoiceRetailTypeLabel(invoice.retailSaleType)}</span><span>{invoice.tableName??""}{invoice.areaName?` · ${invoice.areaName}`:""}</span><span>{statusLabel}</span></div><div className="flex flex-wrap justify-between gap-2 text-xs"><span>{invoice.customerName||"Khách lẻ"}</span><span>{formatDate(invoice.date)}</span></div>{invoice.source==="fnb"&&<p className="text-xs">Khách vào {time(invoice.openedAt)} · Khách về {time(invoice.paidAt)}</p>}{invoice.posNote&&<p className="whitespace-pre-wrap break-words text-[13px]">Ghi chú: {invoice.posNote}</p>}</div>;
+}

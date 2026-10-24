@@ -18,6 +18,27 @@ beforeEach(() => { state.ready = true; state.branchId = "b1"; state.permissions 
 afterEach(cleanup);
 beforeEach(() => openBills.mockReset().mockReturnValue({ orders: [], loading: false, error: null, refresh: vi.fn() }));
 describe("sales dashboard permission and scope", () => {
+  it("uses completed invoice value, not collections or return-adjusted sales, for average order value", async () => {
+    state.fetch.mockResolvedValueOnce({ ...sample, sales: 90000, returns: 20000, orders: 2, collected: 5000 });
+    render(<Dashboard />);
+    expect(await screen.findByTestId("average-order-value")).toHaveTextContent("55,000");
+  });
+  it("does not invent an average when the day has no completed invoices", async () => {
+    state.fetch.mockResolvedValueOnce({ ...sample, sales: -20000, returns: 20000, orders: 0 });
+    render(<Dashboard />);
+    expect(await screen.findByTestId("average-order-value")).toHaveTextContent("—");
+  });
+  it("hides previously loaded totals if refresh fails and restores them only after retry succeeds", async () => {
+    render(<Dashboard />);
+    await screen.findByTestId("net-sales");
+    state.fetch.mockRejectedValueOnce(new Error("Nguồn tạm lỗi"));
+    fireEvent.click(screen.getByRole("button", { name: "Làm mới" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Nguồn tạm lỗi"));
+    expect(screen.queryByTestId("net-sales")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("average-order-value")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Thử lại" }));
+    expect(await screen.findByTestId("net-sales")).toHaveTextContent("111,111");
+  });
   it("restores live unpaid bills independently of the sales day and chart", async () => {
     state.permissions.add("pos_fnb.view_orders");
     openBills.mockReturnValue({ orders: [{ id: "test-open-1", branchId: "b1", tableId: "table-1", tableName: "Bàn thử", orderNumber: "TEST-OPEN-001", orderType: "dine_in", createdAt: "2026-10-18T01:00:00Z", provisionalTotal: 100 }], loading: false, error: null, refresh: vi.fn() });

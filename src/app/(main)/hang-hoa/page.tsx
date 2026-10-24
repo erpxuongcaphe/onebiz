@@ -2000,6 +2000,7 @@ export default function HangHoaPage() {
     <>
       <ListPageLayout sidebar={null}>
         <PageHeader
+          mobileCompact
           title="Hàng hóa"
           density="compact"
           tabs={
@@ -2108,6 +2109,13 @@ export default function HangHoaPage() {
           ))}
 
         <DataTable
+          compactMobileToolbar
+          fitDetailToViewport
+          renderMobileRow={product=>{
+            const available=branchStockView&&product.hasBom&&!product.isFnbStockItem?bomAvailability.get(product.id):undefined;
+            const quantity=branchStockView?(product.branchStock??0):product.stock;
+            return <div className="min-w-0 space-y-1.5 text-sm"><b className="block break-words">{product.name}</b><div className="flex flex-wrap justify-between gap-2 text-xs"><span className="break-all text-primary">{product.code}</span>{scope==="sku"&&<span>Giá bán: {formatCurrency(product.sellPrice)}</span>}</div><div className="flex flex-wrap justify-between gap-2 text-xs"><span>{product.categoryName}</span><span>{available?<>≈ {formatNumber(available.available)} {product.unit} có thể pha</>:branchStockView&&product.channel==="fnb"&&!product.hasBom?"Không giữ tồn":<StockWithConversion quantity={quantity} unit={product.unit??""} conversions={conversionsMap.get(product.id)??null} variant="cell"/>}</span></div>{canViewCost&&<div className="flex items-start justify-between gap-2 text-xs"><span className="text-muted-foreground">{isFnbOutletView&&scope==="sku"?"Dự toán BOM":"Giá vốn"}</span><PreparedCost product={product} cost={preparedCosts.get(product.id)} estimate={menuEstimates.get(product.id)} loading={isFnbMenuRecipe(product)?menuEstimatesLoading:preparedCostsLoading}/></div>}{scope==="sku"&&product.hasBom&&!productsWithActiveBom.has(product.id)&&<p className="text-xs text-status-warning">Chưa setup BOM</p>}</div>;
+          }}
           columns={columns}
           data={data}
           sorting={sorting}

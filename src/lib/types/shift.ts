@@ -11,7 +11,7 @@ export interface Shift {
   branchId: string;
   cashierId: string;
   cashierName?: string;
-  status: "open" | "closed";
+  status: "open" | "closed" | "pending_reconcile";
   openedAt: string;
   closedAt: string | null;
   startingCash: number | null;

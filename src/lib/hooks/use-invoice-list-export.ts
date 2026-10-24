@@ -1,4 +1,7 @@
 "use client";
+import {parseFnbChoiceFilter,hasFnbChoiceFilter} from "@/lib/utils/fnb-invoice-choice-filter";
+import {getFnbInvoiceExportDetails,fnbInvoiceItemExportColumns} from "@/lib/services/supabase/fnb-invoice-export-details";
+import {fnbContextExportColumns} from "@/lib/utils/fnb-invoice-context";
 import {useCallback,useEffect,useRef,useState} from "react";
 import type {PhamViChiNhanh} from "@/lib/services/supabase/invoice-list-scope";
 import {getInvoicesForFilteredExport,type InvoiceExportQuery,type InvoiceExportProgress} from "@/lib/services/supabase/invoice-list-export";
@@ -24,19 +27,24 @@ export function useInvoiceListExport(options:{
       const rows=await getInvoicesForFilteredExport(options.scope,options.query,{signal:controller.signal,onProgress:setProgress});
       if(controller.signal.aborted)return;
       if(!rows.length){options.onError("Không có hóa đơn theo bộ lọc đã chọn.");return;}
-      const records=rows.map(row=>({...row,invoiceTypeLabel:options.fnb?invoiceFnbTypeLabel(row.fnbOrderType):row.source==="fnb"?"F&B":invoiceRetailTypeLabel(row.retailSaleType)}));
+      const choices=parseFnbChoiceFilter(options.query.filters?.fnbOptions);
+      const details=await getFnbInvoiceExportDetails(rows,controller.signal,choices);
+      if(controller.signal.aborted)return;
+      const records=rows.map(row=>({...row,fnbItemSummary:details.summaries.get(row.id)??"",invoiceTypeLabel:options.fnb?invoiceFnbTypeLabel(row.fnbOrderType):row.source==="fnb"?"F&B":invoiceRetailTypeLabel(row.retailSaleType)}));
       const statusLabels:Record<string,string>={completed:"Hoàn thành",processing:"Đang xử lý",cancelled:"Đã hủy",delivery_failed:"Giao thất bại"};
       const columns=[
         {header:"Mã HD",key:"code",width:15},
         {header:"Thời gian",key:"date",width:18,format:(v:string)=>formatDate(v)},
         {header:"Khách hàng",key:"customerName",width:25},
         {header:options.fnb?"Hình thức":"Loại bán",key:"invoiceTypeLabel",width:18},
-        {header:"Tổng tiền",key:"totalAmount",width:15},
+        ...((options.fnb || rows.some(row=>row.source==="fnb")) ? fnbContextExportColumns : []),
+        ...(type==="csv" && rows.some(row=>row.source==="fnb") ? [{header:"Chi tiết món và tùy chọn",key:"fnbItemSummary",width:50}] : []),
+        {header:hasFnbChoiceFilter(choices)?"Tổng toàn hóa đơn":"Tổng tiền",key:"totalAmount",width:15},
         {header:"Giảm giá",key:"discount",width:15},
         {header:"Trạng thái",key:"status",width:15,format:(v:string)=>statusLabels[v]??v},
       ];
       // The final guard also runs after the lazy XLSX import and before download.
-      const exportOptions={shouldSave:()=>!controller.signal.aborted};
+      const exportOptions={shouldSave:()=>!controller.signal.aborted,additionalSheets:details.items.length?[{name:hasFnbChoiceFilter(choices)?"Món khớp bộ lọc":"Chi tiết món",data:details.items,columns:fnbInvoiceItemExportColumns}]:[]};
       if(type==="excel")await exportToExcel(records,columns,"danh-sach-hoa-don",exportOptions);
       else await exportToCsv(records,columns,"danh-sach-hoa-don",exportOptions);
       if(!controller.signal.aborted)options.onSuccess(rows.length);

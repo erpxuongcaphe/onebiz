@@ -36,7 +36,8 @@ describe("F&B invoice void shift reconciliation", () => {
   });
 
   it("nets F&B invoice void refunds in preview and atomic close", () => {
-    expect(shiftService).toContain("summarizeshiftcashrows(cashrows, startingcash, fnbvoidinvoiceids)");
+    expect(shiftService).toContain('rpc("get_shift_close_preview_scoped"');
+    expect(shiftService).toContain("return parseshiftpreview(data, shiftid, tenantid)");
     const cash = summarizeShiftCashRows([
       {
         code: "PT001", type: "receipt", amount: 79000, payment_method: "cash",

@@ -6,8 +6,9 @@
 
 import { getClient, handleError, getCurrentTenantId } from "./base";
 import type { Shift, OpenShiftInput, CloseShiftInput, ShiftTotalsInput } from "@/lib/types/shift";
-import { applyDateRangeFilter } from "@/lib/utils/list-date-preset-range";
-import { summarizeShiftCashRows, type ShiftCashEntry, type ShiftCashRow } from "@/lib/shift-cash-preview";
+import { normalizeCreatedAtRange } from "@/lib/utils/list-date-preset-range";
+import type { ShiftCashEntry } from "@/lib/shift-cash-preview";
+import { parseShiftPreview, readReconciledShiftPages, readShiftRecordPages } from "./shift-readers";
 
 // ── Mappers ──
 
@@ -19,7 +20,7 @@ function mapShift(row: Record<string, unknown>): Shift {
     cashierId: row.cashier_id as string,
     cashierName: typeof row.cashier_name === "string" ? row.cashier_name
       : (row.profiles as { full_name?: string } | null)?.full_name ?? undefined,
-    status: row.status as "open" | "closed",
+    status: row.status as Shift["status"],
     openedAt: row.opened_at as string,
     closedAt: (row.closed_at as string) ?? null,
     startingCash: row.starting_cash != null ? Number(row.starting_cash) : null,
@@ -273,40 +274,34 @@ export interface PendingShift {
   cashierId: string;
   cashierName: string;
   openedAt: string;
-  autoMarkedPendingAt: string;
+  autoMarkedPendingAt: string | null;
   startingCash: number;
   shiftDurationHours: number;
 }
 
 /**
  * Get pending shifts cho 1 branch (filter cho POS popup) hoặc all (admin overview).
- * Dùng view `pending_shifts_view` đã create ở migration 00127.
+ * Nguồn máy chủ kiểm tra quyền đối chiếu và phạm vi từng chi nhánh.
  */
 export async function getPendingShifts(branchId?: string): Promise<PendingShift[]> {
-  const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let query = (supabase as any)
-    .from("pending_shifts_view")
-    .select("*")
-    .eq("tenant_id", tenantId)
-    .order("opened_at", { ascending: true });
-  if (branchId) query = query.eq("branch_id", branchId);
-
-  const { data, error } = await query;
-  if (error) handleError(error, "getPendingShifts");
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((row: any) => ({
-    id: row.id,
-    branchId: row.branch_id,
-    branchName: row.branch_name ?? "—",
-    cashierId: row.cashier_id,
-    cashierName: row.cashier_name ?? "—",
-    openedAt: row.opened_at,
-    autoMarkedPendingAt: row.auto_marked_pending_at,
-    startingCash: Number(row.starting_cash ?? 0),
-    shiftDurationHours: Number(row.shift_duration_hours ?? 0),
+  const { rows, asOf } = await loadShiftRecords({ kind: "pending", tenantId, branchId: branchId ?? null });
+  return rows.map(row => ({
+    id: row.id as string, branchId: row.branch_id as string,
+    branchName: typeof row.branch_name === "string" ? row.branch_name : "—",
+    cashierId: row.cashier_id as string, cashierName: typeof row.cashier_name === "string" ? row.cashier_name : "—",
+    openedAt: row.opened_at as string, autoMarkedPendingAt: row.auto_marked_pending_at as string | null,
+    startingCash: Number(row.starting_cash),
+    shiftDurationHours: Math.max(0, (Date.parse(asOf) - Date.parse(row.opened_at as string)) / 3_600_000),
   }));
+}
+
+async function loadShiftRecords(scope: Parameters<typeof readShiftRecordPages>[0]) {
+  return readShiftRecordPages(scope, async args => {
+    const { data, error } = await getClient().rpc("get_shift_records_scoped" as never, args as never);
+    if (error) handleError(error, "loadShiftRecords");
+    return data;
+  });
 }
 
 /**
@@ -354,83 +349,16 @@ export interface ShiftPreview {
   totalOrders: number;
   salesByMethod: Record<string, number>;
   cashEntries: ShiftCashEntry[];
+  cashEntryCount?: number;
 }
 
 export async function previewShiftClose(shiftId: string): Promise<ShiftPreview> {
-  const supabase = getClient();
+  if (!shiftId) throw new Error("Thiếu mã ca cần đối chiếu.");
   const tenantId = await getCurrentTenantId();
-
-  // 1. Lấy shift để biết startingCash
-  const { data: shift, error: shiftErr } = await supabase
-    .from("shifts")
-    .select("starting_cash")
-    .eq("tenant_id", tenantId)
-    .eq("id", shiftId)
-    .single();
-  if (shiftErr) handleError(shiftErr, "previewShiftClose:shift");
-  const startingCash = Number(shift?.starting_cash ?? 0);
-
-  // Load all pages so the preview agrees with the database finalizer even
-  // when a busy shift has more than the PostgREST row limit.
-  const cashRows: ShiftCashRow[] = [];
-  const pageSize = 500;
-  for (let offset = 0; ; offset += pageSize) {
-    const { data, error } = await supabase
-      .from("cash_transactions")
-      .select("code, type, amount, payment_method, status, reference_type, reference_id, category, note, created_at")
-      .eq("tenant_id", tenantId)
-      .eq("shift_id", shiftId)
-      .order("created_at", { ascending: true })
-      .order("id", { ascending: true })
-      .range(offset, offset + pageSize - 1);
-    if (error) handleError(error, "previewShiftClose:cash");
-    cashRows.push(...((data ?? []) as ShiftCashRow[]));
-    if ((data?.length ?? 0) < pageSize) break;
-  }
-
-  const voidInvoiceIds = Array.from(
-    new Set<string>(
-      cashRows
-        .filter((row) => row.reference_type === "invoice_void" && row.reference_id != null)
-        .map((row) => row.reference_id as string),
-    ),
-  );
-  const fnbVoidInvoiceIds = new Set<string>();
-  if (voidInvoiceIds.length > 0) {
-    const { data: fnbVoidInvoices, error: voidInvoiceErr } = await supabase
-      .from("invoices")
-      .select("id")
-      .eq("tenant_id", tenantId)
-      .eq("source", "fnb")
-      .in("id", voidInvoiceIds);
-    if (voidInvoiceErr) {
-      handleError(voidInvoiceErr, "previewShiftClose:voidInvoices");
-    }
-    (fnbVoidInvoices ?? []).forEach((invoice) =>
-      fnbVoidInvoiceIds.add(invoice.id),
-    );
-  }
-
-  const cash = summarizeShiftCashRows(cashRows, startingCash, fnbVoidInvoiceIds);
-
-  // 3. Đếm số hoá đơn completed
-  const { count: orderCount } = await supabase
-    .from("invoices")
-    .select("id", { count: "exact", head: true })
-    .eq("tenant_id", tenantId)
-    .eq("shift_id", shiftId)
-    .eq("status", "completed");
-
-  return {
-    startingCash,
-    cashIn: cash.cashIn,
-    cashOut: cash.cashOut,
-    expectedCash: cash.expectedCash,
-    totalSales: cash.totalSales,
-    totalOrders: orderCount ?? 0,
-    salesByMethod: cash.salesByMethod,
-    cashEntries: cash.cashEntries,
-  };
+  const { data, error } = await getClient().rpc("get_shift_close_preview_scoped" as never,
+    { p_shift_id: shiftId } as never);
+  if (error) handleError(error, "previewShiftClose");
+  return parseShiftPreview(data, shiftId, tenantId);
 }
 
 // ============================================================
@@ -477,106 +405,15 @@ export interface ReconciledShiftFilter {
 export async function getReconciledShifts(
   filter: ReconciledShiftFilter = {},
 ): Promise<ReconciledShiftRow[]> {
-  const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let query = (supabase as any)
-    .from("shifts")
-    .select(
-      "id, branch_id, cashier_id, reconciled_by, opened_at, closed_at, reconciled_at, auto_marked_pending_at, starting_cash, expected_cash, actual_cash, cash_difference, total_sales, total_orders, reconcile_reason, note, status, close_kind, expected_transfer, actual_transfer, transfer_difference, " +
-        "cashier:profiles!shifts_cashier_id_fkey(full_name), " +
-        "branch:branches(name)",
-    )
-    .eq("tenant_id", tenantId)
-    .eq("status", "closed")
-    .not("actual_cash", "is", null)
-    .order("closed_at", { ascending: false, nullsFirst: false });
-
-  if (filter.branchId) query = query.eq("branch_id", filter.branchId);
-  query = applyDateRangeFilter(query, "closed_at", filter);
-
-  const { data, error } = await query;
-  if (error) handleError(error, "getReconciledShifts");
-
-  // Map + lấy tên người đối chiếu qua batch query (vì FK 2 hướng phức tạp với
-  // Supabase nested select — em làm tay cho rõ)
-  const rows: ReconciledShiftRow[] = (data ?? []).map(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (r: any) => {
-      const expectedCash = Number(r.expected_cash ?? 0);
-      const actualCash = Number(r.actual_cash ?? 0);
-      const variance =
-        r.cash_difference != null
-          ? Number(r.cash_difference)
-          : actualCash - expectedCash;
-      return {
-        id: r.id,
-        branchId: r.branch_id,
-        branchName: r.branch?.name ?? "—",
-        cashierId: r.cashier_id,
-        cashierName: r.cashier?.full_name ?? "—",
-        reconciledById: r.reconciled_by ?? null,
-        reconciledByName: null, // batch fill below
-        openedAt: r.opened_at,
-        closedAt: r.closed_at ?? null,
-        reconciledAt: r.reconciled_at ?? null,
-        wasAutoMarkedPending: r.auto_marked_pending_at != null,
-        startingCash: Number(r.starting_cash ?? 0),
-        expectedCash,
-        actualCash,
-        closeKind: r.close_kind ?? null,
-        expectedTransfer: r.expected_transfer == null ? null : Number(r.expected_transfer),
-        actualTransfer: r.actual_transfer == null ? null : Number(r.actual_transfer),
-        transferDifference: r.transfer_difference == null ? null : Number(r.transfer_difference),
-        variance,
-        totalSales: Number(r.total_sales ?? 0),
-        totalOrders: Number(r.total_orders ?? 0),
-        reason: r.reconcile_reason ?? null,
-        note: r.note ?? null,
-      };
-    },
-  );
-
-  // Batch fetch reconciledByName
-  const reconcilerIds = Array.from(
-    new Set(rows.map((r) => r.reconciledById).filter(Boolean) as string[]),
-  );
-  if (reconcilerIds.length > 0) {
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("id, full_name")
-      .in("id", reconcilerIds);
-    const nameMap = new Map(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (profiles ?? []).map((p: any) => [p.id, p.full_name as string]),
-    );
-    rows.forEach((r) => {
-      if (r.reconciledById) {
-        r.reconciledByName = nameMap.get(r.reconciledById) ?? "—";
-      }
-    });
-  }
-
-  // Filter type client-side (đơn giản, ít row)
-  let filtered = rows;
-  if (filter.type === "self") {
-    filtered = rows.filter(
-      (r) => r.reconciledById && r.reconciledById === r.cashierId,
-    );
-  } else if (filter.type === "cross") {
-    filtered = rows.filter(
-      (r) => r.reconciledById && r.reconciledById !== r.cashierId,
-    );
-  } else if (filter.type === "big_variance") {
-    filtered = rows.filter(
-      (r) =>
-        r.expectedCash > 0 &&
-        Math.abs(r.variance) / r.expectedCash > 0.05,
-    );
-  }
-
-  return filtered;
+  const range = normalizeCreatedAtRange(filter);
+  return readReconciledShiftPages({ tenantId, branchId: filter.branchId ?? null,
+    from: range.from ?? null, toExclusive: range.toExclusive ?? null, type: filter.type ?? "all" },
+  async (args) => {
+    const { data, error } = await getClient().rpc("get_reconciled_shifts_scoped" as never, args as never);
+    if (error) handleError(error, "getReconciledShifts");
+    return data;
+  });
 }
 
 export interface ReconciledShiftInvoiceDetail {
@@ -770,16 +607,8 @@ export async function getShiftHistory(
   branchId: string,
   limit = 20
 ): Promise<Shift[]> {
-  const supabase = getClient();
+  if (!branchId || !Number.isSafeInteger(limit) || limit < 1) throw new Error("Phạm vi lịch sử ca không hợp lệ.");
   const tenantId = await getCurrentTenantId();
-  const { data, error } = await supabase
-    .from("shifts")
-    .select("*, profiles(full_name)")
-    .eq("tenant_id", tenantId)
-    .eq("branch_id", branchId)
-    .order("opened_at", { ascending: false })
-    .limit(limit);
-
-  if (error) handleError(error, "getShiftHistory");
-  return (data ?? []).map((row) => mapShift(row as unknown as Record<string, unknown>));
+  const { rows } = await loadShiftRecords({ kind: "history", tenantId, branchId, maxRows: limit });
+  return rows.map(mapShift);
 }

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const mock=vi.hoisted(()=>({tables:{} as Record<string,Record<string,unknown>[]>,calls:[] as {table:string;op:string;args:unknown[]}[],fail:"",rpc:vi.fn()}));
-vi.mock("@/lib/services/supabase/base",()=>({getCurrentTenantId:async()=>"tenant",handleError:(error:{message:string})=>{throw new Error(error.message);},getClient:()=>({rpc:mock.rpc,from:(table:string)=>{
+vi.mock("@/lib/services/supabase/base",()=>({getCurrentTenantId:async()=>"tenant",handleError:(error:{message:string})=>{throw new Error(error.message);},getClient:()=>({rpc:(name:string,...args:unknown[])=>{const r=mock.rpc(name,...args);const q:Record<string,unknown>={order:()=>q,range:()=>q,then:(resolve:(v:unknown)=>unknown)=>Promise.resolve(r).then(resolve)};return q;},from:(table:string)=>{
  let rows=[...(mock.tables[table]??[])],from=0,to=Infinity,single=false;
  const q:Record<string,unknown>={};
  for(const op of ["select","eq","is","in","gte","lt","order","range","single"]) q[op]=(...args:unknown[])=>{
@@ -39,6 +39,11 @@ describe("F&B sales history boundaries",()=>{
   mock.tables.invoices=[inv("paid")];mock.tables.kitchen_orders=[{...ko("ko","paid","completed"),created_at:"2026-10-19T01:00:00.000Z",restaurant_tables:{name:"TN08"}}];
   expect((await getFnbDayHistory("xtb","2026-10-20")).rows[0].tableName).toBe("TN08");
  });
+ it("preserves paid table/area/times/POS note snapshot after order changes",async()=>{
+  const snapshot={version:1,table_name:"TN 03",table_number:3,area_name:"Trong nhà",opened_at:"2026-10-19T14:00:00Z",paid_at:"2026-10-20T01:00:00Z",pos_note:"Lấy thêm ly"};
+  mock.tables.invoices=[{...inv("paid"),fnb_context:snapshot}];mock.tables.kitchen_orders=[{...ko("ko","paid","completed"),note:"Edited",restaurant_tables:{name:"Renamed"}}];
+  expect((await getFnbDayHistory("xtb","2026-10-20")).rows[0]).toMatchObject({tableName:"TN 03",tableNumber:"3",areaName:"Trong nhà",openedAt:snapshot.opened_at,paidAt:snapshot.paid_at,posNote:"Lấy thêm ly"});
+ });
  it("loads aggregate data only through the guarded server RPC",async()=>{
   const summary={received:100,refunded:25,net:75,methods:{cash:60,transfer:15},completed:1,pending:0,cancelled:1,invoiceValue:100};
   mock.rpc.mockResolvedValue({data:summary,error:null});
@@ -47,6 +52,16 @@ describe("F&B sales history boundaries",()=>{
   expect(mock.calls).toHaveLength(0);
   mock.rpc.mockResolvedValue({data:null,error:{message:"FNB_SALES_SUMMARY_PERMISSION_DENIED"}});
   await expect(getFnbDayCash("xtb","2026-10-20")).rejects.toThrow("PERMISSION_DENIED");
+ });
+ it("resolves paid item notes by line ID but leaves pending kitchen notes alone",async()=>{
+  mock.tables.invoices=[inv("paid")];mock.tables.invoice_items_scoped=[{id:"a",invoice_id:"paid",product_name:"Trà",quantity:1,total:30000,note:null},{id:"b",invoice_id:"paid",product_name:"Trà",quantity:1,total:30000,note:"Saved"}];
+  mock.rpc.mockResolvedValue({data:[{invoice_item_id:"a",note:"Ít đá"}],error:null});
+  const row=(await getFnbDayHistory("xtb","2026-10-20")).rows[0];
+  expect((await getFnbHistoryItems(row,"xtb")).map(i=>i.note)).toEqual(["Ít đá","Saved"]);
+  expect(mock.rpc).toHaveBeenCalledWith("get_fnb_invoice_item_details_20261023",{p_invoice_ids:["paid"]},{count:"exact"});
+  mock.rpc.mockClear();mock.tables.kitchen_orders=[ko("open")];mock.tables.kitchen_order_items=[{id:"k",kitchen_order_id:"open",product_name:"Trà",quantity:1,unit_price:30000,note:"Pending"}];
+  const pending=(await getFnbDayHistory("xtb","2026-10-20")).rows.find(r=>!r.invoiceId)!;
+  expect((await getFnbHistoryItems(pending,"xtb"))[0].note).toBe("Pending");expect(mock.rpc).not.toHaveBeenCalled();
  });
  it("fails visibly on denied reads and verifies branch before loading items",async()=>{
   mock.fail="invoices";await expect(getFnbDayHistory("xtb","2026-10-20")).rejects.toThrow("Không được đọc");mock.fail="";

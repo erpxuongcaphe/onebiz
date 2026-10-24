@@ -1,13 +1,14 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Invoice } from "@/lib/types";
-const mocks = vi.hoisted(() => ({ read: vi.fn(), excel: vi.fn(), csv: vi.fn() }));
+const mocks = vi.hoisted(() => ({ details:vi.fn(),read: vi.fn(), excel: vi.fn(), csv: vi.fn() }));
 vi.mock("@/lib/services/supabase/invoice-list-export", () => ({ getInvoicesForFilteredExport: mocks.read }));
+vi.mock("@/lib/services/supabase/fnb-invoice-export-details",()=>({getFnbInvoiceExportDetails:mocks.details,fnbInvoiceItemExportColumns:[{header:"Size",key:"size"}]}));
 vi.mock("@/lib/utils/export", () => ({ exportToExcel: mocks.excel, exportToCsv: mocks.csv }));
 import { useInvoiceListExport } from "@/lib/hooks/use-invoice-list-export";
 const data = Array.from({ length: 437 }, (_, i) => ({ id: `i${i}`, code: `HD${i}`, totalAmount: 50000, discount: 1000, source: "fnb", fnbOrderType: "takeaway" }) as Invoice);
 function options() { return { scope: { mode: "branch" as const, branchId: "a", duocDemChiNhanhKhac: false }, query: { filters: { status: ["completed"] } }, ready: true, allowed: true, fnb: true, onError: vi.fn(), onSuccess: vi.fn() }; }
-beforeEach(() => { vi.clearAllMocks(); mocks.read.mockResolvedValue(data); mocks.excel.mockResolvedValue(undefined); mocks.csv.mockResolvedValue(undefined); });
+beforeEach(() => { vi.clearAllMocks();mocks.details.mockResolvedValue({items:[],summaries:new Map()}); mocks.read.mockResolvedValue(data); mocks.excel.mockResolvedValue(undefined); mocks.csv.mockResolvedValue(undefined); });
 describe("Invoice export interaction", () => {
   it.each(["excel", "csv"] as const)("passes every filtered row to %s, including type labels and numeric amounts", async type => {
     const opts = options(); const { result } = renderHook(() => useInvoiceListExport(opts));
@@ -17,6 +18,7 @@ describe("Invoice export interaction", () => {
     const [exported, columns] = writer.mock.calls[0];
     expect(exported).toHaveLength(437); expect(exported[436].invoiceTypeLabel).toBe("Mang về");
     expect(exported[436].totalAmount).toBe(50000); expect(columns.map((c: {key:string}) => c.key)).toContain("invoiceTypeLabel");
+    expect(columns.map((c: {key:string})=>c.key)).toEqual(expect.arrayContaining(["tableName","tableNumber","areaName","openedAt","paidAt","posNote"]));
     expect(opts.onSuccess).toHaveBeenCalledWith(437); expect(result.current.progress).toBeNull();
   });
   it.each(["cancel", "branch change", "filter change", "unmount"])("does not save stale or partial files after %s", async change => {
@@ -52,4 +54,21 @@ describe("Invoice export interaction", () => {
     await act(async () => { await result.current.start("excel"); });
     expect(opts.onError).toHaveBeenCalledTimes(1); expect(mocks.excel).not.toHaveBeenCalled(); expect(result.current.progress).toBeNull();
   });
+  it("exports separate Excel line detail and full CSV choices, aborting if detail load fails",async()=>{
+    const opts=options();mocks.details.mockResolvedValue({items:[{invoiceCode:"HD0",size:"Size L",temperature:"Nóng"}],summaries:new Map([["i0","1 × Bạc Sỉu (Size L) · Đá/Nóng: Nóng"]])});
+    const {result}=renderHook(()=>useInvoiceListExport(opts));await act(async()=>{await result.current.start("excel");});
+    expect(mocks.excel.mock.calls[0][3].additionalSheets[0]).toMatchObject({name:"Chi tiết món",data:[{size:"Size L",temperature:"Nóng",invoiceCode:"HD0"}]});
+    await act(async()=>{await result.current.start("csv");});expect(mocks.csv.mock.calls[0][0][0].fnbItemSummary).toContain("Size L");expect(mocks.csv.mock.calls[0][0][0].fnbItemSummary).toContain("Nóng");
+    mocks.excel.mockClear();mocks.details.mockRejectedValue(new Error("Chưa tải đủ tùy chọn"));await act(async()=>{await result.current.start("excel");});expect(mocks.excel).not.toHaveBeenCalled();expect(opts.onError).toHaveBeenCalled();
+  });
+
+  it("passes option filters to all detail pages and distinguishes whole-invoice totals from matched line export",async()=>{
+    const opts={...options(),query:{filters:{fnbOptions:JSON.stringify({size:"Size L"})}}};
+    mocks.details.mockResolvedValue({items:[{invoiceCode:"HD0",size:"Size L",temperature:"Nóng"}],summaries:new Map()});
+    const {result}=renderHook(()=>useInvoiceListExport(opts));await act(async()=>{await result.current.start("excel");});
+    expect(mocks.details.mock.calls[0][2]).toEqual({size:"Size L"});
+    expect(mocks.excel.mock.calls[0][3].additionalSheets[0].name).toBe("Món khớp bộ lọc");
+    expect(mocks.excel.mock.calls[0][1].find((c:{key:string})=>c.key==="totalAmount").header).toBe("Tổng toàn hóa đơn");
+  });
+
 });

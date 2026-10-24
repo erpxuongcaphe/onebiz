@@ -23,6 +23,10 @@ describe("private RPC interface declarations", () => {
     "manifest.functions[0].params[0].optional = 'false';",
     "manifest.functions[0].params[1].name = manifest.functions[0].params[0].name;",
     "manifest.functions[0].params[0].optional = true;",
+    "manifest.additionalMigrations = {};",
+    "manifest.additionalMigrations[0].migration = manifest.migration;",
+    "manifest.additionalMigrations[0].migrationSha256 = 'invalid';",
+    "manifest.additionalMigrations[0].functions.push(manifest.functions[0]);",
   ])("rejects malformed metadata: %s", (mutation) => {
     expect(validate(mutation)).toThrow();
   });

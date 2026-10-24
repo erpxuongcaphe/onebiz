@@ -1,3 +1,8 @@
+import {parseFnbChoiceFilter,hasFnbChoiceFilter} from "@/lib/utils/fnb-invoice-choice-filter";
+import {getFnbInvoiceItemDetails,type FnbInvoiceItemDetail} from "./fnb-invoice-item-details";
+import type {FnbServiceFilterOptions} from "@/components/shared/fnb-invoice-service-filter";
+import type {FnbInvoiceContext as PaidFnbContext} from "@/lib/utils/fnb-invoice-context";
+import {readFnbInvoiceContext, FNB_ORDER_CONTEXT_SELECT} from "@/lib/utils/fnb-invoice-context";
 /**
  * Supabase service: Invoices
  *
@@ -74,15 +79,17 @@ export async function getInvoices(params: QueryParams): Promise<QueryResult<Invo
     : retailSaleType === "delivery" || retailSaleType === "no_delivery" ? retailSaleType
     : retailSaleType === "internal" ? "all" : deliveryFilter;
   const shipmentPlan = getInvoiceShipmentQueryPlan(effectiveDelivery);
+  const choiceFilter=parseFnbChoiceFilter(params.filters?.fnbOptions);
+  const optionRelation=hasFnbChoiceFilter(choiceFilter)?", fnb_option_rows:fnb_invoice_option_items_20261023!inner(id)":"";
   const fnbRelation = params.filters?.fnbOrderType !== undefined
-    ? `, fnb_orders:kitchen_orders!kitchen_orders_invoice_id_fkey${fnbOrderType === "all" ? "" : "!inner"}(order_type)`
-    : "";
+    ? `, fnb_orders:kitchen_orders!kitchen_orders_invoice_id_fkey${fnbOrderType === "all" ? "" : "!inner"}(${FNB_ORDER_CONTEXT_SELECT})`
+    : retailSaleType !== "all" ? "" : `, fnb_orders:kitchen_orders!kitchen_orders_invoice_id_fkey(${FNB_ORDER_CONTEXT_SELECT})`;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase as any)
     .from("invoices")
     .select(
-      `*, profiles!invoices_created_by_fkey(full_name), branches!invoices_branch_id_fkey(name), customers!invoices_customer_id_fkey(code, phone, address, debt), ${shipmentPlan.relation}${fnbRelation}`,
+      `*, profiles!invoices_created_by_fkey(full_name), branches!invoices_branch_id_fkey(name), customers!invoices_customer_id_fkey(code, phone, address, debt), ${shipmentPlan.relation}${fnbRelation}${optionRelation}`,
       { count: "exact" },
     )
     .eq("tenant_id", tenantId)
@@ -157,6 +164,20 @@ export async function getInvoices(params: QueryParams): Promise<QueryResult<Invo
     else query = query.or("source.is.null,and(source.neq.internal,source.neq.fnb)");
   }
 
+  for (const [key,column] of [["fnbTable","fnb_table_label_20261023"],["fnbArea","fnb_area_label_20261023"]] as const) {
+    const value=params.filters?.[key];
+    if(typeof value === "string" && value) query=query.eq(column,value);
+  }
+
+  if(hasFnbChoiceFilter(choiceFilter)) {
+    query=query.eq("source","fnb");
+    if(choiceFilter.productId)query=query.eq("fnb_option_rows.product_id",choiceFilter.productId);
+    if(choiceFilter.size)query=query.eq("fnb_option_rows.size",choiceFilter.size);
+    for(const [key,value] of Object.entries(choiceFilter.groups??{})) {
+      if(value==="__missing__")query=query.is(`fnb_option_rows.choices->${key}`,null);
+      else query=query.contains("fnb_option_rows.choices",{[key]:[value]});
+    }
+  }
   // Sort & paginate
   const sortColumn = getInvoiceListSort(params.sortBy, cotNgay);
   query = query
@@ -242,7 +263,7 @@ export async function getInvoiceById(id: string): Promise<Invoice | null> {
   const { data, error } = await (supabase as any)
     .from("invoices")
     .select(
-      "*, profiles!invoices_created_by_fkey(full_name), branches!invoices_branch_id_fkey(name), customers!invoices_customer_id_fkey(code, phone, address, debt)",
+      `*, profiles!invoices_created_by_fkey(full_name), branches!invoices_branch_id_fkey(name), customers!invoices_customer_id_fkey(code, phone, address, debt), fnb_orders:kitchen_orders!kitchen_orders_invoice_id_fkey(${FNB_ORDER_CONTEXT_SELECT})`,
     )
     .eq("tenant_id", tenantId)
     .eq("id", id)
@@ -275,7 +296,7 @@ export async function getInvoicesForCustomer(
   const data = await readHistoryPages(async (offset, size) => {
     let query = supabase
     .from("invoices")
-    .select("*, profiles!invoices_created_by_fkey(full_name)", {count:"exact"})
+    .select(`*, profiles!invoices_created_by_fkey(full_name), fnb_orders:kitchen_orders!kitchen_orders_invoice_id_fkey(${FNB_ORDER_CONTEXT_SELECT})`, {count:"exact"})
     .eq("tenant_id", tenantId)
     .eq("customer_id", customerId)
     .order("ngay_chung_tu", { ascending: false }).order("id", { ascending: false });
@@ -337,7 +358,7 @@ export async function getReturnsForCustomer(
 // for reprint / lookup ở POS FnB.
 // ============================================================
 
-export interface FnbRecentInvoice {
+export interface FnbRecentInvoice extends PaidFnbContext {
   id: string;
   code: string;
   customerName: string;
@@ -363,7 +384,7 @@ export async function getFnbRecentInvoices(params: {
 
   let query = supabase
     .from("invoices")
-    .select("id, code, customer_name, total, paid, tip_amount, payment_method, ngay_chung_tu")
+    .select("id, code, customer_name, total, paid, tip_amount, payment_method, ngay_chung_tu, created_at, fnb_context, source")
     .eq("tenant_id", tenantId)
     .eq("branch_id", params.branchId)
     .eq("source", "fnb")
@@ -390,10 +411,10 @@ export async function getFnbRecentInvoices(params: {
   // Lookup kitchen orders separately (kitchen_orders.invoice_id → invoices.id)
   const { data: kos } = await supabase
     .from("kitchen_orders")
-    .select("id, invoice_id, order_number, order_type, table_id, restaurant_tables!kitchen_orders_table_id_fkey(table_number)")
+    .select(FNB_ORDER_CONTEXT_SELECT)
     .in("invoice_id", invoiceIds);
 
-  const koMap = new Map<string, { id: string; orderNumber: string; orderType: string; tableName: string | null }>();
+  const koMap = new Map<string, { id: string; orderNumber: string; orderType: string; tableName: string | null; order: Record<string,unknown> }>();
   (kos ?? []).forEach((ko) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const k = ko as any;
@@ -402,6 +423,7 @@ export async function getFnbRecentInvoices(params: {
     const tableNumber = Array.isArray(tbl) ? tbl[0]?.table_number : tbl?.table_number;
     koMap.set(k.invoice_id, {
       id: k.id,
+      order: k,
       orderNumber: k.order_number,
       orderType: k.order_type,
       tableName: tableNumber ? `Bàn ${tableNumber}` : null,
@@ -410,7 +432,9 @@ export async function getFnbRecentInvoices(params: {
 
   return rows.map((row) => {
     const ko = koMap.get(row.id);
+    const context=readFnbInvoiceContext(row,ko?.order);
     return {
+      ...context,
       id: row.id,
       code: row.code,
       customerName: row.customer_name ?? "Khách lẻ",
@@ -421,7 +445,7 @@ export async function getFnbRecentInvoices(params: {
       createdAt: row.ngay_chung_tu,
       kitchenOrderId: ko?.id ?? null,
       kitchenOrderNumber: ko?.orderNumber ?? null,
-      tableName: ko?.tableName ?? null,
+      tableName: context.tableName ?? (context.tableNumber ? `Bàn ${context.tableNumber}` : null),
       orderType: ko?.orderType ?? "takeaway",
     };
   });
@@ -628,6 +652,9 @@ export interface InvoiceItemRow {
   vatAmount: number;
   total: number;
   unit?: string;
+  fnbOptions?:unknown;
+  variantLabel?:string;
+  fnbDetailsUnavailable?:boolean;
   /** 00208: ghi chú từng món — in ra phiếu. */
   note?: string;
 }
@@ -640,12 +667,13 @@ export async function getInvoiceItems(
 
   // Verify invoice thuộc tenant trước (defense-in-depth — invoice_items
   // không có tenant_id direct, dùng FK qua invoice).
-  const { data: inv } = await supabase
+  const { data: inv, error: invoiceError } = await supabase
     .from("invoices")
-    .select("id")
+    .select("id, source")
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
     .maybeSingle();
+  if(invoiceError)handleError(invoiceError,"getInvoiceItems.invoice");
   if (!inv) return [];
 
   // Schema invoice_items không có cột product_code — phải join `products:products_scoped(code)`.
@@ -658,8 +686,13 @@ export async function getInvoiceItems(
     .eq("invoice_id", invoiceId);
 
   if (error) {
-    console.warn("[getInvoiceItems]", error.message);
-    return [];
+    handleError(error,"getInvoiceItems");
+  }
+
+  let details=new Map<string,FnbInvoiceItemDetail>();let detailsUnavailable=false;
+  if(inv.source === "fnb" && data?.length) {
+    try {details=await getFnbInvoiceItemDetails([invoiceId]);if(data.some(row=>!details.has(row.id)))throw new Error("Chưa tải đủ tùy chọn món.");}
+    catch(error){console.warn("[getInvoiceItems.options]",error);detailsUnavailable=true;}
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -678,7 +711,10 @@ export async function getInvoiceItems(
     vatAmount: Number(row.vat_amount ?? 0),
     total: Number(row.total ?? 0),
     unit: row.unit ?? undefined,
-    note: row.note ?? undefined, // 00208
+    note: row.note ?? details.get(row.id)?.note ?? undefined,
+    fnbOptions: details.get(row.id)?.modifier_selections,
+    variantLabel: details.get(row.id)?.variant_label ?? undefined,
+    fnbDetailsUnavailable: detailsUnavailable,
   }));
 }
 
@@ -702,6 +738,7 @@ function mapInvoice(row: any): Invoice {
   } | null;
 
   return {
+    ...readFnbInvoiceContext(row, Array.isArray(row.fnb_orders) && row.fnb_orders.length === 1 ? row.fnb_orders[0] : undefined),
     id: row.id,
     code: row.code,
     // Mã đơn gốc DH/NH trước khi hoàn tất → HD (00169) — truy vết ở trang Hóa đơn.
@@ -790,6 +827,9 @@ export interface InvoiceListSummaryParams {
   delivery?: "all" | "delivery" | "no_delivery";
   fnbOrderType?: FnbInvoiceType;
   retailSaleType?: RetailInvoiceType;
+  fnbTable?: string;
+  fnbArea?: string;
+  fnbOptions?: string;
 }
 
 export async function getInvoiceListSummary(
@@ -804,7 +844,11 @@ export async function getInvoiceListSummary(
   });
 
   const statuses = getEffectiveInvoiceListStatuses(params.statuses);
-  const { data, error } = await supabase.rpc("get_invoice_list_summary", {
+  const choices=parseFnbChoiceFilter(params.fnbOptions);
+  const hasChoices=hasFnbChoiceFilter(choices);
+  const { data, error } = await supabase.rpc(hasChoices ? "get_invoice_list_summary_fnb_choices_20261023" : params.fnbTable || params.fnbArea ? "get_invoice_list_summary_fnb_context_20261023" : "get_invoice_list_summary", {
+    ...(hasChoices ? {p_options:choices} : {}),
+    ...((hasChoices || params.fnbTable || params.fnbArea) ? {p_table:params.fnbTable || null,p_area:params.fnbArea || null} : {}),
     p_branch_id: params.branchId ?? null,
     p_date_from: from ?? null,
     p_date_to_exclusive: toExclusive ?? null,
@@ -845,6 +889,7 @@ export function khoaChiSoHoaDon(params: InvoiceListSummaryParams): string {
     params.delivery ?? "all",
     resolveFnbInvoiceType(params.fnbOrderType),
     resolveRetailInvoiceType(params.retailSaleType),
+    params.fnbTable ?? "",params.fnbArea ?? "",params.fnbOptions ?? "",
   ]);
 }
 
@@ -878,3 +923,10 @@ export function taoBoNhoChiSo() {
   };
 }
 export type BoNhoChiSo = ReturnType<typeof taoBoNhoChiSo>;
+
+export async function getFnbInvoiceFilterOptions(branchId?:string):Promise<FnbServiceFilterOptions> {
+  const {data,error}=await (getClient().rpc as any)("get_fnb_invoice_filter_options_20261023",{p_branch_id:branchId ?? null});
+  if(error)handleError(error,"getFnbInvoiceFilterOptions");
+  if(!data || !Array.isArray(data.tables) || !Array.isArray(data.areas))throw new Error("Không tải được bộ lọc bàn/khu vực.");
+  return data as unknown as FnbServiceFilterOptions;
+}
