@@ -15,6 +15,7 @@ export interface PartyDirectoryContact {
   lastPurchaseAt: string | null;
 }
 export interface PartyDirectoryPage {
+  revision: string;
   scope: PartyDirectoryScope;
   contacts: PartyDirectoryContact[];
   total: number;
@@ -63,6 +64,9 @@ export function parsePartyDirectoryPage(
     throw new Error("PARTY_DIRECTORY_PAGE_INVALID");
   }
   const payload = record(value);
+  if (typeof payload.revision !== "string" || !/^[a-f0-9]{32}$/.test(payload.revision)) {
+    throw new Error("PARTY_DIRECTORY_REVISION_REQUIRED");
+  }
   const summary = record(payload.summary);
   const rawScope = record(summary.scope);
   if (typeof summary.canViewActivity !== "boolean" || typeof summary.canViewDebt !== "boolean"
@@ -113,6 +117,7 @@ export function parsePartyDirectoryPage(
   const partiesWithDebt = amount(summary[customer ? "customersWithDebt" : "suppliersWithDebt"], canViewDebt, true);
   if (partiesWithDebt !== null && partiesWithDebt > total) throw new Error("PARTY_DIRECTORY_DEBT_COUNT_INVALID");
   return {
+    revision: payload.revision,
     scope: { scope: rawScope.scope as PartyDirectoryScope["scope"], branchIds }, contacts, total,
     canViewActivity, canViewDebt, activity, returns, netSales, partiesWithDebt,
     debt: amount(summary.totalDebt, canViewDebt),
@@ -142,8 +147,9 @@ export async function readPartyDirectoryPages(
     const request = { branchId, page, pageSize };
     const next = parsePartyDirectoryPage(kind, await read(request), request);
     signal?.throwIfAborted();
-    // Detect observable scope/summary changes; this is not a database snapshot.
+    // A changed authorized dataset must restart the export, not mix pages.
     const nextSignature = JSON.stringify({
+      revision: next.revision,
       total: next.total, scope: next.scope.scope, branches: [...next.scope.branchIds].sort(),
       canViewActivity: next.canViewActivity, canViewDebt: next.canViewDebt,
       activity: next.activity, debt: next.debt, returns: next.returns,

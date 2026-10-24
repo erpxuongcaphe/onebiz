@@ -4,6 +4,7 @@ import { parsePartyDirectoryPage, partyDirectoryExportRows, readPartyDirectoryPa
 const request = { branchId: "branch-a", page: 0, pageSize: 15 };
 function payload(activity = true, debt = true) {
   return {
+    revision: "a".repeat(32),
     total: 1,
     items: [{ id: "customer-a", code: "KH001", name: "Customer A", phone: null,
       total_spent: activity ? 100 : null, returned_total: activity ? 20 : null,
@@ -76,7 +77,7 @@ describe("party directory contract", () => {
     expect(() => parsePartyDirectoryPage("customer", input, request)).toThrow();
   });
   it("supports supplier purchase figures without inventing customer activity", () => {
-    const input = { total: 1, items: [{ id: "supplier-a", code: "NCC001", name: "Supplier A", phone: "",
+    const input = { revision: "a".repeat(32), total: 1, items: [{ id: "supplier-a", code: "NCC001", name: "Supplier A", phone: "",
       total_purchases: 50, debt: -10 }], summary: { scope: { scope: "assigned", branchIds: ["branch-a", "branch-b"] },
       canViewActivity: true, canViewDebt: true, totalPurchases: 50, totalDebt: -10, suppliersWithDebt: 0 } };
     const page = parsePartyDirectoryPage("supplier", input, { ...request, branchId: null });
@@ -99,7 +100,7 @@ describe("complete party directory traversal", () => {
     expect(partyDirectoryExportRows(result)).toHaveLength(453);
     expect(read.mock.calls.map(([args]) => args.page)).toEqual([0, 1, 2]);
   });
-  it.each(["scope", "total", "amount", "capability", "duplicate", "missing"])("rejects changed or incomplete traversal: %s", async failure => {
+  it.each(["scope", "total", "amount", "capability", "duplicate", "missing", "revision"])("rejects changed or incomplete traversal: %s", async failure => {
     const read = vi.fn(async ({ page }: { page: number }) => {
       const input = pageData(page);
       if (page === 1) {
@@ -109,6 +110,7 @@ describe("complete party directory traversal", () => {
         if (failure === "capability") input.summary.canViewDebt = false;
         if (failure === "duplicate") input.items[0].id = "customer-0";
         if (failure === "missing") input.items.pop();
+        if (failure === "revision") input.revision = "b".repeat(32);
       }
       return input;
     });
