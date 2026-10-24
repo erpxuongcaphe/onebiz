@@ -8,7 +8,7 @@ import { getClient, handleError, getCurrentTenantId } from "./base";
 import type { Shift, OpenShiftInput, CloseShiftInput, ShiftTotalsInput } from "@/lib/types/shift";
 import { normalizeCreatedAtRange } from "@/lib/utils/list-date-preset-range";
 import type { ShiftCashEntry } from "@/lib/shift-cash-preview";
-import { parseShiftPreview, readReconciledShiftPages, readShiftRecordPages } from "./shift-readers";
+import { parseShiftPreview, readReconciledShiftPages, readShiftRecordPages, readShiftDocumentPages } from "./shift-readers";
 
 // ── Mappers ──
 
@@ -487,119 +487,16 @@ export function summarizeReconciledShiftDetail(
   };
 }
 
-/**
- * Bounded, read-only drill-down for one reconciled shift. Both sources are
- * joined by shift_id so overlapping cashiers or back-dated invoices cannot be
- * pulled into the wrong reconciliation.
- */
-export async function getReconciledShiftDetail(
-  shiftId: string,
-): Promise<ReconciledShiftDetail> {
+/** Read-only reconciliation documents, scoped and paginated by the server. */
+export async function getReconciledShiftDetail(shiftId: string): Promise<ReconciledShiftDetail> {
   if (!shiftId) throw new Error("Thiếu mã ca cần đối soát.");
-  const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const { data: context, error: contextError } = await supabase.rpc(
-    "get_shift_context_scoped" as never, { p_shift_id: shiftId } as never,
-  );
-  if (contextError) handleError(contextError, "getReconciledShiftDetail.context");
-  const payload = context as unknown as { mode?: string; shift?: Record<string, unknown> } | null;
-  const shift = payload?.shift;
-  if (payload?.mode !== "reconciliation" || !shift || shift.id !== shiftId
-    || shift.tenant_id !== tenantId || typeof shift.branch_id !== "string" || !shift.branch_id) {
-    throw new Error("Không có quyền đối chiếu ca hoặc chưa xác nhận được phạm vi chi nhánh.");
-  }
-
-  // Keep the legacy table consumers branch-bound until their server readers replace them.
-  async function readAllPages<T extends { id: string }>(
-    read: (offset: number, pageSize: number) => PromiseLike<{
-      data: T[] | null; error: { message: string } | null; count: number | null;
-    }>,
-  ): Promise<T[]> {
-    const pageSize = 500;
-    const rows: T[] = [];
-    const seen = new Set<string>();
-    let total: number | null = null;
-    for (;;) {
-      const { data, error, count } = await read(rows.length, pageSize);
-      if (error) handleError(error, "getReconciledShiftDetail.documents");
-      if (!Array.isArray(data) || !Number.isSafeInteger(count) || count! < 0
-        || (total !== null && count !== total) || data.length > pageSize
-        || rows.length + data.length > count!) {
-        throw new Error("Dữ liệu đối chiếu ca đã thay đổi hoặc chưa đầy đủ. Tải lại để đối chiếu.");
-      }
-      total = count!;
-      for (const row of data) {
-        if (!row || typeof row.id !== "string" || !row.id || seen.has(row.id)) {
-          throw new Error("Dữ liệu đối chiếu ca bị trùng hoặc không hợp lệ. Tải lại để đối chiếu.");
-        }
-        seen.add(row.id);
-        rows.push(row);
-      }
-      if (rows.length === total) return rows;
-      if (data.length === 0) {
-        throw new Error("Dữ liệu đối chiếu ca chưa đầy đủ. Tải lại để đối chiếu.");
-      }
-    }
-  }
-
-  const [invoiceRows, cashRows] = await Promise.all([
-    readAllPages((offset, pageSize) => supabase
-      .from("invoices")
-      .select(
-        "id, code, customer_name, status, total, paid, payment_method, source, created_at, void_reason",
-        { count: "exact" },
-      )
-      .eq("tenant_id", tenantId)
-      .eq("branch_id", shift.branch_id as string)
-      .eq("shift_id", shiftId)
-      .order("created_at", { ascending: true })
-      .order("id", { ascending: true })
-      .range(offset, offset + pageSize - 1)),
-    readAllPages((offset, pageSize) => supabase
-      .from("cash_transactions")
-      .select(
-        "id, code, type, category, amount, payment_method, status, reference_type, reference_id, note, transaction_date",
-        { count: "exact" },
-      )
-      .eq("tenant_id", tenantId)
-      .eq("branch_id", shift.branch_id as string)
-      .eq("shift_id", shiftId)
-      .order("transaction_date", { ascending: true })
-      .order("id", { ascending: true })
-      .range(offset, offset + pageSize - 1)),
-  ]);
-
-  const invoices: ReconciledShiftInvoiceDetail[] = invoiceRows.map((row) => ({
-    id: row.id,
-    code: row.code,
-    customerName: row.customer_name || "Khách lẻ",
-    status: row.status,
-    total: Number(row.total ?? 0),
-    paid: Number(row.paid ?? 0),
-    paymentMethod: row.payment_method,
-    source: row.source,
-    createdAt: row.created_at,
-    voidReason: row.void_reason ?? null,
-  }));
-  const transactions: ReconciledShiftCashDetail[] = cashRows.map((row) => ({
-    id: row.id,
-    code: row.code,
-    type: row.type,
-    category: row.category,
-    amount: Number(row.amount ?? 0),
-    paymentMethod: row.payment_method,
-    status: row.status,
-    referenceType: row.reference_type ?? null,
-    referenceId: row.reference_id ?? null,
-    note: row.note ?? null,
-    transactionDate: row.transaction_date,
-  }));
-
-  return {
-    invoices,
-    transactions,
-    summary: summarizeReconciledShiftDetail(invoices, transactions),
-  };
+  const { invoices, transactions } = await readShiftDocumentPages(shiftId, tenantId, async args => {
+    const { data, error } = await getClient().rpc("get_shift_documents_scoped" as never, args as never);
+    if (error) handleError(error, "getReconciledShiftDetail");
+    return data;
+  });
+  return { invoices, transactions, summary: summarizeReconciledShiftDetail(invoices, transactions) };
 }
 
 /** Get shift history for a branch */

@@ -97,8 +97,13 @@ describe("shift reconciliation document drill-down", () => {
       "utf8",
     );
 
-    expect(service.match(/\.eq\("shift_id", shiftId\)/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
-    expect(service).toContain("Promise.all");
+    const reader = readFileSync("src/lib/services/supabase/shift-readers.ts", "utf8");
+    expect(service).toContain('rpc("get_shift_documents_scoped"');
+    expect(service).toContain("readShiftDocumentPages(shiftId, tenantId");
+    expect(service).not.toContain('.from("cash_transactions")');
+    expect(service).not.toContain('.from("invoices")');
+    expect(reader).toContain("row.shift_id !== shiftId");
+    expect(reader).toContain("row.branch_id !== branch");
     expect(page).toContain("Đối soát chứng từ trong ca");
     expect(page).toContain("Dự kiến từ sổ");
     expect(page).toContain("Phiếu thu chi trong ca");

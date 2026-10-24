@@ -1,4 +1,4 @@
-import type { ReconciledShiftRow, ShiftPreview } from "./shifts";
+import type { ReconciledShiftRow, ShiftPreview, ReconciledShiftInvoiceDetail, ReconciledShiftCashDetail } from "./shifts";
 import type { ShiftCashEntry } from "@/lib/shift-cash-preview";
 
 type Row = Record<string, unknown>;
@@ -131,6 +131,61 @@ export async function readReconciledShiftPages(
 
 const SHIFT_FINANCIAL_FIELDS = ["starting_cash", "expected_cash", "actual_cash", "cash_difference",
   "total_sales", "total_orders", "sales_by_method", "expected_transfer", "actual_transfer", "transfer_difference"];
+
+export async function readShiftDocumentPages(
+  shiftId: string, tenantId: string,
+  read: (args: { p_shift_id: string; p_offset: number; p_limit: number }) => Promise<unknown>,
+): Promise<{ invoices: ReconciledShiftInvoiceDetail[]; transactions: ReconciledShiftCashDetail[] }> {
+  const invoices: ReconciledShiftInvoiceDetail[] = [];
+  const transactions: ReconciledShiftCashDetail[] = [];
+  const seen = new Set<string>();
+  let total: number | null = null;
+  let revision: string | null = null;
+  let branch: string | null = null;
+  for (;;) {
+    const page = record(await read({ p_shift_id: shiftId, p_offset: seen.size, p_limit: 200 }));
+    const nextTotal = count(page.total_count);
+    const nextRevision = identifier(page.revision);
+    const nextBranch = identifier(page.branch_id);
+    if (page.shift_id !== shiftId || page.tenant_id !== tenantId || page.offset !== seen.size || page.limit !== 200
+      || !Array.isArray(page.rows) || page.rows.length > 200 || seen.size + page.rows.length > nextTotal
+      || (total !== null && total !== nextTotal) || (revision !== null && revision !== nextRevision)
+      || (branch !== null && branch !== nextBranch)) {
+      throw new Error("Dữ liệu đối chiếu ca đã thay đổi hoặc chưa đầy đủ. Tải lại để đối chiếu.");
+    }
+    total = nextTotal; revision = nextRevision; branch = nextBranch;
+    for (const value of page.rows) {
+      const row = record(value);
+      const id = identifier(row.id);
+      const kind = row.document_kind;
+      const key = `${kind}:${id}`;
+      if (row.shift_id !== shiftId || row.tenant_id !== tenantId || row.branch_id !== branch
+        || (kind !== "invoice" && kind !== "cash") || seen.has(key)) {
+        throw new Error("Chứng từ đối chiếu ca sai phạm vi hoặc bị trùng.");
+      }
+      const code = identifier(row.code);
+      const method = optionalText(row.payment_method) || "unknown";
+      if (kind === "invoice") {
+        if (!["draft", "confirmed", "completed", "cancelled"].includes(String(row.status))) throw new Error("Trạng thái hóa đơn không hợp lệ.");
+        invoices.push({ id, code, customerName: optionalText(row.customer_name) || "Khách lẻ",
+          status: row.status as ReconciledShiftInvoiceDetail["status"], total: number(row.total), paid: number(row.paid),
+          paymentMethod: method, source: optionalText(row.source) || "unknown", createdAt: date(row.created_at),
+          voidReason: optionalText(row.void_reason) });
+      } else {
+        if ((row.type !== "receipt" && row.type !== "payment") || !["draft", "completed", "cancelled"].includes(String(row.status))) {
+          throw new Error("Phiếu thu/chi đối chiếu ca không hợp lệ.");
+        }
+        transactions.push({ id, code, type: row.type, category: optionalText(row.category) || "Chưa phân loại",
+          amount: number(row.amount), paymentMethod: method, status: row.status as ReconciledShiftCashDetail["status"],
+          referenceType: optionalText(row.reference_type), referenceId: optionalText(row.reference_id), note: optionalText(row.note),
+          transactionDate: date(row.transaction_date) });
+      }
+      seen.add(key);
+    }
+    if (seen.size === total) return { invoices, transactions };
+    if (page.rows.length === 0) throw new Error("Dữ liệu đối chiếu ca chưa đầy đủ. Tải lại để đối chiếu.");
+  }
+}
 
 export async function readShiftRecordPages(
   scope: { kind: "pending" | "history"; tenantId: string; branchId: string | null; maxRows?: number },
