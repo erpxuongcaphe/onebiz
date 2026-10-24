@@ -6,11 +6,13 @@ import { standardizeWalkInCustomerCode } from "@/lib/services/supabase/customers
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRevalidateOnFocus } from "@/lib/hooks/use-revalidate-on-focus";
+import { useListWorkspaceQuery } from "@/lib/hooks/use-list-workspace-query";
 import { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
 import { ListMetric } from "@/components/shared/list-metric";
+import { ListWorkspaceError } from "@/components/shared/list-workspace-error";
 import {
   FilterChips,
   type ListFilterChip,
@@ -58,7 +60,7 @@ import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dial
 import { downloadTemplate } from "@/lib/excel";
 import { customerExcelSchema } from "@/lib/excel/schemas";
 import { bulkImportCustomers } from "@/lib/services/supabase/excel-import";
-import { useBranchFilter, useToast } from "@/lib/contexts";
+import { useAuth, useBranchFilter, useToast } from "@/lib/contexts";
 import { usePermissions } from "@/lib/permissions/use-permission";
 import { PERMISSIONS } from "@/lib/permissions/constants";
 import { OtpApprovalDialog } from "@/components/shared/dialogs/otp-approval-dialog";
@@ -100,6 +102,7 @@ function useStarredSet() {
 /* ------------------------------------------------------------------ */
 export default function KhachHangPage() {
   const { toast } = useToast();
+  const { user, tenant } = useAuth();
   const { activeBranchId, isReady: branchScopeReady } = useBranchFilter();
 
   // Sprint S2 Phase 1 + 3a (CEO 12/05): defense-in-depth permission cho xoá KH.
@@ -117,22 +120,12 @@ export default function KhachHangPage() {
   const [otpTargetCustomer, setOtpTargetCustomer] = useState<Customer | null>(
     null,
   );
-  const [data, setData] = useState<Customer[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   // CEO 04/07: ô "Tìm theo" — "all" = gộp mã+tên+SĐT như cũ.
   const [searchField, setSearchField] = useState("all");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
   const [filterOpen, setFilterOpen] = useState(false);
-  const [summary, setSummary] = useState({
-    totalSales: 0,
-    totalReturns: 0,
-    netSales: 0,
-    totalDebt: 0,
-    customersWithDebt: 0,
-  });
 
   // Filters
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
@@ -299,17 +292,12 @@ export default function KhachHangPage() {
   ];
 
   /* ---- Fetch data ---- */
-  const fetchData = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
-    if (!branchScopeReady) return;
-    if (!background) setLoading(true);
-    // Không có try/finally thì truy vấn lỗi là cờ loading không bao giờ tắt →
-    // trang treo mãi ở vòng xoay, người dùng không biết vì sao.
-    try {
+  const loadWorkspace = useCallback(async () => {
       const presetRange = computeListPresetRange(datePreset);
       const effectiveDateFrom =
         datePreset === "custom" ? dateFrom : presetRange.from;
       const effectiveDateTo = datePreset === "custom" ? dateTo : presetRange.to;
-      const result = await getCustomerListWorkspace({
+      return getCustomerListWorkspace({
         page,
         pageSize,
         branchId: activeBranchId ?? undefined,
@@ -328,23 +316,10 @@ export default function KhachHangPage() {
         dateTo: effectiveDateTo,
         province: provinceFilter,
       });
-      setData(result.data);
-      setTotal(result.total);
-      setSummary(result.summary);
-    } catch (e) {
-      toast({
-        variant: "error",
-        title: "Không tải được danh sách khách hàng",
-        description: e instanceof Error ? e.message : "Lỗi không xác định",
-      });
-    } finally {
-      setLoading(false);
-    }
   }, [
     page,
     pageSize,
     activeBranchId,
-    branchScopeReady,
     search,
     searchField,
     selectedGroups,
@@ -361,12 +336,13 @@ export default function KhachHangPage() {
     dateFrom,
     dateTo,
     provinceFilter,
-    toast,
   ]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const { data: workspace, error: workspaceError, loading, fetching, refresh: fetchData } = useListWorkspaceQuery(
+    loadWorkspace, branchScopeReady && !!user?.id && !!tenant?.id, `${tenant?.id}:${user?.id}`,
+  );
+  const data = workspace?.data ?? [];
+  const total = workspace?.total ?? 0;
+  const summary = workspace?.summary ?? { totalSales: 0, totalReturns: 0, netSales: 0, totalDebt: 0, customersWithDebt: 0, canViewDebt: false };
 
   // CEO 23/05/2026: refetch khi tab visible/focus lại → fix bug F5 stale
   useRevalidateOnFocus(fetchData);
@@ -381,6 +357,8 @@ export default function KhachHangPage() {
   }, [
     search,
     activeBranchId,
+    user?.id,
+    tenant?.id,
     selectedGroups,
     typeFilter,
     genderFilter,
@@ -533,6 +511,10 @@ export default function KhachHangPage() {
 
   /* ---- Export ---- */
   const handleExport = (type: "excel" | "csv") => {
+    if (!workspace || fetching) {
+      toast({ title: "Chưa thể xuất dữ liệu", description: "Chờ tải xong danh sách hoặc bấm Thử lại.", variant: "error" });
+      return;
+    }
     if (type === "excel") {
       // Xuất theo schema import → user edit rồi upload lại không mất field
       const rows: CustomerImportRow[] = data.map((c) => ({
@@ -663,6 +645,7 @@ export default function KhachHangPage() {
           }}
         />
 
+        <ListWorkspaceError label="danh sách khách hàng" error={workspaceError} onRetry={() => void fetchData()} />
         <DataTable
           columns={columns}
           data={data}
@@ -675,28 +658,32 @@ export default function KhachHangPage() {
               <ListMetric
                 icon={<Icon name="group" size={15} />}
                 label="Kết quả"
-                value={formatNumber(total)}
+                value={workspace ? formatNumber(total) : "—"}
+                loading={loading}
                 hint="Toàn bộ khách theo bộ lọc"
               />
               <ListMetric
                 icon={<Icon name="point_of_sale" size={15} />}
                 label="Doanh số"
-                value={formatCurrency(summary.totalSales)}
+                value={workspace ? formatCurrency(summary.totalSales) : "—"}
+                loading={loading}
                 hint="Toàn bộ kết quả đang lọc"
               />
               <ListMetric
                 icon={<Icon name="sell" size={15} />}
                 label="Doanh số ròng"
-                value={formatCurrency(summary.netSales)}
-                hint={`Đã trừ ${formatCurrency(summary.totalReturns)} trả hàng`}
+                value={workspace ? formatCurrency(summary.netSales) : "—"}
+                loading={loading}
+                hint={workspace ? `Đã trừ ${formatCurrency(summary.totalReturns)} trả hàng` : undefined}
               />
               {canViewDebt && (
                 <ListMetric
                   icon={<Icon name="account_balance" size={15} />}
                   label="Công nợ"
-                  value={formatCurrency(summary.totalDebt)}
+                  value={workspace ? formatCurrency(summary.totalDebt) : "—"}
+                  loading={loading}
                   hint={
-                    summary.customersWithDebt > 0
+                    !workspace ? undefined : summary.customersWithDebt > 0
                       ? `${summary.customersWithDebt} khách còn nợ`
                       : "Không có nợ"
                   }
@@ -752,12 +739,12 @@ export default function KhachHangPage() {
           emptyState={emptyState}
           emptyIcon="person_add"
           emptyTitle={
-            emptyState === "no-results"
+            workspaceError ? "Chưa tải được danh sách" : emptyState === "no-results"
               ? "Không tìm thấy khách hàng"
               : "Chưa có khách hàng nào"
           }
           emptyDescription={
-            emptyState === "no-results"
+            workspaceError ? "Bấm Thử lại để tải dữ liệu theo bộ lọc hiện tại." : emptyState === "no-results"
               ? "Thử thay đổi nhóm, loại khách, giới tính, công nợ, doanh số, số lần mua, thời gian hoặc nội dung tìm kiếm."
               : 'Bấm "Tạo mới" để thêm khách hoặc dùng "Nhập Excel" để nhập danh sách.'
           }
@@ -767,6 +754,7 @@ export default function KhachHangPage() {
               label: "Xuất Excel",
               icon: <Icon name="download" size={16} />,
               onClick: (selectedRows) => {
+                if (!workspace || fetching) return;
                 const rows: CustomerImportRow[] = selectedRows.map((c) => ({
                   code: c.code,
                   name: c.name,
@@ -817,7 +805,7 @@ export default function KhachHangPage() {
               },
             },
           ]}
-          summaryRow={{
+          summaryRow={workspace ? {
             ...(canViewDebt && {
               currentDebt: formatCurrency(
                 data.reduce((sum, customer) => sum + customer.currentDebt, 0),
@@ -832,7 +820,7 @@ export default function KhachHangPage() {
                 0,
               ),
             ),
-          }}
+          } : {}}
           expandedRow={expandedRow}
           onExpandedRowChange={setExpandedRow}
           renderDetail={renderDetail}
