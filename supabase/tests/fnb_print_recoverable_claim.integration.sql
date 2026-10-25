@@ -18,6 +18,7 @@ begin
  perform public.fnb_print_enqueue_v1(b,a,'kitchen','Lost claim response','58mm',p);
  perform public.fnb_print_enqueue_v1(b,z,'kitchen','Next bill','58mm',p);
  j:=public.fnb_print_agent_v1((c->>'id')::uuid,c->>'token','claim',jsonb_build_object('request_id',req));
+ update fnb_print_jobs set claimed_at=now()-interval '30 seconds' where id=(j->>'id')::uuid;
  select claimed_at into stamp from fnb_print_jobs where id=(j->>'id')::uuid;
  -- Discard first response: retry returns exactly the same assignment and bytes.
  again:=public.fnb_print_agent_v1((c->>'id')::uuid,c->>'token','claim',jsonb_build_object('request_id',req));
@@ -27,6 +28,7 @@ begin
  -- Discard finish response: repeat is idempotent and does not change history.
  answer:=jsonb_build_object('id',j->>'id','claim_id',j->>'claim_id','status','handed_off','message','fixture');
  perform public.fnb_print_agent_v1((c->>'id')::uuid,c->>'token','finish',answer);
+ update fnb_print_jobs set finished_at=now()-interval '10 seconds' where id=(j->>'id')::uuid;
  select finished_at into stamp from fnb_print_jobs where id=(j->>'id')::uuid;
  again:=public.fnb_print_agent_v1((c->>'id')::uuid,c->>'token','finish',answer);
  if again->>'already_finished'<>'true' or (select finished_at from fnb_print_jobs where id=(j->>'id')::uuid) is distinct from stamp then raise exception 'Lost finish ack not idempotent'; end if;
