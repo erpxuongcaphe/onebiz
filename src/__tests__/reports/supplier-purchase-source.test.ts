@@ -21,6 +21,10 @@ import { getSupplierKpis } from "@/lib/services/supabase/analytics";
 
 beforeEach(() => { state.rows = {}; state.reads = []; });
 describe("supplier purchase source", () => {
+  it("does not derive net purchase from a missing gross voucher amount", async () => {
+    state.rows.purchase_orders=[{supplier_id:"supplier",total:null,debt:0,created_at:"2026-10-02T00:00:00Z"}];
+    expect(await getSupplierKpis("branch",{from:"2026-10-01",to:"2026-10-03"})).toMatchObject({purchaseThisMonth:null,netPurchase:null,returnAmount:0});
+  });
   it("uses timestamp instants at the business-day boundary, not lexical timezone strings", async () => {
     state.rows.supplier_returns = [
       {id:"start",total:10,created_at:"2026-09-30T17:00:00+00:00"},

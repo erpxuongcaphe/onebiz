@@ -544,7 +544,7 @@ export default function NhaCungCapPage() {
 
         <section aria-label="Đối chiếu mua và trả NCC" className="border-y border-border py-3">
           <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
-            <div><dt className="text-muted-foreground">Mua gộp</dt><dd className="font-semibold tabular-nums">{formatCurrency(kpis?.purchaseThisMonth ?? 0)} đ</dd></div>
+            <div><dt className="text-muted-foreground">Mua gộp</dt><dd className="font-semibold tabular-nums">{kpis?.purchaseThisMonth == null ? "Chưa đủ dữ liệu" : `${formatCurrency(kpis.purchaseThisMonth)} đ`}</dd></div>
             <div><dt className="text-muted-foreground">Trả NCC</dt><dd className="font-semibold tabular-nums">{kpis?.returnAmount == null ? "Chưa đủ dữ liệu" : `${formatCurrency(kpis.returnAmount)} đ`}</dd></div>
             <div><dt className="text-muted-foreground">Mua thuần</dt><dd className="font-semibold tabular-nums">{kpis?.netPurchase == null ? "Chưa đủ dữ liệu" : `${formatCurrency(kpis.netPurchase)} đ`}</dd></div>
           </dl>

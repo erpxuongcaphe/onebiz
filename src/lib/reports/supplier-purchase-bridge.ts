@@ -5,7 +5,7 @@ export interface SupplierPurchaseBridge {
   prevNetPurchase: number | null;
 }
 
-function totalReturns(rows: { total: unknown }[]): number | null {
+export function sumSupplierDocumentAmounts(rows: { total: unknown }[]): number | null {
   let total = 0;
   for (const row of rows) {
     const value = row.total;
@@ -17,17 +17,17 @@ function totalReturns(rows: { total: unknown }[]): number | null {
 }
 
 export function supplierPurchaseBridge(
-  gross: number,
-  previousGross: number,
+  gross: number | null,
+  previousGross: number | null,
   returns: { total: unknown }[],
   previousReturns: { total: unknown }[],
 ): SupplierPurchaseBridge {
-  const returnAmount = totalReturns(returns);
-  const prevReturnAmount = totalReturns(previousReturns);
+  const returnAmount = sumSupplierDocumentAmounts(returns);
+  const prevReturnAmount = sumSupplierDocumentAmounts(previousReturns);
   return {
     returnAmount,
     prevReturnAmount,
-    netPurchase: returnAmount === null || !Number.isFinite(gross) ? null : gross - returnAmount,
-    prevNetPurchase: prevReturnAmount === null || !Number.isFinite(previousGross) ? null : previousGross - prevReturnAmount,
+    netPurchase: gross === null || returnAmount === null || !Number.isFinite(gross) ? null : gross - returnAmount,
+    prevNetPurchase: previousGross === null || prevReturnAmount === null || !Number.isFinite(previousGross) ? null : previousGross - prevReturnAmount,
   };
 }

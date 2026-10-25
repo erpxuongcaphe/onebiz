@@ -16,7 +16,7 @@ import { summarizeChannelSales, type ChannelOnlineOrder } from "@/lib/utils/chan
 import { aggregateProductSaleLines } from "@/lib/reports/product-sales-aggregation";
 import { aggregateStockMovementRows, type MovementReportRow, type MovementSourceRow } from "@/lib/reports/stock-movement-aggregation";
 import { getProfitAndLoss, getConsolidatedPnL } from "./reports";
-import { supplierPurchaseBridge, type SupplierPurchaseBridge } from "@/lib/reports/supplier-purchase-bridge";
+import { supplierPurchaseBridge, sumSupplierDocumentAmounts, type SupplierPurchaseBridge } from "@/lib/reports/supplier-purchase-bridge";
 
 // === Shared Types ===
 
@@ -2398,8 +2398,8 @@ export async function getSupplierKpis(
   range?: { from: string; to: string },
 ): Promise<SupplierPurchaseBridge & {
   totalSuppliers: number;
-  purchaseThisMonth: number;
-  prevPurchase: number;
+  purchaseThisMonth: number | null;
+  prevPurchase: number | null;
   totalDebt: number;
   prevDebt: number;
   returnCount: number;
@@ -2444,23 +2444,17 @@ export async function getSupplierKpis(
   };
 
   const supplierIds = new Set<string>();
-  let purchaseThisMonth = 0;
-  let prevPurchase = 0;
   let totalDebt = 0;
   for (const order of purchaseOrders) {
     const supplierId = String(order.supplier_id ?? "");
     if (supplierId) supplierIds.add(supplierId);
-    if (inPeriod(order.created_at, current)) {
-      purchaseThisMonth += Number(order.total ?? 0);
-    }
-    if (inPeriod(order.created_at, previous)) {
-      prevPurchase += Number(order.total ?? 0);
-    }
     totalDebt += Number(order.debt ?? 0);
   }
 
   const currentReturns = supplierReturns.filter(row => inPeriod(row.created_at, current));
   const previousReturns = supplierReturns.filter(row => inPeriod(row.created_at, previous));
+  const purchaseThisMonth = sumSupplierDocumentAmounts(purchaseOrders.filter(row => inPeriod(row.created_at, current)).map(row => ({ total: row.total })));
+  const prevPurchase = sumSupplierDocumentAmounts(purchaseOrders.filter(row => inPeriod(row.created_at, previous)).map(row => ({ total: row.total })));
   return {
     ...supplierPurchaseBridge(purchaseThisMonth, prevPurchase,
       currentReturns.map(row => ({ total: row.total })), previousReturns.map(row => ({ total: row.total }))),
