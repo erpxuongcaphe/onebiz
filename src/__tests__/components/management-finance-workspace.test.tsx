@@ -24,6 +24,22 @@ beforeEach(() => {
   mocks.all.mockResolvedValue([row]);
 });
 describe('management finance reporting workspace',() => {
+  it('applies the linked historical recognition period before the first data request',async()=>{
+    window.history.replaceState({},'','/?branch=xtb&from=2026-08-01&to=2026-08-31&preset=custom');
+    render(<Page/>);
+    await screen.findByRole('button',{name:'CP001'});
+    expect(mocks.workspace).toHaveBeenCalled();
+    for (const [input] of mocks.workspace.mock.calls) {
+      expect(input).toMatchObject({branchId:'xtb',from:'2026-08-01',to:'2026-08-31'});
+    }
+  });
+  it('does not replace an incomplete linked period with today',async()=>{
+    window.history.replaceState({},'','/?branch=xtb&from=2026-08-01');
+    render(<Page/>);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Chọn ngày bắt đầu và kết thúc hợp lệ.');
+    expect(mocks.workspace).not.toHaveBeenCalled();
+    expect(screen.getByRole('button',{name:'Xuất Excel'})).toBeDisabled();
+  });
   it('opens the dedicated internal supply view with structured line details and the original branch scope',async()=>{
     window.history.replaceState({},'','/?category=CP-VH-NOIBO&branch=xtb');
     mocks.categories.mockResolvedValue([{id:'internal',code:'CP-VH-NOIBO',name:'Vật tư vận hành nội bộ',kind:'expense',is_group:false}]);

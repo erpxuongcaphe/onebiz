@@ -10,6 +10,19 @@ const pnl: ProfitAndLoss = {
 };
 
 describe("management reporting", () => {
+  it("attaches exact numeric evidence including negative and zero amounts", () => {
+    const observations = managementObservations({ ...pnl, goodsRevenue: 0, operatingExpense: -10 }, { ...pnl, goodsRevenue: 100, operatingExpense: -20 });
+    expect(observations.find(row => row.id === "sales-decline")?.evidence).toEqual([
+      { metric: "Doanh thu thuần", current: 0, previous: 100, difference: -100, unit: "money" },
+    ]);
+    expect(observations.find(row => row.id === "expense-increase")?.evidence[0]).toMatchObject({ current: -10, previous: -20, difference: 10 });
+  });
+  it("keeps unknown evidence and incomplete operating results distinct from zero", () => {
+    const unknown = { ...pnl, goodsRevenue: NaN, operatingExpenseComplete: false };
+    expect(managementObservations(unknown, pnl).find(row => row.id === "expense-incomplete")?.evidence[0]).toMatchObject({ current: null, previous: 200, difference: null });
+    expect(managementObservations(unknown, pnl).some(row => row.id === "sales-decline")).toBe(false);
+    expect(managementFinancialRows(unknown, pnl).at(-1)).toMatchObject({ current: null, difference: null });
+  });
   it("does not infer an expense trend while internal source costs are incomplete",()=>{
     const incomplete={...pnl,cogsComplete:false,missingCostLines:1,missingExpenseCostLines:1,operatingExpenseComplete:false,operatingExpense:900};
     expect(managementObservations(incomplete,pnl)[0]).toMatchObject({title:'Chưa đủ giá vốn nguồn',path:'/tai-chinh/thu-nhap-chi-phi'});

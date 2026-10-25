@@ -3,12 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 
 const state = vi.hoisted(() => ({
+  userId: "user-a",
   branchId: "branch-a", refresh: undefined as (() => void) | undefined,
   getOverviewKpis: vi.fn(), getDebtWorkspace: vi.fn(), getCashFlowDetailed: vi.fn(), exportReportToExcel: vi.fn(), denied: new Set<string>(), range: { from: "2026-09-01", to: "2026-09-30" },
 }));
 vi.mock("@/lib/contexts", () => ({
   useBranchFilter: () => ({ activeBranchId: state.branchId, branchLabel: state.branchId, isReady: true }),
-  useAuth: () => ({ tenant: { id: "tenant-1", name: "OneBiz" }, hasPermission: (key: string) => !state.denied.has(key) }),
+  useAuth: () => ({ user: { id: state.userId }, tenant: { id: "tenant-1", name: "OneBiz" }, hasPermission: (key: string) => !state.denied.has(key) }),
   useToast: () => ({ toast: vi.fn() }),
 }));
 vi.mock("@/lib/hooks/use-report-state", () => ({
@@ -50,6 +51,19 @@ beforeEach(() => { state.branchId = "branch-a"; state.denied = new Set(); state.
 afterEach(cleanup);
 
 describe("overview refresh safety", () => {
+  beforeEach(() => { state.userId = "user-a"; });
+  it("discards an old account response even when the branch and permissions are unchanged", async () => {
+    const old = deferred<ReturnType<typeof result>>();
+    state.getOverviewKpis.mockReturnValueOnce(old.promise).mockResolvedValue(result(777777));
+    const view = render(<Overview />);
+    await waitFor(() => expect(state.getOverviewKpis).toHaveBeenCalledTimes(1));
+    state.userId = "user-b";
+    view.rerender(<Overview />);
+    await waitFor(() => expect(screen.getAllByText("777,777đ").length).toBeGreaterThan(0));
+    await act(async () => { old.resolve(result(111111)); });
+    expect(screen.queryByText("111,111đ")).not.toBeInTheDocument();
+    expect(state.getOverviewKpis).toHaveBeenCalledTimes(2);
+  });
   it("coalesces events during a request instead of canceling it repeatedly", async () => {
     const first = deferred<ReturnType<typeof result>>();
     state.getOverviewKpis.mockReturnValueOnce(first.promise).mockResolvedValue(result(222222));

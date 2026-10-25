@@ -8,6 +8,7 @@ import type { BranchPnLRow, ProfitAndLoss } from "@/lib/services/supabase/report
 import { managementFinancialRows, managementObservations, managementReportLink } from "@/lib/reports/management-review";
 import { ReportDataTable, type DataTableColumn } from "./report-data-table";
 import { Icon } from "@/components/ui/icon";
+import { canOpenManagementAction, ManagementObservationItem } from "./management-observation-item";
 
 export interface ManagementReviewProps {
   current: ProfitAndLoss & { internalRevenue?: number };
@@ -19,6 +20,7 @@ export interface ManagementReviewProps {
   updatedAt: string;
   branchSort?: { id: string; direction: "asc" | "desc" } | null;
   onBranchSort?: (sort: { id: string; direction: "asc" | "desc" }) => void;
+  hasPermission: (permission: string) => boolean;
 }
 
 const relatedReports = [
@@ -29,7 +31,7 @@ const relatedReports = [
 ];
 
 function currency(value: number | null) {
-  return value === null ? "Chưa đủ giá vốn" : `${formatCurrency(value)}đ`;
+  return value === null ? "Chưa đủ dữ liệu" : `${formatCurrency(value)}đ`;
 }
 
 type FinancialRow = ReturnType<typeof managementFinancialRows>[number];
@@ -46,7 +48,7 @@ const evidenceColumns: DataTableColumn<FinancialRow>[] = [
 
 export function ManagementReview({
   current, previous, branchId, range, branches: sourceBranches,
-  branchError, updatedAt, branchSort, onBranchSort,
+  branchError, updatedAt, branchSort, onBranchSort, hasPermission,
 }: ManagementReviewProps) {
   const [showEvidence, setShowEvidence] = useState(false);
   const branches = useMemo(() => sourceBranches?.map(row => ({
@@ -60,9 +62,9 @@ export function ManagementReview({
     {
       key: "branchName", label: "Chi nhánh", sticky: true, hideable: false,
       cell: row => (
-        <Link href={href("/phan-tich/bao-cao-tai-chinh", row.branchId)} className="text-primary hover:underline">
+        canOpenManagementAction("/phan-tich/bao-cao-tai-chinh", hasPermission) ? <Link href={href("/phan-tich/bao-cao-tai-chinh", row.branchId)} className="text-primary hover:underline">
           {row.branchName}<span className="block text-xs text-muted-foreground">{row.branchType}</span>
-        </Link>
+        </Link> : <span>{row.branchName}<span className="block text-xs text-muted-foreground">{row.branchType}</span></span>
       ),
     },
     { key: "goodsRevenue", label: "Doanh thu thuần", align: "right", cell: row => currency(row.goodsRevenue) },
@@ -83,7 +85,7 @@ export function ManagementReview({
         <p className="text-sm">Doanh thu nội bộ loại trừ: <strong className="tabular-nums">{currency(current.internalRevenue)}</strong></p>
       )}
       <nav className="flex flex-wrap gap-2" aria-label="Báo cáo liên quan cùng phạm vi">
-        {relatedReports.map(item => (
+        {relatedReports.filter(item => canOpenManagementAction(item.path, hasPermission)).map(item => (
           <Link key={item.path} href={href(item.path)} className="inline-flex min-h-9 items-center gap-2 rounded border border-border px-3 text-sm text-primary hover:bg-surface-container-low">
             <Icon name={item.icon} size={17} />{item.name}
           </Link>
@@ -98,18 +100,7 @@ export function ManagementReview({
             </button>
           </div>
           <div className="divide-y divide-border">
-            {observations.map(item => (
-              <article key={item.id} className="flex gap-3 py-3">
-                <Icon name={item.severity === "warning" ? "warning" : "info"} size={20} className={item.severity === "warning" ? "shrink-0 text-status-warning" : "shrink-0 text-primary"} />
-                <div className="min-w-0 space-y-1">
-                  <h3 className="text-sm font-medium">{item.title}</h3>
-                  <p className="text-sm leading-6 text-muted-foreground">{item.detail}</p>
-                  <Link href={href(item.path)} className="inline-flex min-h-9 items-center gap-1 text-sm font-medium text-primary">
-                    {item.action}<Icon name="arrow_forward" size={16} />
-                  </Link>
-                </div>
-              </article>
-            ))}
+            {observations.map(item => <ManagementObservationItem key={item.id} observation={item} branchId={branchId} range={range} hasPermission={hasPermission} />)}
           </div>
         </div>
         <div className="min-w-0">

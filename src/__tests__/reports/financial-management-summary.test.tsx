@@ -9,9 +9,15 @@ const range = { from: "2026-10-01", to: "2026-10-18" };
 afterEach(cleanup);
 
 describe("financial management summary", () => {
+  it("does not finalize operating results when recognized expense is incomplete", () => {
+    render(<FinancialManagementSummary current={{ ...period, operatingExpenseComplete: false }} previous={period} range={range} hasPermission={() => false} />);
+    expect(screen.getAllByText("Chưa đủ chi phí")).toHaveLength(3);
+    expect(screen.getAllByText("Chưa đủ dữ liệu")).toHaveLength(2);
+    expect(screen.queryAllByRole("link")).toHaveLength(0);
+  });
   it("uses goods revenue and scoped evidence without inventing a zero-base percentage", () => {
-    render(<FinancialManagementSummary current={period} previous={{ ...period, goodsRevenue: 0, grossProfit: 0, netProfit: 0 }} branchId="fnb" range={range} />);
-    expect(screen.getByText("Doanh thu thuần")).toBeInTheDocument();
+    render(<FinancialManagementSummary current={period} previous={{ ...period, goodsRevenue: 0, grossProfit: 0, netProfit: 0 }} branchId="fnb" range={range} hasPermission={() => true} />);
+    expect(screen.getAllByText("Doanh thu thuần").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Phát sinh mới")).toHaveLength(3);
     expect(screen.queryByText("+100%")).not.toBeInTheDocument();
     expect(screen.queryByText(/điểm %/)).not.toBeInTheDocument();
@@ -19,14 +25,14 @@ describe("financial management summary", () => {
   });
 
   it("masks profit and margin when historical cost is incomplete", () => {
-    render(<FinancialManagementSummary current={{ ...period, cogsComplete: false, missingCostLines: 2 }} previous={period} range={range} />);
+    render(<FinancialManagementSummary current={{ ...period, cogsComplete: false, missingCostLines: 2 }} previous={period} range={range} hasPermission={() => true} />);
     expect(screen.getAllByText("Chưa đủ giá vốn").length).toBeGreaterThan(1);
     expect(screen.queryByText("599.71")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Đối chiếu giá vốn" })).toHaveAttribute("href", expect.stringContaining("branch=all"));
   });
 
   it("compares margin in percentage points when both periods have revenue", () => {
-    render(<FinancialManagementSummary current={period} previous={{ ...period, grossMargin: 49.971 }} range={range} />);
+    render(<FinancialManagementSummary current={period} previous={{ ...period, grossMargin: 49.971 }} range={range} hasPermission={() => true} />);
     expect(screen.getByText("10 điểm %")).toBeInTheDocument();
   });
 

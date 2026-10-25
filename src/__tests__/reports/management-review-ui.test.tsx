@@ -11,12 +11,18 @@ const pnl: ProfitAndLoss = {
   grossMargin: 60, operatingExpense: 200, otherIncome: 50, netProfit: 450, netMargin: 45,
 };
 const props = {
+  hasPermission: () => true,
   current: pnl, previous: pnl,
   range: { from: "2026-09-01", to: "2026-09-30" },
   updatedAt: "2026-10-18T06:00:00Z",
 };
 
 describe("management review interface", () => {
+  it("does not offer actions outside the user's permissions", () => {
+    render(<ManagementReview {...props} hasPermission={() => false} />);
+    expect(screen.queryAllByRole("link")).toHaveLength(0);
+    expect(screen.getByRole("heading", { name: "Đối chiếu cuối kỳ" })).toBeInTheDocument();
+  });
   it("reveals numeric evidence and keeps drilldown scope", () => {
     render(<ManagementReview {...props} branchId="branch-1" />);
     expect(screen.queryByLabelText("Bằng chứng biến động")).not.toBeInTheDocument();

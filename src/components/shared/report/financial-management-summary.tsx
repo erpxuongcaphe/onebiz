@@ -1,24 +1,27 @@
 "use client";
 
-import Link from "next/link";
 import { KpiCard } from "@/app/(main)/phan-tich/_components";
-import { Icon } from "@/components/ui/icon";
 import { formatCurrency, formatNumber } from "@/lib/format";
-import { managementObservations, managementReportLink, reportChange } from "@/lib/reports/management-review";
+import { managementObservations, reportChange } from "@/lib/reports/management-review";
 import type { ProfitAndLoss } from "@/lib/services/supabase/reports";
+import { ManagementObservationItem } from "./management-observation-item";
 
-export function FinancialManagementSummary({ current, previous, branchId, range }: {
+export function FinancialManagementSummary({ current, previous, branchId, range, hasPermission }: {
   current: ProfitAndLoss;
   previous: ProfitAndLoss;
   branchId?: string;
   range: { from: string; to: string };
+  hasPermission: (permission: string) => boolean;
 }) {
   const complete = current.cogsComplete && previous.cogsComplete;
+  const expenseComplete = current.operatingExpenseComplete !== false;
+  const expenseComparisonComplete = expenseComplete && previous.operatingExpenseComplete !== false;
+  const resultComplete = current.cogsComplete && expenseComplete;
   const metrics = [
     { label: "Doanh thu thuần", value: formatCurrency(current.goodsRevenue), change: reportChange(current.goodsRevenue, previous.goodsRevenue), positive: current.goodsRevenue >= previous.goodsRevenue, icon: "trending_up" },
     { label: "Lãi gộp", value: current.cogsComplete ? formatCurrency(current.grossProfit) : "Chưa đủ giá vốn", change: complete ? reportChange(current.grossProfit, previous.grossProfit) : "", positive: current.grossProfit >= previous.grossProfit, icon: "payments" },
-    { label: "Chi phí vận hành", value: formatCurrency(current.operatingExpense), change: reportChange(current.operatingExpense, previous.operatingExpense), positive: current.operatingExpense <= previous.operatingExpense, icon: "receipt_long" },
-    { label: "Kết quả vận hành", value: current.cogsComplete ? formatCurrency(current.netProfit) : "Chưa đủ giá vốn", change: complete ? reportChange(current.netProfit, previous.netProfit) : "", positive: current.netProfit >= previous.netProfit, icon: "account_balance" },
+    { label: "Chi phí vận hành", value: expenseComplete ? formatCurrency(current.operatingExpense) : "Chưa đủ chi phí", change: expenseComparisonComplete ? reportChange(current.operatingExpense, previous.operatingExpense) : "", positive: current.operatingExpense <= previous.operatingExpense, icon: "receipt_long" },
+    { label: "Kết quả vận hành", value: resultComplete ? formatCurrency(current.netProfit) : current.cogsComplete ? "Chưa đủ chi phí" : "Chưa đủ giá vốn", change: complete && expenseComparisonComplete ? reportChange(current.netProfit, previous.netProfit) : "", positive: current.netProfit >= previous.netProfit, icon: "account_balance" },
   ];
   return (
     <section aria-label="Kết quả và việc cần xem" className="space-y-4 border-b pb-4">
@@ -33,16 +36,7 @@ export function FinancialManagementSummary({ current, previous, branchId, range 
       </div>
       <h2 className="border-l-4 border-border bg-muted/50 px-3 py-3 text-base font-semibold">Biến động cần xem</h2>
       <div className="grid gap-4 lg:grid-cols-2">
-        {managementObservations(current, previous).map(item => (
-          <article key={item.id} className="flex min-w-0 gap-2 border-l-2 border-border pl-3">
-            <Icon name={item.severity === "warning" ? "warning" : "info"} size={18} className={item.severity === "warning" ? "shrink-0 text-status-warning" : "shrink-0 text-primary"} />
-            <div className="min-w-0">
-              <h3 className="text-sm font-medium">{item.title}</h3>
-              <p className="mt-1 text-sm text-muted-foreground">{item.detail}</p>
-              <Link href={managementReportLink(item.path, branchId, range)} className="inline-flex min-h-9 items-center gap-1 text-sm text-primary">{item.action}<Icon name="arrow_forward" size={16} /></Link>
-            </div>
-          </article>
-        ))}
+        {managementObservations(current, previous).map(item => <ManagementObservationItem key={item.id} observation={item} branchId={branchId} range={range} hasPermission={hasPermission} />)}
       </div>
     </section>
   );
