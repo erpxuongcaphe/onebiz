@@ -124,11 +124,11 @@ export async function getUserEffectivePermissions(
   );
 
   if (error) {
-    console.warn("[getUserEffectivePermissions]", error.message);
-    return [];
+    throw new Error("Không tải được quyền truy cập. Vui lòng thử lại.");
   }
 
-  return ((data ?? []) as Array<{ permission_code: string }>).map(
-    (r) => r.permission_code,
-  );
+  if (!Array.isArray(data) || data.some((row: unknown) =>
+    !row || typeof row !== "object" || typeof (row as { permission_code?: unknown }).permission_code !== "string"
+  )) throw new Error("Dữ liệu quyền truy cập chưa đầy đủ. Vui lòng thử lại.");
+  return data.map((row: { permission_code: string }) => row.permission_code);
 }

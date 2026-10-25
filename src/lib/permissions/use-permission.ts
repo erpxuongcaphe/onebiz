@@ -20,15 +20,17 @@ export interface PermissionsAPI {
   permissions: Set<string>;
   /** True while permissions are loading */
   isLoading: boolean;
+  loadError?: string | null;
+  retry?: () => Promise<void>;
 }
 
 export function usePermissions(): PermissionsAPI {
-  const { user, permissions, isLoading } = useAuth();
+  const { user, permissions, isLoading, authDataError, refreshProfile } = useAuth();
 
   const isOwner = user?.role === "owner";
 
   const hasPermission = (code: PermissionCode | string): boolean => {
-    if (isLoading || !user?.isActive) return false;
+    if (isLoading || authDataError || !user?.isActive) return false;
     if (isOwner) return true;
     if (permissions.has("*")) return true;
     return permissions.has(code);
@@ -40,5 +42,5 @@ export function usePermissions(): PermissionsAPI {
   const hasAll = (codes: (PermissionCode | string)[]): boolean =>
     codes.every((c) => hasPermission(c));
 
-  return { hasPermission, hasAny, hasAll, permissions, isLoading };
+  return { hasPermission, hasAny, hasAll, permissions, isLoading, loadError: authDataError, retry: refreshProfile };
 }
