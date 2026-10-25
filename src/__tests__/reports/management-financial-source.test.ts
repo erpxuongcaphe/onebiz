@@ -16,6 +16,25 @@ const snapshot = {
 beforeEach(() => rpc.mockReset());
 
 describe("shared management financial source", () => {
+  it.each([undefined, null, "", " ", NaN, Infinity, true, [], {}, "invalid"])("rejects invalid required amounts instead of publishing zero: %j", async value => {
+    rpc.mockResolvedValue({ data: { current: { ...snapshot, operating_expense: value }, previous: snapshot }, error: null });
+    await expect(getProfitAndLoss("branch-1")).rejects.toThrow("chi phí vận hành");
+    await expect(getConsolidatedPnL()).rejects.toThrow("chi phí vận hành");
+  });
+  it("accepts explicit zero and numeric database strings without inventing values", async () => {
+    const row = { ...snapshot, revenue: "0", delivery_fee: "0", cogs: "0", operating_expense: "0", other_income: 0 };
+    rpc.mockResolvedValue({ data: { current: row, previous: row }, error: null });
+    expect((await getConsolidatedPnL()).current).toMatchObject({ goodsRevenue: 0, cogs: 0, operatingExpense: 0, netProfit: 0 });
+  });
+  it("rejects invalid previous-period data as well as current-period data", async () => {
+    rpc.mockResolvedValue({ data: { current: snapshot, previous: { ...snapshot, revenue: null } }, error: null });
+    await expect(getProfitAndLoss("branch-1")).rejects.toThrow("doanh thu");
+    await expect(getConsolidatedPnL()).rejects.toThrow("doanh thu");
+  });
+  it("does not accept missing cost when the source claims complete historical cost", async () => {
+    rpc.mockResolvedValue({ data: { current: { ...snapshot, cogs: null }, previous: snapshot }, error: null });
+    await expect(getConsolidatedPnL()).rejects.toThrow("giá vốn");
+  });
   it("includes other income in consolidated results just as in branch results", async () => {
     rpc.mockResolvedValue({ data: { current: snapshot, previous: snapshot }, error: null });
     const range = { from: "2026-09-01", to: "2026-09-30" };
