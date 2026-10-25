@@ -938,9 +938,11 @@ export default function HangHoaPage() {
     if (!canEditTrading || tradingLock.current || !ids.length) return;
     tradingLock.current = true; setTradingBusy(true);
     try {
-      const count = await setProductTradingStatus(ids, active);
+      const count = await setProductTradingStatus(ids, active, isFnbOutletView && catalogChannel === "fnb" ? activeBranchId ?? undefined : undefined);
       await finishBulkSuccess(active ? "Đã bật kinh doanh" : "Đã ngừng kinh doanh",
-        `${count} mã thay đổi · áp dụng toàn hệ thống. Tồn kho và chứng từ giữ nguyên.`);
+        isFnbOutletView && catalogChannel === "fnb"
+          ? `${count} món · chỉ tại ${currentBranch?.name}. Tồn kho và chứng từ giữ nguyên.`
+          : `${count} mã thay đổi · áp dụng toàn hệ thống. Tồn kho và chứng từ giữ nguyên.`);
       await fetchStats();
     } catch (err) { finishBulkError("Chưa đổi được trạng thái", err); }
     finally { tradingLock.current = false; setTradingBusy(false); }
@@ -1893,11 +1895,11 @@ export default function HangHoaPage() {
     enableSorting: false,
     cell: ({ row }) => (
       <div className="flex items-center gap-1" onClick={(event) => event.stopPropagation()}
-        title="Trạng thái kinh doanh toàn hệ thống">
+        title={isFnbOutletView && catalogChannel === "fnb" ? `Chỉ áp dụng tại ${currentBranch?.name}` : "Trạng thái mã hàng toàn hệ thống; món F&B cần chọn một quán"}>
         <SettingsSwitch
-          label={(row.original.status === "inactive" ? "Bật" : "Ngừng") + " kinh doanh " + row.original.name + " · toàn hệ thống"}
+          label={(row.original.status === "inactive" ? "Bật" : "Ngừng") + " kinh doanh " + row.original.name + (isFnbOutletView && catalogChannel === "fnb" ? ` · ${currentBranch?.name}` : " · toàn hệ thống")}
           checked={row.original.status !== "inactive"}
-          disabled={!canEditTrading || tradingBusy}
+          disabled={!canEditTrading || tradingBusy || (row.original.channel === "fnb" && !(isFnbOutletView && catalogChannel === "fnb"))}
           onCheckedChange={(active) => void changeTradingStatus([row.original.id], active)} />
         <span className="whitespace-nowrap text-xs text-muted-foreground">
           {row.original.status === "inactive" ? "Đã ngừng" : "Đang bán"}
