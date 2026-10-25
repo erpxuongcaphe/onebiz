@@ -55,6 +55,42 @@ function renderGio(lines: FnbOrderLine[], them: Record<string, unknown> = {}) {
   );
 }
 
+describe("FnbCart pre-bill action beside checkout", () => {
+  it("prints directly once without sending to kitchen, paying or editing the cart", () => {
+    const onPrintPreBill = vi.fn(), onPayment = vi.fn(), onSendToKitchen = vi.fn();
+    const updateLineQty = vi.fn(), removeLine = vi.fn();
+    renderGio([taoDong(1)], {onPrintPreBill, onPayment, onSendToKitchen, updateLineQty, removeLine});
+    fireEvent.click(screen.getByRole("button", {name:"In tạm tính"}));
+    expect(onPrintPreBill).toHaveBeenCalledOnce();
+    for (const action of [onPayment,onSendToKitchen,updateLineQty,removeLine]) expect(action).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", {name:"Thao tác đơn"}));
+    expect(screen.queryByRole("menuitem", {name:/In tạm tính/})).not.toBeInTheDocument();
+  });
+  it("keeps printing disabled for an empty cart", () => {
+    const onPrintPreBill=vi.fn();
+    renderGio([], {onPrintPreBill});
+    const button=screen.getByRole("button", {name:"In tạm tính"});
+    expect(button).toBeDisabled();fireEvent.click(button);
+    expect(onPrintPreBill).not.toHaveBeenCalled();
+  });
+  it("prints sent lines while preserving the existing checkout restriction", () => {
+    const onPrintPreBill=vi.fn();
+    renderGio([], {onPrintPreBill, canCheckout:false,
+      activeTab:{id:"sent",label:"Bàn 1",orderType:"dine_in",kitchenOrderId:"order",lines:[],sentLines:[taoDong(1)]}});
+    expect(screen.getByRole("button", {name:"In tạm tính"})).toBeEnabled();
+    expect(screen.getByRole("button", {name:/Chỉ thu ngân được thu tiền/})).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", {name:"In tạm tính"}));
+    expect(onPrintPreBill).toHaveBeenCalledOnce();
+  });
+  it("keeps checkout available when no printing callback was supplied", () => {
+    const onPayment=vi.fn();
+    renderGio([taoDong(1)], {onPayment});
+    expect(screen.queryByRole("button", {name:"In tạm tính"})).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", {name:/Thanh toán \(F9\)/}));
+    expect(onPayment).toHaveBeenCalledOnce();
+  });
+});
+
 describe("FnbCart table transfer eligibility", () => {
   it("hides split and history when their permitted callbacks are absent", () => {
     renderGio([], {

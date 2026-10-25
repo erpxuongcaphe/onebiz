@@ -231,7 +231,7 @@ export function FnbCart({
   const pendingLines = activeTab?.lines ?? [];
   const lines = [...sentLines, ...pendingLines];
   const isEmpty = lines.length === 0;
-  // Vùng ưu đãi/coupon/in tạm ít dùng hơn danh sách món nên mặc định thu gọn
+  // Vùng ưu đãi/coupon ít dùng hơn danh sách món nên mặc định thu gọn
   // trên mọi màn hình. State chỉ đổi class, không remount: mở lại vẫn giữ nội
   // dung mã đang gõ. Tổng tiền, gửi bếp và thanh toán luôn hiển thị.
   const [moPhanPhu, setMoPhanPhu] = useState(false);
@@ -258,7 +258,7 @@ export function FnbCart({
   // - Header: tên đơn + badge loại + icons actions
   // - Order type 3 buttons pill row
   // - Items: bg-surface p-3 rounded-lg với qty controls bg-surface-container-low
-  // - Footer: summary + 2 primary buttons (Bếp F10 / Thanh toán F9)
+  // - Footer: summary + Bếp F10 / In tạm tính / Thanh toán F9
   return (
     <div className={cn(
       // Head and footer scroll independently when space is limited;
@@ -304,7 +304,6 @@ export function FnbCart({
               {onTransferTable && activeTab?.orderType === "dine_in" && activeTab.tableId && activeTab.kitchenOrderId && <DropdownMenuItem onClick={onTransferTable}><Icon name="swap_horiz" size={18} /> Chuyển bill sang bàn khác</DropdownMenuItem>}
               {onMergeTable && <DropdownMenuItem onClick={onMergeTable}><Icon name="call_merge" size={18} /> Gộp 2 hoặc nhiều bill…</DropdownMenuItem>}
               {onSplitBill && activeTab?.kitchenOrderId && lines.reduce((sum, line) => sum + line.quantity, 0) > 1 && <DropdownMenuItem onClick={onSplitBill}><Icon name="content_cut" size={18} /> Tách bill</DropdownMenuItem>}
-              {onPrintPreBill && !isEmpty && <DropdownMenuItem onClick={onPrintPreBill}><Icon name="description" size={18} /> In tạm tính</DropdownMenuItem>}
               {auditHistoryHref && activeTab?.kitchenOrderId && <DropdownMenuItem render={<a href={auditHistoryHref} target="_blank" rel="noopener noreferrer" title="Mở nhật ký bill trong tab mới" />}><Icon name="history" size={18} /> Nhật ký bill</DropdownMenuItem>}
               {onOrderHistory && <DropdownMenuItem onClick={onOrderHistory}><Icon name="receipt_long" size={18} /> Lịch sử đơn / in lại</DropdownMenuItem>}
               {activeTab?.kitchenOrderId && onCancelSentItems && <DropdownMenuItem onClick={onCancelSentItems} className="text-status-error"><Icon name="remove_shopping_cart" size={18} /> Hủy một / nhiều món</DropdownMenuItem>}
@@ -907,14 +906,19 @@ export function FnbCart({
           );
         })()}
 
-        {/* Primary actions row — Stitch spec: 40/60 split */}
-        <div className="sticky bottom-0 flex gap-2 bg-white dark:bg-card pt-1">
+        {/* Primary actions row — printing stays beside checkout without adding a row. */}
+        <div className={cn(
+          "sticky bottom-0 grid gap-2 bg-white dark:bg-card pt-1",
+          onPrintPreBill
+            ? "grid-cols-[minmax(0,0.9fr)_minmax(0,0.85fr)_minmax(0,1.25fr)]"
+            : "grid-cols-[minmax(0,2fr)_minmax(0,3fr)]"
+        )}>
           <button
             type="button"
             onClick={onSendToKitchen}
             disabled={unsentLineCount === 0 || kitchenSubmitting}
             className={cn(
-              "flex-[0.4] h-12 rounded-md font-semibold text-sm flex flex-col items-center justify-center gap-0.5 transition-all press-scale-sm",
+              "min-w-0 h-12 rounded-md font-semibold text-sm flex flex-col items-center justify-center gap-0.5 transition-all press-scale-sm",
               activeTab?.kitchenOrderId
                 ? "bg-status-info/15 text-status-info hover:bg-status-info/25 disabled:opacity-40 disabled:pointer-events-none"
                 : "bg-surface-container-high text-on-surface hover:bg-surface-container disabled:opacity-40 disabled:pointer-events-none"
@@ -925,7 +929,7 @@ export function FnbCart({
               size={18}
               className={kitchenSubmitting ? "animate-spin" : undefined}
             />
-            <span className="text-sm font-semibold leading-tight">
+            <span className="text-xs font-semibold leading-tight">
               {kitchenSubmitting
                 ? "Đang gửi..."
                 : activeTab?.kitchenOrderId
@@ -933,18 +937,31 @@ export function FnbCart({
                   : "Bếp (F10)"}
             </span>
           </button>
+          {onPrintPreBill && (
+            <button
+              type="button"
+              onClick={onPrintPreBill}
+              disabled={isEmpty}
+              aria-label="In tạm tính"
+              title="In tạm tính"
+              className="min-w-0 h-12 rounded-md border border-primary/25 bg-white text-primary flex flex-col items-center justify-center gap-0.5 font-semibold transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:opacity-40 disabled:pointer-events-none dark:bg-card"
+            >
+              <Icon name="print" size={18} />
+              <span className="text-xs leading-tight">In tạm tính</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={onPayment}
             disabled={isEmpty || !canCheckout}
             title={canCheckout ? "Thanh toán (F9)" : "Tài khoản này chỉ được nhận món và gửi bếp"}
             className={cn(
-              "flex-[0.6] h-12 rounded-md font-bold text-sm flex flex-col items-center justify-center gap-0.5 transition-all press-scale-sm",
+              "min-w-0 h-12 rounded-md font-bold text-sm flex flex-col items-center justify-center gap-0.5 transition-all press-scale-sm",
               "bg-primary text-on-primary hover:bg-primary-hover disabled:opacity-40 disabled:pointer-events-none"
             )}
           >
             <Icon name="payments" size={18} />
-            <span className="text-sm font-bold leading-tight">
+            <span className="text-xs font-bold leading-tight">
               {canCheckout ? "Thanh toán (F9)" : "Chỉ thu ngân được thu tiền"}
             </span>
           </button>
