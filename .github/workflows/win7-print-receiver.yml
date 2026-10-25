@@ -1,0 +1,47 @@
+name: Win7 print receiver
+on:
+  pull_request:
+    paths:
+      - 'tools/win7-print-point/**'
+      - '.github/workflows/win7-print-receiver.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  receiver:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: tools/win7-print-point
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v5
+      - name: Compile .NET Framework x86 receiver and disposable tests
+        run: |
+          $compiler = "$env:WINDIR\Microsoft.NET\Framework\v4.0.30319\csc.exe"
+          & $compiler /nologo /platform:x86 /r:System.Web.Extensions.dll /r:System.Drawing.dll /out:OnebizWin7.exe OnebizWin7.cs
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & $compiler /nologo /platform:x86 /r:System.Web.Extensions.dll /out:ClaimTests.exe ClaimTests.cs
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & $compiler /nologo /platform:x86 /out:RecoveryTests.exe RecoveryTests.cs
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & $compiler /nologo /platform:x86 /out:TransportTests.exe TransportTests.cs
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Verify recovery with loopback HTTP, journals and a fake printer
+        run: |
+          .\OnebizWin7.exe --self-test
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          .\ClaimTests.exe
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          .\RecoveryTests.exe
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          .\TransportTests.exe
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Onebiz-Win7-20261025-1
+          path: |
+            tools/win7-print-point/OnebizWin7.exe
+            tools/win7-print-point/OnebizWin7.cs
+            tools/win7-print-point/README.md
