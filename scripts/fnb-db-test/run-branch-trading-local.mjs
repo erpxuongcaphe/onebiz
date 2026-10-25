@@ -23,6 +23,14 @@ set test.actor='${actor}';set test.permission='yes';`);
 const original=readFileSync('supabase/migrations/00354_fnb_branch_menu_exclusions.sql','utf8');
 const start=original.indexOf('create or replace function public.save_fnb_product_branch_menu_policy(');
 await db.exec(original.slice(start,original.indexOf('$function$;',start)+11));
+function installGuard(file,name,table) {
+ const text=readFileSync(file,'utf8');const start=text.indexOf('create or replace function public.'+name+'(');
+ assert(start>=0,name);const end=text.indexOf('$function$;',start)+11;
+ return db.exec(text.slice(start,end)+`\ncreate trigger test_${name} before insert or update on ${table} for each row execute function public.${name}();`);
+}
+await installGuard('supabase/migrations/00353_fnb_branch_menu_isolation.sql','enforce_fnb_product_branch_menu_scope_00353','fnb_product_branch_menu_scopes');
+await installGuard('supabase/migrations/00354_fnb_branch_menu_exclusions.sql','enforce_fnb_product_branch_menu_policy_00354','fnb_product_branch_menu_policies');
+
 await db.exec(readFileSync('supabase/migrations/00559_product_trading_status.sql','utf8'));
 await db.exec(readFileSync('supabase/migrations/202610250100_fnb_branch_trading_status.sql','utf8'));
 const baseline=(await db.query("select * from products where channel='fnb' order by id")).rows;
