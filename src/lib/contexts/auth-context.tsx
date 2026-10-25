@@ -19,6 +19,7 @@ import { _seedProfileCache as seedProfileCache, _clearProfileCache as clearProfi
 import { readDeviceBinding } from "@/lib/hooks/use-device-binding";
 import { isInternalAuthEmail } from "@/lib/auth/user-identifiers";
 import { canViewAllBranches, parseAccessibleBranchIds } from "@/lib/auth/branch-scope";
+import { readAuthBootstrap } from "@/lib/auth/bootstrap";
 
 // --- Types ---
 
@@ -113,7 +114,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }, 12_000);
       try {
         // 1. Profile TRƯỚC — các query khác cần profile.tenant_id + profile.id.
-        const { data: profile, error: profileError } = await supabase
+        const bootstrap = await readAuthBootstrap(supabase, authUser.id);
+        const { data: profile, error: profileError } = bootstrap ? { data: bootstrap.profile, error: null } : await supabase
           .from("profiles")
           .select("id,tenant_id,branch_id,role_id,full_name,email,phone,role,is_active,created_at")
           .eq("id", authUser.id)
@@ -165,12 +167,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // getUserPermissions để bao gồm per-user overrides (grants/revokes).
         // RPC fallback về role permissions nếu user chưa có override.
         const permsPromise: Promise<Set<string>> =
-          profile.role === "owner"
+          bootstrap ? Promise.resolve(new Set(bootstrap.permissions)) : profile.role === "owner"
             ? Promise.resolve(new Set(["*"]))
             : getUserEffectivePermissions(profile.id)
                 .then((codes) => new Set(codes));
 
-        const [tenantRes, branchRes, perms, scopeRes] = await Promise.all([
+        const [tenantRes, branchRes, perms, scopeRes] = bootstrap ? [
+          { data: bootstrap.tenant, error: null }, { data: bootstrap.branches, error: null },
+          await permsPromise, { data: bootstrap.scope, error: null },
+        ] as const : await Promise.all([
           supabase
             .from("tenants")
             .select("*")

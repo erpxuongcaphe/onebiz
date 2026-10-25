@@ -16,7 +16,7 @@ vi.mock("@/lib/supabase/client", () => ({ createClient: () => ({
     onAuthStateChange: (callback: typeof state.callback) => { state.callback = callback; return { data: { subscription: { unsubscribe: vi.fn() } } }; },
     signOut: async () => undefined,
   },
-  rpc: async () => ({ data: state.assigned, error: state.scopeError }),
+  rpc: async (name:string) => name === "get_my_auth_bootstrap" ? ({data:null,error:{code:"PGRST202"}}) : ({ data: state.assigned, error: state.scopeError }),
   from: (table: string) => {
     const query = {
       select: () => query, eq: () => query,
