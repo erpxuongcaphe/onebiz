@@ -26,12 +26,19 @@ export default function ManagementFinancePage() {
   const {activeBranchId:globalBranchId, branches, hasPermission, isLoading} = useAuth();
   const [localBranch,setLocalBranch]=useState<string>();
   const [urlReady,setUrlReady]=useState(false);
-  useEffect(()=>{setLocalBranch(new URLSearchParams(window.location.search).get('branch')??undefined);setUrlReady(true);},[]);
   const branchDenied=!!localBranch && localBranch!=='all' && !branches?.some(branch=>branch.id===localBranch);
   const activeBranchId=localBranch==='all'?undefined:localBranch??globalBranchId;
   const cashBranchName = (id: string) => branches?.find(branch => branch.id === id)?.name ?? 'Chưa xác định';
   const today = cashDateTimeInput().slice(0, 10);
   const [filters, setFilters] = useState<FinanceFilters>({from: today.slice(0, 7) + '-01', to: today, kind: 'expense'});
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setLocalBranch(params.get('branch') ?? undefined);
+    if (params.has('from') || params.has('to')) {
+      setFilters(previous => ({...previous, from: params.get('from') ?? '', to: params.get('to') ?? ''}));
+    }
+    setUrlReady(true);
+  }, []);
   const [categories, setCategories] = useState<FinanceCategory[]>([]);
   const initialCategoryApplied=useRef(false);
   const internalCategory=categories.find(category=>category.code==='CP-VH-NOIBO' && category.kind==='expense' && !category.is_group);

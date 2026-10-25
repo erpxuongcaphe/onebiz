@@ -161,7 +161,7 @@ function COGSTooltip({
 
 export default function BaoCaoTaiChinhPage() {
   const { toast } = useToast();
-  const { tenant } = useAuth();
+  const { tenant, hasPermission } = useAuth();
   const {
     isReady: periodReady,
     preset,
@@ -686,7 +686,7 @@ export default function BaoCaoTaiChinhPage() {
       )}
 
       <div className="flex-1 p-4 md:p-6 space-y-4">
-        {cur && prev && <FinancialManagementSummary current={cur} previous={prev} branchId={activeBranchId} range={range} />}
+        {cur && prev && <FinancialManagementSummary current={cur} previous={prev} branchId={activeBranchId} range={range} hasPermission={hasPermission} />}
         {updatedAt && <p className="text-xs text-muted-foreground">Cập nhật {new Date(updatedAt).toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}</p>}
         {/* Consolidated banner — hiển thị doanh thu nội bộ đã bị loại trừ */}
         {useConsolidated && consolidated && (

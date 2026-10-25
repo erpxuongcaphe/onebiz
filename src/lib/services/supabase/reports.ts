@@ -6,6 +6,7 @@
 import { getClient, handleError, getCurrentTenantId } from "./base";
 import { formatNumber } from "@/lib/format";
 import { formatFinancialBucket } from "@/lib/reports/financial-bucket-label";
+import { validateProfitAndLossSource } from "@/lib/reports/financial-source-validation";
 import { toCreatedAtRangeWindow } from "@/lib/utils/list-date-preset-range";
 interface ReportPagedQuery<T> {
   range(
@@ -262,6 +263,8 @@ export async function getProfitAndLoss(
       if (!payload?.current || !payload.previous) {
         throw new Error("Invalid P&L aggregate response");
       }
+      validateProfitAndLossSource(payload.current);
+      validateProfitAndLossSource(payload.previous);
 
       const number = (value: unknown) => {
         const parsed = Number(value ?? 0);
@@ -893,6 +896,8 @@ export async function getConsolidatedPnL(
     if (!payload?.current || !payload.previous) {
       throw new Error("Invalid consolidated P&L aggregate response");
     }
+    validateProfitAndLossSource(payload.current);
+    validateProfitAndLossSource(payload.previous);
 
     const number = (value: unknown) => {
       const parsed = Number(value ?? 0);

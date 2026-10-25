@@ -90,7 +90,7 @@ function RevenueTooltip({ active, payload, label }: RevenueTooltipProps) {
 }
 export default function BusinessOverview() {
   const { activeBranchId, branchLabel, isReady } = useBranchFilter();
-  const { tenant, hasPermission } = useAuth();
+  const { tenant, user, hasPermission } = useAuth();
   const canViewProfit = hasPermission("reports.view_profit") && hasPermission("reports.view_detail");
   const canViewCash = hasPermission("finance.view_cash_book");
   const canViewDebt = hasPermission("reports.analytics") && hasPermission("reports.view_detail");
@@ -126,7 +126,7 @@ export default function BusinessOverview() {
   const [debtError, setDebtError] = useState<string | null>(null);
   const [branchSort, setBranchSort] = useState<{ id: string; direction: "asc" | "desc" } | null>(null);
   const visibleBranches = useMemo(() => sortManagementBranches(branchRows, branchSort), [branchRows, branchSort]);
-  const scopeKey = `${tenant?.id}:${activeBranchId ?? "all"}:${range.from}:${range.to}:${canViewProfit}:${canViewCash}:${canViewDebt}`;
+  const scopeKey = `${tenant?.id}:${user?.id}:${activeBranchId ?? "all"}:${range.from}:${range.to}:${canViewProfit}:${canViewCash}:${canViewDebt}`;
   const pending = loadedScope !== scopeKey || (!kpis && loading);
   const refreshState = useRef({ inFlight: false, queued: false });
   const refresh = useCallback(() => {
@@ -562,7 +562,7 @@ export default function BusinessOverview() {
             valueColor="text-foreground"
           />}
         </div>
-        {canViewProfit && updatedAt && <ManagementReview current={kpis.financial.current} previous={kpis.financial.previous} branchId={activeBranchId} range={range} branches={visibleBranches} branchError={branchError} updatedAt={updatedAt} branchSort={branchSort} onBranchSort={setBranchSort} />}
+        {canViewProfit && updatedAt && <ManagementReview current={kpis.financial.current} previous={kpis.financial.previous} branchId={activeBranchId} range={range} branches={visibleBranches} branchError={branchError} updatedAt={updatedAt} branchSort={branchSort} onBranchSort={setBranchSort} hasPermission={hasPermission} />}
         {canViewCash && <ManagementCashSummary rows={cashRows} error={cashError} branchId={activeBranchId} range={range} />}
         {canViewDebt && <ManagementDebtSummary workspace={debtWorkspace} error={debtError} branchId={activeBranchId} />}
 

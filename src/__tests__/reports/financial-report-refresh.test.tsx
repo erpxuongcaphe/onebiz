@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 
 const state = vi.hoisted(() => ({ periodReady: true, branchId: "fnb", range: { from: "2026-10-01", to: "2026-10-18" }, refresh: undefined as (() => void) | undefined, pnl: vi.fn(), consolidated: vi.fn(), details: vi.fn(), exportExcel: vi.fn(), toast: vi.fn() }));
 vi.mock("@/lib/contexts", () => ({
-  useAuth: () => ({ tenant: { id: "onebiz" } }),
+  useAuth: () => ({ tenant: { id: "onebiz" }, hasPermission: () => true }),
   useBranchFilter: () => ({ activeBranchId: state.branchId || undefined, branches: [], isReady: true }),
   useToast: () => ({ toast: state.toast }),
 }));
