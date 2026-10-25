@@ -117,6 +117,16 @@
       ]
     },
     {
+      "migration": "pos_customer_balance_20261025",
+      "migrationSha256": "05699216e16d83ce60938d7fb8250d5650f79cf735ff0e73bc60bb17147a02fd",
+      "functions": [
+        { "name": "get_pos_customer_balance_scoped", "params": [
+          { "name": "p_customer_id", "optional": false },
+          { "name": "p_branch_id", "optional": false }
+        ] }
+      ]
+    },
+    {
       "migration": "shift_document_readers_20261023",
       "migrationSha256": "87b05a5c42a4883c04c72102a24f284d9a774cc93c4c08e4c1ffb502cc0a969a",
       "functions": [

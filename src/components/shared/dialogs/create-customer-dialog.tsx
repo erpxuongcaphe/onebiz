@@ -33,6 +33,7 @@ interface CreateCustomerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
+  onSavedIdentity?: (customerId: string) => void;
   initialData?: Omit<Customer, "currentDebt" | "totalSales" | "totalSalesMinusReturns">;
 }
 
@@ -44,6 +45,7 @@ export function CreateCustomerDialog({
   open,
   onOpenChange,
   onSuccess,
+  onSavedIdentity,
   initialData,
 }: CreateCustomerDialogProps) {
   const isEditing = !!initialData;
@@ -159,6 +161,7 @@ export function CreateCustomerDialog({
   async function handleSave() {
     if (!validate()) return;
     setSaving(true);
+    let savedCustomerId = initialData?.id;
     try {
       if (isEditing) {
         await updateCustomer(initialData!.id, {
@@ -207,12 +210,14 @@ export function CreateCustomerDialog({
           priceTierId: priceTierId || undefined,
         });
         onOpenChange(false);
+        savedCustomerId = created.id;
         toast({
           title: "Tạo khách hàng thành công",
           description: `Đã thêm khách hàng ${name} (${created.code})`,
           variant: "success",
         });
       }
+      if (savedCustomerId) onSavedIdentity?.(savedCustomerId);
       onSuccess?.();
     } catch (err) {
       toast({

@@ -8,11 +8,9 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getCustomers } from "@/lib/services/supabase";
-import type { Customer } from "@/lib/types";
+import { getRetailCustomerContacts, type RetailCustomerContact as Customer } from "@/lib/services/supabase/pos-retail-customer-contacts";
 import { useDebounce } from "@/lib/utils/use-debounce";
 import { cn } from "@/lib/utils";
-import { formatCurrency } from "@/lib/format";
 import { Icon } from "@/components/ui/icon";
 
 interface CustomerPickerProps {
@@ -27,6 +25,7 @@ interface CustomerPickerProps {
 }
 
 const GUEST_OPTION_ID = "__guest__";
+const EMPTY_CUSTOMERS: Customer[] = [];
 
 export function CustomerPicker({
   open,
@@ -37,52 +36,44 @@ export function CustomerPicker({
   currentBranchId,
 }: CustomerPickerProps) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [response, setResponse] = useState<{key: string; rows: Customer[]; failed: boolean} | null>(null);
+  const [retry, setRetry] = useState(0);
   const [highlighted, setHighlighted] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
 
   const debouncedQuery = useDebounce(query, 200);
+  const requestKey = `${currentBranchId}:${internalOnly}:${debouncedQuery.trim()}:${retry}`;
+  const currentResponse = response?.key === requestKey && query.trim() === debouncedQuery.trim() ? response : null;
+  const results = currentResponse?.rows ?? EMPTY_CUSTOMERS;
 
   useEffect(() => {
-    if (open) {
-      setTimeout(() => inputRef.current?.focus(), 0);
-    } else {
-      setQuery("");
-      setResults([]);
-      setHighlighted(0);
-    }
+    if (!open) return;
+    const timer = setTimeout(() => inputRef.current?.focus(), 0);
+    return () => clearTimeout(timer);
   }, [open]);
 
   useEffect(() => {
     if (!open) return;
-    let cancelled = false;
-    setLoading(true);
-    getCustomers({
-      page: 0,
-      pageSize: 10,
+    const controller = new AbortController();
+    getRetailCustomerContacts({
+      branchId: currentBranchId ?? "", internal: internalOnly, limit: 10,
       search: debouncedQuery.trim() || "",
-      filters: internalOnly ? { internalOnly: "true", ...(currentBranchId ? { excludeBranch: currentBranchId } : {}) } : {},
-      sortBy: "name",
-      sortOrder: "asc",
+      signal: controller.signal,
     })
       .then((res) => {
-        if (cancelled) return;
-        setResults(res.data);
+        if (controller.signal.aborted) return;
+        setResponse({ key: requestKey, rows: res, failed: false });
         setHighlighted(0);
       })
       .catch(() => {
-        if (cancelled) return;
-        setResults([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (controller.signal.aborted) return;
+        setResponse({ key: requestKey, rows: [], failed: true });
       });
     return () => {
-      cancelled = true;
+      controller.abort();
     };
-  }, [debouncedQuery, open, internalOnly, currentBranchId]);
+  }, [debouncedQuery, open, internalOnly, currentBranchId, requestKey, retry]);
 
   useEffect(() => {
     if (!listRef.current) return;
@@ -114,7 +105,7 @@ export function CustomerPicker({
     (e: React.KeyboardEvent) => {
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setHighlighted((h) => Math.min(h + 1, totalOptions - 1));
+        setHighlighted((h) => Math.max(0, Math.min(h + 1, totalOptions - 1)));
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
         setHighlighted((h) => Math.max(0, h - 1));
@@ -145,20 +136,21 @@ export function CustomerPicker({
             <input
               ref={inputRef}
               type="text"
+              aria-label="Tìm khách hàng"
               data-allow-hotkeys="true"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={internalOnly ? "Tìm tên / mã khách nội bộ..." : "Tìm tên / SĐT / mã khách hàng..."}
-              className="flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
+              className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
             />
-            {loading && <Icon name="progress_activity" size={16} className="animate-spin text-muted-foreground" />}
+            {!currentResponse && <Icon name="progress_activity" size={16} className="animate-spin text-muted-foreground" />}
             <kbd className="font-mono text-xs bg-muted border border-border rounded px-2 py-0.5 text-muted-foreground">
               Esc
             </kbd>
           </div>
 
-          <ul ref={listRef} className="max-h-96 overflow-y-auto">
+          <ul ref={listRef} className="max-h-[calc(100dvh-15rem)] sm:max-h-96 overflow-y-auto">
             {/* Walk-in guest option always first */}
             {!internalOnly && <li
               data-idx={0}
@@ -202,11 +194,6 @@ export function CustomerPicker({
                       {c.phone || c.code || "—"}
                     </div>
                   </div>
-                  {c.currentDebt > 0 && (
-                    <div className="text-xs text-status-error font-medium shrink-0">
-                      Nợ {formatCurrency(c.currentDebt)} ₫
-                    </div>
-                  )}
                 </li>
               );
             })}
@@ -235,9 +222,13 @@ export function CustomerPicker({
               </li>
             )}
           </ul>
+          {currentResponse?.failed && <div role="alert" className="flex items-center justify-between gap-3 border-t border-border px-4 py-3 text-sm text-status-error">
+            <span>Chưa tải được khách.</span><button type="button" onClick={() => setRetry(value => value + 1)} className="min-h-10 px-2 font-medium">Thử lại</button>
+          </div>}
+          {currentResponse && !currentResponse.failed && results.length === 0 && <p className="border-t border-border px-4 py-3 text-sm text-muted-foreground">Không tìm thấy khách.</p>}
 
-          <div className="flex items-center justify-between px-4 h-8 bg-muted/50 border-t border-border text-xs text-muted-foreground">
-            <div className="flex items-center gap-3">
+          <div className="flex items-center justify-end sm:justify-between px-4 h-8 bg-muted/50 border-t border-border text-xs text-muted-foreground">
+            <div className="hidden sm:flex items-center gap-3">
               <span>
                 <kbd className="font-mono bg-background border border-border rounded px-1 text-xs">
                   ↑ ↓

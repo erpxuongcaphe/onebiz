@@ -13,7 +13,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Product } from "@/lib/types";
-import type { Customer } from "@/lib/types";
+import type { RetailCustomerContact as Customer } from "@/lib/services/supabase/pos-retail-customer-contacts";
 import type { DraftOrderDetail } from "@/lib/services/supabase";
 import type { PosStockSnapshot } from "@/lib/services/supabase/pos-stock";
 import { mergePosStockSnapshot } from "../lib/stock-freshness";
@@ -423,11 +423,7 @@ export function usePosState() {
           code: "",
           name: draft.customerName,
           phone: "",
-          currentDebt: 0,
-          totalSales: 0,
-          totalSalesMinusReturns: 0,
           type: "individual",
-          createdAt: draft.createdAt,
         },
         "load-draft",
       );
@@ -581,11 +577,7 @@ export function usePosState() {
               code: "",
               name: data.customer.name,
               phone: "",
-              currentDebt: 0,
-              totalSales: 0,
-              totalSalesMinusReturns: 0,
               type: "individual",
-              createdAt: new Date().toISOString(),
             }
           : null,
         "f5-restore",

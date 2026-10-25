@@ -42,7 +42,6 @@ import {
   type DraftOrderDetail,
   getProducts,
   getOrCreateWalkInCustomer,
-  getCustomerById,
   attachDeliveryToInvoice,
   getPartnerOptionsAsync,
   getTenantBusinessInfo,
@@ -133,7 +132,8 @@ const CreateCustomerDialog = dynamic(
 import { retailDiscountContext } from "@/lib/manager-discount-context";
 import { OtpApprovalDialog } from "@/components/shared/dialogs/otp-approval-dialog";
 import { OTP_ACTION_CODES } from "@/lib/services/supabase/manager-otp";
-import { getCustomers } from "@/lib/services/supabase/customers";
+import { resolveRetailCustomerContact } from "@/lib/services/supabase/pos-retail-customer-contacts";
+import { CustomerBalance } from "./components/customer-balance";
 import { validateCoupon } from "@/lib/services/supabase/coupons";
 import { Icon } from "@/components/ui/icon";
 import { getVariantsByProduct } from "@/lib/services/supabase/variants";
@@ -316,7 +316,7 @@ function PosPageInner() {
     setClientSessionId(sessionId);
     state.loadDraft(detail);
     if (detail.customerId) {
-      const customer = await getCustomerById(detail.customerId);
+      const customer = await resolveRetailCustomerContact(detail.customerId, currentBranch?.id ?? "");
       if (!isCartLoadCurrent(token)) return false;
       if (customer) {
         state.setCustomer(customer, "load-draft");
@@ -330,7 +330,7 @@ function PosPageInner() {
     // theo giờ máy chủ lúc thu tiền, nên trả ngày về null (= tự động).
     datNgayHoaDon(null, "");
     return true;
-  }, [datNgayHoaDon, isCartLoadCurrent, setClientSessionId, state]);
+  }, [currentBranch?.id, datNgayHoaDon, isCartLoadCurrent, setClientSessionId, state]);
 
   const switchTab = useCallback((tabId: string) => {
     const currentId = activeTabIdRef.current;
@@ -812,6 +812,7 @@ function PosPageInner() {
     // popup hỏi (đỡ thao tác cashier — giỏ vẫn đó như anh chưa F5).
     const localBackup = loadLocalCart(tenant.id, branchSnapshot);
     if (localBackup) {
+      const restoreToken = beginCartLoad();
       // 28/07: backup giờ có thể CHỈ CÓ KHÁCH (0 dòng) — thu ngân chọn khách
       // trước khi thêm hàng rồi tablet reload. Khôi phục khách im lặng, không
       // toast "0 sản phẩm".
@@ -831,7 +832,7 @@ function PosPageInner() {
       // cũng kẹt dialog + bắn save hỏng). Best-effort — lỗi thì như cũ.
       findDraftBySession(localBackup.sessionId)
         .then((serverDraft) => {
-          if (cancelled || !serverDraft) return;
+          if (cancelled || !isCartLoadCurrent(restoreToken) || !serverDraft) return;
           state.setLoadedDraftId(serverDraft.invoiceId);
           state.setLoadedDraftRevision(serverDraft.revision);
         })
@@ -844,24 +845,14 @@ function PosPageInner() {
           duration: 4000,
         });
       }
-      // P0-5 fix 12/06/2026: backup chỉ lưu slim {id,name} của KH → currentDebt=0
-      // sau restore là RÁC. Re-fetch full customer từ DB để cashier thấy nợ cũ
-      // và bị cảnh báo nếu KH đang nợ. Best-effort: lỗi/offline thì skip silent.
+      // Restore pricing and loyalty from the scoped contact source, not cached totals.
       const restoredCustomerId = localBackup.customer?.id;
       if (restoredCustomerId) {
-        getCustomerById(restoredCustomerId)
+        resolveRetailCustomerContact(restoredCustomerId, branchSnapshot)
           .then((fresh) => {
-            if (cancelled || !fresh) return;
+            if (cancelled || !isCartLoadCurrent(restoreToken) || !fresh) return;
             state.setCustomer(fresh, "refetch-sau-f5");
             if (fresh.isInternal) state.setSellingMode("internal");
-            if ((fresh.currentDebt ?? 0) > 0) {
-              toast({
-                title: `⚠️ ${fresh.name} đang nợ ${formatCurrency(fresh.currentDebt)} ₫`,
-                description: "Vui lòng đối chiếu công nợ cũ trước khi cho ghi nợ tiếp.",
-                variant: "warning",
-                duration: 6000,
-              });
-            }
           })
           .catch((err) => {
             console.warn("[POS] re-fetch customer after F5 restore failed:", err);
@@ -3508,11 +3499,7 @@ function PosPageInner() {
                     {state.customer.phone}
                   </span>
                 )}
-                {(state.customer.currentDebt ?? 0) > 0 && (
-                  <span className="flex items-center gap-0.5 text-status-error font-semibold">
-                    Nợ cũ: {formatCurrency(state.customer.currentDebt ?? 0)}
-                  </span>
-                )}
+                <CustomerBalance customerId={state.customer.id} branchId={currentBranch?.id} />
                 {state.customer.code && (
                   <span className="text-muted-foreground font-mono">{state.customer.code}</span>
                 )}
@@ -4061,23 +4048,15 @@ function PosPageInner() {
 
       {/* ═══════════ MODALS ═══════════ */}
       <CustomerPicker
+        key={`${tenant?.id}:${user?.id}:${currentBranch?.id}:${customerModalOpen}`}
         internalOnly={state.sellingMode === "internal"}
         currentBranchId={currentBranch?.id}
         open={customerModalOpen}
         onClose={() => setCustomerModalOpen(false)}
         onSelect={(customer) => {
+          cartLoadRequestRef.current += 1;
           state.setCustomer(customer, "user-pick");
           if (customer?.isInternal) state.setSellingMode("internal");
-          // R2: Cảnh báo nợ cũ — KH có currentDebt > 0 → toast warning
-          // ngay khi chọn để cashier biết trước khi cộng thêm đơn mới.
-          if (customer && customer.currentDebt > 0) {
-            toast({
-              title: `⚠️ ${customer.name} đang nợ ${formatCurrency(customer.currentDebt)} ₫`,
-              description: "Vui lòng đối chiếu công nợ cũ trước khi cho ghi nợ tiếp.",
-              variant: "warning",
-              duration: 6000,
-            });
-          }
         }}
         onRequestCreate={(initialName) => {
           setCreateCustomerInitial(initialName);
@@ -4089,29 +4068,24 @@ function PosPageInner() {
       <CreateCustomerDialog
         open={createCustomerOpen}
         onOpenChange={setCreateCustomerOpen}
-        onSuccess={() => {
-          // Refetch customer vừa tạo bằng search theo tên để auto-select
-          // (createCustomer không return customer object, nên phải query lại).
-          if (!createCustomerInitial) return;
-          getCustomers({
-            page: 0,
-            pageSize: 1,
-            search: createCustomerInitial,
-            filters: {},
-            sortBy: "name",
-            sortOrder: "asc",
-          })
-            .then((res) => {
-              if (res.data.length > 0) {
-                state.setCustomer(res.data[0], "user-pick-scan");
+        onSavedIdentity={(customerId) => {
+          const branchSnapshot = currentBranch?.id;
+          if (!customerId || !branchSnapshot) return;
+          const token = beginCartLoad();
+          resolveRetailCustomerContact(customerId, branchSnapshot)
+            .then((customer) => {
+              if (branchIdRef.current !== branchSnapshot || !isCartLoadCurrent(token)) return;
+              if (customer) {
+                state.setCustomer(customer, "user-pick-scan");
                 toast({
                   title: "Đã chọn khách hàng",
-                  description: res.data[0].name,
+                  description: customer.name,
                   variant: "success",
                 });
-              }
+              } else throw new Error("Chưa tải được khách vừa tạo.");
             })
             .catch((err) => {
+              if (branchIdRef.current !== branchSnapshot || !isCartLoadCurrent(token)) return;
               console.error("[POS] customer search failed:", err);
               toast({
                 title: "Không tìm được khách hàng",
