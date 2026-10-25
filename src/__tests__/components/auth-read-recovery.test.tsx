@@ -2,7 +2,7 @@ import {act,cleanup,fireEvent,render,screen} from "@testing-library/react";
 import {afterEach,beforeEach,describe,expect,it,vi} from "vitest";
 const mock=vi.hoisted(()=>({
  router:{push:vi.fn(),replace:vi.fn()},session:vi.fn(),permissions:vi.fn(),profile:vi.fn(),
- callback:undefined as undefined|((event:string,session:unknown)=>void),signOut:vi.fn(),
+ callback:undefined as undefined|((event:string,session:unknown)=>void),signOut:vi.fn(),bootstrap:vi.fn(),
 }));
 vi.mock("next/navigation",()=>({useRouter:()=>mock.router}));
 vi.mock("@/lib/services/supabase/permission-overrides",()=>({getUserEffectivePermissions:mock.permissions}));
@@ -10,7 +10,7 @@ vi.mock("@/lib/services/supabase/base",()=>({_seedProfileCache:vi.fn(),_clearPro
 vi.mock("@/lib/hooks/use-device-binding",()=>({readDeviceBinding:()=>null}));
 vi.mock("@/lib/supabase/client",()=>({createClient:()=>({
  auth:{getSession:mock.session,onAuthStateChange:(callback:typeof mock.callback)=>{mock.callback=callback;return {data:{subscription:{unsubscribe:vi.fn()}}};},signOut:mock.signOut},
- rpc:async()=>({data:[{branch_id:"branch"}],error:null}),
+ rpc:async(name:string)=> name === "get_my_auth_bootstrap" ? mock.bootstrap() :({data:[{branch_id:"branch"}],error:null}),
  from:(table:string)=>{
   const q={select:()=>q,eq:()=>q,single:()=>table==="profiles"?mock.profile():Promise.resolve({data:{id:"tenant",name:"Tenant",settings:{}},error:null}),
    order:async()=>({data:[{id:"branch",tenant_id:"tenant",name:"Branch",is_default:true}],error:null})};return q;
@@ -30,9 +30,16 @@ beforeEach(()=>{
  mock.session.mockReset().mockResolvedValue(session);
  mock.permissions.mockReset().mockResolvedValue(["pos_fnb.send_kitchen"]);
  mock.profile.mockReset().mockResolvedValue({data:profile,error:null});
+ mock.bootstrap.mockReset().mockResolvedValue({data:null,error:{code:"PGRST202"}});
 });
 afterEach(()=>{cleanup();vi.useRealTimers();});
 describe("auth bootstrap failure is distinct from genuine permission denial",()=>{
+ it("restores an allowed POS from one bootstrap request with no legacy queries",async()=>{
+  mock.bootstrap.mockResolvedValue({data:{version:1,profile,tenant:{id:"tenant",name:"Tenant",settings:{}},branches:[{id:"branch",tenant_id:"tenant",is_active:true,is_default:true,name:"Branch"}],permissions:["pos_fnb.send_kitchen"],scope:[{branch_id:"branch"}]},error:null});
+  render(<AuthProvider><Probe/></AuthProvider>);await flush();
+  expect(screen.getByText("POS được phép")).toBeInTheDocument();
+  expect(mock.bootstrap).toHaveBeenCalledTimes(1);expect(mock.profile).not.toHaveBeenCalled();expect(mock.permissions).not.toHaveBeenCalled();
+ });
  it("does not release loading when INITIAL_SESSION and getSession finish in different orders",async()=>{
   let finishSession!:(v:typeof session)=>void,finishPerms!:(v:string[])=>void;
   mock.session.mockReturnValue(new Promise(r=>{finishSession=r;}));
