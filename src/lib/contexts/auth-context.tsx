@@ -33,6 +33,7 @@ interface AuthState {
   /** Cached permission codes for current user */
   permissions: Set<string>;
   isLoading: boolean;
+  authDataError: string | null;
   isAuthenticated: boolean;
 }
 
@@ -59,6 +60,16 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 const MAX_SESSION_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const LOGIN_AT_KEY = "auth_login_at";
 
+async function boundedAuthRead<T>(request: PromiseLike<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      Promise.resolve(request),
+      new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("AUTH_READ_TIMEOUT")), 12_000); }),
+    ]);
+  } finally { clearTimeout(timer); }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [supabase] = useState(() => createClient());
@@ -70,27 +81,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentBranch, setCurrentBranch] = useState<Branch | null>(null);
   const [permissions, setPermissions] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
+  const [authDataError, setAuthDataError] = useState<string | null>(null);
+  const [failedReadVersion, setFailedReadVersion] = useState(0);
   const profileRequestRef = useRef(0);
+  const authEventVersionRef = useRef(0);
+  const autoRecoveryRef = useRef(0);
 
   // Load profile, tenant, branches from Supabase
   const loadUserData = useCallback(
     async (authUser: User) => {
       const request = ++profileRequestRef.current;
       setIsLoading(true);
+      setAuthDataError(null);
       setTenant(null);
       setBranches([]);
       setCurrentBranch(null);
       setPermissions(new Set());
       clearProfileCache();
+      const timeout = setTimeout(() => {
+        if (request !== profileRequestRef.current) return;
+        profileRequestRef.current += 1;
+        setUser(buildFallbackProfile(authUser));
+        setPermissions(new Set());
+        setBranches([]);
+        setCurrentBranch(null);
+        setTenant(null);
+        clearProfileCache();
+        setAuthDataError("Kiểm tra phiên và quyền truy cập đang mất quá nhiều thời gian. Vui lòng thử lại.");
+        setFailedReadVersion(value => value + 1);
+        setIsLoading(false);
+      }, 12_000);
       try {
         // 1. Profile TRƯỚC — các query khác cần profile.tenant_id + profile.id.
-        const { data: profile } = await supabase
+        const { data: profile, error: profileError } = await supabase
           .from("profiles")
           .select("id,tenant_id,branch_id,role_id,full_name,email,phone,role,is_active,created_at")
           .eq("id", authUser.id)
           .single();
 
         if (request !== profileRequestRef.current) return;
+        if (profileError) throw new Error("Không tải được hồ sơ đăng nhập.");
 
         if (!profile || !profile.is_active) {
           // Profile not yet created (handle_new_user trigger hasn't fired or failed)
@@ -138,8 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           profile.role === "owner"
             ? Promise.resolve(new Set(["*"]))
             : getUserEffectivePermissions(profile.id)
-                .then((codes) => new Set(codes))
-                .catch(() => new Set<string>());
+                .then((codes) => new Set(codes));
 
         const [tenantRes, branchRes, perms, scopeRes] = await Promise.all([
           supabase
@@ -234,6 +263,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
           }
         }
+        setAuthDataError(null);
+        autoRecoveryRef.current = 0;
       } catch {
         if (request !== profileRequestRef.current) return;
         // If DB queries fail (e.g., tables not created yet), use fallback
@@ -243,7 +274,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setCurrentBranch(null);
         setTenant(null);
         clearProfileCache();
+        setAuthDataError("Chưa tải được thông tin đăng nhập và quyền truy cập. Kiểm tra kết nối rồi bấm Thử lại.");
+        setFailedReadVersion(value => value + 1);
       } finally {
+        clearTimeout(timeout);
         if (request === profileRequestRef.current) setIsLoading(false);
       }
     },
@@ -266,17 +300,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Listen to Supabase auth state changes
   useEffect(() => {
-    // Safety net: nếu getUser() hang 10s (network dropped, DNS fail, CORS),
-    // force release spinner để user không thấy màn hình trắng vô hạn. Trước
-    // đây getUser() thiếu .catch() → isLoading stuck forever → cả app render
-    // null qua PermissionPage → CEO báo "web quay vòng".
+    // Session-read failures are recoverable errors, never an empty permission result.
+    // Profile/permission reads have their own deadline and keep the gate closed.
     const initTimeoutId = setTimeout(() => {
-      setIsLoading((current) => {
-        if (current) {
-          console.warn("[AuthProvider] Init timeout 10s — force release spinner");
-        }
-        return false;
-      });
+      if (loadedUserIdRef.current) return;
+      setAuthDataError("Chưa xác minh được phiên đăng nhập. Vui lòng thử lại.");
+      setIsLoading(false);
     }, 10_000);
 
     // Sprint LT-6 27/05: Check 30-day HARD timeout TRƯỚC khi getSession.
@@ -311,10 +340,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // - Edge case: session expired/tampered → loadUserData query với invalid
     //   token sẽ fail, RLS block → user bị redirect login. Chấp nhận risk
     //   này vì lợi ích 200-400ms perf cho 99% case happy path.
-    supabase.auth
-      .getSession()
-      .then(({ data: { session } }) => {
+    const bootstrapAuthVersion = authEventVersionRef.current;
+    boundedAuthRead(supabase.auth.getSession())
+      .then(({ data: { session }, error }) => {
+        if (error) throw error;
         const initialUser = session?.user ?? null;
+        if (authEventVersionRef.current !== bootstrapAuthVersion
+            && loadedUserIdRef.current !== (initialUser?.id ?? null)) {
+          clearTimeout(initTimeoutId);
+          return;
+        }
         if (initialUser) {
           setAuthUser(initialUser);
           wasAuthenticatedRef.current = true;
@@ -334,15 +369,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // listener đã loadUserData rồi → ở đây skip để tránh fetch profile
           // lần 2.
           if (loadedUserIdRef.current === initialUser.id) {
-            // Đã load qua listener — chỉ release spinner.
+            // The listener owns the pending read; do not release its loading state.
             clearTimeout(initTimeoutId);
-            setIsLoading(false);
             return;
           }
           loadedUserIdRef.current = initialUser.id;
           loadUserData(initialUser).finally(() => {
             clearTimeout(initTimeoutId);
-            setIsLoading(false);
           });
         } else {
           clearTimeout(initTimeoutId);
@@ -354,7 +387,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // thay vì để isLoading stuck true.
         console.error("[AuthProvider] getSession failed:", err);
         clearTimeout(initTimeoutId);
-        setIsLoading(false);
+        if (!loadedUserIdRef.current) {
+          setAuthDataError("Chưa xác minh được phiên đăng nhập. Vui lòng thử lại.");
+          setIsLoading(false);
+        }
       });
 
     // CEO 06/06/2026: bắt "Invalid Refresh Token: Already Used" global.
@@ -454,6 +490,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
+      authEventVersionRef.current += 1;
       const sessionUser = session?.user ?? null;
       setAuthUser(sessionUser);
 
@@ -476,12 +513,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // / USER_UPDATED không cần re-fetch profile/tenant/branches vì data
         // không đổi — chỉ token đổi.
         if (loadedUserIdRef.current !== sessionUser.id) {
+          autoRecoveryRef.current = 0;
           loadedUserIdRef.current = sessionUser.id;
           // loadUserData có try/catch trong body — không throw lên đây.
           loadUserData(sessionUser);
         }
       } else {
         profileRequestRef.current += 1;
+        setAuthDataError(null);
+        setIsLoading(false);
+        autoRecoveryRef.current = 0;
         setUser(null);
         setTenant(null);
         setBranches([]);
@@ -623,12 +664,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Permission check helper
   const hasPermission = useCallback(
     (code: string): boolean => {
-      if (isLoading || !user?.isActive) return false;
+      if (isLoading || authDataError || !user?.isActive) return false;
       if (user?.role === "owner") return true;
       if (permissions.has("*")) return true;
       return permissions.has(code);
     },
-    [user?.role, user?.isActive, permissions, isLoading]
+    [user?.role, user?.isActive, permissions, isLoading, authDataError]
   );
 
   const logout = useCallback(async () => {
@@ -647,9 +688,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // admin thay đổi role/branch từ trang khác — để UI (header, sidebar, permission)
   // sync ngay không cần reload.
   const refreshProfile = useCallback(async () => {
-    if (!authUser) return;
-    await loadUserData(authUser);
-  }, [authUser, loadUserData]);
+    autoRecoveryRef.current = 0;
+    if (authUser) { await loadUserData(authUser); return; }
+    setIsLoading(true);
+    setAuthDataError(null);
+    try {
+      const { data, error } = await boundedAuthRead(supabase.auth.getSession());
+      if (error) throw error;
+      const sessionUser = data.session?.user;
+      if (!sessionUser) {
+        setIsLoading(false);
+        router.replace("/dang-nhap");
+        return;
+      }
+      setAuthUser(sessionUser);
+      loadedUserIdRef.current = sessionUser.id;
+      await loadUserData(sessionUser);
+    } catch {
+      setAuthDataError("Chưa xác minh được phiên đăng nhập. Vui lòng thử lại.");
+      setIsLoading(false);
+    }
+  }, [authUser, loadUserData, router, supabase]);
+
+  // Retry failed bootstrap reads only; preserve session/draft storage and require real permissions.
+  useEffect(() => {
+    if (!authDataError || !authUser) return;
+    let started = false;
+    const retry = () => {
+      if (started || autoRecoveryRef.current >= 2 || navigator.onLine === false) return;
+      started = true;
+      autoRecoveryRef.current += 1;
+      void loadUserData(authUser);
+    };
+    const onOnline = () => { autoRecoveryRef.current = 0; retry(); };
+    const timer = setTimeout(retry, 1500 * (autoRecoveryRef.current + 1));
+    window.addEventListener("online", onOnline);
+    return () => { clearTimeout(timer); window.removeEventListener("online", onOnline); };
+  }, [authDataError, authUser, loadUserData, failedReadVersion]);
 
   return (
     <AuthContext.Provider
@@ -661,6 +736,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         currentBranch,
         permissions,
         isLoading,
+        authDataError,
         isAuthenticated: !!authUser,
         switchBranch,
         activeBranchId,
