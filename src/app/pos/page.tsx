@@ -5307,7 +5307,7 @@ function ProcessOrderModal({
   const [searchField, setSearchField] = useState<"all" | "code" | "customer_name">(
     "all",
   );
-  const [onlyPending, setOnlyPending] = useState(true);
+
   const [page, setPage] = useState(0);
   const [totalOrders, setTotalOrders] = useState(0);
   const { toast } = useToast();
@@ -5335,8 +5335,8 @@ function ProcessOrderModal({
         searchField,
         branchId,
         filters: {
-          fulfillmentState: "open",
-          ...(onlyPending ? { status: ["draft", "confirmed", "delivering"] } : {}),
+          fulfillmentState: "pending",
+          status: ["draft", "confirmed", "delivering"],
         },
       })
         .then((r) => {
@@ -5366,7 +5366,7 @@ function ProcessOrderModal({
       cancelled = true;
       clearTimeout(t);
     };
-  }, [open, search, searchField, onlyPending, branchId, page, toast]);
+  }, [open, search, searchField, branchId, page, toast]);
 
   if (!open) return null;
 
@@ -5387,8 +5387,7 @@ function ProcessOrderModal({
             Xử lý đặt hàng
           </DialogTitle>
           <p className="text-sm text-muted-foreground">
-            Chọn đơn còn xử lý để tạo phiếu bán riêng. Đơn đã có hóa đơn vẫn
-            có thể bán tiếp cho đến khi được chốt xử lý.
+            Chỉ hiện đơn chưa có hóa đơn xuất còn hiệu lực. Đơn đã xuất hóa đơn được tra cứu tại Đơn đặt hàng.
           </p>
         </DialogHeader>
 
@@ -5422,17 +5421,7 @@ function ProcessOrderModal({
             <option value="code">Mã đơn</option>
             <option value="customer_name">Khách hàng</option>
           </select>
-          <label className="flex items-center gap-1.5 text-sm cursor-pointer select-none whitespace-nowrap">
-            <input
-              type="checkbox"
-              checked={onlyPending}
-              onChange={(e) => {
-                setOnlyPending(e.target.checked);
-                setPage(0);
-              }}
-            />
-            Còn có thể bán tiếp
-          </label>
+
         </div>
 
         <div className="flex-1 overflow-y-auto -mx-1 px-1 space-y-1.5 min-h-[220px]">

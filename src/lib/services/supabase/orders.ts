@@ -157,6 +157,9 @@ export async function getOrders(
     // 00173: ẩn đơn đã xóa mềm (đơn đặt hàng vốn KHÔNG bị xóa — guard cho chắc).
     .is("deleted_at", null);
 
+  // Explicit selected-order export; still subject to tenant, branch and RLS.
+  if (Array.isArray(params.filters?.ids)) query = query.in("id", params.filters.ids);
+
   // Trạng thái rỗng không được hiểu là "hiện cả đơn đã hủy". Danh sách mặc
   // định chỉ hiện đơn còn hiệu lực; muốn xem đơn hủy phải tick "Đã hủy".
   const statusFilter = params.filters?.status;

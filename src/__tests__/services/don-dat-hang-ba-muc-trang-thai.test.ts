@@ -168,20 +168,21 @@ describe("Bộ lọc phân biệt đủ ba mức", () => {
   });
 });
 
-describe("Modal POS vẫn chọn được đơn Đang xử lý", () => {
+describe("Modal POS chỉ hiện đơn chưa có hóa đơn", () => {
   const pos = readFileSync(join(process.cwd(), "src/app/pos/page.tsx"), "utf8");
 
-  it("lọc đơn chưa chốt trên server trước phân trang, vẫn giữ đơn đang xử lý", () => {
-    expect(pos).toContain('fulfillmentState: "open"');
+  it("lọc đơn chưa xuất trên server trước phân trang", () => {
+    expect(pos).toContain('fulfillmentState: "pending"');
     expect(pos).not.toContain("r.data.filter((o) => !o.fulfilledById)");
     expect(pos).toContain("setTotalOrders(r.total)");
     expect(pos).toContain('aria-label="Trang sau"');
   });
 
-  it("không gọi đơn đã bán một phần là 'Chờ xử lý' và cho biết có thể bán tiếp", () => {
+  it("popup không còn tùy chọn đưa đơn đã xuất hóa đơn trở lại", () => {
     expect(pos).toContain('trangThaiXuLyDon(o) === "dang_xu_ly"');
     expect(pos).toContain("NHAN_TRANG_THAI_XU_LY.dang_xu_ly.nhan");
     expect(pos).toContain("Đã xuất {o.completedChildCount} hóa đơn");
-    expect(pos).toContain("Còn có thể bán tiếp");
+    expect(pos).not.toContain("Còn có thể bán tiếp");
+    expect(pos).toContain("Chỉ hiện đơn chưa có hóa đơn xuất còn hiệu lực");
   });
 });

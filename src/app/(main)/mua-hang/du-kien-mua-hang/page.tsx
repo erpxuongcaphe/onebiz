@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { ChartCard } from "../../phan-tich/_components";
 import { ReportPageHeader } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
@@ -10,9 +10,9 @@ import { formatCurrency, formatNumber, formatShortDate } from "@/lib/format";
 // nếu không ô chọn nhóm khách sẽ trống mãi mà không báo lỗi gì.
 import {
   getPurchaseForecast,
-  getCustomers,
   getCustomerGroupsAsync,
 } from "@/lib/services";
+import { getForecastCustomerOptions } from "@/lib/services/supabase/order-management-reads";
 import type { PurchaseForecastResult } from "@/lib/services";
 import {
   exportReportToExcel,
@@ -33,7 +33,7 @@ export default function DuKienMuaHangPage() {
   const { activeBranchId, branchLabel, isReady } = useBranchFilter();
   const { toast } = useToast();
 
-  const [data, setData] = useState<PurchaseForecastResult | null>(null);
+  const [loaded, setLoaded] = useState<{key:string;value:PurchaseForecastResult} | null>(null);
   const [loading, setLoading] = useState(true);
   const [itemView, setItemView] = useState<ItemView>("all");
   const [itemQuery, setItemQuery] = useState("");
@@ -42,62 +42,48 @@ export default function DuKienMuaHangPage() {
   // trả lời câu "đơn của nhóm khách sỉ cần mua bao nhiêu nguyên liệu".
   const [customerId, setCustomerId] = useState<string>("");
   const [groupId, setGroupId] = useState<string>("");
-  const [dsKhach, setDsKhach] = useState<{ id: string; name: string }[]>([]);
+  const [dsKhach, setDsKhach] = useState<{ id: string; name: string; code: string; phone: string | null }[]>([]);
   const [dsNhom, setDsNhom] = useState<{ id: string; name: string }[]>([]);
 
-  useEffect(() => {
-    let huy = false;
-    void (async () => {
-      try {
-        const [kh, nhom] = await Promise.all([
-          getCustomers({ page: 1, pageSize: 500 }),
-          getCustomerGroupsAsync(),
-        ]);
-        if (huy) return;
-        setDsKhach(
-          (kh.data ?? []).map((c) => ({ id: c.id, name: c.name })),
-        );
-        // getCustomerGroupsAsync trả { label, value, count }
-        setDsNhom((nhom ?? []).map((g) => ({ id: g.value, name: g.label })));
-      } catch {
-        // Không tải được danh sách thì ô lọc để trống — không chặn báo cáo
-      }
-    })();
-    return () => {
-      huy = true;
-    };
-  }, []);
-
-  const fetchData = useCallback(async () => {
-    if (!isReady) return;
-    try {
-      setLoading(true);
-      const res = await getPurchaseForecast(
-        {
-          dateFrom: range.from,
-          dateTo: range.to,
-          customerId: customerId || undefined,
-          customerGroupId: groupId || undefined,
-        },
-        activeBranchId,
-      );
-      setData(res);
-    } catch (err) {
-      toast({
-        title: "Không tải được dự kiến mua hàng",
-        description: err instanceof Error ? err.message : "Lỗi",
-        variant: "error",
-      });
-      setData(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [range.from, range.to, activeBranchId, customerId, groupId, isReady, toast]);
-
-  useEffect(() => {
-    void fetchData();
-  }, [fetchData]);
-
+  const [customerQuery,setCustomerQuery]=useState('');
+  const [optionsError,setOptionsError]=useState('');
+  const [optionsLoading,setOptionsLoading]=useState(true);
+  const [retry,setRetry]=useState(0);
+  const [reportError,setReportError]=useState('');
+  const [exporting,setExporting]=useState(false);
+  const exportLock=useRef(false);
+  const mounted=useRef(true);
+  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
+  const queryKey=JSON.stringify([range.from,range.to,activeBranchId,customerId,groupId]);
+  const data=loaded?.key===queryKey && isReady ? loaded.value : null;
+  const exportKey=JSON.stringify([queryKey,itemView,itemQuery]);
+  const currentExportKey=useRef(exportKey);currentExportKey.current=exportKey;
+  useEffect(()=>{
+    if(!isReady)return;
+    let cancelled=false;setOptionsLoading(true);setOptionsError('');
+    void Promise.allSettled([getForecastCustomerOptions(),getCustomerGroupsAsync()]).then(([customers,groups])=>{
+      if(cancelled)return;
+      if(customers.status==='fulfilled')setDsKhach(customers.value);else setDsKhach([]);
+      if(groups.status==='fulfilled')setDsNhom(groups.value.map(g=>({id:g.value,name:g.label})));else setDsNhom([]);
+      if(customers.status==='rejected'||groups.status==='rejected')setOptionsError('Chưa tải đủ khách hoặc nhóm khách. Bấm tải lại; không tự đổi bộ lọc.');
+      setOptionsLoading(false);
+    });
+    return()=>{cancelled=true;};
+  },[isReady,retry]);
+  useEffect(()=>{
+    if(!isReady)return;
+    let cancelled=false;setLoading(true);setReportError('');
+    getPurchaseForecast({dateFrom:range.from,dateTo:range.to,customerId:customerId||undefined,customerGroupId:groupId||undefined},activeBranchId)
+      .then(value=>{if(!cancelled)setLoaded({key:queryKey,value});})
+      .catch(err=>{if(!cancelled){setLoaded(null);setReportError(err instanceof Error?err.message:'Không tải được báo cáo.');}})
+      .finally(()=>{if(!cancelled)setLoading(false);});
+    return()=>{cancelled=true;};
+  },[range.from,range.to,activeBranchId,customerId,groupId,isReady,queryKey,retry]);
+  const matchingCustomers=useMemo(()=>{
+    const normalize=(value:string)=>value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[đĐ]/g,'d').toLowerCase();
+    const q=normalize(customerQuery.trim());
+    return dsKhach.filter(c=>c.id===customerId||normalize(`${c.code} ${c.name} ${c.phone??''}`).includes(q));
+  },[dsKhach,customerQuery,customerId]);
   const normalizedItemQuery = normalizePurchaseForecastQuery(itemQuery);
 
   const filteredMaterials = useMemo(
@@ -128,14 +114,20 @@ export default function DuKienMuaHangPage() {
     return [...groups.values()];
   }, [filteredSkuRows]);
 
-  const handleExport = useCallback(() => {
-    if (!data) return;
+  const handleExport = useCallback(async () => {
+    if (!data || loading || exportLock.current) return;
+    exportLock.current=true;setExporting(true); const key=exportKey;
+    try {
     const title = buildReportTitleRows({
       title: "DỰ KIẾN MUA HÀNG",
       range,
       branchName: branchLabel,
       generatedAt: new Date(),
     });
+    const customerLabel=dsKhach.find(c=>c.id===customerId);
+    if(customerId && !customerLabel)throw new Error("Chưa tải được tên khách đang lọc. Tải lại danh sách trước khi xuất.");
+    const filterTitle=`Khách: ${customerLabel?`${customerLabel.code} · ${customerLabel.name}`:"Tất cả"} · Nhóm: ${dsNhom.find(g=>g.id===groupId)?.name??"Tất cả"} · Loại: ${{all:"Tất cả NVL và SKU",materials:"NVL cần mua",sku:"SKU còn phải xuất"}[itemView]} · Tìm hàng: ${itemQuery.trim()||"Tất cả"}`;
+    title.push(filterTitle);
     const sheets: ExcelSheet[] = [];
     if (itemView !== "sku") {
       sheets.push({
@@ -194,14 +186,18 @@ export default function DuKienMuaHangPage() {
         })),
       });
     }
-    exportReportToExcel({
+    await exportReportToExcel({
+      shouldSave:()=>mounted.current && currentExportKey.current===key,
       kind: "du-kien-mua-hang",
       mode: "full",
+      description:filterTitle,
       range,
       branchName: branchLabel,
       sheets,
     });
-  }, [data, range, branchLabel, itemView, filteredMaterials, filteredSkuRows, filteredToBuyAmount]);
+    } catch(e) { if(mounted.current)toast({title:"Không xuất được file",description:e instanceof Error?e.message:"Vui lòng thử lại.",variant:"error"}); }
+    finally {exportLock.current=false;if(mounted.current)setExporting(false);}
+  }, [data, loading, exportKey, range, branchLabel, itemView, itemQuery, dsKhach, dsNhom, customerId, groupId, filteredMaterials, filteredSkuRows, filteredToBuyAmount, toast]);
 
   return (
     <div className="space-y-4">
@@ -215,7 +211,7 @@ export default function DuKienMuaHangPage() {
         viewMode={viewMode}
         onViewModeChange={setViewMode}
         onExportFull={handleExport}
-        exportDisabled={loading || !data}
+        exportDisabled={loading || !data || exporting || optionsLoading}
       />
 
       <div className="border-y bg-surface-container-lowest px-4 py-3 lg:px-6">
@@ -225,6 +221,7 @@ export default function DuKienMuaHangPage() {
               Loại cần xem
             </label>
             <select
+              aria-label="Loại cần xem"
               value={itemView}
               onChange={(event) => setItemView(event.target.value as ItemView)}
               className="h-9 w-full rounded-lg border bg-background px-3 text-sm"
@@ -246,6 +243,7 @@ export default function DuKienMuaHangPage() {
                 className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
               />
               <input
+                aria-label="Mã hoặc tên NVL / SKU"
                 value={itemQuery}
                 onChange={(event) => setItemQuery(event.target.value)}
                 placeholder="Ví dụ: NVL-SUA, SKU-TPP, Trân châu..."
@@ -290,6 +288,8 @@ export default function DuKienMuaHangPage() {
             Nhóm khách
           </label>
           <select
+            aria-label="Nhóm khách"
+            disabled={optionsLoading}
             value={groupId}
             onChange={(e) => {
               setGroupId(e.target.value);
@@ -310,7 +310,10 @@ export default function DuKienMuaHangPage() {
           <label className="mb-1 block text-xs font-medium text-muted-foreground">
             Khách hàng cụ thể
           </label>
+          <input aria-label="Tìm khách theo mã, tên hoặc số điện thoại" value={customerQuery} onChange={e=>setCustomerQuery(e.target.value)} placeholder="Tìm mã, tên, SĐT khách…" className="mb-2 h-9 w-full rounded-lg border bg-background px-3 text-sm" />
           <select
+            aria-label="Khách hàng cụ thể"
+            disabled={optionsLoading}
             value={customerId}
             onChange={(e) => {
               setCustomerId(e.target.value);
@@ -319,9 +322,9 @@ export default function DuKienMuaHangPage() {
             className="h-9 w-full rounded-lg border bg-background px-3 text-sm"
           >
             <option value="">Tất cả khách</option>
-            {dsKhach.map((c) => (
+            {matchingCustomers.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.name}
+                {c.code} · {c.name}
               </option>
             ))}
           </select>
@@ -349,6 +352,9 @@ export default function DuKienMuaHangPage() {
         )}
       </div>
 
+      {optionsError && <p role="alert" className="text-sm text-destructive">{optionsError} <button type="button" className="underline" onClick={()=>setRetry(n=>n+1)}>Tải lại danh sách</button></p>}
+      {reportError && <p role="alert" className="text-sm text-destructive">{reportError} <button type="button" className="underline" onClick={()=>setRetry(n=>n+1)}>Thử lại</button></p>}
+      {exporting && <p role="status" className="text-sm text-muted-foreground">Đang chuẩn bị file theo bộ lọc…</p>}
       {/* Ghi chú nguồn số liệu */}
       <div className="rounded-lg border border-primary/25 bg-primary/5 px-4 py-2.5 text-sm text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1">
         <span className="flex items-center gap-1.5">
