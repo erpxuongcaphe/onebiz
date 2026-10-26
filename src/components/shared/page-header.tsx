@@ -421,15 +421,15 @@ function DebouncedSearchInput({
   const hasFields = !!(fields && fields.length > 0 && onFieldChange);
 
   return (
-    <div className={cn("flex items-stretch w-full min-w-0", !fullWidth && "lg:max-w-md lg:flex-1")}>
+    <div className={cn("flex items-stretch w-full min-w-0", !fullWidth && "md:flex-1 md:basis-[18rem] md:min-w-[min(100%,18rem)] lg:max-w-md")}>
       {hasFields && (
         <Select
           value={field ?? fields![0].value}
           onValueChange={(v) => v && onFieldChange!(v)}
         >
-          <SelectTrigger className="h-8 w-auto shrink-0 rounded-r-none border-r-0 gap-1 px-2.5 text-xs text-muted-foreground whitespace-nowrap">
+          <SelectTrigger className="h-8 w-auto min-w-0 max-w-[40%] shrink-0 rounded-r-none border-r-0 gap-1 px-2.5 text-xs text-muted-foreground whitespace-nowrap">
             {/* Base UI SelectValue hiện value thô → render nhãn thẳng. */}
-            <span>
+            <span className="min-w-0 truncate">
               {fields!.find((f) => f.value === (field ?? fields![0].value))
                 ?.label ?? fields![0].label}
             </span>
@@ -450,7 +450,7 @@ function DebouncedSearchInput({
           aria-label={placeholder}
           onChange={(e) => setLocal(e.target.value)}
           placeholder={placeholder}
-          className={cn("pl-9 h-8", fullWidth && "h-11 text-base", hasFields && "rounded-l-none")}
+          className={cn("pl-9 h-8 max-md:text-[16px] pointer-coarse:text-[16px]", fullWidth && "h-11 text-base", hasFields && "rounded-l-none")}
         />
       </div>
     </div>
@@ -514,12 +514,11 @@ export function PageHeader({
         {/* Title row: Title (left) + Search (center) + Actions (right) */}
         <div
           className={cn(
-            "flex flex-col",
+            "flex flex-col flex-wrap",
             compact
               ? "gap-2 md:flex-row md:items-center"
               : "gap-3 lg:flex-row lg:items-center",
-            searchOnOwnRow && "md:flex-wrap",
-            mobileCompact && "max-md:grid max-md:grid-cols-[minmax(0,1fr)_auto] max-md:items-center [&_input]:max-md:h-11 [&_input]:max-md:text-base [&_[data-slot=select-trigger]]:max-md:h-11",
+            mobileCompact && "max-md:grid max-md:grid-cols-[minmax(0,1fr)_auto] max-md:items-center [&_input]:max-md:h-11 [&_input]:max-md:text-[16px] [&_[data-slot=select-trigger]]:max-md:h-11",
           )}
         >
           {/* Sprint VISUAL-2 P1: title text-2xl font-bold (24px/700) thay text-lg font-medium (18px/500).
@@ -539,7 +538,7 @@ export function PageHeader({
           </div>
 
           {mobileCompact && <div className="md:hidden"><MobileActions mainActions={mainActions} overflowActions={overflowActions} onImport={onImport} onExport={onExport}/></div>}
-          {tabs && <div className={cn("min-w-0 shrink-0 overflow-x-auto no-scrollbar",mobileCompact&&"max-md:col-span-2")}>{tabs}</div>}
+          {tabs && <div className={cn("min-w-0 max-w-full shrink-0 overflow-x-auto no-scrollbar",mobileCompact&&"max-md:col-span-2")}>{tabs}</div>}
 
           {/* Search bar — centered.
               Trước đây có nút "tune" (≂) ở phải nhưng là dead button (không
@@ -547,7 +546,7 @@ export function PageHeader({
               đủ cho ~95% case. Cần thêm trường (mã vạch, ...) thì mở rộng
               service `.or(...)` thay vì thêm popover chọn trường (giảm
               cognitive load cho nhân viên chưa training). */}
-          {searchInput && (searchOnOwnRow ? <div className={cn("order-last w-full min-w-0 basis-full",mobileCompact&&"max-md:col-span-2")}>{searchInput}</div> : mobileCompact?<div className="min-w-0 flex-1 max-md:col-span-2">{searchInput}</div>:searchInput)}
+          {searchInput && (searchOnOwnRow ? <div className={cn("order-last w-full min-w-0 basis-full",mobileCompact&&"max-md:col-span-2")}>{searchInput}</div> : mobileCompact?<div className="min-w-0 flex-1 max-md:col-span-2 md:basis-[18rem] md:min-w-[min(100%,18rem)] lg:max-w-md">{searchInput}</div>:searchInput)}
 
           {/* Desktop actions */}
           <div className={cn("hidden md:flex min-w-0 flex-wrap items-center justify-end gap-2 lg:ml-auto", searchOnOwnRow && "md:ml-auto md:flex-1")}>
