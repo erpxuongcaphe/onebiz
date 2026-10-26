@@ -5,6 +5,11 @@ const fake = vi.hoisted(() => ({ read: vi.fn(), settle: vi.fn(), toast: vi.fn(),
 vi.mock("@/lib/contexts", () => ({ useToast: () => ({ toast: fake.toast }) }));
 vi.mock("@/lib/contexts/auth-context", () => ({ useAuth: () => ({ user: { id: fake.user }, tenant: { id: "tenant" }, hasPermission: () => fake.permission }) }));
 vi.mock("@/lib/services/supabase/shipping", () => ({ getUnsettledShipments: fake.read, settleCod: fake.settle }));
+vi.mock("@/lib/services/supabase/cod-reconciliation", () => ({ settleCodScoped: fake.settle }));
+vi.mock("@/lib/services/supabase/money-accounts", () => ({
+  getMoneyAccountOptions: async (branch: string) => [{ id: "account-a", branch_id: branch, code: "NH01", name: "Ngân hàng", kind: "bank", active: true }],
+  accountSupportsMethod: (_account: unknown, method: string) => method === "transfer",
+}));
 vi.mock("@/components/ui/dialog", () => {
   const Box = ({ children }: { children: ReactNode }) => <div>{children}</div>;
   return { Dialog: ({ children, open }: { children: ReactNode; open: boolean }) => open ? <div role="dialog">{children}</div> : null, DialogContent: Box, DialogHeader: Box, DialogTitle: Box, DialogDescription: Box, DialogFooter: Box };
@@ -23,10 +28,12 @@ describe("COD explicit selection and scope", () => {
     expect(screen.getByText("Cập nhật")).toBeInTheDocument();
     expect(screen.queryByText("Ngày giao")).not.toBeInTheDocument();
     fireEvent.click(checkbox);
+    expect(screen.getByRole("button", { name: "Xác nhận đối soát (1 đơn)" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Tài khoản đối soát"), { target: { value: "account-a" } });
     const confirm = screen.getByRole("button", { name: "Xác nhận đối soát (1 đơn)" });
     fireEvent.click(confirm); fireEvent.click(confirm);
     await waitFor(() => expect(fake.settle).toHaveBeenCalledTimes(1));
-    expect(fake.settle).toHaveBeenCalledWith({ partnerId: "partner", items: [{ shipmentId: "VD-a", partnerFee: 0 }], paymentMethod: "transfer", note: null });
+    expect(fake.settle).toHaveBeenCalledWith({ requestId: expect.any(String), branchId: "branch-a", moneyAccountId: "account-a", partnerId: "partner", items: [{ shipmentId: "VD-a", partnerFee: 0 }], paymentMethod: "transfer", note: null });
   });
   it("drops late responses from the previous branch", async () => {
     let resolve!: (rows: ReturnType<typeof row>[]) => void;

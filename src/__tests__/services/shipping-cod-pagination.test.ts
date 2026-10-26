@@ -74,7 +74,7 @@ describe("COD complete read pagination", () => {
   });
 
   it.each(["partner", null])("reads all unsettled shipments for %s with stable ordering", async partner => {
-    fake.rows = Array.from({ length: 1001 }, (_, i) => ({ id: `row-${i}`, code: `VD-${i}`, cod_amount: 10, updated_at: "2026-10-01T00:00:00Z", invoices: { code: "HD-fixture", customer_name: "Fixture" } }));
+    fake.rows = Array.from({ length: 1001 }, (_, i) => ({ id: `row-${i}`, code: `VD-${i}`, cod_amount: 10, updated_at: "2026-10-01T00:00:00Z", invoices: { code: "HD-fixture", customer_name: "Fixture", debt: 10, status: "completed" } }));
     const result = await getUnsettledShipments(partner, "branch-fixture");
     expect(result).toHaveLength(1001);
     expect(result[1000].code).toBe("VD-1000");
@@ -89,6 +89,12 @@ describe("COD complete read pagination", () => {
     fake.rows = Array.from({ length: 201 }, (_, i) => ({ id: `row-${i}` }));
     fake.failOffset = 200;
     await expect(kind === "stats" ? getDeliveryPartnersWithStats({ page: 0, pageSize: 20 }) : getUnsettledShipments(null)).rejects.toThrow("Page unavailable");
+  });
+
+  it("caps collectable COD to invoice debt without discarding the declared amount", async () => {
+    fake.rows = [{ id: "row-cap", code: "VD-cap", cod_amount: 100, updated_at: "2026-10-01T00:00:00Z", invoices: { code: "HD-cap", customer_name: "Fixture", debt: 60, status: "completed" } }];
+    expect((await getUnsettledShipments("partner", "branch-fixture"))[0]).toMatchObject({ codAmount: 60, declaredCodAmount: 100 });
+    expect(fake.queries[0].filters).toContainEqual(["invoices.status", "completed"]);
   });
 
   it("rejects changing totals and duplicate pages", async () => {
