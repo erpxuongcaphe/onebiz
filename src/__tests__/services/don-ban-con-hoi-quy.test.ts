@@ -95,12 +95,12 @@ describe("Hồi quy đơn bán con — 12 ca CEO", () => {
     expect(cau).not.toContain("source_order_id");
   });
 
-  it("12. dữ liệu cũ không có source_order_id vẫn chạy — cột nullable, chỉ lọc đơn đã chốt", () => {
+  it("12. dữ liệu cũ không có source_order_id vẫn chạy — cột nullable, popup chỉ lấy đơn chưa có hóa đơn", () => {
     expect(SQL331).toContain("add column if not exists source_order_id");
     expect(SQL331).not.toMatch(/alter table[^;]*source_order_id[^;]*not null/);
-    // Filter before pagination without requiring a child invoice relation.
-    expect(POS).toContain('fulfillmentState: "open"');
-    const openFilter = SERVICE.slice(SERVICE.indexOf('fulfillmentState === "open"'), SERVICE.indexOf('} else if (locBaMuc)'));
+    // POS uses the existing pending anti-join before pagination; legacy nullable links remain valid.
+    expect(POS).toContain('fulfillmentState: "pending"');
+    const openFilter = SERVICE.slice(SERVICE.indexOf('fulfillmentState === "open"'), SERVICE.indexOf('if (debtState === "outstanding")'));
     expect(openFilter).toContain('query.is("fulfilled_by_id", null)');
     expect(openFilter).not.toContain("source_order_id");
   });

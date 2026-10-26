@@ -114,23 +114,13 @@ describe("Bộ lọc phân biệt đủ ba mức", () => {
     expect(khoi).not.toContain("Chưa xuất hóa đơn");
   });
 
-  it("lọc bằng QUAN HỆ NHÚNG, không truyền danh sách UUID qua URL", () => {
-    const khoi = svc.slice(
-      svc.indexOf('if (fulfillmentState === "fulfilled")'),
-      svc.indexOf('if (debtState === "outstanding")'),
-    );
-    // processing = `!inner` (phải có dòng con khớp); pending = `.is(<quan hệ>, null)`
-    // (không có dòng nào khớp). Cùng mẫu trang này đã dùng cho vận đơn.
-    expect(svc).toContain("invoices!invoices_source_order_id_fkey!inner(id)");
-    expect(khoi).toContain('query.is("con_hoan_tat", null)');
-    expect(khoi).toContain('.eq("con_hoan_tat.status", "completed")');
-    expect(khoi).toContain('.is("con_hoan_tat.voided_at", null)');
-    expect(khoi).toContain('.is("con_hoan_tat.cancelled_at", null)');
-    // Tuyệt đối không quay lại cách truyền danh sách id.
-    expect(khoi).not.toMatch(/\.in\("id"/);
-    expect(khoi).not.toMatch(/\.not\("id", "in"/);
+  it("đọc đủ đơn theo phạm vi, đối chiếu hóa đơn rồi phân trang, không cắt bớt ID", () => {
+    expect(svc).toContain('readHistoryPages<SalesOrder>');
+    expect(svc).toContain('matching.slice(from, to + 1)');
+    expect(svc).toContain('o.completedChildCount === 0');
+    expect(svc).not.toContain('con_hoan_tat:invoices!');
+    expect(svc).not.toContain('TRAN_ID_LOC_BA_MUC');
   });
-
   it("KPI và bảng dùng CHUNG điều kiện — RPC nhận đủ ba trạng thái", () => {
     const rpc = readFileSync(
       join(process.cwd(), "supabase/migrations/00341_order_summary_three_states.sql"),
@@ -168,20 +158,21 @@ describe("Bộ lọc phân biệt đủ ba mức", () => {
   });
 });
 
-describe("Modal POS vẫn chọn được đơn Đang xử lý", () => {
+describe("Modal POS chỉ hiện đơn chưa có hóa đơn", () => {
   const pos = readFileSync(join(process.cwd(), "src/app/pos/page.tsx"), "utf8");
 
-  it("lọc đơn chưa chốt trên server trước phân trang, vẫn giữ đơn đang xử lý", () => {
-    expect(pos).toContain('fulfillmentState: "open"');
+  it("lọc đơn chưa xuất trên server trước phân trang", () => {
+    expect(pos).toContain('fulfillmentState: "pending"');
     expect(pos).not.toContain("r.data.filter((o) => !o.fulfilledById)");
     expect(pos).toContain("setTotalOrders(r.total)");
     expect(pos).toContain('aria-label="Trang sau"');
   });
 
-  it("không gọi đơn đã bán một phần là 'Chờ xử lý' và cho biết có thể bán tiếp", () => {
+  it("popup không còn tùy chọn đưa đơn đã xuất hóa đơn trở lại", () => {
     expect(pos).toContain('trangThaiXuLyDon(o) === "dang_xu_ly"');
     expect(pos).toContain("NHAN_TRANG_THAI_XU_LY.dang_xu_ly.nhan");
     expect(pos).toContain("Đã xuất {o.completedChildCount} hóa đơn");
-    expect(pos).toContain("Còn có thể bán tiếp");
+    expect(pos).not.toContain("Còn có thể bán tiếp");
+    expect(pos).toContain("Chỉ hiện đơn chưa có hóa đơn xuất còn hiệu lực");
   });
 });
