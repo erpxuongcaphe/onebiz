@@ -3712,6 +3712,8 @@
   "ops_manager",
   "ops_measurement_signature",
   "ops_measurements_for",
+  "ops_library_assignments_execute",
+  "ops_library_assignments_preview",
   "ops_library_update_execute",
   "ops_library_update_preview",
   "ops_mkt_link",
@@ -3898,5 +3900,5 @@
  ],
  "soBang": 238,
  "soCot": 2806,
- "soRpc": 610
+ "soRpc": 612
 }

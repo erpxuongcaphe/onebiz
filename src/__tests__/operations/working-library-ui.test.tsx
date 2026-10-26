@@ -23,6 +23,17 @@ beforeEach(()=>{
 });});
 afterEach(()=>{cleanup();vi.useRealTimers();vi.unstubAllGlobals();vi.resetAllMocks();});
 describe('company working library and branch setup UX',()=>{
+ it('keeps applied branch rollout locked but exposes a separate assignment editor without reapplying',async()=>{
+  fetchMock.mockImplementation(async(url:string)=>({ok:true,json:async()=>url.includes('/people')?{people:[]}:url.includes('library-assignments')?{result:{rows:[],people:[],changed:0,token:'a'.repeat(32)}}:{libraries:[lib],applications:[{id:branch,library_id:lib.id,branch_id:branch,library_version:1,settings:{effectiveFrom:'2026-10-20',dueTime:'23:59'}}]}}));
+  render(<WorkingLibrary workspace={workspace} onApplied={vi.fn()}/>);
+  fireEvent.click(await screen.findByRole('button',{name:'Áp dụng cho chi nhánh'}));
+  expect(screen.getByRole('checkbox',{name:'Quán A'})).toBeDisabled();
+  fireEvent.click(screen.getByRole('button',{name:'Chỉnh sửa phân công'}));
+  expect(await screen.findByRole('heading',{name:'Chỉnh sửa phân công chi nhánh'})).toBeInTheDocument();
+  await screen.findByText('Chưa có tiêu chí của bộ này tại chi nhánh.');
+  const commands=fetchMock.mock.calls.filter(([,init])=>init?.body).map(([,init])=>JSON.parse(String(init.body)));
+  expect(commands).toHaveLength(1);expect(commands[0]).toEqual({action:'read',id:lib.id,branchId:branch});
+ });
  it('asks for a reason beside the changed name instead of a global save field',async()=>{
   libraries=[{...lib,rows:lib.rows.slice(0,1)}];render(<WorkingLibrary workspace={workspace} onApplied={vi.fn()}/>);
   fireEvent.click(await screen.findByRole('button',{name:'Sửa nội dung'}));
