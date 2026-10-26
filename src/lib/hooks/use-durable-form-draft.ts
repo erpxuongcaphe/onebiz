@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { getCurrentContext } from "@/lib/services/supabase/base";
 
 const STORAGE_PREFIX = "onebiz_form_draft_v1";
@@ -194,9 +194,7 @@ export function useDurableFormDraft<T>({
   ready = true,
   ttlMs = DEFAULT_TTL_MS,
 }: UseDurableFormDraftOptions<T>) {
-  const tokenRef = useRef(
-    `${form}:${Math.random().toString(36).slice(2)}:${Date.now()}`,
-  );
+  const tokenRef = useRef(useId());
   const [key, setKey] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [restored, setRestored] = useState(false);
@@ -211,11 +209,13 @@ export function useDurableFormDraft<T>({
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previouslyOpenRef = useRef(open);
 
-  snapshotRef.current = snapshot;
-  restoreRef.current = restore;
-  hasContentRef.current = hasContent;
-  requestOpenRef.current = onRequestOpen;
-  openRef.current = open;
+  useLayoutEffect(() => {
+    snapshotRef.current = snapshot;
+    restoreRef.current = restore;
+    hasContentRef.current = hasContent;
+    requestOpenRef.current = onRequestOpen;
+    openRef.current = open;
+  });
 
   useEffect(() => {
     if (key && previouslyOpenRef.current && !open) rememberOpenForm(key, false);
@@ -353,5 +353,5 @@ export function useDurableFormDraft<T>({
     setRestored(true);
   }, [key]);
 
-  return { clearDraft, restored };
+  return { clearDraft, restored, flushDraft: writeNow };
 }

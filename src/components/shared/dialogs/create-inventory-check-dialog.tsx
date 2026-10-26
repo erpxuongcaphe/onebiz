@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback, memo } from "react";
+import { getFnbBranchComponentCosts } from "@/lib/services/supabase/fnb-branch-cost";
+import { useDurableFormDraft } from "@/lib/hooks/use-durable-form-draft";
 import {
   Dialog,
   DialogContent,
@@ -107,7 +109,7 @@ export function CreateInventoryCheckDialog({
   const [addingCount, setAddingCount] = useState(0);
   const [copyLoading, setCopyLoading] = useState(false);
   const [copyError, setCopyError] = useState("");
-  const requestId = useMemo(() => crypto.randomUUID(), [checkItems, notes, activeBranchId]);
+  const [request, setRequest] = useState({ id: crypto.randomUUID(), signature: "" });
 
   useEffect(() => {
     invalidateFormSession();
@@ -134,6 +136,7 @@ export function CreateInventoryCheckDialog({
       const seed = await loadDocumentCopy('inventory', copySource.id, activeBranchId, allowFlexibleCountUnits);
       const ids = seed.items.map(p => p.id);
       const conversions = await getUOMConversionsByProductIds(ids);
+      const costs = await getFnbBranchComponentCosts(activeBranchId, ids);
       const ctx = await getCurrentContext();
       const stock = new Map<string,number>();
       for (let offset=0;offset<ids.length;offset+=100) {
@@ -144,12 +147,29 @@ export function CreateInventoryCheckDialog({
         for (const row of data ?? []) stock.set(row.product_id,(stock.get(row.product_id) ?? 0)+Number(row.quantity ?? 0));
       }
       if (cancelled) return;
-      setCheckItems(seed.items.map(p => ({productId:p.id,productCode:p.code,productName:p.name,unit:p.unit,costPrice:Number(p.cost_price),systemStock:stock.get(p.id) ?? 0,actualStock:0,countUnit:p.unit,conversions:conversions.get(p.id) ?? [],convFactor:null,convBigUnit:null,actualBig:0,actualSmall:0,needsCount:true})));
+      setCheckItems(seed.items.map(p => ({productId:p.id,productCode:p.code,productName:p.name,unit:p.unit,costPrice:costs.get(p.id)?.unitCost ?? Number(p.cost_price),systemStock:stock.get(p.id) ?? 0,actualStock:0,countUnit:p.unit,conversions:conversions.get(p.id) ?? [],convFactor:null,convBigUnit:null,actualBig:0,actualSmall:0,needsCount:true})));
       setNotes(`[Sao chép danh sách hàng từ ${seed.code}]`);
     })().catch(e => {if (!cancelled) setCopyError(e instanceof Error ? e.message : 'Không đọc được phiếu nguồn.');})
       .finally(() => {if (!cancelled) setCopyLoading(false);});
     return () => {cancelled = true;};
   }, [open, copySource, activeBranchId, allowFlexibleCountUnits]);
+
+  const { clearDraft, flushDraft } = useDurableFormDraft({
+    form: copySource ? "inventory-check-copy" : "inventory-check-create",
+    entityId: copySource?.id,
+    branchId: activeBranchId,
+    autoRestore: !copySource,
+    ready: !copySource || (!copyLoading && !copyError && checkItems.length > 0),
+    open,
+    onRequestOpen: () => onOpenChange(true),
+    snapshot: { checkItems, notes, request },
+    hasContent: (draft) => draft.checkItems.length > 0 || !!draft.notes.trim(),
+    restore: (draft) => {
+      setCheckItems(draft.checkItems);
+      setNotes(draft.notes);
+      setRequest(draft.request);
+    },
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -252,10 +272,13 @@ export function CreateInventoryCheckDialog({
 
     // CEO 28/05/2026: load quy cách để cho nhập theo thùng + lẻ.
     let conversions: UOMConversion[] = [];
+    let costPrice = Number(product.cost_price ?? 0);
     try {
       conversions = await getUOMConversions(product.id);
+      const costs = await getFnbBranchComponentCosts(branchId, [product.id]);
+      costPrice = costs.get(product.id)?.unitCost ?? costPrice;
     } catch {
-      toast({ title: "Không tải được đơn vị quy đổi", description: "Thử thêm lại mặt hàng. Chưa thay đổi tồn kho.", variant: "error" });
+      toast({ title: "Không tải được đơn vị quy đổi hoặc giá vốn", description: "Thử thêm lại mặt hàng. Chưa thay đổi tồn kho.", variant: "error" });
       return;
     }
     const best = pickBestConversion(product.unit, conversions);
@@ -273,7 +296,7 @@ export function CreateInventoryCheckDialog({
         productCode: product.code,
         productName: product.name,
         unit: product.unit,
-        costPrice: Number(product.cost_price ?? 0),
+        costPrice,
         systemStock,
         actualStock: allowFlexibleCountUnits ? stockToInput(Math.max(0,systemStock),product.unit,preferredWeighingUnit(product.unit,conversions),conversions) ?? Math.max(0,systemStock) : systemStock,
         countUnit: allowFlexibleCountUnits ? preferredWeighingUnit(product.unit,conversions) : null,
@@ -409,6 +432,10 @@ export function CreateInventoryCheckDialog({
       const ctx = await getCurrentContext();
       const branchId = activeBranchId ?? ctx.branchId;
 
+      const signature = JSON.stringify({ branchId, checkItems, notes: notes.trim() });
+      const requestId = request.signature === signature ? request.id : crypto.randomUUID();
+      setRequest({ id: requestId, signature });
+
       // Tồn hệ thống được máy chủ đọc lại theo đúng chi nhánh ngay lúc hoàn tất.
       // Tạo phiếu, tạo dòng và cân bằng kho cùng một giao dịch.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -438,7 +465,9 @@ export function CreateInventoryCheckDialog({
             "Chưa có migration 00256. Không thể hoàn tất kiểm kho an toàn.",
           );
         }
-        throw new Error(error.message);
+        throw new Error(error.message.includes("FNB_MANUAL_STOCK_GAIN_COST_REQUIRED")
+          ? "Có mặt hàng chưa có giá vốn tại chi nhánh. Phiếu nháp vẫn được giữ; hãy xác nhận giá vốn đầu kỳ hoặc nhập hàng có giá vốn rồi thử lại."
+          : error.message);
       }
 
       const result = data as {
@@ -450,6 +479,10 @@ export function CreateInventoryCheckDialog({
         throw new Error("Máy chủ trả về kết quả kiểm kho không hợp lệ.");
       }
 
+      clearDraft();
+      setCheckItems([]);
+      setNotes("");
+      setRequest({ id: crypto.randomUUID(), signature: "" });
       setCode(result.code);
       onOpenChange(false);
       toast({
@@ -472,8 +505,14 @@ export function CreateInventoryCheckDialog({
     }
   }
 
+  function handleOpenChange(nextOpen: boolean) {
+    if (saveLockRef.current) return;
+    if (!nextOpen) flushDraft();
+    onOpenChange(nextOpen);
+  }
+
   return (
-    <Dialog open={open} onOpenChange={next => { if (!saveLockRef.current) onOpenChange(next); }}>
+    <Dialog open={open} onOpenChange={handleOpenChange} protectUnsavedChanges={false}>
       <DialogContent className="flex h-[calc(100dvh-24px)] w-[calc(100vw-24px)] max-w-[1450px] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(1200px,calc(100vw-48px))] xl:max-w-[1450px] sm:rounded-2xl">
         <div className="shrink-0 border-b bg-white px-4 py-3 md:px-5">
           <DialogHeader className="gap-0 pr-10">
@@ -617,8 +656,8 @@ export function CreateInventoryCheckDialog({
               />
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" disabled={saving} onClick={() => onOpenChange(false)}>
-                Hủy
+              <Button variant="outline" disabled={saving} onClick={() => handleOpenChange(false)}>
+                Đóng, giữ nháp
               </Button>
               <Button onClick={handleSave} disabled={saving || copyLoading || !!copyError || addingCount > 0}>
                 {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}

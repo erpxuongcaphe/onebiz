@@ -2,11 +2,12 @@ import {act,cleanup,fireEvent,render,screen,waitFor} from '@testing-library/reac
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 const m=vi.hoisted(()=>({uom:vi.fn(),rpc:vi.fn(),toast:vi.fn(),branch:{id:'branch',branchType:'store'},branches:[{id:'branch',branchType:'store'}]}));
 vi.mock('@/lib/contexts',()=>({useAuth:()=>({activeBranchId:'branch',currentBranch:m.branch,branches:m.branches}),useToast:()=>({toast:m.toast})}));
+vi.mock('@/lib/services/supabase/fnb-branch-cost',()=>({getFnbBranchComponentCosts:async()=>new Map()}));
 vi.mock('@/lib/services/supabase/uom',()=>({getUOMConversions:m.uom,getUOMConversionsByProductIds:async()=>new Map()}));
 vi.mock('@/lib/services/supabase/document-copy',()=>({loadDocumentCopy:vi.fn()}));
-vi.mock('@/lib/services/supabase/base',()=>({getCurrentContext:async()=>({tenantId:'tenant',branchId:'branch'}),getClient:()=>({rpc:m.rpc,from:(table:string)=>{const result={data:table==='products_scoped'?[{id:'rich',code:'SKU-SST-017',name:'Rich lùn',unit:'Hộp',cost_price:10}]:[{quantity:3.1314}],error:null};const q={select:()=>q,eq:()=>q,is:()=>q,or:()=>q,limit:async()=>result,then:(resolve:(r:unknown)=>unknown)=>Promise.resolve(result).then(resolve)};return q;}})}));
+vi.mock('@/lib/services/supabase/base',()=>({getCurrentContext:async()=>({tenantId:'tenant',userId:'user',branchId:'branch'}),getClient:()=>({rpc:m.rpc,from:(table:string)=>{const result={data:table==='products_scoped'?[{id:'rich',code:'SKU-SST-017',name:'Rich lùn',unit:'Hộp',cost_price:10}]:[{quantity:3.1314}],error:null};const q={select:()=>q,eq:()=>q,is:()=>q,or:()=>q,limit:async()=>result,then:(resolve:(r:unknown)=>unknown)=>Promise.resolve(result).then(resolve)};return q;}})}));
 import {CreateInventoryCheckDialog} from '@/components/shared/dialogs/create-inventory-check-dialog';
-beforeEach(()=>vi.clearAllMocks());afterEach(cleanup);
+beforeEach(()=>{vi.clearAllMocks();localStorage.clear();sessionStorage.clear();});afterEach(cleanup);
 describe('inventory count input stability',()=>{
  it('coalesces rapid clicks during stock/UOM loading and never appends duplicate keys',async()=>{
   let finish!:(rows:[])=>void;m.uom.mockReturnValue(new Promise(resolve=>{finish=resolve;}));
