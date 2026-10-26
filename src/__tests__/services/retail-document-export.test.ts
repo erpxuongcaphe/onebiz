@@ -1,19 +1,38 @@
 import {act,renderHook} from '@testing-library/react';
 import {beforeEach,describe,expect,it,vi} from 'vitest';
 import type {Invoice} from '@/lib/types';
-const f=vi.hoisted(()=>({headers:vi.fn(),writer:vi.fn(),csv:vi.fn(),rows:[] as Record<string,unknown>[],calls:[] as unknown[][]}));
+const f=vi.hoisted(()=>({headers:vi.fn(),writer:vi.fn(),csv:vi.fn(),rows:[] as Record<string,unknown>[],invoiceRows:[] as Record<string,unknown>[],parentRows:[] as Record<string,unknown>[],calls:[] as unknown[][]}));
 vi.mock('@/lib/services/supabase/invoice-list-export',()=>({getInvoicesForFilteredExport:f.headers}));
 vi.mock('@/lib/utils/excel-export',()=>({exportReportToExcel:f.writer}));
 vi.mock('@/lib/utils/export',()=>({exportToExcel:vi.fn(),exportToCsv:f.csv}));
-vi.mock('@/lib/services/supabase/base',()=>({getClient:()=>({from:(table:string)=>{
+vi.mock('@/lib/services/supabase/base',()=>({getCurrentTenantId:async()=> 'tenant-a',getPaginationRange:()=>({from:0,to:199}),handleError:(e:{message:string})=>{throw new Error(e.message);},getClient:()=>({from:(table:string)=>{
  f.calls.push(['from',table]);const builder:Record<string,unknown>={};
- for(const method of ['select','in','order'])builder[method]=(...args:unknown[])=>{f.calls.push([method,...args]);return builder;};
- builder.range=(from:number,to:number)=>Promise.resolve({data:f.rows.slice(from,to+1),count:f.rows.length,error:null});return builder;
+ for(const method of ['select','in','order','eq','is','or','ilike','gte','lt'])builder[method]=(...args:unknown[])=>{f.calls.push([method,...args]);return builder;};
+ builder.range=(from:number,to:number)=>Promise.resolve({data:(table==='invoices'?f.invoiceRows:f.rows).slice(from,to+1),count:table==='invoices'?f.invoiceRows.length:f.rows.length,error:null});
+ builder.then=(resolve:(value:unknown)=>void)=>resolve({data:table==='invoices'?f.parentRows:[],error:null});return builder;
 }})}));
 import {useInvoiceListExport} from '@/lib/hooks/use-invoice-list-export';
 import {readSelectedInvoiceExport,readRetailDocumentExportLines} from '@/lib/services/supabase/retail-document-export';
+import {getInvoices} from '@/lib/services/supabase/invoices';
 const scope={mode:'branch' as const,branchId:'warehouse',duocDemChiNhanhKhac:false};
-beforeEach(()=>{vi.clearAllMocks();f.calls=[];f.rows=[];});
+beforeEach(()=>{vi.clearAllMocks();f.calls=[];f.rows=[];f.invoiceRows=[];f.parentRows=[];});
+
+describe('source DH references without unsupported PostgREST self-embedding',()=>{
+ it('keeps linked and unlinked documents and reads parent codes by tenant-scoped IDs',async()=>{
+  f.invoiceRows=[{id:'nh',code:'NH000412',source:'pos',source_order_id:'dh',status:'draft'},{id:'hd',code:'HD000001',source:'pos',status:'completed'}];
+  f.parentRows=[{id:'dh',code:'DH000142'}];
+  const result=await getInvoices({page:0,pageSize:200});
+  expect(result.total).toBe(2);expect(result.data.map(row=>row.id)).toEqual(['nh','hd']);
+  expect(result.data[0]).toMatchObject({sourceOrderId:'dh',sourceOrderCode:'DH000142',code:'NH000412'});
+  expect(result.data[1].sourceOrderCode).toBeUndefined();
+  expect(f.calls.filter(call=>call[0]==='select').some(call=>String(call[1]).includes('parent_order:invoices!'))).toBe(false);
+  expect(f.calls).toContainEqual(['select','id, code']);expect(f.calls).toContainEqual(['in','id',['dh']]);expect(f.calls).toContainEqual(['eq','tenant_id','tenant-a']);
+ });
+ it('does not query parent metadata for unlinked documents',async()=>{
+  f.invoiceRows=[{id:'a',code:'HD-A',status:'completed'}];await getInvoices({page:0,pageSize:200});
+  expect(f.calls).not.toContainEqual(['select','id, code']);
+ });
+});
 describe('scope-checked Retail export reads',()=>{
  it('rereads only selected IDs under the same filters and refuses missing selections',async()=>{
   f.headers.mockResolvedValue([{id:'b'},{id:'a'}]);
