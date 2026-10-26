@@ -19,6 +19,7 @@ import {
   buildReportTitleRows,
   type ExcelSheet,
 } from "@/lib/utils/excel-export";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Icon } from "@/components/ui/icon";
 import {
   filterPurchaseForecastRows,
@@ -45,7 +46,6 @@ export default function DuKienMuaHangPage() {
   const [dsKhach, setDsKhach] = useState<{ id: string; name: string; code: string; phone: string | null }[]>([]);
   const [dsNhom, setDsNhom] = useState<{ id: string; name: string }[]>([]);
 
-  const [customerQuery,setCustomerQuery]=useState('');
   const [optionsError,setOptionsError]=useState('');
   const [optionsLoading,setOptionsLoading]=useState(true);
   const [retry,setRetry]=useState(0);
@@ -79,11 +79,6 @@ export default function DuKienMuaHangPage() {
       .finally(()=>{if(!cancelled)setLoading(false);});
     return()=>{cancelled=true;};
   },[range.from,range.to,activeBranchId,customerId,groupId,isReady,queryKey,retry]);
-  const matchingCustomers=useMemo(()=>{
-    const normalize=(value:string)=>value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[đĐ]/g,'d').toLowerCase();
-    const q=normalize(customerQuery.trim());
-    return dsKhach.filter(c=>c.id===customerId||normalize(`${c.code} ${c.name} ${c.phone??''}`).includes(q));
-  },[dsKhach,customerQuery,customerId]);
   const normalizedItemQuery = normalizePurchaseForecastQuery(itemQuery);
 
   const filteredMaterials = useMemo(
@@ -287,47 +282,21 @@ export default function DuKienMuaHangPage() {
           <label className="mb-1 block text-xs font-medium text-muted-foreground">
             Nhóm khách
           </label>
-          <select
-            aria-label="Nhóm khách"
-            disabled={optionsLoading}
-            value={groupId}
-            onChange={(e) => {
-              setGroupId(e.target.value);
-              if (e.target.value) setCustomerId(""); // chọn nhóm thì bỏ chọn khách lẻ
-            }}
-            className="h-9 w-full rounded-lg border bg-background px-3 text-sm"
-          >
-            <option value="">Tất cả nhóm</option>
-            {dsNhom.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.name}
-              </option>
-            ))}
-          </select>
+          <SearchableSelect aria-label="Nhóm khách" disabled={optionsLoading}
+            value={groupId} placeholder="Tất cả nhóm" preserveOrder
+            options={[{value:"",label:"Tất cả nhóm"},...dsNhom.map(g=>({value:g.id,label:g.name}))]}
+            onValueChange={value=>{setGroupId(value);if(value)setCustomerId("");}} />
         </div>
 
-        <div className="min-w-[240px]">
+        <div className="w-full min-w-[240px] sm:w-80">
           <label className="mb-1 block text-xs font-medium text-muted-foreground">
             Khách hàng cụ thể
           </label>
-          <input aria-label="Tìm khách theo mã, tên hoặc số điện thoại" value={customerQuery} onChange={e=>setCustomerQuery(e.target.value)} placeholder="Tìm mã, tên, SĐT khách…" className="mb-2 h-9 w-full rounded-lg border bg-background px-3 text-sm" />
-          <select
-            aria-label="Khách hàng cụ thể"
-            disabled={optionsLoading}
-            value={customerId}
-            onChange={(e) => {
-              setCustomerId(e.target.value);
-              if (e.target.value) setGroupId(""); // chọn khách thì bỏ lọc nhóm
-            }}
-            className="h-9 w-full rounded-lg border bg-background px-3 text-sm"
-          >
-            <option value="">Tất cả khách</option>
-            {matchingCustomers.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.code} · {c.name}
-              </option>
-            ))}
-          </select>
+          <SearchableSelect aria-label="Khách hàng cụ thể" disabled={optionsLoading}
+            value={customerId} placeholder="Tất cả khách" preserveOrder
+            searchPlaceholder="Tìm mã, tên, SĐT khách…"
+            options={[{value:"",label:"Tất cả khách"},...dsKhach.map(c=>({value:c.id,label:c.name,meta:c.code,searchText:c.phone??""}))]}
+            onValueChange={value=>{setCustomerId(value);if(value)setGroupId("");}} />
         </div>
 
         {(groupId || customerId) && (

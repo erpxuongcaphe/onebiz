@@ -4,7 +4,7 @@ vi.mock('@/lib/services/supabase/base',()=>({getCurrentTenantId:async()=> 'tenan
  const state={filters:[] as unknown[][],from:0,to:999};
  const q={select(){return q;},eq(k:string,v:unknown){state.filters.push(['eq',k,v]);return q;},in(k:string,v:unknown[]){state.filters.push(['in',k,v]);return q;},is(k:string,v:unknown){state.filters.push(['is',k,v]);return q;},not(){return q;},order(){return q;},gte(){return q;},lte(){return q;},range(a:number,b:number){state.from=a;state.to=b;return q;},then(resolve:(v:unknown)=>unknown){
   f.calls.push(state.filters);
-  const children=state.filters.some(v=>v[1]==='source_order_id');
+  const children=state.filters.some(v=>Array.isArray(v)&&v[1]==='source_order_id');
   const rows=f.rows.filter(r=>state.filters.every(([op,k,v])=>op==='in'?(v as unknown[]).includes(r[String(k)]):op==='is'?(r[String(k)]??null)===v:r[String(k)]===v));
   return Promise.resolve({data:rows.slice(state.from,state.to+1),count:rows.length,error:children&&f.missing?{code:'42703',message:'missing column'}:null}).then(resolve);
  }};return q;}}),handleError:(e:{message:string})=>{throw new Error(e.message);}}));
@@ -22,7 +22,7 @@ describe('POS only uninvoiced orders without embedded self-relation loss',()=>{
   const parents=Array.from({length:501},(_,i)=>parent(`p${i}`));f.rows=[...parents,...parents.filter((_,i)=>i%2===0).map(p=>child('hd'+p.id,String(p.id)))];
   const r=await getOrders({page:1,pageSize:50,branchId:'warehouse',filters:{fulfillmentState:'pending'}});
   expect(r.total).toBe(250);expect(r.data.map(o=>o.id)).toEqual(parents.filter((_,i)=>i%2===1).slice(50,100).map(p=>p.id));
-  expect(f.calls.every(filters=>filters.some(v=>v[1]==='tenant_id'&&v[2]==='tenant'))).toBe(true);
+  expect(f.calls.every(filters=>filters.some(v=>Array.isArray(v)&&v[1]==='tenant_id'&&v[2]==='tenant'))).toBe(true);
  });
  it('processing uses the same complete comparison and missing child metadata fails visibly',async()=>{
   f.rows=[parent('pending'),parent('invoiced'),child('hd','invoiced')];

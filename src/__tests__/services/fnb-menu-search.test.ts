@@ -15,4 +15,11 @@ describe("F&B menu search", () => {
     expect(matchesFnbMenuSearch(product, "sku-cap-013")).toBe(true);
     expect(matchesFnbMenuSearch(product, "gu matcha")).toBe(false);
   });
+  it("allows a light typo only in the name and keeps menu codes literal",()=>{
+    const product={name:"Trà Đào Cam Sả",code:"SKU-TRA-013"};
+    expect(matchesFnbMenuSearch(product,"tra doa")).toBe(true);
+    expect(matchesFnbMenuSearch(product,"SKU-TRA-014")).toBe(false);
+    expect(matchesFnbMenuSearch(product," ")).toBe(true);
+  });
+
 });

@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 
 interface SelectFilterProps {
   options: { label: string; value: string }[];
@@ -56,28 +50,8 @@ export function SelectFilter({
   const safeValue = safeOptions.some((o) => o.value === value) ? value : "all";
 
   return (
-    <Select
-      value={safeValue}
-      onValueChange={(v: string | null) => onChange(v ?? "all")}
-      items={safeOptions}
-    >
-      <SelectTrigger className="h-8 text-sm">
-        <SelectValue placeholder={placeholder}>
-          {(currentValue: unknown) => {
-            const matched = safeOptions.find(
-              (o) => o.value === currentValue,
-            );
-            return matched ? matched.label : placeholder;
-          }}
-        </SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        {safeOptions.map((opt) => (
-          <SelectItem key={opt.value} value={opt.value}>
-            {opt.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <SearchableSelect value={safeValue} onValueChange={onChange}
+      options={safeOptions} placeholder={placeholder} preserveOrder
+      className="h-8 text-sm" />
   );
 }
