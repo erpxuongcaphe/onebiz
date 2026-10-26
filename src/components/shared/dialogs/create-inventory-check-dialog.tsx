@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback, memo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -16,7 +16,7 @@ import { useAuth, useToast } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import { getUOMConversions, getUOMConversionsByProductIds } from "@/lib/services/supabase/uom";
 import { loadDocumentCopy, type DocumentCopySource } from "@/lib/services/supabase/document-copy";
-import { pickBestConversion, getConversionText, getDirectConvertibleUnits, getDirectConversionFactor } from "@/lib/format-uom";
+import { pickBestConversion, getDirectConvertibleUnits, getDirectConversionFactor } from "@/lib/format-uom";
 import { inventoryCountFromStock, inventoryCountToStock } from "@/lib/inventory-count-uom";
 import { preferredWeighingUnit, stockToInput, operationalFactor, switchInputQuantity } from "@/lib/operational-uom";
 import { StockWithConversion } from "@/components/shared/stock-with-conversion";
@@ -101,11 +101,17 @@ export function CreateInventoryCheckDialog({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const saveLockRef = useRef(false);
+  const addingProducts = useRef(new Set<string>());
+  const formSession = useRef(0);
+  const invalidateFormSession = useCallback(() => { formSession.current++; addingProducts.current.clear(); }, []);
+  const [addingCount, setAddingCount] = useState(0);
   const [copyLoading, setCopyLoading] = useState(false);
   const [copyError, setCopyError] = useState("");
   const requestId = useMemo(() => crypto.randomUUID(), [checkItems, notes, activeBranchId]);
 
   useEffect(() => {
+    invalidateFormSession();
+    setAddingCount(0);
     if (!open) return;
 
     setCode(PENDING_CODE_PLACEHOLDER);
@@ -117,7 +123,8 @@ export function CreateInventoryCheckDialog({
     setCheckItems([]);
     setErrors({});
     setSaving(false);
-  }, [open]);
+    return invalidateFormSession;
+  }, [open, activeBranchId, invalidateFormSession]);
 
   useEffect(() => {
     if (!open || !copySource || !activeBranchId) return;
@@ -205,14 +212,19 @@ export function CreateInventoryCheckDialog({
   }, [productSearch, currentBranch?.branchType, branches, activeBranchId]);
 
   async function addProduct(product: ProductRow) {
-    if (checkItems.some((item) => item.productId === product.id)) {
+    if (saving || addingProducts.current.has(product.id) || checkItems.some((item) => item.productId === product.id)) {
       setProductSearch("");
       setShowProductDropdown(false);
       return;
     }
-
+    const session = formSession.current;
+    addingProducts.current.add(product.id);
+    setAddingCount(addingProducts.current.size);
+    setShowProductDropdown(false);
+    try {
     const supabase = getClient();
     const ctx = await getCurrentContext();
+    if (session !== formSession.current) return;
     const branchId = activeBranchId ?? ctx.branchId;
     // branch_stock can have multiple base rows when variant_id is NULL; sum rows instead of maybeSingle().
     const { data: branchStockRows, error: stockErr } = await supabase
@@ -224,6 +236,7 @@ export function CreateInventoryCheckDialog({
       .is("variant_id", null);
 
     if (stockErr) {
+      if (session !== formSession.current) return;
       toast({
         title: "Không đọc được tồn kho chi nhánh",
         description: stockErr.message,
@@ -246,13 +259,14 @@ export function CreateInventoryCheckDialog({
       return;
     }
     const best = pickBestConversion(product.unit, conversions);
+    if (session !== formSession.current) return;
     const convFactor = best && best.factor > 0 ? best.factor : null;
     const convBigUnit = best ? best.fromUnit : null;
     // CEO 29/05/2026: tách tồn hệ thống thành thùng nguyên + lẻ (mặc định thực tế = hệ thống).
     const actualBig = convFactor ? Math.floor(systemStock / convFactor) : 0;
     const actualSmall = convFactor ? systemStock - actualBig * convFactor : systemStock;
 
-    setCheckItems((items) => [
+    setCheckItems((items) => items.some(item => item.productId === product.id) ? items : [
       ...items,
       {
         productId: product.id,
@@ -274,9 +288,17 @@ export function CreateInventoryCheckDialog({
     setShowProductDropdown(false);
     setFilteredProducts([]);
     setErrors((prev) => ({ ...prev, items: "" }));
+    } catch (error) {
+      if (session === formSession.current) toast({title:'Không thêm được mặt hàng',description:error instanceof Error ? error.message : 'Vui lòng thử lại.',variant:'error'});
+    } finally {
+      if (session === formSession.current) {
+        addingProducts.current.delete(product.id);
+        setAddingCount(addingProducts.current.size);
+      }
+    }
   }
 
-  function updateActualStock(productId: string, actualStock: number) {
+  const updateActualStock = useCallback((productId: string, actualStock: number) => {
     setCheckItems((items) =>
       items.map((item) =>
         item.productId === productId
@@ -284,9 +306,9 @@ export function CreateInventoryCheckDialog({
           : item,
       ),
     );
-  }
+  }, []);
 
-  function updateCountUnit(productId: string, countUnit: string | null) {
+  const updateCountUnit = useCallback((productId: string, countUnit: string | null) => {
     setCheckItems((items) => items.map((item) => {
       if (item.productId !== productId) return item;
       // Keep entered precision during unit switches. Only the stock preview and
@@ -307,10 +329,10 @@ export function CreateInventoryCheckDialog({
       const actualStock = inventoryCountFromStock(stock, item.unit, countUnit, item.conversions);
       return actualStock == null ? item : { ...item, countUnit, actualStock };
     }));
-  }
+  }, []);
 
   // CEO 29/05/2026: cập nhật số đơn vị lớn (thùng).
-  function updateActualBig(productId: string, big: number) {
+  const updateActualBig = useCallback((productId: string, big: number) => {
     setCheckItems((items) =>
       items.map((item) =>
         item.productId === productId
@@ -318,10 +340,10 @@ export function CreateInventoryCheckDialog({
           : item,
       ),
     );
-  }
+  }, []);
 
   // Cập nhật số lẻ (đơn vị nhỏ).
-  function updateActualSmall(productId: string, small: number) {
+  const updateActualSmall = useCallback((productId: string, small: number) => {
     setCheckItems((items) =>
       items.map((item) =>
         item.productId === productId
@@ -329,11 +351,11 @@ export function CreateInventoryCheckDialog({
           : item,
       ),
     );
-  }
+  }, []);
 
-  function removeProduct(productId: string) {
+  const removeProduct = useCallback((productId: string) => {
     setCheckItems((items) => items.filter((item) => item.productId !== productId));
-  }
+  }, []);
 
   // KiotViet style: tổng theo TIỀN (giá trị lệch), KHÔNG cộng số lượng vì
   // các SP khác đơn vị (Lon + Cái + Kg) cộng lại vô nghĩa.
@@ -363,6 +385,7 @@ export function CreateInventoryCheckDialog({
     if (checkItems.length === 0) {
       newErrors.items = "Vui lòng thêm ít nhất một sản phẩm kiểm kho";
     }
+    if (new Set(checkItems.map(item => item.productId)).size !== checkItems.length) newErrors.items = 'Mã hàng bị lặp. Chưa cân bằng kho; cần giữ một dòng thực đếm cho mỗi mã.';
     if (checkItems.some((item) => !Number.isFinite(lineActual(item)) || lineActual(item) < 0)) {
       newErrors.items = "Số thực tế phải là số không âm";
     }
@@ -371,7 +394,7 @@ export function CreateInventoryCheckDialog({
   }
 
   async function handleSave() {
-    if (copyLoading || copyError) return;
+    if (copyLoading || copyError || addingProducts.current.size > 0) return;
     if (copySource && copySource.branchId !== activeBranchId) { setErrors({items:'Chi nhánh đã thay đổi. Đóng phiếu và sao chép lại tại đúng chi nhánh.'}); return; }
     if (checkItems.some(item => item.needsCount)) {
       setErrors({items:'Nhập số thực đếm cho tất cả mặt hàng được sao chép trước khi cân bằng kho.'}); return;
@@ -450,7 +473,7 @@ export function CreateInventoryCheckDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={next => { if (!saveLockRef.current) onOpenChange(next); }}>
       <DialogContent className="flex h-[calc(100dvh-24px)] w-[calc(100vw-24px)] max-w-[1450px] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(1200px,calc(100vw-48px))] xl:max-w-[1450px] sm:rounded-2xl">
         <div className="shrink-0 border-b bg-white px-4 py-3 md:px-5">
           <DialogHeader className="gap-0 pr-10">
@@ -468,7 +491,7 @@ export function CreateInventoryCheckDialog({
           </DialogHeader>
         </div>
 
-        <div inert={copyLoading || !!copyError} className="min-h-0 flex-1 overflow-y-auto bg-surface-container-low p-3 md:p-4">
+        <div inert={saving || copyLoading || !!copyError} className="min-h-0 flex-1 overflow-y-auto bg-surface-container-low p-3 md:p-4">
           <div className="mx-auto flex max-w-[1380px] flex-col gap-3">
             <div className="grid gap-3 lg:grid-cols-[minmax(420px,1fr)_minmax(320px,0.75fr)]">
               <section className="rounded-lg border bg-white p-3 shadow-none">
@@ -545,8 +568,8 @@ export function CreateInventoryCheckDialog({
               </section>
             </div>
 
-            <div className="overflow-hidden rounded-lg border bg-white shadow-none">
-              <div className="hidden grid-cols-[minmax(220px,1fr)_60px_148px_268px_120px_150px_40px] gap-3 border-b bg-muted/50 px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground md:grid">
+            <div className="overflow-x-auto rounded-lg border bg-white shadow-none">
+              <div className="hidden md:min-w-[920px] grid-cols-[minmax(180px,1fr)_48px_116px_200px_96px_120px_36px] gap-3 border-b bg-muted/50 px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground md:grid">
                 <span>Sản phẩm</span>
                 <span className="flex justify-center">ĐVT</span>
                 <span className="flex justify-end">Tồn kho</span>
@@ -569,10 +592,91 @@ export function CreateInventoryCheckDialog({
               ) : (
                 <div className="divide-y">
                   {/* CEO 04/07: NVL mới thêm hiện TRÊN CÙNG — chỉ đảo hiển thị, data giữ cũ→mới. */}
-                  {[...checkItems].reverse().map((item) => {
+                  {[...checkItems].reverse().map(item => <InventoryCountRow key={item.productId} item={item} allowFlexibleCountUnits={allowFlexibleCountUnits} saving={saving} updateActualStock={updateActualStock} updateCountUnit={updateCountUnit} updateActualBig={updateActualBig} updateActualSmall={updateActualSmall} removeProduct={removeProduct}/>)}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter className="mx-0 mb-0 shrink-0 rounded-none border-t bg-white px-4 py-3">
+          <div className="mx-auto grid w-full max-w-[1380px] grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto]">
+            <div className="grid grid-cols-2 min-[360px]:grid-cols-3 gap-2 text-sm sm:grid-cols-3 xl:grid-cols-5">
+              <FooterMetric label="Mặt hàng" value={formatNumber(checkItems.length)} />
+              <FooterMetric
+                label="Dòng lệch"
+                value={`${formatNumber(increaseLines)} thừa · ${formatNumber(decreaseLines)} thiếu`}
+              />
+              <FooterMetric label="Giá trị thừa" value={formatCurrency(increaseValue)} tone="success" />
+              <FooterMetric label="Giá trị thiếu" value={formatCurrency(decreaseValue)} tone="destructive" />
+              <FooterMetric
+                label="Tổng chênh lệch"
+                value={`${netValue > 0 ? "+" : ""}${formatCurrency(netValue)}`}
+                strong
+                tone={netValue === 0 ? "default" : netValue > 0 ? "success" : "destructive"}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" disabled={saving} onClick={() => onOpenChange(false)}>
+                Hủy
+              </Button>
+              <Button onClick={handleSave} disabled={saving || copyLoading || !!copyError || addingCount > 0}>
+                {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
+                {"Hoàn thành kiểm kho"}
+              </Button>
+            </div>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function FooterMetric({
+  label,
+  value,
+  strong,
+  tone = "default",
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+  tone?: "default" | "success" | "destructive";
+}) {
+  const toneClass =
+    tone === "success"
+      ? "text-status-success"
+      : tone === "destructive"
+        ? "text-destructive"
+        : strong
+          ? "text-primary"
+          : "";
+  return (
+    <div className="rounded-lg border bg-surface-container-lowest px-3 py-2">
+      <div className="text-xs font-semibold uppercase text-muted-foreground">{label}</div>
+      <div className={`mt-0.5 break-words font-bold leading-tight tabular-nums ${strong ? "text-lg" : ""} ${toneClass}`}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+interface InventoryCountRowProps {
+  item: InventoryCheckLine;
+  allowFlexibleCountUnits: boolean;
+  saving: boolean;
+  updateActualStock: (id: string, value: number) => void;
+  updateCountUnit: (id: string, unit: string | null) => void;
+  updateActualBig: (id: string, value: number) => void;
+  updateActualSmall: (id: string, value: number) => void;
+  removeProduct: (id: string) => void;
+}
+const InventoryCountRow = memo(function InventoryCountRow({item,allowFlexibleCountUnits,saving,updateActualStock,updateCountUnit,updateActualBig,updateActualSmall,removeProduct}: InventoryCountRowProps) {
+
+  const actual = lineActual(item);
                     // Làm tròn + chuẩn hoá -0 → 0 (tránh hiện "-0" khi vừa đổi đơn vị).
                     const diff =
-                      Math.round((lineActual(item) - item.systemStock) * 10000) / 10000 || 0;
+                      Math.round((actual - item.systemStock) * 10000) / 10000 || 0;
                     const diffValue = diff * item.costPrice;
                     const diffColor =
                       diff === 0
@@ -580,11 +684,10 @@ export function CreateInventoryCheckDialog({
                         : diff > 0
                           ? "text-status-success"
                           : "text-destructive";
-                    const sysConvText = getConversionText(item.systemStock, item.unit, item.conversions);
                     return (
                       <div
                         key={item.productId}
-                        className="grid gap-3 px-3 py-3 md:grid-cols-[minmax(220px,1fr)_60px_148px_268px_120px_150px_40px] md:items-center"
+                        className="grid gap-3 px-3 py-3 md:min-w-[920px] md:grid-cols-[minmax(180px,1fr)_48px_116px_200px_96px_120px_36px] md:items-center"
                       >
                         {/* Sản phẩm */}
                         <div className="min-w-0 pr-2">
@@ -661,7 +764,7 @@ export function CreateInventoryCheckDialog({
                               </div>
                               <div className="text-right text-xs text-muted-foreground">
                                 ={" "}
-                                <b className="tabular-nums text-foreground">{formatStockQuantity(lineActual(item))}</b>{" "}
+                                <b className="tabular-nums text-foreground">{formatStockQuantity(actual)}</b>{" "}
                                 {item.unit}
                               </div>
                             </div>
@@ -677,7 +780,7 @@ export function CreateInventoryCheckDialog({
                               disabled={saving}
                             />
                             {allowFlexibleCountUnits && <div className="text-right text-xs text-muted-foreground">
-                              {item.needsCount ? 'Chưa nhập số thực đếm' : <>= <b className="tabular-nums text-foreground">{formatStockQuantity(lineActual(item))}</b> {item.unit}</>}
+                              {item.needsCount ? 'Chưa nhập số thực đếm' : <>= <b className="tabular-nums text-foreground">{formatStockQuantity(actual)}</b> {item.unit}</>}
                             </div>}</div>
                           )}
                         </div>
@@ -716,71 +819,5 @@ export function CreateInventoryCheckDialog({
                         </Button>
                       </div>
                     );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
 
-        <DialogFooter className="mx-0 mb-0 shrink-0 rounded-none border-t bg-white px-4 py-3">
-          <div className="mx-auto grid w-full max-w-[1380px] grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto]">
-            <div className="grid grid-cols-2 min-[360px]:grid-cols-3 gap-2 text-sm sm:grid-cols-3 xl:grid-cols-5">
-              <FooterMetric label="Mặt hàng" value={formatNumber(checkItems.length)} />
-              <FooterMetric
-                label="Dòng lệch"
-                value={`${formatNumber(increaseLines)} thừa · ${formatNumber(decreaseLines)} thiếu`}
-              />
-              <FooterMetric label="Giá trị thừa" value={formatCurrency(increaseValue)} tone="success" />
-              <FooterMetric label="Giá trị thiếu" value={formatCurrency(decreaseValue)} tone="destructive" />
-              <FooterMetric
-                label="Tổng chênh lệch"
-                value={`${netValue > 0 ? "+" : ""}${formatCurrency(netValue)}`}
-                strong
-                tone={netValue === 0 ? "default" : netValue > 0 ? "success" : "destructive"}
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
-                Hủy
-              </Button>
-              <Button onClick={handleSave} disabled={saving || copyLoading || !!copyError}>
-                {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
-                {"Hoàn thành kiểm kho"}
-              </Button>
-            </div>
-          </div>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function FooterMetric({
-  label,
-  value,
-  strong,
-  tone = "default",
-}: {
-  label: string;
-  value: string;
-  strong?: boolean;
-  tone?: "default" | "success" | "destructive";
-}) {
-  const toneClass =
-    tone === "success"
-      ? "text-status-success"
-      : tone === "destructive"
-        ? "text-destructive"
-        : strong
-          ? "text-primary"
-          : "";
-  return (
-    <div className="rounded-lg border bg-surface-container-lowest px-3 py-2">
-      <div className="text-xs font-semibold uppercase text-muted-foreground">{label}</div>
-      <div className={`mt-0.5 break-words font-bold leading-tight tabular-nums ${strong ? "text-lg" : ""} ${toneClass}`}>
-        {value}
-      </div>
-    </div>
-  );
-}
+});
