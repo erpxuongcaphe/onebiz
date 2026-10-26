@@ -18,7 +18,7 @@ export interface MoneyAccount {
   payments?: number;
   closing_balance?: number | null;
 }
-export function accountSupportsMethod(account: MoneyAccount, method: string) {
+export function accountSupportsMethod(account: Pick<MoneyAccount, "kind">, method: string) {
   return method === "cash"
     ? account.kind === "cash"
     : method === "transfer"
@@ -26,6 +26,18 @@ export function accountSupportsMethod(account: MoneyAccount, method: string) {
       : method === "card"
         ? ["bank", "clearing"].includes(account.kind)
         : ["bank", "clearing", "ewallet"].includes(account.kind);
+}
+export type MoneyAccountOption = Pick<MoneyAccount, "id" | "branch_id" | "code" | "name" | "kind" | "active">;
+/** Posting selectors do not need account balances or opening amounts. */
+export async function getMoneyAccountOptions(branchId: string): Promise<MoneyAccountOption[]> {
+  if (!branchId) throw new Error("Cần chọn một chi nhánh.");
+  const tenant = await getCurrentTenantId();
+  const { data, error } = await getClient().from("money_accounts" as never)
+    .select("id,branch_id,code,name,kind,active").eq("tenant_id", tenant)
+    .eq("branch_id", branchId).eq("active", true).order("code");
+  if (error) handleError(error, "getMoneyAccountOptions");
+  if (!Array.isArray(data)) throw new Error("Chưa tải được tài khoản tiền.");
+  return data as unknown as MoneyAccountOption[];
 }
 export async function getMoneyAccounts(
   branchId: string,

@@ -23,6 +23,7 @@
  */
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import dynamic from "next/dynamic";
 import { ColumnDef, type SortingState } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -62,6 +63,7 @@ const EMPTY_STATS: DeliveryPartnerStats = {
   feeCollected: 0,
 };
 const EMPTY_PARTNERS: DeliveryPartnerWithStats[] = [];
+const CodReconciliationPanel = dynamic(() => import("@/components/shared/cod-reconciliation-panel").then(module => module.CodReconciliationPanel));
 
 type PartnerStatusFilter = "all" | "active" | "inactive";
 type PartnerActivityFilter = "all" | "active_orders" | "holding_cod" | "delivered" | "failed";
@@ -85,6 +87,8 @@ export default function DoiTacGiaoHangPage() {
   const { activeBranchId, branchLabel, isReady } = useBranchFilter();
   const { user, tenant, hasPermission } = useAuth();
   const canSettle = hasPermission("finance.create_transaction");
+  const canReadHistory = hasPermission("finance.view_cash_book");
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const [loadedPartners, setPartners] = useState<DeliveryPartnerWithStats[]>([]);
   const [loadedUnassigned, setUnassigned] = useState<DeliveryPartnerStats>(EMPTY_STATS);
@@ -325,6 +329,8 @@ export default function DoiTacGiaoHangPage() {
             <Button
               size="sm"
               className="h-7 gap-1 px-2 text-xs"
+              disabled={!activeBranchId}
+              title={!activeBranchId ? "Đối soát cần một chi nhánh" : undefined}
               onClick={() => setSettling(row.original)}
             >
               <Icon name="account_balance_wallet" size={14} />
@@ -554,6 +560,14 @@ export default function DoiTacGiaoHangPage() {
           />
         </FilterGroup>
       </FilterPanel>
+
+      {canReadHistory && <div className="border-t bg-background">
+        <Button variant="ghost" className="m-2" aria-expanded={historyOpen} onClick={() => setHistoryOpen(value => !value)}>
+          <Icon name="receipt_long" size={16} className="mr-2" />Lịch sử đối soát COD
+          <Icon name={historyOpen ? "expand_less" : "expand_more"} size={16} className="ml-2" />
+        </Button>
+        {historyOpen && <CodReconciliationPanel branchId={activeBranchId} branchName={branchLabel} branchReady={isReady} />}
+      </div>}
 
       <CreateDeliveryPartnerDialog
         open={createOpen || !!editing}
