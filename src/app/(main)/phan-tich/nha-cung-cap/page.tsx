@@ -322,7 +322,7 @@ export default function NhaCungCapPage() {
           titleRows: title,
           columns: [
             { label: "Chỉ tiêu", key: "metric", width: 28 },
-            { label: "Giá trị", key: "value", width: 18 },
+            { label: "Giá trị", key: "value", width: 18, format: "number", decimalPlaces: 2 },
           ],
           rows: [
             { metric: "Tổng NCC", value: kpis?.totalSuppliers ?? 0 },
