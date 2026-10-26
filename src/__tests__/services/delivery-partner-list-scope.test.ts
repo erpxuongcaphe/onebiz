@@ -9,7 +9,7 @@ describe("delivery partner list scope and layout", () => {
     expect(page).toContain("{ branchId: activeBranchId }");
     expect(page).toContain("branchId={activeBranchId}");
     expect(page).toContain("Phạm vi vận đơn:");
-    expect(service.match(/"invoices\.branch_id", scope\.branchId/g)?.length).toBe(2);
+    expect(service.match(/"invoices\.branch_id", scope\.branchId/g)?.length).toBe(1);
     expect(service).toContain('query = query.eq("invoices.branch_id", branchId)');
     expect(service).not.toContain('.eq("branch_id", branchId)');
   });

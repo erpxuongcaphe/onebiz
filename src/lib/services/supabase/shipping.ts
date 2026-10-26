@@ -330,8 +330,8 @@ export async function getDeliveryPartners(params: QueryParams): Promise<QueryRes
  *   · Mình phải trả họ bao nhiêu phí giao?
  *   · Tỷ lệ giao hỏng (hoàn/huỷ) bao nhiêu?
  *
- * Dữ liệu nhỏ (vài chục–vài nghìn vận đơn) nên gộp phía ứng dụng bằng 2 truy
- * vấn, không cần thêm hàm phía máy chủ. Nếu sau này nhiều lên thì chuyển RPC.
+ * Read every permitted shipment page before aggregating. Large datasets should
+ * eventually use a server aggregate with the same scope.
  */
 export interface DeliveryPartnerStats {
   /** Đơn đối tác đang cầm: pending + picked_up + in_transit */
@@ -340,9 +340,7 @@ export interface DeliveryPartnerStats {
   /** Giao hỏng: returned + cancelled */
   failedOrders: number;
   /**
-   * COD của các đơn ĐÃ GIAO. Hiện cộng dồn TẤT CẢ đơn đã giao vì bảng chưa có
-   * cột đánh dấu đã đối soát (`cod_collected_at`). Khi làm màn đối soát thì
-   * trừ phần đã nộp ra.
+   * COD of delivered shipments without a settlement reference.
    */
   codHolding: number;
   /**
@@ -384,6 +382,7 @@ export async function getDeliveryPartnersWithStats(
   // Chưa chạy migration (42703 cột chưa có) → rơi về câu cũ, trang vẫn chạy.
   // Type sinh máy chưa biết cột mới → ép kiểu dòng cục bộ.
   type StatsRow = {
+    id: string;
     partner_id: string | null;
     status: string | null;
     shipping_fee: number | null;
@@ -393,35 +392,38 @@ export async function getDeliveryPartnersWithStats(
   type StatsResult = {
     data: StatsRow[] | null;
     error: { code?: string; message: string } | null;
+    count?: number | null;
   };
-  let ordersQuery = supabase
-    .from("shipping_orders")
-    .select("partner_id, status, shipping_fee, cod_amount, settlement_id, invoices!inner(branch_id)")
-    .eq("tenant_id", tenantId);
-  if (scope?.branchId) {
-    ordersQuery = ordersQuery.eq("invoices.branch_id", scope.branchId);
-  }
-  let ordersResult = (await ordersQuery) as unknown as StatsResult;
-  if (ordersResult.error?.code === "42703") {
-    let legacyOrdersQuery = supabase
+  const readStats = (legacy: boolean) => readHistoryPages<StatsRow>(async (offset, size) => {
+    let ordersQuery = supabase
       .from("shipping_orders")
-      .select("partner_id, status, shipping_fee, cod_amount, invoices!inner(branch_id)")
+      .select(legacy
+        ? "id, partner_id, status, shipping_fee, cod_amount, invoices!inner(branch_id)"
+        : "id, partner_id, status, shipping_fee, cod_amount, settlement_id, invoices!inner(branch_id)",
+      { count: "exact" })
       .eq("tenant_id", tenantId);
     if (scope?.branchId) {
-      legacyOrdersQuery = legacyOrdersQuery.eq("invoices.branch_id", scope.branchId);
+      ordersQuery = ordersQuery.eq("invoices.branch_id", scope.branchId);
     }
-    ordersResult = (await legacyOrdersQuery) as unknown as StatsResult;
+    const result = await ordersQuery.order("id", { ascending: true })
+      .range(offset, offset + size - 1) as unknown as StatsResult;
+    // Preserve the schema error code for the existing compatibility fallback.
+    if (result.error?.code === "42703") throw result.error;
+    return result;
+  });
+  let orders: StatsRow[];
+  try {
+    orders = await readStats(false);
+  } catch (error) {
+    if ((error as { code?: string }).code !== "42703") throw error;
+    orders = await readStats(true);
   }
   const partnersResult = await getDeliveryPartners(params);
-
-  if (ordersResult.error) {
-    handleError(ordersResult.error, "getDeliveryPartnersWithStats.orders");
-  }
 
   const byPartner = new Map<string, DeliveryPartnerStats>();
   const unassigned: DeliveryPartnerStats = { ...EMPTY_STATS };
 
-  for (const row of ordersResult.data ?? []) {
+  for (const row of orders) {
     const key = (row.partner_id as string | null) ?? "";
     const bucket = key
       ? byPartner.get(key) ?? { ...EMPTY_STATS }
@@ -486,11 +488,13 @@ export async function getUnsettledShipments(
     .from("shipping_orders")
     .select(
       "id, code, cod_amount, updated_at, settlement_id, invoices!shipping_orders_invoice_id_fkey!inner(code, customer_name, branch_id)",
+      { count: "exact" },
     )
     .eq("tenant_id", tenantId)
     .eq("status", "delivered")
     .is("settlement_id", null)
-    .order("updated_at", { ascending: true });
+    .order("updated_at", { ascending: true })
+    .order("id", { ascending: true });
   if (branchId) query = query.eq("invoices.branch_id", branchId);
   query = partnerId
     ? query.eq("partner_id", partnerId)
@@ -504,16 +508,17 @@ export async function getUnsettledShipments(
     updated_at: string;
     invoices: { code: string; customer_name: string } | null;
   };
-  const { data, error } = (await query) as unknown as {
-    data: UnsettledRow[] | null;
-    error: { code?: string; message: string } | null;
-  };
-  if (error) {
-    if (error.code === "42703") throw new Error(MIGRATION_00301_HINT);
-    handleError(error, "getUnsettledShipments");
-  }
+  const data = await readHistoryPages<UnsettledRow>(async (offset, size) => {
+    const result = await query.range(offset, offset + size - 1) as unknown as {
+      data: UnsettledRow[] | null;
+      error: { code?: string; message: string } | null;
+      count?: number | null;
+    };
+    if (result.error?.code === "42703") throw new Error(MIGRATION_00301_HINT);
+    return result;
+  });
 
-  return (data ?? []).map((row) => ({
+  return data.map((row) => ({
     id: row.id,
     code: row.code,
     invoiceCode: row.invoices?.code ?? "—",
