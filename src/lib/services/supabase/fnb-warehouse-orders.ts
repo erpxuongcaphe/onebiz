@@ -15,7 +15,35 @@ function handleWarehouseError(error: { message: string; code?: string }, context
   }
   return handleError(error, context);
 }
-export interface SupplyOrderLink { purchaseOrderId: string; salesOrderCode: string; processed: boolean; cancelled: boolean }
+export interface SupplyOrderLink { purchaseOrderId: string; salesOrderCode: string; processed: boolean; cancelled: boolean; revision?: number; blockedReason?: string | null }
+export interface SupplyOrderChangeDetail {
+  purchaseOrderId: string; code: string; salesOrderCode: string; branchId: string; warehouseId: string;
+  revision: number; items: Array<SupplyProduct & { quantity: number; note?: string }>; note: string; blockedReason: string | null;
+}
+export async function getWarehouseOrderForChange(id: string): Promise<SupplyOrderChangeDetail> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (getClient().rpc as any)('get_fnb_warehouse_order_for_change', { p_purchase_order_id: id });
+  if (error) handleWarehouseError(error, 'getWarehouseOrderForChange');
+  if (!data || data.purchaseOrderId !== id || !Number.isInteger(data.revision) || !Array.isArray(data.items)) throw new Error('Chưa tải đủ phiếu đặt. Vui lòng mở lại.');
+  return data;
+}
+export interface SupplyOrderChangeInput {
+  purchaseOrderId: string; expectedRevision: number; requestId: string; action: 'edit' | 'cancel';
+  items?: SupplyOrderInput['items']; note?: string; reason: string;
+}
+export async function changeWarehouseOrder(input: SupplyOrderChangeInput): Promise<void> {
+  if (!input.requestId || !Number.isInteger(input.expectedRevision) || input.expectedRevision < 0 || input.reason.trim().length < 3 || input.reason.length > 1000) throw new Error('Nhập lý do thay đổi/hủy từ 3 đến 1000 ký tự.');
+  if (input.action === 'edit' && (!input.items?.length || input.items.length > 500 || input.items.some(i => !Number.isFinite(i.quantity) || i.quantity <= 0 || (i.note?.length ?? 0) > 2000))) throw new Error('Kiểm tra mặt hàng, số lượng và ghi chú.');
+  // Keep the request key on retry after an uncertain/lost response.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (getClient().rpc as any)('change_fnb_warehouse_order', {
+    p_purchase_order_id: input.purchaseOrderId, p_expected_revision: input.expectedRevision,
+    p_request_id: input.requestId, p_action: input.action, p_items: input.action === 'edit' ? input.items : null,
+    p_note: input.action === 'edit' ? input.note ?? '' : null, p_reason: input.reason,
+  });
+  if (error) handleWarehouseError(error, 'changeWarehouseOrder');
+  if (data?.purchaseOrderId !== input.purchaseOrderId || data?.action !== input.action || data?.revision !== input.expectedRevision + 1) throw new Error('Chưa nhận được xác nhận đồng bộ. Giữ nội dung và thử lại cùng thao tác.');
+}
 export async function getWarehouseOrderLinks(ids: string[]): Promise<SupplyOrderLink[]> {
   if (!ids.length) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

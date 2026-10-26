@@ -1,6 +1,6 @@
 // Isolated PostgreSQL execution. No connection to ONEBIZ or a remote database.
 import { createRequire } from 'node:module';
-const { PGlite } = createRequire(import.meta.url)('@electric-sql/pglite');
+const { PGlite } = createRequire(process.argv[2] || import.meta.url)('@electric-sql/pglite');
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 const db = new PGlite();
@@ -300,4 +300,6 @@ await test('new search retains branch/permission denial and private helper ACL',
  assert.equal(await scalar("select has_function_privilege('anon','catalog_search_rank(text,text,text,text)','execute')"),false);
 });
 
-console.log(`${passed} isolated PostgreSQL checks passed.`);await db.close();
+console.log(`${passed} isolated PostgreSQL checks passed.`);
+await (await import('./test-fnb-warehouse-order-changes.mjs')).runChanges(db,{id,tenant,actor,store,warehouse,supplier,product,substitute,submit});
+await db.close();

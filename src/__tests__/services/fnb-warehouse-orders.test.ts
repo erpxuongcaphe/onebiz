@@ -1,10 +1,31 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks=vi.hoisted(()=>({rpc:vi.fn()}));
 vi.mock('@/lib/services/supabase/base',()=>({getClient:()=>({rpc:mocks.rpc}),handleError:(e:Error)=>{throw e;}}));
-import { getWarehouseOrderContext, submitWarehouseOrder } from '@/lib/services/supabase/fnb-warehouse-orders';
+import { getWarehouseOrderContext, submitWarehouseOrder, getWarehouseOrderForChange, changeWarehouseOrder } from '@/lib/services/supabase/fnb-warehouse-orders';
 const input={branchId:'store',warehouseId:'warehouse',requestId:'durable-key',items:[{productId:'milk',quantity:3}],note:'  Giữ nguyên ghi chú\nHàng mới  '};
 describe('warehouse order bridge client',()=>{
  beforeEach(()=>vi.clearAllMocks());
+ it('reads a current change snapshot with a server revision',async()=>{
+  mocks.rpc.mockResolvedValue({data:{purchaseOrderId:'po',revision:2,items:[]}});await getWarehouseOrderForChange('po');
+  expect(mocks.rpc).toHaveBeenCalledWith('get_fnb_warehouse_order_for_change',{p_purchase_order_id:'po'});
+ });
+ it('sends edit intent, revision, literal notes and durable change key',async()=>{
+  mocks.rpc.mockResolvedValue({data:{purchaseOrderId:'po',revision:3,action:'edit'}});
+  await changeWarehouseOrder({purchaseOrderId:'po',expectedRevision:2,requestId:'retry-key',action:'edit',items:input.items,note:input.note,reason:'Đổi nhu cầu'});
+  expect(mocks.rpc).toHaveBeenCalledWith('change_fnb_warehouse_order',{p_purchase_order_id:'po',p_expected_revision:2,p_request_id:'retry-key',p_action:'edit',p_items:input.items,p_note:input.note,p_reason:'Đổi nhu cầu'});
+ });
+ it('cancel never sends replacement rows or writes a reason into employee notes',async()=>{
+  mocks.rpc.mockResolvedValue({data:{purchaseOrderId:'po',revision:1,action:'cancel'}});
+  await changeWarehouseOrder({purchaseOrderId:'po',expectedRevision:0,requestId:'key',action:'cancel',reason:'Không cần nữa'});
+  expect(mocks.rpc.mock.calls[0][1]).toMatchObject({p_items:null,p_note:null,p_reason:'Không cần nữa'});
+ });
+ it('rejects malformed or mismatched change confirmations',async()=>{
+  mocks.rpc.mockResolvedValue({data:{purchaseOrderId:'other',revision:1,action:'cancel'}});
+  await expect(changeWarehouseOrder({purchaseOrderId:'po',expectedRevision:0,requestId:'key',action:'cancel',reason:'Không cần nữa'})).rejects.toThrow('Chưa nhận được');
+ });
+ it.each(['','x'])('requires a deliberate change reason %s',async reason=>{
+  await expect(changeWarehouseOrder({purchaseOrderId:'po',expectedRevision:0,requestId:'key',action:'cancel',reason})).rejects.toThrow('lý do');expect(mocks.rpc).not.toHaveBeenCalled();
+ });
  it('sends branch context and literal search to scoped server RPC',async()=>{
   mocks.rpc.mockResolvedValue({data:{warehouses:[],products:[]}});await getWarehouseOrderContext('store',"%'_");
   expect(mocks.rpc).toHaveBeenCalledWith('get_fnb_warehouse_order_context',{p_branch_id:'store',p_search:"%'_"});
