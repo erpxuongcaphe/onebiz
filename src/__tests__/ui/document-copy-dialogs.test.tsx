@@ -2,8 +2,9 @@ import {act,cleanup,fireEvent,render,screen,waitFor} from '@testing-library/reac
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 const m=vi.hoisted(()=>({load:vi.fn(),submit:vi.fn(),rpc:vi.fn(),toast:vi.fn(),branch:{id:'branch',branchType:'store'},branches:[{id:'branch',branchType:'store'}]}));
 vi.mock('@/lib/contexts',()=>({useAuth:()=>({activeBranchId:'branch',currentBranch:m.branch,branches:m.branches}),useToast:()=>({toast:m.toast})}));
-vi.mock('@/lib/hooks/use-durable-form-draft',()=>({useDurableFormDraft:()=>({clearDraft:vi.fn()})}));
+vi.mock('@/lib/hooks/use-durable-form-draft',()=>({useDurableFormDraft:()=>({clearDraft:vi.fn(),flushDraft:vi.fn()})}));
 vi.mock('@/lib/services/supabase/document-copy',()=>({loadDocumentCopy:m.load}));
+vi.mock('@/lib/services/supabase/fnb-branch-cost',()=>({getFnbBranchComponentCosts:async()=>new Map()}));
 vi.mock('@/lib/services/supabase/uom',()=>({getUOMConversions:async()=>[],getUOMConversionsByProductIds:async()=>new Map()}));
 vi.mock('@/lib/services/supabase/rpc-utils',()=>({isRpcUnavailable:()=>false}));
 vi.mock('@/lib/services/supabase/base',()=>({getCurrentContext:async()=>({tenantId:'tenant',branchId:'branch'}),getClient:()=>({rpc:m.rpc,from:()=>{const q={select:()=>q,eq:()=>q,is:()=>q,in:()=>q,limit:async()=>({data:[{product_id:'milk',quantity:7}],error:null})};return q;}})}));
