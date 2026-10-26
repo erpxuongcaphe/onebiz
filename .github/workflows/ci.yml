@@ -82,6 +82,19 @@ jobs:
           node scripts/fnb-db-test/run-manager-approvals-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
           node scripts/fnb-db-test/run-branch-layout-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
 
+      - name: Verify branch request changes and warehouse race safety
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          node scripts/test-fnb-warehouse-bridge.mjs "$RUNNER_TEMP/internal-pos-runtime/package.json"
+          createdb onebiz_warehouse_change_test
+          node scripts/fnb-db-test/extract-warehouse-change-fixture.mjs /tmp/warehouse-change-fixture.sql
+          PGDATABASE=onebiz_warehouse_change_test psql -X -v ON_ERROR_STOP=1 -f /tmp/warehouse-change-fixture.sql
+          PGDATABASE=onebiz_warehouse_change_test python3 scripts/fnb-db-test/warehouse-change-concurrency.py
+
       - name: Verify atomic opening stock and isolated branch value
         env:
           PGHOST: localhost
