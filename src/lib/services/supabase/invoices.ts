@@ -89,7 +89,7 @@ export async function getInvoices(params: QueryParams): Promise<QueryResult<Invo
   let query = (supabase as any)
     .from("invoices")
     .select(
-      `*, profiles!invoices_created_by_fkey(full_name), branches!invoices_branch_id_fkey(name), customers!invoices_customer_id_fkey(code, phone, address, debt), ${shipmentPlan.relation}${fnbRelation}${optionRelation}`,
+      `*, profiles!invoices_created_by_fkey(full_name), branches!invoices_branch_id_fkey(name), customers!invoices_customer_id_fkey(code, phone, address, debt), parent_order:invoices!invoices_source_order_id_fkey(code), ${shipmentPlan.relation}${fnbRelation}${optionRelation}`,
       { count: "exact" },
     )
     .eq("tenant_id", tenantId)
@@ -106,6 +106,11 @@ export async function getInvoices(params: QueryParams): Promise<QueryResult<Invo
   query = apDungLocChungTuBan(query);
 
   // Search — escape % wildcard.
+  if (params.filters?.ids !== undefined) {
+    const ids=params.filters.ids;
+    if(!Array.isArray(ids)||!ids.length||ids.some(id=>typeof id!=="string"||!id))throw new Error("Danh sách chứng từ xuất chưa hợp lệ.");
+    query=query.in("id",ids);
+  }
   // Note: search by SĐT KH cần subquery customers.phone — chưa wire vì
   // invoices.customer_phone không tồn tại; search hiện chỉ trên code +
   // customer_name (text snapshot lúc tạo HD).
@@ -263,7 +268,7 @@ export async function getInvoiceById(id: string): Promise<Invoice | null> {
   const { data, error } = await (supabase as any)
     .from("invoices")
     .select(
-      `*, profiles!invoices_created_by_fkey(full_name), branches!invoices_branch_id_fkey(name), customers!invoices_customer_id_fkey(code, phone, address, debt), fnb_orders:kitchen_orders!kitchen_orders_invoice_id_fkey(${FNB_ORDER_CONTEXT_SELECT})`,
+      `*, profiles!invoices_created_by_fkey(full_name), branches!invoices_branch_id_fkey(name), customers!invoices_customer_id_fkey(code, phone, address, debt), parent_order:invoices!invoices_source_order_id_fkey(code), fnb_orders:kitchen_orders!kitchen_orders_invoice_id_fkey(${FNB_ORDER_CONTEXT_SELECT})`,
     )
     .eq("tenant_id", tenantId)
     .eq("id", id)
@@ -743,6 +748,8 @@ function mapInvoice(row: any): Invoice {
     code: row.code,
     // Mã đơn gốc DH/NH trước khi hoàn tất → HD (00169) — truy vết ở trang Hóa đơn.
     orderCode: row.order_code ?? undefined,
+    sourceOrderId: row.source_order_id ?? undefined,
+    sourceOrderCode: (Array.isArray(row.parent_order)?row.parent_order[0]:row.parent_order)?.code ?? undefined,
     // 00335: NGÀY HOÁ ĐƠN. Cột sinh ngay_chung_tu = coalesce(issued_at,
     // created_at); giữ nhánh dự phòng cho nơi select thiếu cột.
     date: row.ngay_chung_tu ?? row.created_at,
