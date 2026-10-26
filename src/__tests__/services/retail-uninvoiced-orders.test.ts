@@ -1,5 +1,5 @@
 import {beforeEach,describe,it,expect,vi} from 'vitest';
-const f=vi.hoisted(()=>({rows:[] as Record<string,unknown>[],missing:false,calls:[] as unknown[][]}));
+const f=vi.hoisted(()=>({rows:[] as Record<string,unknown>[],missing:false,calls:[] as unknown[][][]}));
 vi.mock('@/lib/services/supabase/base',()=>({getCurrentTenantId:async()=> 'tenant',getPaginationRange:(p:{page:number;pageSize:number})=>({from:p.page*p.pageSize,to:(p.page+1)*p.pageSize-1}),getClient:()=>({from:()=>{
  const state={filters:[] as unknown[][],from:0,to:999};
  const q={select(){return q;},eq(k:string,v:unknown){state.filters.push(['eq',k,v]);return q;},in(k:string,v:unknown[]){state.filters.push(['in',k,v]);return q;},is(k:string,v:unknown){state.filters.push(['is',k,v]);return q;},not(){return q;},order(){return q;},gte(){return q;},lte(){return q;},range(a:number,b:number){state.from=a;state.to=b;return q;},then(resolve:(v:unknown)=>unknown){
