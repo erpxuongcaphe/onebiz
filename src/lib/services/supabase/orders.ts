@@ -32,6 +32,7 @@ import {
   applyCreatedAtRangeFilter,
   normalizeCreatedAtRange,
 } from "@/lib/utils/list-date-preset-range";
+import { readHistoryPages } from "./read-history-pages";
 import { DEFAULT_ORDER_LIST_STATUSES } from "@/lib/utils/document-list-statuses";
 
 // ============================================================
@@ -129,27 +130,26 @@ export async function getOrders(
       : ", shipments:shipping_orders!shipping_orders_invoice_id_fkey!inner(id)"
     : "";
 
-  // BA MỨC XỬ LÝ — lọc bằng QUAN HỆ NHÚNG, không bằng danh sách id.
-  //
-  // Vì sao không dùng danh sách id: phải tải hết hóa đơn con rồi khử trùng mới
-  // ra tập đơn gốc; hễ có trần là một đơn nhiều hóa đơn con sẽ ăn hết quota và
-  // làm rơi mất đơn khác — danh sách thiếu mà người dùng tưởng là đủ. Nhúng
-  // quan hệ để MÁY CHỦ tự lọc, không giới hạn, giữ nguyên mọi bộ lọc khác.
-  //
-  // Cùng một mẫu trang này đã dùng cho vận đơn: `!inner` = phải có ít nhất một
-  // dòng khớp; không `!inner` + `.is(<quan hệ>, null)` = không có dòng nào khớp.
-  const locBaMuc =
-    fulfillmentState === "pending" || fulfillmentState === "processing";
-  const childRelation = locBaMuc
-    ? fulfillmentState === "processing"
-      ? ", con_hoan_tat:invoices!invoices_source_order_id_fkey!inner(id)"
-      : ", con_hoan_tat:invoices!invoices_source_order_id_fkey(id)"
-    : "";
-
+  // A self-referencing embedded anti-join can discard pending parents in
+  // PostgREST. Read every scoped open-order page, use the existing explicit
+  // source_order_id summary, then filter BEFORE the requested UI page.
+  if (fulfillmentState === "pending" || fulfillmentState === "processing") {
+    const candidates = await readHistoryPages<SalesOrder>(async (offset, size) => {
+      const r = await getOrders({ ...params, page: offset / size, pageSize: size,
+        filters: { ...params.filters, fulfillmentState: "open" } });
+      return { data: r.data, count: r.total, error: null };
+    });
+    if (candidates.some(o => o.completedChildCount == null)) {
+      throw new Error('Chưa xác định được hóa đơn của đơn đặt hàng. Vui lòng tải lại.');
+    }
+    const matching = candidates.filter(o => !o.fulfilledById &&
+      (fulfillmentState === "pending" ? o.completedChildCount === 0 : (o.completedChildCount ?? 0) > 0));
+    return { data: matching.slice(from, to + 1), total: matching.length };
+  }
   let query = (supabase as any)
     .from("invoices")
     .select(
-      `*, profiles!invoices_created_by_fkey(full_name), branches!invoices_branch_id_fkey(name), ${customerRelation}${shipmentRelation}${childRelation}`,
+      `*, profiles!invoices_created_by_fkey(full_name), branches!invoices_branch_id_fkey(name), ${customerRelation}${shipmentRelation}`,
       { count: "exact" },
     )
     .eq("tenant_id", tenantId)
@@ -203,20 +203,6 @@ export async function getOrders(
   } else if (fulfillmentState === "open") {
     // Includes both pending and partially processed orders, before pagination.
     query = query.is("fulfilled_by_id", null);
-  } else if (locBaMuc) {
-    query = query.is("fulfilled_by_id", null);
-    // Điều kiện "hóa đơn con còn hiệu lực" áp lên QUAN HỆ NHÚNG. Máy chủ tự
-    // lọc nên một đơn có bao nhiêu hóa đơn con cũng đúng.
-    query = query
-      .eq("con_hoan_tat.status", "completed")
-      .is("con_hoan_tat.deleted_at", null)
-      .is("con_hoan_tat.voided_at", null)
-      .is("con_hoan_tat.cancelled_at", null);
-    if (fulfillmentState === "pending") {
-      // Không có dòng con nào khớp ⇒ chưa có hóa đơn ⇒ CHỜ XỬ LÝ.
-      query = query.is("con_hoan_tat", null);
-    }
-    // "processing" đã có `!inner` trong select nên chỉ giữ đơn CÓ dòng khớp.
   }
 
   if (debtState === "outstanding") {

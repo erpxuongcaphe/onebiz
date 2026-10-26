@@ -100,7 +100,7 @@ describe("Hồi quy đơn bán con — 12 ca CEO", () => {
     expect(SQL331).not.toMatch(/alter table[^;]*source_order_id[^;]*not null/);
     // POS uses the existing pending anti-join before pagination; legacy nullable links remain valid.
     expect(POS).toContain('fulfillmentState: "pending"');
-    const openFilter = SERVICE.slice(SERVICE.indexOf('fulfillmentState === "open"'), SERVICE.indexOf('} else if (locBaMuc)'));
+    const openFilter = SERVICE.slice(SERVICE.indexOf('fulfillmentState === "open"'), SERVICE.indexOf('if (debtState === "outstanding")'));
     expect(openFilter).toContain('query.is("fulfilled_by_id", null)');
     expect(openFilter).not.toContain("source_order_id");
   });
