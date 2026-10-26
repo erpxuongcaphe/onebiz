@@ -212,7 +212,7 @@ export default function CustomerCohortPage() {
           <KpiCard
             label="Số nhóm khách"
             value={data ? String(totalCohorts) : error ? "Không tải được" : "Đang tải"}
-            change={`${data?.monthsTracked ?? 6} tháng theo dõi`}
+            change={`${data?.monthsTracked ?? months} tháng theo dõi`}
             positive
             icon="group"
             bg="bg-primary-fixed"
