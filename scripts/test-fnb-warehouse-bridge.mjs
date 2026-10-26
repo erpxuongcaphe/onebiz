@@ -1,6 +1,6 @@
 // Isolated PostgreSQL execution. No connection to ONEBIZ or a remote database.
 import { createRequire } from 'node:module';
-const { PGlite } = createRequire(import.meta.url)('@electric-sql/pglite');
+const { PGlite } = createRequire(process.argv[2] || import.meta.url)('@electric-sql/pglite');
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 const db = new PGlite();
@@ -300,16 +300,20 @@ await test('new search retains branch/permission denial and private helper ACL',
  assert.equal(await scalar("select has_function_privilege('anon','catalog_search_rank(text,text,text,text)','execute')"),false);
 });
 
-await db.exec(readFileSync('supabase/migrations/202610260100_fnb_wholesale_catalog_boundary.sql','utf8'));
-await db.exec(readFileSync('supabase/migrations/202610260100_fnb_wholesale_catalog_boundary.sql','utf8'));
+await (await import('./test-fnb-warehouse-order-changes.mjs')).runChanges(db,{id,tenant,actor,store,warehouse,supplier,product,substitute,submit});
+await db.exec(readFileSync('supabase/migrations/202610260200_fnb_wholesale_catalog_boundary.sql','utf8'));
+await db.exec(readFileSync('supabase/migrations/202610260200_fnb_wholesale_catalog_boundary.sql','utf8'));
 await test('wholesale-only WS and FECA products are excluded before limiting and rejected on new submission, while old retries remain idempotent',async()=>{
  for(const classification of ["code='wS-001'","name='WS - Sữa Đặc'","name='fEcA - Sữa Đặc'"]){
-  await db.exec('begin');await db.query(`update products set ${classification} where id=$1`,[product]);
+  await db.exec('begin'); const editable=await submit(id(995)); await db.query(`update products set ${classification} where id=$1`,[product]);
   assert.equal((await contextSearch('Sữa Đặc')).some(p=>p.id===product),false);
   assert.deepEqual(await submit(key),saved);
   const before=(await db.query('select * from codes order by entity')).rows;
   await db.exec('savepoint wholesale_submit');await rejects(()=>submit(id(993)),/không còn được phép/);
   await db.exec('rollback to savepoint wholesale_submit');
+  await db.exec('savepoint wholesale_edit');
+  await rejects(()=>scalar('select change_fnb_warehouse_order($1,0,$2,$3,$4::jsonb,$5,$6)',[editable.purchaseOrderId,id(996),'edit',JSON.stringify(input(3)),'New note','Update request']),/không còn được phép/);
+  await db.exec('rollback to savepoint wholesale_edit');
   assert.deepEqual((await db.query('select * from codes order by entity')).rows,before);
   await db.exec('rollback');
  }

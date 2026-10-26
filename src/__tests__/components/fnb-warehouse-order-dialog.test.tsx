@@ -1,9 +1,9 @@
 import React from 'react';
 import { afterEach,beforeEach,describe,expect,it,vi } from 'vitest';
 import { cleanup,fireEvent,render,screen,waitFor } from '@testing-library/react';
-const mocks=vi.hoisted(()=>({context:vi.fn(),submit:vi.fn(),toast:vi.fn(),clear:vi.fn(),draft:vi.fn()}));
+const mocks=vi.hoisted(()=>({context:vi.fn(),submit:vi.fn(),toast:vi.fn(),clear:vi.fn(),draft:vi.fn(),detail:vi.fn(),change:vi.fn()}));
 vi.mock('@/lib/contexts',()=>({useToast:()=>({toast:mocks.toast})}));
-vi.mock('@/lib/services/supabase/fnb-warehouse-orders',()=>({getWarehouseOrderContext:mocks.context,submitWarehouseOrder:mocks.submit}));
+vi.mock('@/lib/services/supabase/fnb-warehouse-orders',()=>({getWarehouseOrderContext:mocks.context,submitWarehouseOrder:mocks.submit,getWarehouseOrderForChange:mocks.detail,changeWarehouseOrder:mocks.change}));
 vi.mock('@/lib/hooks/use-durable-form-draft',()=>({useDurableFormDraft:(options:unknown)=>{mocks.draft(options);return {clearDraft:mocks.clear};}}));
 vi.mock('@/components/ui/dialog',()=>({
  Dialog:({open,children}:{open:boolean;children:React.ReactNode})=>open?<>{children}</>:null,
@@ -23,8 +23,31 @@ describe('F&B warehouse order form',()=>{
  beforeEach(()=>{
   vi.clearAllMocks();mocks.context.mockImplementation(async(_b:string,search:string)=>({warehouses:[warehouse],products:search?[milk]:[]}));
   mocks.submit.mockResolvedValue({code:'PO1',salesOrderCode:'DH1'});
+  mocks.detail.mockReset().mockResolvedValue({purchaseOrderId:'po',code:'PO1',salesOrderCode:'DH1',branchId:'store',warehouseId:'warehouse',revision:2,items:[{...milk,quantity:2,note:'Gói riêng'}],note:'Giao sáng',blockedReason:null});
+  mocks.change.mockReset().mockResolvedValue(undefined);
  });
  afterEach(cleanup);
+ it('edits existing rows with revision and updates both sides only through the change RPC',async()=>{
+  const close=vi.fn();render(<CreateFnbWarehouseOrderDialog open onOpenChange={close} branchId="store" editingOrderId="po"/>);
+  await waitFor(()=>expect(screen.getByLabelText('Số lượng Sữa A')).toHaveValue(2));expect(screen.getByLabelText('Kho cung cấp')).toBeDisabled();
+  expect(screen.getByRole('button',{name:'Lưu thay đổi'})).toBeDisabled();
+  fireEvent.change(screen.getByLabelText('Số lượng Sữa A'),{target:{value:'5'}});fireEvent.change(screen.getByLabelText('Ghi chú SKU-A'),{target:{value:'  Nguyên thùng  '}});
+  fireEvent.change(screen.getByLabelText('Lý do thay đổi'),{target:{value:'Đổi nhu cầu'}});fireEvent.click(screen.getByRole('button',{name:'Lưu thay đổi'}));
+  await waitFor(()=>expect(mocks.change).toHaveBeenCalledTimes(1));
+  expect(mocks.change.mock.calls[0][0]).toMatchObject({purchaseOrderId:'po',expectedRevision:2,action:'edit',items:[{productId:'milk',quantity:5,note:'  Nguyên thùng  '}],note:'Giao sáng',reason:'Đổi nhu cầu'});
+  expect(mocks.submit).not.toHaveBeenCalled();await waitFor(()=>expect(close).toHaveBeenCalledWith(false));
+ });
+ it('blocks a shipped order and never silently recreates it as a new order',async()=>{
+  mocks.detail.mockResolvedValue({purchaseOrderId:'po',code:'PO1',branchId:'store',warehouseId:'warehouse',revision:2,items:[],note:'',blockedReason:'Kho đã xuất/giao hàng.'});
+  render(<CreateFnbWarehouseOrderDialog open onOpenChange={vi.fn()} branchId="store" editingOrderId="po"/>);
+  expect(await screen.findByRole('alert')).toHaveTextContent('Kho đã xuất');expect(screen.getByRole('button',{name:'Lưu thay đổi'})).toBeDisabled();expect(mocks.change).not.toHaveBeenCalled();expect(mocks.submit).not.toHaveBeenCalled();
+ });
+ it('retains edit contents and the same operation key after an uncertain response',async()=>{
+  mocks.change.mockRejectedValueOnce(new Error('Mất kết nối'));render(<CreateFnbWarehouseOrderDialog open onOpenChange={vi.fn()} branchId="store" editingOrderId="po"/>);
+  await screen.findByLabelText('Số lượng Sữa A');fireEvent.change(screen.getByLabelText('Lý do thay đổi'),{target:{value:'Đổi nhu cầu'}});
+  fireEvent.click(screen.getByRole('button',{name:'Lưu thay đổi'}));await screen.findByRole('alert');expect(screen.getByLabelText('Ghi chú SKU-A')).toHaveValue('Gói riêng');
+  fireEvent.click(screen.getByRole('button',{name:'Lưu thay đổi'}));await waitFor(()=>expect(mocks.change).toHaveBeenCalledTimes(2));expect(mocks.change.mock.calls[0][0].requestId).toBe(mocks.change.mock.calls[1][0].requestId);
+ });
  it('opening and closing never reserves a document number or submits',async()=>{
   const close=vi.fn();render(<CreateFnbWarehouseOrderDialog open onOpenChange={close} branchId="store"/>);
   await waitFor(()=>expect(screen.getByLabelText('Kho cung cấp')).toHaveValue('warehouse'));

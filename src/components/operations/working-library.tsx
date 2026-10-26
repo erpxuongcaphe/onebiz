@@ -14,6 +14,8 @@ import { vnToday } from "./quality-fields";
 import { missingWorkSchedules, workScheduleSummary } from "@/lib/operations/work-schedule";
 import { libraryChanges, libraryChangeReason, reconcileLibraryImport } from "@/lib/operations/library-change-reasons";
 import { LibraryUpdate } from "./library-update";
+import { LibraryAssignments } from "./library-assignments";
+import { requestPageLeave } from "@/lib/hooks/use-unsaved-work";
 import s from "./quality.module.css";
 import w from "./working-library.module.css";
 
@@ -31,6 +33,7 @@ export function WorkingLibrary({ workspace, onApplied }: { workspace:Workspace; 
   const [libraries,setLibraries]=useState<Library[]>([]);
   const [applications,setApplications]=useState<LibraryApplication[]>([]);
   const [editor,setEditor]=useState<Editor|null>(null);
+  const [assignment,setAssignment]=useState<{library:Library;branchId:string}|null>(null);
   const [rows,setRows]=useState<WorkingRow[]>([]);
   const [notes,setNotes]=useState("");
   const [title,setTitle]=useState("");
@@ -234,12 +237,12 @@ export function WorkingLibrary({ workspace, onApplied }: { workspace:Workspace; 
           <h3>{editor.library.title} · phiên bản {formatNumber(editor.library.version)}</h3><p>{formatNumber(editor.library.rows.length)} tiêu chí. Chỉ các chi nhánh được chọn và đủ cấu hình mới được áp dụng sau khi xác nhận.</p>
           {!!missingWorkSchedules(editor.library.rows).length&&<div role="alert" className={w.notice}><p>Chưa thể áp dụng. Chọn thứ riêng cho {missingWorkSchedules(editor.library.rows).map(row=>`mục ${row.number}: ${row.title}`).join('; ')}. Không tự dùng một thứ cho cả bộ.</p><button type="button" onClick={()=>edit(editor.library)}>Bổ sung lịch từng công việc</button></div>}
           <details className={w.workSchedules}><summary>Lịch riêng của {editor.library.rows.length} công việc</summary><div className={w.scheduleList}>{editor.library.rows.map(row=><div key={row.number}><span>{row.number}. {row.title}</span><strong className={missingWorkSchedules([row]).length?w.fieldError:undefined}>{workScheduleSummary(row)}</strong></div>)}</div></details>
-          <p className={w.notice}>Chi nhánh đã áp dụng giữ nguyên công việc và lịch sử. Muốn thay đổi tại chi nhánh đó, dùng “Sửa công việc / lịch” hoặc “Kết thúc lặp” trong Standard Working.</p>
+          <p className={w.notice}>Chi nhánh đã áp dụng: dùng “Chỉnh sửa phân công” để thêm, bớt hoặc thay người phụ trách. Muốn đổi lịch, dùng “Sửa công việc / lịch” hoặc “Kết thúc lặp” trong Standard Working. Không cần áp dụng lại bộ tiêu chí.</p>
           <label className={w.check}><input type="checkbox" checked={eligible.length>0&&selected.length===eligible.length} disabled={!eligible.length||busy||!!missingWorkSchedules(editor.library.rows).length} onChange={e=>setSelected(e.target.checked?eligible.map(b=>b.id):[])}/>Chọn tất cả chi nhánh chưa áp dụng trong phạm vi được phép</label>
           {!!selected.length&&<div className={w.selectedBranches} aria-label="Chi nhánh đang chọn">{selected.map(id=><span key={id}>{branches.find(b=>b.id===id)?.name}<button type="button" disabled={busy} title={`Bỏ chọn ${branches.find(b=>b.id===id)?.name}`} aria-label={`Bỏ chọn chi nhánh ${branches.find(b=>b.id===id)?.name}`} onClick={()=>{setSelected(old=>old.filter(v=>v!==id));setError('');}}><span aria-hidden="true">×</span></button></span>)}</div>}
           {selected.length>1&&<details className={w.commonSchedule}><summary>Điền nhanh ngày bắt đầu và giờ hạn cho {selected.length} chi nhánh</summary><div className={w.grid}><label>Ngày bắt đầu chung<ScheduleDateInput min={vnToday()} value={bulkSchedule.effectiveFrom} onValueChange={value=>setBulkSchedule(old=>({...old,effectiveFrom:value}))}/></label><label>Giờ hạn chung (24 giờ)<ScheduleTimeInput value={bulkSchedule.dueTime} onValueChange={value=>setBulkSchedule(old=>({...old,dueTime:value}))}/></label></div><button type="button" disabled={busy||!bulkSchedule.effectiveFrom||!bulkSchedule.dueTime} onClick={fillSchedule}>Điền cho {selected.length} chi nhánh đã chọn</button></details>}
           {branches.map(branch=>{const applied=existing.find(a=>a.branch_id===branch.id);const picked=selected.includes(branch.id);const draft=branchDraft(branch.id);const missing=missingSchedule(draft);const ready=!missing.length;const invalid=(field:ScheduleField)=>checkSchedule&&missing.includes(field);const fieldError=(field:ScheduleField)=>invalid(field)?<small id={`${branch.id}-${field}-error`} className={w.fieldError}>{scheduleLabels[field]}</small>:null;return <section aria-label={branch.name} key={branch.id} className={`${w.branch} ${picked?w.selected:''}`}><div className={w.rowHeader}><label className={w.check}><input type="checkbox" checked={picked} disabled={!!applied||busy||!!missingWorkSchedules(editor.library.rows).length} onChange={e=>{setSelected(old=>e.target.checked?[...old,branch.id]:old.filter(id=>id!==branch.id));setError('');}}/><strong>{branch.name}</strong></label><span className={ready?w.ready:w.status}>{applied?`Đã áp dụng · phiên bản ${applied.library_version}`:picked?ready?'Đủ thông tin':'Cần điền người và lịch':'Chưa áp dụng'}</span></div>
-            {applied&&<p className={w.status}>Bắt đầu {formatShortDate(`${applied.settings.effectiveFrom}T00:00:00+07:00`)} · hạn {applied.settings.dueTime}. Không tự thay thế khi sửa bộ chung.</p>}
+            {applied&&<><p className={w.status}>Bắt đầu {formatShortDate(`${applied.settings.effectiveFrom}T00:00:00+07:00`)} · hạn {applied.settings.dueTime}. Không tự thay thế khi sửa bộ chung.</p><button type="button" disabled={busy} onClick={()=>requestPageLeave(()=>{setEditor(null);setAssignment({library:editor.library,branchId:branch.id});})}><Icon name="group" size={16}/>Chỉnh sửa phân công</button></>}
             {picked&&<>
               <div className={w.branchFields}>
                 <div data-field-error={invalid('manager')}><UserPicker branch={branch.id} purpose="manager" name={`user-${branch.id}`} label="Quản lý phụ trách" multiple required disabled={busy} value={draft.assigneeIds} onValuesChange={(assigneeIds,people)=>updateBranch(branch.id,{assigneeIds,names:Object.fromEntries(people.map(p=>[p.id,p.name]))})}/>{fieldError('manager')}</div>
@@ -257,6 +260,7 @@ export function WorkingLibrary({ workspace, onApplied }: { workspace:Workspace; 
         </>}
       </div><footer className={`${s.dialogFooter} ${w.footer}`}>{editor?.kind==='apply'&&(error?<p role="alert" className={s.alert}>{error}</p>:<p className={w.status}>{selected.length} chi nhánh đã chọn · Chưa lưu</p>)}<div><button type="button" disabled={busy} onClick={close}>Đóng</button><button type="submit" className={s.primary} disabled={busy||(editor?.kind==='edit'&&(!rows.length||!!fileErrors.length))||(editor?.kind==='apply'&&!selected.length)}>{busy?'Đang xử lý…':editor?.kind==='edit'?'Lưu bộ tiêu chí chung':editor?.kind==='apply'?'Tiếp tục: kiểm tra phân công':editor?.kind==='restore'?'Xác nhận khôi phục':'Xác nhận ẩn bộ'}</button></div></footer></form>
     </DialogContent></Dialog>
+    {assignment&&<LibraryAssignments key={`${assignment.library.id}:${assignment.branchId}`} library={assignment.library} branchId={assignment.branchId} workspace={workspace} onClose={()=>setAssignment(null)} onSaved={()=>{void load();onApplied();}}/>}
     <Dialog open={confirmApply} protectUnsavedChanges={false} onOpenChange={open=>{if(!busy)setConfirmApply(open);}}>
       <DialogContent className={`${s.dialog} ${w.dialog} translate-x-0 translate-y-0`} showCloseButton={false}>
         <header className={s.dialogHeader}><DialogTitle>Kiểm tra và lưu phân công</DialogTitle><p className={w.step}>Bước 2/2 · Kiểm tra đủ người và lịch trước khi lưu.</p></header>

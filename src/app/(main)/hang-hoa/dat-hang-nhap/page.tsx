@@ -61,7 +61,12 @@ import { usePermissions } from "@/lib/permissions";
 import { DocumentNoteBox } from "@/components/shared/document-note-box";
 import type { PurchaseOrderEntry as BasePurchaseOrderEntry } from "@/lib/types";
 import { getWarehouseOrderLinks, type SupplyOrderLink } from "@/lib/services/supabase/fnb-warehouse-orders";
+const CreateFnbWarehouseOrderDialog = dynamic(() => import("@/components/shared/dialogs/create-fnb-warehouse-order-dialog").then(m => m.CreateFnbWarehouseOrderDialog), { ssr: false });
+const CancelFnbWarehouseOrderDialog = dynamic(() => import("@/components/shared/dialogs/cancel-fnb-warehouse-order-dialog").then(m => m.CancelFnbWarehouseOrderDialog), { ssr: false });
 type PurchaseOrderEntry = BasePurchaseOrderEntry & { warehouseOrder?: SupplyOrderLink };
+const canChangeWarehouseOrder = (item: PurchaseOrderEntry) => !!item.warehouseOrder
+  && Number.isInteger(item.warehouseOrder.revision) && !item.warehouseOrder.processed
+  && !item.warehouseOrder.cancelled && !item.warehouseOrder.blockedReason && item.status === "pending";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 
@@ -126,6 +131,7 @@ function PurchaseOrderEntryDetail({
           {/* 06/08: ghi chú phiếu đặt NCC — trước đây không hiện trong chi tiết. */}
           {item.warehouseOrder && <div className="rounded-md border bg-blue-50 p-3 text-sm">
             Đơn kho tổng: <strong>{item.warehouseOrder.salesOrderCode}</strong>. Đây là nhu cầu đã gửi; kho được điều chỉnh hàng thực xuất. Nhận hàng tại phiếu giao nội bộ, không nhập lại từ PO này.
+            {item.warehouseOrder.blockedReason && <p className="mt-2 font-medium">{item.warehouseOrder.blockedReason}</p>}
           </div>}
           <DocumentNoteBox note={item.note} />
         </div>
@@ -228,6 +234,9 @@ export default function DatHangNhapPage() {
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [cancellingItem, setCancellingItem] = useState<PurchaseOrderEntry | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
+  const [editingWarehouseOrder, setEditingWarehouseOrder] = useState<PurchaseOrderEntry | null>(null);
+  const [cancelWarehouseOrderId, setCancelWarehouseOrderId] = useState<string | null>(null);
+  useEffect(() => { setEditingWarehouseOrder(null); setCancelWarehouseOrderId(null); }, [activeBranchId]);
   // Sprint UX-1 Stage 4: Audit log dialog
   const [auditDialogTarget, setAuditDialogTarget] = useState<PurchaseOrderEntry | null>(null);
   const { toast } = useToast();
@@ -505,8 +514,8 @@ export default function DatHangNhapPage() {
             item={item}
             onClose={onClose}
             onDelete={
-              item.status === "pending" && !item.warehouseOrder
-                ? () => setCancellingItem(item)
+              txPerms.canCancel && (canChangeWarehouseOrder(item) || (item.status === "pending" && !item.warehouseOrder))
+                ? () => item.warehouseOrder ? setCancelWarehouseOrderId(item.id) : setCancellingItem(item)
                 : undefined
             }
           />
@@ -517,6 +526,7 @@ export default function DatHangNhapPage() {
             kind: "purchase_order",
             onDuplicate: () => { if (!activeBranchId || row.branchId !== activeBranchId) { toast({title:"Chọn đúng chi nhánh của phiếu để sao chép.",variant:"error"}); return; } setCopySource(row); setCreateOpen(true); },
             permissions: txPerms,
+            onEdit: canChangeWarehouseOrder(row) ? () => setEditingWarehouseOrder(row) : undefined,
             onView: () => {
               const idx = data.findIndex((d) => d.id === row.id);
               setExpandedRow(expandedRow === idx ? null : idx);
@@ -545,8 +555,8 @@ export default function DatHangNhapPage() {
             onAuditLog: () => setAuditDialogTarget(row),
             // Chỉ hủy đơn chưa nhận hàng; đơn partial phải đóng phần còn thiếu.
             onCancel:
-              row.status === "pending" && !row.warehouseOrder
-                ? () => setCancellingItem(row)
+              canChangeWarehouseOrder(row) || (row.status === "pending" && !row.warehouseOrder)
+                ? () => row.warehouseOrder ? setCancelWarehouseOrderId(row.id) : setCancellingItem(row)
                 : undefined,
           })
         }
@@ -558,6 +568,9 @@ export default function DatHangNhapPage() {
         <FilterGroup label="Giá trị đơn" activeHint={amountMin || amountMax ? "Đang lọc" : undefined}><RangeFilter fromValue={amountMin} toValue={amountMax} onFromChange={setAmountMin} onToChange={setAmountMax} fromPlaceholder="Số tiền tối thiểu" toPlaceholder="Số tiền tối đa" /></FilterGroup>
       </FilterPanel>
 
+      {editingWarehouseOrder && <CreateFnbWarehouseOrderDialog open onOpenChange={open => { if (!open) setEditingWarehouseOrder(null); }}
+        editingOrderId={editingWarehouseOrder.id} branchId={editingWarehouseOrder.branchId ?? activeBranchId ?? ""} onSuccess={() => { void fetchData(); }} />}
+      <CancelFnbWarehouseOrderDialog orderId={cancelWarehouseOrderId} onClose={() => setCancelWarehouseOrderId(null)} onSuccess={() => { void fetchData(); }} />
       <ConfirmDialog
         open={!!cancellingItem}
         onOpenChange={(open) => { if (!open) setCancellingItem(null); }}

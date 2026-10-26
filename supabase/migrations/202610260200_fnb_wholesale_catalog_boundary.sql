@@ -20,6 +20,14 @@ begin
  and code not ilike 'WS%' and name not ilike 'WS%' and name not ilike 'FECA%' -- FNB_WHOLESALE_CATALOG_BOUNDARY
  for share;$replacement$);
   end if;
+  select pg_get_functiondef('public.change_fnb_warehouse_order(uuid,integer,uuid,text,jsonb,text,text)'::regprocedure) into definition;
+  if strpos(definition,'FNB_WHOLESALE_CATALOG_BOUNDARY')=0 then
+    anchor := 'and coalesce(is_fnb_stock_item,false)=false for share;';
+    if strpos(definition,anchor)=0 then raise exception 'Unexpected warehouse edit definition; review before installing.'; end if;
+    execute replace(definition,anchor,$replacement$and coalesce(is_fnb_stock_item,false)=false
+ and code not ilike 'WS%' and name not ilike 'WS%' and name not ilike 'FECA%' -- FNB_WHOLESALE_CATALOG_BOUNDARY
+ for share;$replacement$);
+  end if;
 end;
 $patch$;
 commit;
