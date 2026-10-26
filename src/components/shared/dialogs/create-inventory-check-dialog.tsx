@@ -14,7 +14,8 @@ import { NumericInput } from "@/components/ui/numeric-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth, useToast } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
-import { getUOMConversions } from "@/lib/services/supabase/uom";
+import { getUOMConversions, getUOMConversionsByProductIds } from "@/lib/services/supabase/uom";
+import { loadDocumentCopy, type DocumentCopySource } from "@/lib/services/supabase/document-copy";
 import { pickBestConversion, getConversionText, getDirectConvertibleUnits, getDirectConversionFactor } from "@/lib/format-uom";
 import { inventoryCountFromStock, inventoryCountToStock } from "@/lib/inventory-count-uom";
 import { preferredWeighingUnit, stockToInput, operationalFactor, switchInputQuantity } from "@/lib/operational-uom";
@@ -32,6 +33,7 @@ type ProductRow = Pick<
 >;
 
 interface InventoryCheckLine {
+  needsCount?: boolean;
   productId: string;
   productCode: string;
   productName: string;
@@ -60,6 +62,7 @@ interface InventoryCheckLine {
  * Làm tròn 4 chữ số để khử sai số dấu phẩy động khi quy đổi qua lại
  * (vd 224.58 ÷ 12 × 12 = 224.5799… → tránh lệch "-0" giả). */
 function lineActual(item: InventoryCheckLine): number {
+  if (item.needsCount) return item.systemStock;
   if (item.countUnit !== null) {
     return inventoryCountToStock(item.actualStock, item.unit, item.countUnit, item.conversions) ?? NaN;
   }
@@ -74,6 +77,7 @@ interface CreateInventoryCheckDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
+  copySource?: DocumentCopySource | null;
 }
 
 const PENDING_CODE_PLACEHOLDER = "Tự tạo khi lưu";
@@ -82,6 +86,7 @@ export function CreateInventoryCheckDialog({
   open,
   onOpenChange,
   onSuccess,
+  copySource,
 }: CreateInventoryCheckDialogProps) {
   const { toast } = useToast();
   const { currentBranch, branches, activeBranchId } = useAuth();
@@ -96,6 +101,8 @@ export function CreateInventoryCheckDialog({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const saveLockRef = useRef(false);
+  const [copyLoading, setCopyLoading] = useState(false);
+  const [copyError, setCopyError] = useState("");
   const requestId = useMemo(() => crypto.randomUUID(), [checkItems, notes, activeBranchId]);
 
   useEffect(() => {
@@ -111,6 +118,31 @@ export function CreateInventoryCheckDialog({
     setErrors({});
     setSaving(false);
   }, [open]);
+
+  useEffect(() => {
+    if (!open || !copySource || !activeBranchId) return;
+    let cancelled = false;
+    setCopyLoading(true); setCopyError("");
+    (async () => {
+      const seed = await loadDocumentCopy('inventory', copySource.id, activeBranchId, allowFlexibleCountUnits);
+      const ids = seed.items.map(p => p.id);
+      const conversions = await getUOMConversionsByProductIds(ids);
+      const ctx = await getCurrentContext();
+      const stock = new Map<string,number>();
+      for (let offset=0;offset<ids.length;offset+=100) {
+        const {data,error} = await getClient().from('branch_stock').select('product_id,quantity')
+          .eq('tenant_id',ctx.tenantId).eq('branch_id',activeBranchId).is('variant_id',null).in('product_id',ids.slice(offset,offset+100)).limit(1000);
+        if (error) throw error;
+        if (data?.length === 1000) throw new Error('Dữ liệu tồn quá lớn để sao chép an toàn. Vui lòng kiểm tra từng mặt hàng.');
+        for (const row of data ?? []) stock.set(row.product_id,(stock.get(row.product_id) ?? 0)+Number(row.quantity ?? 0));
+      }
+      if (cancelled) return;
+      setCheckItems(seed.items.map(p => ({productId:p.id,productCode:p.code,productName:p.name,unit:p.unit,costPrice:Number(p.cost_price),systemStock:stock.get(p.id) ?? 0,actualStock:0,countUnit:p.unit,conversions:conversions.get(p.id) ?? [],convFactor:null,convBigUnit:null,actualBig:0,actualSmall:0,needsCount:true})));
+      setNotes(`[Sao chép danh sách hàng từ ${seed.code}]`);
+    })().catch(e => {if (!cancelled) setCopyError(e instanceof Error ? e.message : 'Không đọc được phiếu nguồn.');})
+      .finally(() => {if (!cancelled) setCopyLoading(false);});
+    return () => {cancelled = true;};
+  }, [open, copySource, activeBranchId, allowFlexibleCountUnits]);
 
   useEffect(() => {
     let cancelled = false;
@@ -248,7 +280,7 @@ export function CreateInventoryCheckDialog({
     setCheckItems((items) =>
       items.map((item) =>
         item.productId === productId
-          ? { ...item, actualStock: Number.isFinite(actualStock) ? Math.max(0, actualStock) : 0 }
+          ? { ...item, needsCount: item.needsCount === undefined ? undefined : !Number.isFinite(actualStock), actualStock: Number.isFinite(actualStock) ? Math.max(0, actualStock) : 0 }
           : item,
       ),
     );
@@ -339,6 +371,11 @@ export function CreateInventoryCheckDialog({
   }
 
   async function handleSave() {
+    if (copyLoading || copyError) return;
+    if (copySource && copySource.branchId !== activeBranchId) { setErrors({items:'Chi nhánh đã thay đổi. Đóng phiếu và sao chép lại tại đúng chi nhánh.'}); return; }
+    if (checkItems.some(item => item.needsCount)) {
+      setErrors({items:'Nhập số thực đếm cho tất cả mặt hàng được sao chép trước khi cân bằng kho.'}); return;
+    }
     if (saveLockRef.current) return;
     if (!validate()) return;
 
@@ -419,6 +456,8 @@ export function CreateInventoryCheckDialog({
           <DialogHeader className="gap-0 pr-10">
             <div className="flex flex-wrap items-center gap-3">
               <DialogTitle className="text-xl">Tạo phiếu kiểm kho</DialogTitle>
+              {copySource && <p role="status" className="order-last basis-full text-xs text-muted-foreground">{copyLoading ? 'Đang tải danh sách và tồn hiện tại…' : `Từ ${copySource.code} · Nhập lại số thực đếm, không dùng số kiểm cũ.`}</p>}
+              {copyError && <p role="alert" className="order-last basis-full text-sm text-destructive">{copyError}</p>}
               <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
                 {"Cân bằng khi lưu"}
               </span>
@@ -429,7 +468,7 @@ export function CreateInventoryCheckDialog({
           </DialogHeader>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto bg-surface-container-low p-3 md:p-4">
+        <div inert={copyLoading || !!copyError} className="min-h-0 flex-1 overflow-y-auto bg-surface-container-low p-3 md:p-4">
           <div className="mx-auto flex max-w-[1380px] flex-col gap-3">
             <div className="grid gap-3 lg:grid-cols-[minmax(420px,1fr)_minmax(320px,0.75fr)]">
               <section className="rounded-lg border bg-white p-3 shadow-none">
@@ -437,7 +476,7 @@ export function CreateInventoryCheckDialog({
                   <div>
                     <h3 className="text-sm font-semibold">Sản phẩm kiểm kho</h3>
                     <p className="text-xs text-muted-foreground">
-                      NVL / hàng giữ tồn tại chi nhánh (không gồm món menu F&amp;B)
+                      {allowFlexibleCountUnits ? 'Nguyên liệu, BTP và vật tư tại quán (không gồm món menu)' : 'NVL / hàng giữ tồn tại chi nhánh (không gồm món menu F&B)'}
                     </p>
                   </div>
                   <span className="text-xs text-muted-foreground">{formatNumber(checkItems.length)} dòng</span>
@@ -628,8 +667,9 @@ export function CreateInventoryCheckDialog({
                             </div>
                           ) : (
                             <div className="space-y-1.5"><NumericInput
-                              value={item.actualStock}
-                              onChange={(value) => updateActualStock(item.productId, value ?? 0)}
+                              value={item.needsCount ? null : item.actualStock}
+                              placeholder={item.needsCount ? 'Chưa kiểm' : undefined}
+                              onChange={(value) => updateActualStock(item.productId, value ?? NaN)}
                               min={0}
                               decimals={allowFlexibleCountUnits ? 8 : 4}
                               className="h-9 text-right"
@@ -637,7 +677,7 @@ export function CreateInventoryCheckDialog({
                               disabled={saving}
                             />
                             {allowFlexibleCountUnits && <div className="text-right text-xs text-muted-foreground">
-                              = <b className="tabular-nums text-foreground">{formatStockQuantity(lineActual(item))}</b> {item.unit}
+                              {item.needsCount ? 'Chưa nhập số thực đếm' : <>= <b className="tabular-nums text-foreground">{formatStockQuantity(lineActual(item))}</b> {item.unit}</>}
                             </div>}</div>
                           )}
                         </div>
@@ -647,8 +687,7 @@ export function CreateInventoryCheckDialog({
                           <span className="text-xs font-medium uppercase text-muted-foreground md:hidden">SL lệch</span>
                           <div className="text-right">
                             <span className={`text-sm font-bold tabular-nums ${diffColor}`}>
-                              {diff > 0 ? "+" : ""}
-                              {formatStockQuantity(diff)}
+                              {item.needsCount ? '—' : `${diff > 0 ? '+' : ''}${formatStockQuantity(diff)}`}
                             </span>
                             <span className="ml-1 text-xs text-muted-foreground">{item.unit}</span>
                           </div>
@@ -660,7 +699,7 @@ export function CreateInventoryCheckDialog({
                           <span
                             className={`text-sm font-bold tabular-nums ${item.costPrice > 0 ? diffColor : "text-muted-foreground"}`}
                           >
-                            {item.costPrice > 0 ? `${diff > 0 ? "+" : ""}${formatCurrency(diffValue)}` : "—"}
+                            {!item.needsCount && item.costPrice > 0 ? `${diff > 0 ? "+" : ""}${formatCurrency(diffValue)}` : "—"}
                           </span>
                         </div>
 
@@ -686,7 +725,7 @@ export function CreateInventoryCheckDialog({
 
         <DialogFooter className="mx-0 mb-0 shrink-0 rounded-none border-t bg-white px-4 py-3">
           <div className="mx-auto grid w-full max-w-[1380px] grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto]">
-            <div className="grid gap-2 text-sm sm:grid-cols-3 xl:grid-cols-5">
+            <div className="grid grid-cols-2 min-[360px]:grid-cols-3 gap-2 text-sm sm:grid-cols-3 xl:grid-cols-5">
               <FooterMetric label="Mặt hàng" value={formatNumber(checkItems.length)} />
               <FooterMetric
                 label="Dòng lệch"
@@ -705,7 +744,7 @@ export function CreateInventoryCheckDialog({
               <Button variant="outline" onClick={() => onOpenChange(false)}>
                 Hủy
               </Button>
-              <Button onClick={handleSave} disabled={saving}>
+              <Button onClick={handleSave} disabled={saving || copyLoading || !!copyError}>
                 {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
                 {"Hoàn thành kiểm kho"}
               </Button>
