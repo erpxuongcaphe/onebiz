@@ -6,7 +6,7 @@ set local lock_timeout = '3s';
 do $patch$
 declare definition text;
 begin
-  definition := pg_get_functiondef('public._capture_fnb_inventory_cost_event_00400()'::regprocedure);
+  definition := replace(pg_get_functiondef('public._capture_fnb_inventory_cost_event_00400()'::regprocedure), E'\r\n', E'\n');
   if strpos(definition, $old$    if not found or (v_costed_quantity <= 0 and not (
       v_costed_quantity=0 and exists(
         select 1 from public.fnb_branch_product_cost_balances quote
