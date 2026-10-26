@@ -48,10 +48,14 @@ describe("customer cohort scope integrity", () => {
     fake.ready = false; view.rerender(<CustomerCohortPage />); expect(screen.queryByText("Cohort A")).not.toBeInTheDocument(); expect(screen.getByRole("button", { name: "Excel full" })).toBeDisabled();
   });
   it("keeps month selection and Excel metadata bound to the returned cohort scope", async () => {
-    render(<CustomerCohortPage />); await screen.findByText("Cohort A");
+    const view = render(<CustomerCohortPage />); await screen.findByText("Cohort A");
     fake.read.mockResolvedValueOnce(result("Twelve")); fireEvent.change(screen.getByRole("combobox", { name: "Số tháng theo dõi" }), { target: { value: "12" } });
     await screen.findByText("Twelve"); expect(fake.read).toHaveBeenLastCalledWith({ branchId: "a", months: 12 });
     fireEvent.click(screen.getByRole("button", { name: "Excel full" })); expect(fake.excel).toHaveBeenCalledWith(expect.objectContaining({ branchName: "a", range: { from: "2026-10-01", to: "2026-10-31" } }));
+    const exportOptions = fake.excel.mock.calls[0][0];
+    expect(exportOptions.shouldSave()).toBe(true);
+    fake.branch = "b"; view.rerender(<CustomerCohortPage />);
+    expect(exportOptions.shouldSave()).toBe(false);
   });
   it("hides both Excel actions when export rights are absent", async () => {
     fake.exportAllowed = false; render(<CustomerCohortPage />); await screen.findByText("Cohort A"); expect(screen.queryByRole("button", { name: /Excel/ })).not.toBeInTheDocument();

@@ -36,7 +36,7 @@ export default function CustomerCohortPage() {
   const [revision, setRevision] = useState(0);
   const [loaded, setLoaded] = useState<{ scope: string; result: CohortReportResult } | null>(null);
   const [failure, setFailure] = useState<{ scope: string; message: string } | null>(null);
-  const scope = JSON.stringify([user?.id, tenant?.id, allowed, isReady, activeBranchId, months, revision]);
+  const scope = JSON.stringify([user?.id, tenant?.id, allowed, canExportView, canExportFull, isReady, activeBranchId, months, revision]);
   const scopeRef = useRef(scope);
   useEffect(() => {
     scopeRef.current = scope;
@@ -45,7 +45,7 @@ export default function CustomerCohortPage() {
     getCustomerCohortReport({ months, branchId: activeBranchId })
       .then(result => { if (active && scopeRef.current === scope) setLoaded({ scope, result }); })
       .catch(error => { if (active && scopeRef.current === scope) setFailure({ scope, message: error instanceof Error ? error.message : "Không tải được khách hàng quay lại." }); });
-    return () => { active = false; };
+    return () => { active = false; if (scopeRef.current === scope) scopeRef.current = ""; };
   }, [allowed, isReady, user?.id, tenant?.id, activeBranchId, months, scope]);
   const data = loaded?.scope === scope ? loaded.result : null;
   const error = failure?.scope === scope ? failure.message : null;
@@ -103,6 +103,7 @@ export default function CustomerCohortPage() {
 
     exportReportToExcel({
       kind: "customer-cohort",
+      shouldSave: () => scopeRef.current === scope,
       mode,
       range: cohortRange,
       branchName: branchLabel,
