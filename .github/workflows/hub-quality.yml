@@ -43,3 +43,5 @@ jobs:
         run: HUB_PGLITE_DIR="$RUNNER_TEMP/hub-quality-runtime/node_modules/@electric-sql/pglite" node scripts/hub-qc-test/lifecycle-acceptance.cjs
       - name: Verify library update preview, atomic release and result preservation
         run: HUB_PGLITE_DIR="$RUNNER_TEMP/hub-quality-runtime/node_modules/@electric-sql/pglite" node scripts/hub-qc-test/library-update-acceptance.cjs
+      - name: Verify applied branch manager edits, stale preview and preserved records
+        run: HUB_PGLITE_DIR="$RUNNER_TEMP/hub-quality-runtime/node_modules/@electric-sql/pglite" node scripts/hub-qc-test/library-assignments-acceptance.cjs
