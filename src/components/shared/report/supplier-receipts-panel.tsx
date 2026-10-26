@@ -62,9 +62,10 @@ export function SupplierReceiptsPanel({ branchId, branchName, range, ready }: { 
   const [error, setError] = useState<{ scope: string; message: string } | null>(null);
   const [exporting, setExporting] = useState(false);
   const scope = JSON.stringify([user?.id, tenant?.id, allowed, canExport, branchId, range.from, range.to, ready, search, debouncedSearch, kind, status, sort, descending, page, size, revision]);
-  const scopeRef = useRef(scope); scopeRef.current = scope;
+  const scopeRef = useRef(scope);
   const from = range.from, to = range.to;
   useEffect(() => {
+    scopeRef.current = scope;
     if (!allowed || !ready || !user?.id || !tenant?.id || search !== debouncedSearch) return;
     let active = true;
     getSupplierReceiptWorkspace({ branchId, from, to, search: debouncedSearch, kind, status, sortBy: sort, descending, page, size })
