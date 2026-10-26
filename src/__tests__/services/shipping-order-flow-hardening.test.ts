@@ -160,7 +160,7 @@ describe("COD settlement (00301) links every ledger", () => {
   });
 
   it("dialog settles through the atomic RPC only", () => {
-    expect(settleDialog).toContain("settleCod({");
+    expect(settleDialog).toContain("settleCodScoped({");
     expect(settleDialog).not.toMatch(/\.from\(/);
     expect(partnerPage).toContain("SettleCodDialog");
     // COD đang giữ chỉ tính đơn CHƯA đối soát

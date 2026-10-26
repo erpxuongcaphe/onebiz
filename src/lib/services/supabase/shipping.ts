@@ -491,6 +491,7 @@ export interface UnsettledShipment {
   invoiceCode: string;
   customerName: string;
   codAmount: number;
+  declaredCodAmount?: number;
   /** Last update only; not a verified delivery timestamp or COD due date. */
   deliveredAt: string;
 }
@@ -509,11 +510,12 @@ export async function getUnsettledShipments(
   let query = supabase
     .from("shipping_orders")
     .select(
-      "id, code, cod_amount, updated_at, settlement_id, invoices!shipping_orders_invoice_id_fkey!inner(code, customer_name, branch_id)",
+      "id, code, cod_amount, updated_at, settlement_id, invoices!shipping_orders_invoice_id_fkey!inner(code, customer_name, branch_id, debt, status)",
       { count: "exact" },
     )
     .eq("tenant_id", tenantId)
     .eq("status", "delivered")
+    .eq("invoices.status", "completed")
     .is("settlement_id", null)
     .order("updated_at", { ascending: true })
     .order("id", { ascending: true });
@@ -528,7 +530,7 @@ export async function getUnsettledShipments(
     code: string;
     cod_amount: number | null;
     updated_at: string;
-    invoices: { code: string; customer_name: string } | null;
+    invoices: { code: string; customer_name: string; debt: number | string | null } | null;
   };
   const data = await readHistoryPages<UnsettledRow>(async (offset, size) => {
     const result = await query.range(offset, offset + size - 1) as unknown as {
@@ -545,7 +547,8 @@ export async function getUnsettledShipments(
     code: row.code,
     invoiceCode: row.invoices?.code ?? "—",
     customerName: row.invoices?.customer_name ?? "—",
-    codAmount: requireShippingAmount(row.cod_amount),
+    codAmount: Math.min(requireShippingAmount(row.cod_amount), requireShippingAmount(row.invoices?.debt)),
+    declaredCodAmount: requireShippingAmount(row.cod_amount),
     deliveredAt: row.updated_at,
   }));
 }

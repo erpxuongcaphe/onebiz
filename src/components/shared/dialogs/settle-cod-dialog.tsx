@@ -23,9 +23,10 @@ import { useToast } from "@/lib/contexts";
 import { formatCurrency, formatDate } from "@/lib/format";
 import {
   getUnsettledShipments,
-  settleCod,
   type UnsettledShipment,
 } from "@/lib/services/supabase/shipping";
+import { settleCodScoped } from "@/lib/services/supabase/cod-reconciliation";
+import { getMoneyAccountOptions, accountSupportsMethod, type MoneyAccountOption } from "@/lib/services/supabase/money-accounts";
 import { Icon } from "@/components/ui/icon";
 
 interface SettleCodDialogProps {
@@ -55,30 +56,39 @@ export function SettleCodDialog({
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [fees, setFees] = useState<Record<string, number>>({});
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "transfer">("transfer");
+  const [accounts, setAccounts] = useState<MoneyAccountOption[]>([]);
+  const [accountId, setAccountId] = useState("");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
+  const submissionRef = useRef<{ key: string; id: string } | null>(null);
   const [loadedScope, setLoadedScope] = useState<string | null>(null);
   const scopeKey = JSON.stringify([open, branchId, partnerId, user?.id, tenant?.id, canSettle]);
   const scopeRef = useRef(scopeKey);
   scopeRef.current = scopeKey;
-  const ready = open && canSettle && loadedScope === scopeKey && !loading && !loadError;
+  const ready = open && !!branchId && canSettle && loadedScope === scopeKey && !loading && !loadError;
+  const eligibleAccounts = accounts.filter(account => account.active && account.branch_id === branchId && accountSupportsMethod(account, paymentMethod));
+  const selectedAccount = eligibleAccounts.find(account => account.id === accountId);
 
   useEffect(() => {
-    if (!open || !canSettle) return;
+    if (!open || !canSettle || !branchId) return;
     let active = true;
     const current = () => active && scopeRef.current === scopeKey;
     setShipments([]);
     setChecked(new Set());
     setFees({});
+    setAccounts([]);
+    setAccountId("");
+    submissionRef.current = null;
     setNote("");
     setSaving(false);
     setLoading(true);
     setLoadError(null);
-    getUnsettledShipments(partnerId, branchId)
-      .then((rows) => {
+    Promise.all([getUnsettledShipments(partnerId, branchId), getMoneyAccountOptions(branchId)])
+      .then(([rows, accountRows]) => {
         if (!current()) return;
         setShipments(rows);
+        setAccounts(accountRows);
         setLoadedScope(scopeKey);
       })
       .catch((err) => {
@@ -115,16 +125,19 @@ export function SettleCodDialog({
     );
 
   async function handleConfirm() {
-    if (!ready || savingRef.current || scopeRef.current !== scopeKey || selected.length === 0) return;
+    if (!ready || !branchId || !selectedAccount || savingRef.current || scopeRef.current !== scopeKey || selected.length === 0) return;
     savingRef.current = true;
     setSaving(true);
     try {
-      const result = await settleCod({
+      const items = selected.map(s => ({ shipmentId: s.id, partnerFee: fees[s.id] ?? 0 })).sort((a,b) => a.shipmentId.localeCompare(b.shipmentId));
+      const key = JSON.stringify([scopeKey, accountId, paymentMethod, note.trim(), items]);
+      if (submissionRef.current?.key !== key) submissionRef.current = { key, id: crypto.randomUUID() };
+      const result = await settleCodScoped({
+        requestId: submissionRef.current.id,
+        branchId,
+        moneyAccountId: accountId,
         partnerId,
-        items: selected.map((s) => ({
-          shipmentId: s.id,
-          partnerFee: fees[s.id] ?? 0,
-        })),
+        items,
         paymentMethod,
         note: note.trim() || null,
       });
@@ -136,7 +149,7 @@ export function SettleCodDialog({
           (result.totalPartnerFee > 0
             ? ` − phí ${formatCurrency(result.totalPartnerFee)} = thực nhận ${formatCurrency(result.netAmount)}`
             : "") +
-          ` · ${result.receipts} phiếu thu vào sổ quỹ, công nợ khách đã trừ.`,
+          ` · ${result.receipts} phiếu thu.`,
         variant: "success",
         duration: 8000,
       });
@@ -163,7 +176,7 @@ export function SettleCodDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {!canSettle ? <p role="alert" className="text-sm text-destructive">Không có quyền đối soát COD.</p> : loading || (loadedScope !== scopeKey && !loadError) ? (
+        {!canSettle ? <p role="alert" className="text-sm text-destructive">Không có quyền đối soát COD.</p> : !branchId ? <p role="alert" className="text-sm text-destructive">Đối soát cần một chi nhánh.</p> : loading || (loadedScope !== scopeKey && !loadError) ? (
           <div className="py-10 text-center text-sm text-muted-foreground">
             <Icon name="progress_activity" size={18} className="mr-2 inline animate-spin" />
             Đang tải vận đơn đã giao...
@@ -197,7 +210,7 @@ export function SettleCodDialog({
                     <th className="px-2 py-2">Hóa đơn</th>
                     <th className="px-2 py-2">Khách</th>
                     <th className="px-2 py-2">Cập nhật</th>
-                    <th className="px-2 py-2 text-right">COD</th>
+                    <th className="px-2 py-2 text-right">COD còn thu</th>
                     <th className="w-32 px-2 py-2 text-right">Phí trả đối tác</th>
                   </tr>
                 </thead>
@@ -246,7 +259,7 @@ export function SettleCodDialog({
             <div className="grid grid-cols-3 gap-3 rounded-md border bg-muted/30 px-3 py-2 text-sm">
               <div>
                 <div className="text-xs text-muted-foreground">
-                  Tổng COD ({selected.length} đơn)
+                  COD còn thu ({selected.length} đơn)
                 </div>
                 <div className="font-semibold tabular-nums">{formatCurrency(totalCod)}</div>
               </div>
@@ -256,24 +269,33 @@ export function SettleCodDialog({
               </div>
               <div>
                 <div className="text-xs text-muted-foreground">Thực nhận</div>
-                <div className="font-semibold tabular-nums text-status-success">
+                <div className={`font-semibold tabular-nums ${totalCod - totalFee < 0 ? "text-destructive" : "text-status-success"}`}>
                   {formatCurrency(totalCod - totalFee)}
                 </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <label htmlFor="cod-payment-method" className="text-sm font-medium">Nhận tiền qua</label>
                 <select
                   id="cod-payment-method"
                   value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value as "cash" | "transfer")}
+                  onChange={(e) => { setPaymentMethod(e.target.value as "cash" | "transfer"); setAccountId(""); }}
                   className="flex h-8 w-full rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring"
                 >
                   <option value="transfer">Chuyển khoản</option>
                   <option value="cash">Tiền mặt</option>
                 </select>
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="cod-money-account" className="text-sm font-medium">Tài khoản đối soát</label>
+                <select id="cod-money-account" value={accountId} onChange={e => setAccountId(e.target.value)}
+                  className="flex h-8 w-full rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring">
+                  <option value="">Chưa chọn tài khoản</option>
+                  {eligibleAccounts.map(account => <option key={account.id} value={account.id}>{account.code} · {account.name}</option>)}
+                </select>
+                {eligibleAccounts.length === 0 && <p className="text-xs text-destructive">Chưa có tài khoản phù hợp.</p>}
               </div>
               <div className="space-y-1.5">
                 <label htmlFor="cod-note" className="text-sm font-medium">Ghi chú</label>
@@ -295,7 +317,7 @@ export function SettleCodDialog({
           </Button>
           <Button
             onClick={handleConfirm}
-            disabled={saving || !ready || selected.length === 0}
+            disabled={saving || !ready || !selectedAccount || selected.length === 0}
           >
             {saving && (
               <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />
