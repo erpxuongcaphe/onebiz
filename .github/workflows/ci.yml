@@ -35,6 +35,12 @@ jobs:
           sudo apt-get install --yes postgresql-client
 
       - name: Verify internal POS paired payments and reversal in disposable PostgreSQL
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: postgres
         run: |
           npm install --prefix "$RUNNER_TEMP/internal-pos-runtime" --no-save --ignore-scripts --no-audit --no-fund @electric-sql/pglite@0.5.8
           node scripts/fnb-db-test/run-internal-pos-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
@@ -42,7 +48,10 @@ jobs:
           FNB_PGLITE_DIR="$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js" node scripts/fnb-db-test/run-trading-status.cjs
           FNB_PGLITE_DIR="$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js" node scripts/fnb-db-test/run-negative-stock.cjs
           FNB_PGLITE_DIR="$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js" node scripts/fnb-db-test/run-stocktake-depleted.mjs
-          FNB_PGLITE_DIR="$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js" node scripts/fnb-db-test/run-inventory-check-amendment.mjs
+          FNB_RECORD_SQL="$RUNNER_TEMP/inventory-count-fixture.sql" FNB_PGLITE_DIR="$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js" node scripts/fnb-db-test/run-inventory-check-amendment.mjs
+          createdb inventory_count_correction_test
+          PGDATABASE=inventory_count_correction_test psql -X -v ON_ERROR_STOP=1 -f "$RUNNER_TEMP/inventory-count-fixture.sql"
+          PGDATABASE=inventory_count_correction_test python3 scripts/fnb-db-test/inventory-check-concurrency.py
           mkdir -p .tmp
           node scripts/fnb-db-test/run-modifier-scale-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
           node scripts/fnb-db-test/run-branch-bom-clone-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"

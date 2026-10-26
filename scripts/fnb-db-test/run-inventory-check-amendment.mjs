@@ -3,6 +3,11 @@
 import fs from 'node:fs';
 import {createRequire} from 'node:module';
 let source=fs.readFileSync('scripts/fnb-db-test/run-negative-stock.cjs','utf8');
+if(process.env.FNB_RECORD_SQL){
+  source=source.replace('const db=new PGlite();try{',`const db=new PGlite();
+  const execute=db.exec.bind(db);fs.writeFileSync(process.env.FNB_RECORD_SQL,'');
+  db.exec=async sql=>{fs.appendFileSync(process.env.FNB_RECORD_SQL,sql+'\\n');return execute(sql);};try{`);
+}
 const install=`
 await db.exec(\`create role service_role;create table inventory_checks(id uuid primary key,tenant_id uuid,branch_id uuid,code text,status text,note text,created_by uuid,created_at timestamptz default now(),updated_at timestamptz default now());
 create table inventory_check_items(id uuid primary key default gen_random_uuid(),check_id uuid,product_id uuid,product_name text,system_stock numeric,actual_stock numeric,unit_cost numeric,difference numeric generated always as(actual_stock-system_stock) stored);
