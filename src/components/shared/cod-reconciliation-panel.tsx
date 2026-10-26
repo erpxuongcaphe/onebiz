@@ -28,6 +28,7 @@ const columns: Array<ExcelColumn & { key: CodSortKey }> = [
 ];
 const payment = (value: string) => value === "cash" ? "Tiền mặt" : value === "transfer" ? "Chuyển khoản" : value;
 const money = (value: number | null) => value === null ? "Chưa xác minh" : formatCurrency(value);
+const documentStatus = (value: string | null) => value === "completed" ? "Hoàn tất" : value === "cancelled" ? "Đã hủy" : value === "pending" ? "Chờ xử lý" : value ?? "Chưa xác định";
 
 export function CodReconciliationPanel({ branchId, branchName, branchReady }: { branchId?: string; branchName: string; branchReady: boolean }) {
   const { user, tenant, hasPermission } = useAuth();
@@ -91,6 +92,7 @@ export function CodReconciliationPanel({ branchId, branchName, branchReady }: { 
             { key: "moneyAccountCode", label: "Mã tài khoản" }, { key: "moneyAccountName", label: "Tài khoản nhận" }, { key: "paymentMethod", label: "Hình thức" },
             { key: "linkedLabel", label: "Liên kết" },
           ], rows: rows.flatMap(row => (row.shipments ?? []).map(item => ({ ...item, settlementCode: row.code, branchName: row.branchName,
+            invoiceStatus: documentStatus(item.invoiceStatus), receiptStatus: documentStatus(item.receiptStatus),
             paymentMethod: item.paymentMethod ? payment(item.paymentMethod) : null, linkedLabel: item.linked ? "Đã liên kết" : "Thiếu liên kết" }))) }] });
     } catch (reason) {
       if (currentScope.current === scope) setError({ scope, message: reason instanceof Error ? reason.message : "Không xuất được Excel." });
@@ -117,6 +119,19 @@ export function CodReconciliationPanel({ branchId, branchName, branchReady }: { 
       <div className="divide-y md:hidden">{data.items.map(row => <article key={row.id} className="p-3"><button className="font-semibold text-primary" onClick={() => openDetail(row.id)}>{row.code}</button><p className="mb-2 text-xs text-muted-foreground">{formatDate(row.createdAt)} · {row.partnerName}</p><dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">{columns.filter(column => column.key !== "code" && column.key !== "createdAt" && column.key !== "partnerName").map(column => <div key={column.key} className="min-w-0"><dt className="text-xs text-muted-foreground">{column.label}</dt><dd className="break-words tabular-nums">{column.key === "status" ? COD_RECONCILIATION_LABELS[row.status] : column.key === "paymentMethod" ? payment(row.paymentMethod) : column.format === "currency" ? money(row[column.key] as number | null) : row[column.key] ?? "Chưa xác định"}</dd></div>)}</dl></article>)}</div>
     </>}
     <div className="flex flex-wrap items-center justify-end gap-2 border-t p-3 text-sm"><span>{data?.total ?? 0} lần đối soát</span><select aria-label="Số dòng đối soát" className="h-8 rounded border bg-background" value={size} onChange={event => { setSize(Number(event.target.value)); setPage(0); }}>{[20,50,100,200].map(value => <option key={value} value={value}>{value} dòng</option>)}</select><Button variant="outline" size="sm" aria-label="Trang trước" disabled={busy || page === 0} onClick={() => setPage(value => value - 1)}><Icon name="chevron_left" size={16} /></Button><span>{page + 1} / {Math.max(1, Math.ceil((data?.total ?? 0) / size))}</span><Button variant="outline" size="sm" aria-label="Trang sau" disabled={busy || !data || (page + 1) * size >= data.total} onClick={() => setPage(value => value + 1)}><Icon name="chevron_right" size={16} /></Button></div>
-    {shownDetail && <div className="border-t border-primary/30 bg-muted/20 p-3" role="region" aria-label="Chi tiết đối soát"><div className="mb-3 flex items-center justify-between"><h3 className="font-semibold">{shownDetail.data?.settlement.code ?? "Chi tiết đối soát"}</h3><Button variant="outline" size="sm" aria-label="Đóng chi tiết" onClick={() => { detailRequest.current += 1; setDetail(null); }}><Icon name="close" size={16} /></Button></div>{shownDetail.error ? <p role="alert">{shownDetail.error}</p> : !shownDetail.data ? <p role="status">Đang tải chi tiết…</p> : <div className="divide-y">{shownDetail.data.shipments.map(item => <div key={item.shipmentId} className="grid gap-2 py-3 text-sm sm:grid-cols-2 lg:grid-cols-4"><div><p className="font-medium">{item.shipmentCode} · {item.invoiceCode}</p><p className="text-xs text-muted-foreground">{item.invoiceStatus}</p></div><div><p>{item.receiptCode ?? "Chưa liên kết phiếu thu"}</p><p className="text-xs text-muted-foreground">{item.receiptStatus ?? "Chưa xác định"}</p></div><div><p>{item.moneyAccountCode ?? "—"} · {item.moneyAccountName ?? "Chưa xác định tài khoản"}</p><p className="text-xs text-muted-foreground">{item.paymentMethod ? payment(item.paymentMethod) : "Chưa xác định hình thức"}</p></div><div className="tabular-nums"><p>Thu ban đầu: {money(item.expectedReceipt)}</p><p>Còn hiệu lực: {money(item.postedReceipt)}</p></div></div>)}</div>}</div>}
+    {shownDetail && <div className="border-t border-primary/30 bg-muted/20 p-3" role="region" aria-label="Chi tiết đối soát">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="font-semibold">{shownDetail.data?.settlement.code ?? "Chi tiết đối soát"}</h3>
+        <Button variant="outline" size="sm" aria-label="Đóng chi tiết" onClick={() => { detailRequest.current += 1; setDetail(null); }}><Icon name="close" size={16} /></Button>
+      </div>
+      {shownDetail.error ? <p role="alert">{shownDetail.error}</p> : !shownDetail.data ? <p role="status">Đang tải chi tiết…</p> : <div className="divide-y">
+        {shownDetail.data.shipments.map(item => <div key={item.shipmentId} className="grid gap-2 py-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+          <div><p className="font-medium">{item.shipmentCode} · {item.invoiceCode}</p><p className="text-xs text-muted-foreground">{documentStatus(item.invoiceStatus)}</p></div>
+          <div><p>{item.receiptCode ?? (item.linked && item.expectedReceipt === 0 ? "Không phát sinh phiếu thu" : "Chưa liên kết phiếu thu")}</p><p className="text-xs text-muted-foreground">{documentStatus(item.receiptStatus)}</p></div>
+          <div><p>{item.moneyAccountCode ?? "—"} · {item.moneyAccountName ?? "Chưa xác định tài khoản"}</p><p className="text-xs text-muted-foreground">{item.paymentMethod ? payment(item.paymentMethod) : "Chưa xác định hình thức"}</p></div>
+          <div className="tabular-nums"><p>Thu ban đầu: {money(item.expectedReceipt)}</p><p>Còn hiệu lực: {money(item.postedReceipt)}</p></div>
+        </div>)}
+      </div>}
+    </div>}
   </section>;
 }
