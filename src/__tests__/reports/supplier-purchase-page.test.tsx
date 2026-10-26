@@ -38,6 +38,7 @@ describe("supplier purchase report",()=>{
     fireEvent.click(screen.getByRole("button",{name:"Xuất đầy đủ"}));
     await waitFor(()=>expect(state.export).toHaveBeenCalledTimes(1));
     expect(state.export.mock.calls[0][0].sheets[0].rows).toEqual(expect.arrayContaining([{metric:"Mua gộp trong kỳ",value:100},{metric:"Trả NCC trong kỳ",value:20},{metric:"Mua thuần trong kỳ",value:80}]));
+    expect(state.export.mock.calls[0][0].sheets[0].columns.find((column:{key:string})=>column.key==="value")).toMatchObject({format:"number",decimalPlaces:2});
   });
   it("hides old figures when the new branch load fails",async()=>{
     const view=render(<Page/>);
