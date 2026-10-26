@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 const state = vi.hoisted(() => ({ branch: "branch-a", kpi: vi.fn(), export: vi.fn(), summary: vi.fn(), detail: false, range:{from:"2026-10-01",to:"2026-10-03"} }));
+vi.mock("next/dynamic", () => ({ default: () => () => <div>Receipt basis fixture</div> }));
 vi.mock("@/lib/contexts", () => ({ useBranchFilter: () => ({ activeBranchId: state.branch, branchLabel: state.branch, branches: [], isReady: true }), useToast: () => ({ toast: vi.fn() }) }));
 vi.mock("@/lib/contexts/auth-context", () => ({ useAuth: () => ({ user:{id:"user-fixture"},tenant:{id:"tenant-fixture"},hasPermission: () => state.detail }) }));
 vi.mock("@/lib/hooks/use-report-state", () => ({ useReportState: () => ({ preset:"custom",range:state.range,viewMode:"table",setPreset:vi.fn(),setCustomRange:vi.fn(),setViewMode:vi.fn() }) }));
@@ -19,6 +20,16 @@ const kpi={totalSuppliers:0,purchaseThisMonth:100,prevPurchase:0,totalDebt:0,pre
 beforeEach(()=>{state.branch="branch-a";state.detail=false;state.kpi.mockReset().mockResolvedValue(kpi);state.summary.mockReset().mockResolvedValue([]);state.export.mockReset().mockResolvedValue(undefined);});
 afterEach(cleanup);
 describe("supplier purchase report",()=>{
+  it("keeps physical receipt values separate from completed-voucher KPIs and exports",async()=>{
+    state.detail=true;render(<Page/>);await screen.findByRole("region",{name:"Mua thuần trong kỳ"});
+    fireEvent.click(screen.getByRole("button",{name:/^Thực nhập$/}));
+    expect(screen.getByText("Receipt basis fixture")).toBeInTheDocument();
+    expect(screen.queryByRole("region",{name:"Mua thuần trong kỳ"})).not.toBeInTheDocument();
+    expect(state.export).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button",{name:/^Phiếu nhập$/}));
+    await screen.findByRole("region",{name:"Mua thuần trong kỳ"});
+    expect(screen.queryByText("Receipt basis fixture")).not.toBeInTheDocument();
+  });
   it("keeps missing return and net amounts unavailable on screen and in Excel",async()=>{
     state.kpi.mockResolvedValue({...kpi,returnAmount:null,netPurchase:null});
     render(<Page/>);

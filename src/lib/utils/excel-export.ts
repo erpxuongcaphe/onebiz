@@ -537,6 +537,7 @@ const REPORT_KIND_LABELS: Record<ReportKind, string> = {
   "canh-bao": "Báo cáo cảnh báo",
   "doi-chieu-ca": "Báo cáo đối chiếu ca",
   "cod-doi-soat": "Đối soát COD",
+  "thuc-nhap-ncc": "Thực nhập nhà cung cấp",
   "ban-hang": "Báo cáo bán hàng",
   "dat-hang": "Báo cáo đặt hàng",
   "kenh-ban": "Báo cáo kênh bán",

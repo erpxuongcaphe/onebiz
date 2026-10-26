@@ -136,6 +136,54 @@
           { "name": "p_limit", "optional": true }
         ] }
       ]
+    },
+    {
+      "migration": "cod_ledger_reconciliation_20261026",
+      "migrationSha256": "3491b4dd4260888bc86b173861e2bc3fb1452c545affa89953493fe6497ebf67",
+      "functions": [
+        { "name": "settle_cod_scoped_v1", "params": [
+          { "name": "p_request_id", "optional": false },
+          { "name": "p_branch_id", "optional": false },
+          { "name": "p_money_account_id", "optional": false },
+          { "name": "p_partner_id", "optional": false },
+          { "name": "p_items", "optional": false },
+          { "name": "p_payment_method", "optional": false },
+          { "name": "p_note", "optional": true }
+        ] },
+        { "name": "get_cod_settlement_workspace_v1", "params": [
+          { "name": "p_branch_id", "optional": false },
+          { "name": "p_from", "optional": false },
+          { "name": "p_to", "optional": false },
+          { "name": "p_page", "optional": true },
+          { "name": "p_size", "optional": true },
+          { "name": "p_search", "optional": true },
+          { "name": "p_sort_by", "optional": true },
+          { "name": "p_sort_desc", "optional": true },
+          { "name": "p_with_shipments", "optional": true }
+        ] },
+        { "name": "get_cod_settlement_trace_v1", "params": [
+          { "name": "p_settlement_id", "optional": false }
+        ] }
+      ]
+    },
+    {
+      "migration": "supplier_physical_receipts_20261026",
+      "migrationSha256": "ee0c4d8e715cd9138e9efe707355cdf6b71c8a62c7acd6a1d80484fbdaa323a2",
+      "functions": [
+        { "name": "get_supplier_receipt_workspace_v1", "params": [
+          { "name": "p_branch_id", "optional": false },
+          { "name": "p_from", "optional": false },
+          { "name": "p_to", "optional": false },
+          { "name": "p_page", "optional": true },
+          { "name": "p_size", "optional": true },
+          { "name": "p_supplier_id", "optional": true },
+          { "name": "p_kind", "optional": true },
+          { "name": "p_status", "optional": true },
+          { "name": "p_search", "optional": true },
+          { "name": "p_sort_by", "optional": true },
+          { "name": "p_sort_desc", "optional": true }
+        ] }
+      ]
     }
   ]
 }

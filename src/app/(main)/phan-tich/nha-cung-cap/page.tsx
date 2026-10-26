@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import dynamic from "next/dynamic";
 import {
   LineChart,
   Line,
@@ -56,6 +57,7 @@ import { reportChange } from "@/lib/reports/management-review";
 // === Helpers ===
 
 const PAYMENT_COLORS = ["#16a34a", "#f59e0b", "#ef4444"];
+const SupplierReceiptsPanel = dynamic(() => import("@/components/shared/report/supplier-receipts-panel").then(module => module.SupplierReceiptsPanel));
 const VOUCHER_SORTS = {
   recent: { sortBy: "created_at", sortOrder: "desc" },
   oldest: { sortBy: "created_at", sortOrder: "asc" },
@@ -154,6 +156,7 @@ export default function NhaCungCapPage() {
   const { activeBranchId, branchLabel, branches, isReady } = useBranchFilter();
   const { hasPermission, user, tenant } = useAuth();
   const canViewDetail = hasPermission(PERMISSIONS.REPORTS_VIEW_DETAIL);
+  const canViewReceipts = canViewDetail && hasPermission(PERMISSIONS.SUPPLIERS_VIEW_PURCHASES);
   const { toast } = useToast();
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisMonth", defaultViewMode: "table" });
@@ -175,7 +178,8 @@ export default function NhaCungCapPage() {
   const visibleSuppliers = useMemo(() => supplierSummaryView(supplierTable, supplierSearch, supplierSort),
     [supplierTable, supplierSearch, supplierSort]);
   const debtLabel = canViewDetail ? "Phải trả hiện tại" : "Nợ trên phiếu nhập";
-  const [tableMode, setTableMode] = useState<"vouchers" | "suppliers">("vouchers");
+  const [tableMode, setTableMode] = useState<"vouchers" | "suppliers" | "receipts">("vouchers");
+  const showReceipts = viewMode === "table" && tableMode === "receipts" && canViewReceipts;
   const [voucherSearch, setVoucherSearch] = useState("");
   const [voucherSort, setVoucherSort] = useState<keyof typeof VOUCHER_SORTS>("recent");
   const debouncedVoucherSearch = useDebounce(voucherSearch, 300);
@@ -429,11 +433,19 @@ export default function NhaCungCapPage() {
       onCustomRangeChange={setCustomRange}
       viewMode={viewMode}
       onViewModeChange={setViewMode}
-      onExportView={handleExportView}
-      onExportFull={handleExportFull}
+      onExportView={showReceipts ? undefined : handleExportView}
+      onExportFull={showReceipts ? undefined : handleExportFull}
       exportDisabled={pending || exporting || !!loadError}
     />
   );
+  const reportViews = viewMode === "table" && <div className="flex shrink-0 flex-wrap gap-1 border-b bg-background px-4 py-2" role="group" aria-label="Góc nhìn báo cáo nhà cung cấp">
+    {[
+      ...(canViewDetail ? [{ value: "vouchers" as const, label: "Phiếu nhập" }] : []),
+      { value: "suppliers" as const, label: "Nhà cung cấp" },
+      ...(canViewReceipts ? [{ value: "receipts" as const, label: "Thực nhập" }] : []),
+    ].map(option => <button key={option.value} type="button" aria-pressed={tableMode === option.value} onClick={() => setTableMode(option.value)}
+      className={`min-h-9 rounded-md px-3 py-1.5 text-sm ${tableMode === option.value ? "bg-primary/10 font-semibold text-primary" : "text-muted-foreground hover:bg-muted"}`}>{option.label}</button>)}
+  </div>;
 
   const fetchData = useCallback(async () => {
     const requestId = ++requestIdRef.current;
@@ -470,15 +482,21 @@ export default function NhaCungCapPage() {
   }, [activeBranchId, range, canViewDetail, scopeKey]);
 
   useEffect(() => {
-    if (!isReady) return;
+    if (!isReady || showReceipts) return;
     fetchData();
     return () => { requestIdRef.current += 1; };
-  }, [fetchData, isReady]);
+  }, [fetchData, isReady, showReceipts]);
+
+  if (showReceipts) return <div className="flex h-[calc(100vh-4rem)] min-w-0 flex-col">
+    {reportHeader}{reportViews}
+    <div className="min-h-0 flex-1 overflow-y-auto"><SupplierReceiptsPanel branchId={activeBranchId} branchName={branchLabel} range={range} ready={isReady} /></div>
+  </div>;
 
   if (pending) {
     return (
       <div className="flex flex-col h-[calc(100vh-4rem)]">
         {reportHeader}
+        {reportViews}
         <div className="flex-1 flex items-center justify-center">
           <Icon name="progress_activity" size={32} className="animate-spin text-muted-foreground" />
         </div>
@@ -486,11 +504,12 @@ export default function NhaCungCapPage() {
     );
   }
 
-  if (loadError) return <div>{reportHeader}<div role="alert" className="m-4 border border-destructive/30 p-4 text-sm text-destructive">{loadError}<button type="button" onClick={() => void fetchData()} className="ml-3 min-h-10 text-primary underline">Thử lại</button></div></div>;
+  if (loadError) return <div>{reportHeader}{reportViews}<div role="alert" className="m-4 border border-destructive/30 p-4 text-sm text-destructive">{loadError}<button type="button" onClick={() => void fetchData()} className="ml-3 min-h-10 text-primary underline">Thử lại</button></div></div>;
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] overflow-y-auto">
       {reportHeader}
+      {reportViews}
 
       <div className="flex-1 p-4 md:p-6 space-y-4">
         {loadError && (
@@ -689,16 +708,6 @@ export default function NhaCungCapPage() {
               <h2 className="text-base font-semibold">Mua hàng nhà cung cấp</h2>
               <p className="text-sm text-muted-foreground">{selectedPeriodLabel} · {branchLabel}</p>
               <p className="text-xs text-muted-foreground">Ngày lọc theo lúc tạo phiếu; đã trả và còn nợ là số hiện tại của phiếu.</p>
-            </div>
-            <div className="flex border border-border" role="group" aria-label="Góc nhìn báo cáo nhà cung cấp">
-              {canViewDetail && <button type="button" onClick={() => setTableMode("vouchers")}
-                className={tableMode === "vouchers" ? "bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground" : "px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground"}>
-                Theo phiếu nhập
-              </button>}
-              <button type="button" onClick={() => setTableMode("suppliers")}
-                className={tableMode === "suppliers" ? "bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground" : "px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground"}>
-                Theo nhà cung cấp
-              </button>
             </div>
           </div>
           {tableMode === "vouchers" && canViewDetail ? <div className="p-4">
