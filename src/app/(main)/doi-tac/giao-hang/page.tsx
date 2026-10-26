@@ -89,6 +89,7 @@ export default function DoiTacGiaoHangPage() {
   const canSettle = hasPermission("finance.create_transaction");
   const canReadHistory = hasPermission("finance.view_cash_book");
   const [historyOpen, setHistoryOpen] = useState(false);
+  const showHistory = historyOpen && canReadHistory;
 
   const [loadedPartners, setPartners] = useState<DeliveryPartnerWithStats[]>([]);
   const [loadedUnassigned, setUnassigned] = useState<DeliveryPartnerStats>(EMPTY_STATS);
@@ -367,17 +368,17 @@ export default function DoiTacGiaoHangPage() {
       <PageHeader
         title="Đối tác giao hàng"
         density="compact"
-        searchPlaceholder="Theo tên đối tác..."
-        searchValue={search}
-        onSearchChange={(value) => { setSearch(value); setPageIndex(0); }}
-        actions={[
+        searchPlaceholder={showHistory ? undefined : "Theo tên đối tác..."}
+        searchValue={showHistory ? undefined : search}
+        onSearchChange={showHistory ? undefined : (value) => { setSearch(value); setPageIndex(0); }}
+        actions={showHistory ? [] : [
           {
             label: "Thêm đối tác",
             icon: <Icon name="add" size={16} />,
             onClick: () => setCreateOpen(true),
           },
         ]}
-        onExport={busy || loadError ? undefined : {
+        onExport={showHistory || busy || loadError ? undefined : {
           csv: () => {
             if (scopeRef.current !== scopeKey || busy || loadError) return;
             exportToCsv(
@@ -416,6 +417,17 @@ export default function DoiTacGiaoHangPage() {
         }}
       />
 
+      {canReadHistory && <div role="tablist" aria-label="Góc nhìn giao hàng" className="flex shrink-0 gap-1 border-b bg-background px-3 py-1">
+        <Button role="tab" aria-selected={!showHistory} variant={showHistory ? "ghost" : "secondary"} size="sm" onClick={() => setHistoryOpen(false)}>
+          <Icon name="local_shipping" size={16} className="mr-2" />Đối tác
+        </Button>
+        <Button role="tab" aria-selected={showHistory} variant={showHistory ? "secondary" : "ghost"} size="sm" onClick={() => setHistoryOpen(true)}>
+          <Icon name="receipt_long" size={16} className="mr-2" />Đối soát COD
+        </Button>
+      </div>}
+      {showHistory ? <div className="min-h-0 flex-1 overflow-y-auto" role="tabpanel" aria-label="Đối soát COD">
+        <CodReconciliationPanel branchId={activeBranchId} branchName={branchLabel} branchReady={isReady} />
+      </div> : <>
       <div
         className="grid grid-cols-2 gap-1 border-b bg-background px-3 py-1 md:flex md:min-h-11 md:items-center md:overflow-x-auto"
         role="region"
@@ -530,6 +542,7 @@ export default function DoiTacGiaoHangPage() {
         />
       </div>
 
+      </>}
       <FilterPanel
         open={filterOpen}
         onOpenChange={setFilterOpen}
@@ -560,14 +573,6 @@ export default function DoiTacGiaoHangPage() {
           />
         </FilterGroup>
       </FilterPanel>
-
-      {canReadHistory && <div className="border-t bg-background">
-        <Button variant="ghost" className="m-2" aria-expanded={historyOpen} onClick={() => setHistoryOpen(value => !value)}>
-          <Icon name="receipt_long" size={16} className="mr-2" />Lịch sử đối soát COD
-          <Icon name={historyOpen ? "expand_less" : "expand_more"} size={16} className="ml-2" />
-        </Button>
-        {historyOpen && <CodReconciliationPanel branchId={activeBranchId} branchName={branchLabel} branchReady={isReady} />}
-      </div>}
 
       <CreateDeliveryPartnerDialog
         open={createOpen || !!editing}
