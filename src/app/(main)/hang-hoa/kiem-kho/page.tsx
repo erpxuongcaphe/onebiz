@@ -29,10 +29,11 @@ import {
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { formatCurrency, formatDate, formatNumber, formatUser } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
-import { getInventoryCheckListWorkspace, getInventoryChecksForExport, getInventoryCheckStatuses, applyInventoryCheck, cancelInventoryCheck, getInventoryCheckItems, getProfilesForPersonFilter } from "@/lib/services";
+import { getInventoryCheckListWorkspace, getInventoryChecksForExport, getInventoryCheckStatuses, applyInventoryCheck, getInventoryCheckItems, getProfilesForPersonFilter } from "@/lib/services";
 import type { InventoryCheckItemRow } from "@/lib/services";
 import type { InventoryCheck } from "@/lib/types";
-import { CreateInventoryCheckDialog, ConfirmDialog } from "@/components/shared/dialogs";
+import { CreateInventoryCheckDialog } from "@/components/shared/dialogs";
+import { ChangeInventoryCheckDialog } from "@/components/shared/dialogs/change-inventory-check-dialog";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { useTxRowPermissions } from "@/lib/permissions";
@@ -418,8 +419,7 @@ export default function KiemKhoPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [copySource, setCopySource] = useState<DocumentCopySource | null>(null);
   const [applyingId, setApplyingId] = useState<string | null>(null);
-  const [cancellingItem, setCancellingItem] = useState<InventoryCheck | null>(null);
-  const [cancelLoading, setCancelLoading] = useState(false);
+  const [changeTarget, setChangeTarget] = useState<{id:string;branchId?:string;action:"edit"|"cancel"}|null>(null);
   // Sprint UX-1 Stage 4: Audit log dialog
   const [auditDialogTarget, setAuditDialogTarget] = useState<InventoryCheck | null>(null);
 
@@ -671,7 +671,7 @@ export default function KiemKhoPage() {
       item={item}
       onClose={onClose}
       onDelete={
-        item.status === "processing" ? () => setCancellingItem(item) : undefined
+        item.status !== "unbalanced" && txPerms.canCancel ? () => setChangeTarget({...item,action:"cancel"}) : undefined
       }
     />
   );
@@ -846,44 +846,14 @@ export default function KiemKhoPage() {
             },
           },
           {
-            label: "Hủy hàng loạt",
+            label: "Hủy phiếu (xem trước)",
             icon: <Icon name="cancel" size={16} />,
             variant: "destructive",
-            onClick: async (selectedRows) => {
-              const cancellable = selectedRows.filter(
-                (r) => r.status === "processing",
-              );
-              if (cancellable.length === 0) {
-                toast({
-                  title: "Không có phiếu nào có thể hủy",
-                  description: "Chỉ hủy được phiếu ở trạng thái Phiếu tạm",
-                  variant: "info",
-                });
-                return;
-              }
-              if (
-                !window.confirm(
-                  `Hủy ${cancellable.length} phiếu kiểm kho? Thao tác này không thể hoàn tác.`,
-                )
-              )
-                return;
-              try {
-                await Promise.all(
-                  cancellable.map((r) => cancelInventoryCheck(r.id)),
-                );
-                toast({
-                  title: `Đã hủy ${cancellable.length} phiếu`,
-                  variant: "success",
-                });
-                await fetchData();
-              } catch (err) {
-                toast({
-                  title: "Lỗi hủy hàng loạt",
-                  description:
-                    err instanceof Error ? err.message : "Vui lòng thử lại",
-                  variant: "error",
-                });
-              }
+            onClick: (selectedRows) => {
+              if (!txPerms.canCancel) { toast({title:"Tài khoản chưa được cấp quyền hủy phiếu kiểm kho.",variant:"error"}); return; }
+              if (selectedRows.length !== 1) { toast({title:"Chọn một phiếu để xem trước chênh lệch và ghi lý do hủy.",variant:"info"}); return; }
+              if (selectedRows[0].status === "unbalanced") return;
+              setChangeTarget({...selectedRows[0],action:"cancel"});
             },
           },
         ]}
@@ -916,11 +886,8 @@ export default function KiemKhoPage() {
             workflowActions,
             // Audit log shortcut
             onAuditLog: () => setAuditDialogTarget(row),
-            // Hủy — chỉ status='processing'
-            onCancel:
-              row.status === "processing"
-                ? () => setCancellingItem(row)
-                : undefined,
+            onEdit: row.status !== "unbalanced" ? () => setChangeTarget({...row,action:"edit"}) : undefined,
+            onCancel: row.status !== "unbalanced" ? () => setChangeTarget({...row,action:"cancel"}) : undefined,
           });
         }}
       />
@@ -939,38 +906,7 @@ export default function KiemKhoPage() {
       onSuccess={fetchData}
     />
 
-    <ConfirmDialog
-      open={!!cancellingItem}
-      onOpenChange={(open) => { if (!open) setCancellingItem(null); }}
-      title="Hủy phiếu kiểm kho"
-      description={`Bạn có chắc muốn hủy phiếu kiểm kho ${cancellingItem?.code ?? ""}? Thao tác này không thể hoàn tác.`}
-      confirmLabel="Hủy phiếu"
-      cancelLabel="Đóng"
-      variant="destructive"
-      loading={cancelLoading}
-      onConfirm={async () => {
-        if (!cancellingItem) return;
-        setCancelLoading(true);
-        try {
-          await cancelInventoryCheck(cancellingItem.id);
-          toast({
-            title: "Đã hủy phiếu kiểm kho",
-            description: `Phiếu ${cancellingItem.code} đã được hủy thành công`,
-            variant: "success",
-          });
-          await fetchData();
-        } catch (err) {
-          toast({
-            title: "Lỗi hủy phiếu kiểm kho",
-            description: err instanceof Error ? err.message : "Vui lòng thử lại",
-            variant: "error",
-          });
-        } finally {
-          setCancelLoading(false);
-          setCancellingItem(null);
-        }
-      }}
-    />
+    <ChangeInventoryCheckDialog target={changeTarget} onClose={() => setChangeTarget(null)} onSuccess={fetchData} />
 
     {printerDialog}
 
