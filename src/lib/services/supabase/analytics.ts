@@ -16,6 +16,7 @@ import { summarizeChannelSales, type ChannelOnlineOrder } from "@/lib/utils/chan
 import { aggregateProductSaleLines } from "@/lib/reports/product-sales-aggregation";
 import { aggregateStockMovementRows, type MovementReportRow, type MovementSourceRow } from "@/lib/reports/stock-movement-aggregation";
 import { getProfitAndLoss, getConsolidatedPnL } from "./reports";
+import { supplierPurchaseBridge, sumSupplierDocumentAmounts, type SupplierPurchaseBridge } from "@/lib/reports/supplier-purchase-bridge";
 
 // === Shared Types ===
 
@@ -2395,10 +2396,10 @@ export async function getTopDebtors(
 export async function getSupplierKpis(
   branchId?: string,
   range?: { from: string; to: string },
-): Promise<{
+): Promise<SupplierPurchaseBridge & {
   totalSuppliers: number;
-  purchaseThisMonth: number;
-  prevPurchase: number;
+  purchaseThisMonth: number | null;
+  prevPurchase: number | null;
   totalDebt: number;
   prevDebt: number;
   returnCount: number;
@@ -2414,7 +2415,8 @@ export async function getSupplierKpis(
         .select("supplier_id, total, debt, created_at")
         .eq("tenant_id", tenantId)
         .eq("status", "completed")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false });
       if (branchId) query = query.eq("branch_id", branchId);
       return query;
     },
@@ -2424,42 +2426,44 @@ export async function getSupplierKpis(
     () => {
       let query = supabase
         .from("supplier_returns")
-        .select("id, created_at")
+        .select("id, created_at, total")
         .eq("tenant_id", tenantId)
         .eq("status", "completed")
-        .gte("created_at", current.start)
+        .gte("created_at", previous.start)
         .lt("created_at", current.end)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false });
       if (branchId) query = query.eq("branch_id", branchId);
       return query;
     },
     "[getSupplierKpis.supplierReturns]",
   );
+  const inPeriod = (value: unknown, period: { start: string; end: string }) => {
+    const time = Date.parse(String(value));
+    return time >= Date.parse(period.start) && time < Date.parse(period.end);
+  };
 
   const supplierIds = new Set<string>();
-  let purchaseThisMonth = 0;
-  let prevPurchase = 0;
   let totalDebt = 0;
   for (const order of purchaseOrders) {
     const supplierId = String(order.supplier_id ?? "");
-    const createdAt = String(order.created_at ?? "");
     if (supplierId) supplierIds.add(supplierId);
-    if (createdAt >= current.start && createdAt < current.end) {
-      purchaseThisMonth += Number(order.total ?? 0);
-    }
-    if (createdAt >= previous.start && createdAt < previous.end) {
-      prevPurchase += Number(order.total ?? 0);
-    }
     totalDebt += Number(order.debt ?? 0);
   }
 
+  const currentReturns = supplierReturns.filter(row => inPeriod(row.created_at, current));
+  const previousReturns = supplierReturns.filter(row => inPeriod(row.created_at, previous));
+  const purchaseThisMonth = sumSupplierDocumentAmounts(purchaseOrders.filter(row => inPeriod(row.created_at, current)).map(row => ({ total: row.total })));
+  const prevPurchase = sumSupplierDocumentAmounts(purchaseOrders.filter(row => inPeriod(row.created_at, previous)).map(row => ({ total: row.total })));
   return {
+    ...supplierPurchaseBridge(purchaseThisMonth, prevPurchase,
+      currentReturns.map(row => ({ total: row.total })), previousReturns.map(row => ({ total: row.total }))),
     totalSuppliers: supplierIds.size,
     purchaseThisMonth,
     prevPurchase,
     totalDebt,
     prevDebt: totalDebt,
-    returnCount: supplierReturns.length,
+    returnCount: currentReturns.length,
   };
 }
 

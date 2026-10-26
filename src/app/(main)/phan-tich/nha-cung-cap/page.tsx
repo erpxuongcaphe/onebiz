@@ -51,6 +51,7 @@ import type {
 import { Icon } from "@/components/ui/icon";
 import { formatSelectedPeriodLabel } from "@/lib/utils/date-presets";
 import { reconcileSupplierPayables, supplierSummaryView } from "@/lib/reports/supplier-summary-view";
+import { reportChange } from "@/lib/reports/management-review";
 
 // === Helpers ===
 
@@ -66,12 +67,6 @@ const VOUCHER_SORTS = {
 
 function truncateAxisLabel(value: string, maxLength: number = 24): string {
   return value.length > maxLength ? `${value.slice(0, maxLength - 1)}…` : value;
-}
-
-function calcChange(current: number, previous: number): string {
-  if (previous === 0) return current > 0 ? "+100%" : "0%";
-  const pct = ((current - previous) / previous) * 100;
-  return `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}% so với kỳ trước`;
 }
 
 // === Custom Tooltips ===
@@ -157,7 +152,7 @@ function renderPieLabel(props: any) {
 
 export default function NhaCungCapPage() {
   const { activeBranchId, branchLabel, branches, isReady } = useBranchFilter();
-  const { hasPermission } = useAuth();
+  const { hasPermission, user, tenant } = useAuth();
   const canViewDetail = hasPermission(PERMISSIONS.REPORTS_VIEW_DETAIL);
   const { toast } = useToast();
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
@@ -165,14 +160,12 @@ export default function NhaCungCapPage() {
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [kpis, setKpis] = useState<{
-    totalSuppliers: number;
-    purchaseThisMonth: number;
-    prevPurchase: number;
-    totalDebt: number;
-    prevDebt: number;
-    returnCount: number;
-  } | null>(null);
+  const scopeKey = `${tenant?.id}:${user?.id}:${activeBranchId ?? "all"}:${range.from}:${range.to}:${canViewDetail}`;
+  const scopeRef = useRef(scopeKey);
+  scopeRef.current = scopeKey;
+  const [loadedScope, setLoadedScope] = useState<string | null>(null);
+  const pending = loading || loadedScope !== scopeKey;
+  const [kpis, setKpis] = useState<Awaited<ReturnType<typeof getSupplierKpis>> | null>(null);
   const [purchaseByMonth, setPurchaseByMonth] = useState<ChartPoint[]>([]);
   const [topSuppliers, setTopSuppliers] = useState<{ name: string; amount: number }[]>([]);
   const [paymentStatus, setPaymentStatus] = useState<{ name: string; value: number }[]>([]);
@@ -211,6 +204,7 @@ export default function NhaCungCapPage() {
 
   const fetchVouchers = useCallback(async (page: number, append = false) => {
     const requestId = ++voucherRequestIdRef.current;
+    const requestScope = scopeKey;
     setVoucherLoading(true);
     setVoucherError(null);
     try {
@@ -220,7 +214,7 @@ export default function NhaCungCapPage() {
         branchId: activeBranchId,
         filters: { status: "completed", dateFrom: range.from, dateTo: range.to },
       });
-      if (requestId !== voucherRequestIdRef.current) return;
+      if (requestId !== voucherRequestIdRef.current || requestScope !== scopeRef.current) return;
       setVouchers((current) => append ? [...current, ...result.data] : result.data);
       setVoucherPage(page);
       setVoucherTotal(result.total);
@@ -231,7 +225,7 @@ export default function NhaCungCapPage() {
     } finally {
       if (requestId === voucherRequestIdRef.current) setVoucherLoading(false);
     }
-  }, [activeBranchId, debouncedVoucherSearch, range, voucherSort]);
+  }, [activeBranchId, debouncedVoucherSearch, range, voucherSort, scopeKey]);
 
   useEffect(() => {
     if (!isReady || !canViewDetail || viewMode !== "table" || tableMode !== "vouchers") return;
@@ -244,6 +238,7 @@ export default function NhaCungCapPage() {
 
   const handleExportView = useCallback(async () => {
     if (exporting) return;
+    if (pending || loadError) return;
     setExporting(true);
     try {
       const title = buildReportTitleRows({
@@ -274,7 +269,7 @@ export default function NhaCungCapPage() {
         titleRows: title,
         columns: [
           { label: "Nhà cung cấp", key: "name", width: 32 },
-          { label: "Mua trong kỳ (VND)", key: "total", width: 18, format: "currency" },
+          { label: "Mua gộp trong kỳ (VND)", key: "total", width: 18, format: "currency" },
           { label: debtLabel, key: "debt", width: 18, format: "currency" },
           { label: "Số phiếu nhập", key: "orders", width: 12, format: "number" },
         ],
@@ -300,10 +295,12 @@ export default function NhaCungCapPage() {
     } finally {
       setExporting(false);
     }
-  }, [visibleSuppliers, debtLabel, vouchers, range, branchLabel, branches, exporting, toast, viewMode, tableMode, canViewDetail]);
+  }, [visibleSuppliers, debtLabel, vouchers, range, branchLabel, branches, exporting, toast, viewMode, tableMode, canViewDetail, pending, loadError]);
 
   const handleExportFull = useCallback(async () => {
     if (exporting) return;
+    if (pending || loadError) return;
+    const exportScope = scopeKey;
     setExporting(true);
     try {
       const [allTopSuppliers, purchaseSummary, payables] = await Promise.all([
@@ -311,6 +308,7 @@ export default function NhaCungCapPage() {
         getSupplierSummary(null, activeBranchId, range),
         canViewDetail ? getPayableAgingReport({ branchId: activeBranchId ?? null }) : Promise.resolve(null),
       ]);
+      if (scopeRef.current !== exportScope) return;
       const allSupplierRows = payables ? reconcileSupplierPayables(purchaseSummary, payables.rows) : purchaseSummary;
       const title = buildReportTitleRows({
         title: "BÁO CÁO NHÀ CUNG CẤP — ĐẦY ĐỦ",
@@ -328,8 +326,12 @@ export default function NhaCungCapPage() {
           ],
           rows: [
             { metric: "Tổng NCC", value: kpis?.totalSuppliers ?? 0 },
-            { metric: "Mua trong kỳ", value: kpis?.purchaseThisMonth ?? 0 },
-            { metric: "Mua kỳ trước", value: kpis?.prevPurchase ?? 0 },
+            { metric: "Mua gộp trong kỳ", value: kpis?.purchaseThisMonth ?? null },
+            { metric: "Trả NCC trong kỳ", value: kpis?.returnAmount ?? null },
+            { metric: "Mua thuần trong kỳ", value: kpis?.netPurchase ?? null },
+            { metric: "Mua gộp kỳ trước", value: kpis?.prevPurchase ?? null },
+            { metric: "Trả NCC kỳ trước", value: kpis?.prevReturnAmount ?? null },
+            { metric: "Mua thuần kỳ trước", value: kpis?.prevNetPurchase ?? null },
             { metric: debtLabel, value: allSupplierRows.reduce((sum, row) => sum + row.debt, 0) },
             { metric: "Số đơn trả", value: kpis?.returnCount ?? 0 },
           ],
@@ -348,7 +350,7 @@ export default function NhaCungCapPage() {
           titleRows: ["TẤT CẢ NHÀ CUNG CẤP", ...title.slice(1)],
           columns: [
             { label: "Nhà cung cấp", key: "name", width: 32 },
-            { label: "Tổng mua (VND)", key: "amount", width: 18, format: "currency" },
+            { label: "Mua gộp (VND)", key: "amount", width: 18, format: "currency" },
           ],
           rows: allTopSuppliers,
         },
@@ -357,7 +359,7 @@ export default function NhaCungCapPage() {
           titleRows: ["TỔNG HỢP NCC", ...title.slice(1)],
           columns: [
             { label: "Nhà cung cấp", key: "name", width: 32 },
-            { label: "Mua trong kỳ (VND)", key: "total", width: 18, format: "currency" },
+            { label: "Mua gộp trong kỳ (VND)", key: "total", width: 18, format: "currency" },
             { label: debtLabel, key: "debt", width: 18, format: "currency" },
             { label: "Số phiếu nhập", key: "orders", width: 12, format: "number" },
           ],
@@ -384,6 +386,7 @@ export default function NhaCungCapPage() {
             branchId: activeBranchId,
             filters: { status: "completed", dateFrom: range.from, dateTo: range.to },
           });
+          if (scopeRef.current !== exportScope) return;
           allVouchers.push(...result.data);
           if (!result.data.length || allVouchers.length >= result.total) break;
         }
@@ -406,6 +409,7 @@ export default function NhaCungCapPage() {
           })),
         });
       }
+      if (scopeRef.current !== exportScope) return;
       await exportReportToExcel({ kind: "nha-cung-cap", mode: "full", range, branchName: branchLabel, sheets });
       toast({ title: "Đã xuất Excel (đầy đủ)", variant: "success" });
     } catch (err) {
@@ -413,7 +417,7 @@ export default function NhaCungCapPage() {
     } finally {
       setExporting(false);
     }
-  }, [activeBranchId, kpis, purchaseByMonth, paymentStatus, debtLabel, range, branchLabel, branches, debouncedVoucherSearch, voucherSort, canViewDetail, exporting, toast]);
+  }, [activeBranchId, kpis, purchaseByMonth, paymentStatus, debtLabel, range, branchLabel, branches, debouncedVoucherSearch, voucherSort, canViewDetail, exporting, toast, pending, loadError, scopeKey]);
 
   const reportHeader = (
     <ReportPageHeader
@@ -427,7 +431,7 @@ export default function NhaCungCapPage() {
       onViewModeChange={setViewMode}
       onExportView={handleExportView}
       onExportFull={handleExportFull}
-      exportDisabled={loading || exporting || !!loadError}
+      exportDisabled={pending || exporting || !!loadError}
     />
   );
 
@@ -455,20 +459,23 @@ export default function NhaCungCapPage() {
         { name: "Còn nợ", value: reconciled.filter(row => row.debt > 0).length },
       ] : payment);
       setSupplierTable(reconciled);
+      setLoadedScope(scopeKey);
     } catch (err) {
       if (requestId !== requestIdRef.current) return;
       setLoadError(err instanceof Error ? err.message : "Không tải được báo cáo nhà cung cấp.");
+      setLoadedScope(scopeKey);
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [activeBranchId, range, canViewDetail]);
+  }, [activeBranchId, range, canViewDetail, scopeKey]);
 
   useEffect(() => {
     if (!isReady) return;
     fetchData();
+    return () => { requestIdRef.current += 1; };
   }, [fetchData, isReady]);
 
-  if (loading) {
+  if (pending) {
     return (
       <div className="flex flex-col h-[calc(100vh-4rem)]">
         {reportHeader}
@@ -478,6 +485,8 @@ export default function NhaCungCapPage() {
       </div>
     );
   }
+
+  if (loadError) return <div>{reportHeader}<div role="alert" className="m-4 border border-destructive/30 p-4 text-sm text-destructive">{loadError}<button type="button" onClick={() => void fetchData()} className="ml-3 min-h-10 text-primary underline">Thử lại</button></div></div>;
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] overflow-y-auto">
@@ -502,10 +511,10 @@ export default function NhaCungCapPage() {
             valueColor="text-foreground"
           />
           <KpiCard
-            label="Tổng mua trong kỳ"
-            value={formatCurrency(kpis?.purchaseThisMonth ?? 0)}
-            change={calcChange(kpis?.purchaseThisMonth ?? 0, kpis?.prevPurchase ?? 0)}
-            positive={(kpis?.purchaseThisMonth ?? 0) >= (kpis?.prevPurchase ?? 0)}
+            label="Mua thuần trong kỳ"
+            value={kpis?.netPurchase == null ? "Chưa đủ dữ liệu" : formatCurrency(kpis.netPurchase)}
+            change={kpis?.netPurchase == null || kpis?.prevNetPurchase == null ? "Chưa đủ dữ liệu so sánh" : reportChange(kpis.netPurchase, kpis.prevNetPurchase)}
+            positive={kpis?.netPurchase != null && kpis?.prevNetPurchase != null && kpis.netPurchase >= kpis.prevNetPurchase}
             icon="shopping_bag"
             bg="bg-status-success/10"
             iconColor="text-status-success"
@@ -523,7 +532,7 @@ export default function NhaCungCapPage() {
           />
           <KpiCard
             label="Trả hàng NCC"
-            value={String(kpis?.returnCount ?? 0)}
+            value={kpis?.returnAmount == null ? "Chưa đủ dữ liệu" : formatCurrency(kpis.returnAmount)}
             change={`${kpis?.returnCount ?? 0} phiếu trả hàng`}
             positive={false}
             icon="undo"
@@ -533,9 +542,18 @@ export default function NhaCungCapPage() {
           />
         </div>
 
+        <section aria-label="Đối chiếu mua và trả NCC" className="border-y border-border py-3">
+          <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
+            <div><dt className="text-muted-foreground">Mua gộp</dt><dd className="font-semibold tabular-nums">{kpis?.purchaseThisMonth == null ? "Chưa đủ dữ liệu" : `${formatCurrency(kpis.purchaseThisMonth)} đ`}</dd></div>
+            <div><dt className="text-muted-foreground">Trả NCC</dt><dd className="font-semibold tabular-nums">{kpis?.returnAmount == null ? "Chưa đủ dữ liệu" : `${formatCurrency(kpis.returnAmount)} đ`}</dd></div>
+            <div><dt className="text-muted-foreground">Mua thuần</dt><dd className="font-semibold tabular-nums">{kpis?.netPurchase == null ? "Chưa đủ dữ liệu" : `${formatCurrency(kpis.netPurchase)} đ`}</dd></div>
+          </dl>
+          <p className="mt-2 text-xs text-muted-foreground">Mua thuần = mua gộp − trả NCC. Theo ngày tạo phiếu hoàn tất; trả trong kỳ có thể thuộc phiếu nhập kỳ trước. Chưa gồm nhận một phần; không phải tiền đã chi.</p>
+        </section>
+
         {viewMode === "chart" && <><div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Purchase volume by month */}
-          <ChartCard title="Giá trị mua hàng theo tháng" subtitle={selectedPeriodLabel}>
+          <ChartCard title="Mua gộp theo tháng" subtitle={selectedPeriodLabel}>
             <div className="h-64">
               {purchaseByMonth.length === 0 ? (
                 <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
@@ -569,7 +587,7 @@ export default function NhaCungCapPage() {
                       strokeWidth={2}
                       dot={{ fill: "#004AC6", r: 4 }}
                       activeDot={{ r: 6, fill: "#004AC6" }}
-                      name="Giá trị mua"
+                      name="Mua gộp"
                     />
                   </LineChart>
                 </ResponsiveContainer>
@@ -578,7 +596,7 @@ export default function NhaCungCapPage() {
           </ChartCard>
 
           {/* Top 5 suppliers horizontal bar */}
-          <ChartCard title="Top 5 nhà cung cấp" subtitle={`${selectedPeriodLabel} · Theo giá trị mua hàng`}>
+          <ChartCard title="Top 5 nhà cung cấp" subtitle={`${selectedPeriodLabel} · Theo mua gộp`}>
             <div className="h-64">
               {topSuppliers.length === 0 ? (
                 <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
@@ -613,7 +631,7 @@ export default function NhaCungCapPage() {
                       dataKey="amount"
                       fill="#ea580c"
                       radius={[0, 6, 6, 0]}
-                      name="Giá trị mua"
+                      name="Mua gộp"
                     />
                   </BarChart>
                 </ResponsiveContainer>
@@ -733,7 +751,7 @@ export default function NhaCungCapPage() {
               sortState={supplierSort} onSortChange={setSupplierSort}
               columns={[
                 { key: "name", label: "Nhà cung cấp", sticky: true, hideable: false },
-                { key: "total", label: "Mua trong kỳ", align: "right", cell: row => formatCurrency(row.total) },
+                { key: "total", label: "Mua gộp trong kỳ", align: "right", cell: row => formatCurrency(row.total) },
                 { key: "debt", label: debtLabel, align: "right", cell: row => formatCurrency(row.debt) },
                 { key: "orders", label: "Số phiếu nhập", align: "right" },
               ]}
