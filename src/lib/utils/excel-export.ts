@@ -429,6 +429,8 @@ function formatCell(value: unknown, col: ExcelColumn): XLSXTypes.CellObject {
 // ============================================================
 
 export interface ExportOptions {
+  /** Prevent a delayed download after the report scope changes. */
+  shouldSave?: () => boolean;
   kind: ReportKind;
   /** view = 1 sheet mirror; full = multi-sheet */
   mode: "view" | "full";
@@ -503,6 +505,7 @@ export async function exportReportToExcel(
   const blob = new Blob([out], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
+  if (options.shouldSave && !options.shouldSave()) throw new Error('Bộ lọc đã thay đổi. Xuất lại theo phạm vi mới.');
   saveAs(blob, filename);
 }
 

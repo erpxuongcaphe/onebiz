@@ -19,7 +19,8 @@
  * Số liệu đã verify prototype trên data thật.
  */
 
-import { getClient, getCurrentTenantId, handleError } from "./base";
+import { getClient, getCurrentTenantId } from "./base";
+import { readHistoryPages } from "./read-history-pages";
 import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
 
 /** Trạng thái đơn đặt hàng coi là "đang mở / chưa hoàn tất". */
@@ -70,6 +71,9 @@ export interface PurchaseForecastResult {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRow = any;
+async function readForecastRows(query: AnyRow): Promise<AnyRow[]> {
+  return readHistoryPages<{id:string}>(async(offset,size)=>query.order("id").range(offset,offset+size-1));
+}
 
 export interface PurchaseForecastOrderLine {
   orderId: string;
@@ -186,12 +190,12 @@ async function fetchActiveBoms(
 ): Promise<Map<string, { id: string; yieldQty: number }>> {
   const map = new Map<string, { id: string; yieldQty: number }>();
   for (let i = 0; i < productIds.length; i += 200) {
-    const { data } = await supabase
+    const data = await readForecastRows(supabase
       .from("bom_scoped")
-      .select("id, product_id, yield_qty")
+      .select("id, product_id, yield_qty", {count:"exact"})
       .eq("tenant_id", tenantId)
       .eq("is_active", true)
-      .in("product_id", productIds.slice(i, i + 200));
+      .in("product_id", productIds.slice(i, i + 200)));
     for (const b of (data ?? []) as AnyRow[]) {
       // 1 SKU chỉ có 1 BOM active (đã verify) — giữ cái đầu nếu lỡ trùng.
       if (!map.has(b.product_id))
@@ -208,10 +212,10 @@ async function fetchBomItems(
 ): Promise<Map<string, Array<{ materialId: string; quantity: number; waste: number }>>> {
   const map = new Map<string, Array<{ materialId: string; quantity: number; waste: number }>>();
   for (let i = 0; i < bomIds.length; i += 200) {
-    const { data } = await supabase
+    const data = await readForecastRows(supabase
       .from("bom_items")
-      .select("bom_id, material_id, quantity, waste_percent")
-      .in("bom_id", bomIds.slice(i, i + 200));
+      .select("id, bom_id, material_id, quantity, waste_percent", {count:"exact"})
+      .in("bom_id", bomIds.slice(i, i + 200)));
     for (const it of (data ?? []) as AnyRow[]) {
       const arr = map.get(it.bom_id) ?? [];
       arr.push({
@@ -243,17 +247,17 @@ export async function getPurchaseForecast(
   const tenantId = await getCurrentTenantId();
 
   // ── 1) Xác định Kho Tổng ──
-  const { data: khoRows } = await supabase
+  const khoRows = await readForecastRows(supabase
     .from("branches")
-    .select("id, name")
+    .select("id, name", {count:"exact"})
     .eq("tenant_id", tenantId)
-    .eq("branch_type", "warehouse");
+    .eq("branch_type", "warehouse"));
   const khoTong = (khoRows ?? [])[0] as { id: string; name: string } | undefined;
 
   // ── 2) Đơn đặt hàng đang mở ──
   let orderQ = supabase
     .from("invoices")
-    .select("id, code, order_code, branch_id, branches!invoices_branch_id_fkey(name)")
+    .select("id, code, order_code, branch_id, branches!invoices_branch_id_fkey(name)", {count:"exact"})
     .eq("tenant_id", tenantId)
     .eq("source", "order")
     .is("deleted_at", null)
@@ -270,11 +274,11 @@ export async function getPurchaseForecast(
   // Không join thẳng vì đơn có thể là khách vãng lai (customer_id null) —
   // lọc theo nhóm thì những đơn đó phải bị loại, đúng ý "đơn của nhóm này".
   if (filters?.customerGroupId) {
-    const { data: khachTrongNhom } = await supabase
+    const khachTrongNhom = await readForecastRows(supabase
       .from("customers")
-      .select("id")
+      .select("id", {count:"exact"})
       .eq("tenant_id", tenantId)
-      .eq("group_id", filters.customerGroupId);
+      .eq("group_id", filters.customerGroupId));
     const ids = ((khachTrongNhom ?? []) as AnyRow[]).map((c) => c.id as string);
     if (ids.length === 0) {
       return {
@@ -287,8 +291,7 @@ export async function getPurchaseForecast(
     }
     orderQ = orderQ.in("customer_id", ids);
   }
-  const { data: orders, error: orderErr } = await orderQ;
-  if (orderErr) handleError(orderErr, "getPurchaseForecast.orders");
+  const orders = await readHistoryPages<{id:string}>(async(offset,size)=>orderQ.order("id").range(offset,offset+size-1));
 
   const orderList = (orders ?? []) as AnyRow[];
   const orderBranch = new Map<string, { id: string | null; name: string }>();
@@ -313,10 +316,10 @@ export async function getPurchaseForecast(
   // ── 3) Lấy dòng đơn gốc và phần đã xuất từ hóa đơn con hợp lệ ──
   const orderLines: PurchaseForecastOrderLine[] = [];
   for (let i = 0; i < orderIds.length; i += 100) {
-    const { data: items } = await supabase
+    const items = await readForecastRows(supabase
       .from("invoice_items_scoped")
-      .select("invoice_id, product_id, quantity, total")
-      .in("invoice_id", orderIds.slice(i, i + 100));
+      .select("id, invoice_id, product_id, quantity, total", {count:"exact"})
+      .in("invoice_id", orderIds.slice(i, i + 100)));
     for (const it of (items ?? []) as AnyRow[]) {
       if (!it.product_id) continue;
       orderLines.push({
@@ -330,15 +333,15 @@ export async function getPurchaseForecast(
 
   const childSales: PurchaseForecastChildSale[] = [];
   for (let i = 0; i < orderIds.length; i += 100) {
-    const { data: children } = await supabase
+    const children = await readForecastRows(supabase
       .from("invoices")
-      .select("id, source_order_id, status, deleted_at, voided_at, cancelled_at")
+      .select("id, source_order_id, status, deleted_at, voided_at, cancelled_at", {count:"exact"})
       .eq("tenant_id", tenantId)
       .in("source_order_id", orderIds.slice(i, i + 100))
       .eq("status", "completed")
       .is("deleted_at", null)
       .is("voided_at", null)
-      .is("cancelled_at", null);
+      .is("cancelled_at", null));
     for (const child of (children ?? []) as AnyRow[]) {
       childSales.push({
         id: child.id,
@@ -354,10 +357,10 @@ export async function getPurchaseForecast(
   const childSaleLines: PurchaseForecastChildSaleLine[] = [];
   const childSaleIds = childSales.map((sale) => sale.id);
   for (let i = 0; i < childSaleIds.length; i += 100) {
-    const { data: items } = await supabase
+    const items = await readForecastRows(supabase
       .from("invoice_items_scoped")
-      .select("invoice_id, product_id, quantity")
-      .in("invoice_id", childSaleIds.slice(i, i + 100));
+      .select("id, invoice_id, product_id, quantity", {count:"exact"})
+      .in("invoice_id", childSaleIds.slice(i, i + 100)));
     for (const it of (items ?? []) as AnyRow[]) {
       if (!it.product_id) continue;
       childSaleLines.push({
@@ -454,11 +457,11 @@ export async function getPurchaseForecast(
   const nvlIds = [...nvlNeed.keys()];
   const nvlInfo = new Map<string, { code: string; name: string; unit: string; cost: number }>();
   for (let i = 0; i < nvlIds.length; i += 200) {
-    const { data } = await supabase
+    const data = await readForecastRows(supabase
       .from("products_scoped")
-      .select("id, code, name, unit, cost_price")
+      .select("id, code, name, unit, cost_price", {count:"exact"})
       .eq("tenant_id", tenantId)
-      .in("id", nvlIds.slice(i, i + 200));
+      .in("id", nvlIds.slice(i, i + 200)));
     for (const p of (data ?? []) as AnyRow[])
       nvlInfo.set(p.id, {
         code: p.code,
@@ -470,12 +473,12 @@ export async function getPurchaseForecast(
   const stockKT = new Map<string, number>();
   if (khoTong) {
     for (let i = 0; i < nvlIds.length; i += 200) {
-      const { data } = await supabase
+      const data = await readForecastRows(supabase
         .from("branch_stock")
-        .select("product_id, quantity")
+        .select("id, product_id, quantity", {count:"exact"})
         .eq("branch_id", khoTong.id)
         .is("variant_id", null)
-        .in("product_id", nvlIds.slice(i, i + 200));
+        .in("product_id", nvlIds.slice(i, i + 200)));
       for (const r of (data ?? []) as AnyRow[])
         stockKT.set(r.product_id, Number(r.quantity) || 0);
     }
@@ -509,11 +512,11 @@ export async function getPurchaseForecast(
   const skuProductIds = [...new Set([...perBranch.values()].map((r) => r.productId))];
   const skuInfo = new Map<string, { code: string; name: string; unit: string }>();
   for (let i = 0; i < skuProductIds.length; i += 200) {
-    const { data } = await supabase
+    const data = await readForecastRows(supabase
       .from("products_scoped")
-      .select("id, code, name, unit")
+      .select("id, code, name, unit", {count:"exact"})
       .eq("tenant_id", tenantId)
-      .in("id", skuProductIds.slice(i, i + 200));
+      .in("id", skuProductIds.slice(i, i + 200)));
     for (const p of (data ?? []) as AnyRow[])
       skuInfo.set(p.id, { code: p.code, name: p.name, unit: p.unit ?? "" });
   }

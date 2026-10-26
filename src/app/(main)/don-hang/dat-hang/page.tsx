@@ -43,6 +43,8 @@ import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
 import { buildSalesOrderPrintData, toPrintLines } from "@/lib/print-templates";
 import { formatCurrency, formatDate, formatNumber, formatUser } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
+import { readOrdersForExport } from "@/lib/services/supabase/order-management-reads";
+import { buildOrderExportRows, orderSummaryColumns, orderLineColumns } from "@/lib/utils/sales-order-export";
 import { computeListPresetRange } from "@/lib/utils/list-date-preset-range";
 import {
   cancelInvoice,
@@ -919,34 +921,33 @@ export default function DatHangPage() {
       ? "Chọn chi nhánh trên thanh phía trên để xem đúng đơn và chỉ số."
       : "Tài khoản chưa được phân quyền chi nhánh. Vui lòng liên hệ quản trị viên.";
 
-  const handleExport = (type: "excel" | "csv") => {
-    const exportColumns = [
-      { header: "Mã đặt hàng", key: "code", width: 15 },
-      {
-        header: "Thời gian",
-        key: "date",
-        width: 18,
-        format: (v: string) => formatDate(v),
-      },
-      { header: "Khách hàng", key: "customerName", width: 25 },
-      {
-        header: "Tổng tiền",
-        key: "totalAmount",
-        width: 15,
-        format: (v: number) => v,
-      },
-      {
-        header: "Trạng thái",
-        key: "status",
-        width: 15,
-        format: (v: string) => statusMap[v]?.label ?? v,
-      },
-    ];
-    if (type === "excel")
-      exportToExcel(data, exportColumns, "danh-sach-dat-hang");
-    else exportToCsv(data, exportColumns, "danh-sach-dat-hang");
+  const [exporting, setExporting] = useState(false);
+  const exportLock = useRef(false);
+  const exportMounted = useRef(true);
+  useEffect(() => { exportMounted.current = true; return () => { exportMounted.current = false; }; }, []);
+  const exportKey = JSON.stringify([phamViHienTai, buildFilters(), search, searchField, deliveryArea]);
+  const currentExportKey = useRef(exportKey); currentExportKey.current = exportKey;
+  const handleExport = async (type: "excel" | "csv", selected?: SalesOrder[]) => {
+    if (exportLock.current) return;
+    if (!branchScopeReady || loading || search !== debouncedSearch) {
+      toast({title:'Chờ danh sách tải xong trước khi xuất.',variant:'info'}); return;
+    }
+    exportLock.current = true; setExporting(true);
+    const key = exportKey;
+    const valid = () => exportMounted.current && currentExportKey.current === key;
+    try {
+      const {orders,lines} = await readOrdersForExport(phamViHienTai, {search:debouncedSearch,searchField,filters:buildFilters()},selected?.map(o=>o.id));
+      if (!valid()) throw new Error('Bộ lọc hoặc chi nhánh đã thay đổi. Xuất lại theo phạm vi mới.');
+      if (!orders.length) throw new Error('Không có đơn phù hợp để xuất.');
+      const details=buildOrderExportRows(orders,lines);
+      const name=selected?'dat-hang-da-chon':'dat-hang-theo-bo-loc';
+      if(type==='excel') await exportToExcel(orders,orderSummaryColumns,name,{financialTable:true,shouldSave:valid,additionalSheets:[{name:'Chi tiet hang dat',data:details,columns:orderLineColumns}]});
+      else await exportToCsv(details,orderLineColumns,name,{shouldSave:valid});
+      if(valid()) toast({title:'Đã chuẩn bị tải file',description:`${orders.length} đơn · ${details.length} dòng hàng`,variant:'success'});
+    } catch(e) {
+      if(exportMounted.current) toast({title:'Không xuất được file',description:e instanceof Error?e.message:'Vui lòng thử lại.',variant:'error'});
+    } finally { exportLock.current=false; if(exportMounted.current) setExporting(false); }
   };
-
   // --- Columns ---
 
   const columns: ColumnDef<SalesOrder, unknown>[] = [
@@ -1072,6 +1073,7 @@ export default function DatHangPage() {
         />
       )}
 
+      {exporting && <p role="status" className="px-4 text-sm text-muted-foreground">Đang chuẩn bị đủ đơn và chi tiết hàng theo phạm vi đã chọn…</p>}
       <DataTable
         columns={columns}
         data={data}
@@ -1187,36 +1189,8 @@ export default function DatHangPage() {
           {
             label: "Xuất Excel",
             icon: <Icon name="download" size={16} />,
-            onClick: (selectedRows) => {
-              const cols = [
-                { header: "Mã đặt hàng", key: "code", width: 15 },
-                {
-                  header: "Thời gian",
-                  key: "date",
-                  width: 18,
-                  format: (v: string) => formatDate(v),
-                },
-                { header: "Khách hàng", key: "customerName", width: 25 },
-                {
-                  header: "Tổng tiền",
-                  key: "totalAmount",
-                  width: 15,
-                  format: (v: number) => v,
-                },
-                {
-                  header: "Trạng thái",
-                  key: "status",
-                  width: 15,
-                  format: (v: string) => statusMap[v]?.label ?? v,
-                },
-              ];
-              exportToExcel(selectedRows, cols, "dat-hang-da-chon");
-              toast({
-                title: "Đã xuất Excel",
-                description: `${selectedRows.length} đơn đặt hàng`,
-                variant: "success",
-              });
-            },
+            disabled: exporting,
+            onClick: (selectedRows) => { void handleExport("excel", selectedRows); },
           },
           {
             label: "In hàng loạt",
