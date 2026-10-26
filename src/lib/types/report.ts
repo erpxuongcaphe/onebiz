@@ -62,6 +62,7 @@ export type ReportExportMode = "view" | "full";
 // ============================================================
 
 export type ReportKind =
+  | "thuc-nhap-ncc"
   | "cod-doi-soat"
   | "tong-quan"
   | "cuoi-ngay"
