@@ -8,7 +8,8 @@
  * 1 phiếu chi phí giao + cột "COD đang giữ" của đối tác tự giảm.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
+import { useAuth } from "@/lib/contexts/auth-context";
 import {
   Dialog,
   DialogContent,
@@ -46,6 +47,8 @@ export function SettleCodDialog({
   onSuccess,
 }: SettleCodDialogProps) {
   const { toast } = useToast();
+  const { user, tenant, hasPermission } = useAuth();
+  const canSettle = hasPermission("finance.create_transaction");
   const [shipments, setShipments] = useState<UnsettledShipment[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -54,9 +57,18 @@ export function SettleCodDialog({
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "transfer">("transfer");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const [loadedScope, setLoadedScope] = useState<string | null>(null);
+  const scopeKey = JSON.stringify([open, branchId, partnerId, user?.id, tenant?.id, canSettle]);
+  const scopeRef = useRef(scopeKey);
+  scopeRef.current = scopeKey;
+  const ready = open && canSettle && loadedScope === scopeKey && !loading && !loadError;
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !canSettle) return;
+    let active = true;
+    const current = () => active && scopeRef.current === scopeKey;
+    setShipments([]);
     setChecked(new Set());
     setFees({});
     setNote("");
@@ -65,22 +77,24 @@ export function SettleCodDialog({
     setLoadError(null);
     getUnsettledShipments(partnerId, branchId)
       .then((rows) => {
+        if (!current()) return;
         setShipments(rows);
-        // mặc định tick hết — thao tác phổ biến là đối soát trọn kỳ
-        setChecked(new Set(rows.map((r) => r.id)));
+        setLoadedScope(scopeKey);
       })
       .catch((err) => {
+        if (!current()) return;
         setShipments([]);
         setLoadError(
           err instanceof Error ? err.message : "Không tải được danh sách vận đơn",
         );
       })
-      .finally(() => setLoading(false));
-  }, [branchId, open, partnerId]);
+      .finally(() => { if (current()) setLoading(false); });
+    return () => { active = false; };
+  }, [branchId, open, partnerId, scopeKey, canSettle]);
 
   const selected = useMemo(
-    () => shipments.filter((s) => checked.has(s.id)),
-    [shipments, checked],
+    () => ready ? shipments.filter((s) => checked.has(s.id)) : [],
+    [shipments, checked, ready],
   );
   const totalCod = selected.reduce((sum, s) => sum + s.codAmount, 0);
   const totalFee = selected.reduce((sum, s) => sum + (fees[s.id] ?? 0), 0);
@@ -101,7 +115,8 @@ export function SettleCodDialog({
     );
 
   async function handleConfirm() {
-    if (selected.length === 0) return;
+    if (!ready || savingRef.current || scopeRef.current !== scopeKey || selected.length === 0) return;
+    savingRef.current = true;
     setSaving(true);
     try {
       const result = await settleCod({
@@ -133,6 +148,7 @@ export function SettleCodDialog({
         variant: "error",
       });
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   }
@@ -143,13 +159,11 @@ export function SettleCodDialog({
         <DialogHeader>
           <DialogTitle>Đối soát COD — {partnerName}</DialogTitle>
           <DialogDescription>
-            Tick các vận đơn đối tác đã nộp tiền. Xác nhận xong: tiền vào sổ
-            quỹ, công nợ khách được trừ, "COD đang giữ" của đối tác giảm tương
-            ứng.
+            COD đã giao, chưa đối soát.
           </DialogDescription>
         </DialogHeader>
 
-        {loading ? (
+        {!canSettle ? <p role="alert" className="text-sm text-destructive">Không có quyền đối soát COD.</p> : loading || (loadedScope !== scopeKey && !loadError) ? (
           <div className="py-10 text-center text-sm text-muted-foreground">
             <Icon name="progress_activity" size={18} className="mr-2 inline animate-spin" />
             Đang tải vận đơn đã giao...
@@ -162,18 +176,18 @@ export function SettleCodDialog({
           <div className="py-8 text-center text-sm text-muted-foreground">
             Chưa có vận đơn nào <b>đã giao</b> chờ đối soát với {partnerName}.
             <br />
-            Vận đơn phải chuyển sang trạng thái "Đã giao" trước rồi mới đối soát
-            được.
+            Chỉ ghi nhận vận đơn đã giao, chưa đối soát.
           </div>
         ) : (
           <>
-            <div className="max-h-[42vh] overflow-y-auto rounded-md border">
-              <table className="w-full text-sm">
+            <div className="max-h-[42vh] overflow-auto rounded-md border" role="region" aria-label="Vận đơn chờ đối soát" tabIndex={0}>
+              <table className="w-full min-w-[680px] text-sm">
                 <thead className="sticky top-0 bg-muted/80 backdrop-blur">
                   <tr className="text-left text-xs text-muted-foreground">
                     <th className="w-9 px-2 py-2">
                       <input
                         type="checkbox"
+                        aria-label="Chọn tất cả vận đơn"
                         checked={checked.size === shipments.length && shipments.length > 0}
                         onChange={toggleAll}
                         className="h-3.5 w-3.5 accent-primary"
@@ -182,7 +196,7 @@ export function SettleCodDialog({
                     <th className="px-2 py-2">Vận đơn</th>
                     <th className="px-2 py-2">Hóa đơn</th>
                     <th className="px-2 py-2">Khách</th>
-                    <th className="px-2 py-2">Ngày giao</th>
+                    <th className="px-2 py-2">Cập nhật</th>
                     <th className="px-2 py-2 text-right">COD</th>
                     <th className="w-32 px-2 py-2 text-right">Phí trả đối tác</th>
                   </tr>
@@ -193,6 +207,7 @@ export function SettleCodDialog({
                       <td className="px-2 py-1.5">
                         <input
                           type="checkbox"
+                          aria-label={`Chọn vận đơn ${s.code}`}
                           checked={checked.has(s.id)}
                           onChange={() => toggle(s.id)}
                           className="h-3.5 w-3.5 accent-primary"
@@ -208,6 +223,7 @@ export function SettleCodDialog({
                       <td className="px-2 py-1.5">
                         <input
                           type="number"
+                          aria-label={`Phí trả đối tác ${s.code}`}
                           min={0}
                           value={fees[s.id] || ""}
                           onChange={(e) =>
@@ -248,8 +264,9 @@ export function SettleCodDialog({
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className="text-sm font-medium">Nhận tiền qua</label>
+                <label htmlFor="cod-payment-method" className="text-sm font-medium">Nhận tiền qua</label>
                 <select
+                  id="cod-payment-method"
                   value={paymentMethod}
                   onChange={(e) => setPaymentMethod(e.target.value as "cash" | "transfer")}
                   className="flex h-8 w-full rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring"
@@ -259,8 +276,9 @@ export function SettleCodDialog({
                 </select>
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm font-medium">Ghi chú</label>
+                <label htmlFor="cod-note" className="text-sm font-medium">Ghi chú</label>
                 <input
+                  id="cod-note"
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   placeholder="Số chứng từ bên đối tác..."
@@ -277,7 +295,7 @@ export function SettleCodDialog({
           </Button>
           <Button
             onClick={handleConfirm}
-            disabled={saving || loading || selected.length === 0}
+            disabled={saving || !ready || selected.length === 0}
           >
             {saving && (
               <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />
