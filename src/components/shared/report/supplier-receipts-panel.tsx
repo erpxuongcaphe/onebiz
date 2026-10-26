@@ -18,7 +18,7 @@ const columns: Array<ExcelColumn & { key: SupplierReceiptSort }> = [
   { key: "productCode", label: "Mã hàng" }, { key: "productName", label: "Hàng hóa", width: 32 },
   { key: "stockUnit", label: "ĐVT tồn" }, { key: "quantity", label: "Số lượng", format: "number", decimalPlaces: 4 },
   { key: "unitPrice", label: "Đơn giá ghi nhận", format: "currency", decimalPlaces: 6 },
-  { key: "amount", label: "Giá trị", format: "currency" }, { key: "signedAmount", label: "Tăng / giảm", format: "currency" },
+  { key: "amount", label: "Giá trị", format: "currency", decimalPlaces: 2 }, { key: "signedAmount", label: "Tăng / giảm", format: "currency", decimalPlaces: 2 },
   { key: "documentStatus", label: "Trạng thái phiếu hiện tại" }, { key: "priceSource", label: "Nguồn giá" }, { key: "status", label: "Đối chiếu" },
 ];
 const money = (value: number | null) => value === null ? "Chưa xác minh" : formatCurrency(value);
@@ -61,16 +61,17 @@ export function SupplierReceiptsPanel({ branchId, branchName, range, ready }: { 
   const [loaded, setLoaded] = useState<{ scope: string; data: SupplierReceiptWorkspace } | null>(null);
   const [error, setError] = useState<{ scope: string; message: string } | null>(null);
   const [exporting, setExporting] = useState(false);
-  const scope = JSON.stringify([user?.id, tenant?.id, allowed, branchId, range.from, range.to, ready, search, debouncedSearch, kind, status, sort, descending, page, size, revision]);
-  const scopeRef = useRef(scope); scopeRef.current = scope;
+  const scope = JSON.stringify([user?.id, tenant?.id, allowed, canExport, branchId, range.from, range.to, ready, search, debouncedSearch, kind, status, sort, descending, page, size, revision]);
+  const scopeRef = useRef(scope);
   const from = range.from, to = range.to;
   useEffect(() => {
+    scopeRef.current = scope;
     if (!allowed || !ready || !user?.id || !tenant?.id || search !== debouncedSearch) return;
     let active = true;
     getSupplierReceiptWorkspace({ branchId, from, to, search: debouncedSearch, kind, status, sortBy: sort, descending, page, size })
       .then(data => { if (active && scopeRef.current === scope) setLoaded({ scope, data }); })
       .catch(reason => { if (active && scopeRef.current === scope) setError({ scope, message: reason instanceof Error ? reason.message : "Không tải được thực nhập." }); });
-    return () => { active = false; };
+    return () => { active = false; if (scopeRef.current === scope) scopeRef.current = ""; };
   }, [allowed, ready, user?.id, tenant?.id, branchId, from, to, search, debouncedSearch, kind, status, sort, descending, page, size, scope]);
   const data = loaded?.scope === scope ? loaded.data : null;
   const failure = error?.scope === scope ? error.message : null;
@@ -82,7 +83,7 @@ export function SupplierReceiptsPanel({ branchId, branchName, range, ready }: { 
       const rows = await getAllSupplierReceipts({ branchId, from, to, search: debouncedSearch, kind, status, sortBy: sort, descending });
       const { exportReportToExcel } = await import("@/lib/utils/excel-export");
       if (scopeRef.current !== scope) return;
-      await exportReportToExcel({ kind: "thuc-nhap-ncc", mode: "full", range, branchName, reportTitle: "Thực nhập nhà cung cấp",
+      await exportReportToExcel({ kind: "thuc-nhap-ncc", mode: "full", range, branchName, reportTitle: "Thực nhập nhà cung cấp", shouldSave: () => scopeRef.current === scope,
         disclaimer: "Theo ngày biến động và giá lịch sử. Chưa phân bổ giảm giá, VAT, phí của phiếu; không phải tiền đã chi. ĐVT tồn và thông tin phiếu là danh mục/trạng thái hiện tại. Trống là chưa xác minh.",
         sheets: [{ name: "Thực nhập", columns, rows: rows.map(row => ({ ...row, kind: SUPPLIER_RECEIPT_KINDS[row.kind], status: SUPPLIER_RECEIPT_STATUSES[row.status],
           documentStatus: statusLabel(row.documentStatus), priceSource: row.priceSource === "movement" ? "Sổ kho" : row.priceSource === "return_line" ? "Dòng trả NCC" : null })) }] });

@@ -379,10 +379,11 @@ function formatCell(value: unknown, col: ExcelColumn): XLSXTypes.CellObject {
 
   if (format === "currency") {
     const n = typeof value === "number" ? value : Number(value);
+    const digits = col.decimalPlaces === undefined ? undefined : Math.min(8, Math.max(0, Math.trunc(col.decimalPlaces)));
     return {
-      v: Number.isFinite(n) ? roundDecimals(n) : 0,
+      v: Number.isFinite(n) ? digits === undefined ? roundDecimals(n) : n : 0,
       t: "n",
-      z: "#,##0",
+      z: digits ? `#,##0.${"#".repeat(digits)}` : "#,##0",
       s: STYLE_DATA_NUMBER,
     };
   }

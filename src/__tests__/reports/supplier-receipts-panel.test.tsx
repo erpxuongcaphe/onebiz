@@ -1,4 +1,5 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const fake = vi.hoisted(() => ({ allowed: true, exportAllowed: true, read: vi.fn(), full: vi.fn() }));
 vi.mock("@/lib/contexts/auth-context", () => ({ useAuth: () => ({ user: { id: "actor" }, tenant: { id: "tenant" }, hasPermission: (code: string) => code === "reports.export_detail" ? fake.exportAllowed : fake.allowed }) }));
@@ -10,6 +11,10 @@ const result = (code = "PN-fixture") => ({ items: [{ id: "one", occurredAt: "202
 beforeEach(() => { fake.allowed = true; fake.exportAllowed = true; fake.read.mockReset().mockResolvedValue(result()); fake.full.mockReset(); });
 afterEach(cleanup);
 describe("supplier physical receipts UI", () => {
+  it("loads after Strict Mode effect cleanup and remount", async () => {
+    render(<StrictMode><SupplierReceiptsPanel branchId="a" branchName="A" range={range} ready /></StrictMode>);
+    await screen.findAllByText("PN-fixture"); expect(screen.getByRole("button", { name: "Excel đầy đủ" })).toBeEnabled();
+  });
   it("does not request confidential purchase data without the required permissions", () => {
     fake.allowed = false; render(<SupplierReceiptsPanel branchId="a" branchName="A" range={range} ready />);
     expect(fake.read).not.toHaveBeenCalled();expect(screen.getByRole("alert")).toHaveTextContent("Không có quyền");

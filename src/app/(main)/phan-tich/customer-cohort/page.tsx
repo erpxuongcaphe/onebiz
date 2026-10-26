@@ -12,6 +12,7 @@ import { Icon } from "@/components/ui/icon";
 import { ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
 import { useBranchFilter } from "@/lib/contexts";
+import { useAuth } from "@/lib/contexts/auth-context";
 import {
   exportReportToExcel,
   buildReportTitleRows,
@@ -27,33 +28,28 @@ export default function CustomerCohortPage() {
     useReportState({ defaultPreset: "thisYear", defaultViewMode: "table" });
 
   const { activeBranchId, branchLabel, branches, isReady } = useBranchFilter();
-  const [data, setData] = useState<CohortReportResult | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, tenant, hasPermission } = useAuth();
+  const allowed = hasPermission("reports.analytics") && hasPermission("reports.view_detail");
+  const canExportView = hasPermission("reports.export");
+  const canExportFull = hasPermission("reports.export_detail");
   const [months, setMonths] = useState(6);
-  const requestIdRef = useRef(0);
-
-  const fetchData = useCallback(async () => {
-    if (!isReady) return;
-    const requestId = ++requestIdRef.current;
-    setLoading(true);
-    try {
-      const result = await getCustomerCohortReport({
-        months,
-        branchId: activeBranchId,
-      });
-      if (requestId !== requestIdRef.current) return;
-      setData(result);
-    } catch (err) {
-      if (requestId !== requestIdRef.current) return;
-      console.error("Failed to fetch cohort report:", err);
-    } finally {
-      if (requestId === requestIdRef.current) setLoading(false);
-    }
-  }, [activeBranchId, isReady, months]);
-
+  const [revision, setRevision] = useState(0);
+  const [loaded, setLoaded] = useState<{ scope: string; result: CohortReportResult } | null>(null);
+  const [failure, setFailure] = useState<{ scope: string; message: string } | null>(null);
+  const scope = JSON.stringify([user?.id, tenant?.id, allowed, canExportView, canExportFull, isReady, activeBranchId, months, revision]);
+  const scopeRef = useRef(scope);
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    scopeRef.current = scope;
+    if (!allowed || !isReady || !user?.id || !tenant?.id) return;
+    let active = true;
+    getCustomerCohortReport({ months, branchId: activeBranchId })
+      .then(result => { if (active && scopeRef.current === scope) setLoaded({ scope, result }); })
+      .catch(error => { if (active && scopeRef.current === scope) setFailure({ scope, message: error instanceof Error ? error.message : "Không tải được khách hàng quay lại." }); });
+    return () => { active = false; if (scopeRef.current === scope) scopeRef.current = ""; };
+  }, [allowed, isReady, user?.id, tenant?.id, activeBranchId, months, scope]);
+  const data = loaded?.scope === scope ? loaded.result : null;
+  const error = failure?.scope === scope ? failure.message : null;
+  const loading = !data && !error;
 
   const totalCohorts = data?.rows.length ?? 0;
   const totalCustomers = data?.rows.reduce((s, r) => s + r.size, 0) ?? 0;
@@ -78,9 +74,10 @@ export default function CustomerCohortPage() {
       from: `${firstMonth}-01`,
       to: `${lastMonth}-${String(lastDay).padStart(2, "0")}`,
     };
-  }, [data?.rows, range]);
+  }, [data, range]);
   const handleExport = useCallback((mode: "view" | "full") => {
-    if (!data) return;
+    if (!data || loading || error || !allowed || scopeRef.current !== scope ||
+      (mode === "full" ? !canExportFull : !canExportView)) return;
     const titleRows = buildReportTitleRows({
       title: "Báo cáo khách hàng quay lại",
       range: cohortRange,
@@ -106,6 +103,7 @@ export default function CustomerCohortPage() {
 
     exportReportToExcel({
       kind: "customer-cohort",
+      shouldSave: () => scopeRef.current === scope,
       mode,
       range: cohortRange,
       branchName: branchLabel,
@@ -165,6 +163,12 @@ export default function CustomerCohortPage() {
     cohortRange,
     totalCohorts,
     totalCustomers,
+    loading,
+    error,
+    allowed,
+    scope,
+    canExportFull,
+    canExportView,
   ]);
 
   const colorForRetention = (pct: number): string => {
@@ -175,6 +179,7 @@ export default function CustomerCohortPage() {
     return "bg-status-success/20 text-status-success font-bold";
   };
 
+  if (!allowed) return <p role="alert" className="p-4 text-sm text-muted-foreground">Không có quyền xem khách hàng quay lại.</p>;
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] overflow-hidden">
       <ReportPageHeader
@@ -184,9 +189,9 @@ export default function CustomerCohortPage() {
         range={range}
         onPresetChange={setPreset}
         onCustomRangeChange={setCustomRange}
-        onExportView={() => handleExport("view")}
-        onExportFull={() => handleExport("full")}
-        exportDisabled={loading || !data}
+        onExportView={canExportView ? () => handleExport("view") : undefined}
+        onExportFull={canExportFull ? () => handleExport("full") : undefined}
+        exportDisabled={loading || !!error || !data}
         hideDateRange
         actions={
           <select
@@ -206,8 +211,8 @@ export default function CustomerCohortPage() {
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
           <KpiCard
             label="Số nhóm khách"
-            value={String(totalCohorts)}
-            change={`${data?.monthsTracked ?? 6} tháng theo dõi`}
+            value={data ? String(totalCohorts) : error ? "Không tải được" : "Đang tải"}
+            change={`${data?.monthsTracked ?? months} tháng theo dõi`}
             positive
             icon="group"
             bg="bg-primary-fixed"
@@ -216,7 +221,7 @@ export default function CustomerCohortPage() {
           />
           <KpiCard
             label="Tổng khách hàng lần đầu"
-            value={String(totalCustomers)}
+            value={data ? String(totalCustomers) : error ? "Không tải được" : "Đang tải"}
             change={`${months} tháng gần nhất`}
             positive
             icon="person_add"
@@ -226,9 +231,9 @@ export default function CustomerCohortPage() {
           />
           <KpiCard
             label="Tháng kế tiếp quay lại trung bình"
-            value={`${m1Retention}%`}
+            value={data ? `${m1Retention}%` : error ? "Không tải được" : "Đang tải"}
             change={
-              m1Retention >= 30
+              !data ? "" : m1Retention >= 30
                 ? "Tốt"
                 : m1Retention >= 20
                   ? "Trung bình"
@@ -243,7 +248,12 @@ export default function CustomerCohortPage() {
         </div>
 
         {/* Cohort matrix */}
-        {loading ? (
+        {error ? (
+          <div role="alert" className="border-l-2 border-status-error p-4 text-sm">
+            <p>{error}</p>
+            <button type="button" onClick={() => setRevision(value => value + 1)} className="mt-2 inline-flex min-h-9 items-center gap-1 text-primary"><Icon name="refresh" size={16} />Tải lại</button>
+          </div>
+        ) : loading ? (
           <div className="flex flex-col items-center justify-center py-16">
             <Icon
               name="progress_activity"
