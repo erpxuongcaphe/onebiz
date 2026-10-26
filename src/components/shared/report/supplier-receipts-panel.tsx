@@ -18,7 +18,7 @@ const columns: Array<ExcelColumn & { key: SupplierReceiptSort }> = [
   { key: "productCode", label: "Mã hàng" }, { key: "productName", label: "Hàng hóa", width: 32 },
   { key: "stockUnit", label: "ĐVT tồn" }, { key: "quantity", label: "Số lượng", format: "number", decimalPlaces: 4 },
   { key: "unitPrice", label: "Đơn giá ghi nhận", format: "currency", decimalPlaces: 6 },
-  { key: "amount", label: "Giá trị", format: "currency" }, { key: "signedAmount", label: "Tăng / giảm", format: "currency" },
+  { key: "amount", label: "Giá trị", format: "currency", decimalPlaces: 2 }, { key: "signedAmount", label: "Tăng / giảm", format: "currency", decimalPlaces: 2 },
   { key: "documentStatus", label: "Trạng thái phiếu hiện tại" }, { key: "priceSource", label: "Nguồn giá" }, { key: "status", label: "Đối chiếu" },
 ];
 const money = (value: number | null) => value === null ? "Chưa xác minh" : formatCurrency(value);
