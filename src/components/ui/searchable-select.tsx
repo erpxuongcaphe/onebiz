@@ -81,7 +81,7 @@ export function SearchableSelect({
   }, [open]);
 
   return (
-    <div ref={rootRef} className={cn("relative", className)}>
+    <div ref={rootRef} className={cn("relative min-w-0", className)}>
       <Button
         type="button"
         variant="outline"
@@ -96,7 +96,7 @@ export function SearchableSelect({
           });
         }}
       >
-        <span className={selected ? "truncate" : "text-muted-foreground"}>
+        <span className={cn("min-w-0 truncate", !selected && "text-muted-foreground")}>
           {selected ? selected.label : placeholder}
         </span>
         <Icon name="expand_more" size={18} className="shrink-0 text-muted-foreground" />
@@ -118,7 +118,7 @@ export function SearchableSelect({
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder={searchPlaceholder}
-              className="h-8 pl-8"
+              className="h-8 pl-8 max-md:text-[16px] pointer-coarse:text-[16px]"
               onKeyDown={(event) => {
                 if (event.key === "Escape") {
                   setQuery("");
