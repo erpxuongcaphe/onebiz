@@ -41,6 +41,13 @@ describe('searchable entity picker',()=>{
   await waitFor(()=>expect(screen.queryByRole('listbox')).toBeNull());expect(change).not.toHaveBeenCalled();
   expect((await open()) as HTMLInputElement).toHaveProperty('value','');
  });
+ it('keeps one editable input and only consumes Escape while suggestions are open',async()=>{
+  render(<SearchableSelect aria-label="Khách hàng" options={options} placeholder="Chọn khách" onValueChange={vi.fn()}/>);
+  const input=screen.getByRole('combobox',{name:'Khách hàng'});
+  expect(fireEvent.keyDown(input,{key:'Escape'})).toBe(true);
+  await open();expect(screen.getAllByRole('combobox')).toHaveLength(1);
+  expect(fireEvent.keyDown(input,{key:'Escape'})).toBe(false);
+ });
  it('does not mutate a stale selection when options load or scope changes',async()=>{
   const change=vi.fn();const {rerender}=render(<SearchableSelect aria-label="Khách hàng" value="old" options={[]} placeholder="Chọn khách" onValueChange={change}/>);
   rerender(<SearchableSelect aria-label="Khách hàng" value="old" options={options} placeholder="Chọn khách" onValueChange={change}/>);

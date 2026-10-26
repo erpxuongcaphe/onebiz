@@ -70,7 +70,7 @@ export function SearchableSelect({ value = "", onValueChange, options, placehold
         onChange={event=>{setQuery(event.target.value);setActiveValue(null);setOpen(true);}}
         onKeyDown={event=>{
           if(event.nativeEvent.isComposing || event.keyCode===229)return;
-          if(event.key==="Escape"){event.preventDefault();event.stopPropagation();close();}
+          if(event.key==="Escape" && open){event.preventDefault();event.stopPropagation();close();}
           if(event.key==="Tab")close();
           if(event.key==="ArrowDown" || event.key==="ArrowUp"){event.preventDefault();if(!open)begin();move(event.key==="ArrowDown"?1:-1);}
           if(event.key==="Enter" && open){event.preventDefault();choose(active);}
