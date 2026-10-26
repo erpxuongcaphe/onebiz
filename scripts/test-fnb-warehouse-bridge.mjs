@@ -300,4 +300,22 @@ await test('new search retains branch/permission denial and private helper ACL',
  assert.equal(await scalar("select has_function_privilege('anon','catalog_search_rank(text,text,text,text)','execute')"),false);
 });
 
+await db.exec(readFileSync('supabase/migrations/202610260100_fnb_wholesale_catalog_boundary.sql','utf8'));
+await db.exec(readFileSync('supabase/migrations/202610260100_fnb_wholesale_catalog_boundary.sql','utf8'));
+await test('wholesale-only WS and FECA products are excluded before limiting and rejected on new submission, while old retries remain idempotent',async()=>{
+ for(const classification of ["code='wS-001'","name='WS - Sữa Đặc'","name='fEcA - Sữa Đặc'"]){
+  await db.exec('begin');await db.query(`update products set ${classification} where id=$1`,[product]);
+  assert.equal((await contextSearch('Sữa Đặc')).some(p=>p.id===product),false);
+  assert.deepEqual(await submit(key),saved);
+  const before=(await db.query('select * from codes order by entity')).rows;
+  await db.exec('savepoint wholesale_submit');await rejects(()=>submit(id(993)),/không còn được phép/);
+  await db.exec('rollback to savepoint wholesale_submit');
+  assert.deepEqual((await db.query('select * from codes order by entity')).rows,before);
+  await db.exec('rollback');
+ }
+});
+await test('ordinary Retail SKU used as a F&B ingredient stays selectable and can be ordered',async()=>{
+ assert.equal((await contextSearch('012345'))[0].id,product);
+ await db.exec('begin');assert.ok((await submit(id(994))).purchaseOrderId);await db.exec('rollback');
+});
 console.log(`${passed} isolated PostgreSQL checks passed.`);await db.close();

@@ -128,6 +128,7 @@ const PERMISSION_MAP: Record<
   },
   inventory_check: {
     canView: PERMISSIONS.INVENTORY_VIEW,
+    canDuplicate: PERMISSIONS.INVENTORY_CHECK,
     canPrint: PERMISSIONS.INVENTORY_VIEW,
     canCancel: PERMISSIONS.INVENTORY_CHECK,
     canAuditLog: PERMISSIONS.SYSTEM_VIEW_AUDIT,

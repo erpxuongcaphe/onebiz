@@ -1,4 +1,5 @@
 "use client";
+import type { DocumentCopySource } from "@/lib/services/supabase/document-copy";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
@@ -222,6 +223,7 @@ export default function DatHangNhapPage() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
   const [createOpen, setCreateOpen] = useState(false);
+  const [copySource, setCopySource] = useState<DocumentCopySource | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [cancellingItem, setCancellingItem] = useState<PurchaseOrderEntry | null>(null);
@@ -366,13 +368,14 @@ export default function DatHangNhapPage() {
           },
         }}
         actions={[
-          { label: "Đặt hàng", icon: <Icon name="add" size={16} />, variant: "default", onClick: () => setCreateOpen(true) },
+          { label: "Đặt hàng", icon: <Icon name="add" size={16} />, variant: "default", onClick: () => { setCopySource(null); setCreateOpen(true); } },
           { label: "Nhập Excel", icon: <Icon name="upload_file" size={16} />, variant: "outline", onClick: () => setImportOpen(true) },
         ]}
       />
 
       <CreatePurchaseEntryDialog
         open={createOpen}
+        copySource={copySource} key={copySource?.id ?? "new"}
         onOpenChange={setCreateOpen}
         onSuccess={fetchData}
       />
@@ -512,6 +515,7 @@ export default function DatHangNhapPage() {
           buildTransactionRowActions({
             row,
             kind: "purchase_order",
+            onDuplicate: () => { if (!activeBranchId || row.branchId !== activeBranchId) { toast({title:"Chọn đúng chi nhánh của phiếu để sao chép.",variant:"error"}); return; } setCopySource(row); setCreateOpen(true); },
             permissions: txPerms,
             onView: () => {
               const idx = data.findIndex((d) => d.id === row.id);

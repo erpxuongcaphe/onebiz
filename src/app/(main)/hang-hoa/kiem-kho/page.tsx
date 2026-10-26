@@ -1,4 +1,5 @@
 "use client";
+import type { DocumentCopySource } from "@/lib/services/supabase/document-copy";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { ColumnDef } from "@tanstack/react-table";
@@ -415,6 +416,7 @@ export default function KiemKhoPage() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
   const [createOpen, setCreateOpen] = useState(false);
+  const [copySource, setCopySource] = useState<DocumentCopySource | null>(null);
   const [applyingId, setApplyingId] = useState<string | null>(null);
   const [cancellingItem, setCancellingItem] = useState<InventoryCheck | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
@@ -696,7 +698,7 @@ export default function KiemKhoPage() {
             label: "Kiểm kho",
             icon: <Icon name="add" size={16} />,
             variant: "default",
-            onClick: () => setCreateOpen(true),
+            onClick: () => { setCopySource(null); setCreateOpen(true); },
           },
         ]}
       />
@@ -903,6 +905,7 @@ export default function KiemKhoPage() {
           return buildTransactionRowActions({
             row,
             kind: "inventory_check",
+            onDuplicate: () => { if (!activeBranchId || row.branchId !== activeBranchId) { toast({title:"Chọn đúng chi nhánh của phiếu để sao chép.",variant:"error"}); return; } setCopySource(row); setCreateOpen(true); },
             permissions: txPerms,
             onPrint: () =>
               printWithPicker(buildInventoryCheckPrintData(row), "In phiếu kiểm kho", {
@@ -931,7 +934,8 @@ export default function KiemKhoPage() {
 
     <CreateInventoryCheckDialog
       open={createOpen}
-      onOpenChange={setCreateOpen}
+      copySource={copySource} key={copySource?.id ?? "new"}
+        onOpenChange={setCreateOpen}
       onSuccess={fetchData}
     />
 

@@ -29,12 +29,14 @@ import { CreateFnbWarehouseOrderDialog } from "./create-fnb-warehouse-order-dial
 import { savePurchaseOrderAtomic } from "@/lib/services/supabase/purchase-orders";
 import { Icon } from "@/components/ui/icon";
 import { useDurableFormDraft } from "@/lib/hooks/use-durable-form-draft";
+import { loadDocumentCopy, type DocumentCopySource } from "@/lib/services/supabase/document-copy";
 
 
 interface CreatePurchaseEntryDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
+  copySource?: DocumentCopySource | null;
 }
 
 interface LineItem {
@@ -94,9 +96,14 @@ function CreateLegacyPurchaseEntryDialog({
   open,
   onOpenChange,
   onSuccess,
+  copySource,
 }: CreatePurchaseEntryDialogProps) {
   const { toast } = useToast();
   const fnbCatalog = useFnbCatalogScope();
+  const { activeBranchId, currentBranch } = useAuth();
+  const copyBranchId = activeBranchId ?? currentBranch?.id;
+  const [copyLoading, setCopyLoading] = useState(false);
+  const [copyError, setCopyError] = useState("");
   const [code, setCode] = useState("");
   const [supplierSearch, setSupplierSearch] = useState("");
   const [selectedSupplier, setSelectedSupplier] = useState<{ id: string; name: string } | null>(null);
@@ -137,8 +144,24 @@ function CreateLegacyPurchaseEntryDialog({
     setSaving(false);
   }, [open]);
 
+  useEffect(() => {
+    if (!open || !copySource || !copyBranchId) return;
+    let cancelled = false;
+    setCopyLoading(true); setCopyError("");
+    loadDocumentCopy('purchase', copySource.id, copyBranchId, fnbCatalog).then(seed => {
+      if (cancelled || !seed.supplier) return;
+      setSelectedSupplier(seed.supplier); setSupplierSearch(seed.supplier.name);
+      setItems(seed.items.map(p => ({ id:p.id, productCode:p.code, productName:p.name, unit:p.unit, quantity:p.quantity, price:p.price, vatRate:p.vatRate })));
+      setNotes(`[Sao chép từ ${seed.code}] ${seed.note}`);
+    }).catch(e => { if (!cancelled) setCopyError(e instanceof Error ? e.message : 'Không đọc được phiếu nguồn.'); })
+      .finally(() => { if (!cancelled) setCopyLoading(false); });
+    return () => { cancelled = true; };
+  }, [open, copySource, copyBranchId, fnbCatalog]);
+
   const { clearDraft } = useDurableFormDraft({
-    form: "purchase-order-create",
+    form: copySource ? "purchase-order-copy" : "purchase-order-create",
+    entityId: copySource?.id, autoRestore: !copySource,
+    ready: !copySource || (!copyLoading && !copyError && items.length > 0),
     open,
     onRequestOpen: () => onOpenChange(true),
     snapshot: {
@@ -282,12 +305,14 @@ function CreateLegacyPurchaseEntryDialog({
   }
 
   async function handleSave() {
+    if (copyLoading || copyError || saving) return;
+    if (copySource && copySource.branchId !== copyBranchId) { setCopyError('Chi nhánh đã thay đổi. Đóng phiếu và sao chép lại tại đúng chi nhánh.'); return; }
     if (!validate()) return;
     setSaving(true);
     try {
       const ctx = await getCurrentContext();
       const saved = await savePurchaseOrderAtomic({
-        branchId: ctx.branchId,
+        branchId: copyBranchId ?? ctx.branchId,
         supplierId: selectedSupplier!.id,
         note: notes || null,
         shippingCost: shippingFee,
@@ -332,6 +357,8 @@ function CreateLegacyPurchaseEntryDialog({
           <DialogHeader className="gap-0 pr-10">
             <div className="flex flex-wrap items-center gap-3">
               <DialogTitle className="text-xl">Tạo đơn đặt hàng nhập</DialogTitle>
+              {copySource && <p role="status" className="order-last basis-full text-xs text-muted-foreground">{copyLoading ? 'Đang sao chép…' : `Từ ${copySource.code} · Kiểm tra số lượng và giá trước khi lưu. Chi phí/tiền trả không sao chép.`}</p>}
+              {copyError && <p role="alert" className="order-last basis-full text-sm text-destructive">{copyError}</p>}
               <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
                 Chưa gửi
               </span>
@@ -342,7 +369,7 @@ function CreateLegacyPurchaseEntryDialog({
           </DialogHeader>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto bg-surface-container-low p-3 md:p-4">
+        <div inert={copyLoading || !!copyError} className="min-h-0 flex-1 overflow-y-auto bg-surface-container-low p-3 md:p-4">
           <div className="mx-auto flex max-w-[1420px] flex-col gap-3">
             <div className="grid gap-3 xl:grid-cols-[minmax(340px,0.9fr)_minmax(380px,1.2fr)_minmax(300px,0.85fr)]">
               <section className="rounded-lg border bg-white p-3 shadow-none">
@@ -571,7 +598,7 @@ function CreateLegacyPurchaseEntryDialog({
 
         <DialogFooter className="mx-0 mb-0 shrink-0 rounded-none border-t bg-white px-4 py-3">
           <div className="mx-auto grid w-full max-w-[1420px] grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto]">
-            <div className="grid gap-2 text-sm sm:grid-cols-3 xl:grid-cols-6">
+            <div className="grid grid-cols-2 min-[360px]:grid-cols-3 gap-2 text-sm sm:grid-cols-3 xl:grid-cols-6">
               <FooterMetric label="Dòng" value={formatNumber(items.length)} />
               <FooterMetric label="Tổng SL" value={formatNumber(totalQuantity)} />
               <FooterMetric label="Tiền hàng" value={formatCurrency(subtotal)} />
@@ -583,7 +610,7 @@ function CreateLegacyPurchaseEntryDialog({
               <Button variant="outline" onClick={() => onOpenChange(false)}>
                 Hủy
               </Button>
-              <Button onClick={handleSave} disabled={saving}>
+              <Button onClick={handleSave} disabled={saving || copyLoading || !!copyError}>
                 {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
                 Tạo đơn đặt hàng
               </Button>

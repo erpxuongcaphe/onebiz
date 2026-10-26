@@ -8,11 +8,12 @@ import { NumericInput } from '@/components/ui/numeric-input';
 import { useToast } from '@/lib/contexts';
 import { useDurableFormDraft } from '@/lib/hooks/use-durable-form-draft';
 import { getWarehouseOrderContext, submitWarehouseOrder, type SupplyProduct, type SupplyWarehouse } from '@/lib/services/supabase/fnb-warehouse-orders';
+import { loadDocumentCopy, type DocumentCopySource } from '@/lib/services/supabase/document-copy';
 
-interface Props { open: boolean; onOpenChange: (open: boolean) => void; onSuccess?: () => void; branchId: string }
+interface Props { open: boolean; onOpenChange: (open: boolean) => void; onSuccess?: () => void; branchId: string; copySource?: DocumentCopySource | null }
 type Line = SupplyProduct & { quantity: number; note?: string };
 
-export function CreateFnbWarehouseOrderDialog({ open, onOpenChange, onSuccess, branchId }: Props) {
+export function CreateFnbWarehouseOrderDialog({ open, onOpenChange, onSuccess, branchId, copySource }: Props) {
   const { toast } = useToast();
   const [warehouses, setWarehouses] = useState<SupplyWarehouse[]>([]);
   const [warehouseId, setWarehouseId] = useState('');
@@ -25,6 +26,8 @@ export function CreateFnbWarehouseOrderDialog({ open, onOpenChange, onSuccess, b
   const [catalogError, setCatalogError] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [copyLoading, setCopyLoading] = useState(false);
+  const [copyError, setCopyError] = useState('');
   const submitLock = useRef(false);
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
@@ -37,8 +40,25 @@ export function CreateFnbWarehouseOrderDialog({ open, onOpenChange, onSuccess, b
     setRequestId(crypto.randomUUID()); setError(''); setCatalogError('');
   }, [open, branchId]);
 
+  useEffect(() => {
+    if (!open || !copySource) return;
+    let cancelled = false;
+    setCopyLoading(true); setCopyError('');
+    loadDocumentCopy('purchase', copySource.id, branchId, true).then(seed => {
+      if (cancelled) return;
+      if (!seed.supplier?.branchId) throw new Error('Phiếu nguồn không phải đơn đặt kho tổng.');
+      setWarehouseId(seed.supplier.branchId);
+      setItems(seed.items.map(p => ({ ...p, note: p.note })));
+      setNote(`[Sao chép từ ${seed.code}] ${seed.note}`.slice(0,10000));
+    }).catch(e => { if (!cancelled) setCopyError(e instanceof Error ? e.message : 'Không tải được phiếu nguồn.'); })
+      .finally(() => { if (!cancelled) setCopyLoading(false); });
+    return () => { cancelled = true; };
+  }, [open, copySource, branchId]);
+
   const { clearDraft } = useDurableFormDraft({
-    form: 'fnb-warehouse-purchase-order', branchId, open,
+    form: copySource ? 'fnb-warehouse-purchase-order-copy' : 'fnb-warehouse-purchase-order', branchId, open,
+    entityId: copySource?.id, autoRestore: !copySource,
+    ready: !copySource || (!copyLoading && !copyError && items.length > 0),
     onRequestOpen: () => onOpenChange(true),
     snapshot: { items, note, requestId, warehouseId },
     hasContent: draft => draft.items.length > 0 || !!draft.note.trim(),
@@ -63,7 +83,8 @@ export function CreateFnbWarehouseOrderDialog({ open, onOpenChange, onSuccess, b
   }, [open, branchId, search]);
 
   async function send() {
-    if (submitLock.current || catalogError) return;
+    if (submitLock.current || catalogError || copyLoading || copyError) return;
+    if (copySource && copySource.branchId !== branchId) { setError('Chi nhánh đã thay đổi. Đóng phiếu và sao chép lại tại đúng chi nhánh.'); return; }
     if (!warehouses.some(w => w.id === warehouseId) || !items.length || items.some(i => !Number.isFinite(i.quantity) || i.quantity <= 0)) {
       setError('Chọn kho tổng, thêm hàng và nhập số lượng lớn hơn 0.'); return;
     }
@@ -85,7 +106,9 @@ export function CreateFnbWarehouseOrderDialog({ open, onOpenChange, onSuccess, b
       <DialogHeader><DialogTitle>Đặt hàng nhập từ kho tổng</DialogTitle></DialogHeader>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain">
         <p className="text-sm text-muted-foreground">Gửi nhu cầu để kho tổng chuẩn bị hàng. Kho có thể điều chỉnh hàng thực giao; chi nhánh xác nhận khi nhận hàng.</p>
-        <fieldset disabled={saving} className="space-y-4">
+        {copySource && <p role="status" className="rounded-md border px-3 py-2 text-sm">{copyLoading ? 'Đang sao chép…' : `Bản mới từ ${copySource.code}. Kiểm tra số lượng trước khi gửi; giá được kho tổng tính lại.`}</p>}
+        {copyError && <p role="alert" className="text-sm text-destructive">{copyError}</p>}
+        <fieldset disabled={saving || copyLoading || !!copyError} className="space-y-4">
           <div className="sticky top-0 z-10 grid gap-3 bg-popover pb-3 md:grid-cols-3">
           <label className="block text-sm font-medium">Kho cung cấp
             <select aria-label="Kho cung cấp" value={warehouseId} onChange={e => setWarehouseId(e.target.value)} className="mt-1 h-10 w-full rounded-md border bg-background px-3">
@@ -124,7 +147,7 @@ export function CreateFnbWarehouseOrderDialog({ open, onOpenChange, onSuccess, b
       <DialogFooter className="border-t pt-3">
         <span className="mr-auto text-sm text-muted-foreground">{items.length} mặt hàng · Mã PO cấp khi gửi thành công</span>
         <Button variant="outline" disabled={saving} onClick={() => onOpenChange(false)}>Đóng</Button>
-        <Button disabled={saving || !!catalogError || !warehouseId || !items.length} onClick={send}>{saving ? 'Đang gửi…' : 'Gửi đặt hàng'}</Button>
+        <Button disabled={saving || copyLoading || !!copyError || !!catalogError || !warehouseId || !items.length} onClick={send}>{saving ? 'Đang gửi…' : 'Gửi đặt hàng'}</Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>;
