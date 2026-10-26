@@ -4,6 +4,7 @@ type Row = Record<string, unknown> & { id: string };
 type Query = { table: string; columns: string; filters: Array<[string, unknown]>; orders: string[]; from: number; to: number; exact: boolean };
 const fake = vi.hoisted(() => ({
   rows: [] as Row[], queries: [] as Query[],
+  partners: [] as Row[],
   failOffset: -1, missingSettlement: false, changedCount: false,
 }));
 vi.mock("@/lib/services/supabase/base", () => ({
@@ -15,12 +16,13 @@ vi.mock("@/lib/services/supabase/base", () => ({
     const chain = {
       select(columns: string, options?: { count?: string }) { state.columns = columns; state.exact = options?.count === "exact"; return chain; },
       eq(key: string, value: unknown) { state.filters.push([key, value]); return chain; },
+      ilike(key: string, value: unknown) { state.filters.push([key, value]); return chain; },
       is(key: string, value: unknown) { state.filters.push([key, value]); return chain; },
       order(key: string) { state.orders.push(key); return chain; },
       range(from: number, to: number) { state.from = from; state.to = to; return chain; },
       then(resolve: (result: unknown) => unknown) {
         fake.queries.push({ ...state, filters: [...state.filters], orders: [...state.orders] });
-        if (table === "delivery_partners") return Promise.resolve({ data: [{ id: "partner", name: "Fixture" }], count: 1, error: null }).then(resolve);
+        if (table === "delivery_partners") return Promise.resolve({ data: fake.partners.slice(state.from, state.to + 1), count: fake.partners.length, error: null }).then(resolve);
         if (fake.missingSettlement && state.columns.includes("settlement_id")) return Promise.resolve({ data: null, error: { code: "42703", message: "Missing column" } }).then(resolve);
         if (state.from === fake.failOffset) return Promise.resolve({ data: null, error: { message: "Page unavailable" } }).then(resolve);
         return Promise.resolve({ data: fake.rows.slice(state.from, state.to + 1), count: fake.rows.length + (fake.changedCount && state.from > 0 ? 1 : 0), error: null }).then(resolve);
@@ -34,6 +36,7 @@ import { getDeliveryPartnersWithStats, getUnsettledShipments } from "@/lib/servi
 
 beforeEach(() => {
   fake.rows = []; fake.queries = []; fake.failOffset = -1;
+  fake.partners = [{ id: "partner", name: "Fixture" }];
   fake.missingSettlement = false; fake.changedCount = false;
 });
 
@@ -100,5 +103,24 @@ describe("COD complete read pagination", () => {
   it("keeps the schema hint for unsettled shipments instead of returning an empty selection", async () => {
     fake.missingSettlement = true;
     await expect(getUnsettledShipments("partner")).rejects.toThrow("migration 00301");
+  });
+
+  it("loads every partner for the full workspace with exact count and stable ordering", async () => {
+    fake.partners = Array.from({ length: 1001 }, (_, i) => ({ id: `partner-${i}`, name: "Fixture" }));
+    const result = await getDeliveryPartnersWithStats({ page: 0, pageSize: 100, fetchAll: true, search: "Fixture" });
+    expect(result.data).toHaveLength(1001);
+    const pages = fake.queries.filter(q => q.table === "delivery_partners");
+    expect(pages).toHaveLength(6);
+    for (const page of pages) {
+      expect(page.exact).toBe(true);
+      expect(page.orders).toEqual(["created_at", "id"]);
+      expect(page.filters).toEqual([["tenant_id", "tenant-fixture"], ["name", "%Fixture%"]]);
+    }
+  });
+
+  it.each([null, "", "bad", false, -1, Infinity])("rejects an invalid COD amount %s", async amount => {
+    fake.rows = [{ id: "invalid", partner_id: "partner", status: "delivered", settlement_id: null, cod_amount: amount, shipping_fee: 0 }];
+    await expect(getDeliveryPartnersWithStats({ page: 0, pageSize: 20 })).rejects.toThrow();
+    await expect(getUnsettledShipments("partner")).rejects.toThrow();
   });
 });

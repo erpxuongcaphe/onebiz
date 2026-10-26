@@ -367,12 +367,13 @@ const ACTIVE_SHIPPING_STATUSES = ["pending", "picked_up", "in_transit"];
 const FAILED_SHIPPING_STATUSES = ["returned", "cancelled"];
 
 export async function getDeliveryPartnersWithStats(
-  params: QueryParams,
+  params: QueryParams & { fetchAll?: boolean },
   scope?: { branchId?: string },
 ): Promise<
   QueryResult<DeliveryPartnerWithStats> & {
     /** Vận đơn CHƯA gán đối tác — hiện đang là toàn bộ, cần cho CEO biết. */
     unassigned: DeliveryPartnerStats;
+    settlementTracking: boolean;
   }
 > {
   const supabase = getClient();
@@ -412,13 +413,24 @@ export async function getDeliveryPartnersWithStats(
     return result;
   });
   let orders: StatsRow[];
+  let settlementTracking = true;
   try {
     orders = await readStats(false);
   } catch (error) {
     if ((error as { code?: string }).code !== "42703") throw error;
+    settlementTracking = false;
     orders = await readStats(true);
   }
-  const partnersResult = await getDeliveryPartners(params);
+  const partnersResult = params.fetchAll
+    ? await (async () => {
+      const rows = await readHistoryPages(async (offset, size) => {
+        let query = supabase.from("delivery_partners").select("*", { count: "exact" }).eq("tenant_id", tenantId);
+        if (params.search) query = query.ilike("name", `%${params.search}%`);
+        return await query.order("created_at", { ascending: false }).order("id", { ascending: false }).range(offset, offset + size - 1);
+      });
+      return { data: rows.map(mapDeliveryPartner), total: rows.length };
+    })()
+    : await getDeliveryPartners(params);
 
   const byPartner = new Map<string, DeliveryPartnerStats>();
   const unassigned: DeliveryPartnerStats = { ...EMPTY_STATS };
@@ -438,8 +450,8 @@ export async function getDeliveryPartnersWithStats(
       bucket.deliveredOrders += 1;
       // Chỉ đơn đã giao mà CHƯA đối soát mới là tiền đối tác đang giữ.
       if (!settled) {
-        bucket.codHolding += Number(row.cod_amount ?? 0);
-        bucket.feeCollected += Number(row.shipping_fee ?? 0);
+        bucket.codHolding += requireShippingAmount(row.cod_amount);
+        bucket.feeCollected += requireShippingAmount(row.shipping_fee);
       }
     } else if (FAILED_SHIPPING_STATUSES.includes(status)) {
       bucket.failedOrders += 1;
@@ -455,7 +467,17 @@ export async function getDeliveryPartnersWithStats(
     })),
     total: partnersResult.total,
     unassigned,
+    settlementTracking,
   };
+}
+
+function requireShippingAmount(value: unknown): number {
+  if ((typeof value !== "number" && typeof value !== "string") || (typeof value === "string" && !value.trim())) {
+    throw new Error("Vận đơn thiếu số tiền hợp lệ. Vui lòng kiểm tra chứng từ.");
+  }
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount < 0) throw new Error("Số tiền vận đơn không hợp lệ.");
+  return amount;
 }
 
 // --- Đối soát COD (00301, kiểu KiotViet) ---
@@ -469,7 +491,7 @@ export interface UnsettledShipment {
   invoiceCode: string;
   customerName: string;
   codAmount: number;
-  /** Thời điểm chuyển sang "đã giao" (updated_at — bảng không có cột riêng). */
+  /** Last update only; not a verified delivery timestamp or COD due date. */
   deliveredAt: string;
 }
 
@@ -523,7 +545,7 @@ export async function getUnsettledShipments(
     code: row.code,
     invoiceCode: row.invoices?.code ?? "—",
     customerName: row.invoices?.customer_name ?? "—",
-    codAmount: Number(row.cod_amount ?? 0),
+    codAmount: requireShippingAmount(row.cod_amount),
     deliveredAt: row.updated_at,
   }));
 }
