@@ -44,7 +44,7 @@ grant execute on function public.get_inventory_check_change_source(uuid) to auth
 create or replace function public._change_inventory_check(
  p_check_id uuid,p_action text,p_items jsonb,p_note text,p_reason text,p_source_version text,
  p_request_id uuid,p_preview_token text,p_apply boolean
-) returns jsonb language plpgsql security definer set search_path='' as $$
+) returns jsonb language plpgsql security definer set search_path='' set lock_timeout='100ms' as $$
 declare
  actor uuid:=auth.uid(); tenant uuid; c public.inventory_checks%rowtype; src jsonb; req jsonb; prior public.inventory_check_changes%rowtype;
  item_row record; x jsonb; lines jsonb:='[]'; state jsonb:='[]'; plan jsonb; token text; change_id uuid:=gen_random_uuid(); movement_id uuid;
@@ -57,7 +57,7 @@ begin
  if not public.user_has_permission(actor,'inventory.view') or not public.user_has_permission(actor,
    case when p_action='edit' then 'inventory.edit_check' else 'inventory.cancel_check' end)
  then raise exception 'INSUFFICIENT_PERMISSION' using errcode='42501'; end if;
- select * into c from public.inventory_checks where id=p_check_id and tenant_id=tenant for update;
+ select * into c from public.inventory_checks where id=p_check_id and tenant_id=tenant for update nowait;
  if not found then raise exception 'INVENTORY_CHECK_NOT_FOUND'; end if;
  if not public.user_has_branch_access(actor,c.branch_id) then raise exception 'BRANCH_ACCESS_DENIED' using errcode='42501'; end if;
  if p_request_id is null or length(trim(coalesce(p_reason,''))) not between 3 and 1000 or length(coalesce(p_note,''))>5000
@@ -87,9 +87,13 @@ begin
    exists(select 1 from jsonb_array_elements(p_items) v group by v->>'productId' having count(*)<>1) or
    exists(select 1 from jsonb_array_elements(p_items) v where not exists(select 1 from public.inventory_check_items i where i.check_id=c.id and i.product_id::text=v->>'productId'))
  ) then raise exception 'INVENTORY_CHECK_ITEMS_INVALID'; end if;
- -- Same global product lock used by stock-changing operations. Deterministic order.
+ -- Reject busy stock immediately instead of waiting while holding locks needed
+ -- by checkout/production. NOWAIT keeps this manual workflow out of their way.
  perform p.id from public.products p join public.inventory_check_items ci on ci.product_id=p.id
-   where ci.check_id=c.id and p.tenant_id=tenant order by p.id for update of p;
+   where ci.check_id=c.id and p.tenant_id=tenant order by p.id for update of p nowait;
+ perform pl.id from public.product_lots pl join public.inventory_check_items ci on ci.product_id=pl.product_id
+   where ci.check_id=c.id and pl.tenant_id=tenant and pl.branch_id=c.branch_id and pl.status in ('active','expired')
+   order by pl.product_id,pl.id for update of pl nowait;
  tracked:=public._fnb_branch_cost_tracking_enabled_00390(tenant,c.branch_id);
  if exists(select 1 from public.stock_movements sm where sm.tenant_id=tenant and sm.reference_type='inventory_check' and sm.reference_id=c.id
    and (sm.branch_id<>c.branch_id or not exists(select 1 from public.inventory_check_items ci where ci.check_id=c.id and ci.product_id=sm.product_id)))
@@ -110,12 +114,12 @@ begin
        and sm.product_id=item_row.product_id and sm.reference_type='inventory_check' and sm.reference_id=c.id;
    if abs(ledger_net-old_net)>0.0001 then raise exception 'INVENTORY_CHECK_LEDGER_MISMATCH'; end if;
    delta:=case when c.status<>'balanced' then 0 when p_action='cancel' then -old_net else round(actual-item_row.actual_stock,4) end;
-   perform 1 from public.branch_stock bs where bs.tenant_id=tenant and bs.branch_id=c.branch_id and bs.product_id=item_row.product_id and bs.variant_id is null for update;
+   perform 1 from public.branch_stock bs where bs.tenant_id=tenant and bs.branch_id=c.branch_id and bs.product_id=item_row.product_id and bs.variant_id is null for update nowait;
    select coalesce(sum(bs.quantity),0) into stock_qty from public.branch_stock bs where bs.tenant_id=tenant and bs.branch_id=c.branch_id and bs.product_id=item_row.product_id and bs.variant_id is null;
    global_qty:=coalesce(item_row.stock,0); wac:=coalesce(item_row.cost_price,0); cost_qty:=null; cost_total:=null; deficit_qty:=0; cost_known:=true; blocked:=null;
    if tracked then
      select b.unit_cost,b.costed_quantity,b.total_cost,coalesce(b.deficit_quantity,0) into wac,cost_qty,cost_total,deficit_qty from public.fnb_branch_product_cost_balances b
-       where b.tenant_id=tenant and b.branch_id=c.branch_id and b.product_id=item_row.product_id for update;
+       where b.tenant_id=tenant and b.branch_id=c.branch_id and b.product_id=item_row.product_id for update nowait;
      cost_known:=found and (cost_qty>0 or exists(select 1 from public.fnb_branch_product_cost_events e where e.tenant_id=tenant and e.branch_id=c.branch_id and e.product_id=item_row.product_id and e.direction='in')
        or exists(select 1 from public.fnb_branch_product_cost_balances b where b.tenant_id=tenant and b.branch_id=c.branch_id and b.product_id=item_row.product_id and b.opening_cost_confirmed));
    end if;

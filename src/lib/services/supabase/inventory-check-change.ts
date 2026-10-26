@@ -27,7 +27,8 @@ const messages:Record<string,string>={
   INVENTORY_CHECK_NOT_EDITABLE:'Phiếu đã hủy hoặc không còn ở trạng thái có thể sửa.',
 };
 async function call<T>(name:string,args:Record<string,unknown>):Promise<T>{
-  const {data,error}=await (getClient().rpc as unknown as (name:string,args:Record<string,unknown>)=>Promise<{data:T;error:{message:string}|null}>)(name,args);
+  const {data,error}=await (getClient().rpc as unknown as (name:string,args:Record<string,unknown>)=>Promise<{data:T;error:{message:string;code?:string}|null}>)(name,args);
+  if(error?.code==='55P03'||error?.code==='40P01') throw new Error('Kho đang có giao dịch. Chưa thay đổi số liệu; vui lòng xem trước và thử lại sau vài giây.');
   if(error) throw new Error(Object.entries(messages).find(([code])=>error.message.includes(code))?.[1] ?? error.message);
   if(!data) throw new Error('Máy chủ chưa xác nhận kết quả. Vui lòng thử lại cùng yêu cầu.');
   return data;
