@@ -3,9 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import type { DeliveryPartnerWithStats } from "@/lib/services/supabase/shipping";
 
-const fixture = vi.hoisted(() => ({ branch: "branch-a", user: "user-a", read: vi.fn(), csv: vi.fn(), toast: vi.fn() }));
+const fixture = vi.hoisted(() => ({ branch: "branch-a", user: "user-a", historyAllowed: true, read: vi.fn(), csv: vi.fn(), toast: vi.fn() }));
+vi.mock("next/dynamic", () => ({ default: () => () => <div>COD history fixture</div> }));
 vi.mock("@/lib/contexts", () => ({ useBranchFilter: () => ({ activeBranchId: fixture.branch, branchLabel: fixture.branch, isReady: true }), useToast: () => ({ toast: fixture.toast }) }));
-vi.mock("@/lib/contexts/auth-context", () => ({ useAuth: () => ({ user: { id: fixture.user }, tenant: { id: "tenant" }, hasPermission: () => true }) }));
+vi.mock("@/lib/contexts/auth-context", () => ({ useAuth: () => ({ user: { id: fixture.user }, tenant: { id: "tenant" }, hasPermission: (code: string) => code !== "finance.view_cash_book" || fixture.historyAllowed }) }));
 vi.mock("@/lib/services/supabase/shipping", () => ({ getDeliveryPartnersWithStats: fixture.read, deactivateDeliveryPartner: vi.fn() }));
 vi.mock("@/lib/utils/export", () => ({ exportToCsv: fixture.csv }));
 vi.mock("@/components/shared/dialogs", () => ({ CreateDeliveryPartnerDialog: () => null, ConfirmDialog: () => null, SettleCodDialog: () => null }));
@@ -21,10 +22,27 @@ function partner(id: string, amount = 50, status: "active" | "inactive" = "activ
   return { id, code: id, name: id, phone: "", status, statusName: status, activeOrders: 2, completedOrders: 1, createdAt: "2026-10-01T00:00:00Z", stats: { ...stats, codHolding: amount } };
 }
 const result = (data = [partner("Partner-a")]) => ({ data, total: data.length, unassigned: { ...stats, activeOrders: 3, codHolding: 25 }, settlementTracking: true });
-beforeEach(() => { fixture.branch = "branch-a"; fixture.user = "user-a"; fixture.read.mockReset().mockResolvedValue(result()); fixture.csv.mockReset(); fixture.toast.mockReset(); });
+beforeEach(() => { fixture.branch = "branch-a"; fixture.user = "user-a"; fixture.historyAllowed = true; fixture.read.mockReset().mockResolvedValue(result()); fixture.csv.mockReset(); fixture.toast.mockReset(); });
 afterEach(cleanup);
 
 describe("delivery partner complete workspace", () => {
+  it("uses one independently scrolling view instead of stacking two competing tables", async () => {
+    render(<Page />); await screen.findByText("Partner-a");
+    fireEvent.click(screen.getByRole("tab", { name: "Đối soát COD" }));
+    expect(screen.queryByText("Partner-a")).not.toBeInTheDocument();
+    expect(screen.getByRole("tabpanel", { name: "Đối soát COD" })).toHaveClass("min-h-0", "flex-1", "overflow-y-auto");
+    expect(screen.getByText("COD history fixture")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Xuất CSV" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: /^Đối tác$/ }));
+    expect(screen.getByText("Partner-a")).toBeInTheDocument();
+    expect(screen.queryByText("COD history fixture")).not.toBeInTheDocument();
+  });
+
+  it("does not offer financial history without its separate permission", async () => {
+    fixture.historyAllowed = false;
+    render(<Page />); await screen.findByText("Partner-a");
+    expect(screen.queryByRole("tab", { name: "Đối soát COD" })).not.toBeInTheDocument();
+  });
   it("includes unassigned shipment amounts and exports the same basis", async () => {
     render(<Page />);
     await screen.findByRole("button", { name: "Xuất CSV" });
