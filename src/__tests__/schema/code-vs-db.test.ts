@@ -47,8 +47,6 @@ const RPC = new Set(schema.rpc as string[]);
  * dưới sẽ BẮT XOÁ dòng ngay khi dump đã có (sau `node scripts/dump-db-schema.mjs`).
  */
 const RPC_CHO_MIGRATION = new Map<string, string>([
-  ["ops_library_assignments_preview", "20261026110000_operations_library_assignments.sql"],
-  ["ops_library_assignments_execute", "20261026110000_operations_library_assignments.sql"],
   ["get_my_auth_bootstrap", "202610250001_auth_bootstrap_snapshot.sql"],
   ["get_invoice_display_preferences_20261024", "202610240001_invoice_display_account_preferences.sql"],
   ["save_invoice_display_preferences_20261024", "202610240001_invoice_display_account_preferences.sql"],
