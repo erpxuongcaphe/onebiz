@@ -10,12 +10,22 @@
  *   T2/2026      | 80   | 100% | 40% | 28% | 18% | ...
  *   ...
  *
- * Insight kinh doanh:
- * - M1 retention < 20% → có vấn đề với onboarding/sản phẩm
- * - M3+ retention > 30% → loyal cohort, khả năng LTV cao
+ * Empty or immature cohorts are not evidence of low retention.
  */
 
 import { getClient, handleError } from "./base";
+import { z } from "zod";
+
+const numeric = z.preprocess(value => typeof value === "string" && value.trim() ? Number(value) : value, z.number().finite());
+const cohortSchema = z.object({
+  generated_at: z.string().datetime({ offset: true }),
+  months_tracked: numeric.pipe(z.number().int().min(1).max(24)),
+  rows: z.array(z.object({
+    cohort_month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+    label: z.string().min(1), size: numeric.pipe(z.number().int().nonnegative()),
+    retention: z.array(numeric.pipe(z.number().min(0).max(100))),
+  })),
+});
 
 export interface CohortRow {
   /** Tháng cohort (vd "2026-01") */
@@ -29,6 +39,7 @@ export interface CohortRow {
 }
 
 export interface CohortReportResult {
+  generatedAt: string;
   rows: CohortRow[];
   /** Số tháng cohort được track */
   monthsTracked: number;
@@ -50,35 +61,37 @@ export async function getCustomerCohortReport(options: {
   branchId?: string;
 } = {}): Promise<CohortReportResult> {
   const supabase = getClient();
-  const months = Math.min(24, Math.max(1, options.months ?? 6));
-  const { data, error } = await (supabase.rpc as any)(
-    "get_customer_cohort_report",
+  const requested = options.months ?? 6;
+  if (!Number.isSafeInteger(requested)) throw new Error("Số tháng theo dõi chưa hợp lệ.");
+  const months = Math.min(24, Math.max(1, requested));
+  const { data, error } = await supabase.rpc(
+    "get_customer_cohort_report" as never,
     {
       p_months: months,
       p_branch_id: options.branchId ?? null,
-    },
+    } as never,
   );
 
   if (error) handleError(error, "getCustomerCohortReport");
-  if (!data) throw new Error("Server did not return cohort report data.");
-
-  const raw = data as {
-    months_tracked?: number;
-    rows?: Array<{
-      cohort_month: string;
-      label: string;
-      size: number | string;
-      retention: Array<number | string>;
-    }>;
-  };
+  const parsed = cohortSchema.safeParse(data);
+  if (!parsed.success) throw new Error("Nguồn khách quay lại chưa đầy đủ. Vui lòng tải lại.");
+  const raw = parsed.data;
+  const monthIndex = (value: string) => Number(value.slice(0, 4)) * 12 + Number(value.slice(5)) - 1;
+  if (raw.months_tracked !== months || raw.rows.length !== months || raw.rows.some((row, index) =>
+    row.retention.length !== months - index ||
+    (index > 0 && monthIndex(row.cohort_month) !== monthIndex(raw.rows[index - 1].cohort_month) + 1) ||
+    (row.size > 0 ? row.retention[0] !== 100 : row.retention.some(value => value !== 0)))) {
+    throw new Error("Nhóm khách và kỳ theo dõi không khớp. Vui lòng tải lại.");
+  }
 
   return {
-    monthsTracked: Number(raw.months_tracked ?? months),
-    rows: (raw.rows ?? []).map((row) => ({
+    generatedAt: raw.generated_at,
+    monthsTracked: raw.months_tracked,
+    rows: raw.rows.map((row) => ({
       cohortMonth: row.cohort_month,
       label: row.label,
-      size: Number(row.size ?? 0),
-      retention: (row.retention ?? []).map(Number),
+      size: row.size,
+      retention: row.retention,
     })),
   };
 }

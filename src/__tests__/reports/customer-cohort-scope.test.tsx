@@ -15,7 +15,7 @@ vi.mock("@/components/shared/report", () => ({
 vi.mock("@/app/(main)/phan-tich/_components", () => ({ KpiCard: ({ label, value }: { label: string; value: string }) => <div>{label}: {value}</div> }));
 import CustomerCohortPage from "@/app/(main)/phan-tich/customer-cohort/page";
 
-const result = (label = "Cohort A") => ({ monthsTracked: 6, rows: [{ cohortMonth: "2026-10", label, size: 8, retention: [100, 25] }] });
+const result = (label = "Cohort A") => ({ generatedAt: "2026-12-01T00:00:00+07:00", monthsTracked: 6, rows: [{ cohortMonth: "2026-10", label, size: 8, retention: [100, 25] }] });
 beforeEach(() => { fake.branch = "a"; fake.actor = "one"; fake.allowed = true; fake.exportAllowed = true; fake.ready = true; fake.read.mockReset().mockResolvedValue(result()); fake.excel.mockReset(); });
 afterEach(cleanup);
 
@@ -59,5 +59,44 @@ describe("customer cohort scope integrity", () => {
   });
   it("hides both Excel actions when export rights are absent", async () => {
     fake.exportAllowed = false; render(<CustomerCohortPage />); await screen.findByText("Cohort A"); expect(screen.queryByRole("button", { name: /Excel/ })).not.toBeInTheDocument();
+  });
+  it("does not grade empty cohorts or export artificial zero retention", async () => {
+    fake.read.mockResolvedValue({ generatedAt: "2026-12-01T00:00:00+07:00", monthsTracked: 6, rows: [{ cohortMonth: "2026-10", label: "Empty", size: 0, retention: [0, 0] }] });
+    render(<CustomerCohortPage />); await screen.findByText("Empty");
+    expect(screen.getByRole("status")).toHaveTextContent("Chưa có nhóm khách lần đầu");
+    expect(screen.queryByText("Cần cải thiện")).not.toBeInTheDocument();
+    expect(screen.queryByText("Quay lại tháng kế: 0%")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Excel full" }));
+    const file = fake.excel.mock.calls[0][0]; const matrix = file.sheets[file.sheets.length - 1];
+    expect(matrix.rows[0]).toMatchObject({ size: 0, m0: null, m1: null });
+  });
+  it("excludes empty and immature cohorts but keeps genuine zero retention", async () => {
+    fake.read.mockResolvedValue({ generatedAt: "2026-12-01T00:00:00+07:00", monthsTracked: 6, rows: [
+      { cohortMonth: "2026-08", label: "Mature", size: 10, retention: [100, 0] },
+      { cohortMonth: "2026-09", label: "Empty", size: 0, retention: [0, 0] },
+      { cohortMonth: "2026-10", label: "Immature", size: 20, retention: [100] },
+    ] });
+    render(<CustomerCohortPage />); await screen.findByText("Mature");
+    expect(screen.getByText("Quay lại tháng kế: 0%")).toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.queryByText("Cần cải thiện")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Excel full" }));
+    const file = fake.excel.mock.calls[0][0]; const matrix = file.sheets[file.sheets.length - 1];
+    expect(matrix.rows[0].m1).toBe(0); expect(matrix.rows[1].m1).toBeNull(); expect(matrix.rows[2].m1).toBeNull();
+  });
+  it("does not average empty cohorts into a valid mature group's rate", async () => {
+    fake.read.mockResolvedValue({ generatedAt: "2026-12-01T00:00:00+07:00", monthsTracked: 6, rows: [
+      { cohortMonth: "2026-09", label: "Valid", size: 10, retention: [100, 40] },
+      { cohortMonth: "2026-10", label: "Empty", size: 0, retention: [0, 0] },
+    ] });
+    render(<CustomerCohortPage />); await screen.findByText("Valid"); expect(screen.getByText("Quay lại tháng kế: 40%")).toBeInTheDocument();
+  });
+  it("does not treat an in-progress next month as a completed observation", async () => {
+    fake.read.mockResolvedValue({ generatedAt: "2026-10-27T01:00:00+07:00", monthsTracked: 6, rows: [
+      { cohortMonth: "2026-09", label: "Next month open", size: 10, retention: [100, 40] },
+    ] });
+    render(<CustomerCohortPage />); await screen.findByText("Next month open");
+    expect(screen.getByRole("status")).toHaveTextContent("Chưa có nhóm khách đủ kỳ");
+    expect(screen.queryByText("Quay lại tháng kế: 40%")).not.toBeInTheDocument();
   });
 });

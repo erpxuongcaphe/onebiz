@@ -13,9 +13,17 @@ vi.mock('xlsx-js-style', async (importOriginal) => {
 });
 vi.mock('file-saver', () => ({ saveAs }));
 
-import { exportReportToExcel } from '@/lib/utils/excel-export';
+import { buildMetricSummarySheet, exportReportToExcel } from '@/lib/utils/excel-export';
 
 describe('Report workbook numeric precision', () => {
+  it('keeps an unavailable summary rate null while preserving a measured zero', () => {
+    const sheet = buildMetricSummarySheet({ metrics: [
+      { label: 'Unavailable', value: null, format: 'percent', note: 'Insufficient observation' },
+      { label: 'Observed zero', value: 0, format: 'percent' },
+    ] });
+    expect(sheet.rows[0]).toMatchObject({ percentValue: null, note: 'Insufficient observation' });
+    expect(sheet.rows[1]).toMatchObject({ percentValue: 0 });
+  });
   it('defaults quantities to four visible decimals while preserving full numeric values', async () => {
     write.mockClear();
     await exportReportToExcel({ kind: 'xuat-nhap-ton', mode: 'view', range: { from: '2026-10-01', to: '2026-10-06' }, sheets: [{
