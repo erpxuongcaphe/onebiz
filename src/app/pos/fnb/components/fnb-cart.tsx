@@ -87,9 +87,6 @@ interface FnbCartProps {
   ) => void;
   /** Day 21/05/2026: list shipper khả dụng (staff branch hiện tại). */
   deliveryStaffBusy?: boolean;
-  deliveryStaffLoading?: boolean;
-  deliveryStaffError?: boolean;
-  onRetryDeliveryStaff?: () => void;
   staffOptions?: { id: string; name: string }[];
   /** Day 21/05/2026: list tier config từ fnb_delivery_fee_tiers. */
   deliveryPolicySlot?: React.ReactNode;
@@ -219,9 +216,6 @@ export function FnbCart({
   onDeliveryTierChange,
   staffOptions,
   deliveryStaffBusy,
-  deliveryStaffLoading,
-  deliveryStaffError,
-  onRetryDeliveryStaff,
   selfDeliveryTiers,
   deliveryPolicySlot,
   discountPresets,
@@ -616,25 +610,20 @@ export function FnbCart({
                   </div>
                   <select
                     aria-label="Nhân viên giao"
-                    disabled={deliveryStaffBusy || deliveryStaffLoading || deliveryStaffError}
+                    disabled={deliveryStaffBusy}
                     value={activeTab.deliveryStaffId ?? ""}
                     onChange={(e) =>
                       onDeliveryStaffChange(e.target.value || undefined)
                     }
                     className="w-full min-h-11 px-2 text-sm rounded-md border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40"
                   >
-                    <option value="">{deliveryStaffLoading ? "Đang tải nhân viên…" : deliveryStaffError ? "Chưa tải được nhân viên" : "Chưa gán"}</option>
-                    {activeTab.deliveryStaffId && !staffOptions.some(s => s.id === activeTab.deliveryStaffId) && (
-                      <option value={activeTab.deliveryStaffId} disabled>Người đã gán · không còn trong danh sách hiện tại</option>
-                    )}
+                    <option value="">Chưa gán</option>
                     {staffOptions.map((s) => (
                       <option key={s.id} value={s.id}>
                         {s.name}
                       </option>
                     ))}
                   </select>
-                  {deliveryStaffError && <button type="button" onClick={onRetryDeliveryStaff} className="text-xs text-primary underline">Thử lại</button>}
-                  {!deliveryStaffLoading && !deliveryStaffError && staffOptions.length === 0 && <p className="text-xs text-muted-foreground">Chưa có nhân viên được phân công tại chi nhánh. Có thể gán sau.</p>}
                 </div>
               )}
             </div>
