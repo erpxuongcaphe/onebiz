@@ -3459,6 +3459,9 @@
   "fnb_complete_payment_timed_v1",
   "fnb_delivery_destination_20261020",
   "fnb_delivery_dispatch_20261020",
+  "list_fnb_delivery_staff_20261027",
+  "_fnb_delivery_staff_eligible_20261027",
+  "_guard_fnb_delivery_staff_20261027",
   "fnb_execute_cancel_request_00455",
   "fnb_floor_decoration_config_atomic",
   "fnb_floor_layout_update_atomic",
@@ -3900,5 +3903,5 @@
  ],
  "soBang": 238,
  "soCot": 2806,
- "soRpc": 612
+ "soRpc": 615
 }

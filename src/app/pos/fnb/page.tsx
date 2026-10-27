@@ -1,5 +1,6 @@
 "use client";
 import { billAuditHref } from "@/lib/operation-history-entry";
+import { useDeliveryStaff } from "./hooks/use-delivery-staff";
 import { useFnbTabReconciliation } from "@/lib/hooks/use-fnb-tab-reconciliation";
 
 import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from "react";
@@ -859,9 +860,8 @@ function FnbPosPageInner() {
   }, []);
 
   // Day 21/05/2026 (CEO): load shipper list + delivery fee tiers + count today
-  const [shipperOptions, setShipperOptions] = useState<
-    { id: string; name: string }[]
-  >([]);
+  const deliveryStaff = useDeliveryStaff(branchId, userId);
+  const shipperOptions = deliveryStaff.options;
   const [deliveryTiers, setDeliveryTiers] = useState<
     { code: "near" | "mid" | "far"; label: string; fee: number }[]
   >([]);
@@ -888,16 +888,8 @@ function FnbPosPageInner() {
     void (async () => {
       try {
         const services = await import("@/lib/services");
-        const [pinUsers, tiers] = await Promise.all([
-          services.listPosPinUsers(branchId),
-          services.getDeliveryFeeTiersForBranch(branchId),
-        ]);
+        const tiers = await services.getDeliveryFeeTiersForBranch(branchId);
         if (cancelled) return;
-        setShipperOptions(
-          pinUsers
-            .filter((u) => !u.isLocked)
-            .map((u) => ({ id: u.id, name: u.fullName })),
-        );
         setDeliveryTiers(
           tiers
             .filter((t) => t.tierCode !== undefined)
@@ -3929,6 +3921,9 @@ function FnbPosPageInner() {
           onDeliveryStaffChange={handleDeliveryStaffChange}
           onDeliveryTierChange={handleDeliveryTierChange}
           staffOptions={shipperOptions}
+          deliveryStaffLoading={deliveryStaff.loading}
+          deliveryStaffError={deliveryStaff.error}
+          onRetryDeliveryStaff={deliveryStaff.retry}
           deliveryStaffBusy={deliveryStaffSaving}
           selfDeliveryTiers={deliveryTiers}
           deliveryPolicySlot={deliveryPolicySlot}
@@ -4153,6 +4148,9 @@ function FnbPosPageInner() {
               onDeliveryStaffChange={handleDeliveryStaffChange}
               onDeliveryTierChange={handleDeliveryTierChange}
               staffOptions={shipperOptions}
+              deliveryStaffLoading={deliveryStaff.loading}
+              deliveryStaffError={deliveryStaff.error}
+              onRetryDeliveryStaff={deliveryStaff.retry}
               deliveryStaffBusy={deliveryStaffSaving}
               selfDeliveryTiers={deliveryTiers}
               deliveryPolicySlot={deliveryPolicySlot}

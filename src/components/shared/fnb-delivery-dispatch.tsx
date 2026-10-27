@@ -8,7 +8,7 @@ import { useAuth, useToast } from "@/lib/contexts";
 import { usePermissions } from "@/lib/permissions";
 import { requestPageLeave, useUnsavedWork } from "@/lib/hooks/use-unsaved-work";
 import { formatCurrency } from "@/lib/format";
-import { listPosPinUsers } from "@/lib/services/supabase/pos-pin";
+import { listFnbDeliveryStaff } from "@/lib/services/supabase/fnb-delivery-staff";
 import { assignDeliveryStaff, unassignDeliveryStaff, completeDelivery } from "@/lib/services/supabase/kitchen-orders";
 import { getDeliveryDispatch, saveDeliveryDestination, type DeliveryDispatchOrder, type DeliveryDispatchState } from "@/lib/services/supabase/fnb-delivery-dispatch";
 
@@ -32,8 +32,8 @@ export function FnbDeliveryDispatch() {
   useEffect(() => {
     if (!branchId) return;
     let cancelled = false;
-    Promise.all([getDeliveryDispatch(branchId, day, state, offset), canAssign ? listPosPinUsers(branchId) : Promise.resolve([])]).then(([rows, staff]) => {
-      if (!cancelled) setResult({ key, rows, staff: staff.filter(s => !s.isLocked).map(s => ({ id: s.id, name: s.fullName })) });
+    Promise.all([getDeliveryDispatch(branchId, day, state, offset), canAssign ? listFnbDeliveryStaff(branchId) : Promise.resolve([])]).then(([rows, staff]) => {
+      if (!cancelled) setResult({ key, rows, staff });
     }).catch(err => { if (!cancelled) setResult({ key, rows: [], staff: [], error: err instanceof Error ? err.message : "Không tải được đơn giao." }); });
     return () => { cancelled = true; };
   }, [branchId, day, state, offset, key, canAssign]);
