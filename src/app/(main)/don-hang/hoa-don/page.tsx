@@ -1086,10 +1086,10 @@ export default function HoaDonPage() {
             setPage(0);
           }}
           onExport={txPerms.canExport ? {items:[
-            {label:"Excel — tất cả theo bộ lọc",hint:"Xuất toàn bộ kết quả, không chỉ trang đang xem",onClick:()=>void invoiceExport.start("excel")},
-            {label:"CSV — tất cả theo bộ lọc",hint:"Xuất toàn bộ kết quả, không chỉ trang đang xem",onClick:()=>void invoiceExport.start("csv")},
-            {label:`Excel — trang ${page+1} đang xem`,hint:`Chỉ ${data.length} chứng từ trên trang này, đủ chi tiết hàng`,onClick:()=>void invoiceExport.start("excel","page")},
-            {label:`CSV — trang ${page+1} đang xem`,hint:`Chỉ ${data.length} chứng từ trên trang này`,onClick:()=>void invoiceExport.start("csv","page")},
+            {label:"Excel — theo bộ lọc",hint:"Xuất toàn bộ kết quả, không chỉ trang đang xem",onClick:()=>void invoiceExport.start("excel")},
+            {label:"CSV — theo bộ lọc",hint:"Xuất toàn bộ kết quả, không chỉ trang đang xem",onClick:()=>void invoiceExport.start("csv")},
+            {label:`Excel — trang ${page+1}`,hint:`Chỉ ${data.length} chứng từ trên trang đang xem, đủ chi tiết hàng`,onClick:()=>void invoiceExport.start("excel","page")},
+            {label:`CSV — trang ${page+1}`,hint:`Chỉ ${data.length} chứng từ trên trang đang xem`,onClick:()=>void invoiceExport.start("csv","page")},
           ]} : undefined}
           actions={[
             {

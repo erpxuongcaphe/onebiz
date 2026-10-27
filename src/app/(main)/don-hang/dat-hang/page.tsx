@@ -1060,10 +1060,10 @@ export default function DatHangPage() {
           setPage(0);
         }}
         onExport={txPerms.canExport?{items:[
-          {label:'Excel — tất cả theo bộ lọc',hint:'Tất cả các trang, đủ chi tiết hàng và bảng theo khách',onClick:()=>void handleExport('excel')},
-          {label:`Excel — trang ${page+1} đang xem`,hint:`Chỉ ${data.length} đơn trên trang này, đủ chi tiết hàng`,onClick:()=>void handleExport('excel',undefined,'page')},
-          {label:'CSV — tất cả theo bộ lọc',hint:'Mỗi dòng là một mã hàng đặt',onClick:()=>void handleExport('csv')},
-          {label:`CSV — trang ${page+1} đang xem`,hint:'Chỉ các đơn trên trang này',onClick:()=>void handleExport('csv',undefined,'page')},
+          {label:'Excel — theo bộ lọc',hint:'Tất cả các trang, đủ chi tiết hàng và bảng theo khách',onClick:()=>void handleExport('excel')},
+          {label:`Excel — trang ${page+1}`,hint:`Chỉ ${data.length} đơn trên trang đang xem, đủ chi tiết hàng`,onClick:()=>void handleExport('excel',undefined,'page')},
+          {label:'CSV — theo bộ lọc',hint:'Tất cả các trang; mỗi dòng là một mã hàng đặt',onClick:()=>void handleExport('csv')},
+          {label:`CSV — trang ${page+1}`,hint:'Chỉ các đơn trên trang đang xem',onClick:()=>void handleExport('csv',undefined,'page')},
         ]}:undefined}
         actions={[
           {
