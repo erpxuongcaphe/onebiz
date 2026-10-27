@@ -113,7 +113,7 @@ export function ChangeInventoryCheckDialog({target,onClose,onSuccess}:Props){
         <Button variant="outline" className="min-h-[40px] xl:min-h-0 [@media(any-pointer:coarse)]:min-h-[40px]" disabled={busy} onClick={onClose}>Đóng</Button>
         {preview?<div className="flex flex-wrap justify-end gap-2">
           {!uncertain&&<Button variant="outline" className="min-h-[40px] xl:min-h-0 [@media(any-pointer:coarse)]:min-h-[40px]" disabled={busy} onClick={()=>{invalidate();resetScroll();}}>Sửa lại</Button>}
-          <Button className="min-h-[40px] xl:min-h-0 [@media(any-pointer:coarse)]:min-h-[40px]" variant={target?.action==='cancel'?'destructive':'default'} disabled={busy||!validBranch||!preview.canApply} onClick={confirm}>{busy?'Đang xử lý…':uncertain?'Kiểm tra lại kết quả':target?.action==='cancel'?'Hủy & hoàn kho':'Lưu điều chỉnh'}</Button>
+          <Button className={`min-h-[40px] xl:min-h-0 [@media(any-pointer:coarse)]:min-h-[40px] ${target?.action==='cancel'?'dark:bg-red-600 dark:text-white dark:hover:bg-red-700':''}`} variant={target?.action==='cancel'?'destructive':'default'} disabled={busy||!validBranch||!preview.canApply} onClick={confirm}>{busy?'Đang xử lý…':uncertain?'Kiểm tra lại kết quả':target?.action==='cancel'?'Hủy & hoàn kho':'Lưu điều chỉnh'}</Button>
         </div>:<Button className="min-h-[40px] xl:min-h-0 [@media(any-pointer:coarse)]:min-h-[40px]" disabled={loading||busy||!canInspect} onClick={inspect}>{busy?'Đang tính…':'Xem trước chênh lệch'}</Button>}
       </DialogFooter>
     </DialogContent>
