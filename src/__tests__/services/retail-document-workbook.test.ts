@@ -2,7 +2,7 @@ import {beforeEach,describe,expect,it,vi} from 'vitest';
 import * as XLSX from 'xlsx';
 import type {Invoice} from '@/lib/types';
 import type {OrderExportLine} from '@/lib/services/supabase/order-management-reads';
-import {buildRetailDocumentExport,buildRetailDocumentSheets,retailDocumentExportRange,retailDocumentExportScopeText} from '@/lib/utils/retail-document-export';
+import {buildRetailDocumentExport,buildRetailDocumentSheets,retailDocumentExportRange,retailDocumentExportScopeText,retailDocumentStatusLabel} from '@/lib/utils/retail-document-export';
 import {exportReportToExcel} from '@/lib/utils/excel-export';
 const mock=vi.hoisted(()=>({save:vi.fn()}));
 vi.mock('file-saver',()=>({saveAs:mock.save,default:mock.save}));
@@ -10,6 +10,11 @@ const invoice=(id='i',customerId='c',status:Invoice['status']='completed')=>({id
 const line=(invoice_id='i')=>({id:'line-'+invoice_id,invoice_id,products:{code:'SKU-THU'},product_name:'Hàng thử',unit:'Kg',quantity:.12345,unit_price:24000,discount:0,total:2962.8,note:'=ghi chú nguyên văn'} as OrderExportLine);
 beforeEach(()=>vi.clearAllMocks());
 describe('Retail document export workbook',()=>{
+ it('distinguishes unfinished Retail drafts consistently without changing F&B status labels',()=>{
+  expect(retailDocumentStatusLabel({...invoice(),code:'NH000412',status:'processing'})).toBe('Nháp · chưa xuất');
+  expect(retailDocumentStatusLabel({...invoice(),code:'NH000412',status:'completed'})).toBe('Hoàn thành');
+  expect(retailDocumentStatusLabel({...invoice(),code:'NH000412',status:'processing',source:'fnb'})).toBe('Đang xử lý');
+ });
  it('uses the min/max business dates even when the UI is sorted newest first',()=>{
   expect(retailDocumentExportRange([{...invoice('1'),date:'2026-10-27T03:00:00Z'},{...invoice('2'),date:'2026-10-18T18:00:00Z'}],{})).toEqual({from:'2026-10-19',to:'2026-10-27'});
   expect(retailDocumentExportScopeText({search:'Tư Búa',filters:{status:['processing'],retailSaleType:'internal'}})).toBe('Trạng thái: Đang xử lý · Tìm kiếm: Tư Búa · Loại bán: Bán nội bộ');

@@ -43,6 +43,9 @@ export const customerDocumentExportColumns=[
   {header:'Đã thanh toán trong file',key:'paid',width:24},
 ];
 const labels:Record<string,string>={draft:'Nháp',processing:'Đang xử lý',confirmed:'Đã xác nhận',completed:'Hoàn thành',cancelled:'Đã hủy',delivery_failed:'Giao thất bại'};
+export function retailDocumentStatusLabel(row:Pick<Invoice,'code'|'status'|'source'>){
+  return row.source!=='fnb'&&row.status==='processing'&&row.code.startsWith('NH')?'Nháp · chưa xuất':labels[row.status]??row.status;
+}
 function number(value:unknown){const n=Number(value);if(!Number.isFinite(n))throw new Error('Dữ liệu số trên chứng từ chưa hợp lệ, chưa tạo file.');return n;}
 
 export function retailDocumentExportRange(invoices:readonly Invoice[],query:InvoiceExportQuery){
@@ -71,7 +74,7 @@ export function retailDocumentExportScopeText(query:InvoiceExportQuery){
 
 /** Three distinct grains: one row per document, per item, and per customer. */
 export function buildRetailDocumentExport(invoices:readonly Invoice[],lines:readonly RetailExportLine[]) {
-  const summaries=invoices.map(row=>({...row,statusLabel:row.status==='processing'&&row.code.startsWith('NH')?'Nháp · chưa xuất':labels[row.status]??row.status,saleTypeLabel:row.source==='internal'||row.retailSaleType==='internal'?'Bán nội bộ':row.retailSaleType==='delivery'?'Giao hàng':'Bán thường'}));
+  const summaries=invoices.map(row=>({...row,statusLabel:retailDocumentStatusLabel(row),saleTypeLabel:row.source==='internal'||row.retailSaleType==='internal'?'Bán nội bộ':row.retailSaleType==='delivery'?'Giao hàng':'Bán thường'}));
   const byId=new Map(summaries.map(row=>[row.id,row]));
   const details=lines.map(line=>{
     const invoice=byId.get(line.invoice_id);

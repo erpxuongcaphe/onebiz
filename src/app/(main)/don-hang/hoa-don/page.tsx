@@ -78,7 +78,7 @@ import { buildTransactionRowActions } from "@/components/shared/transaction-row-
 import { useTxRowPermissions, usePermissions } from "@/lib/permissions";
 import { formatCurrency, formatDate, formatNumber, formatUser } from "@/lib/format";
 import { readSelectedInvoiceExport, readRetailDocumentExportLines } from "@/lib/services/supabase/retail-document-export";
-import { buildRetailDocumentSheets, retailDocumentExportRange } from "@/lib/utils/retail-document-export";
+import { buildRetailDocumentSheets, retailDocumentExportRange, retailDocumentStatusLabel } from "@/lib/utils/retail-document-export";
 import { exportReportToExcel } from "@/lib/utils/excel-export";
 import { exportToExcel } from "@/lib/utils/export";
 import {
@@ -161,7 +161,7 @@ function InvoiceDetail({
   /** Gọi khi data hóa đơn đổi (vd gắn vận đơn làm tổng tiền đổi) → refetch list. */
   onDataChanged?: () => void;
 }) {
-  const status = statusMap[invoice.status];
+  const status = {...statusMap[invoice.status],label:retailDocumentStatusLabel(invoice)};
   const { toast } = useToast();
 
   // Lazy fetch line items thay vì hardcode "Sản phẩm mẫu" (P0 audit fix).
@@ -1018,7 +1018,7 @@ export default function HoaDonPage() {
     },
     {
       id: "invoiceStatus", header: "Trạng thái", enableSorting: false,
-      cell: ({row}) => <Badge variant={statusMap[row.original.status]?.variant ?? "secondary"}>{row.original.status==="processing"&&row.original.code.startsWith("NH")?"Nháp · chưa xuất":statusMap[row.original.status]?.label ?? row.original.status}</Badge>,
+      cell: ({row}) => <Badge variant={statusMap[row.original.status]?.variant ?? "secondary"}>{retailDocumentStatusLabel(row.original)}</Badge>,
     },
     {
       accessorKey: "debt",
@@ -1108,7 +1108,7 @@ export default function HoaDonPage() {
           key={isFnbBranch ? "fnb-invoices" : "erp-invoices"}
           compactMobileToolbar
           fitDetailToViewport
-          renderMobileRow={invoice=><InvoiceMobileRow invoice={invoice} statusLabel={statusMap[invoice.status]?.label??invoice.status}/>}
+          renderMobileRow={invoice=><div className="min-w-0 space-y-1"><InvoiceMobileRow invoice={invoice} statusLabel={retailDocumentStatusLabel(invoice)}/>{invoice.sourceOrderCode&&<p className="text-xs text-muted-foreground">Đặt hàng: {invoice.sourceOrderCode}</p>}</div>}
 
           defaultColumnVisibility={isFnbBranch ? {star: false, returnCode: false, customerCode: false, discount: false, debt: false} : {paid: false, invoiceStatus: false}}
           columns={columns}
