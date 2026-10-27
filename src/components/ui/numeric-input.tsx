@@ -82,6 +82,15 @@ export function NumericInput({
 
   const [text, setText] = React.useState<string>(() => formatForDisplay(value));
   const focusedRef = React.useRef(false);
+  const pendingFocusSelection = React.useRef<HTMLInputElement | null>(null);
+  // Formatting "1,620" to "1620" replaces the DOM value and collapses an
+  // earlier select(). Restore the intended selection after that render only;
+  // never select again while the user is typing.
+  React.useLayoutEffect(() => {
+    const input = pendingFocusSelection.current;
+    pendingFocusSelection.current = null;
+    if (input && document.activeElement === input) input.select();
+  }, [text]);
 
   // Sync external value → text khi parent thay đổi (vd reset form). Chỉ
   // update khi không focus (tránh ghi đè input của user đang gõ).
@@ -117,7 +126,9 @@ export function NumericInput({
     focusedRef.current = true;
     // Convert formatted "1,234,567.89" → raw "1234567.89" để dễ edit
     if (value !== null && value !== undefined && Number.isFinite(value)) {
-      setText(String(value));
+      const raw = String(value);
+      if (raw !== text) pendingFocusSelection.current = e.currentTarget;
+      setText(raw);
     }
     // Select all → cashier dễ replace
     e.target.select();
@@ -126,6 +137,7 @@ export function NumericInput({
 
   const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
     focusedRef.current = false;
+    pendingFocusSelection.current = null;
     if (text === "" || text === "-") {
       onChange(null);
       setText("");
