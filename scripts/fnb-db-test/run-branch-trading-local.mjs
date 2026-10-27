@@ -1,0 +1,57 @@
+import { pathToFileURL } from 'node:url';
+import path from 'node:path';
+const { PGlite } = await import(process.argv[2] ? pathToFileURL(path.resolve(process.argv[2])).href : '@electric-sql/pglite');
+import { readFileSync,writeFileSync } from 'node:fs';
+import assert from 'node:assert/strict';
+const db=new PGlite();const id=n=>`00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
+const [tenant,actor,a,b,c,p,q,retail,other]=[1,2,3,4,5,6,7,8,9].map(id);
+await db.exec(`create role anon;create role authenticated;create role service_role;create schema auth;create schema extensions;
+create function auth.uid() returns uuid language sql as $$select current_setting('test.actor',true)::uuid$$;
+create function get_user_tenant_id() returns uuid language sql as $$select '00000000-0000-0000-0000-000000000001'::uuid$$;
+create function user_has_permission(uuid,text) returns boolean language sql as $$select coalesce(current_setting('test.permission',true),'yes')='yes'$$;
+create function user_has_branch_access(uuid,uuid) returns boolean language sql as $$select $2::text<>coalesce(current_setting('test.denied',true),'')$$;
+create table profiles(id uuid primary key,tenant_id uuid,is_active boolean);
+create table branches(id uuid primary key,tenant_id uuid,is_active boolean,cascade_mode text,branch_type text);
+create table products(id uuid primary key,tenant_id uuid,is_active boolean,product_type text,channel text,code text,name text,updated_at timestamptz);
+create table fnb_product_branch_menu_policies(id uuid default gen_random_uuid(),tenant_id uuid,product_id uuid unique,mode text check(mode in ('only','except')));
+create table fnb_product_branch_menu_scopes(id uuid default gen_random_uuid(),tenant_id uuid,product_id uuid,branch_id uuid,unique(product_id,branch_id));
+create table audit_log(id uuid default gen_random_uuid(),tenant_id uuid,user_id uuid,action text,entity_type text,entity_id uuid,old_data jsonb,new_data jsonb);
+insert into profiles values('${actor}','${tenant}',true);
+insert into branches values('${a}','${tenant}',true,'outlet','store'),('${b}','${tenant}',true,'outlet','store'),('${c}','${tenant}',true,'outlet','store');
+insert into products values('${p}','${tenant}',true,'sku','fnb','P','Coffee',null),('${q}','${tenant}',true,'sku','fnb','Q','Tea',null),('${retail}','${tenant}',true,'sku','retail','R','Retail',null),('${other}','${id(99)}',true,'sku','fnb','X','Other',null);
+set test.actor='${actor}';set test.permission='yes';`);
+const original=readFileSync('supabase/migrations/00354_fnb_branch_menu_exclusions.sql','utf8');
+const start=original.indexOf('create or replace function public.save_fnb_product_branch_menu_policy(');
+await db.exec(original.slice(start,original.indexOf('$function$;',start)+11));
+function installGuard(file,name,table) {
+ const text=readFileSync(file,'utf8');const start=text.indexOf('create or replace function public.'+name+'(');
+ assert(start>=0,name);const end=text.indexOf('$function$;',start)+11;
+ return db.exec(text.slice(start,end)+`\ncreate trigger test_${name} before insert or update on ${table} for each row execute function public.${name}();`);
+}
+await installGuard('supabase/migrations/00353_fnb_branch_menu_isolation.sql','enforce_fnb_product_branch_menu_scope_00353','fnb_product_branch_menu_scopes');
+await installGuard('supabase/migrations/00354_fnb_branch_menu_exclusions.sql','enforce_fnb_product_branch_menu_policy_00354','fnb_product_branch_menu_policies');
+
+await db.exec(readFileSync('supabase/migrations/00559_product_trading_status.sql','utf8'));
+await db.exec(readFileSync('supabase/migrations/202610250100_fnb_branch_trading_status.sql','utf8'));
+const baseline=(await db.query("select * from products where channel='fnb' order by id")).rows;
+const results=[];const run=async(name,fn)=>{await fn();results.push({name,passed:true});};
+const toggle=(ids,active,branch=a)=>db.query('select set_fnb_branch_trading_status_20261025($1::uuid[],$2,$3::uuid) n',[ids,active,branch]);
+const visible=async(product,branch)=>(await db.query(`select case (select mode from fnb_product_branch_menu_policies where product_id=$1) when 'only' then exists(select 1 from fnb_product_branch_menu_scopes where product_id=$1 and branch_id=$2) when 'except' then not exists(select 1 from fnb_product_branch_menu_scopes where product_id=$1 and branch_id=$2) else true end v`,[product,branch])).rows[0].v;
+await run('off A preserves B and C',async()=>{await toggle([p],false);assert.equal(await visible(p,a),false);assert.equal(await visible(p,b),true);assert.equal(await visible(p,c),true);});
+await run('idempotent duplicate IDs',async()=>{assert.equal((await toggle([p,p],false)).rows[0].n,0);assert.equal((await db.query('select count(*)::int n from audit_log')).rows[0].n,1);});
+await run('on A preserves exclusion B',async()=>{await toggle([p],false,b);await toggle([p],true);assert.equal(await visible(p,a),true);assert.equal(await visible(p,b),false);});
+await run('last whitelist off also blocks future outlet',async()=>{await db.query('select save_fnb_product_branch_menu_policy($1,$2,$3)',[q,'only',[a]]);await toggle([q],false);for(const branch of [a,b,c,id(555)])assert.equal(await visible(q,branch),false);});
+await run('empty whitelist on B opens only B',async()=>{await toggle([q],true,b);assert.equal(await visible(q,a),false);assert.equal(await visible(q,b),true);assert.equal(await visible(q,c),false);});
+await run('bulk rejects missing, Retail and other tenant without partial writes',async()=>{for(const ids of [[p,id(444)],[p,retail],[p,other]]){await assert.rejects(toggle(ids,false));assert.equal(await visible(p,a),true);}});
+await run('bulk affects selected branch only',async()=>{await toggle([p,q],false,c);assert.equal(await visible(p,c),false);assert.equal(await visible(q,c),false);assert.equal(await visible(p,a),true);assert.equal(await visible(q,b),true);});
+await run('branch permission enforced',async()=>{await db.exec(`set test.denied='${a}'`);await assert.rejects(toggle([p],false));await db.exec(`set test.denied=''`);});
+await run('edit permission enforced',async()=>{await db.exec(`set test.permission='no'`);await assert.rejects(toggle([p],false));await db.exec(`set test.permission='yes'`);});
+await run('disabled profile denied',async()=>{await db.exec('update profiles set is_active=false');await assert.rejects(toggle([p],false));await db.exec('update profiles set is_active=true');});
+await run('globally stopped product cannot be silently reactivated',async()=>{await db.query('update products set is_active=false where id=$1',[q]);await assert.rejects(toggle([p,q],true));assert.equal(await visible(q,a),false);await db.query('update products set is_active=true where id=$1',[q]);});
+await run('old browser cannot globally change FnB',async()=>{await assert.rejects(db.query('select set_product_trading_status_00559($1,false)',[[p,retail]]));assert.equal((await db.query('select is_active from products where id=$1',[retail])).rows[0].is_active,true);});
+await run('Retail behavior unchanged',async()=>{await db.query('select set_product_trading_status_00559($1,false)',[[retail]]);assert.equal((await db.query('select is_active from products where id=$1',[retail])).rows[0].is_active,false);});
+await run('empty/null requests rejected',async()=>{await assert.rejects(toggle([],false));await assert.rejects(toggle([null],false));await assert.rejects(toggle([p],null));});
+await run('FnB global records unchanged',async()=>assert.deepEqual((await db.query("select * from products where channel='fnb' order by id")).rows,baseline));
+await run('private implementations inaccessible',async()=>assert.deepEqual((await db.query("select has_function_privilege('authenticated','_save_fnb_menu_policy_impl_20261025(uuid,text,uuid[])','execute') a,has_function_privilege('authenticated','_set_product_trading_status_impl_20261025(uuid[],boolean)','execute') b,has_function_privilege('anon','set_fnb_branch_trading_status_20261025(uuid[],boolean,uuid)','execute') c")).rows[0],{a:false,b:false,c:false}));
+console.log(JSON.stringify({passed:results.length,results},null,2));await db.close();
+

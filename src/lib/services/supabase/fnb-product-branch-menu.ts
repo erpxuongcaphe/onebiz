@@ -9,6 +9,7 @@
  */
 
 import { getClient, getCurrentTenantId, handleError } from "./base";
+import { readHistoryPages } from "./read-history-pages";
 
 export interface FnbProductBranchMenuScope {
   productId: string;
@@ -49,36 +50,32 @@ export async function listFnbProductBranchMenuScopes(
   // local until Supabase generated types are refreshed from production.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = getClient() as any;
-  const [scopeResponse, policyResponse] = await Promise.all([
-    supabase
-      .from("fnb_product_branch_menu_scopes")
-      .select("product_id, branch_id")
-      .eq("tenant_id", tenantId),
-    supabase
-      .from("fnb_product_branch_menu_policies")
-      .select("product_id, mode")
-      .eq("tenant_id", tenantId),
+  const [scopeRows, policyRows] = await Promise.all([
+    readHistoryPages<{ id: string; product_id: string; branch_id: string }>((offset, size) => supabase
+      .from("fnb_product_branch_menu_scopes").select("id, product_id, branch_id", { count: "exact" })
+      .eq("tenant_id", tenantId).order("id").range(offset, offset + size - 1)),
+    readHistoryPages<{ id: string; product_id: string; mode: string }>((offset, size) => supabase
+      .from("fnb_product_branch_menu_policies").select("id, product_id, mode", { count: "exact" })
+      .eq("tenant_id", tenantId).order("id").range(offset, offset + size - 1)),
   ]);
 
-  if (scopeResponse.error) {
-    handleError(scopeResponse.error, "listFnbProductBranchMenuScopes");
-  }
-  if (policyResponse.error) {
-    handleError(policyResponse.error, "listFnbProductBranchMenuPolicies");
-  }
-
   const modeByProduct = new Map<string, FnbProductBranchMenuMode>(
-    (policyResponse.data ?? []).map((row: Record<string, unknown>) => [
+    policyRows.map((row: Record<string, unknown>) => [
       String(row.product_id),
       row.mode === "except" ? "except" : "only",
     ]),
   );
 
-  return (scopeResponse.data ?? []).map((row: Record<string, unknown>) =>
-    // A row written by 00353 before 00354 is interpreted as its original
-    // whitelist until the 00354 policy backfill has run.
-    mapScope(row, modeByProduct.get(String(row.product_id)) ?? "only"),
-  );
+  const scopes = scopeRows.map((row) => mapScope(row, modeByProduct.get(row.product_id) ?? "only"));
+  // An explicit empty whitelist means no outlet, not the legacy default "all".
+  // Empty branch ID is an in-memory marker only; it is never written to SQL.
+  const productsWithScopes = new Set(scopeRows.map(row => row.product_id));
+  for (const policy of policyRows) {
+    if (policy.mode === "only" && !productsWithScopes.has(policy.product_id)) {
+      scopes.push({ productId: policy.product_id, branchId: "", mode: "only" });
+    }
+  }
+  return scopes;
 }
 
 export async function getFnbProductBranchMenuPolicy(
@@ -92,7 +89,7 @@ export async function getFnbProductBranchMenuPolicy(
   }
   return {
     mode: productScopes[0].mode,
-    branchIds: productScopes.map((scope) => scope.branchId),
+    branchIds: productScopes.map((scope) => scope.branchId).filter(Boolean),
   };
 }
 
@@ -161,4 +158,11 @@ export function getFnbMenuScopeFingerprint(
     .map((scope) => `${scope.mode}:${scope.productId}:${scope.branchId}`)
     .sort()
     .join("|");
+}
+
+/** All menu-policy exclusions for one branch, before pagination/search/count. */
+export function getFnbUnavailableProductIds(scopes: FnbProductBranchMenuScope[], branchId: string): string[] {
+  const products = [...new Set(scopes.map(scope => scope.productId))].map(id => ({ id }));
+  const allowed = new Set(filterFnbProductsForBranch(products, scopes, branchId).map(product => product.id));
+  return products.filter(product => !allowed.has(product.id)).map(product => product.id);
 }

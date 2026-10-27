@@ -549,7 +549,11 @@ export default function HangHoaPage() {
     "reports.view_all_branches",
   ]);
   const canDeleteProduct = hasPermission(PERMISSIONS.PRODUCTS_DELETE);
-  const canEditTrading = hasPermission(PERMISSIONS.PRODUCTS_EDIT);
+  const tradingScopeKey = `${branchStockView ? activeBranchId : "all"}:${catalogChannel ?? "all"}`;
+  const liveTradingScope = useRef(tradingScopeKey);
+  liveTradingScope.current = tradingScopeKey;
+  const loadedTradingScope = useRef<string | null>(null);
+  const canEditTrading = hasPermission(PERMISSIONS.PRODUCTS_EDIT) && loadedTradingScope.current === tradingScopeKey;
   const tradingLock = useRef(false);
   const [tradingBusy, setTradingBusy] = useState(false);
   // Sprint A.2 (CEO 12/05): cashier KHÔNG được thấy giá vốn / lợi nhuận
@@ -576,6 +580,11 @@ export default function HangHoaPage() {
     : selectedRowsForBulk.length;
   const [bulkLoading, setBulkLoading] = useState(false);
   const [clearSelectionToken, setClearSelectionToken] = useState(0);
+  useEffect(() => {
+    setSelectedRowsForBulk([]);
+    setSelectedIdsForBulk([]);
+    setClearSelectionToken(n => n + 1);
+  }, [activeBranchId, viewAllBranches, scope]);
 
   // Dialog form state
   const [bulkCategoryValue, setBulkCategoryValue] = useState<string>("");
@@ -727,6 +736,7 @@ export default function HangHoaPage() {
       result.total = allRows.length;
     }
     if (requestId !== listRequestId.current) return;
+    loadedTradingScope.current = `${query.branchId ?? "all"}:${catalogChannel ?? "all"}`;
     setData(result.data);
     setTotal(result.total);
     setPreparedCosts(new Map());
@@ -936,12 +946,20 @@ export default function HangHoaPage() {
 
   const changeTradingStatus = async (ids: string[], active: boolean) => {
     if (!canEditTrading || tradingLock.current || !ids.length) return;
+    const operationScope = tradingScopeKey;
     tradingLock.current = true; setTradingBusy(true);
     try {
-      const count = await setProductTradingStatus(ids, active);
-      await finishBulkSuccess(active ? "Đã bật kinh doanh" : "Đã ngừng kinh doanh",
-        `${count} mã thay đổi · áp dụng toàn hệ thống. Tồn kho và chứng từ giữ nguyên.`);
-      await fetchStats();
+      const count = await setProductTradingStatus(ids, active, isFnbOutletView && catalogChannel === "fnb" ? activeBranchId ?? undefined : undefined);
+      const title = active ? "Đã bật kinh doanh" : "Đã ngừng kinh doanh";
+      const description = isFnbOutletView && catalogChannel === "fnb"
+        ? `${count} món · chỉ tại ${currentBranch?.name}. Tồn kho và chứng từ giữ nguyên.`
+        : `${count} mã thay đổi · áp dụng toàn hệ thống. Tồn kho và chứng từ giữ nguyên.`;
+      if (liveTradingScope.current === operationScope) {
+        await finishBulkSuccess(title, description);
+        await fetchStats();
+      } else {
+        toast({ variant: "success", title, description });
+      }
     } catch (err) { finishBulkError("Chưa đổi được trạng thái", err); }
     finally { tradingLock.current = false; setTradingBusy(false); }
   };
@@ -1893,11 +1911,11 @@ export default function HangHoaPage() {
     enableSorting: false,
     cell: ({ row }) => (
       <div className="flex items-center gap-1" onClick={(event) => event.stopPropagation()}
-        title="Trạng thái kinh doanh toàn hệ thống">
+        title={isFnbOutletView && catalogChannel === "fnb" ? `Chỉ áp dụng tại ${currentBranch?.name}` : "Trạng thái mã hàng toàn hệ thống; món F&B cần chọn một quán"}>
         <SettingsSwitch
-          label={(row.original.status === "inactive" ? "Bật" : "Ngừng") + " kinh doanh " + row.original.name + " · toàn hệ thống"}
+          label={(row.original.status === "inactive" ? "Bật" : "Ngừng") + " kinh doanh " + row.original.name + (isFnbOutletView && catalogChannel === "fnb" ? ` · ${currentBranch?.name}` : " · toàn hệ thống")}
           checked={row.original.status !== "inactive"}
-          disabled={!canEditTrading || tradingBusy}
+          disabled={!canEditTrading || tradingBusy || (row.original.channel === "fnb" && !(isFnbOutletView && catalogChannel === "fnb"))}
           onCheckedChange={(active) => void changeTradingStatus([row.original.id], active)} />
         <span className="whitespace-nowrap text-xs text-muted-foreground">
           {row.original.status === "inactive" ? "Đã ngừng" : "Đang bán"}

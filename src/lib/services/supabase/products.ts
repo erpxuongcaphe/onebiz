@@ -12,6 +12,19 @@ import { MOVEMENT_TYPE_LABELS } from "@/lib/constants/stock-movement-refs";
 import { getRecordedMovementPrices } from "@/lib/stock-movement-values";
 import { getStockValuations } from "./stock-valuation";
 import { readHistoryPages } from "./read-history-pages";
+import { getFnbUnavailableProductIds, listFnbProductBranchMenuScopes } from "./fnb-product-branch-menu";
+
+// Apply branch menu status in SQL before count/range, never after pagination.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyTradingStatus(query: any, status: unknown, unavailable: string[]) {
+  if (status === "active") {
+    query = query.eq("is_active", true);
+    return unavailable.length ? query.not("id", "in", `(${unavailable.join(",")})`) : query;
+  }
+  if (status === "inactive") return unavailable.length
+    ? query.or(`is_active.eq.false,id.in.(${unavailable.join(",")})`) : query.eq("is_active", false);
+  return query;
+}
 
 type ProductInsert = Database["public"]["Tables"]["products"]["Insert"];
 type ProductUpdate = Database["public"]["Tables"]["products"]["Update"];
@@ -117,6 +130,8 @@ export async function getProducts(params: QueryParams): Promise<QueryResult<Prod
   // join tồn thật như trước (PostgREST không lọc parent qua LEFT join).
   const branchId =
     params.branchId && params.branchId !== "all" ? params.branchId : undefined;
+  const unavailable = branchId && params.filters?.channel === "fnb"
+    ? getFnbUnavailableProductIds(await listFnbProductBranchMenuScopes(tenantId), branchId) : [];
   const hasStockFilter = Boolean(params.filters?.stock);
   const supplierJoin = supplierNameFilter(params.filters) ? "!inner" : "";
   const selectCols =
@@ -180,8 +195,7 @@ export async function getProducts(params: QueryParams): Promise<QueryResult<Prod
 
   // Filter: status (active | inactive) — map sang cột is_active boolean
   if (params.filters?.status && params.filters.status !== "all") {
-    const isActive = params.filters.status === "active";
-    query = query.eq("is_active", isActive);
+    query = applyTradingStatus(query, params.filters.status, unavailable);
   }
 
   if (params.filters?.allowSale === "true") {
@@ -216,7 +230,11 @@ export async function getProducts(params: QueryParams): Promise<QueryResult<Prod
   if (error) handleError(error, "getProducts");
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const products: Product[] = (data ?? []).map((row: any) => mapProduct(row));
+  const products: Product[] = (data ?? []).map((row: any) => {
+    const product = mapProduct(row);
+    if (unavailable.includes(product.id)) product.status = "inactive";
+    return product;
+  });
   if (branchId) {
     const values = new Map((await getStockValuations(products.map(product => product.id), [branchId]))
       .map(value => [value.productId, value]));
@@ -252,6 +270,8 @@ export async function getAllMatchingProductIds(params: QueryParams): Promise<str
     params.branchId && params.branchId !== "all" ? params.branchId : undefined;
 
   // Khớp getProducts (Phương án B): LEFT join khi không lọc tồn + scope ngành.
+  const unavailable = branchId && params.filters?.channel === "fnb"
+    ? getFnbUnavailableProductIds(await listFnbProductBranchMenuScopes(tenantId), branchId) : [];
   const hasStockFilter = Boolean(params.filters?.stock);
   const supplierJoin = supplierNameFilter(params.filters)
     ? ", suppliers!products_supplier_id_fkey!inner(name)" : "";
@@ -307,8 +327,7 @@ export async function getAllMatchingProductIds(params: QueryParams): Promise<str
 
     // Filter: status (active | inactive)
     if (params.filters?.status && params.filters.status !== "all") {
-      const isActive = params.filters.status === "active";
-      query = query.eq("is_active", isActive);
+      query = applyTradingStatus(query, params.filters.status, unavailable);
     }
 
     if (params.filters?.allowSale === "true") {
