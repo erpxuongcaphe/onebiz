@@ -25,7 +25,17 @@ const schema = z.object({
 
 export type CohortEvidence = z.infer<typeof schema>;
 
-/** Candidate contract only; no production RPC or route is switched to this source. */
+export function summarizeCohortEvidence(data: CohortEvidence) {
+  if (!data.retention_ready) return { firstTimeCustomers: null, m1Retention: null, matureGroups: 0 };
+  const mature = data.rows.filter(row => row.size > 0 && row.closed_observations[1] === true);
+  return {
+    firstTimeCustomers: data.rows.reduce((sum, row) => sum + row.size, 0),
+    m1Retention: mature.length ? Math.round(mature.reduce((sum, row) => sum + row.retention[1], 0) / mature.length) : null,
+    matureGroups: mature.length,
+  };
+}
+
+/** Reject incomplete responses and data returned for a different report scope. */
 export function parseCohortEvidence(input: unknown, scope: { tenantId: string; branchId: string | null; months: number }): CohortEvidence {
   const result = schema.safeParse(input);
   if (!result.success) throw new Error("Nguồn khách quay lại chưa đầy đủ.");
