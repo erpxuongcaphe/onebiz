@@ -714,6 +714,8 @@ export default function HoaDonPage() {
   },[dateRange,selectedStatuses,showFnbTypes,retailSaleType,fnbOrderType,fnbTable,fnbArea,fnbChoiceJson,debouncedSearch,searchField,sorting]);
 
   const selectedExportKey=JSON.stringify([phamViHienTai,listQuery,txPerms.canExport]);
+  const pageExportKey=JSON.stringify([phamViHienTai,listQuery,page,pageSize]);
+  const [loadedPageExportKey,setLoadedPageExportKey]=useState('');
   const selectedExportContext=useRef(selectedExportKey);selectedExportContext.current=selectedExportKey;
   const selectedExportActive=useRef<AbortController|null>(null);
   const [selectedExportStage,setSelectedExportStage]=useState("");
@@ -736,6 +738,7 @@ export default function HoaDonPage() {
     const result = await getInvoicesTheoPhamVi(phamViHienTai, {...listQuery!,page,pageSize});
     if (request !== listRequest.current) return;
     setData(result.data);
+    setLoadedPageExportKey(JSON.stringify([phamViHienTai,listQuery,page,pageSize]));
     setTotal(result.total);
     // Bảng trống vì lọc chi nhánh? Đếm hóa đơn ở chi nhánh khác để gợi ý (cùng
     // bộ lọc, bỏ branch). Chỉ khi đang lọc theo 1 chi nhánh cụ thể.
@@ -913,8 +916,9 @@ export default function HoaDonPage() {
 
   const invoiceExport=useInvoiceListExport({scope:phamViHienTai,query:listQuery,
     ready:branchScopeReady&&deepLinkReady&&search===debouncedSearch,allowed:txPerms.canExport,fnb:showFnbTypes,
+    currentPage:{ids:data.map(row=>row.id),number:page+1,ready:!loading&&loadedPageExportKey===pageExportKey},
     onError:message=>toast({title:"Chưa xuất được hóa đơn",description:message,variant:"error"}),
-    onSuccess:count=>toast({title:"Đã xuất hóa đơn",description:`Đã xuất đủ ${formatNumber(count)} hóa đơn theo bộ lọc đã chọn.`}),
+    onSuccess:(count,scopeLabel)=>toast({title:"Đã xuất hóa đơn",description:`Đã xuất ${formatNumber(count)} hóa đơn — ${scopeLabel}.`}),
   });
 
   const columns: ColumnDef<Invoice, unknown>[] = [
@@ -1082,8 +1086,10 @@ export default function HoaDonPage() {
             setPage(0);
           }}
           onExport={txPerms.canExport ? {items:[
-            {label:"Excel — tất cả theo bộ lọc",hint:"Xuất toàn bộ kết quả, không chỉ trang đang xem",onClick:()=>void invoiceExport.start("excel")},
-            {label:"CSV — tất cả theo bộ lọc",hint:"Xuất toàn bộ kết quả, không chỉ trang đang xem",onClick:()=>void invoiceExport.start("csv")},
+            {label:"Excel — theo bộ lọc",hint:"Xuất toàn bộ kết quả, không chỉ trang đang xem",onClick:()=>void invoiceExport.start("excel")},
+            {label:"CSV — theo bộ lọc",hint:"Xuất toàn bộ kết quả, không chỉ trang đang xem",onClick:()=>void invoiceExport.start("csv")},
+            {label:`Excel — trang ${page+1}`,hint:`Chỉ ${data.length} chứng từ trên trang đang xem, đủ chi tiết hàng`,onClick:()=>void invoiceExport.start("excel","page")},
+            {label:`CSV — trang ${page+1}`,hint:`Chỉ ${data.length} chứng từ trên trang đang xem`,onClick:()=>void invoiceExport.start("csv","page")},
           ]} : undefined}
           actions={[
             {

@@ -42,9 +42,10 @@ import { DocumentNoteBox } from "@/components/shared/document-note-box";
 import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
 import { buildSalesOrderPrintData, toPrintLines } from "@/lib/print-templates";
 import { formatCurrency, formatDate, formatNumber, formatUser } from "@/lib/format";
-import { exportToExcel, exportToCsv } from "@/lib/utils/export";
+import { exportToCsv } from "@/lib/utils/export";
+import { exportReportToExcel } from "@/lib/utils/excel-export";
 import { readOrdersForExport } from "@/lib/services/supabase/order-management-reads";
-import { buildOrderExportRows, orderSummaryColumns, orderLineColumns } from "@/lib/utils/sales-order-export";
+import { buildOrderExportRows, buildOrderExportSheets, orderLineColumns } from "@/lib/utils/sales-order-export";
 import { computeListPresetRange } from "@/lib/utils/list-date-preset-range";
 import {
   cancelInvoice,
@@ -449,6 +450,7 @@ export default function DatHangPage() {
     "reports.view_all_branches",
   ]);
   const [data, setData] = useState<SalesOrder[]>([]);
+  const [loadedListKey,setLoadedListKey]=useState('');
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const fetchLuotRef = useRef(0);
@@ -695,6 +697,7 @@ export default function DatHangPage() {
     debouncedDeliveryArea,
   ]);
 
+  const orderListKey=JSON.stringify([phamViHienTai,buildFilters(),debouncedSearch,searchField,page,pageSize]);
   const fetchData = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
     if (!branchScopeReady) return;
     const luot = ++fetchLuotRef.current;
@@ -722,6 +725,7 @@ export default function DatHangPage() {
     }
     if (luot !== fetchLuotRef.current) return;
     setData(result.data);
+    setLoadedListKey(orderListKey);
     setTotal(result.total);
     setOtherBranchCount(soDonChiNhanhKhac);
     } catch (e) {
@@ -743,6 +747,7 @@ export default function DatHangPage() {
     debouncedSearch,
     searchField,
     toast,
+    orderListKey,
   ]);
 
   useEffect(() => {
@@ -925,25 +930,33 @@ export default function DatHangPage() {
   const exportLock = useRef(false);
   const exportMounted = useRef(true);
   useEffect(() => { exportMounted.current = true; return () => { exportMounted.current = false; }; }, []);
-  const exportKey = JSON.stringify([phamViHienTai, buildFilters(), search, searchField, deliveryArea]);
+  const exportKey = JSON.stringify([orderListKey,search,deliveryArea,txPerms.canExport]);
   const currentExportKey = useRef(exportKey); currentExportKey.current = exportKey;
-  const handleExport = async (type: "excel" | "csv", selected?: SalesOrder[]) => {
+  const handleExport = async (type: "excel" | "csv", selected?: SalesOrder[], target:"filtered"|"page"="filtered") => {
     if (exportLock.current) return;
-    if (!branchScopeReady || loading || search !== debouncedSearch) {
+    if(!txPerms.canExport){toast({title:'Anh/chị chưa có quyền xuất đơn đặt hàng.',variant:'error'});return;}
+    if (!branchScopeReady || loading || search !== debouncedSearch || deliveryArea !== debouncedDeliveryArea || loadedListKey!==orderListKey) {
       toast({title:'Chờ danh sách tải xong trước khi xuất.',variant:'info'}); return;
     }
     exportLock.current = true; setExporting(true);
     const key = exportKey;
     const valid = () => exportMounted.current && currentExportKey.current === key;
     try {
-      const {orders,lines} = await readOrdersForExport(phamViHienTai, {search:debouncedSearch,searchField,filters:buildFilters()},selected?.map(o=>o.id));
+      const scopeLabel=selected?'các đơn đã chọn':target==='page'?`trang ${page+1} đang xem`:'toàn bộ theo bộ lọc';
+      const chosen=selected??(target==='page'?data:undefined);
+      const {orders,lines} = await readOrdersForExport(phamViHienTai, {search:debouncedSearch,searchField,filters:buildFilters()},chosen?.map(o=>o.id));
       if (!valid()) throw new Error('Bộ lọc hoặc chi nhánh đã thay đổi. Xuất lại theo phạm vi mới.');
       if (!orders.length) throw new Error('Không có đơn phù hợp để xuất.');
       const details=buildOrderExportRows(orders,lines);
-      const name=selected?'dat-hang-da-chon':'dat-hang-theo-bo-loc';
-      if(type==='excel') await exportToExcel(orders,orderSummaryColumns,name,{financialTable:true,shouldSave:valid,additionalSheets:[{name:'Chi tiet hang dat',data:details,columns:orderLineColumns}]});
+      const name=selected?'dat-hang-da-chon':target==='page'?`dat-hang-trang-${page+1}`:'dat-hang-theo-bo-loc';
+      const titles=[`ĐƠN ĐẶT HÀNG — ${scopeLabel.toLocaleUpperCase('vi')}`,`${orders.length} đơn · ${details.length} dòng hàng`,...filterChips.map(chip=>`${chip.label}: ${chip.value}`),...(search?[`Tìm kiếm: ${search}`]:[])];
+      const dates=orders.map(order=>new Date(Date.parse(order.date)+7*60*60*1000).toISOString().slice(0,10)).sort();
+      const filters=buildFilters();
+      if(type==='excel') await exportReportToExcel({kind:'dat-hang',mode:'full',range:{from:String(filters.dateFrom??dates[0]),to:String(filters.dateTo??dates[dates.length-1])},
+        reportTitle:`Đơn đặt hàng — ${scopeLabel}`,branchName:phamViHienTai.mode==='branch'?(orders[0]?.branchName??''):'Các chi nhánh được phép',
+        description:titles.slice(1).join(' · '),sheets:buildOrderExportSheets(orders,lines,titles),shouldSave:valid});
       else await exportToCsv(details,orderLineColumns,name,{shouldSave:valid});
-      if(valid()) toast({title:'Đã chuẩn bị tải file',description:`${orders.length} đơn · ${details.length} dòng hàng`,variant:'success'});
+      if(valid()) toast({title:'Đã chuẩn bị tải file',description:`${orders.length} đơn · ${details.length} dòng hàng — ${scopeLabel}`,variant:'success'});
     } catch(e) {
       if(exportMounted.current) toast({title:'Không xuất được file',description:e instanceof Error?e.message:'Vui lòng thử lại.',variant:'error'});
     } finally { exportLock.current=false; if(exportMounted.current) setExporting(false); }
@@ -982,7 +995,7 @@ export default function DatHangPage() {
       accessorKey: "customerCode",
       header: "Mã KH",
       size: 100,
-      cell: () => "—",
+      cell: ({row}) => row.original.customerCode || "—",
     },
     {
       accessorKey: "customerName",
@@ -1046,10 +1059,12 @@ export default function DatHangPage() {
           setSearchField(v);
           setPage(0);
         }}
-        onExport={{
-          excel: () => handleExport("excel"),
-          csv: () => handleExport("csv"),
-        }}
+        onExport={txPerms.canExport?{items:[
+          {label:'Excel — theo bộ lọc',hint:'Tất cả các trang, đủ chi tiết hàng và bảng theo khách',onClick:()=>void handleExport('excel')},
+          {label:`Excel — trang ${page+1}`,hint:`Chỉ ${data.length} đơn trên trang đang xem, đủ chi tiết hàng`,onClick:()=>void handleExport('excel',undefined,'page')},
+          {label:'CSV — theo bộ lọc',hint:'Tất cả các trang; mỗi dòng là một mã hàng đặt',onClick:()=>void handleExport('csv')},
+          {label:`CSV — trang ${page+1}`,hint:'Chỉ các đơn trên trang đang xem',onClick:()=>void handleExport('csv',undefined,'page')},
+        ]}:undefined}
         actions={[
           {
             label: "Đặt hàng",

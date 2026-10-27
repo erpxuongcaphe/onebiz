@@ -25,6 +25,14 @@ describe('read-only management exports',()=>{
   f.orders=[{id:'a'},{id:'b'},{id:'c'}];const r=await readOrdersForExport(scope,{},['a','c']);
   expect(r.orders.map(o=>o.id)).toEqual(['a','c']);expect((f.queries[0].filters as unknown[][])[0]).toEqual(['invoice_id',['a','c']]);
  });
+ it('preserves the exact visible page order and reads VAT, while rejecting foreign lines',async()=>{
+  f.orders=[{id:'a'},{id:'b'},{id:'c'}];
+  const r=await readOrdersForExport(scope,{search:'đơn',filters:{dateFrom:'2026-10-01'}},['c','a']);
+  expect(r.orders.map(o=>o.id)).toEqual(['c','a']);
+  expect(f.queries.some(q=>String(q.cols).includes('vat_rate'))).toBe(true);
+  f.lines=[{id:'foreign',invoice_id:'b'}];
+  await expect(readOrdersForExport(scope,{},['a'])).rejects.toThrow('không thuộc');
+ });
  it('rejects missing scope and selected documents no longer visible',async()=>{
   await expect(readOrdersForExport({mode:'none',duocDemChiNhanhKhac:false},{})).rejects.toThrow('phạm vi');
   await expect(readOrdersForExport(scope,{},['gone'])).rejects.toThrow('đã thay đổi');

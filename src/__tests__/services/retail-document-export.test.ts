@@ -64,6 +64,42 @@ const header={id:'a',code:'NH-THU',date:'2026-10-27T03:00:00Z',branchName:'Kho t
 const validLine={id:'l',invoice_id:'a',products:{code:'SKU-THU'},product_name:'Hàng thử',unit:'Kg',quantity:0.5,unit_price:6000,discount:0,total:3000,note:'Ghi chú mã'};
 function options(){return {scope,query:{filters:{status:['processing'],dateFrom:'2026-10-01',dateTo:'2026-10-27'}},ready:true,allowed:true,fnb:false,onError:vi.fn(),onSuccess:vi.fn()};}
 describe('Retail full-filter export interaction',()=>{
+ it('exports page two by exact visible IDs, preserving their order and all item details',async()=>{
+  const second={...header,id:'b',code:'HD-PAGE-2'};
+  f.headers.mockResolvedValue([header,second]);f.rows=[validLine,{...validLine,id:'lb',invoice_id:'b'}];f.writer.mockResolvedValue(undefined);
+  const opts={...options(),currentPage:{ids:['b','a'],number:2,ready:true}};
+  const {result}=renderHook(()=>useInvoiceListExport(opts));
+  await act(async()=>{await result.current.start('excel','page');});
+  expect(f.headers).toHaveBeenCalledWith(scope,{...opts.query,filters:{...opts.query.filters,ids:['b','a']}},expect.anything());
+  const out=f.writer.mock.calls[0][0];
+  expect(out.sheets[0].rows.map((r:Invoice)=>r.id)).toEqual(['b','a']);
+  expect(out.sheets[1].rows).toHaveLength(2);
+  expect(out.reportTitle).toContain('trang 2');expect(out.description).toContain('trang 2');
+  expect(opts.onSuccess).toHaveBeenCalledWith(2,'trang 2 đang xem');
+ });
+ it.each([false,true])('refuses a stale or empty page instead of exporting all filtered rows (%s)',async ready=>{
+  const opts={...options(),currentPage:{ids:ready?[]:['a'],number:2,ready}};
+  const {result}=renderHook(()=>useInvoiceListExport(opts));
+  await act(async()=>{await result.current.start('excel','page');});
+  expect(f.headers).not.toHaveBeenCalled();expect(f.writer).not.toHaveBeenCalled();expect(opts.onError).toHaveBeenCalledOnce();
+ });
+ it('refuses a page document that no longer matches the active filter',async()=>{
+  f.headers.mockResolvedValue([]);
+  const opts={...options(),currentPage:{ids:['a'],number:2,ready:true}};
+  const {result}=renderHook(()=>useInvoiceListExport(opts));
+  await act(async()=>{await result.current.start('excel','page');});
+  expect(f.writer).not.toHaveBeenCalled();expect(opts.onError).toHaveBeenCalledWith(expect.stringContaining('đã thay đổi'));
+ });
+ it('does not save an old page after pagination changes during workbook generation',async()=>{
+  f.headers.mockResolvedValue([header]);f.rows=[validLine];let finish!:()=>void;
+  f.writer.mockImplementation(()=>new Promise<void>(resolve=>{finish=resolve;}));
+  const opts={...options(),currentPage:{ids:['a'],number:2,ready:true}};
+  const {result,rerender}=renderHook(o=>useInvoiceListExport(o),{initialProps:opts});
+  let work!:Promise<void>;await act(async()=>{work=result.current.start('excel','page');});
+  const guard=f.writer.mock.calls[0][0].shouldSave;expect(guard()).toBe(true);
+  rerender({...opts,currentPage:{ids:['b'],number:3,ready:false}});expect(guard()).toBe(false);
+  await act(async()=>{finish();await work;});expect(opts.onSuccess).not.toHaveBeenCalled();
+ });
  it('writes the item and customer sheets with the same scoped headers and notes',async()=>{
   f.headers.mockResolvedValue([header]);f.rows=[validLine];f.writer.mockResolvedValue(undefined);
   const opts=options(),{result}=renderHook(()=>useInvoiceListExport(opts));
@@ -71,7 +107,7 @@ describe('Retail full-filter export interaction',()=>{
   expect(f.writer).toHaveBeenCalledOnce();const out=f.writer.mock.calls[0][0];
   expect(out.sheets.map((sheet:{name:string})=>sheet.name)).toEqual(['Chứng từ','Chi tiết hàng','Theo khách hàng']);
   expect(out.sheets[1].rows[0]).toMatchObject({customerCode:'KHA-THU',lineNote:'Ghi chú mã',note:'Ghi chú đơn',quantity:0.5});
-  expect(opts.onSuccess).toHaveBeenCalledWith(1);
+  expect(opts.onSuccess).toHaveBeenCalledWith(1,'toàn bộ theo bộ lọc');
  });
  it('cancels a lazy workbook when the filter changes before saving',async()=>{
   f.headers.mockResolvedValue([header]);f.rows=[validLine];let finish!:()=>void;

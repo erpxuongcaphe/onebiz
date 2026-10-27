@@ -13,6 +13,13 @@ const parent=(id:string)=>({id,code:id,tenant_id:'tenant',branch_id:'warehouse',
 const child=(id:string,order:string,extra={})=>({id,code:id,tenant_id:'tenant',source:'pos',source_order_id:order,status:'completed',deleted_at:null,voided_at:null,cancelled_at:null,...extra});
 beforeEach(()=>{f.rows=[];f.missing=false;f.calls=[];});
 describe('POS only uninvoiced orders without embedded self-relation loss',()=>{
+ it('maps order export contact, author and stored tax fields without guessing missing historical VAT',async()=>{
+  f.rows=[{...parent('export'),customer:{code:'KHA-TEST',phone:'0900123456',address:'Địa chỉ thử'},customer_name:'Khách thử',customer_id:'customer',profiles:{full_name:'Người lập thử'},created_by:'user',discount_amount:100,tax_amount:80,delivery_fee:500},parent('old')];
+  const r=await getOrders({page:0,pageSize:15,branchId:'warehouse',filters:{}});
+  expect(r.data[0]).toMatchObject({customerId:'customer',customerCode:'KHA-TEST',customerPhone:'0900123456',customerAddress:'Địa chỉ thử',createdByName:'Người lập thử',discountAmount:100,taxAmount:80,shippingFee:500});
+  expect(r.data[1].taxAmount).toBeUndefined();expect(r.data[1].customerCode).toBe('');
+  expect(f.calls.every(filters=>filters.some(v=>v[1]==='tenant_id'&&v[2]==='tenant'))).toBe(true);
+ });
  it('keeps a real pending parent and drafts/voided/cancelled children, excludes valid invoices and closed parents',async()=>{
   f.rows=[parent('pending'),parent('invoiced'),parent('draft-only'),parent('voided'),parent('cancelled'),{...parent('closed'),fulfilled_by_id:'posted'},child('hd','invoiced'),child('nh','draft-only',{status:'draft'}),child('void','voided',{voided_at:'2026-10-26'}),child('cancel','cancelled',{status:'cancelled'})];
   const r=await getOrders({page:0,pageSize:50,branchId:'warehouse',filters:{fulfillmentState:'pending'}});
