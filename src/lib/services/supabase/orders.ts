@@ -20,6 +20,7 @@
 
 import type { SalesOrder, QueryParams, QueryResult } from "@/lib/types";
 import { getClient, getPaginationRange, handleError, getCurrentTenantId, getCurrentContext } from "./base";
+import {getCustomerIdentityDirectory,displayCustomerIdentity} from './customer-identity';
 import {
   posCheckout,
   type PosCheckoutInput,
@@ -337,7 +338,8 @@ export async function getOrders(
     }
   }
 
-  return { data: orders, total: count ?? 0 };
+  const identityLinks=await getCustomerIdentityDirectory();
+  return { data: orders.map(row=>displayCustomerIdentity(row,identityLinks)), total: count ?? 0 };
 }
 
 export function getOrderStatuses() {

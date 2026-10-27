@@ -46,3 +46,8 @@ describe('read-only management exports',()=>{
   expect(orderLineColumns.map(c=>c.key)).not.toContain('totalAmount');
  });
 });
+
+vi.mock("@/lib/services/supabase/customer-identity",async importOriginal=>({
+ ...await importOriginal<typeof import("@/lib/services/supabase/customer-identity")>(),
+ getCustomerIdentityDirectory:async()=>[],
+}));

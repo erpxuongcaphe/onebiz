@@ -227,3 +227,18 @@ describe("getCustomerGroups", () => {
     expect(Array.isArray(result)).toBe(true);
   });
 });
+
+vi.mock("@/lib/services/supabase/customer-identity",async importOriginal=>({
+ ...await importOriginal<typeof import("@/lib/services/supabase/customer-identity")>(),
+ getCustomerIdentityDirectory:vi.fn(async()=>[]),
+}));
+
+import {getCustomerIdentityDirectory} from '@/lib/services/supabase/customer-identity';
+describe('managed technical customer profiles',()=>{
+ it.each(['profile','code'])('prevents editing an alias through the %s form and points to the canonical code',async operation=>{
+  vi.clearAllMocks();
+  vi.mocked(getCustomerIdentityDirectory).mockResolvedValueOnce([{aliasId:'old',canonicalId:'nbo',code:'KHA-NBO-002',name:'Xưởng Tư Búa',branchId:'xtb'}]);
+  await expect(operation==='profile'?updateCustomer('old',{name:'Changed'}):changeCustomerCode('old','NEW')).rejects.toThrow('KHA-NBO-002');
+  expect(mockFrom).not.toHaveBeenCalled();expect(mockRpc).not.toHaveBeenCalled();
+ });
+});

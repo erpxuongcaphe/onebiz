@@ -13,6 +13,7 @@ const contextColumns=[
   {header:'Chi nhánh',key:'branchName',width:30},
   {header:'Người tạo',key:'createdBy',width:24},{header:'Loại bán',key:'saleTypeLabel',width:20},
   {header:'Mã khách hàng',key:'customerCode',width:20},
+  {header:'Mã hồ sơ gốc',key:'originalCustomerCode',width:20},
   {header:'Khách hàng',key:'customerName',width:38},
   {header:'SĐT',key:'customerPhone',width:17},
   {header:'Địa chỉ',key:'customerAddress',width:45},
@@ -79,21 +80,21 @@ export function buildRetailDocumentExport(invoices:readonly Invoice[],lines:read
   const details=lines.map(line=>{
     const invoice=byId.get(line.invoice_id);
     if(!invoice || invoice.source==='fnb')throw new Error('Dòng hàng không thuộc chứng từ Retail đã chọn.');
-    const {code,date,orderCode,sourceOrderCode,branchName,customerCode,customerName,customerPhone,customerAddress,note,statusLabel,createdBy,saleTypeLabel}=invoice;
-    return {code,date,orderCode,sourceOrderCode,branchName,customerCode,customerName,customerPhone,customerAddress,note,statusLabel,createdBy,saleTypeLabel,
+    const {code,date,orderCode,sourceOrderCode,branchName,customerCode,originalCustomerCode,customerName,customerPhone,customerAddress,note,statusLabel,createdBy,saleTypeLabel}=invoice;
+    return {code,date,orderCode,sourceOrderCode,branchName,customerCode,originalCustomerCode,customerName,customerPhone,customerAddress,note,statusLabel,createdBy,saleTypeLabel,
       productCode:line.products?.code??'',productName:line.product_name??'',unit:line.unit??'',quantity:number(line.quantity),
       unitPrice:number(line.unit_price),lineDiscount:number(line.discount),lineTotal:number(line.total),vatRate:line.vat_rate==null?'':number(line.vat_rate),lineNote:line.note??''};
   });
   const withLines=new Set(lines.map(line=>line.invoice_id));
   for(const row of summaries.filter(row=>row.source!=='fnb'&&!withLines.has(row.id))){
-    details.push({code:row.code,date:row.date,orderCode:row.orderCode,sourceOrderCode:row.sourceOrderCode,branchName:row.branchName,customerCode:row.customerCode,
+    details.push({code:row.code,date:row.date,orderCode:row.orderCode,sourceOrderCode:row.sourceOrderCode,branchName:row.branchName,customerCode:row.customerCode,originalCustomerCode:row.originalCustomerCode,
       customerName:row.customerName,customerPhone:row.customerPhone,customerAddress:row.customerAddress,note:row.note,statusLabel:row.statusLabel,createdBy:row.createdBy,saleTypeLabel:row.saleTypeLabel,
       productCode:'',productName:'(Không có dòng hàng)',unit:'',quantity:0,unitPrice:0,lineDiscount:0,lineTotal:0,vatRate:'' as number|string,lineNote:''});
   }
   const customers=new Map<string,{customerCode:string;customerName:string;customerPhone:string;customerAddress:string;documentCount:number;documents:string;documentValue:number;cancelledValue:number;paid:number}>();
   for(const row of summaries){
     // Never merge customers by a similar name. Walk-in records stay separate by document.
-    const key=row.customerId && row.customerCode!=='KL-VL'?row.customerId:`document:${row.id}`;
+    const key=row.customerId && row.customerCode!=='KL-VL'?(row.canonicalCustomerId??row.customerId):`document:${row.id}`;
     const customer=customers.get(key)??{customerCode:row.customerCode,customerName:row.customerName,customerPhone:row.customerPhone??'',customerAddress:row.customerAddress??'',documentCount:0,documents:'',documentValue:0,cancelledValue:0,paid:0};
     customer.documentCount++;customer.documents+=(customer.documents?', ':'')+row.code;
     if(row.status==='cancelled')customer.cancelledValue+=number(row.totalAmount);

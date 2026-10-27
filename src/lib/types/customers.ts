@@ -3,6 +3,8 @@
 export interface Customer {
   id: string;
   code: string;
+  canonicalCustomerId?: string;
+  originalCode?: string;
   name: string;
   phone: string;
   email?: string;

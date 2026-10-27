@@ -30,3 +30,8 @@ describe('POS only uninvoiced orders without embedded self-relation loss',()=>{
   f.missing=true;await expect(getOrders({page:0,pageSize:50,filters:{fulfillmentState:'pending'}})).rejects.toThrow('Chưa xác định');
  });
 });
+
+vi.mock("@/lib/services/supabase/customer-identity",async importOriginal=>({
+ ...await importOriginal<typeof import("@/lib/services/supabase/customer-identity")>(),
+ getCustomerIdentityDirectory:async()=>[],
+}));

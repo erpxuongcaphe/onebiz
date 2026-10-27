@@ -30,3 +30,8 @@ describe("Internal POS customer boundary",()=>{
   expect(await getCustomerById("internal-1")).toMatchObject({id:"internal-1",isInternal:true,branchId:"branch-xtb"});
  });
 });
+
+vi.mock("@/lib/services/supabase/customer-identity",async importOriginal=>({
+ ...await importOriginal<typeof import("@/lib/services/supabase/customer-identity")>(),
+ getCustomerIdentityDirectory:async()=>[],
+}));

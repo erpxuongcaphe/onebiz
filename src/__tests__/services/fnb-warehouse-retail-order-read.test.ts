@@ -40,3 +40,8 @@ describe('warehouse demand visible through both Retail order readers',()=>{
   expect(result[119]).toMatchObject({productCode:'SKU-119',quantity:120,note:'Ghi chú 119'});
  });
 });
+
+vi.mock("@/lib/services/supabase/customer-identity",async importOriginal=>({
+ ...await importOriginal<typeof import("@/lib/services/supabase/customer-identity")>(),
+ getCustomerIdentityDirectory:async()=>[],
+}));

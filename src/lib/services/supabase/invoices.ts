@@ -22,6 +22,7 @@ import { getClient, getPaginationRange, handleError, getCurrentTenantId } from "
 import { apDungLocChungTuBan } from "./chung-tu-ban";
 import { readHistoryPages } from "./read-history-pages";
 import { DEFAULT_INVOICE_LIST_STATUSES } from "@/lib/utils/document-list-statuses";
+import {getCustomerIdentityDirectory,customerFamilyIds,displayCustomerIdentity} from './customer-identity';
 
 import { resolveFnbInvoiceType, resolveRetailInvoiceType, type FnbInvoiceType, type RetailInvoiceType } from "@/lib/utils/invoice-list-filters";
 
@@ -193,7 +194,9 @@ export async function getInvoices(params: QueryParams): Promise<QueryResult<Invo
   const { data, count, error } = await query;
   if (error) handleError(error, "getInvoices");
 
-  const invoices: Invoice[] = (data ?? []).map(mapInvoice);
+  const rawInvoices: Invoice[] = (data ?? []).map(mapInvoice);
+  const links=rawInvoices.some(row=>row.source!=='fnb')?await getCustomerIdentityDirectory():[];
+  const invoices=rawInvoices.map(row=>row.source==='fnb'?row:displayCustomerIdentity(row,links));
   await attachSourceOrderCodes(invoices, tenantId);
 
   // BATCH 3R: gắn tổng tiền đã trả per HĐ → badge "Đã trả 1 phần"/"toàn bộ".
@@ -277,7 +280,8 @@ export async function getInvoiceById(id: string): Promise<Invoice | null> {
     .maybeSingle();
   if (error) handleError(error, "getInvoiceById");
   if (!data) return null;
-  const invoice = mapInvoice(data);
+  const rawInvoice = mapInvoice(data);
+  const invoice = rawInvoice.source==='fnb'?rawInvoice:displayCustomerIdentity(rawInvoice,await getCustomerIdentityDirectory());
   await attachSourceOrderCodes([invoice], tenantId);
   return invoice;
 }
@@ -317,12 +321,13 @@ export async function getInvoicesForCustomer(
 ): Promise<Invoice[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
+  const customerIds=customerFamilyIds(customerId,await getCustomerIdentityDirectory());
   const data = await readHistoryPages(async (offset, size) => {
     let query = supabase
     .from("invoices")
     .select(`*, profiles!invoices_created_by_fkey(full_name), fnb_orders:kitchen_orders!kitchen_orders_invoice_id_fkey(${FNB_ORDER_CONTEXT_SELECT})`, {count:"exact"})
     .eq("tenant_id", tenantId)
-    .eq("customer_id", customerId)
+    .in("customer_id", customerIds)
     .order("ngay_chung_tu", { ascending: false }).order("id", { ascending: false });
     if (branchId) query = query.eq("branch_id", branchId);
     return await query.range(offset, offset + size - 1);
@@ -349,12 +354,13 @@ export async function getReturnsForCustomer(
 ): Promise<CustomerReturn[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
+  const customerIds=customerFamilyIds(customerId,await getCustomerIdentityDirectory());
   const data = await readHistoryPages(async (offset, size) => {
     let query = supabase
     .from("sales_returns")
     .select("id, code, total, status, created_at, invoices!sales_returns_invoice_id_fkey(code)", {count:"exact"})
     .eq("tenant_id", tenantId)
-    .eq("customer_id", customerId)
+    .in("customer_id", customerIds)
     .order("created_at", { ascending: false }).order("id", { ascending: false });
     if (branchId) query = query.eq("branch_id", branchId);
     return await query.range(offset, offset + size - 1);

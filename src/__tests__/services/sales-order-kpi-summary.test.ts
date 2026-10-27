@@ -318,3 +318,8 @@ describe("nhớ tạm KPI", () => {
     expect(cache.batDau("A").sanCo).toBeUndefined();
   });
 });
+
+vi.mock("@/lib/services/supabase/customer-identity",async importOriginal=>({
+ ...await importOriginal<typeof import("@/lib/services/supabase/customer-identity")>(),
+ getCustomerIdentityDirectory:async()=>[],
+}));

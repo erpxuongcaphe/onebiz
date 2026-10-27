@@ -17,6 +17,7 @@ import type { CashTimingInput } from "@/lib/cash-time";
 import { recordTimedCash } from "./cash-timing";
 import { readHistoryPages } from "./read-history-pages";
 import { debtCalendarAgeDays } from "@/lib/reports/debt-age";
+import {getCustomerIdentityDirectory,customerFamilyIds} from './customer-identity';
 
 export interface RecordPaymentInput extends CashTimingInput {
   branchId?: string;
@@ -108,11 +109,13 @@ export async function getDocumentAdvanceAvailable(type: "invoice" | "purchase_or
   if (documentError) handleError(documentError, "getDocumentAdvanceAvailable.document");
   const row = document as unknown as Record<string, unknown> | null;
   if (!row?.[partyColumn] || !row.branch_id) return 0;
+  const family=isInvoice?customerFamilyIds(String(row[partyColumn]),await getCustomerIdentityDirectory()):[String(row[partyColumn])];
   let available = 0;
   for (let offset = 0; ; offset += 200) {
-    const { data, error } = await supabase.from((isInvoice ? "customer_advances" : "supplier_advances") as never)
-      .select("remaining_amount").eq("tenant_id", ctx.tenantId)
-      .eq(partyColumn, row[partyColumn] as string).eq("branch_id", row.branch_id as string)
+    let query=supabase.from((isInvoice ? "customer_advances" : "supplier_advances") as never)
+      .select("remaining_amount").eq("tenant_id", ctx.tenantId);
+    query=family.length>1?query.in(partyColumn,family):query.eq(partyColumn,family[0]);
+    const { data, error } = await query.eq("branch_id", row.branch_id as string)
       .eq("status", "active").gt("remaining_amount", 0)
       .order("id", { ascending: true }).range(offset, offset + 199);
     if (error) handleError(error, "getDocumentAdvanceAvailable.sources");
@@ -313,12 +316,13 @@ export async function getOpenInvoicesByCustomer(
 ): Promise<OpenInvoiceLine[]> {
   const supabase = getClient();
   const ctx = await getCurrentContext();
+  const customerIds=customerFamilyIds(customerId,await getCustomerIdentityDirectory());
 
   let query = supabase
     .from("invoices")
     .select("id, code, ngay_chung_tu, total, paid, debt, status", {count:"exact"})
     .eq("tenant_id", ctx.tenantId)
-    .eq("customer_id", customerId)
+    .in("customer_id", customerIds)
     .gt("debt", 0)
     // 20/07/2026 — chỉ HĐ hoàn tất (nháp/đặt hàng mang debt=total hiển thị,
     // không phải nợ thật; HD001438 bị thu 2 lần vì lọt nháp vào đây)

@@ -47,6 +47,9 @@ const RPC = new Set(schema.rpc as string[]);
  * dưới sẽ BẮT XOÁ dòng ngay khi dump đã có (sau `node scripts/dump-db-schema.mjs`).
  */
 const RPC_CHO_MIGRATION = new Map<string, string>([
+  ["get_customer_identity_directory", "20261027005706_internal_customer_canonical_identity.sql"],
+  ["get_pos_retail_customer_contacts_identity", "20261027005706_internal_customer_canonical_identity.sql"],
+  ["get_pos_customer_balance_scoped", "20261027005706_internal_customer_canonical_identity.sql"],
   ["get_fnb_warehouse_order_for_change", "202610260100_fnb_warehouse_order_changes.sql"],
   ["change_fnb_warehouse_order", "202610260100_fnb_warehouse_order_changes.sql"],
   ["get_my_auth_bootstrap", "202610250001_auth_bootstrap_snapshot.sql"],
@@ -68,6 +71,7 @@ const RPC_CHO_MIGRATION = new Map<string, string>([
   // vì không có service-role credential. Xóa các dòng này ngay lần dump schema kế tiếp.
 ]);
 const COT_CHO_MIGRATION = new Map<string, string>([
+  ["customers.canonical_customer_id", "20261027005706_internal_customer_canonical_identity.sql"],
   ["invoices.fnb_context", "202610230004_fnb_paid_context_zero_total.sql"],
   ["shifts.close_kind", "202610220002_fnb_shift_totals_reconciliation.sql"],
   ["shifts.expected_transfer", "202610220002_fnb_shift_totals_reconciliation.sql"],

@@ -1,6 +1,6 @@
 import {beforeEach,describe,it,expect,vi} from 'vitest';
 const f=vi.hoisted(()=>({tables:{} as Record<string,Record<string,unknown>[]>,fail:'',calls:[] as {table:string;filters:unknown[][];offset:number}[]}));
-vi.mock('@/lib/services/supabase/base',()=>({getCurrentTenantId:async()=> 'tenant',getClient:()=>({from:(table:string)=>{
+vi.mock('@/lib/services/supabase/base',()=>({getCurrentTenantId:async()=> 'tenant',getClient:()=>({rpc:async()=>({data:[],error:null}),from:(table:string)=>{
  const state={table,filters:[] as unknown[][],offset:0,size:200};
  const q={select(){return q;},eq(k:string,v:unknown){state.filters.push(['eq',k,v]);return q;},in(k:string,v:unknown[]){state.filters.push(['in',k,v]);return q;},is(k:string,v:unknown){state.filters.push(['is',k,v]);return q;},gte(){return q;},lt(){return q;},order(){return q;},range(a:number,b:number){state.offset=a;state.size=b-a+1;return q;},then(resolve:(v:unknown)=>unknown){
   f.calls.push({...state,filters:[...state.filters]});

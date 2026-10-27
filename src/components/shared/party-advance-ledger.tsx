@@ -347,7 +347,7 @@ export function PartyAdvanceLedger({
         <RefundAdvanceDialog
           key={`${mode}:${refundSource.id}`}
           mode={mode}
-          partyId={partyId}
+          partyId={refundSource.sourcePartyId??partyId}
           partyName={partyName}
           source={refundSource}
           onClose={() => setRefundSource(null)}
