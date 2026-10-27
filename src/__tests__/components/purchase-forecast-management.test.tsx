@@ -18,6 +18,18 @@ async function pickCustomer(){
 }
 beforeEach(()=>{cleanup();vi.clearAllMocks();f.forecast.mockResolvedValue(report('SUA'));f.customers.mockResolvedValue([{id:'nb',code:'NB1',name:'NB: Tư Búa',phone:'0901'},{id:'ws',code:'WS1',name:'Khách Sỉ',phone:null}]);f.groups.mockResolvedValue([{value:'g',label:'Nhóm sỉ'}]);f.excel.mockResolvedValue(undefined);});
 describe('forecast filters and workbook scope',()=>{
+ it('uses one editable customer field inside the aligned filter group, with no separate search box',async()=>{
+  render(<Page/>);
+  await waitFor(()=>expect((screen.getByRole('combobox',{name:'Khách hàng cụ thể'}) as HTMLInputElement).disabled).toBe(false));
+  const filters=screen.getByRole('region',{name:'Bộ lọc dự kiến mua hàng'});
+  const input=screen.getByRole('combobox',{name:'Khách hàng cụ thể'});
+  expect(filters.contains(input)).toBe(true);
+  fireEvent.click(input);fireEvent.change(input,{target:{value:'tu buaa'}});
+  expect(screen.getAllByRole('combobox',{name:'Khách hàng cụ thể'})).toHaveLength(1);
+  expect(screen.getByRole('option',{name:/NB: Tư Búa/})).toBeTruthy();
+  expect(screen.queryByPlaceholderText('Tìm mã, tên, SĐT khách…')).toBeNull();
+  expect(f.forecast).toHaveBeenCalledTimes(1);
+ });
  it('exports only matching materials or SKU rows according to the visible item filters',async()=>{
   f.forecast.mockResolvedValue({...report('SUA'),materials:[report('SUA').materials[0],report('CA-PHE').materials[0]],skuRows:[{productId:'s',code:'SKU-SUA',name:'Sữa',unit:'Kg',branchName:'Kho tổng',orderedQuantity:2,issuedQuantity:1,remainingQuantity:1,amount:3000}]});
   render(<Page/>);await waitFor(()=>expect((screen.getByRole('button',{name:'Xuất báo cáo'}) as HTMLButtonElement).disabled).toBe(false));

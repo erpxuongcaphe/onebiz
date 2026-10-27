@@ -209,117 +209,59 @@ export default function DuKienMuaHangPage() {
         exportDisabled={loading || !data || exporting || optionsLoading}
       />
 
-      <div className="border-y bg-surface-container-lowest px-4 py-3 lg:px-6">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[180px]">
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">
-              Loại cần xem
-            </label>
-            <select
-              aria-label="Loại cần xem"
-              value={itemView}
-              onChange={(event) => setItemView(event.target.value as ItemView)}
-              className="h-9 w-full rounded-lg border bg-background px-3 text-sm"
-            >
+      <section aria-label="Bộ lọc dự kiến mua hàng" className="rounded-xl border bg-background p-4 lg:p-5">
+        <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 xl:grid-cols-[180px_minmax(240px,1fr)_220px_minmax(280px,1.2fr)]">
+          <div className="min-w-0">
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Loại cần xem</label>
+            <select aria-label="Loại cần xem" value={itemView}
+              onChange={event=>setItemView(event.target.value as ItemView)}
+              className="h-9 w-full rounded-lg border bg-background px-3 text-sm">
               <option value="all">Tất cả NVL và SKU</option>
               <option value="materials">NVL cần mua</option>
               <option value="sku">SKU còn phải xuất</option>
             </select>
           </div>
-
-          <div className="min-w-[260px] flex-1 lg:max-w-[460px]">
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">
-              Mã hoặc tên NVL / SKU
-            </label>
+          <div className="min-w-0">
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Mã hoặc tên NVL / SKU</label>
             <div className="relative">
-              <Icon
-                name="search"
-                size={16}
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-              />
-              <input
-                aria-label="Mã hoặc tên NVL / SKU"
-                value={itemQuery}
-                onChange={(event) => setItemQuery(event.target.value)}
-                placeholder="Ví dụ: NVL-SUA, SKU-TPP, Trân châu..."
-                className="h-9 w-full rounded-lg border bg-background pl-9 pr-9 text-sm"
-              />
-              {itemQuery && (
-                <button
-                  type="button"
-                  onClick={() => setItemQuery("")}
-                  aria-label="Xóa nội dung tìm kiếm"
-                  className="absolute right-1.5 top-1/2 inline-flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
-                >
-                  <Icon name="close" size={15} />
-                </button>
-              )}
+              <Icon name="search" size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <input aria-label="Mã hoặc tên NVL / SKU" value={itemQuery}
+                onChange={event=>setItemQuery(event.target.value)} placeholder="Tìm mã hoặc tên hàng…"
+                className="h-9 w-full rounded-lg border bg-background pl-9 pr-9 text-sm" />
+              {itemQuery&&<button type="button" onClick={()=>setItemQuery("")} aria-label="Xóa nội dung tìm kiếm"
+                className="absolute right-1.5 top-1/2 inline-flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-muted">
+                <Icon name="close" size={15}/>
+              </button>}
             </div>
           </div>
-
-          <div className="flex min-h-9 flex-wrap items-center gap-2 text-xs">
-            <span className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-muted px-2.5">
-              <Icon name="storefront" size={14} />
-              Chi nhánh đặt: <strong>{branchLabel}</strong>
-            </span>
-            <span className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-muted px-2.5">
-              <Icon name="event" size={14} />
-              Ngày đơn: <strong>{formatShortDate(range.from)} - {formatShortDate(range.to)}</strong>
-            </span>
-            {normalizedItemQuery && (
-              <span className="inline-flex h-8 items-center rounded-lg bg-primary/10 px-2.5 text-primary">
-                {filteredMaterials.length} NVL · {filteredSkuRows.length} SKU
-              </span>
-            )}
+          <div className="min-w-0">
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Nhóm khách</label>
+            <SearchableSelect aria-label="Nhóm khách" disabled={optionsLoading} value={groupId}
+              placeholder="Tất cả nhóm" preserveOrder
+              options={[{value:"",label:"Tất cả nhóm"},...dsNhom.map(g=>({value:g.id,label:g.name}))]}
+              onValueChange={value=>{setGroupId(value);if(value)setCustomerId("");}}/>
+          </div>
+          <div className="min-w-0">
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Khách hàng cụ thể</label>
+            <SearchableSelect aria-label="Khách hàng cụ thể" disabled={optionsLoading} value={customerId}
+              placeholder="Tất cả khách" preserveOrder searchPlaceholder="Tìm mã, tên hoặc SĐT khách…"
+              options={[{value:"",label:"Tất cả khách"},...dsKhach.map(c=>({value:c.id,label:c.name,meta:c.code,searchText:c.phone??""}))]}
+              onValueChange={value=>{setCustomerId(value);if(value)setGroupId("");}}/>
           </div>
         </div>
-      </div>
-
-      {/* 29/07 (CEO): lọc theo khách / nhóm khách. Đặt ngay dưới đầu trang để
-          thấy trước khi đọc số — tránh nhìn nhầm số đã lọc thành số toàn bộ. */}
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="min-w-[200px]">
-          <label className="mb-1 block text-xs font-medium text-muted-foreground">
-            Nhóm khách
-          </label>
-          <SearchableSelect aria-label="Nhóm khách" disabled={optionsLoading}
-            value={groupId} placeholder="Tất cả nhóm" preserveOrder
-            options={[{value:"",label:"Tất cả nhóm"},...dsNhom.map(g=>({value:g.id,label:g.name}))]}
-            onValueChange={value=>{setGroupId(value);if(value)setCustomerId("");}} />
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t pt-3 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5"><Icon name="storefront" size={14}/>{branchLabel}</span>
+          <span className="inline-flex items-center gap-1.5"><Icon name="event" size={14}/>{formatShortDate(range.from)} – {formatShortDate(range.to)}</span>
+          {normalizedItemQuery&&<span className="text-primary">{filteredMaterials.length} NVL · {filteredSkuRows.length} SKU</span>}
+          {(groupId||customerId)&&<>
+            <span className="text-amber-700">Đang lọc theo khách hàng</span>
+            <button type="button" onClick={()=>{setGroupId("");setCustomerId("");}}
+              className="ml-auto inline-flex h-7 items-center gap-1 rounded-md px-2 hover:bg-muted hover:text-foreground">
+              <Icon name="filter_alt_off" size={14}/>Bỏ lọc khách
+            </button>
+          </>}
         </div>
-
-        <div className="w-full min-w-[240px] sm:w-80">
-          <label className="mb-1 block text-xs font-medium text-muted-foreground">
-            Khách hàng cụ thể
-          </label>
-          <SearchableSelect aria-label="Khách hàng cụ thể" disabled={optionsLoading}
-            value={customerId} placeholder="Tất cả khách" preserveOrder
-            searchPlaceholder="Tìm mã, tên, SĐT khách…"
-            options={[{value:"",label:"Tất cả khách"},...dsKhach.map(c=>({value:c.id,label:c.name,meta:c.code,searchText:c.phone??""}))]}
-            onValueChange={value=>{setCustomerId(value);if(value)setGroupId("");}} />
-        </div>
-
-        {(groupId || customerId) && (
-          <button
-            type="button"
-            onClick={() => {
-              setGroupId("");
-              setCustomerId("");
-            }}
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm hover:bg-muted/50"
-          >
-            <Icon name="filter_alt_off" size={16} />
-            Bỏ lọc
-          </button>
-        )}
-
-        {(groupId || customerId) && (
-          <span className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-amber-500/10 px-3 text-sm text-amber-700">
-            <Icon name="info" size={16} />
-            Đang xem số liệu đã lọc, không phải toàn bộ
-          </span>
-        )}
-      </div>
+      </section>
 
       {optionsError && <p role="alert" className="text-sm text-destructive">{optionsError} <button type="button" className="underline" onClick={()=>setRetry(n=>n+1)}>Tải lại danh sách</button></p>}
       {reportError && <p role="alert" className="text-sm text-destructive">{reportError} <button type="button" className="underline" onClick={()=>setRetry(n=>n+1)}>Thử lại</button></p>}
