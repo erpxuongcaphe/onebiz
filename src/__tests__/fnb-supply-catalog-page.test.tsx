@@ -2,6 +2,7 @@ import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import Page from "@/app/(main)/hang-hoa/hang-cap-fnb/page";
+vi.mock("@/components/shared/fnb-new-store-defaults", () => ({ FnbNewStoreDefaults: () => <span>Mặc định quán mới</span> }));
 
 const mocks = vi.hoisted(() => ({
   permission: vi.fn(), save: vi.fn(), list: vi.fn(), scope: vi.fn(), setScope: vi.fn(), search: vi.fn(), toast: vi.fn(),

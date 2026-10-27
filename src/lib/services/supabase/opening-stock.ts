@@ -44,11 +44,12 @@ const messages: Record<string,string> = {
   OPENING_DUPLICATE_PRODUCT: "Mã hàng bị lặp trong file",
   OPENING_STOCK_COMPONENT_REQUIRED: "Mã này không giữ tồn tại chi nhánh. Hãy nhập mã thành phần công thức",
   OPENING_UNIT_MISMATCH: "Đơn vị chưa khớp. Hãy quy đổi số lượng và đơn giá về đơn vị tồn Onebiz",
-  OPENING_NUMBER_INVALID: "Số lượng/giá vốn chưa hợp lệ (lượng tối đa 4, giá tối đa 6 chữ số thập phân)",
+  OPENING_NUMBER_INVALID: "Số lượng hoặc đơn giá chưa hợp lệ: lượng tối đa 4, đơn giá tối đa 6 số sau dấu chấm. Ví dụ 1.25 đơn vị, giá 32,500 hoặc 20.545455đ/đơn vị",
   OPENING_RESERVED_STOCK: "Hàng đang có lượng giữ chỗ. Hãy đối soát đơn đang xử lý trước",
   OPENING_USE_STOCKTAKE: "Mã đã có tồn hoặc phát sinh vận hành. Muốn đổi số lượng hãy dùng Kiểm kho; bổ sung giá vốn thì giữ nguyên lượng đang có",
   OPENING_COST_ALREADY_TRACKED: "Mã đã có lịch sử giá vốn. Không ghi đè đầu kỳ; hãy đối soát giá vốn/kiểm kê",
-  OPENING_SHARED_COST_CONFLICT: "Giá vốn dùng chung khác file và chi nhánh khác đang có hàng. Cần đối soát trước khi đổi giá",
+  OPENING_SHARED_COST_CONFLICT: "Chi nhánh đang dùng giá vốn chung; đơn giá nhập khác danh mục và kho khác đang có hàng. Với quán F&B, vào Hàng cấp F&B để thiết lập sổ giá vốn riêng trước; không đổi giá kho khác để vượt lỗi",
+  OPENING_FNB_SETUP_REQUIRED: "Chưa bật sổ giá vốn riêng cho quán. Vào Hàng cấp F&B, cấu hình hàng và bật kiểm soát cho đúng chi nhánh trước khi lấy giá kho tổng",
   OPENING_PREVIEW_CHANGED: "Tồn hoặc giá vốn đã thay đổi sau khi xem trước. Xem trước lại dữ liệu để cập nhật; chưa ghi dữ liệu.",
   OPENING_REPLAY_CONFLICT: "Mã đợt nhập đã được dùng cho dữ liệu khác. Đóng rồi mở lại để tạo đợt mới.",
   OPENING_CONTEXT_REQUIRED: "Cần chọn mục đích, thời điểm chốt hợp lệ và lý do (tối đa 500 ký tự).",
@@ -80,6 +81,18 @@ export async function commitOpeningStock(input: {
 }
 export function packOpeningRows(rows:InitialStockImportRow[]) {
   return rows.map(row=>({...row,expiryDate:row.expiryDate?formatDateInputValue(row.expiryDate):undefined}));
+}
+
+export interface OpeningWarehousePrice { productId: string; unit: string; costPrice: number | null }
+/** Read-only quotes in the inventory unit; the user must explicitly choose to use them. */
+export async function getOpeningWarehousePrices(branchId: string, productIds: string[]): Promise<OpeningWarehousePrice[]> {
+  if (!branchId || !productIds.length) return [];
+  const { data, error } = await (getClient().rpc as any)("get_inventory_opening_warehouse_prices", {
+    p_branch_id: branchId, p_product_ids: [...new Set(productIds)],
+  });
+  if (error) throw openingError(error.message);
+  if (!Array.isArray(data)) throw new Error("Chưa đọc được giá kho tổng. Giá đã nhập được giữ nguyên.");
+  return data.map((row: OpeningWarehousePrice) => ({ ...row, costPrice: row.costPrice == null ? null : Number(row.costPrice) }));
 }
 export async function listOpeningBatches(branchId?: string,batchId?:string): Promise<OpeningBatch[]> {
   let query=(getClient() as any).from("inventory_opening_batches")

@@ -122,7 +122,12 @@ export async function createBranch(branch: {
           : 3,
     },
   });
-  if (error) throw error;
+  if (error) {
+    if (/FNB_DEFAULT_TEMPLATE_REQUIRED|FNB_SUPPLY_CATALOG_EMPTY/.test(error.message)) {
+      throw new Error("Chưa tạo chi nhánh: quán mẫu cấp hàng không còn sẵn sàng. Vào Hàng cấp F&B → Mặc định quán mới để đổi quán mẫu hoặc tắt mặc định, rồi tạo lại.");
+    }
+    throw error;
+  }
   if (!data) throw new Error("Máy chủ không trả về chi nhánh đã tạo.");
   return mapBranch(data as Record<string, unknown>);
 }

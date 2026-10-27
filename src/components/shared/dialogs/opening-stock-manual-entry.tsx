@@ -8,7 +8,7 @@ import { NumericInput } from "@/components/ui/numeric-input";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { formatCurrency } from "@/lib/format";
-import { searchOpeningStockCandidates, type OpeningStockCandidate } from "@/lib/services/supabase/opening-stock";
+import { getOpeningWarehousePrices, searchOpeningStockCandidates, type OpeningStockCandidate } from "@/lib/services/supabase/opening-stock";
 import type { InitialStockImportRow } from "@/lib/excel/schemas";
 
 type Line = OpeningStockCandidate & { quantity: number | null; cost: number | null; lot: string; expiry: string; note: string };
@@ -30,6 +30,11 @@ export function OpeningStockManualEntry({ onPreview, busy, contextContent, onSum
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [showCompleted, setShowCompleted] = useState(true);
+  const [priceBusy, setPriceBusy] = useState(false);
+  const [priceStatus, setPriceStatus] = useState("");
+  const priceRequest = useRef(0);
+  const priceLock = useRef(false);
+  useEffect(() => () => { priceRequest.current++; }, []);
   const searchRef = useRef<HTMLInputElement>(null);
   const count = lines.length;
   const incomplete = lines.filter(line => line.quantity === null || line.cost === null).length;
@@ -51,6 +56,28 @@ export function OpeningStockManualEntry({ onPreview, busy, contextContent, onSum
   function update(id: string, patch: Partial<Line>) {
     setLines(previous => previous.map(line => line.id === id ? { ...line, ...patch } : line)); setError("");
   }
+  async function fillWarehousePrices() {
+    if (busy || priceLock.current || !branchId) return;
+    const missing = lines.filter(line => line.cost === null);
+    if (!missing.length) return;
+    const request = ++priceRequest.current;
+    priceLock.current = true; setPriceBusy(true); setPriceStatus(""); setError("");
+    try {
+      const quotes = await getOpeningWarehousePrices(branchId, missing.map(line => line.id));
+      if (request !== priceRequest.current) return;
+      const prices = new Map(quotes.filter(quote => quote.costPrice !== null && Number.isFinite(quote.costPrice) && quote.costPrice! > 0)
+        .map(quote => [quote.productId, quote]));
+      const usable = missing.filter(line => prices.get(line.id)?.unit === line.unit);
+      const usableIds = new Set(usable.map(line => line.id));
+      setLines(previous => previous.map(line => line.cost === null && usableIds.has(line.id)
+        ? { ...line, cost: prices.get(line.id)!.costPrice } : line));
+      setPriceStatus(`Đã điền giá ${usable.length}/${missing.length} dòng còn trống, theo đơn vị tồn. Giữ nguyên mọi giá đã nhập.${usable.length < missing.length ? " Dòng chưa có giá bán cần nhập giá vốn xác nhận hoặc giá công thức BTP; không tự lấy 0." : ""}`);
+    } catch (cause) {
+      if (request === priceRequest.current) setError(cause instanceof Error ? cause.message : "Không tải được giá kho tổng. Giá đã nhập được giữ nguyên.");
+    } finally {
+      if (request === priceRequest.current) { priceLock.current = false; setPriceBusy(false); }
+    }
+  }
   function add(item: OpeningStockCandidate) {
     if (count >= 1000) return;
     if (lines.some(line => line.id === item.id)) { setStatus(`${item.code} đã có trong danh sách.`); return; }
@@ -59,6 +86,7 @@ export function OpeningStockManualEntry({ onPreview, busy, contextContent, onSum
     requestAnimationFrame(() => document.getElementById(`opening-qty-${item.id}`)?.focus());
   }
   async function preview() {
+    if (busy || priceLock.current) return;
     setSubmitted(true);
     if (!branch?.code) { setError("Chọn chi nhánh nhận tồn trước khi nhập."); return; }
     if (!count) { setError("Tìm và thêm ít nhất một mã hàng."); searchRef.current?.focus(); return; }
@@ -73,7 +101,7 @@ export function OpeningStockManualEntry({ onPreview, busy, contextContent, onSum
       expiryDate: line.expiry ? new Date(`${line.expiry}T00:00:00+07:00`) : undefined, note: line.note.trim() || undefined })));
   }
   return <form id="opening-manual-form" onSubmit={event => { event.preventDefault(); if (!busy) void preview(); }}>
-    <fieldset disabled={busy} className="min-w-0 space-y-4">
+    <fieldset disabled={busy || priceBusy} className="min-w-0 space-y-4">
       <section aria-label="Thông tin đợt nhập" className="space-y-3">
         <h3 className="font-semibold text-primary text-sm">Thông tin đợt nhập</h3>
         <div className="space-y-1"><label htmlFor="opening-manual-branch" className="text-sm font-medium">Chi nhánh nhận tồn <span className="text-destructive">*</span></label>
@@ -86,6 +114,13 @@ export function OpeningStockManualEntry({ onPreview, busy, contextContent, onSum
         <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold text-primary text-sm">Hàng nhập tồn <span className="font-normal text-muted-foreground">· {count} mã</span></h3>
           {count > 1 && <Button type="button" variant="ghost" size="sm" onClick={() => setShowCompleted(previous => !previous)}>{showCompleted ? `Chưa đủ thông tin (${incomplete})` : "Hiện tất cả"}</Button>}
         </div>
+        {count > 0 && branch?.branchType === "store" && <div className="space-y-1">
+          <Button type="button" variant="outline" size="sm" className="min-h-10 max-w-full whitespace-normal text-left" disabled={busy || priceBusy || !lines.some(line => line.cost === null)} onClick={() => void fillWarehousePrices()}>
+            {priceBusy ? "Đang lấy giá..." : "Lấy giá kho tổng cho dòng trống"}
+          </Button>
+          <p className="text-xs text-foreground">Giá bán niêm yết kho tổng / 1 đơn vị tồn. Chỉ điền dòng trống; vẫn sửa được trước khi xác nhận.</p>
+          {priceStatus && <p role="status" className="text-sm text-foreground">{priceStatus}</p>}
+        </div>}
         <div className="space-y-1"><label htmlFor="opening-manual-search" className="sr-only">Thêm hàng</label>
           <div className="relative"><Icon name="search" size={18} className="absolute left-3 top-3 text-muted-foreground pointer-events-none" />
             <Input ref={searchRef} id="opening-manual-search" className="pl-10" role="combobox" aria-autocomplete="list" aria-expanded={results.length > 0} aria-controls="opening-search-results" aria-activedescendant={results[activeResult] ? `opening-option-${results[activeResult].id}` : undefined}
@@ -113,11 +148,11 @@ export function OpeningStockManualEntry({ onPreview, busy, contextContent, onSum
             const missing = submitted && (line.quantity === null || line.cost === null);
             return <div key={line.id} className={`border-b last:border-b-0 p-3 ${missing ? "bg-destructive/5" : ""}`}>
               <div className={`${rowGrid} grid grid-cols-2 gap-2`}>
-                <div className="col-span-2 md:col-span-1 min-w-0 pr-10 md:pr-0 relative"><p id={`opening-product-${line.id}`} className="font-semibold text-sm leading-snug md:flex md:items-center md:gap-2 md:whitespace-nowrap"><span className="md:order-2 md:min-w-0 md:truncate" title={line.name}>{line.name}</span><span className="text-primary md:order-1 md:shrink-0 font-normal">{line.code}</span><span className="text-muted-foreground md:order-3 md:shrink-0 font-normal"> · {line.unit}</span></p>
+                <div className="col-span-2 md:col-span-1 min-w-0 pr-10 md:pr-0 relative"><p id={`opening-product-${line.id}`} className="font-semibold text-sm leading-snug md:flex md:items-center md:gap-2 md:whitespace-nowrap"><span className="block md:order-2 md:min-w-0 md:truncate" title={line.name}>{line.name}</span><span className="text-primary md:order-1 md:shrink-0 font-normal">{line.code}</span><span className="text-muted-foreground md:order-3 md:shrink-0 font-normal"> · {line.unit}</span></p>
                   <Button type="button" size="icon" variant="ghost" className="md:hidden absolute -right-1 -top-1 text-muted-foreground hover:text-destructive" aria-label={`Xóa ${line.code}`} onClick={() => setLines(previous => previous.filter(item => item.id !== line.id))}><Icon name="close" size={18} /></Button>
                 </div>
-                <div><label htmlFor={`opening-qty-${line.id}`} className="text-xs font-medium md:sr-only">Số lượng ({line.unit})</label><NumericInput id={`opening-qty-${line.id}`} value={line.quantity} onChange={quantity => update(line.id, { quantity })} decimals={4} placeholder="Chưa nhập" aria-invalid={submitted && line.quantity === null} aria-describedby={`opening-product-${line.id}${missing?` opening-line-error-${line.id}`:""}`} /></div>
-                <div><label htmlFor={`opening-cost-${line.id}`} className="text-xs font-medium md:sr-only">Giá vốn / {line.unit}</label><NumericInput id={`opening-cost-${line.id}`} value={line.cost} onChange={cost => update(line.id, { cost })} decimals={6} placeholder="Chưa nhập" aria-invalid={submitted && line.cost === null} aria-describedby={`opening-product-${line.id}${missing?` opening-line-error-${line.id}`:""}`} /></div>
+                <div><label htmlFor={`opening-qty-${line.id}`} className="text-xs font-medium md:sr-only">Số lượng ({line.unit})</label><NumericInput id={`opening-qty-${line.id}`} className="text-base xl:text-sm [@media(pointer:coarse)]:text-base" value={line.quantity} onChange={quantity => update(line.id, { quantity })} decimals={4} placeholder="Chưa nhập" aria-invalid={submitted && line.quantity === null} aria-describedby={`opening-product-${line.id}${missing?` opening-line-error-${line.id}`:""}`} /></div>
+                <div><label htmlFor={`opening-cost-${line.id}`} className="text-xs font-medium md:sr-only">Giá vốn / {line.unit}</label><NumericInput id={`opening-cost-${line.id}`} className="text-base xl:text-sm [@media(pointer:coarse)]:text-base" value={line.cost} onChange={cost => update(line.id, { cost })} decimals={6} placeholder="Chưa nhập" aria-invalid={submitted && line.cost === null} aria-describedby={`opening-product-${line.id}${missing?` opening-line-error-${line.id}`:""}`} /></div>
                 <p className="col-span-2 md:col-span-1 flex items-center justify-between md:justify-end min-h-8 md:min-h-11 text-sm tabular-nums"><span className="md:hidden text-muted-foreground">Thành tiền</span><b>{line.quantity !== null && line.cost !== null ? formatCurrency(line.quantity * line.cost) : "—"}</b></p>
                 <Button type="button" size="icon" variant="ghost" className="hidden md:flex md:col-start-6 md:row-start-1 text-muted-foreground hover:text-destructive" aria-label={`Xóa ${line.code}`} onClick={() => setLines(previous => previous.filter(item => item.id !== line.id))}><Icon name="close" size={18} /></Button>
               <details className="col-span-2 md:col-span-1 md:col-start-5 md:row-start-1 md:open:col-span-6 md:open:col-start-1 md:open:row-start-2"><summary className="min-h-11 cursor-pointer text-sm text-primary content-center md:w-11 md:text-center" title="Lô, hạn sử dụng, ghi chú"><span className="md:hidden">Lô, hạn sử dụng, ghi chú{line.lot || line.expiry || line.note ? " · Đã bổ sung" : " (tùy chọn)"}</span><span className="hidden md:inline" aria-hidden="true">{line.lot || line.expiry || line.note ? "●" : "•••"}</span><span className="sr-only hidden md:inline">Lô, hạn sử dụng, ghi chú {line.code}</span></summary>

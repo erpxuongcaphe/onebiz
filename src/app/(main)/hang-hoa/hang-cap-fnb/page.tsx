@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
+import { FnbNewStoreDefaults } from "@/components/shared/fnb-new-store-defaults";
 import { useAuth, useToast } from "@/lib/contexts";
 import { getBranches, type BranchDetail } from "@/lib/services";
 import { searchInternalSaleProducts, type InternalSaleProduct } from "@/lib/services/supabase/internal-sale-products";
@@ -273,6 +274,7 @@ export default function FnbSupplyCatalogPage() {
         </Button>
       </section>}
       <section className="space-y-3">
+        {canEdit && <FnbNewStoreDefaults branches={storeBranches} />}
         <div className="flex flex-wrap items-center gap-3">
           <h2 className="text-base font-semibold">Danh sách đã cấu hình</h2>
           <select aria-label="Quán xem cấu hình" className="min-w-0 max-w-full rounded-md border bg-background p-2 text-sm"
