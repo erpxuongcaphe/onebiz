@@ -84,7 +84,7 @@ export function ChangeInventoryCheckDialog({target,onClose,onSuccess}:Props){
         {source&&!validBranch&&<p role="alert" className="text-destructive">Chọn đúng chi nhánh của phiếu trước khi thực hiện.</p>}
         {source&&!preview&&<>
           <div className="overflow-x-auto rounded-md border">
-            <div className="hidden min-w-[650px] grid-cols-[minmax(180px,1fr)_60px_120px_140px] gap-3 border-b bg-muted/50 px-3 py-2 text-xs font-semibold md:grid"><span>Mặt hàng</span><span>ĐVT tồn</span><span className="text-right">Thực đếm đã lưu</span><span className="text-right">Thực đếm sửa lại</span></div>
+            <div className="hidden min-w-[650px] grid-cols-[minmax(180px,1fr)_60px_120px_140px] gap-3 border-b bg-muted/50 px-3 py-2 text-xs font-semibold md:grid"><span>Mặt hàng</span><span>ĐVT tồn</span><span className="text-right">Thực đếm đã lưu</span><span className="text-right">{target?.action==='cancel'?'Xử lý khi hủy':'Thực đếm sửa lại'}</span></div>
             {source.items.map(i=><CountRow key={i.productId} item={i} value={counts[i.productId]} editing={target?.action==='edit'} onChange={updateCount}/>)}
           </div>
           {target?.action==='edit'&&<label className="block text-xs font-medium">Ghi chú phiếu<Textarea value={note} maxLength={5000} onChange={e=>{invalidate();setNote(e.target.value);}} className="mt-1 min-h-16 text-[16px] xl:text-sm [@media(any-pointer:coarse)]:text-[16px]"/></label>}
