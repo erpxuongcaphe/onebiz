@@ -1,3 +1,4 @@
+import { searchOptions } from "@/lib/search-options";
 export interface PurchaseForecastSearchableRow {
   code: string;
   name: string;
@@ -13,9 +14,5 @@ export function filterPurchaseForecastRows<
   const normalized = normalizePurchaseForecastQuery(query);
   if (!normalized) return rows;
 
-  return rows.filter(
-    (row) =>
-      row.code.toLocaleLowerCase("vi").includes(normalized) ||
-      row.name.toLocaleLowerCase("vi").includes(normalized),
-  );
+  return searchOptions(rows, query, row => ({name: row.name, identifiers: [row.code]})).map(result => result.item);
 }

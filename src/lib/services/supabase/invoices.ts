@@ -106,6 +106,11 @@ export async function getInvoices(params: QueryParams): Promise<QueryResult<Invo
   query = apDungLocChungTuBan(query);
 
   // Search — escape % wildcard.
+  if (params.filters?.ids !== undefined) {
+    const ids=params.filters.ids;
+    if(!Array.isArray(ids)||!ids.length||ids.some(id=>typeof id!=="string"||!id))throw new Error("Danh sách chứng từ xuất chưa hợp lệ.");
+    query=query.in("id",ids);
+  }
   // Note: search by SĐT KH cần subquery customers.phone — chưa wire vì
   // invoices.customer_phone không tồn tại; search hiện chỉ trên code +
   // customer_name (text snapshot lúc tạo HD).
@@ -189,6 +194,7 @@ export async function getInvoices(params: QueryParams): Promise<QueryResult<Invo
   if (error) handleError(error, "getInvoices");
 
   const invoices: Invoice[] = (data ?? []).map(mapInvoice);
+  await attachSourceOrderCodes(invoices, tenantId);
 
   // BATCH 3R: gắn tổng tiền đã trả per HĐ → badge "Đã trả 1 phần"/"toàn bộ".
   //   1 query gộp cho cả trang (KHÔNG N+1): aggregate sales_returns theo
@@ -270,7 +276,25 @@ export async function getInvoiceById(id: string): Promise<Invoice | null> {
     .is("deleted_at", null)
     .maybeSingle();
   if (error) handleError(error, "getInvoiceById");
-  return data ? mapInvoice(data) : null;
+  if (!data) return null;
+  const invoice = mapInvoice(data);
+  await attachSourceOrderCodes([invoice], tenantId);
+  return invoice;
+}
+
+/** PostgREST does not expose this self-reference as an embeddable relation.
+ * Read unique parent IDs in bounded tenant-scoped batches after the page query;
+ * this cannot filter out documents without a parent or alter pagination. */
+async function attachSourceOrderCodes(invoices: Invoice[], tenantId: string): Promise<void> {
+  const ids = [...new Set(invoices.map(row => row.sourceOrderId).filter((id): id is string => Boolean(id)))];
+  const codes = new Map<string, string>();
+  for (let offset = 0; offset < ids.length; offset += 100) {
+    const { data, error } = await getClient().from("invoices").select("id, code")
+      .eq("tenant_id", tenantId).in("id", ids.slice(offset, offset + 100));
+    if (error) handleError(error, "getInvoiceSourceOrderCodes");
+    for (const row of data ?? []) codes.set(row.id, row.code);
+  }
+  for (const row of invoices) if (row.sourceOrderId) row.sourceOrderCode = codes.get(row.sourceOrderId);
 }
 
 export function getInvoiceStatuses() {
@@ -743,6 +767,7 @@ function mapInvoice(row: any): Invoice {
     code: row.code,
     // Mã đơn gốc DH/NH trước khi hoàn tất → HD (00169) — truy vết ở trang Hóa đơn.
     orderCode: row.order_code ?? undefined,
+    sourceOrderId: row.source_order_id ?? undefined,
     // 00335: NGÀY HOÁ ĐƠN. Cột sinh ngay_chung_tu = coalesce(issued_at,
     // created_at); giữ nhánh dự phòng cho nơi select thiếu cột.
     date: row.ngay_chung_tu ?? row.created_at,

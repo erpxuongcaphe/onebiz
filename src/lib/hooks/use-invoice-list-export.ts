@@ -6,6 +6,9 @@ import {useCallback,useEffect,useRef,useState} from "react";
 import type {PhamViChiNhanh} from "@/lib/services/supabase/invoice-list-scope";
 import {getInvoicesForFilteredExport,type InvoiceExportQuery,type InvoiceExportProgress} from "@/lib/services/supabase/invoice-list-export";
 import {exportToExcel,exportToCsv} from "@/lib/utils/export";
+import {readRetailDocumentExportLines} from "@/lib/services/supabase/retail-document-export";
+import {buildRetailDocumentSheets,buildRetailDocumentExport,retailDocumentLineColumns,retailDocumentExportRange,retailDocumentExportScopeText} from "@/lib/utils/retail-document-export";
+import {exportReportToExcel} from "@/lib/utils/excel-export";
 import {formatDate} from "@/lib/format";
 import {invoiceFnbTypeLabel,invoiceRetailTypeLabel} from "@/lib/utils/invoice-list-filters";
 
@@ -27,6 +30,19 @@ export function useInvoiceListExport(options:{
       const rows=await getInvoicesForFilteredExport(options.scope,options.query,{signal:controller.signal,onProgress:setProgress});
       if(controller.signal.aborted)return;
       if(!rows.length){options.onError("Không có hóa đơn theo bộ lọc đã chọn.");return;}
+      if(rows.every(row=>row.source!=="fnb")){
+        const lines=await readRetailDocumentExportLines(rows,controller.signal);
+        if(controller.signal.aborted)return;
+        const range=retailDocumentExportRange(rows,options.query);
+        if(type==="excel")await exportReportToExcel({kind:"ban-hang",mode:"full",range,reportTitle:"Chứng từ bán hàng theo bộ lọc",
+          branchName:options.scope.mode==="branch"?(rows[0]?.branchName??""):"Các chi nhánh được phép",
+          description:retailDocumentExportScopeText(options.query),
+          sheets:buildRetailDocumentSheets(rows,lines,["CHỨNG TỪ BÁN HÀNG — THEO BỘ LỌC",`${rows.length} chứng từ · ${lines.length} dòng hàng`]),
+          shouldSave:()=>!controller.signal.aborted});
+        else await exportToCsv(buildRetailDocumentExport(rows,lines).details,retailDocumentLineColumns,"chi-tiet-chung-tu-theo-bo-loc",{shouldSave:()=>!controller.signal.aborted});
+        if(!controller.signal.aborted)options.onSuccess(rows.length);
+        return;
+      }
       const choices=parseFnbChoiceFilter(options.query.filters?.fnbOptions);
       const details=await getFnbInvoiceExportDetails(rows,controller.signal,choices);
       if(controller.signal.aborted)return;

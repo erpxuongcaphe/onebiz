@@ -22,6 +22,7 @@ import { useRouter } from "next/navigation";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { sidebarNavGroups } from "./nav-config";
 import { getProducts, getCustomers, getSuppliers } from "@/lib/services";
+import { searchOptions } from "@/lib/search-options";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
 
@@ -315,12 +316,7 @@ function CommandPaletteDialog({
 
   // Filter static items by query
   const filteredStatic = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return staticItems;
-    return staticItems.filter((item) => {
-      const hay = `${item.label} ${item.description ?? ""} ${item.keywords ?? ""}`.toLowerCase();
-      return hay.includes(q);
-    });
+    return searchOptions(staticItems,query,item=>({name:`${item.label} ${item.description??""} ${item.keywords??""}`})).map(result=>result.item);
   }, [query, staticItems]);
 
   // Group items for display

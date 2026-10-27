@@ -7,6 +7,9 @@ export interface Invoice extends FnbInvoiceContext {
   code: string;
   /** Mã đơn gốc (DH đặt hàng / NH nháp) trước khi hoàn tất — truy vết (00169). */
   orderCode?: string;
+  /** Explicit source-order link; distinct from the previous NH draft code. */
+  sourceOrderId?: string;
+  sourceOrderCode?: string;
   date: string;
   returnCode?: string;
   customerId: string;

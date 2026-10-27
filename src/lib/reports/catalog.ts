@@ -1,3 +1,4 @@
+import { searchOptions } from "@/lib/search-options";
 import { PERMISSIONS } from "@/lib/permissions/constants";
 
 export type ReportCategoryId =
@@ -564,16 +565,6 @@ const CATEGORY_BY_ID = new Map(
   REPORT_CATEGORIES.map((category) => [category.id, category]),
 );
 
-function normalizeSearchText(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/đ/g, "d")
-    .replace(/Đ/g, "D")
-    .toLowerCase()
-    .trim();
-}
-
 export function getReportByPath(pathname: string): ReportCatalogItem | undefined {
   return REPORT_CATALOG.find((report) => report.href === pathname);
 }
@@ -599,20 +590,7 @@ export function searchReports(
   reports: ReportCatalogItem[],
   query: string,
 ): ReportCatalogItem[] {
-  const normalizedQuery = normalizeSearchText(query);
-  if (!normalizedQuery) return reports;
-
-  return reports.filter((report) => {
-    const category = getReportCategory(report.category);
-    const haystack = normalizeSearchText(
-      [
-        report.title,
-        report.shortTitle,
-        report.description,
-        category.title,
-        ...report.keywords,
-      ].join(" "),
-    );
-    return haystack.includes(normalizedQuery);
-  });
+  return searchOptions(reports, query, report => ({ name: [report.title, report.shortTitle,
+    report.description, getReportCategory(report.category).title, ...report.keywords].join(" ")
+  })).map(result=>result.item);
 }

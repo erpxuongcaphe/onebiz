@@ -46,7 +46,7 @@ describe("report branch scope integration", () => {
     expect(selector).toContain("const branchItems = useMemo");
     expect(selector).toContain("const scopeItems = useMemo");
     expect(selector).toContain("value={selectedValue}");
-    expect(selector).toContain("items={scopeItems}");
+    expect(selector).toContain("options={scopeItems}");
     expect(selector).toContain("selectBranch(value === ALL_BRANCHES_VALUE ? null : value)");
     expect(selector).not.toContain("selectedBranchId");
     expect(selector).not.toContain("aria-pressed");

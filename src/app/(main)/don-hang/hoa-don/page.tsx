@@ -77,6 +77,9 @@ import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { useTxRowPermissions, usePermissions } from "@/lib/permissions";
 import { formatCurrency, formatDate, formatNumber, formatUser } from "@/lib/format";
+import { readSelectedInvoiceExport, readRetailDocumentExportLines } from "@/lib/services/supabase/retail-document-export";
+import { buildRetailDocumentSheets, retailDocumentExportRange, retailDocumentStatusLabel } from "@/lib/utils/retail-document-export";
+import { exportReportToExcel } from "@/lib/utils/excel-export";
 import { exportToExcel } from "@/lib/utils/export";
 import {
   khoaChiSoHoaDon,
@@ -158,7 +161,7 @@ function InvoiceDetail({
   /** Gọi khi data hóa đơn đổi (vd gắn vận đơn làm tổng tiền đổi) → refetch list. */
   onDataChanged?: () => void;
 }) {
-  const status = statusMap[invoice.status];
+  const status = {...statusMap[invoice.status],label:retailDocumentStatusLabel(invoice)};
   const { toast } = useToast();
 
   // Lazy fetch line items thay vì hardcode "Sản phẩm mẫu" (P0 audit fix).
@@ -710,6 +713,12 @@ export default function HoaDonPage() {
     return {search:debouncedSearch,searchField,sortBy:sorting[0]?.id,sortOrder:sorting[0]?.desc?"desc":"asc",filters:commonFilters};
   },[dateRange,selectedStatuses,showFnbTypes,retailSaleType,fnbOrderType,fnbTable,fnbArea,fnbChoiceJson,debouncedSearch,searchField,sorting]);
 
+  const selectedExportKey=JSON.stringify([phamViHienTai,listQuery,txPerms.canExport]);
+  const selectedExportContext=useRef(selectedExportKey);selectedExportContext.current=selectedExportKey;
+  const selectedExportActive=useRef<AbortController|null>(null);
+  const [selectedExportStage,setSelectedExportStage]=useState("");
+  useEffect(()=>()=>selectedExportActive.current?.abort(),[selectedExportKey]);
+
   const fetchData = useCallback(async () => {
     const request = ++listRequest.current;
     if (!branchScopeReady || !deepLinkReady) return;
@@ -929,7 +938,7 @@ export default function HoaDonPage() {
     },
     {
       accessorKey: "code",
-      header: "Mã hóa đơn",
+      header: "Mã chứng từ",
       size: showFnbTypes ? 310 : 130,
       cell: ({ row }) => {
         // BATCH 3R: badge trả hàng — suy từ returnedAmount vs totalAmount.
@@ -944,6 +953,7 @@ export default function HoaDonPage() {
         return (
           <div className="flex flex-col gap-0.5">
             <span className="font-medium text-primary">{row.original.code}</span>
+            {row.original.sourceOrderCode && <span className="text-xs text-muted-foreground">Đặt hàng: {row.original.sourceOrderCode}</span>}
             {row.original.source === "fnb" && <FnbInvoiceContext value={row.original} compact/>}
             {returnBadge && (
               <Badge variant="outline" className={`h-4 px-1.5 text-[10px] ${returnBadge.cls}`}>
@@ -1008,7 +1018,7 @@ export default function HoaDonPage() {
     },
     {
       id: "invoiceStatus", header: "Trạng thái", enableSorting: false,
-      cell: ({row}) => <Badge variant={statusMap[row.original.status]?.variant ?? "secondary"}>{statusMap[row.original.status]?.label ?? row.original.status}</Badge>,
+      cell: ({row}) => <Badge variant={statusMap[row.original.status]?.variant ?? "secondary"}>{retailDocumentStatusLabel(row.original)}</Badge>,
     },
     {
       accessorKey: "debt",
@@ -1098,7 +1108,7 @@ export default function HoaDonPage() {
           key={isFnbBranch ? "fnb-invoices" : "erp-invoices"}
           compactMobileToolbar
           fitDetailToViewport
-          renderMobileRow={invoice=><InvoiceMobileRow invoice={invoice} statusLabel={statusMap[invoice.status]?.label??invoice.status}/>}
+          renderMobileRow={invoice=><div className="min-w-0 space-y-1"><InvoiceMobileRow invoice={invoice} statusLabel={retailDocumentStatusLabel(invoice)}/>{invoice.sourceOrderCode&&<p className="text-xs text-muted-foreground">Đặt hàng: {invoice.sourceOrderCode}</p>}</div>}
 
           defaultColumnVisibility={isFnbBranch ? {star: false, returnCode: false, customerCode: false, discount: false, debt: false} : {paid: false, invoiceStatus: false}}
           columns={columns}
@@ -1195,6 +1205,7 @@ export default function HoaDonPage() {
           }
           toolbarFooter={
             <div className="space-y-2">
+            {selectedExportStage && <div role="status" aria-live="polite" className="flex flex-wrap items-center gap-2 text-xs text-foreground"><span>{selectedExportStage}</span><Button type="button" variant="ghost" size="sm" onClick={()=>selectedExportActive.current?.abort()}>Hủy xuất</Button></div>}
             {invoiceExport.progress && <div role="status" aria-live="polite" className="flex flex-wrap items-center gap-2 text-xs text-foreground">
               <span>Đang xuất theo bộ lọc: {formatNumber(invoiceExport.progress.loaded)}{invoiceExport.progress.total?` / ${formatNumber(invoiceExport.progress.total)}`:""} hóa đơn…</span>
               <Button type="button" variant="ghost" size="sm" onClick={invoiceExport.cancel}>Hủy xuất</Button>
@@ -1257,10 +1268,31 @@ export default function HoaDonPage() {
           selectable
           bulkActions={[
             {
-              label: "Xuất Excel dòng đã chọn",
+              label: "Xuất Excel chi tiết đã chọn",
               icon: <Icon name="download" size={16} />,
               onClick: async (selectedRows) => {
                 try {
+                if(selectedRows.every(row=>row.source!=="fnb")){
+                  if(!txPerms.canExport)throw new Error("Anh/chị chưa có quyền xuất chứng từ.");
+                  if(!listQuery || !branchScopeReady || selectedExportActive.current)return;
+                  const controller=new AbortController();selectedExportActive.current=controller;setSelectedExportStage("Đang đọc chứng từ đã chọn…");
+                  const snapshot=selectedExportContext.current;
+                  try{
+                    const rows=await readSelectedInvoiceExport(phamViHienTai,listQuery,selectedRows.map(row=>row.id),controller.signal);
+                    setSelectedExportStage("Đang tải chi tiết hàng và ghi chú…");
+                    const lines=await readRetailDocumentExportLines(rows,controller.signal);
+                    const range=retailDocumentExportRange(rows,listQuery);
+                    const titles=["CHỨNG TỪ BÁN HÀNG — ĐÃ CHỌN",`${rows.length} chứng từ · ${lines.length} dòng hàng`,"Mã: "+rows.map(row=>row.code).join(", ")];
+                    setSelectedExportStage("Đang tạo Excel chi tiết và tổng hợp theo khách…");
+                    await exportReportToExcel({kind:"ban-hang",mode:"full",range,reportTitle:"Chứng từ bán hàng đã chọn",
+                      branchName:phamViHienTai.mode==="branch"?(rows[0]?.branchName??""):"Các chi nhánh được phép",
+                      description:"Danh sách chứng từ, từng mã hàng và tổng hợp theo khách. Nháp chưa ghi nhận bán; hủy không cộng vào giá trị còn hiệu lực.",
+                      sheets:buildRetailDocumentSheets(rows,lines,titles),
+                      shouldSave:()=>!controller.signal.aborted && selectedExportContext.current===snapshot});
+                    if(!controller.signal.aborted && selectedExportContext.current===snapshot)toast({title:"Đã xuất Excel chi tiết",description:`${rows.length} chứng từ · ${lines.length} dòng hàng · có bảng theo khách`,variant:"success"});
+                  }catch(error){if(!controller.signal.aborted)throw error;}finally{if(selectedExportActive.current===controller){selectedExportActive.current=null;setSelectedExportStage("");}}
+                  return;
+                }
                 const cols = [
                   { header: "Mã HD", key: "code", width: 15 },
                   {
