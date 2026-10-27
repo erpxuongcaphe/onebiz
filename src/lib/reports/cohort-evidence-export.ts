@@ -28,8 +28,8 @@ export function buildCohortEvidenceSheets(input: CohortEvidence, scope: { tenant
     ["Ngày không hợp lệ", c.invalid_date_records, "bản ghi", "Chưa gán vào kỳ; thống kê trên toàn lịch sử trong phạm vi."],
   ];
   const matrix: ExcelSheet = { name: "Khách quay lại", titleRows, tablePreferenceKey: "report.customer-cohort.matrix",
-    columns: [{ key: "label", label: "Tháng mua đầu", width: 18 }, { key: "size", label: "Số khách", width: 12, format: "number" },
-      ...Array.from({ length: data.months_tracked }, (_, index) => ({ key: `m${index}`, label: index === 0 ? "Tháng đầu (%)" : `Tháng +${index} (%)`, width: 16, format: "number" as const }))],
+    columns: [{ id: "column-1", key: "label", label: "Tháng mua đầu", width: 18 }, { id: "column-2", key: "size", label: "Số khách", width: 12, format: "number" },
+      ...Array.from({ length: data.months_tracked }, (_, index) => ({ id: `column-${index + 3}`, key: `m${index}`, label: index === 0 ? "Tháng đầu (%)" : `Tháng +${index} (%)`, width: 16, format: "number" as const }))],
     rows: data.rows.map(row => ({ label: row.label, size: data.retention_ready ? row.size : null,
       ...Object.fromEntries(Array.from({ length: data.months_tracked }, (_, index) => [`m${index}`, data.retention_ready && row.size > 0 ? row.retention[index] ?? null : null])) })),
   };

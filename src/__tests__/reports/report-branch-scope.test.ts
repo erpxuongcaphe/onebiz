@@ -23,7 +23,8 @@ describe("report branch scope integration", () => {
     const lots = source(
       "src/app/(main)/phan-tich/lot-traceability/page.tsx",
     );
-    expect(cohort).toContain("branchId: activeBranchId");
+    expect(cohort).toContain("branchId={activeBranchId ?? null}");
+    expect(cohort).toContain("load={getCustomerCohortEvidence}");
     expect(lots).toContain("branchId: activeBranchId");
     expect(lots).not.toContain("getExpiringLots");
     expect(lots).toContain("lot.expiryDate");

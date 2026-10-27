@@ -3,7 +3,7 @@ import type { CohortEvidence } from "@/lib/reports/cohort-evidence";
 const integer = new Intl.NumberFormat("vi-VN");
 const percent = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 1 });
 
-/** Build-only candidate, not mounted by a production route. */
+/** Keep identity coverage separate from customer-retention conclusions. */
 export function CustomerCohortCoverage({ data, canView, error }: { data?: CohortEvidence; canView: boolean; error?: string }) {
   if (!canView) return null;
   if (error) return <p role="alert" className="border-l-2 border-status-error px-3 py-2 text-sm">Không tải được độ phủ khách hàng.</p>;

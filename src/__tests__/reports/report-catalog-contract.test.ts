@@ -14,7 +14,11 @@ describe("report catalog implementation contract", () => {
     expect(REPORT_CATALOG).toHaveLength(38);
 
     for (const report of REPORT_CATALOG) {
-      const source = readFileSync(resolve(reportPagePath(report.href)), "utf8");
+      const page = readFileSync(resolve(reportPagePath(report.href)), "utf8");
+      const source = report.href === "/phan-tich/customer-cohort"
+        ? page + readFileSync(resolve("src/components/reports/customer-cohort-evidence-panel.tsx"), "utf8")
+        : page;
+      if (report.href === "/phan-tich/customer-cohort") expect(page).toContain("<CustomerCohortEvidencePanel");
       const expectedKind =
         report.href === "/phan-tich"
           ? "tong-quan"
