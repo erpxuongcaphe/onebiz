@@ -183,8 +183,14 @@ export interface SalesOrder {
   date: string;
   customerName: string;
   customerId?: string;
+  customerCode?: string;
+  originalCustomerCode?: string;
+  canonicalCustomerId?: string;
+  customerAddress?: string;
   customerPhone: string;
   totalAmount: number;
+  discountAmount?: number;
+  taxAmount?: number;
   /**
    * Phí giao hàng (invoices.shipping_fee). Đơn đặt hàng = hóa đơn nháp nên
    * totalAmount đã gộp ship (= tiền hàng + phí giao). undefined/0 = không có ship.

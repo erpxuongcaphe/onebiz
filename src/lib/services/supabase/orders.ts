@@ -123,8 +123,8 @@ export async function getOrders(
       shippingState !== "all",
   );
   const customerRelation = hasCustomerPhoneFilter
-    ? "customer:customers!invoices_customer_id_fkey!inner(phone, tenant_id)"
-    : "customer:customers!invoices_customer_id_fkey(phone)";
+    ? "customer:customers!invoices_customer_id_fkey!inner(code, phone, address, tenant_id)"
+    : "customer:customers!invoices_customer_id_fkey(code, phone, address)";
   const shipmentRelation = hasShippingFilter
     ? shippingState === "none"
       ? ", shipments:shipping_orders!shipping_orders_invoice_id_fkey(id)"
@@ -263,7 +263,7 @@ export async function getOrders(
   const orders: SalesOrder[] = (data ?? []).map((row: any) => {
     const profile = row.profiles as { full_name: string } | null;
     const branch = row.branches as { name: string } | null;
-    const customer = row.customer as { phone: string | null } | null;
+    const customer = row.customer as { code: string; phone: string | null; address: string | null } | null;
     return {
       id: row.id,
       // CEO 10/07: hiện MÃ ĐƠN gốc (DH). Trước hoàn tất code=DH; sau hoàn tất
@@ -274,8 +274,12 @@ export async function getOrders(
       date: row.created_at,
       customerName: row.customer_name ?? "",
       customerId: row.customer_id ?? undefined,
+      customerCode: customer?.code ?? "",
+      customerAddress: customer?.address ?? "",
       customerPhone: customer?.phone ?? "",
       totalAmount: row.total ?? 0,
+      discountAmount: row.discount_amount == null ? undefined : Number(row.discount_amount),
+      taxAmount: row.tax_amount == null ? undefined : Number(row.tax_amount),
       // Phí giao = cột delivery_fee (invoices KHÔNG có shipping_fee).
       shippingFee: Number(row.delivery_fee ?? 0),
       // Số đã thu / còn phải thu — để thẻ "Tổng cần thu" tính đúng theo trạng

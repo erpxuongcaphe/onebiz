@@ -17,10 +17,11 @@ export async function getForecastCustomerOptions() {
 export interface OrderExportLine {
   id: string; invoice_id: string; product_name: string | null; unit: string | null;
   quantity: number; unit_price: number; discount: number; total: number; note: string | null;
+  vat_rate?: number | null;
   products: { code: string } | null;
 }
 
-/** Every page in the same authorized scope; never export only the visible page. */
+/** All matching orders, or an exact set of visible/selected IDs, in the same authorized scope. */
 export async function readOrdersForExport(scope: PhamViDonDatHang, params: Omit<QueryParams, 'branchId' | 'page' | 'pageSize'>, selectedIds?: string[]) {
   if (scope.mode === 'none') throw new Error('Chọn phạm vi chi nhánh trước khi xuất.');
   const ids = selectedIds ? [...new Set(selectedIds)] : undefined;
@@ -33,16 +34,19 @@ export async function readOrdersForExport(scope: PhamViDonDatHang, params: Omit<
   if (ids && (orders.length !== ids.length || orders.some(o => !ids.includes(o.id)))) {
     throw new Error('Đơn được chọn đã thay đổi hoặc không còn trong phạm vi. Tải lại trước khi xuất.');
   }
+  // Preserve the visible/selected order without trusting cached document data.
+  if (ids) orders.sort((a,b) => ids.indexOf(a.id) - ids.indexOf(b.id));
   const client = getClient();
   const lines: OrderExportLine[] = [];
   for (let start = 0; start < orders.length; start += 100) {
     const batchIds = orders.slice(start, start + 100).map(o => o.id);
     const batch = await readHistoryPages<OrderExportLine>(async (offset, size) => {
       const r = await client.from('invoice_items_scoped')
-        .select('id,invoice_id,product_name,unit,quantity,unit_price,discount,total,note,products:products_scoped!invoice_items_product_id_fkey(code)', { count: 'exact' })
+        .select('id,invoice_id,product_name,unit,quantity,unit_price,discount,total,vat_rate,note,products:products_scoped!invoice_items_product_id_fkey(code)', { count: 'exact' })
         .in('invoice_id', batchIds).order('invoice_id').order('id').range(offset, offset + size - 1);
       return r as unknown as { data: OrderExportLine[] | null; count: number | null; error: {message:string} | null };
     });
+    if (batch.some(line => !batchIds.includes(line.invoice_id))) throw new Error('Dòng hàng không thuộc đơn đang xuất.');
     lines.push(...batch);
   }
   return { orders, lines };

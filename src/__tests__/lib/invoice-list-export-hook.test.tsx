@@ -19,7 +19,7 @@ describe("Invoice export interaction", () => {
     expect(exported).toHaveLength(437); expect(exported[436].invoiceTypeLabel).toBe("Mang về");
     expect(exported[436].totalAmount).toBe(50000); expect(columns.map((c: {key:string}) => c.key)).toContain("invoiceTypeLabel");
     expect(columns.map((c: {key:string})=>c.key)).toEqual(expect.arrayContaining(["tableName","tableNumber","areaName","openedAt","paidAt","posNote"]));
-    expect(opts.onSuccess).toHaveBeenCalledWith(437); expect(result.current.progress).toBeNull();
+    expect(opts.onSuccess).toHaveBeenCalledWith(437,'toàn bộ theo bộ lọc'); expect(result.current.progress).toBeNull();
   });
   it.each(["cancel", "branch change", "filter change", "unmount"])("does not save stale or partial files after %s", async change => {
     let resolve!: (value: Invoice[]) => void;

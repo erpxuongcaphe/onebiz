@@ -178,7 +178,7 @@ describe("danh sách dùng cùng bộ lọc vận đơn", () => {
     });
     const phoneSelect = queryCalls.find((call) => call.method === "select");
     expect(String(phoneSelect?.args[0])).toContain(
-      "customers!invoices_customer_id_fkey!inner(phone, tenant_id)",
+      "customers!invoices_customer_id_fkey!inner(code, phone, address, tenant_id)",
     );
     expect(queryCalls).toContainEqual({
       method: "eq",
