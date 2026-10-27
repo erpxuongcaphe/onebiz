@@ -3921,9 +3921,6 @@ function FnbPosPageInner() {
           onDeliveryStaffChange={handleDeliveryStaffChange}
           onDeliveryTierChange={handleDeliveryTierChange}
           staffOptions={shipperOptions}
-          deliveryStaffLoading={deliveryStaff.loading}
-          deliveryStaffError={deliveryStaff.error}
-          onRetryDeliveryStaff={deliveryStaff.retry}
           deliveryStaffBusy={deliveryStaffSaving}
           selfDeliveryTiers={deliveryTiers}
           deliveryPolicySlot={deliveryPolicySlot}
@@ -4148,9 +4145,6 @@ function FnbPosPageInner() {
               onDeliveryStaffChange={handleDeliveryStaffChange}
               onDeliveryTierChange={handleDeliveryTierChange}
               staffOptions={shipperOptions}
-              deliveryStaffLoading={deliveryStaff.loading}
-              deliveryStaffError={deliveryStaff.error}
-              onRetryDeliveryStaff={deliveryStaff.retry}
               deliveryStaffBusy={deliveryStaffSaving}
               selfDeliveryTiers={deliveryTiers}
               deliveryPolicySlot={deliveryPolicySlot}
