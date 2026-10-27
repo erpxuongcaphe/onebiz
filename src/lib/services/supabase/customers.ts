@@ -12,6 +12,7 @@ import {
 } from "./base";
 import { recordAuditLog } from "./audit";
 import { isRpcUnavailable } from "./rpc-utils";
+import {getCustomerIdentityDirectory,customerIdentity} from './customer-identity';
 import { composeAddress as composeStructuredAddress } from "@/lib/data/vn-provinces";
 import {
   applyCreatedAtRangeFilter,
@@ -145,6 +146,8 @@ export async function getCustomers(
 ): Promise<QueryResult<Customer>> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
+  const identityLinks=params.filters?.internalOnly||params.filters?.includeInternal
+    ?await getCustomerIdentityDirectory():[];
   const { from, to } = getPaginationRange(params);
 
   let query = supabase
@@ -162,6 +165,7 @@ export async function getCustomers(
   } else if (!params.filters?.includeInternal) {
     query = query.or("is_internal.is.null,is_internal.eq.false");
   }
+  else if(identityLinks.length) query=query.is('canonical_customer_id' as never,null);
 
   // Search — escape % wildcard
   if (params.search) {
@@ -320,7 +324,7 @@ export async function getCustomers(
   );
 
   const customers: Customer[] = rows.map((row) =>
-    mapCustomer(row, returnsByCustomer.get(row.id) ?? 0),
+    displayCustomer(mapCustomer(row, returnsByCustomer.get(row.id) ?? 0),identityLinks),
   );
   return { data: customers, total: count ?? 0 };
 }
@@ -501,7 +505,20 @@ export async function getCustomerById(id: string): Promise<Customer | null> {
     handleError(error, "getCustomerById");
   }
 
-  return data ? mapCustomer(data) : null;
+  if(!data)return null;
+  return displayCustomer(mapCustomer(data),data.is_internal===true?await getCustomerIdentityDirectory():[]);
+}
+
+function displayCustomer(row:Customer,links:Awaited<ReturnType<typeof getCustomerIdentityDirectory>>):Customer {
+  const link=customerIdentity(row.id,links);
+  return link?{...row,code:link.code,name:link.name,canonicalCustomerId:link.canonicalId,originalCode:row.code}:row;
+}
+
+async function assertCustomerIdentityEditable(id:string):Promise<void>{
+  const link=customerIdentity(id,await getCustomerIdentityDirectory());
+  if(link&&link.aliasId===id){
+    throw new Error(`Hồ sơ này giữ lịch sử nội bộ. Vui lòng mở khách ${link.code} để sửa thông tin.`);
+  }
 }
 
 // --- Write Operations ---
@@ -608,6 +625,7 @@ export async function updateCustomer(
   id: string,
   updates: Partial<Customer>,
 ): Promise<Customer> {
+  await assertCustomerIdentityEditable(id);
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
@@ -752,6 +770,7 @@ export async function changeCustomerCode(
   customerId: string,
   newCode: string,
 ): Promise<ChangeCustomerCodeResult> {
+  await assertCustomerIdentityEditable(customerId);
   const supabase = getClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase.rpc as any)(

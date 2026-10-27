@@ -2,14 +2,16 @@ import type { QueryParams, SalesOrder } from '@/lib/types';
 import { getClient, getCurrentTenantId } from './base';
 import { readHistoryPages } from './read-history-pages';
 import { getOrdersTheoPhamVi, type PhamViDonDatHang } from './sales-order-list-scope';
+import {getCustomerIdentityDirectory,canonicalCustomerOptions} from './customer-identity';
 
 /** Read-only, lean catalogue for report filters. Includes internal customers. */
 export async function getForecastCustomerOptions() {
   const client = getClient();
   const tenant = await getCurrentTenantId();
-  return readHistoryPages<{ id: string; code: string; name: string; phone: string | null }>(async (offset, size) =>
+  const [rows,links]=await Promise.all([readHistoryPages<{ id: string; code: string; name: string; phone: string | null }>(async (offset, size) =>
     client.from('customers').select('id,code,name,phone', { count: 'exact' })
-      .eq('tenant_id', tenant).order('name').order('id').range(offset, offset + size - 1));
+      .eq('tenant_id', tenant).order('name').order('id').range(offset, offset + size - 1)),getCustomerIdentityDirectory()]);
+  return canonicalCustomerOptions(rows,links);
 }
 
 export interface OrderExportLine {

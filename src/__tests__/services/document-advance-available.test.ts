@@ -1,16 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const state = vi.hoisted(() => ({ from: vi.fn(), eq: vi.fn(), queries: [] as string[] }));
+const state = vi.hoisted(() => ({ from: vi.fn(), eq: vi.fn(), in:vi.fn(), rpc:vi.fn(), queries: [] as string[] }));
 vi.mock("@/lib/services/supabase/base", () => ({
-  getClient: () => ({ from: state.from }), getCurrentContext: async () => ({ tenantId: "tenant-1" }),
+  getClient: () => ({ from: state.from,rpc:state.rpc }), getCurrentContext: async () => ({ tenantId: "tenant-1" }),
   handleError: (error: { message: string }) => { throw new Error(error.message); },
 }));
 import { getDocumentAdvanceAvailable } from "@/lib/services/supabase/payments";
 describe("document advance availability", () => {
   beforeEach(() => {
     vi.clearAllMocks(); state.queries = [];
+    state.rpc.mockResolvedValue({data:[],error:null});
     state.from.mockImplementation((table: string) => {
       state.queries.push(table);
-      const query = { select: vi.fn(), eq: state.eq, gt: vi.fn(), order: vi.fn(), range: vi.fn(), single: vi.fn() };
+      const query = { select: vi.fn(), eq: state.eq, in:state.in,gt: vi.fn(), order: vi.fn(), range: vi.fn(), single: vi.fn() };
+      state.in.mockReturnValue(query);
       query.select.mockReturnValue(query); state.eq.mockReturnValue(query); query.gt.mockReturnValue(query); query.order.mockReturnValue(query);
       query.single.mockResolvedValue({ data: { branch_id: "document-branch", supplier_id: "supplier-1", customer_id: "customer-1" }, error: null });
       query.range.mockResolvedValue({ data: [{ remaining_amount: "300" }, { remaining_amount: 200 }], error: null });
@@ -37,5 +39,11 @@ describe("document advance availability", () => {
       query.single.mockResolvedValue({ data: null, error: { message: "branch denied" } }); return query;
     });
     await expect(getDocumentAdvanceAvailable("purchase_order", "po-1")).rejects.toThrow("branch denied");
+  });
+  it('reads both explicitly linked accounts in the exact invoice branch before totaling available advances',async()=>{
+    state.rpc.mockResolvedValue({data:[{alias_id:'customer-1',canonical_id:'nbo',canonical_code:'KHA-NBO-002',canonical_name:'Xưởng Tư Búa',receiver_branch_id:'xtb'}],error:null});
+    expect(await getDocumentAdvanceAvailable('invoice','invoice-1')).toBe(500);
+    expect(state.in).toHaveBeenCalledWith('customer_id',['nbo','customer-1']);
+    expect(state.eq).toHaveBeenCalledWith('branch_id','document-branch');
   });
 });

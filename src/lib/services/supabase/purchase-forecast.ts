@@ -22,6 +22,7 @@
 import { getClient, getCurrentTenantId } from "./base";
 import { readHistoryPages } from "./read-history-pages";
 import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
+import {getCustomerIdentityDirectory,customerFamilyIds,expandCustomerFamilyIds} from './customer-identity';
 
 /** Trạng thái đơn đặt hàng coi là "đang mở / chưa hoàn tất". */
 const OPEN_ORDER_STATUSES = ["draft", "confirmed", "delivering"] as const;
@@ -245,6 +246,7 @@ export async function getPurchaseForecast(
 ): Promise<PurchaseForecastResult> {
   const supabase = getClient() as AnyRow;
   const tenantId = await getCurrentTenantId();
+  const identityLinks=await getCustomerIdentityDirectory();
 
   // ── 1) Xác định Kho Tổng ──
   const khoRows = await readForecastRows(supabase
@@ -268,7 +270,7 @@ export async function getPurchaseForecast(
   if (branchId) orderQ = orderQ.eq("branch_id", branchId);
 
   // Lọc theo khách cụ thể
-  if (filters?.customerId) orderQ = orderQ.eq("customer_id", filters.customerId);
+  if (filters?.customerId) orderQ = orderQ.in("customer_id", customerFamilyIds(filters.customerId,identityLinks));
 
   // Lọc theo NHÓM khách: lấy danh sách khách thuộc nhóm rồi lọc đơn theo đó.
   // Không join thẳng vì đơn có thể là khách vãng lai (customer_id null) —
@@ -279,7 +281,7 @@ export async function getPurchaseForecast(
       .select("id", {count:"exact"})
       .eq("tenant_id", tenantId)
       .eq("group_id", filters.customerGroupId));
-    const ids = ((khachTrongNhom ?? []) as AnyRow[]).map((c) => c.id as string);
+    const ids = expandCustomerFamilyIds(((khachTrongNhom ?? []) as AnyRow[]).map((c) => c.id as string),identityLinks);
     if (ids.length === 0) {
       return {
         khoTongName: khoTong?.name ?? null,

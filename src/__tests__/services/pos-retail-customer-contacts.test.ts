@@ -12,6 +12,12 @@ const contact = { id: "customer-a", code: "KH001", name: "Customer A", phone: nu
   email: "fixture@example.test", address: "Address A", tax_code: "FIXTURE" };
 beforeEach(() => vi.resetAllMocks());
 describe("Retail contact profile boundary", () => {
+  it("falls back only when the new identity RPC is not installed", async () => {
+    api.rpc.mockResolvedValueOnce({data:null,error:{code:"PGRST202",message:"Function not found"}})
+      .mockResolvedValueOnce({data:[contact],error:null});
+    expect(await getRetailCustomerContacts(request)).toHaveLength(1);
+    expect(api.rpc).toHaveBeenNthCalledWith(2,"get_pos_customer_contacts_scoped",expect.objectContaining({p_branch_id:"branch-a"}));
+  });
   it("resolves external identity without another lookup", async () => {
     api.rpc.mockResolvedValue({ data: [contact], error: null });
     expect(await resolveRetailCustomerContact(contact.id, "branch-a")).toMatchObject({ id: contact.id });
@@ -22,7 +28,7 @@ describe("Retail contact profile boundary", () => {
       data: [{ ...contact, is_internal: true, branch_id: "branch-b" }], error: null,
     });
     expect(await resolveRetailCustomerContact(contact.id, "branch-a")).toMatchObject({ isInternal: true });
-    expect(api.rpc).toHaveBeenNthCalledWith(2, "get_pos_customer_contacts_scoped", expect.objectContaining({ p_internal: true, p_customer_id: contact.id }));
+    expect(api.rpc).toHaveBeenNthCalledWith(2, "get_pos_retail_customer_contacts_identity", expect.objectContaining({ p_internal: true, p_customer_id: contact.id }));
   });
   it("does not retry another mode after an authorization error", async () => {
     api.rpc.mockResolvedValue({ data: null, error: { message: "denied" } });
@@ -60,7 +66,7 @@ describe("Retail contact profile boundary", () => {
   it("passes search/mode/branch and never reads raw customers", async () => {
     api.rpc.mockResolvedValue({ data: [contact], error: null });
     await getRetailCustomerContacts({ ...request, search: " KH001 ", limit: 20 });
-    expect(api.rpc).toHaveBeenCalledWith("get_pos_customer_contacts_scoped", {
+    expect(api.rpc).toHaveBeenCalledWith("get_pos_retail_customer_contacts_identity", {
       p_branch_id: "branch-a", p_search: "KH001", p_customer_id: null, p_internal: false, p_limit: 20,
     });
     expect(api.from).not.toHaveBeenCalled();
@@ -68,7 +74,7 @@ describe("Retail contact profile boundary", () => {
   it("restores the exact identity with its explicit internal mode", async () => {
     api.rpc.mockResolvedValue({ data: [{ ...contact, is_internal: true, branch_id: "branch-b" }], error: null });
     expect(await getRetailCustomerContactById({ ...request, customerId: "customer-a", internal: true })).toMatchObject({ id: "customer-a", isInternal: true });
-    expect(api.rpc).toHaveBeenCalledWith("get_pos_customer_contacts_scoped", expect.objectContaining({ p_customer_id: "customer-a", p_limit: 1, p_internal: true }));
+    expect(api.rpc).toHaveBeenCalledWith("get_pos_retail_customer_contacts_identity", expect.objectContaining({ p_customer_id: "customer-a", p_limit: 1, p_internal: true }));
   });
   it("returns null for missing identities, not a fabricated customer", async () => {
     api.rpc.mockResolvedValue({ data: [], error: null });

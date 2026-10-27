@@ -6,6 +6,7 @@ import type { CashBookEntry, CashTransaction, QueryParams, QueryResult } from "@
 import type { CashTimingInput } from "@/lib/cash-time";
 import { recordTimedCash } from "./cash-timing";
 import { cashBookDate } from "@/lib/cash-time";
+import {customerFamilyIds,getCustomerIdentityDirectory} from './customer-identity';
 import {
   getClient,
   getCurrentContext,
@@ -494,6 +495,8 @@ export async function amendPartyCash(row: CashBookEntry, requestId: string, payl
 }
 
 export interface PartyAdvanceLedgerRow {
+  /** Original owner of this source; refund mutations must keep this exact ID. */
+  sourcePartyId?:string;
   id: string; branchId: string; branchName: string; cashCode: string; date: string; note: string | null;
   originalAmount: number; remainingAmount: number; status: string;
   allocations: Array<{documentCode: string; amount: number; note: string; createdAt: string}>;
@@ -517,8 +520,14 @@ export async function getCashAmendmentHistory(cashId: string): Promise<CashAmend
   return data as unknown as CashAmendmentHistoryRow[];
 }
 export async function getPartyAdvanceLedger(mode: 'customer'|'supplier', partyId: string, branchId?: string | null) {
-  const {data,error} = await getClient().rpc('get_party_advance_ledger' as never,{p_mode:mode,p_party_id:partyId,p_branch_id:branchId || null} as never);
-  if (error) handleError(error,'getPartyAdvanceLedger');
-  if (!Array.isArray(data)) throw new Error('Chưa tải được nguồn tiền ứng.');
-  return data as unknown as PartyAdvanceLedgerRow[];
+  const ids=mode==='customer'?customerFamilyIds(partyId,await getCustomerIdentityDirectory()):[partyId];
+  const rows:PartyAdvanceLedgerRow[]=[];
+  for(const id of ids){
+    const {data,error} = await getClient().rpc('get_party_advance_ledger' as never,{p_mode:mode,p_party_id:id,p_branch_id:branchId || null} as never);
+    if (error) handleError(error,'getPartyAdvanceLedger');
+    if (!Array.isArray(data)) throw new Error('Chưa tải được nguồn tiền ứng.');
+    rows.push(...(data as unknown as PartyAdvanceLedgerRow[]).map(row=>({...row,sourcePartyId:id})));
+  }
+  if(new Set(rows.map(row=>row.id)).size!==rows.length)throw new Error('Nguồn tiền ứng bị trùng. Vui lòng tải lại để đối soát.');
+  return ids.length>1?rows.sort((a,b)=>(Date.parse(b.date)||0)-(Date.parse(a.date)||0)||a.id.localeCompare(b.id)):rows;
 }

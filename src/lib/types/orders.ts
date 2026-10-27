@@ -15,6 +15,9 @@ export interface Invoice extends FnbInvoiceContext {
   customerId: string;
   customerCode: string;
   customerName: string;
+  /** Display identity only; customerId remains the actual historical account. */
+  canonicalCustomerId?: string;
+  originalCustomerCode?: string;
   /** SĐT khách (join customers.phone) — in trên phiếu nếu có. */
   customerPhone?: string;
   /** Địa chỉ khách (join customers.address) — in trên phiếu nếu có. */

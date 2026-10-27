@@ -41,3 +41,8 @@ it("internal classification wins even if a shipment exists; NULL legacy source i
 it("summary cache separates all Retail categories",()=>{
  expect(new Set((["all","no_delivery","delivery","internal"] as RetailInvoiceType[]).map(type=>khoaChiSoHoaDon({retailSaleType:type}))).size).toBe(4);
 });
+
+vi.mock("@/lib/services/supabase/customer-identity",async importOriginal=>({
+ ...await importOriginal<typeof import("@/lib/services/supabase/customer-identity")>(),
+ getCustomerIdentityDirectory:async()=>[],
+}));

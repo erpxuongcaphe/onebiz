@@ -1,5 +1,6 @@
 import type { Customer } from "@/lib/types/customers";
 import { getClient, handleError } from "./base";
+import {isRpcUnavailable} from './rpc-utils';
 
 export type RetailCustomerContact = Omit<Customer,
   "currentDebt" | "totalSales" | "totalSalesMinusReturns" | "createdAt" | "lastPurchaseAt">;
@@ -84,11 +85,16 @@ export async function getRetailCustomerContacts(request: RetailContactRequest): 
     || request.customerId !== undefined && !request.customerId.trim()) {
     throw new Error("Phạm vi tìm khách chưa hợp lệ.");
   }
-  const query = getClient().rpc("get_pos_customer_contacts_scoped" as never, {
+  const params={
     p_branch_id: request.branchId, p_search: search, p_customer_id: request.customerId ?? null,
     p_internal: request.internal ?? false, p_limit: limit,
-  } as never);
-  const { data, error } = await (request.signal ? query.abortSignal(request.signal) : query);
+  };
+  const query = getClient().rpc("get_pos_retail_customer_contacts_identity" as never,params as never);
+  let { data, error } = await (request.signal ? query.abortSignal(request.signal) : query);
+  if(error&&isRpcUnavailable(error)){
+    const legacy=getClient().rpc('get_pos_customer_contacts_scoped' as never,params as never);
+    ({data,error}=await(request.signal?legacy.abortSignal(request.signal):legacy));
+  }
   request.signal?.throwIfAborted();
   if (error) handleError(error, "getRetailCustomerContacts");
   return parseRetailCustomerContacts(data, request);

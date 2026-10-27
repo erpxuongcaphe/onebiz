@@ -20,3 +20,8 @@ describe("open debt reader calendar display", () => {
     expect(await read("party", "branch")).toEqual([{ id: "doc", code: "DOC-01", date: "2026-10-12T09:00:00Z", total: 630000, paid: 0, debt: 630000, ageDays: 7 }]);
   });
 });
+
+vi.mock("@/lib/services/supabase/customer-identity",async importOriginal=>({
+ ...await importOriginal<typeof import("@/lib/services/supabase/customer-identity")>(),
+ getCustomerIdentityDirectory:async()=>[],
+}));
