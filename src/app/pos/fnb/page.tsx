@@ -1015,7 +1015,7 @@ function FnbPosPageInner() {
   }, [pos, quotedDeliveryFee]);
   const deliveryPolicySlot = deliveryPolicyError ? <div role="alert" className="space-y-2 text-sm"><p>Chưa tải được chính sách phí giao. {deliveryPolicyError}</p><Button variant="outline" onClick={() => { setDeliveryPolicyError(""); setDeliveryPolicy(null); setDeliveryPolicyReload(n => n + 1); }}>Thử tải lại</Button></div>
     : !currentDeliveryPolicy ? <p role="status" className="text-sm">Đang tải chính sách phí giao…</p>
-      : currentDeliveryPolicy.enabled ? <FnbDeliveryPrice key={pos.activeTabId} policy={currentDeliveryPolicy} meters={pos.activeTab?.deliveryDistanceMeters} range={pos.activeTab?.deliveryDistanceRange} before={pos.subtotal} after={fnbBenefitDisplay.total}
+      : currentDeliveryPolicy.enabled ? <FnbDeliveryPrice compact key={pos.activeTabId} policy={currentDeliveryPolicy} meters={pos.activeTab?.deliveryDistanceMeters} range={pos.activeTab?.deliveryDistanceRange} before={pos.subtotal} after={fnbBenefitDisplay.total}
           onChange={(meters, range) => pos.updateTabMeta(pos.activeTabId, { deliveryDistanceMeters: meters, deliveryDistanceRange: range })} /> : undefined;
 
   useEffect(() => {

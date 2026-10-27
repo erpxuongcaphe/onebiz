@@ -68,13 +68,35 @@ const liveBoundaries: DeliveryPricePolicy = { ...policy, rules: policy.rules.map
   fromMeters: r.fromMeters === 3000 ? 3001 : r.fromMeters,
   toMeters: r.toMeters === 3000 ? 3001 : r.toMeters,
 })) };
-function DistanceHarness({ after = 75000 }: { after?: number }) {
+function DistanceHarness({ after = 75000, compact = false }: { after?: number; compact?: boolean }) {
   const [distance, setDistance] = useState<{ meters?: number; range?: DeliveryDistanceRange }>({});
-  return <FnbDeliveryPrice policy={liveBoundaries} {...distance} before={150000} after={after}
+  return <FnbDeliveryPrice compact={compact} policy={liveBoundaries} {...distance} before={150000} after={after}
     onChange={(meters, range) => setDistance({ meters, range })} />;
 }
 
 describe("quick delivery distance choices", () => {
+  it("uses a compact list with the same fee rules and updates after discount", () => {
+    const { rerender } = render(<DistanceHarness compact />);
+    expect(screen.queryByRole("button", { name: "1 km – 3 km" })).toBeNull();
+    const list = screen.getByRole("combobox", { name: "Khoảng cách giao" });
+    fireEvent.change(list, { target: { value: "2" } });
+    expect(screen.getByRole("status")).toHaveTextContent("Miễn phí giao");
+    rerender(<DistanceHarness compact after={45000} />);
+    expect(screen.getByRole("status")).toHaveTextContent(/10[.,]000/);
+    expect(list).toHaveValue("2");
+    fireEvent.change(list, { target: { value: "custom" } });
+    fireEvent.change(screen.getByLabelText("Khoảng cách giao (km)"), { target: { value: "3,5" } });
+    expect(screen.getByRole("status")).toHaveTextContent("Chưa có mức phí phù hợp");
+    fireEvent.change(list, { target: { value: "0" } });
+    expect(screen.queryByLabelText("Khoảng cách giao (km)")).toBeNull();
+  });
+  it("keeps an invalidated saved range explicit in the compact list", () => {
+    const change = vi.fn();
+    render(<FnbDeliveryPrice compact policy={policy} meters={1000} range={{ fromMeters: 1000, toMeters: 3001 }} before={75000} after={75000} onChange={change} />);
+    expect(screen.getByRole("combobox", { name: "Khoảng cách giao" })).toHaveValue("stale");
+    expect(screen.getByRole("status")).toHaveTextContent("chọn lại");
+    expect(change).not.toHaveBeenCalled();
+  });
   it("deduplicates amount brackets and labels exact 3 km / 5 km boundaries truthfully", () => {
     expect(getDeliveryDistancePresets(liveBoundaries).map(formatDeliveryDistanceRange)).toEqual([
       "Dưới 500 m", "500 m – dưới 1 km", "1 km – 3 km", "Trên 3 km – 5 km",

@@ -429,9 +429,9 @@ export function FnbCart({
         {activeTab?.orderType === "delivery" &&
           onDeliveryPlatformChange &&
           !activeTab?.kitchenOrderId && (
-            <div className="mt-2 border-t border-border pt-2 space-y-1">
+            <div className="mt-1 border-t border-border pt-1 space-y-1">
               <div className="flex items-center gap-1">
-                <span className="text-xs uppercase font-bold text-on-surface-variant">
+                <span className="text-[11px] font-medium text-muted-foreground">
                   Sàn giao hàng
                 </span>
                 <HelpTip>
@@ -474,7 +474,7 @@ export function FnbCart({
                   aria-label="Sàn giao hàng"
                   value={selectedPlatform}
                   onChange={event => onDeliveryPlatformChange(event.target.value as DeliveryPlatform)}
-                  className="w-full min-h-11 rounded-md border border-border bg-background px-2 text-sm font-medium text-primary focus-visible:outline-2 focus-visible:outline-primary"
+                  className="h-9 w-full rounded-md border border-border bg-background px-2 text-xs font-medium text-primary focus-visible:outline-2 focus-visible:outline-primary [@media(pointer:coarse)]:h-10"
                 >
                   {enabledDeliveryPlatforms.map(platform => (
                     <option key={platform.key} value={platform.key} disabled={platform.key !== "direct" && deliveryPlatformSettings?.[platform.key]?.active !== true}>
@@ -542,12 +542,11 @@ export function FnbCart({
         {activeTab?.orderType === "delivery" &&
           (activeTab?.deliveryPlatform ?? "direct") === "direct" &&
           (selfDeliveryTiers || staffOptions) && (
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              <a href="/giao-hang-noi-bo" target="_blank" rel="noopener noreferrer" className="col-span-2 min-h-11 flex items-center text-sm font-medium text-primary underline">Phân công · địa chỉ · theo dõi giao hàng</a>
-              {!activeTab.kitchenOrderId && deliveryPolicySlot && <div className="col-span-2">{deliveryPolicySlot}</div>}
+            <div className="mt-1 grid grid-cols-2 items-start gap-x-2 gap-y-1">
+              {!activeTab.kitchenOrderId && deliveryPolicySlot && <div className="min-w-0">{deliveryPolicySlot}</div>}
               {/* Tier picker */}
               {!activeTab.kitchenOrderId && !deliveryPolicySlot && selfDeliveryTiers && selfDeliveryTiers.length > 0 && onDeliveryTierChange && (
-                <div className="space-y-1.5">
+                <div className="min-w-0 space-y-1">
                   <div className="flex items-center gap-1">
                     <span className="text-xs uppercase font-bold text-on-surface-variant">
                       Khoảng cách giao
@@ -567,7 +566,7 @@ export function FnbCart({
                       if (code === "custom") onDeliveryTierChange("custom", undefined);
                       else if (tier) onDeliveryTierChange(tier.code, tier.fee);
                     }}
-                    className="w-full min-h-11 rounded-md border border-border bg-background px-2 text-sm focus-visible:outline-2 focus-visible:outline-primary"
+                    className="h-9 w-full min-w-0 rounded-md border border-border bg-background px-2 text-xs focus-visible:outline-2 focus-visible:outline-primary [@media(pointer:coarse)]:h-10"
                   >
                     <option value="" disabled>Chọn khoảng cách</option>
                     {selfDeliveryTiers.map(tier => <option key={tier.code} value={tier.code}>{tier.label} · {formatCurrency(tier.fee)}đ</option>)}
@@ -598,9 +597,9 @@ export function FnbCart({
 
               {/* Shipper dropdown */}
               {staffOptions && onDeliveryStaffChange && (
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-1">
-                    <span className="text-xs uppercase font-bold text-on-surface-variant">
+                <div className="min-w-0 space-y-1">
+                  <div className="flex h-6 items-center gap-1">
+                    <span className="text-[11px] font-medium text-muted-foreground">
                       Nhân viên giao
                     </span>
                     <HelpTip>
@@ -610,12 +609,13 @@ export function FnbCart({
                   </div>
                   <select
                     aria-label="Nhân viên giao"
+                    title={staffOptions.find(staff => staff.id === activeTab.deliveryStaffId)?.name ?? "Chọn nhân viên giao"}
                     disabled={deliveryStaffBusy}
                     value={activeTab.deliveryStaffId ?? ""}
                     onChange={(e) =>
                       onDeliveryStaffChange(e.target.value || undefined)
                     }
-                    className="w-full min-h-11 px-2 text-sm rounded-md border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    className="h-9 w-full min-w-0 px-2 text-xs rounded-md border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 [@media(pointer:coarse)]:h-10"
                   >
                     <option value="">Chưa gán</option>
                     {staffOptions.map((s) => (
@@ -626,6 +626,7 @@ export function FnbCart({
                   </select>
                 </div>
               )}
+              <a href="/giao-hang-noi-bo" target="_blank" rel="noopener noreferrer" className="col-span-2 flex min-h-7 items-center justify-end gap-1 text-[11px] text-primary hover:underline" aria-label="Xem chi tiết và phân công giao hàng">Chi tiết giao hàng <Icon name="open_in_new" size={12} /></a>
             </div>
           )}
       </div>
