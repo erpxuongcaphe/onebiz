@@ -22,6 +22,7 @@ import { getCustomerCohortReport } from "@/lib/services/supabase/customer-cohort
 import type { CohortReportResult } from "@/lib/services/supabase/customer-cohort";
 import { cn } from "@/lib/utils";
 import { KpiCard } from "../_components";
+import { cashDateTimeInput } from "@/lib/cash-time";
 
 export default function CustomerCohortPage() {
   const { preset, range, setPreset, setCustomRange } =
@@ -56,7 +57,9 @@ export default function CustomerCohortPage() {
   // Keep the equal-cohort average; empty or immature groups are not observations.
   const m1Retention = (() => {
     if (!data) return null;
-    const valid = data.rows.filter((r) => r.size > 0 && r.retention.length >= 2);
+    const observedMonth = cashDateTimeInput(new Date(data.generatedAt)).slice(0, 7);
+    const monthIndex = (value: string) => Number(value.slice(0, 4)) * 12 + Number(value.slice(5, 7)) - 1;
+    const valid = data.rows.filter((r) => r.size > 0 && r.retention.length >= 2 && monthIndex(r.cohortMonth) + 1 < monthIndex(observedMonth));
     if (valid.length === 0) return null;
     return Math.round(
       valid.reduce((s, r) => s + r.retention[1], 0) / valid.length,
@@ -238,6 +241,8 @@ export default function CustomerCohortPage() {
             valueColor="text-foreground"
           />
         </div>
+
+        {data && <p className="text-xs leading-5 text-muted-foreground">Theo mã khách trên hóa đơn trong phạm vi báo cáo, không phải tổng lượt khách. Bình quân tháng kế chỉ tính các tháng đã kết thúc; số liệu tháng hiện tại còn thay đổi.</p>}
 
         {data && m1Retention === null && <p role="status" className="border-l-2 border-status-info bg-status-info/5 px-3 py-2 text-sm">{totalCustomers === 0 ? "Chưa có nhóm khách lần đầu trong kỳ theo dõi." : "Chưa có nhóm khách đủ kỳ để tính tỷ lệ quay lại tháng kế."} Chưa đủ căn cứ đánh giá hiệu quả giữ chân.</p>}
 

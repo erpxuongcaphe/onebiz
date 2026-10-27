@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const fake = vi.hoisted(() => ({ rpc: vi.fn() }));
 vi.mock("@/lib/services/supabase/base", () => ({ getClient: () => ({ rpc: fake.rpc }), handleError: (error: Error) => { throw error; } }));
 import { getCustomerCohortReport } from "@/lib/services/supabase/customer-cohort";
-const payload = () => ({ months_tracked: 2, rows: [
+const payload = () => ({ generated_at: "2026-10-27T00:00:00Z", months_tracked: 2, rows: [
   { cohort_month: "2026-09", label: "T9", size: "10", retention: ["100", "0"] },
   { cohort_month: "2026-10", label: "T10", size: "0", retention: ["0"] },
 ] });

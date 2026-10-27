@@ -18,6 +18,7 @@ import { z } from "zod";
 
 const numeric = z.preprocess(value => typeof value === "string" && value.trim() ? Number(value) : value, z.number().finite());
 const cohortSchema = z.object({
+  generated_at: z.string().datetime({ offset: true }),
   months_tracked: numeric.pipe(z.number().int().min(1).max(24)),
   rows: z.array(z.object({
     cohort_month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
@@ -38,6 +39,7 @@ export interface CohortRow {
 }
 
 export interface CohortReportResult {
+  generatedAt: string;
   rows: CohortRow[];
   /** Số tháng cohort được track */
   monthsTracked: number;
@@ -83,6 +85,7 @@ export async function getCustomerCohortReport(options: {
   }
 
   return {
+    generatedAt: raw.generated_at,
     monthsTracked: raw.months_tracked,
     rows: raw.rows.map((row) => ({
       cohortMonth: row.cohort_month,
