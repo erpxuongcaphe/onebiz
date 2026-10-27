@@ -53,11 +53,11 @@ export default function CustomerCohortPage() {
 
   const totalCohorts = data?.rows.length ?? 0;
   const totalCustomers = data?.rows.reduce((s, r) => s + r.size, 0) ?? 0;
-  // Avg M1 retention across cohorts (skip cohorts với <2 tháng data)
+  // Keep the equal-cohort average; empty or immature groups are not observations.
   const m1Retention = (() => {
-    if (!data) return 0;
-    const valid = data.rows.filter((r) => r.retention.length >= 2);
-    if (valid.length === 0) return 0;
+    if (!data) return null;
+    const valid = data.rows.filter((r) => r.size > 0 && r.retention.length >= 2);
+    if (valid.length === 0) return null;
     return Math.round(
       valid.reduce((s, r) => s + r.retention[1], 0) / valid.length,
     );
@@ -124,9 +124,10 @@ export default function CustomerCohortPage() {
                     format: "number",
                   },
                   {
-                    label: "Tháng kế tiếp quay lại trung bình",
+                    label: "Quay lại tháng kế (bình quân nhóm đủ kỳ)",
                     value: m1Retention,
                     format: "percent",
+                    note: m1Retention === null ? "Chưa có nhóm khách đủ kỳ; không đánh giá hiệu quả." : "Bình quân các nhóm có khách và đủ kỳ theo dõi; không phải tỷ lệ gộp toàn bộ khách.",
                   },
                   {
                     label: "Số tháng theo dõi",
@@ -147,7 +148,7 @@ export default function CustomerCohortPage() {
               size: r.size,
             };
             for (let i = 0; i < data.monthsTracked; i++) {
-              row[`m${i}`] = r.retention[i] ?? null;
+              row[`m${i}`] = r.size > 0 ? r.retention[i] ?? null : null;
             }
             return row;
           }),
@@ -208,44 +209,37 @@ export default function CustomerCohortPage() {
       />
 
       <div className="flex-1 overflow-auto p-4 lg:p-6 space-y-4">
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <KpiCard
             label="Số nhóm khách"
             value={data ? String(totalCohorts) : error ? "Không tải được" : "Đang tải"}
-            change={`${data?.monthsTracked ?? months} tháng theo dõi`}
-            positive
+            subValue={`${data?.monthsTracked ?? months} tháng`}
             icon="group"
             bg="bg-primary-fixed"
             iconColor="text-primary"
             valueColor="text-foreground"
           />
           <KpiCard
-            label="Tổng khách hàng lần đầu"
+            label="Khách lần đầu trong kỳ"
             value={data ? String(totalCustomers) : error ? "Không tải được" : "Đang tải"}
-            change={`${months} tháng gần nhất`}
-            positive
+            subValue={`${months} tháng`}
             icon="person_add"
             bg="bg-status-success/10"
             iconColor="text-status-success"
             valueColor="text-foreground"
           />
           <KpiCard
-            label="Tháng kế tiếp quay lại trung bình"
-            value={data ? `${m1Retention}%` : error ? "Không tải được" : "Đang tải"}
-            change={
-              !data ? "" : m1Retention >= 30
-                ? "Tốt"
-                : m1Retention >= 20
-                  ? "Trung bình"
-                  : "Cần cải thiện"
-            }
-            positive={m1Retention >= 30}
+            label="Quay lại tháng kế"
+            value={data ? m1Retention === null ? "Chưa đủ dữ liệu" : `${m1Retention}%` : error ? "Không tải được" : "Đang tải"}
+            subValue={data && m1Retention !== null ? "Bình quân nhóm đủ kỳ" : ""}
             icon="repeat"
             bg="bg-status-info/10"
             iconColor="text-status-info"
             valueColor="text-foreground"
           />
         </div>
+
+        {data && m1Retention === null && <p role="status" className="border-l-2 border-status-info bg-status-info/5 px-3 py-2 text-sm">{totalCustomers === 0 ? "Chưa có nhóm khách lần đầu trong kỳ theo dõi." : "Chưa có nhóm khách đủ kỳ để tính tỷ lệ quay lại tháng kế."} Chưa đủ căn cứ đánh giá hiệu quả giữ chân.</p>}
 
         {/* Cohort matrix */}
         {error ? (
@@ -302,8 +296,8 @@ export default function CustomerCohortPage() {
                     </td>
                     {Array.from({ length: data.monthsTracked }).map((_, i) => {
                       const pct = r.retention[i];
-                      if (pct == null)
-                        return <td key={i} className="px-3 py-2"></td>;
+                      if (pct == null || r.size === 0)
+                        return <td key={i} className="px-3 py-2 text-center text-muted-foreground" title={r.size === 0 ? "Nhóm không có khách" : "Chưa đủ kỳ theo dõi"}>—</td>;
                       return (
                         <td
                           key={i}

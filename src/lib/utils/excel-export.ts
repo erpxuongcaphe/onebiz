@@ -700,7 +700,7 @@ export function buildInfoSheet(opts: InfoSheetOptions): ExcelSheet {
 
 export interface ExcelSummaryMetric {
   label: string;
-  value: number;
+  value: number | null;
   format: "number" | "currency" | "percent";
   note?: string;
 }

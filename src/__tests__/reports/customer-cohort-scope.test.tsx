@@ -60,4 +60,35 @@ describe("customer cohort scope integrity", () => {
   it("hides both Excel actions when export rights are absent", async () => {
     fake.exportAllowed = false; render(<CustomerCohortPage />); await screen.findByText("Cohort A"); expect(screen.queryByRole("button", { name: /Excel/ })).not.toBeInTheDocument();
   });
+  it("does not grade empty cohorts or export artificial zero retention", async () => {
+    fake.read.mockResolvedValue({ monthsTracked: 6, rows: [{ cohortMonth: "2026-10", label: "Empty", size: 0, retention: [0, 0] }] });
+    render(<CustomerCohortPage />); await screen.findByText("Empty");
+    expect(screen.getByRole("status")).toHaveTextContent("Chưa có nhóm khách lần đầu");
+    expect(screen.queryByText("Cần cải thiện")).not.toBeInTheDocument();
+    expect(screen.queryByText("Quay lại tháng kế: 0%")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Excel full" }));
+    const file = fake.excel.mock.calls[0][0]; const matrix = file.sheets[file.sheets.length - 1];
+    expect(matrix.rows[0]).toMatchObject({ size: 0, m0: null, m1: null });
+  });
+  it("excludes empty and immature cohorts but keeps genuine zero retention", async () => {
+    fake.read.mockResolvedValue({ monthsTracked: 6, rows: [
+      { cohortMonth: "2026-08", label: "Mature", size: 10, retention: [100, 0] },
+      { cohortMonth: "2026-09", label: "Empty", size: 0, retention: [0, 0] },
+      { cohortMonth: "2026-10", label: "Immature", size: 20, retention: [100] },
+    ] });
+    render(<CustomerCohortPage />); await screen.findByText("Mature");
+    expect(screen.getByText("Quay lại tháng kế: 0%")).toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.queryByText("Cần cải thiện")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Excel full" }));
+    const file = fake.excel.mock.calls[0][0]; const matrix = file.sheets[file.sheets.length - 1];
+    expect(matrix.rows[0].m1).toBe(0); expect(matrix.rows[1].m1).toBeNull(); expect(matrix.rows[2].m1).toBeNull();
+  });
+  it("does not average empty cohorts into a valid mature group's rate", async () => {
+    fake.read.mockResolvedValue({ monthsTracked: 6, rows: [
+      { cohortMonth: "2026-09", label: "Valid", size: 10, retention: [100, 40] },
+      { cohortMonth: "2026-10", label: "Empty", size: 0, retention: [0, 0] },
+    ] });
+    render(<CustomerCohortPage />); await screen.findByText("Valid"); expect(screen.getByText("Quay lại tháng kế: 40%")).toBeInTheDocument();
+  });
 });
