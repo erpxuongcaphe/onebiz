@@ -26,11 +26,17 @@ const messages:Record<string,string>={
   BRANCH_ACCESS_DENIED:'Tài khoản chưa được cấp quyền tại chi nhánh của phiếu.',
   INVENTORY_CHECK_NOT_EDITABLE:'Phiếu đã hủy hoặc không còn ở trạng thái có thể sửa.',
 };
+export class InventoryCheckChangeError extends Error {
+  constructor(message:string,readonly code?:string,readonly outcomeUnknown=false){super(message);this.name='InventoryCheckChangeError';}
+}
 async function call<T>(name:string,args:Record<string,unknown>):Promise<T>{
-  const {data,error}=await (getClient().rpc as unknown as (name:string,args:Record<string,unknown>)=>Promise<{data:T;error:{message:string;code?:string}|null}>)(name,args);
-  if(error?.code==='55P03'||error?.code==='40P01') throw new Error('Kho đang có giao dịch. Chưa thay đổi số liệu; vui lòng xem trước và thử lại sau vài giây.');
-  if(error) throw new Error(Object.entries(messages).find(([code])=>error.message.includes(code))?.[1] ?? error.message);
-  if(!data) throw new Error('Máy chủ chưa xác nhận kết quả. Vui lòng thử lại cùng yêu cầu.');
+  let response:{data:T;error:{message:string;code?:string}|null};
+  try{response=await (getClient().rpc as unknown as (name:string,args:Record<string,unknown>)=>Promise<typeof response>)(name,args);}
+  catch{throw new InventoryCheckChangeError('Chưa nhận được kết quả từ máy chủ. Kiểm tra lại bằng cùng yêu cầu để tránh ghi hai lần.',undefined,true);}
+  const {data,error}=response;
+  if(error?.code==='55P03'||error?.code==='40P01') throw new InventoryCheckChangeError('Kho đang có giao dịch. Chưa thay đổi số liệu; vui lòng xem trước và thử lại sau vài giây.',error.code);
+  if(error) throw new InventoryCheckChangeError(Object.entries(messages).find(([code])=>error.message.includes(code))?.[1] ?? error.message,error.code,!/^[0-9A-Z]{5}$/.test(error.code??''));
+  if(!data) throw new InventoryCheckChangeError('Máy chủ chưa xác nhận kết quả. Vui lòng thử lại cùng yêu cầu.',undefined,true);
   return data;
 }
 export const getInventoryCheckChangeSource=(id:string)=>call<InventoryCheckChangeSource>('get_inventory_check_change_source',{p_check_id:id});
@@ -41,6 +47,6 @@ function args(input:InventoryCheckChangeInput){return {
 export const previewInventoryCheckChange=(input:InventoryCheckChangeInput)=>call<InventoryCheckChangePreview>('preview_inventory_check_change',args(input));
 export async function applyInventoryCheckChange(input:InventoryCheckChangeInput,token:string){
   const result=await call<InventoryCheckChangePreview>('apply_inventory_check_change',{...args(input),p_preview_token:token});
-  if(!result.applied||result.checkId!==input.checkId) throw new Error('Máy chủ chưa xác nhận điều chỉnh phiếu.');
+  if(!result.applied||result.checkId!==input.checkId) throw new InventoryCheckChangeError('Máy chủ chưa xác nhận điều chỉnh phiếu.',undefined,true);
   return result;
 }
