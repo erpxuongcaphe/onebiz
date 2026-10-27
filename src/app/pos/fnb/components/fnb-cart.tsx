@@ -547,8 +547,8 @@ export function FnbCart({
               {/* Tier picker */}
               {!activeTab.kitchenOrderId && !deliveryPolicySlot && selfDeliveryTiers && selfDeliveryTiers.length > 0 && onDeliveryTierChange && (
                 <div className="min-w-0 space-y-1">
-                  <div className="flex items-center gap-1">
-                    <span className="text-xs uppercase font-bold text-on-surface-variant">
+                  <div className="flex h-6 items-center gap-1">
+                    <span className="text-[11px] font-medium text-muted-foreground">
                       Khoảng cách giao
                     </span>
                     <HelpTip>
