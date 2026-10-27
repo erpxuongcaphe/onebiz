@@ -1,13 +1,52 @@
 import {render,screen,fireEvent,waitFor,cleanup} from "@testing-library/react";
 import {afterEach,beforeEach,expect,it,vi} from "vitest";
-const mocks=vi.hoisted(()=>({search:vi.fn(),preview:vi.fn(),commit:vi.fn()}));
+const mocks=vi.hoisted(()=>({search:vi.fn(),preview:vi.fn(),commit:vi.fn(),prices:vi.fn()}));
 vi.mock("@/lib/contexts",()=>({useAuth:()=>({branches:[{id:"b",code:"QUAN",name:"Quán",branchType:"store"}],activeBranchId:"b"})}));
 vi.mock("@/lib/services/supabase/opening-stock",async()=>({...await vi.importActual("@/lib/services/supabase/opening-stock"),
- searchOpeningStockCandidates:mocks.search,previewOpeningStock:mocks.preview,commitOpeningStock:mocks.commit}));
+ searchOpeningStockCandidates:mocks.search,previewOpeningStock:mocks.preview,commitOpeningStock:mocks.commit,getOpeningWarehousePrices:mocks.prices}));
 import {OpeningStockDialog} from "@/components/shared/dialogs/opening-stock-dialog";
 const snapshot={productId:"p",productCode:"TRA",productName:"Trà",unit:"G",branchId:"b",branchCode:"QUAN",quantityBefore:0,quantity:2.0042,costPrice:250.000001,costBefore:null,delta:2.0042,value:501.05,latestMovement:null,latestCost:null,costTracked:false,fnb:true,lotNumber:null,expiryDate:null};
 beforeEach(()=>{vi.clearAllMocks();mocks.search.mockResolvedValue([{id:"p",code:"TRA",name:"Trà",unit:"G"}]);mocks.preview.mockResolvedValue([snapshot]);mocks.commit.mockResolvedValue({count:1});});
 afterEach(cleanup);
+
+it("fills only empty costs using inventory-unit quotes and keeps deliberate zero values",async()=>{
+ render(<OpeningStockDialog open mode="manual" onOpenChange={()=>{}} onFinished={()=>{}}/>);await add();
+ fireEvent.change(screen.getByLabelText("Số lượng (G)"),{target:{value:"10"}});
+ mocks.prices.mockResolvedValue([{productId:"p",unit:"G",costPrice:20.545455}]);
+ fireEvent.click(screen.getByRole("button",{name:"Lấy giá kho tổng cho dòng trống"}));
+ await screen.findByText(/Đã điền giá 1\/1/);
+ expect(mocks.prices).toHaveBeenCalledExactlyOnceWith("b",["p"]);
+ await waitFor(()=>expect(screen.getByLabelText("Giá vốn / G")).toHaveValue("20.545455"));
+ expect(mocks.preview).not.toHaveBeenCalled();expect(mocks.commit).not.toHaveBeenCalled();
+ fireEvent.change(screen.getByLabelText("Giá vốn / G"),{target:{value:"0"}});
+ expect(screen.getByRole("button",{name:"Lấy giá kho tổng cho dòng trống"})).toBeDisabled();
+});
+it.each([null,0,-1,NaN])("keeps missing or invalid quote %s blank instead of silently valuing it at zero",async costPrice=>{
+ render(<OpeningStockDialog open mode="manual" onOpenChange={()=>{}} onFinished={()=>{}}/>);await add();
+ mocks.prices.mockResolvedValue([{productId:"p",unit:"G",costPrice}]);
+ fireEvent.click(screen.getByRole("button",{name:"Lấy giá kho tổng cho dòng trống"}));
+ await screen.findByText(/Đã điền giá 0\/1/);
+ expect(screen.getByLabelText("Giá vốn / G")).toHaveValue("");expect(mocks.commit).not.toHaveBeenCalled();
+});
+it("rejects mismatched quote units and preserves input when price lookup fails",async()=>{
+ render(<OpeningStockDialog open mode="manual" onOpenChange={()=>{}} onFinished={()=>{}}/>);await add();
+ mocks.prices.mockResolvedValue([{productId:"p",unit:"Kg",costPrice:1000}]);
+ fireEvent.click(screen.getByRole("button",{name:"Lấy giá kho tổng cho dòng trống"}));await screen.findByText(/Đã điền giá 0\/1/);
+ expect(screen.getByLabelText("Giá vốn / G")).toHaveValue("");
+ fireEvent.change(screen.getByLabelText("Số lượng (G)"),{target:{value:"3"}});
+ mocks.prices.mockRejectedValue(new Error("Chưa bật sổ giá vốn riêng cho quán."));
+ fireEvent.click(screen.getByRole("button",{name:"Lấy giá kho tổng cho dòng trống"}));await screen.findByRole("alert");
+ expect(screen.getByLabelText("Số lượng (G)")).toHaveValue("3");expect(mocks.commit).not.toHaveBeenCalled();
+});
+it("does not preview or duplicate requests while loading prices",async()=>{
+ render(<OpeningStockDialog open mode="manual" onOpenChange={()=>{}} onFinished={()=>{}}/>);await add();
+ let resolve!:(value:unknown)=>void;mocks.prices.mockReturnValue(new Promise(r=>{resolve=r;}));
+ fireEvent.click(screen.getByRole("button",{name:"Lấy giá kho tổng cho dòng trống"}));
+ expect(screen.getByLabelText("Số lượng (G)")).toBeDisabled();
+ fireEvent.click(screen.getByRole("button",{name:"Xem trước tồn"}));expect(mocks.preview).not.toHaveBeenCalled();
+ resolve([{productId:"p",unit:"G",costPrice:25}]);await screen.findByText(/Đã điền giá 1\/1/);
+ expect(mocks.prices).toHaveBeenCalledTimes(1);
+});
 async function add(){fireEvent.change(screen.getByLabelText("Thêm hàng"),{target:{value:"TRA"}});fireEvent.click(await screen.findByRole("option",{name:/TRA.*Trà/}));}
 it("keeps blank costs distinct from zero, preserves edits on back, and commits only after server preview",async()=>{
  render(<OpeningStockDialog open mode="manual" onOpenChange={()=>{}} onFinished={()=>{}}/>);
