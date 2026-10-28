@@ -16,7 +16,7 @@ export default function CustomerCohortPage() {
     <CustomerCohortEvidencePanel
       actorId={user?.id ?? ""} tenantId={tenant?.id ?? ""} branchId={activeBranchId ?? null} branchLabel={branchLabel}
       allowed={allowed} ready={isReady && !isLoading} canExport={hasPermission("reports.export_detail")}
-      canExportView={hasPermission("reports.export")} load={getCustomerCohortEvidence}
+      canExportView={hasPermission("reports.export")} load={getCustomerCohortEvidence} rememberMonths
       renderHeader={({ actions, disabled, onExportView, onExportFull }) => <ReportPageHeader
         title="Khách hàng quay lại theo tháng đầu mua" subtitle="Theo hóa đơn hoàn tất trong phạm vi báo cáo"
         preset={preset} range={range} onPresetChange={setPreset} onCustomRangeChange={setCustomRange}
