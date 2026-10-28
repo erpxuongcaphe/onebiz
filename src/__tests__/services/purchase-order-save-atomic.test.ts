@@ -109,6 +109,7 @@ describe("atomic purchase-order save", () => {
           unitPrice: 100_000,
           discount: 0,
           vatRate: 10,
+          note: "  Mua ngoài tại Đồng Xoài  ",
         },
       ],
     });
@@ -130,6 +131,7 @@ describe("atomic purchase-order save", () => {
       }),
     );
     const params = rpc.mock.calls[0][1];
+    expect(params.p_items[0].note).toBe("Mua ngoài tại Đồng Xoài");
     expect(params).not.toHaveProperty("p_actor_id");
     expect(params).not.toHaveProperty("p_tenant_id");
   });

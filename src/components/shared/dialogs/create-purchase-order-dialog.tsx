@@ -1,6 +1,7 @@
 "use client";
 
 import { useFnbCatalogScope } from "@/lib/hooks/use-fnb-catalog-scope";
+import { searchSupplierPurchaseProducts } from "@/lib/services/supabase/supplier-purchase-products";
 
 import { ExpiryDateInput } from "@/components/shared/expiry-date-input";
 import { useState, useEffect, useMemo, useRef } from "react";
@@ -82,6 +83,7 @@ interface LineItem {
   /** Day 18/05/2026 (CEO): HSD nhập tại phiếu nhập */
   expiryDate?: string;
   lotNumber?: string;
+  note?: string;
 }
 
 interface SearchProduct {
@@ -242,13 +244,14 @@ export function CreatePurchaseOrderDialog({
   // Phase 1.5 (CEO 01/06/2026): edit phiếu đã nhập kho — locked items/qty.
   const isOrderedLocked = isEdit && editingPO?.status === "ordered";
   const { toast } = useToast();
-  const fnbCatalog = useFnbCatalogScope();
+  const fnbCatalog = useFnbCatalogScope(editingPO?.branchId ?? branchId);
   const [code, setCode] = useState("");
   const [supplierSearch, setSupplierSearch] = useState("");
   const [selectedSupplier, setSelectedSupplier] = useState<{ id: string; name: string } | null>(null);
   const [showSupplierDropdown, setShowSupplierDropdown] = useState(false);
   const [filteredSuppliers, setFilteredSuppliers] = useState<SearchSupplier[]>([]);
   const [productSearch, setProductSearch] = useState("");
+  const [productSearchError, setProductSearchError] = useState("");
   const [showProductDropdown, setShowProductDropdown] = useState(false);
   const [filteredProducts, setFilteredProducts] = useState<SearchProduct[]>([]);
   const [items, setItems] = useState<LineItem[]>([]);
@@ -321,6 +324,7 @@ export function CreatePurchaseOrderDialog({
             discountType: discPerUnit > 0 ? "amount" : undefined,
             expiryDate: d.expiry_at ?? d.expiry_date ?? undefined,
             lotNumber: d.lot_number ?? undefined,
+            note: d.note ?? undefined,
           };
         }));
         setItems(mappedItems);
@@ -438,41 +442,23 @@ export function CreatePurchaseOrderDialog({
   useEffect(() => {
     let cancelled = false;
     setFilteredProducts([]);
-    if (fnbCatalog || !productSearch || productSearch.length < 1) {
+    setProductSearchError("");
+    if (!open || !productSearch.trim()) {
       setFilteredProducts([]);
       return;
     }
 
     const timer = setTimeout(async () => {
-      const supabase = getClient();
-      const ctx = await getCurrentContext();
-      // CEO 29/05/2026 + 14/07/2026: Nhập hàng (mua từ NCC ngoài) chỉ là NVL —
-      // KHÔNG hiện SKU (SKU làm từ NVL qua BOM, hoặc là mã bán, không mua ngoài).
-      // FnB lấy SKU từ Retail qua "Bán nội bộ", không qua phiếu nhập.
-      // ⚠️ Cũ dùng `has_bom is not true` → LEAK 147 SKU chưa gắn BOM (retail + fnb)
-      // vào picker. Nay lọc thẳng `product_type='nvl'` — đúng ý CEO: nhập = chỉ NVL.
-      const { data } = await supabase
-        .from("products_scoped")
-        .select("id, code, name, unit, cost_price, vat_rate")
-        .or(`name.ilike.%${productSearch}%,code.ilike.%${productSearch}%`)
-        .eq("tenant_id", currentTenantId ?? ctx.tenantId)
-        .eq("is_active", true)
-        .eq("product_type", "nvl")
-        .limit(10);
-
-      if (cancelled) return;
-      setFilteredProducts((data ?? []).map((p) => ({
-        id: p.id,
-        code: p.code ?? "",
-        name: p.name,
-        unit: p.unit ?? "Cái",
-        price: Number(p.cost_price ?? 0),
-        vatRate: Number(p.vat_rate ?? 0),
-      })));
+      try {
+        const products = await searchSupplierPurchaseProducts(productSearch, fnbCatalog);
+        if (!cancelled) setFilteredProducts(products);
+      } catch {
+        if (!cancelled) setProductSearchError("Chưa tải được mặt hàng. Anh/chị thử tìm lại; chưa thay đổi phiếu.");
+      }
     }, 300);
 
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [productSearch, currentTenantId, fnbCatalog]);
+  }, [productSearch, currentTenantId, fnbCatalog, open, branchId, editingPO?.branchId]);
 
   async function addProduct(product: SearchProduct) {
     const existing = items.find((item) => item.id === product.id);
@@ -630,6 +616,7 @@ export function CreatePurchaseOrderDialog({
           vatRate: item.vatRate,
           expiryDate: item.expiryDate || null,
           lotNumber: item.lotNumber || null,
+          note: item.note?.trim() || null,
         })),
       });
 
@@ -736,10 +723,10 @@ export function CreatePurchaseOrderDialog({
           {/* CEO 01/06/2026: 2-col layout — main left + sticky summary aside.
               Trước đây Chi phí + Đã thanh toán + buttons chen ở header/footer
               gây rối; giờ gom hết vào cột phải kiểu KiotViet (OneBiz style). */}
-          <div className="mx-auto grid max-w-[1500px] gap-3 lg:grid-cols-[1fr_360px]">
+          <div className="mx-auto grid max-w-[1500px] gap-3 2xl:grid-cols-[1fr_360px]">
             {/* Phase 1.5: banner cảnh báo khi đang sửa phiếu đã nhập kho. */}
             {isOrderedLocked && (
-              <div className="lg:col-span-2 flex items-start gap-3 rounded-lg border border-status-warning/40 bg-status-warning/10 p-3 text-sm">
+              <div className="2xl:col-span-2 flex items-start gap-3 rounded-lg border border-status-warning/40 bg-status-warning/10 p-3 text-sm">
                 <Icon name="warning" size={20} className="mt-0.5 shrink-0 text-status-warning" />
                 <div>
                   <p className="font-semibold text-status-warning">Phiếu đã nhập kho — chỉ sửa được "Đã thanh toán NCC" và "Ghi chú".</p>
@@ -808,7 +795,7 @@ export function CreatePurchaseOrderDialog({
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <div>
                     <h3 className="text-sm font-semibold">Dòng hàng nhập</h3>
-                    <p className="text-xs text-muted-foreground">Chỉ hiện NVL (mua ngoài) — SKU lấy từ Retail qua Bán nội bộ</p>
+                    <p className="text-xs text-muted-foreground">{fnbCatalog ? "Mua NCC ngoài: chọn SKU nguyên liệu/bao bì đang dùng tại quán. Nhập giá mua thực tế." : "Chọn nguyên vật liệu mua từ nhà cung cấp."}</p>
                   </div>
                   <span className="text-xs text-muted-foreground">{formatNumber(items.length)} dòng</span>
                 </div>
@@ -825,13 +812,14 @@ export function CreatePurchaseOrderDialog({
                     }}
                     onBlur={() => setTimeout(() => setShowProductDropdown(false), 200)}
                     placeholder="Tìm sản phẩm, mã hàng"
-                    className="pl-8"
+                    className="min-w-0 pl-8 text-base lg:text-sm"
+                    aria-label="Tìm mặt hàng nhập NCC theo mã hoặc tên"
                   />
                   {showProductDropdown && productSearch && (
                     <div className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border bg-popover shadow-lg">
                       {filteredProducts.length === 0 ? (
                         <div className="px-3 py-2 text-sm text-muted-foreground">
-                          Không tìm thấy NVL (phiếu nhập chỉ mua NVL, không gồm SKU)
+                          {productSearchError || (fnbCatalog ? "Không tìm thấy SKU phù hợp. Thử mã hoặc tên nguyên liệu." : "Không tìm thấy nguyên vật liệu.")}
                         </div>
                       ) : (
                         filteredProducts.map((p) => (
@@ -859,8 +847,9 @@ export function CreatePurchaseOrderDialog({
             </div>
 
             <div className="overflow-hidden rounded-lg border bg-white shadow-none">
-              <div className="hidden grid-cols-[minmax(300px,1fr)_90px_112px_150px_90px_150px_44px] gap-2 border-b bg-muted/50 px-3 py-2 text-xs font-semibold uppercase text-muted-foreground md:grid">
+              <div className="hidden grid-cols-[minmax(180px,1fr)_minmax(150px,1fr)_70px_100px_120px_65px_130px_36px] gap-2 border-b bg-muted/50 px-3 py-2 text-xs font-semibold uppercase text-muted-foreground xl:grid">
                 <span>Sản phẩm</span>
+                <span>Ghi chú mặt hàng</span>
                 <span className="flex justify-center">ĐVT</span>
                 <span className="flex justify-end">Số lượng</span>
                 <span className="flex justify-end">Đơn giá</span>
@@ -885,9 +874,9 @@ export function CreatePurchaseOrderDialog({
                   {[...items].reverse().map((item) => (
                     <div key={item.id} className="px-3 py-2.5 space-y-1.5">
                     <div
-                      className="grid gap-2 md:grid-cols-[minmax(300px,1fr)_90px_112px_150px_90px_150px_44px] md:items-center"
+                      className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-[minmax(180px,1fr)_minmax(150px,1fr)_70px_100px_120px_65px_130px_36px] xl:items-center"
                     >
-                      <div className="min-w-0">
+                      <div className="col-span-2 min-w-0 xl:col-span-1">
                         {/* CEO 06/06/2026 P0 #6: title tooltip tên + mã SP đầy đủ */}
                         <div
                           className="truncate text-sm font-semibold"
@@ -904,7 +893,15 @@ export function CreatePurchaseOrderDialog({
                           </div>
                         )}
                       </div>
-                      <div className="flex justify-center">
+                        <Input
+                          value={item.note ?? ""}
+                          onChange={event => updateItem(item.id, "note", event.target.value)}
+                          maxLength={2000}
+                          aria-label={`Ghi chú ${item.productName}`}
+                          placeholder="Ghi chú mặt hàng (tùy chọn)"
+                          className="col-span-2 h-9 min-w-0 text-base xl:col-span-1 xl:h-8 xl:text-sm"
+                        />
+                      <label className="min-w-0"><span className="mb-1 block text-xs text-muted-foreground xl:hidden">Đơn vị tính</span><div className="flex xl:justify-center">
                         <Select
                           value={item.unit}
                           onValueChange={(value) => {
@@ -920,24 +917,24 @@ export function CreatePurchaseOrderDialog({
                             ))}
                           </SelectContent>
                         </Select>
-                      </div>
-                      <NumericInput
+                      </div></label>
+                      <label className="min-w-0"><span className="mb-1 block text-xs text-muted-foreground xl:hidden">Số lượng</span><NumericInput
                         value={item.quantity}
                         onChange={(value) => updateItem(item.id, "quantity", Math.max(0.0001, value ?? 0.0001))}
                         min={0.0001}
                         decimals={4}
-                        className="h-8 text-right"
+                        className="h-9 text-right text-base xl:h-8 xl:text-sm"
                         aria-label={`Số lượng ${item.productName}`}
-                      />
-                      <NumericInput
+                      /></label>
+                      <label className="min-w-0"><span className="mb-1 block text-xs text-muted-foreground xl:hidden">Đơn giá mua</span><NumericInput
                         value={item.price}
                         onChange={(value) => updateItem(item.id, "price", value ?? 0)}
                         min={0}
                         decimals={2}
-                        className="h-8 text-right"
+                        className="h-9 text-right text-base xl:h-8 xl:text-sm"
                         aria-label={`Đơn giá ${item.productName}`}
-                      />
-                      <Select
+                      /></label>
+                      <label className="min-w-0"><span className="mb-1 block text-xs text-muted-foreground xl:hidden">VAT</span><Select
                         value={String(item.vatRate)}
                         onValueChange={(v) => updateItem(item.id, "vatRate", Number(v))}
                       >
@@ -950,8 +947,8 @@ export function CreatePurchaseOrderDialog({
                           <SelectItem value="8">8%</SelectItem>
                           <SelectItem value="10">10%</SelectItem>
                         </SelectContent>
-                      </Select>
-                      <div className="text-right text-sm font-bold tabular-nums text-primary">
+                      </Select></label>
+                      <div className="text-right text-sm font-bold tabular-nums text-primary sm:col-span-3 xl:col-span-1">
                         {formatCurrency(lineTotal(item))}
                       </div>
                       <Button
@@ -964,6 +961,7 @@ export function CreatePurchaseOrderDialog({
                         <Icon name="delete" size={14} />
                       </Button>
                     </div>
+                    <details className="text-xs"><summary className="cursor-pointer py-1 text-muted-foreground">Chiết khấu · Lô / hạn dùng{item.expiryDate || item.lotNumber || item.discount ? " · Đã nhập" : " (tùy chọn)"}</summary>
                     {/* Day 05/06/2026 (CEO): row con Chiết khấu — % hoặc đ, hiện đơn giá sau CK */}
                     <div className="flex items-center gap-2 pl-1 text-xs flex-wrap">
                       <label className="text-muted-foreground shrink-0 flex items-center gap-1">
@@ -1048,6 +1046,7 @@ export function CreatePurchaseOrderDialog({
                         (NCC ghi trên bao bì — optional)
                       </span>
                     </div>
+                    </details>
                     </div>
                   ))}
                 </div>

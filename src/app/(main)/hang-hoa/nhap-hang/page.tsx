@@ -392,6 +392,7 @@ function PurchaseOrderDetail({
                 columns={[
                   { header: "Mã hàng", accessor: "productCode" as never },
                   { header: "Tên hàng", accessor: "productName" as never },
+                  { header: "Ghi chú mặt hàng", accessor: (item: Record<string, unknown>) => <span className="block max-w-64 whitespace-pre-wrap break-words text-sm">{String(item.note || "—")}</span> },
                   {
                     header: order.status === "cancelled" ? "SL phiếu gốc" : "Đã nhập / SL",
                     accessor: (item: Record<string, unknown>) => {

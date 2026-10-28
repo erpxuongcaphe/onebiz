@@ -52,6 +52,7 @@ export interface SavePurchaseOrderItemInput {
   vatRate: number;
   expiryDate?: string | null;
   lotNumber?: string | null;
+  note?: string | null;
 }
 
 export interface SavePurchaseOrderInput {
@@ -184,6 +185,7 @@ export async function savePurchaseOrderAtomic(
       vat_rate: Number(item.vatRate ?? 0),
       expiry_date: item.expiryDate ? expiryInputValue(expiryInputParts(item.expiryDate).day, expiryInputParts(item.expiryDate).time) : null,
       lot_number: item.lotNumber ?? null,
+      note: item.note?.trim() || null,
     })),
   };
 
@@ -366,6 +368,7 @@ export async function getPurchaseOrdersForSupplier(
 /* ------------------------------------------------------------------ */
 
 export interface PurchaseOrderItemRow {
+  note?: string;
   id: string;
   productId: string | null;
   productCode: string;
@@ -394,7 +397,7 @@ export async function getPurchaseOrderItems(
   const { data, error } = await (supabase as any)
     .from("purchase_order_items")
     .select(
-      "id, product_id, product_name, quantity, received_quantity, unit_price, discount, vat_rate, unit, transaction_quantity, transaction_unit, transaction_unit_price, conversion_factor, expiry_date, expiry_at, lot_number, products:products_scoped(code)",
+      "id, product_id, product_name, quantity, received_quantity, unit_price, discount, vat_rate, unit, transaction_quantity, transaction_unit, transaction_unit_price, conversion_factor, expiry_date, expiry_at, lot_number, note, products:products_scoped(code)",
     )
     .eq("purchase_order_id", orderId)
     .order("id", { ascending: true });
@@ -418,6 +421,7 @@ export async function getPurchaseOrderItems(
     expiry_date: string | null;
     expiry_at?: string | null;
     lot_number: string | null;
+    note: string | null;
     products: { code: string } | null;
   }>).map((row) => {
     const stockQty = Number(row.quantity ?? 0);
@@ -431,6 +435,7 @@ export async function getPurchaseOrderItems(
       id: row.id,
       productId: row.product_id,
       productCode: row.products?.code ?? "",
+      note: row.note ?? undefined,
       productName: row.product_name ?? "",
       unit: row.transaction_unit ?? row.unit ?? "cái",
       quantity: qty,
@@ -840,6 +845,7 @@ export async function duplicatePurchaseOrder(
       vatRate: Number(item.vat_rate ?? 0),
       expiryDate: item.expiry_at ? String(item.expiry_at) : item.expiry_date ? String(item.expiry_date) : null,
       lotNumber: item.lot_number ? String(item.lot_number) : null,
+      note: item.note ? String(item.note) : null,
     })),
   });
 
