@@ -188,8 +188,11 @@ describe("report data integrity", () => {
 
   it("uses an explicit month selector for the cohort snapshot report", () => {
     expect(cohortPage).toContain("hideDateRange");
-    expect(cohortPage).toContain('aria-label="Số tháng theo dõi"');
-    expect(cohortPage).toContain("months,");
-    expect(cohortPage).toContain("range: cohortRange");
+    expect(cohortPage).toContain("<CustomerCohortEvidencePanel");
+    const panel = readFileSync("src/components/reports/customer-cohort-evidence-panel.tsx", "utf8");
+    expect(panel).toContain('aria-label="Số tháng theo dõi"');
+    expect(panel).toContain("months,");
+    expect(panel).toContain('range: { from: `${data.rows[0].cohort_month}-01`');
+    expect(panel).toContain("data.rows[data.rows.length - 1].cohort_month");
   });
 });

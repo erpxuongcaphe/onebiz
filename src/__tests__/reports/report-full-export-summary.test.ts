@@ -12,10 +12,15 @@ const SUMMARY_REPORTS = [
 ] as const;
 
 function reportSource(report: (typeof SUMMARY_REPORTS)[number]): string {
-  return readFileSync(
+  const page = readFileSync(
     resolve(`src/app/(main)/phan-tich/${report}/page.tsx`),
     "utf8",
   );
+  if (report !== "customer-cohort") return page;
+  expect(page).toContain("<CustomerCohortEvidencePanel");
+  const panel = readFileSync(resolve("src/components/reports/customer-cohort-evidence-panel.tsx"), "utf8");
+  expect(panel).toContain("buildCohortEvidenceSheets(data,");
+  return page + panel + readFileSync(resolve("src/lib/reports/cohort-evidence-export.ts"), "utf8");
 }
 
 describe("full export KPI summaries", () => {
@@ -24,7 +29,7 @@ describe("full export KPI summaries", () => {
     (report) => {
       const source = reportSource(report);
 
-      expect(source).toContain("buildMetricSummarySheet");
+      expect(source).toContain(report === "customer-cohort" ? 'name: "Độ phủ"' : "buildMetricSummarySheet");
       expect(source).toContain("format:");
       expect(source).toContain("onExportFull=");
     },
