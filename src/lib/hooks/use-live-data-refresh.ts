@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useId, useRef, useState } from "react";
 import { getClient } from "@/lib/services/supabase/base";
+import { createRefreshScheduler } from "@/lib/refresh-scheduler";
 /** Realtime invalidation plus visible-page polling/reconnect recovery. Queries remain tenant/branch scoped. */
 export function useLiveDataRefresh(refresh: () => void | Promise<void>, tenantId: string | undefined, branchId: string | undefined, tables: string[], enabled = true, pollIntervalMs = 30_000) {
   const tableKey = tables.join(",");
@@ -12,10 +13,9 @@ export function useLiveDataRefresh(refresh: () => void | Promise<void>, tenantId
   useEffect(() => {
     if (!enabled || !tenantId) return;
     const client = getClient();
-    let timer: ReturnType<typeof setTimeout> | undefined;
     let disposed = false;
-    const run = () => { if (!disposed && !document.hidden) void refresh(); };
-    const schedule = () => { clearTimeout(timer); timer = setTimeout(run, 350); };
+    const scheduler = createRefreshScheduler(refresh, () => !document.hidden && navigator.onLine !== false);
+    const schedule = () => scheduler.request();
     // Supabase reuses channels by topic; every effect needs its own channel.
     const channel = client.channel(`live-${tenantId}-${branchId ?? "all"}-${tableKey}-${instanceId}-${++subscriptionGeneration.current}`);
     for (const table of tableKey.split(",")) {
@@ -23,13 +23,13 @@ export function useLiveDataRefresh(refresh: () => void | Promise<void>, tenantId
       channel.on("postgres_changes", { event: "*", schema: "public", table, ...(filter ? { filter } : {}) }, schedule);
     }
     channel.subscribe((status) => { if (disposed) return; setConnection({ scope, connected: status === "SUBSCRIBED" }); if (status === "SUBSCRIBED") schedule(); });
-    const interval = setInterval(run, intervalMs);
+    const interval = setInterval(() => scheduler.poll(), intervalMs);
     window.addEventListener("focus", schedule);
     window.addEventListener("online", schedule);
     window.addEventListener("fnb-open-orders-changed", schedule);
     document.addEventListener("visibilitychange", schedule);
     return () => {
-      disposed = true; clearTimeout(timer); clearInterval(interval);
+      disposed = true; scheduler.dispose(); clearInterval(interval);
       window.removeEventListener("focus", schedule); window.removeEventListener("online", schedule);
       window.removeEventListener("fnb-open-orders-changed", schedule); document.removeEventListener("visibilitychange", schedule);
       void client.removeChannel(channel);

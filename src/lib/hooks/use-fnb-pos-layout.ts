@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { EMPTY_FNB_LAYOUT, layoutContent, type FnbPosLayout } from "@/lib/fnb-pos-layout";
 import { cacheFnbPosLayout, cachedFnbPosLayout, getFnbPosLayout } from "@/lib/services/supabase/fnb-pos-layout";
+import { createRefreshScheduler } from "@/lib/refresh-scheduler";
 
 /** Refresh presentation only. No cart or catalog replacement on a layout update. */
 export function useFnbPosLayout(tenant: string | null | undefined, branch: string | null | undefined, online: boolean) {
@@ -23,26 +24,30 @@ export function useFnbPosLayout(tenant: string | null | undefined, branch: strin
           if (previous.scope === scope && !previous.error && previous.layout.revision === layout.revision && layoutContent(previous.layout) === layoutContent(layout)) return previous;
           return { scope, layout, error: "" };
         });
-      } catch {
+      } catch (error) {
         if (active && request === generation) setState(previous => ({ scope,
           layout: previous.scope === scope ? previous.layout : fallback,
           error: "Chưa cập nhật được bố trí. Đang dùng bản đã lưu trên máy.",
         }));
+        throw error; // Background scheduler applies bounded retry; keep the saved layout visible.
       }
     };
+    const scheduler = createRefreshScheduler(refresh, () => active && online && !document.hidden && navigator.onLine !== false);
+    const schedule = () => scheduler.request();
     const storage = (event: StorageEvent) => {
       if (active && event.key === `onebiz:fnb-layout:v1:${tenant}:${branch}`) {
         const layout = cachedFnbPosLayout(tenant, branch);
         setState(previous => previous.scope === scope && previous.layout.revision > layout.revision ? previous : { scope, layout, error: "" });
       }
     };
-    void refresh();
-    const timer = window.setInterval(() => void refresh(), 30000);
-    window.addEventListener("focus", refresh);
+    scheduler.poll();
+    const timer = window.setInterval(() => scheduler.poll(), 30000);
+    window.addEventListener("focus", schedule);
     window.addEventListener("storage", storage);
-    document.addEventListener("visibilitychange", refresh);
-    return () => { active = false; generation++; clearInterval(timer); window.removeEventListener("focus", refresh);
-      window.removeEventListener("storage", storage); document.removeEventListener("visibilitychange", refresh); };
+    document.addEventListener("visibilitychange", schedule);
+    window.addEventListener("online", schedule);
+    return () => { active = false; generation++; scheduler.dispose(); clearInterval(timer); window.removeEventListener("focus", schedule);
+      window.removeEventListener("storage", storage); document.removeEventListener("visibilitychange", schedule); window.removeEventListener("online", schedule); };
   }, [tenant, branch, scope, online, fallback]);
   useEffect(() => {
     if (tenant && branch && state.scope === scope) cacheFnbPosLayout(tenant, branch, state.layout);
