@@ -252,6 +252,7 @@ export function CreatePurchaseOrderDialog({
   const [filteredSuppliers, setFilteredSuppliers] = useState<SearchSupplier[]>([]);
   const [productSearch, setProductSearch] = useState("");
   const [productSearchError, setProductSearchError] = useState("");
+  const [productSearchLoading, setProductSearchLoading] = useState(false);
   const [showProductDropdown, setShowProductDropdown] = useState(false);
   const [filteredProducts, setFilteredProducts] = useState<SearchProduct[]>([]);
   const [items, setItems] = useState<LineItem[]>([]);
@@ -444,16 +445,20 @@ export function CreatePurchaseOrderDialog({
     setFilteredProducts([]);
     setProductSearchError("");
     if (!open || !productSearch.trim()) {
+      setProductSearchLoading(false);
       setFilteredProducts([]);
       return;
     }
 
+    setProductSearchLoading(true);
     const timer = setTimeout(async () => {
       try {
         const products = await searchSupplierPurchaseProducts(productSearch, fnbCatalog);
         if (!cancelled) setFilteredProducts(products);
       } catch {
         if (!cancelled) setProductSearchError("Chưa tải được mặt hàng. Anh/chị thử tìm lại; chưa thay đổi phiếu.");
+      } finally {
+        if (!cancelled) setProductSearchLoading(false);
       }
     }, 300);
 
@@ -819,7 +824,7 @@ export function CreatePurchaseOrderDialog({
                     <div className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border bg-popover shadow-lg">
                       {filteredProducts.length === 0 ? (
                         <div className="px-3 py-2 text-sm text-muted-foreground">
-                          {productSearchError || (fnbCatalog ? "Không tìm thấy SKU phù hợp. Thử mã hoặc tên nguyên liệu." : "Không tìm thấy nguyên vật liệu.")}
+                          {productSearchLoading ? "Đang tìm mặt hàng…" : productSearchError || (fnbCatalog ? "Không tìm thấy SKU phù hợp. Thử mã hoặc tên nguyên liệu." : "Không tìm thấy nguyên vật liệu.")}
                         </div>
                       ) : (
                         filteredProducts.map((p) => (
