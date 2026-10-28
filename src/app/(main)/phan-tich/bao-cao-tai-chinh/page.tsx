@@ -749,7 +749,7 @@ export default function BaoCaoTaiChinhPage() {
                     href={buildSalesInvoiceRangeLink(
                       range.from,
                       range.to,
-                      activeBranchId ?? undefined,
+                      activeBranchId ?? "all",
                     )}
                     className="inline-flex h-8 items-center gap-1 border border-border px-2.5 text-xs font-medium text-foreground hover:bg-surface-container-low"
                   >
@@ -760,7 +760,7 @@ export default function BaoCaoTaiChinhPage() {
                     href={buildSalesReturnRangeLink(
                       range.from,
                       range.to,
-                      activeBranchId ?? undefined,
+                      activeBranchId ?? "all",
                     )}
                     className="inline-flex h-8 items-center gap-1 border border-border px-2.5 text-xs font-medium text-foreground hover:bg-surface-container-low"
                   >

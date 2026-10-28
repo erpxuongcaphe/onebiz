@@ -16,7 +16,7 @@ describe("financial report source drill-through", () => {
     expect(financialPage).toContain("buildSalesReturnRangeLink(");
     expect(financialPage).toContain("range.from");
     expect(financialPage).toContain("range.to");
-    expect(financialPage).toContain("activeBranchId ?? undefined");
+    expect(financialPage).toContain('activeBranchId ?? "all"');
     expect(financialPage).toContain("Xem hóa đơn");
     expect(financialPage).toContain("Xem dòng trả");
   });

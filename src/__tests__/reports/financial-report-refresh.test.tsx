@@ -37,6 +37,20 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("financial report scope and refresh", () => {
+  it.each(["", "fnb"])("retains explicit scope in financial reconciliation links for %s", async (branch) => {
+    state.branchId = branch;
+    state.details.mockResolvedValue({ cogsItems: [], cogsTotalCount: 0, marginTrend: [], reconciliation: { invoiceCount: 1, returnCount: 1 }, granularity: "day", turnover: {}, dso: {} });
+    render(<FinancialReport />);
+    for (const label of ["Xem hóa đơn", "Xem dòng trả"]) {
+      const link = await screen.findByRole("link", { name: label });
+      const url = new URL(link.getAttribute("href")!, "https://example.test");
+      expect(url.searchParams.get("branch")).toBe(branch || "all");
+      expect(url.searchParams.get("from")).toBe(state.range.from);
+      expect(url.searchParams.get("to")).toBe(state.range.to);
+      expect(url.searchParams.get("view")).toBe("table");
+    }
+  });
+
   it("reloads the same branch after the authenticated account changes", async () => {
     const view = render(<FinancialReport />);
     await screen.findByText("Doanh thu thuần: 123,456");
