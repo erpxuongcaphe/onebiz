@@ -18,8 +18,8 @@ Không cam kết mọi máy nhiệt hoặc máy Bluetooth đều đáp ứng.
 
 1. USB: cài driver đúng model, chọn USB và in thử từ Windows.
 LAN: máy in và máy quầy cùng mạng; giữ IP đang hoạt động, nhập đúng cổng.
-Ví dụ máy của Xưởng Tư Búa: 192.168.10.222, cổng 9100. Chi nhánh khác
-phải dùng địa chỉ máy tại chính chi nhánh đó. Không tự đổi IP đang dùng.
+Địa chỉ kết nối do quản lý tại chi nhánh đối chiếu trên máy đang dùng;
+không đưa thông tin mạng riêng vào tài liệu công khai. Không tự đổi IP.
 Chỉ dùng sau khi thử tiếng Việt, QR, lề, cắt.
 2. Cài Node.js LTS từ nodejs.org. Tạo thư mục riêng tại máy quầy.
 3. Tải bộ ZIP và giải nén; đặt onebiz-print-point.json vào cùng thư mục
@@ -96,3 +96,25 @@ cloud queue và Windows queue. Không chạy hai agent. Không tự đổi LAN/U
 Đây không phải tự cập nhật từ web; máy quầy cần được cập nhật một lần.
 Không cam kết chạy bộ cài/USB worker hiện hành trên Windows7/PowerShell2;
 quản trị phải xác minh runtime thực tế trước khi thay chương trình quầy.
+
+GIẢM THỬ LẠI KHI KẾT NỐI LỖI - NODE 2026.10.28.1
+Kết nối hợp lệ vẫn hỏi lệnh mỗi khoảng 1 giây khi rảnh. Không đổi tuyến,
+IP/cổng LAN, USB, khổ giấy, nội dung in hoặc cách xác nhận finish.
+Lỗi quyền/kết nối điểm bị từ chối: chờ tăng dần 60 giây tới 5 phút;
+lỗi mạng/máy chủ tạm thời: chờ tăng dần 5 giây tới 60 giây, có độ lệch
+nhỏ để nhiều máy không cùng gọi lại một lúc. HTTP Retry-After được tôn trọng
+trong giới hạn 1 giờ. Chờ thử lại không kích hoạt vòng restart của watchdog.
+Thành công thì trở về nhịp nhận lệnh bình thường. Không tự phát lại phiếu.
+
+PRINT_CONNECTION_REJECTED_CHECK_LOCAL_CONFIG nghĩa là phải đối chiếu đúng
+tiến trình và onebiz-print-point.json trên máy. Không cấp mã mới cả quán,
+không xóa điểm in cũ/chạy hai bộ nhận để thử. Agent không tự sửa cấu hình.
+Phát hành web không cập nhật tiến trình đã cài; thay chương trình chỉ khi
+người hỗ trợ đã xác định đúng thư mục, đối chiếu lệnh chưa rõ kết quả và có
+bản sao hoàn tác. Giữ cấu hình/token, task khởi động và mọi nhật ký cũ.
+
+Chẩn đoán an toàn: người hỗ trợ có thể chạy diagnose.ps1 trong thư mục bộ
+nhận. Script chỉ đọc cục bộ, không gọi mạng/nhận lệnh/in/đổi cấu hình hay
+dừng tiến trình. Báo cáo không chứa token/public key/nội dung lệnh in hoặc
+command line đầy đủ. Chưa thể gán chắc một tiến trình dùng đường dẫn tương
+đối cho thư mục nào chỉ từ Windows process metadata; cần đối chiếu tại máy.

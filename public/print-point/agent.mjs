@@ -7,7 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseDestination, isConnectionProbe } from './destination.mjs';
 import { sendNetworkPrint } from './network.mjs';
 import { createUsbWorker } from './usb-worker.mjs';
-import { createAgentRpc, createProgressWatchdog } from './recovery.mjs';
+import { AGENT_VERSION, createAgentRpc, createAgentRetryPolicy, createProgressWatchdog, waitForAgentRetry } from './recovery.mjs';
 
 export function validateRaster(bytes, paper) {
   if (!['58mm', '80mm'].includes(paper) || bytes.length > 1800000) throw new Error('INVALID_RASTER');
@@ -47,6 +47,7 @@ export async function runAgent(configPath) {
   const config=JSON.parse(await readFile(configPath,'utf8')), url=new URL(config.url);
   if(url.protocol!=='https:' || !/^[0-9a-f-]{36}$/.test(config.pointId) || !/^[0-9a-f]{64}$/.test(config.token) || !config.publicKey) throw new Error('Tệp cấu hình không hợp lệ.');
   const call=createAgentRpc(config);
+  const retryPolicy=createAgentRetryPolicy();
   const sleep=ms=>new Promise(r=>setTimeout(r,ms));
   const discover=()=>new Promise(done=>{
     const child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-Command','[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); @(Get-CimInstance Win32_Printer | Select-Object -ExpandProperty Name) | ConvertTo-Json -Compress'],{windowsHide:true,stdio:['ignore','pipe','pipe']});
@@ -65,13 +66,16 @@ export async function runAgent(configPath) {
     usbWorker.close();
     process.exit(75); // Supervisor restarts; the cloud never reclaims an ambiguous send.
   });
-  console.log('Onebiz · Điểm in đang chạy. Giữ máy bật.');
+  console.log(`Onebiz · Điểm in ${AGENT_VERSION} đang chạy. Giữ máy bật.`);
   while(!stopped) {
     try {
-      void refreshPrinters();
       watchdog.pulse();
       const claimStarted = Date.now();
       const job=await call('claim');
+      retryPolicy.success();
+      // Do not enumerate/heartbeat repeatedly while this configuration is rejected.
+      // Claim already updates last_seen_at; discovery stays asynchronous after a valid poll.
+      void refreshPrinters();
       watchdog.pulse();
       if(!job){await sleep(1000);continue;}
       const sendStarted = Date.now();
@@ -107,7 +111,14 @@ export async function runAgent(configPath) {
         catch(error){console.error(error.message);await sleep(2500);}
       }
       console.log(`${new Date().toISOString()} · ${job.id} · ${status} · lấy lệnh ${sendStarted-claimStarted}ms · gửi máy ${acknowledgementStarted-sendStarted}ms · xác nhận ${Date.now()-acknowledgementStarted}ms`);
-    }catch(error){console.error(`${new Date().toISOString()} · ${error.message}`);watchdog.pulse();await sleep(5000);}
+    }catch(error){
+      const retry=retryPolicy.failure(error);
+      // Fixed diagnostic code only: never echo configuration, token or response body.
+      console.error(`${new Date().toISOString()} · ${retry.code} · retry_ms=${retry.delayMs}`);
+      watchdog.deferRetry(retry.delayMs);
+      await waitForAgentRetry(retry.delayMs,sleep,()=>stopped);
+      watchdog.pulse();
+    }
   }
   watchdog.close();
   usbWorker.close();
