@@ -26,8 +26,14 @@ try{
  let sequence=0;const send=async(price,variant=null,type='takeaway',platform='direct',quantity=1)=>{const lines=[{productId:id(7),quantity,unitPrice:price,...(variant?{variantId:variant}:{})}];return (await db.query('select _fnb_send_to_kitchen_impl_00303($1,null,$2,null,$3,$4::jsonb,$5) result',[id(3),type,'price-'+sequence++,JSON.stringify(lines),platform])).rows[0].result;};
  await assert.rejects(()=>send(25000),/PRICE_CHANGED:Coffee:25000:22000/); // reproduces Premium defect
  const legacy=await send(22000);
+ if(process.argv.includes('--initialized')){
+   resolver=resolver.replaceAll('\r\n','\n').replace('begin\n  if auth.uid() is null',`begin\n  select null::uuid as id, null::numeric as sell_price into v_variant;\n  select null::uuid as id, null::numeric as price, null::uuid as variant_id, null::numeric as min_qty into v_tier_item;\n  select null::uuid as id, null::numeric as override_price, null::uuid as variant_id into v_platform_price;\n  if auth.uid() is null`);
+   await db.exec(resolver);
+ }
+ const resolverBefore=(await db.query("select pg_get_functiondef('public.resolve_sale_price_00363(uuid,uuid,uuid,uuid,text,text,numeric,timestamptz)'::regprocedure) d")).rows[0].d;
  const before=(await db.query('select count(*) n from kitchen_orders')).rows[0].n;
  const migration=fs.readFileSync('supabase/migrations/20261028091648_fnb_branch_price_at_kitchen_save.sql','utf8');await db.exec(migration);await db.exec(migration);
+ if(process.argv.includes('--initialized')) assert.equal((await db.query("select pg_get_functiondef('public.resolve_sale_price_00363(uuid,uuid,uuid,uuid,text,text,numeric,timestamptz)'::regprocedure) d")).rows[0].d,resolverBefore,'preserves an already fixed concurrent resolver byte-for-byte');
  assert.equal((await db.query('select count(*) n from kitchen_orders')).rows[0].n,before);
  const stored=async(result)=>Number((await db.query('select unit_price from kitchen_order_items where kitchen_order_id=$1',[result.kitchen_order_id])).rows[0].unit_price);
  assert.equal(await stored(await send(25000)),25000);

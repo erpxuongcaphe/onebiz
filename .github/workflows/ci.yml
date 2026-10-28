@@ -58,6 +58,7 @@ jobs:
           node scripts/fnb-db-test/run-opening-defaults-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
           node scripts/fnb-db-test/run-supplier-purchase-notes-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
           node scripts/fnb-db-test/run-branch-price-save-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
+          node scripts/fnb-db-test/run-branch-price-save-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js" --initialized
           node scripts/fnb-db-test/run-branch-trading-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
           node scripts/fnb-db-test/run-delivery-staff-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
           node scripts/fnb-db-test/run-branch-restore-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"

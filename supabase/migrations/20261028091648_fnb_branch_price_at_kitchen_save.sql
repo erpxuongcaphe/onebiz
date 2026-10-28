@@ -44,6 +44,11 @@ declare definition text; old_block text; new_block text; backup text;
 begin
  definition:=replace(pg_get_functiondef('public.resolve_sale_price_00363(uuid,uuid,uuid,uuid,text,text,numeric,timestamptz)'::regprocedure),E'\r\n',E'\n');
  if position('FNB_PRICE_OPTIONAL_METADATA_20261028' in definition)>0 then return; end if;
+ -- Another release may already have initialized the same three optional records.
+ -- Preserve its function byte-for-byte instead of overwriting concurrent work.
+ if position('select null::uuid as id, null::numeric as sell_price into v_variant;' in definition)>0
+    and position('select null::uuid as id, null::numeric as price, null::uuid as variant_id, null::numeric as min_qty into v_tier_item;' in definition)>0
+    and position('select null::uuid as id, null::numeric as override_price, null::uuid as variant_id into v_platform_price;' in definition)>0 then return; end if;
  old_block:=E'begin\n  if auth.uid() is null';
  new_block:=$new$begin
   -- FNB_PRICE_OPTIONAL_METADATA_20261028: define optional RECORD shapes before CASE/JSON field access.
@@ -60,5 +65,9 @@ begin
  execute backup;
  execute replace(definition,old_block,new_block);
 end $metadata$;
-revoke all on function public._resolve_sale_price_before_kitchen_20261028(uuid,uuid,uuid,uuid,text,text,numeric,timestamptz) from public,anon,authenticated,service_role;
+do $acl$ begin
+ if to_regprocedure('public._resolve_sale_price_before_kitchen_20261028(uuid,uuid,uuid,uuid,text,text,numeric,timestamptz)') is not null then
+   revoke all on function public._resolve_sale_price_before_kitchen_20261028(uuid,uuid,uuid,uuid,text,text,numeric,timestamptz) from public,anon,authenticated,service_role;
+ end if;
+end $acl$;
 commit;
