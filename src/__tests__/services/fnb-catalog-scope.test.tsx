@@ -20,6 +20,10 @@ describe("F&B product choices", () => {
     expect(isFnbCatalogContext(undefined, "fnb-preview.vercel.app")).toBe(true);
     expect(isFnbCatalogContext("warehouse", "onebiz.com.vn")).toBe(false);
   });
+  it("uses the receipt branch override even when the global branch is a warehouse", () => {
+    state.auth.activeBranchId = "warehouse";
+    expect(renderHook(() => useFnbCatalogScope("outlet")).result.current).toBe(true);
+  });
   it("filters before the result limit so identical NVL names do not displace valid new SKUs", () => {
     const rows = [{ type: "nvl", code: "NVL-TRA", name: "Hồng trà" }, {type:"sku",code:"WS-001",name:"Hồng trà khách sỉ"}, {type:"sku",code:"SKU-TRA-008",name:"FECA - Hồng trà"}, { type: "sku", code: "SKU-TRA", name: "Hồng trà" }];
     const query = { eq: vi.fn((_column: string, type: string) => { rows.splice(0, rows.length, ...rows.filter(row => row.type === type)); return query; }), not: vi.fn((column: string,_operator: string,value: string) => { rows.splice(0,rows.length,...rows.filter(row=>!String(row[column as 'code'|'name']).toLowerCase().startsWith(value.slice(0,-1).toLowerCase()))); return query; }), limit: (count: number) => rows.slice(0, count) };
