@@ -71,6 +71,8 @@ const RPC_CHO_MIGRATION = new Map<string, string>([
   // vì không có service-role credential. Xóa các dòng này ngay lần dump schema kế tiếp.
 ]);
 const COT_CHO_MIGRATION = new Map<string, string>([
+  // Live column verified through information_schema; remove after the next schema dump.
+  ["purchase_order_items.note", "202610230101_fnb_warehouse_request_line_notes.sql"],
   ["customers.canonical_customer_id", "20261027005706_internal_customer_canonical_identity.sql"],
   ["invoices.fnb_context", "202610230004_fnb_paid_context_zero_total.sql"],
   ["shifts.close_kind", "202610220002_fnb_shift_totals_reconciliation.sql"],
