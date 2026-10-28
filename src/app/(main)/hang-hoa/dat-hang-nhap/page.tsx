@@ -69,6 +69,7 @@ const canChangeWarehouseOrder = (item: PurchaseOrderEntry) => !!item.warehouseOr
   && !item.warehouseOrder.cancelled && !item.warehouseOrder.blockedReason && item.status === "pending";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
+import { PurchaseOrderLines } from "./purchase-order-lines";
 
 // === Status config ===
 const statusMap: Record<
@@ -134,6 +135,7 @@ function PurchaseOrderEntryDetail({
             {item.warehouseOrder.blockedReason && <p className="mt-2 font-medium">{item.warehouseOrder.blockedReason}</p>}
           </div>}
           <DocumentNoteBox note={item.note} />
+          <PurchaseOrderLines orderId={item.id} />
         </div>
       ),
     },

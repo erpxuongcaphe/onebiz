@@ -430,21 +430,24 @@ export function buildKitchenTicketHtml(data: KitchenTicketDataV2): string {
       <div class="item-name">
         <span class="qty">${formatNumber(item.quantity)}x</span>
         ${escapeKitchenText(item.name)}
-        ${item.variant ? `<span class="variant">(${escapeKitchenText(item.variant)})</span>` : ""}
+        ${item.variant ? `<span class="variant">(<span class="kitchen-choice">${escapeKitchenText(item.variant)}</span>)</span>` : ""}
       </div>`;
 
     if (item.toppings && item.toppings.length > 0) {
       const toppingTexts = item.toppings
         .filter(t => t.quantity > 0)
-        .map(t => `${t.name} x${formatNumber(t.quantity)}`);
+        .map(t => `<span class="kitchen-choice">${escapeKitchenText(t.name)}</span> x${formatNumber(t.quantity)}`);
       if (toppingTexts.length > 0) {
-        html += `<div class="toppings">+ ${escapeKitchenText(toppingTexts.join(", "))}</div>`;
+        html += `<div class="toppings">+ ${toppingTexts.join(", ")}</div>`;
       }
     }
     // CEO 01/06/2026 — Sprint 2.4b: print modifier choices lên phiếu bếp.
     // Format compact: "▸ Mức đường: 70% • Mức đá: Ít • Topping: Trân châu"
     if (item.modifierLabels && item.modifierLabels.length > 0) {
-      html += `<div class="modifier">▸ ${escapeKitchenText(item.modifierLabels.join(" • "))}</div>`;
+      html += `<div class="modifier">▸ ${item.modifierLabels.map(label => {
+        const { prefix, choice } = splitKitchenChoice(label);
+        return `${escapeKitchenText(prefix)}<span class="kitchen-choice">${escapeKitchenText(choice)}</span>`;
+      }).join(" • ")}</div>`;
     }
     const freeTextNote = getFnbFreeTextNote(item.note, item.modifierLabels);
     if (freeTextNote) {
@@ -487,6 +490,7 @@ ${thermalTypography(layout, ".line,.line-thin")}
 .table-label{font-size:${layout.titleSize}px}
 .table-label{border:${layout.headerFrame ? "1px solid #000" : "0"};padding:${layout.headerFrame ? "1mm" : "0"};margin:1mm 0}
 .modifier,.note,.toppings,.variant{font-size:${layout.detailSize}px;color:#000;font-weight:${layout.boldDetails ? 700 : 400};font-style:${layout.italicDetails ? "italic" : "normal"};overflow-wrap:anywhere}
+.kitchen-choice{text-decoration:underline;text-underline-offset:2px}
 ${thermalBodyMargins(layout)}
 .item{padding:2px 0;border:0}
 </style></head><body>
@@ -543,6 +547,13 @@ function escapeKitchenText(text: string): string {
   return text.replace(/[&<>"']/g, c => ({"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"}[c]!));
 }
 
+function splitKitchenChoice(label: string): { prefix: string; choice: string } {
+  const colon = label.indexOf(":");
+  if (colon < 0 || !label.slice(colon + 1).trim()) return { prefix: "", choice: label };
+  const choice = label.slice(colon + 1).trimStart();
+  return { prefix: label.slice(0, label.length - choice.length), choice };
+}
+
 export function buildKitchenTicketBytes(data: KitchenTicketDataV2): Uint8Array {
   const b = new EscPosBuilder(data.paperSize ?? "80mm");
   if (data.isOffline) b.text("CHO DONG BO", {bold:true, align:"center"});
@@ -553,9 +564,14 @@ export function buildKitchenTicketBytes(data: KitchenTicketDataV2): Uint8Array {
   b.text(`Phieu: ${data.orderNumber}`).text(ORDER_TYPE_VN[data.orderType]).divider();
   if (data.orderNote) b.text(`GHI CHU DON: ${data.orderNote}`, {bold:true});
   for (const item of data.items) {
-    b.text(`${formatNumber(item.quantity)}x ${item.name}${item.variant ? ` (${item.variant})` : ""}`, {bold:true, size:data.itemFontSize === "lg" ? "double" : "normal"});
-    for (const topping of item.toppings ?? []) if (topping.quantity > 0) b.text(`+ ${topping.name} x${formatNumber(topping.quantity)}`);
-    for (const label of item.modifierLabels ?? []) b.text(`> ${label}`, {bold:true});
+    b.textRaw(`${formatNumber(item.quantity)}x ${item.name}`, {bold:true, size:data.itemFontSize === "lg" ? "double" : "normal"});
+    if (item.variant) b.textRaw(" (").underline(1).textRaw(item.variant).underline(0).textRaw(")");
+    b.bold(false).size("normal").newline();
+    for (const topping of item.toppings ?? []) if (topping.quantity > 0) b.textRaw("+ ").underline(1).textRaw(topping.name).underline(0).text(` x${formatNumber(topping.quantity)}`);
+    for (const label of item.modifierLabels ?? []) {
+      const { prefix, choice } = splitKitchenChoice(label);
+      b.textRaw(`> ${prefix}`).underline(1).textRaw(choice).underline(0).newline();
+    }
     const note = getFnbFreeTextNote(item.note, item.modifierLabels);
     if (note) b.text(`** ${note}`, {bold:true});
     if (data.style === "detailed") b.text(`${formatCurrency(item.unitPrice)} x ${formatNumber(item.quantity)}`);
