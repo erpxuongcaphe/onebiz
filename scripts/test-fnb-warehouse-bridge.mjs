@@ -322,4 +322,6 @@ await test('ordinary Retail SKU used as a F&B ingredient stays selectable and ca
  assert.equal((await contextSearch('012345'))[0].id,product);
  await db.exec('begin');assert.ok((await submit(id(994))).purchaseOrderId);await db.exec('rollback');
 });
-console.log(`${passed} isolated PostgreSQL checks passed.`);await db.close();
+console.log(`${passed} isolated PostgreSQL checks passed.`);
+await (await import('./fnb-db-test/test-unified-warehouse-uom.mjs')).runUnifiedWarehouseUom(db,{id,tenant,actor,store,warehouse,product,submit});
+await db.close();

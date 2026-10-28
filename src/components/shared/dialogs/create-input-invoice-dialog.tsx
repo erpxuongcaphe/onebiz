@@ -1,4 +1,8 @@
 "use client";
+import { useProductUom } from "@/lib/hooks/use-product-uom";
+import { scaleUnitPrice } from "@/lib/operational-uom";
+import { TransactionUnitSelect } from "@/components/shared/transaction-unit-select";
+
 
 import { useFnbCatalogScope } from "@/lib/hooks/use-fnb-catalog-scope";
 import { applyFnbCatalogScope } from "@/lib/fnb-catalog-scope";
@@ -108,6 +112,7 @@ export function CreateInputInvoiceDialog({
   const [showProductDropdown, setShowProductDropdown] = useState(false);
   const [filteredProducts, setFilteredProducts] = useState<SearchProduct[]>([]);
   const [items, setItems] = useState<LineItem[]>([]);
+  const uom = useProductUom(items.map(i => i.id));
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [shippingFee, setShippingFee] = useState(0);
   const [otherCost, setOtherCost] = useState(0);
@@ -290,6 +295,7 @@ export function CreateInputInvoiceDialog({
   }
 
   async function handleSave() {
+    if (uom.loading || uom.error) return;
     if (!validate()) return;
     setSaving(true);
     try {
@@ -311,6 +317,7 @@ export function CreateInputInvoiceDialog({
         receiveNow: true,
         items: items.map((item) => ({
           productId: item.id,
+          unit: item.unit,
           quantity: item.quantity,
           unitPrice: item.price,
           discount: 0,
@@ -537,9 +544,7 @@ export function CreateInputInvoiceDialog({
                         )}
                       </div>
                       <div className="flex justify-center">
-                        <span className="min-w-[64px] rounded-md bg-muted/50 px-2 py-1 text-center text-xs font-semibold text-muted-foreground">
-                          {item.unit || "Cái"}
-                        </span>
+                        <TransactionUnitSelect label={`Đơn vị ${item.productName}`} value={item.unit} stockUnit={uom.units.get(item.id) ?? item.unit} conversions={uom.map.get(item.id)} quantity={item.quantity} disabled={saving || uom.loading || !!uom.error} onChange={(unit, ratio) => setItems(lines => lines.map(line => line.id === item.id ? { ...line, unit, price: scaleUnitPrice(item.price, ratio) } : line))} />
                       </div>
                       <NumericInput
                         value={item.quantity}
@@ -602,6 +607,7 @@ export function CreateInputInvoiceDialog({
           </div>
         </div>
 
+        {uom.error && <p role="alert" className="text-sm text-destructive">Không tải được quy đổi đơn vị. Đóng và mở lại phiếu.</p>}
         <DialogFooter className="mx-0 mb-0 shrink-0 rounded-none border-t bg-white px-4 py-3">
           <div className="mx-auto grid w-full max-w-[1420px] grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto]">
             <div className="grid gap-2 text-sm sm:grid-cols-3 xl:grid-cols-6">
@@ -616,7 +622,7 @@ export function CreateInputInvoiceDialog({
               <Button variant="outline" onClick={() => onOpenChange(false)}>
                 Hủy
               </Button>
-              <Button onClick={handleSave} disabled={saving}>
+              <Button onClick={handleSave} disabled={saving || uom.loading || !!uom.error}>
                 {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
                 Tạo hóa đơn
               </Button>

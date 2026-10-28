@@ -2,6 +2,7 @@ import React from 'react';
 import { afterEach,beforeEach,describe,expect,it,vi } from 'vitest';
 import { cleanup,fireEvent,render,screen,waitFor } from '@testing-library/react';
 const mocks=vi.hoisted(()=>({context:vi.fn(),submit:vi.fn(),toast:vi.fn(),clear:vi.fn(),draft:vi.fn(),detail:vi.fn(),change:vi.fn()}));
+vi.mock('@/lib/hooks/use-product-uom',()=>({useProductUom:()=>({map:new Map(),units:new Map(),loading:false,error:''})}));
 vi.mock('@/lib/contexts',()=>({useToast:()=>({toast:mocks.toast})}));
 vi.mock('@/lib/services/supabase/fnb-warehouse-orders',()=>({getWarehouseOrderContext:mocks.context,submitWarehouseOrder:mocks.submit,getWarehouseOrderForChange:mocks.detail,changeWarehouseOrder:mocks.change}));
 vi.mock('@/lib/hooks/use-durable-form-draft',()=>({useDurableFormDraft:(options:unknown)=>{mocks.draft(options);return {clearDraft:mocks.clear};}}));
@@ -34,7 +35,7 @@ describe('F&B warehouse order form',()=>{
   fireEvent.change(screen.getByLabelText('Số lượng Sữa A'),{target:{value:'5'}});fireEvent.change(screen.getByLabelText('Ghi chú SKU-A'),{target:{value:'  Nguyên thùng  '}});
   fireEvent.change(screen.getByLabelText('Lý do thay đổi'),{target:{value:'Đổi nhu cầu'}});fireEvent.click(screen.getByRole('button',{name:'Lưu thay đổi'}));
   await waitFor(()=>expect(mocks.change).toHaveBeenCalledTimes(1));
-  expect(mocks.change.mock.calls[0][0]).toMatchObject({purchaseOrderId:'po',expectedRevision:2,action:'edit',items:[{productId:'milk',quantity:5,note:'  Nguyên thùng  '}],note:'Giao sáng',reason:'Đổi nhu cầu'});
+  expect(mocks.change.mock.calls[0][0]).toMatchObject({purchaseOrderId:'po',expectedRevision:2,action:'edit',items:[{productId:'milk',unit:'Thùng',expectedFactor:1,quantity:5,note:'  Nguyên thùng  '}],note:'Giao sáng',reason:'Đổi nhu cầu'});
   expect(mocks.submit).not.toHaveBeenCalled();await waitFor(()=>expect(close).toHaveBeenCalledWith(false));
  });
  it('blocks a shipped order and never silently recreates it as a new order',async()=>{
@@ -60,7 +61,7 @@ describe('F&B warehouse order form',()=>{
   fireEvent.change(screen.getByLabelText('Ghi chú SKU-A'),{target:{value:'  Thùng nguyên\nHSD trên 3 tháng  '}});
   fireEvent.change(screen.getByLabelText('Ghi chú cho kho tổng / đề nghị mặt hàng mới'),{target:{value:'Thêm sữa mới\nGiữ lạnh'}});
   fireEvent.click(screen.getByRole('button',{name:'Gửi đặt hàng'}));await waitFor(()=>expect(mocks.submit).toHaveBeenCalledTimes(1));
-  expect(mocks.submit.mock.calls[0][0]).toMatchObject({branchId:'store',warehouseId:'warehouse',items:[{productId:'milk',quantity:6,note:'  Thùng nguyên\nHSD trên 3 tháng  '}],note:'Thêm sữa mới\nGiữ lạnh'});
+  expect(mocks.submit.mock.calls[0][0]).toMatchObject({branchId:'store',warehouseId:'warehouse',items:[{productId:'milk',unit:'Thùng',expectedFactor:1,quantity:6,note:'  Thùng nguyên\nHSD trên 3 tháng  '}],note:'Thêm sữa mới\nGiữ lạnh'});
   await waitFor(()=>expect(close).toHaveBeenCalledWith(false));expect(mocks.clear).toHaveBeenCalledTimes(1);
  });
  it('failure preserves draft and retries with the same request key',async()=>{
@@ -98,7 +99,7 @@ describe('F&B warehouse order form',()=>{
   expect(screen.getByLabelText('Ghi chú SKU-B')).toHaveValue('Ghi chú B');
   fireEvent.click(screen.getByRole('button',{name:'Gửi đặt hàng'}));
   await waitFor(()=>expect(mocks.submit).toHaveBeenCalledTimes(1));
-  expect(mocks.submit.mock.calls[0][0].items).toEqual([{productId:'tea',quantity:1,note:'Ghi chú B'}]);
+  expect(mocks.submit.mock.calls[0][0].items).toEqual([{productId:'tea',unit:'Túi',expectedFactor:1,quantity:1,note:'Ghi chú B'}]);
  });
  it('restores legacy drafts without line notes and includes new notes in its durable snapshot',async()=>{
   render(<CreateFnbWarehouseOrderDialog open onOpenChange={vi.fn()} branchId="store"/>);

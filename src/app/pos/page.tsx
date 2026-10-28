@@ -1,4 +1,8 @@
 "use client";
+import { useProductUom } from "@/lib/hooks/use-product-uom";
+import { operationalUnits } from "@/lib/operational-uom";
+import type { UOMConversion } from "@/lib/types";
+import { PosUnitQuantityDialog } from "./components/unit-quantity-dialog";
 import { requestPageLeave, useUnsavedWork } from "@/lib/hooks/use-unsaved-work";
 
 // ---------------------------------------------------------------------------
@@ -216,6 +220,7 @@ function PosPageInner() {
   const router = useRouter();
   const { toast } = useToast();
   const state = usePosState();
+  const cartUom = useProductUom(state.lines.map(line => line.productId));
   const {
     user,
     tenant,
@@ -3430,6 +3435,8 @@ function PosPageInner() {
                     key={line.lineId}
                     index={stt}
                     line={line}
+                    unitConversions={cartUom.units.get(line.productId) === line.unit ? cartUom.map.get(line.productId) : undefined}
+                    unitLoading={cartUom.loading || !!cartUom.error}
                     lineTotal={state.computeLineTotal(line)}
                     onQtyChange={(qty) => state.updateLineQty(line.lineId, qty)}
                     onPriceChange={(price) => state.updateLinePrice(line.lineId, price)}
@@ -4581,6 +4588,8 @@ function CartItem({
   onDiscountChange,
   onNoteChange,
   onRemove,
+  unitConversions = [],
+  unitLoading,
 }: {
   index: number;
   line: OrderLine;
@@ -4590,7 +4599,11 @@ function CartItem({
   onDiscountChange: (d: DiscountInput) => void;
   onNoteChange: (note: string) => void;
   onRemove: () => void;
+  unitConversions?: UOMConversion[];
+  unitLoading?: boolean;
 }) {
+  const [showUnits, setShowUnits] = useState(false);
+  const hasUnitChoices = operationalUnits(line.unit,unitConversions).length > 1;
   const oversold = line.availableStock > 0 && line.quantity > line.availableStock;
   // CEO 08/07 (như KiotViet): HẾT HÀNG → tô đỏ ô số lượng. Tô khi BIẾT CHẮC khả
   // dụng (stockKnown): availableStock là số lưới đã tính BOM-aware — nên SKU có
@@ -4656,7 +4669,7 @@ function CartItem({
           {(line.productCode || line.unit || stockIssue || lowStock) && (
             <p className="text-[9.5px] text-muted-foreground/80 font-mono leading-tight truncate">
               {line.productCode && <span>{line.productCode}</span>}
-              {line.unit && <span className="ml-1">({line.unit})</span>}
+
               {(stockIssue || lowStock) && (
                 <span
                   className={cn(
@@ -4733,7 +4746,7 @@ function CartItem({
       ) : null}
 
       {/* ── Line 2: qty stepper · × · price · −GG · = total ── */}
-      <div className="flex items-center gap-2 px-3 pb-2 pl-[26px] mt-1">
+      <div className="flex flex-wrap items-center gap-2 px-3 pb-2 pl-[26px] mt-1">
         {/* Qty stepper +/− — CEO 08/07: hết tồn/bán vượt → ô SL viền+chữ ĐỎ
             (như KiotViet), tooltip báo tồn. Vẫn thao tác bình thường. */}
         <div
@@ -4792,6 +4805,7 @@ function CartItem({
           </button>
         </div>
 
+        <button type="button" className="inline-flex h-8 shrink-0 items-center gap-1 rounded border px-1.5 text-xs disabled:border-transparent disabled:opacity-80" aria-label={`Đơn vị ${line.productName}`} title={hasUnitChoices ? "Nhập số lượng theo đơn vị khác" : "Đơn vị giỏ hàng"} disabled={unitLoading || !hasUnitChoices} onClick={() => setShowUnits(true)}>{line.unit}{hasUnitChoices && <Icon name="expand_more" size={12} />}</button>
         <span className="text-xs text-muted-foreground/60 shrink-0">×</span>
 
         {/* Price (click to edit) — CEO 22/05/2026: gate by permission */}
@@ -4899,6 +4913,7 @@ function CartItem({
           {formatNumber(lineTotal)}
         </span>
       </div>
+      {showUnits && <PosUnitQuantityDialog name={line.productName} unit={line.unit} quantity={line.quantity} unitPrice={line.unitPrice} conversions={unitConversions} onClose={() => setShowUnits(false)} onApply={onQtyChange} />}
     </div>
   );
 }

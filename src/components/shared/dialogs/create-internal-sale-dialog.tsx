@@ -1,4 +1,8 @@
 "use client";
+import { useProductUom } from "@/lib/hooks/use-product-uom";
+import { scaleUnitPrice } from "@/lib/operational-uom";
+import { TransactionUnitSelect } from "@/components/shared/transaction-unit-select";
+
 
 import { useState, useEffect, useRef } from "react";
 import {
@@ -53,6 +57,7 @@ export function CreateInternalSaleDialog({
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [items, setItems] = useState<SaleItem[]>([]);
+  const uom = useProductUom(items.map(i => i.productId));
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const saveLockRef = useRef(false);
@@ -138,6 +143,7 @@ export function CreateInternalSaleDialog({
   const totalQuantity = items.reduce((s, i) => s + i.quantity, 0);
 
   async function handleSave() {
+    if (uom.loading || uom.error) return;
     if (saveLockRef.current) return;
     if (!fromBranchId || !toBranchId) {
       toast({ title: "Chọn chi nhánh bán và chi nhánh mua", variant: "error" });
@@ -343,9 +349,7 @@ export function CreateInternalSaleDialog({
                       </div>
                     </td>
                     <td className="p-2 text-center">
-                      <span className="inline-flex min-w-14 justify-center rounded-md bg-muted px-2 py-1 font-medium">
-                        {item.unit}
-                      </span>
+                      <TransactionUnitSelect label={`Đơn vị ${item.productName}`} value={item.unit} stockUnit={uom.units.get(item.productId) ?? item.unit} conversions={uom.map.get(item.productId)} quantity={item.quantity} disabled={saving || uom.loading || !!uom.error} onChange={(unit, ratio) => setItems(lines => lines.map(line => line.productId === item.productId ? { ...line, unit, unitPrice: scaleUnitPrice(item.unitPrice, ratio) } : line))} />
                     </td>
                     <td className="p-2">
                       <NumericInput
@@ -421,11 +425,12 @@ export function CreateInternalSaleDialog({
           </div>
         )}
 
+        {uom.error && <p role="alert" className="text-sm text-destructive">Không tải được quy đổi đơn vị. Đóng và mở lại phiếu.</p>}
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             Huỷ
           </Button>
-          <Button onClick={handleSave} disabled={saving}>
+          <Button onClick={handleSave} disabled={saving || uom.loading || !!uom.error}>
             {saving && <Icon name="progress_activity" size={16} className="animate-spin mr-2" />}
             Tạo đơn nội bộ
           </Button>

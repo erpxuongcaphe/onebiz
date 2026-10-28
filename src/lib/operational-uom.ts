@@ -4,6 +4,23 @@ import type { UOMConversion } from "@/lib/types";
 
 export const STOCK_QUANTITY_SCALE = 4;
 export interface OperationalUnitEntry { quantity: number; unit: string; expectedFactor?: number }
+
+/** Price scales with the selected package; quantity keeps the number the operator typed. */
+export function scaleUnitPrice(price: number, ratio: number): number {
+  return new Decimal(price).mul(ratio).toDecimalPlaces(8, Decimal.ROUND_HALF_UP).toNumber();
+}
+
+/** Preview/stock APIs receive canonical quantities and cost, with explicit precision checks. */
+export function normalizeTransactionEntry(quantity: number, price: number, stockUnit: string, inputUnit: string, conversions: UOMConversion[], priceScale = 8) {
+  const factor = operationalFactor(stockUnit, inputUnit, conversions);
+  if (!factor || !Number.isFinite(quantity) || quantity < 0 || !Number.isFinite(price) || price < 0) throw new Error("Đơn vị hoặc số lượng không hợp lệ. Kiểm tra lại quy đổi.");
+  const stockQuantity = new Decimal(quantity).mul(factor).toDecimalPlaces(4, Decimal.ROUND_HALF_UP);
+  const stockPrice = new Decimal(price).div(factor).toDecimalPlaces(priceScale, Decimal.ROUND_HALF_UP);
+  if ((quantity > 0 && stockQuantity.isZero()) || !stockQuantity.mul(stockPrice).toDecimalPlaces(2, Decimal.ROUND_HALF_UP).eq(new Decimal(quantity).mul(price).toDecimalPlaces(2, Decimal.ROUND_HALF_UP))) {
+    throw new Error("Lượng quy đổi quá nhỏ hoặc làm lệch thành tiền. Nhập theo đơn vị tồn để kiểm tra.");
+  }
+  return { quantity: stockQuantity.toNumber(), price: stockPrice.toNumber(), unit: stockUnit };
+}
 const key = (unit: string) => unit.trim().normalize("NFC").toLocaleLowerCase("vi");
 
 /** Use declared product units only; names never imply weights or densities. */

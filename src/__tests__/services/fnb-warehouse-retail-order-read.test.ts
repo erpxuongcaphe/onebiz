@@ -33,6 +33,10 @@ describe('warehouse demand visible through both Retail order readers',()=>{
  it('does not read order lines when the parent is outside the readable tenant scope',async()=>{
   mocks.from.mockReturnValueOnce(query({data:null}));expect(await getDraftOrderItems('foreign')).toEqual([]);expect(mocks.from).toHaveBeenCalledTimes(1);
  });
+ it('shows selected package quantities and prices from immutable snapshots',async()=>{
+  mocks.from.mockReturnValueOnce(query({data:{id:'order'}})).mockReturnValueOnce(query({data:[{id:'milk',unit:'Lon',quantity:24,unit_price:10000,transaction_unit:'Thùng',transaction_quantity:2,transaction_unit_price:120000,total:240000}]}));
+  expect(await getDraftOrderItems('order')).toMatchObject([{unit:'Thùng',quantity:2,unitPrice:120000,total:240000}]);
+ });
  it('keeps all 120 requested rows and the last row note in the Retail detail',async()=>{
   const rows=Array.from({length:120},(_,i)=>({id:`row-${i}`,products:{code:`SKU-${i}`},product_name:`Mặt hàng ${i}`,quantity:i+1,note:`Ghi chú ${i}`}));
   mocks.from.mockReturnValueOnce(query({data:{id:'large-order'}})).mockReturnValueOnce(query({data:rows}));

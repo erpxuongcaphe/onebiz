@@ -1,6 +1,7 @@
 import {act,cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 const m=vi.hoisted(()=>({load:vi.fn(),submit:vi.fn(),rpc:vi.fn(),toast:vi.fn(),branch:{id:'branch',branchType:'store'},branches:[{id:'branch',branchType:'store'}]}));
+vi.mock('@/lib/hooks/use-product-uom',()=>({useProductUom:()=>({map:new Map(),units:new Map(),loading:false,error:''})}));
 vi.mock('@/lib/contexts',()=>({useAuth:()=>({activeBranchId:'branch',currentBranch:m.branch,branches:m.branches}),useToast:()=>({toast:m.toast})}));
 vi.mock('@/lib/hooks/use-durable-form-draft',()=>({useDurableFormDraft:()=>({clearDraft:vi.fn(),flushDraft:vi.fn()})}));
 vi.mock('@/lib/services/supabase/document-copy',()=>({loadDocumentCopy:m.load}));

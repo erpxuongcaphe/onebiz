@@ -1,5 +1,8 @@
 "use client";
 
+import { TransactionUnitSelect } from "@/components/shared/transaction-unit-select";
+import { useProductUom } from "@/lib/hooks/use-product-uom";
+import { operationalFactor } from "@/lib/operational-uom";
 import { useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -20,6 +23,7 @@ export function CreateFnbWarehouseOrderDialog({ open, onOpenChange, onSuccess, b
   const [search, setSearch] = useState('');
   const [products, setProducts] = useState<SupplyProduct[]>([]);
   const [items, setItems] = useState<Line[]>([]);
+  const uom = useProductUom(items.map(i => i.id));
   const [note, setNote] = useState('');
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   const [error, setError] = useState('');
@@ -103,7 +107,7 @@ export function CreateFnbWarehouseOrderDialog({ open, onOpenChange, onSuccess, b
   }, [open, branchId, search]);
 
   async function send() {
-    if (submitLock.current || catalogError || detailLoading || blockedReason || copyLoading || copyError) return;
+    if (uom.loading || uom.error || submitLock.current || catalogError || detailLoading || blockedReason || copyLoading || copyError) return;
     if (copySource && (copySource.branchId !== branchId || editingOrderId)) { setError('Đóng phiếu và mở lại đúng thao tác/chi nhánh trước khi gửi.'); return; }
     if (editingOrderId && (revision === null || reason.trim().length < 3)) { setError('Nhập lý do thay đổi (ít nhất 3 ký tự).'); return; }
     if (!warehouses.some(w => w.id === warehouseId) || !items.length || items.some(i => !Number.isFinite(i.quantity) || i.quantity <= 0)) {
@@ -113,7 +117,7 @@ export function CreateFnbWarehouseOrderDialog({ open, onOpenChange, onSuccess, b
     const submittedBranch = branchId;
     try {
       if (editingOrderId && revision !== null) {
-        const changedItems = items.map(i => ({ productId: i.id, quantity: i.quantity, ...(i.note ? { note: i.note } : {}) }));
+        const changedItems = items.map(i => ({ productId: i.id, quantity: i.quantity, unit: i.unit, expectedFactor: operationalFactor(uom.units.get(i.id) ?? i.unit, i.unit, uom.map.get(i.id) ?? [])?.toDecimalPlaces(12).toNumber(), ...(i.note ? { note: i.note } : {}) }));
         const signature = JSON.stringify({ changedItems, note, reason, revision });
         if (changeAttempt.current?.signature !== signature) changeAttempt.current = { signature, id: crypto.randomUUID() };
         await changeWarehouseOrder({ purchaseOrderId: editingOrderId, expectedRevision: revision, requestId: changeAttempt.current.id, action: 'edit', items: changedItems, note, reason });
@@ -123,7 +127,7 @@ export function CreateFnbWarehouseOrderDialog({ open, onOpenChange, onSuccess, b
         return;
       }
       const result = await submitWarehouseOrder({ branchId, warehouseId, requestId, note,
-        items: items.map(i => ({ productId: i.id, quantity: i.quantity, ...(i.note ? { note: i.note } : {}) })) });
+        items: items.map(i => ({ productId: i.id, quantity: i.quantity, unit: i.unit, expectedFactor: operationalFactor(uom.units.get(i.id) ?? i.unit, i.unit, uom.map.get(i.id) ?? [])?.toDecimalPlaces(12).toNumber(), ...(i.note ? { note: i.note } : {}) })) });
       if (!mounted.current || branchRef.current !== submittedBranch) return;
       clearDraft(); onOpenChange(false); onSuccess?.();
       toast({ title: `Đã gửi ${result.code}`, description: `Kho tổng nhận đơn ${result.salesOrderCode} trong Xử lý đặt hàng POS Retail.`, variant: 'success' });
@@ -133,7 +137,7 @@ export function CreateFnbWarehouseOrderDialog({ open, onOpenChange, onSuccess, b
   }
 
   return <Dialog open={open} onOpenChange={next => { if (!submitLock.current) onOpenChange(next); }}>
-    <DialogContent className="flex h-[94dvh] max-h-[94dvh] w-[calc(100%-1rem)] max-w-none flex-col sm:w-[96vw] sm:max-w-7xl">
+    <DialogContent className="flex max-h-[94dvh] w-[calc(100%-1rem)] max-w-none flex-col sm:w-[96vw] sm:max-w-7xl">
       <DialogHeader><DialogTitle>{editingOrderId ? `Sửa phiếu đặt ${editingCode}` : 'Đặt hàng nhập từ kho tổng'}</DialogTitle></DialogHeader>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain">
         <p className="text-sm text-muted-foreground">Gửi nhu cầu để kho tổng chuẩn bị hàng. Kho có thể điều chỉnh hàng thực giao; chi nhánh xác nhận khi nhận hàng.</p>
@@ -160,13 +164,14 @@ export function CreateFnbWarehouseOrderDialog({ open, onOpenChange, onSuccess, b
           </div>
           </div>
           <div className="divide-y rounded-md border">
-            {items.length > 0 && <div aria-hidden="true" className="hidden gap-3 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground md:grid md:grid-cols-[2rem_minmax(0,1fr)_6rem_2.5rem_minmax(10rem,15rem)]"><span>STT</span><span>Mặt hàng / ĐVT</span><span>Số lượng</span><span /><span>Ghi chú</span></div>}
-            {!items.length ? <p className="p-4 text-sm text-muted-foreground">Chưa có mặt hàng. Tìm hàng phía trên để thêm.</p> : items.map((item, index) => <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_6rem_2.5rem] items-start gap-x-3 gap-y-2 px-3 py-2 md:grid-cols-[2rem_minmax(0,1fr)_6rem_2.5rem_minmax(10rem,15rem)]">
+            {items.length > 0 && <div aria-hidden="true" className="hidden gap-3 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground md:grid md:grid-cols-[2rem_minmax(12rem,1fr)_7rem_7rem_2.5rem_minmax(10rem,15rem)]"><span>STT</span><span>Mặt hàng</span><span>ĐVT</span><span>Số lượng</span><span /><span>Ghi chú</span></div>}
+            {!items.length ? <p className="p-4 text-sm text-muted-foreground">Chưa có mặt hàng. Tìm hàng phía trên để thêm.</p> : items.map((item, index) => <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_7rem_2.5rem] items-start gap-x-3 gap-y-2 px-3 py-2 md:grid-cols-[2rem_minmax(12rem,1fr)_7rem_7rem_2.5rem_minmax(10rem,15rem)]">
               <span className="hidden pt-2 text-sm tabular-nums text-muted-foreground md:block">{index + 1}</span>
-              <div className="min-w-0"><p className="break-words font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{item.code} · {item.unit}</p></div>
-              <NumericInput aria-label={`Số lượng ${item.name}`} className="h-9 w-24 text-right" value={item.quantity} min={0} decimals={4} onChange={value => setItems(lines => lines.map(i => i.id === item.id ? { ...i, quantity: value ?? 0 } : i))} />
-              <Button variant="ghost" className="col-start-3 row-start-1 h-9 px-1 text-xs text-muted-foreground md:col-start-4" aria-label={`Bỏ ${item.name}`} onClick={() => setItems(lines => lines.filter(i => i.id !== item.id))}>Bỏ</Button>
-              <div className="col-span-3 row-start-2 min-w-0 md:col-span-1 md:col-start-5 md:row-start-1">
+              <div className="min-w-0"><p className="break-words font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{item.code}</p></div>
+              <div className="col-start-1 row-start-2 md:col-start-3 md:row-start-1"><label className="text-xs text-muted-foreground md:sr-only">ĐVT</label><TransactionUnitSelect label={`Đơn vị ${item.name}`} value={item.unit} stockUnit={uom.units.get(item.id) ?? item.unit} conversions={uom.map.get(item.id)} quantity={item.quantity} disabled={uom.loading || !!uom.error} onChange={unit => setItems(lines => lines.map(i => i.id === item.id ? {...i, unit} : i))} /></div>
+              <NumericInput aria-label={`Số lượng ${item.name}`} className="col-start-2 row-start-2 h-9 w-full text-right md:col-start-4 md:row-start-1" value={item.quantity} min={0} decimals={4} onChange={value => setItems(lines => lines.map(i => i.id === item.id ? { ...i, quantity: value ?? 0 } : i))} />
+              <Button variant="ghost" className="col-start-3 row-start-1 h-9 px-1 text-xs text-muted-foreground md:col-start-5" aria-label={`Bỏ ${item.name}`} onClick={() => setItems(lines => lines.filter(i => i.id !== item.id))}>Bỏ</Button>
+              <div className="col-span-3 row-start-3 min-w-0 md:col-span-1 md:col-start-6 md:row-start-1">
                 <label className="mb-1 block text-xs text-muted-foreground md:sr-only" htmlFor={`fnb-line-note-${item.id}`}>Ghi chú {item.code}</label>
                 <textarea id={`fnb-line-note-${item.id}`} aria-label={`Ghi chú ${item.code}`} title={item.note || 'Ghi chú riêng cho mã hàng này'} value={item.note ?? ''} maxLength={2000} rows={1} className="h-9 min-h-9 w-full resize-none overflow-hidden rounded-md border border-border/60 bg-muted/15 px-2 py-0 text-xs leading-[34px] placeholder:text-muted-foreground/60 focus:min-h-20 focus:resize-y focus:overflow-y-auto focus:bg-background focus:py-2 focus:leading-5 focus:outline-none focus:ring-2 focus:ring-primary/30" placeholder="Ghi chú…" onChange={e => setItems(lines => lines.map(i => i.id === item.id ? { ...i, note: e.target.value } : i))} />
               </div>
@@ -176,12 +181,12 @@ export function CreateFnbWarehouseOrderDialog({ open, onOpenChange, onSuccess, b
           <textarea id="fnb-supply-note" value={note} maxLength={10000} onChange={e => setNote(e.target.value)} rows={3} className="w-full rounded-md border p-3 text-sm" placeholder="Ghi nhu cầu thêm, mặt hàng chưa có, quy cách hoặc lưu ý giao hàng…" />
           {editingOrderId && <label className="block text-sm font-medium">Lý do thay đổi<Input aria-label="Lý do thay đổi" value={reason} maxLength={1000} onChange={e => setReason(e.target.value)} className="mt-1" placeholder="Ví dụ: điều chỉnh nhu cầu ngày mai" /><span className="text-xs font-normal text-muted-foreground">Lưu trong lịch sử, không thêm vào ghi chú phiếu.</span></label>}
         </fieldset>
-        {(catalogError || error) && <p role="alert" className="text-sm text-destructive">{catalogError || error}</p>}
+        {(uom.error || catalogError || error) && <p role="alert" className="text-sm text-destructive">{uom.error || catalogError || error}</p>}
       </div>
       <DialogFooter className="border-t pt-3">
         <span className="mr-auto text-sm text-muted-foreground">{items.length} mặt hàng · {editingOrderId ? 'Giữ mã phiếu, đồng bộ đơn kho tổng' : 'Mã PO cấp khi gửi thành công'}</span>
         <Button variant="outline" disabled={saving} onClick={() => onOpenChange(false)}>Đóng</Button>
-        <Button disabled={saving || detailLoading || !!blockedReason || copyLoading || !!copyError || !!catalogError || !warehouseId || !items.length || (!!editingOrderId && (revision === null || reason.trim().length < 3))} onClick={send}>{saving ? 'Đang gửi…' : editingOrderId ? 'Lưu thay đổi' : 'Gửi đặt hàng'}</Button>
+        <Button disabled={uom.loading || !!uom.error || saving || detailLoading || !!blockedReason || copyLoading || !!copyError || !!catalogError || !warehouseId || !items.length || (!!editingOrderId && (revision === null || reason.trim().length < 3))} onClick={send}>{saving ? 'Đang gửi…' : editingOrderId ? 'Lưu thay đổi' : 'Gửi đặt hàng'}</Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>;
