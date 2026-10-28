@@ -36,6 +36,29 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe("F&B live refresh recovery", () => {
+  it("does not overlap slow realtime reads and retains the last invalidation", async () => {
+    let finish!: () => void;
+    const refresh = vi.fn().mockReturnValueOnce(new Promise<void>(resolve => { finish = resolve; }));
+    renderHook(() => useLiveDataRefresh(refresh, "tenant", "branch", ["kitchen_orders"]));
+    await act(async () => { mocks.events[0](); await vi.advanceTimersByTimeAsync(350); });
+    await act(async () => {
+      mocks.events[0](); window.dispatchEvent(new Event("online")); window.dispatchEvent(new Event("focus"));
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(refresh).toHaveBeenCalledTimes(1);
+    await act(async () => { finish(); await vi.advanceTimersByTimeAsync(350); });
+    expect(refresh).toHaveBeenCalledTimes(2);
+  });
+  it("cleans up queued work while an old scope is still loading", async () => {
+    let finish!: () => void;
+    const old = vi.fn().mockReturnValue(new Promise<void>(resolve => { finish = resolve; })); const next = vi.fn();
+    const hook = renderHook(({ branch, read }) => useLiveDataRefresh(read, "tenant", branch, ["kitchen_orders"]), { initialProps: { branch: "old", read: old } });
+    await act(async () => { mocks.events[0](); await vi.advanceTimersByTimeAsync(350); mocks.events[0](); });
+    hook.rerender({ branch: "new", read: next });
+    await act(async () => { finish(); mocks.events.at(-1)?.(); await vi.advanceTimersByTimeAsync(350); });
+    expect(old).toHaveBeenCalledTimes(1); expect(next).toHaveBeenCalledTimes(1);
+    expect(mocks.on.mock.calls.at(-1)?.[1]).toMatchObject({ filter: "branch_id=eq.new" });
+  });
   it("keeps the default POS cadence while a report uses a slower fallback", () => {
     const pos = vi.fn();
     const report = vi.fn();

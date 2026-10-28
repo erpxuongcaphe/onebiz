@@ -15,7 +15,7 @@ import { getSharedCookieDomain } from "./cookie-domain";
  * bị stale → user nhảy giữa onebiz/fnb subdomain mang token cũ → 401 → đá.
  * Fix: lấy host từ headers(), pass domain option giống middleware.
  */
-export async function createServerSupabaseClient() {
+export async function createServerSupabaseClient(options?: { fetch: typeof fetch }) {
   const cookieStore = await cookies();
   const headersList = await headers();
   const cookieDomain = getSharedCookieDomain(headersList.get("host"));
@@ -24,6 +24,7 @@ export async function createServerSupabaseClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      ...(options ? { global: { fetch: options.fetch } } : {}),
       cookies: {
         getAll() {
           return cookieStore.getAll();

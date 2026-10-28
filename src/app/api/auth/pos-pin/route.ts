@@ -3,17 +3,31 @@ import { createClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { createReadDeadline } from "@/lib/supabase/read-deadline";
 
 const noStore = { "Cache-Control": "no-store" };
-export async function GET() {
-  const sb = await createServerSupabaseClient();
-  const { data: { user }, error } = await sb.auth.getUser();
-  if (error || !user) return NextResponse.json({ message: "Vui lòng đăng nhập." }, { status: 401, headers: noStore });
-  const { data, error: profileError } = await sb.from("profiles")
-    .select("is_active,pos_pin_hash,pos_pin_reset_required").eq("id", user.id).single();
-  if (profileError || !data) return NextResponse.json({ message: "Chưa kiểm tra được PIN. Vui lòng thử lại." }, { status: 503, headers: noStore });
-  if (!data.is_active) return NextResponse.json({ message: "Tài khoản đã bị khóa." }, { status: 403, headers: noStore });
-  return NextResponse.json({ userId: user.id, hasPin: Boolean(data.pos_pin_hash), resetRequired: data.pos_pin_reset_required }, { headers: noStore });
+export async function GET(request: NextRequest) {
+  const deadline = createReadDeadline(8_000, request.signal);
+  const unavailable = () => NextResponse.json({ message: "Máy chủ tạm thời chưa phản hồi. Vui lòng thử lại, không cần đăng xuất." }, { status: 503, headers: { ...noStore, "Retry-After": "5" } });
+  try {
+    // Isolated client: the deadline cannot affect another request or the PIN reset POST.
+    const sb = await createServerSupabaseClient({ fetch: deadline.fetch });
+    const { data: { user }, error } = await deadline.run(() => sb.auth.getUser());
+    if (deadline.aborted) return unavailable();
+    if (error) {
+      if (error.name === "AuthSessionMissingError" || [400, 401, 403].includes(error.status ?? 0)) {
+        return NextResponse.json({ message: "Vui lòng đăng nhập." }, { status: 401, headers: noStore });
+      }
+      return unavailable();
+    }
+    if (!user) return NextResponse.json({ message: "Vui lòng đăng nhập." }, { status: 401, headers: noStore });
+    const { data, error: profileError } = await deadline.run(() => sb.from("profiles")
+      .select("is_active,pos_pin_hash,pos_pin_reset_required").eq("id", user.id).single());
+    if (deadline.aborted || profileError || !data) return unavailable();
+    if (!data.is_active) return NextResponse.json({ message: "Tài khoản đã bị khóa." }, { status: 403, headers: noStore });
+    return NextResponse.json({ userId: user.id, hasPin: Boolean(data.pos_pin_hash), resetRequired: data.pos_pin_reset_required }, { headers: noStore });
+  } catch { return unavailable(); }
+  finally { deadline.dispose(); }
 }
 
 /** Forgotten PIN: verify this exact account's password, then reset atomically.
