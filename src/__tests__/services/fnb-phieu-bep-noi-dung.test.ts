@@ -45,8 +45,12 @@ const PHIEU: KitchenTicketDataV2 = {
 };
 
 /** Vị trí xuất hiện; -1 nếu không có (để so thứ tự cho dễ đọc). */
+function visibleText(html: string): string {
+  return new DOMParser().parseFromString(html, "text/html").body.textContent ?? "";
+}
+
 function viTri(html: string, chuoi: string): number {
-  return html.indexOf(chuoi);
+  return visibleText(html).indexOf(chuoi);
 }
 
 describe("A. Mẫu phiếu bếp in đủ Size · Topping · Đường · Đá · ghi chú", () => {
@@ -54,10 +58,10 @@ describe("A. Mẫu phiếu bếp in đủ Size · Topping · Đường · Đá �
 
   it("có đủ 5 phần, không thiếu phần nào", () => {
     expect(html).toContain("Trà sữa trân châu");
-    expect(html, "Size (quy cách) phải in cạnh tên món").toContain("(Size L)");
-    expect(html, "topping bán theo phần").toContain("Trân châu trắng x2");
-    expect(html, "mức đường").toContain("Mức đường: 50%");
-    expect(html, "mức đá").toContain("Mức đá: Ít đá");
+    expect(visibleText(html), "Size (quy cách) phải in cạnh tên món").toContain("(Size L)");
+    expect(visibleText(html), "topping bán theo phần").toContain("Trân châu trắng x2");
+    expect(visibleText(html), "mức đường").toContain("Mức đường: 50%");
+    expect(visibleText(html), "mức đá").toContain("Mức đá: Ít đá");
     expect(html, "ghi chú từng món").toContain("Không ống hút");
   });
 
@@ -74,7 +78,7 @@ describe("A. Mẫu phiếu bếp in đủ Size · Topping · Đường · Đá �
   });
 
   it("Đường và Đá nằm chung MỘT dòng, ngăn bằng dấu chấm giữa", () => {
-    expect(html).toContain("▸ Mức đường: 50% • Mức đá: Ít đá");
+    expect(visibleText(html)).toContain("▸ Mức đường: 50% • Mức đá: Ít đá");
   });
 
   it("thiếu tuỳ chọn thì không in dòng rỗng", () => {
@@ -97,16 +101,16 @@ describe("A. Mẫu phiếu bếp in đủ Size · Topping · Đường · Đá �
       ],
     });
 
-    expect(legacyHtml.match(/Mức đường: 50%/g)).toHaveLength(1);
+    expect(visibleText(legacyHtml).match(/Mức đường: 50%/g)).toHaveLength(1);
     expect(legacyHtml).toContain("Không ống hút");
   });
 
   it("kiểu Gọn vẫn in đủ thông tin pha chế, chỉ giảm mật độ trình bày", () => {
     const gon = buildKitchenTicketHtml({ ...PHIEU, style: "compact" });
-    expect(gon).toContain("(Size L)");
-    expect(gon).toContain("Trân châu trắng x2");
-    expect(gon).toContain("Mức đường: 50%");
-    expect(gon).toContain("Mức đá: Ít đá");
+    expect(visibleText(gon)).toContain("(Size L)");
+    expect(visibleText(gon)).toContain("Trân châu trắng x2");
+    expect(visibleText(gon)).toContain("Mức đường: 50%");
+    expect(visibleText(gon)).toContain("Mức đá: Ít đá");
     expect(gon).toContain("Không ống hút");
     expect(gon).not.toContain('class="price"');
   });
@@ -135,8 +139,8 @@ describe("D. Phiếu tạm tính và hoá đơn khách giữ đủ tuỳ chọn 
 
   it("phiếu tạm tính có Size, topping, Đường/Đá và ghi chú", () => {
     const html = buildPreBillHtml(duLieuChung);
-    expect(html).toContain("(Size L)");
-    expect(html).toContain("Trân châu trắng x2");
+    expect(visibleText(html)).toContain("(Size L)");
+    expect(visibleText(html)).toContain("Trân châu trắng x2");
     expect(html).toContain("Mức đường: 50% • Mức đá: Ít đá");
     expect(html).toContain("Không ống hút");
   });
@@ -149,8 +153,8 @@ describe("D. Phiếu tạm tính và hoá đơn khách giữ đủ tuỳ chọn 
       paid: 106_000,
       change: 0,
     });
-    expect(html).toContain("(Size L)");
-    expect(html).toContain("Trân châu trắng x2");
+    expect(visibleText(html)).toContain("(Size L)");
+    expect(visibleText(html)).toContain("Trân châu trắng x2");
     expect(html).toContain("Mức đường: 50% • Mức đá: Ít đá");
     expect(html).toContain("Không ống hút");
   });
@@ -249,13 +253,13 @@ describe("B. Đường in thật của POS (tách theo trạm) giữ đủ tuỳ
 
     expect(soPhieu).toBe(1);
     const html = phieuDaDung[0];
-    expect(html).toContain("(Size L)");
-    expect(html).toContain("Trân châu trắng x2");
+    expect(visibleText(html)).toContain("(Size L)");
+    expect(visibleText(html)).toContain("Trân châu trắng x2");
     expect(
-      html,
+      visibleText(html),
       "POS truyền modifierLabels nhưng bước tách trạm làm rơi -> bếp nhận phiếu giấy KHÔNG có Đường/Đá",
     ).toContain("Mức đường: 50%");
-    expect(html).toContain("Mức đá: Ít đá");
+    expect(visibleText(html)).toContain("Mức đá: Ít đá");
     expect(html).toContain("Không ống hút");
   });
 });
