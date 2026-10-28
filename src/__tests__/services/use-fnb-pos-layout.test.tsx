@@ -1,11 +1,12 @@
-import { act, renderHook, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ get: vi.fn(), cached: vi.fn(), cache: vi.fn() }));
 vi.mock("@/lib/services/supabase/fnb-pos-layout", () => ({ getFnbPosLayout: mocks.get, cachedFnbPosLayout: mocks.cached, cacheFnbPosLayout: mocks.cache }));
 import { useFnbPosLayout } from "@/lib/hooks/use-fnb-pos-layout";
 import { EMPTY_FNB_LAYOUT } from "@/lib/fnb-pos-layout";
 const layout = (revision: number, id: string) => ({ revision, categoryIds: [], productIds: [id], hiddenIds: [] });
 describe("POS layout synchronization", () => {
+  afterEach(() => { cleanup(); vi.useRealTimers(); });
   beforeEach(() => { mocks.get.mockReset(); mocks.cached.mockReset().mockReturnValue(EMPTY_FNB_LAYOUT); mocks.cache.mockReset(); });
   it("never applies a delayed response from the previous branch", async () => {
     let finishOld!: (value: ReturnType<typeof layout>) => void;
@@ -31,5 +32,29 @@ describe("POS layout synchronization", () => {
     hook.rerender({ branch: "b" });
     expect(hook.result.current.layout.productIds).toEqual(["b"]);
     expect(mocks.get).not.toHaveBeenCalled();
+  });
+  it("coalesces background focus and polling behind one layout read", async () => {
+    vi.useFakeTimers();
+    let finish!: (value: ReturnType<typeof layout>) => void;
+    mocks.get.mockReturnValueOnce(new Promise(resolve => { finish = resolve; })).mockResolvedValue(layout(2, "latest"));
+    const hook = renderHook(() => useFnbPosLayout("tenant", "branch", true));
+    await act(async () => {
+      window.dispatchEvent(new Event("focus")); window.dispatchEvent(new Event("online"));
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(mocks.get).toHaveBeenCalledTimes(1);
+    await act(async () => { finish(layout(1, "old")); await vi.advanceTimersByTimeAsync(350); });
+    expect(mocks.get).toHaveBeenCalledTimes(2); expect(hook.result.current.layout.productIds).toEqual(["latest"]);
+  });
+  it("keeps cached presentation during failure and recovers with a bounded background retry", async () => {
+    vi.useFakeTimers(); vi.spyOn(Math, "random").mockReturnValue(0);
+    mocks.cached.mockReturnValue(layout(1, "cached"));
+    mocks.get.mockRejectedValueOnce(new Error("offline")).mockResolvedValue(layout(2, "fresh"));
+    const hook = renderHook(() => useFnbPosLayout("tenant", "branch", true));
+    await act(async () => {});
+    expect(hook.result.current.layout.productIds).toEqual(["cached"]); expect(hook.result.current.error).not.toBe("");
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(hook.result.current.layout.productIds).toEqual(["fresh"]); expect(hook.result.current.error).toBe("");
+    vi.restoreAllMocks();
   });
 });

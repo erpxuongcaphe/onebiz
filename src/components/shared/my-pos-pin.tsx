@@ -5,10 +5,19 @@ import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/contexts";
 import { changeMyPosPin } from "@/lib/services/supabase/pos-pin";
 
+export class PosPinStatusError extends Error {
+  constructor(message: string, public readonly retryable: boolean) { super(message); this.name = "PosPinStatusError"; }
+}
+
 export async function readMyPinStatus(signal?: AbortSignal): Promise<{ userId: string; hasPin: boolean }> {
   const response = await fetch("/api/auth/pos-pin", { cache: "no-store", ...(signal ? { signal } : {}) });
-  const body = await response.json();
-  if (!response.ok || typeof body.hasPin !== "boolean" || typeof body.userId !== "string") throw new Error(body.message || "Chưa kiểm tra được PIN.");
+  const retryable = response.status === 408 || response.status === 429 || response.status >= 500;
+  let body;
+  try { body = await response.json(); }
+  catch { throw new PosPinStatusError("Chưa kiểm tra được PIN. Vui lòng thử lại.", retryable); }
+  if (!response.ok || !body || typeof body.hasPin !== "boolean" || typeof body.userId !== "string") {
+    throw new PosPinStatusError(typeof body?.message === "string" ? body.message : "Chưa kiểm tra được PIN.", retryable);
+  }
   return body;
 }
 

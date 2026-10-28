@@ -12,6 +12,25 @@ beforeEach(() => { vi.useFakeTimers(); vi.clearAllMocks(); mocks.user = { id: "s
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe("POS session network recovery", () => {
+  it.each([408, 429, 500, 503, 504])("recovers from HTTP %s without remounting or resetting the draft", async status => {
+    mocks.fetch.mockResolvedValueOnce({ ok: false, status, json: async () => ({ message: "Unavailable" }) }).mockResolvedValue(ok());
+    renderPos(); const cart = screen.getByLabelText("Đơn nháp giữ nguyên"); await settle();
+    expect(cart).not.toBeVisible();
+    await act(async () => { await vi.advanceTimersByTimeAsync(1500); });
+    expect(screen.getByLabelText("Đơn nháp giữ nguyên")).toBe(cart); expect(cart).toHaveValue("Bàn 9: 2 món"); expect(cart).toBeVisible();
+    expect(mocks.logout).not.toHaveBeenCalled();
+  });
+  it.each([401, 403])("does not retry HTTP %s or reveal the cart", async status => {
+    mocks.fetch.mockResolvedValue({ ok: false, status, json: async () => ({ message: "Access denied" }) });
+    renderPos(); await settle(); await act(async () => { await vi.advanceTimersByTimeAsync(60000); });
+    expect(mocks.fetch).toHaveBeenCalledTimes(1); expect(screen.getByLabelText("Đơn nháp giữ nguyên")).not.toBeVisible();
+  });
+  it("recovers from a non-JSON gateway 504 without accepting a malformed success", async () => {
+    mocks.fetch.mockResolvedValueOnce({ ok: false, status: 504, json: async () => { throw new SyntaxError("HTML gateway page"); } })
+      .mockResolvedValue({ ok: true, status: 200, json: async () => ({ userId: "self" }) });
+    renderPos(); await settle(); await act(async () => { await vi.advanceTimersByTimeAsync(60000); });
+    expect(mocks.fetch).toHaveBeenCalledTimes(2); expect(screen.getByLabelText("Đơn nháp giữ nguyên")).not.toBeVisible();
+  });
   it("manual retry still works after automatic retries stop", async () => {
     mocks.fetch.mockRejectedValue(new TypeError("Failed to fetch")); renderPos(); await settle();
     await act(async () => { await vi.advanceTimersByTimeAsync(60000); });

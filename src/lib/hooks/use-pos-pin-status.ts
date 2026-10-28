@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { readMyPinStatus } from "@/components/shared/my-pos-pin";
+import { PosPinStatusError, readMyPinStatus } from "@/components/shared/my-pos-pin";
 
 type PinState = { userId: string; hasPin?: boolean; error?: string };
 const RETRY_DELAYS = [1500, 4000, 10000];
@@ -39,7 +39,7 @@ export function usePosPinStatus(needsCheck: boolean, userId: string | undefined)
         setState(status);
       } catch (error) {
         if (!active) return;
-        const transportFailure = timedOut || error instanceof TypeError;
+        const transportFailure = timedOut || error instanceof TypeError || error instanceof PosPinStatusError && error.retryable;
         // A failed verification must not reuse a previous successful PIN check.
         setState({ userId, error: transportFailure ? NETWORK_MESSAGE : error instanceof Error ? error.message : "Chưa kiểm tra được PIN." });
         if (transportFailure && retries < RETRY_DELAYS.length) {

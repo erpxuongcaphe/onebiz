@@ -15,10 +15,10 @@ beforeEach(() => {
   mocks.verify.mockResolvedValue({ data: { user: { id: "self" } }, error: null }); mocks.signOut.mockResolvedValue({ error: null }); mocks.rpc.mockResolvedValue({ data: { success: true }, error: null });
 });
 describe("own PIN status and password recovery", () => {
-  it("returns boolean status without exposing the PIN hash and disables caching", async () => { const response = await GET(); expect(await response.json()).toEqual({ userId: "self", hasPin: true, resetRequired: false }); expect(response.headers.get("Cache-Control")).toBe("no-store"); });
-  it("does not call a read failure 'no PIN'", async () => { mocks.profileError = { message: "offline" }; expect((await GET()).status).toBe(503); });
-  it("rejects inactive accounts", async () => { mocks.profile!.is_active = false; expect((await GET()).status).toBe(403); });
-  it("requires authentication for status and reset", async () => { mocks.user = null; expect((await GET()).status).toBe(401); expect((await POST(request())).status).toBe(401); expect(mocks.rpc).not.toHaveBeenCalled(); });
+  it("returns boolean status without exposing the PIN hash and disables caching", async () => { const response = await GET(new NextRequest("https://onebiz.com.vn/api/auth/pos-pin")); expect(await response.json()).toEqual({ userId: "self", hasPin: true, resetRequired: false }); expect(response.headers.get("Cache-Control")).toBe("no-store"); });
+  it("does not call a read failure 'no PIN'", async () => { mocks.profileError = { message: "offline" }; expect((await GET(new NextRequest("https://onebiz.com.vn/api/auth/pos-pin"))).status).toBe(503); });
+  it("rejects inactive accounts", async () => { mocks.profile!.is_active = false; expect((await GET(new NextRequest("https://onebiz.com.vn/api/auth/pos-pin"))).status).toBe(403); });
+  it("requires authentication for status and reset", async () => { mocks.user = null; expect((await GET(new NextRequest("https://onebiz.com.vn/api/auth/pos-pin"))).status).toBe(401); expect((await POST(request())).status).toBe(401); expect(mocks.rpc).not.toHaveBeenCalled(); });
   it("rejects cross-origin reset", async () => { expect((await POST(request({}, "https://other.test"))).status).toBe(403); expect(mocks.verify).not.toHaveBeenCalled(); });
   it("rate limits attempts by account", async () => { mocks.allowed = false; expect((await POST(request())).status).toBe(429); expect(mocks.verify).not.toHaveBeenCalled(); });
   it("validates PIN format before password verification", async () => { expect((await POST(request({ pin: "123" }))).status).toBe(400); expect(mocks.verify).not.toHaveBeenCalled(); });
