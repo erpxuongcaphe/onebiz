@@ -13,6 +13,11 @@ describe("saved purchase request review", () => {
     expect(await screen.findByText("Đường cát")).toBeVisible();
     for (const text of ["DUONG-01", "2.5", "Kg", "Giao buổi sáng"]) expect(screen.getByText(text)).toBeVisible();
     expect(read).toHaveBeenCalledWith("po-1");
+    expect(screen.getByRole("columnheader", { name: "Ghi chú" })).toBeVisible();
+    const cells = screen.getByText("Đường cát").closest("tr")!.querySelectorAll("td");
+    expect(cells).toHaveLength(4);
+    expect(cells[0]).not.toHaveTextContent("Giao buổi sáng");
+    expect(cells[3]).toHaveTextContent("Giao buổi sáng");
   });
   it("does not disguise a read failure as an empty request and supports retry", async () => {
     read.mockRejectedValueOnce(new Error("network")).mockResolvedValueOnce(rows);

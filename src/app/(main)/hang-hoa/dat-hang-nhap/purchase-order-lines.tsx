@@ -27,20 +27,22 @@ export function PurchaseOrderLines({ orderId }: { orderId: string }) {
         <Button variant="outline" size="sm" onClick={() => { setResult(null); setAttempt(value => value + 1); }}>Thử lại</Button>
       </div>
       : !current.rows.length ? <p className="text-sm text-muted-foreground">Phiếu chưa có mặt hàng.</p>
-      : <div className="overflow-x-auto rounded-md border">
-        <table className="w-full text-sm">
+      : <div className="max-w-3xl overflow-x-auto rounded-md border">
+        <table className="w-full min-w-[560px] table-fixed text-sm">
+          <colgroup><col className="w-[38%]" /><col className="w-[12%]" /><col className="w-[12%]" /><col className="w-[38%]" /></colgroup>
           <thead className="bg-muted/50"><tr>
             <th className="p-2 text-left font-medium">Mặt hàng</th>
             <th className="p-2 text-right font-medium whitespace-nowrap">SL đặt</th>
             <th className="p-2 text-left font-medium">ĐVT</th>
+            <th className="p-2 text-left font-medium">Ghi chú</th>
           </tr></thead>
           <tbody>{current.rows.map(row => <tr key={row.id} className="border-t align-top">
-            <td className="p-2"><div className="min-w-32 break-words font-medium">{row.productName}</div>
+            <td className="p-2"><div className="break-words font-medium">{row.productName}</div>
               {row.productCode && <div className="text-xs text-muted-foreground">{row.productCode}</div>}
-              {row.note && <div className="mt-1 whitespace-pre-wrap break-words text-xs text-muted-foreground">{row.note}</div>}
             </td>
             <td className="p-2 text-right tabular-nums whitespace-nowrap">{formatNumber(row.quantity)}</td>
             <td className="p-2 whitespace-nowrap">{row.unit}</td>
+            <td className="p-2 whitespace-pre-wrap break-words text-muted-foreground">{row.note?.trim() ? row.note : "—"}</td>
           </tr>)}</tbody>
         </table>
       </div>}
