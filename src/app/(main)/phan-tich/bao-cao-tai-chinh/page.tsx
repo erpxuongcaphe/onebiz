@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from "react";
 import { cogsReportRows, type CogsSort, type SortDirection } from "@/lib/reports/management-table-view";
 import Link from "next/link";
 import {
@@ -161,7 +161,7 @@ function COGSTooltip({
 
 export default function BaoCaoTaiChinhPage() {
   const { toast } = useToast();
-  const { tenant, hasPermission } = useAuth();
+  const { user, tenant, hasPermission } = useAuth();
   const {
     isReady: periodReady,
     preset,
@@ -178,9 +178,13 @@ export default function BaoCaoTaiChinhPage() {
   // CEO view: khi bật, ở chế độ "Tất cả chi nhánh" sẽ dùng getConsolidatedPnL
   // (loại trừ doanh thu/COGS nội bộ) thay vì getProfitAndLoss thông thường.
   const [ceoView, setCeoView] = useState<boolean>(true);
-  const scopeKey = `${tenant?.id}:${activeBranchId ?? "all"}:${range.from}:${range.to}:${ceoView}`;
+  const scopeKey = JSON.stringify([user?.id, tenant?.id, activeBranchId ?? "all", range.from, range.to, ceoView,
+    hasPermission("reports.export"), hasPermission("reports.export_detail"), hasPermission("reports.view_profit")]);
   const scopeRef = useRef(scopeKey);
-  scopeRef.current = scopeKey;
+  useLayoutEffect(() => {
+    scopeRef.current = scopeKey;
+    return () => { if (scopeRef.current === scopeKey) scopeRef.current = ""; };
+  }, [scopeKey]);
   const [loadedScope, setLoadedScope] = useState("");
   const loadedScopeRef = useRef("");
   const [updatedAt, setUpdatedAt] = useState("");
@@ -357,6 +361,7 @@ export default function BaoCaoTaiChinhPage() {
       });
       return;
     }
+    const exportRequestId = requestIdRef.current;
     setExporting(true);
     try {
       const branchName =
@@ -400,10 +405,10 @@ export default function BaoCaoTaiChinhPage() {
             { label: "(+) Thu nhập khác ghi nhận", current: cur.otherIncome ?? 0, previous: prev.otherIncome ?? 0 },
             {
               label: "= Kết quả vận hành",
-              current: cur.cogsComplete ? cur.netProfit : null,
-              currentRate: cur.cogsComplete ? cur.netMargin : null,
-              previous: prev.cogsComplete ? prev.netProfit : null,
-              previousRate: prev.cogsComplete ? prev.netMargin : null,
+              current: cur.cogsComplete && cur.operatingExpenseComplete !== false ? cur.netProfit : null,
+              currentRate: cur.cogsComplete && cur.operatingExpenseComplete !== false ? cur.netMargin : null,
+              previous: prev.cogsComplete && prev.operatingExpenseComplete !== false ? prev.netProfit : null,
+              previousRate: prev.cogsComplete && prev.operatingExpenseComplete !== false ? prev.netMargin : null,
             },
           ],
         },
@@ -430,6 +435,7 @@ export default function BaoCaoTaiChinhPage() {
         range,
         branchName,
         sheets: financialExportSheets(viewSheets, titleRows),
+        shouldSave: () => scopeRef.current === scopeKey && requestIdRef.current === exportRequestId,
       });
       toast({ title: "Đã xuất báo cáo P&L", variant: "success" });
     } catch (err) {
@@ -514,10 +520,10 @@ export default function BaoCaoTaiChinhPage() {
             { label: "(+) Thu nhập khác ghi nhận", current: cur.otherIncome ?? 0, previous: prev.otherIncome ?? 0 },
             {
               label: "= Kết quả vận hành",
-              current: cur.cogsComplete ? cur.netProfit : null,
-              currentRate: cur.cogsComplete ? cur.netMargin : null,
-              previous: prev.cogsComplete ? prev.netProfit : null,
-              previousRate: prev.cogsComplete ? prev.netMargin : null,
+              current: cur.cogsComplete && cur.operatingExpenseComplete !== false ? cur.netProfit : null,
+              currentRate: cur.cogsComplete && cur.operatingExpenseComplete !== false ? cur.netMargin : null,
+              previous: prev.cogsComplete && prev.operatingExpenseComplete !== false ? prev.netProfit : null,
+              previousRate: prev.cogsComplete && prev.operatingExpenseComplete !== false ? prev.netMargin : null,
             },
           ],
         },
@@ -609,6 +615,7 @@ export default function BaoCaoTaiChinhPage() {
           costBasisNote,
         ],
         sheets: financialExportSheets(sheets, titleRows),
+        shouldSave: () => scopeRef.current === scopeKey && requestIdRef.current === exportRequestId,
       });
 
       toast({
@@ -742,7 +749,7 @@ export default function BaoCaoTaiChinhPage() {
                     href={buildSalesInvoiceRangeLink(
                       range.from,
                       range.to,
-                      activeBranchId ?? undefined,
+                      activeBranchId ?? "all",
                     )}
                     className="inline-flex h-8 items-center gap-1 border border-border px-2.5 text-xs font-medium text-foreground hover:bg-surface-container-low"
                   >
@@ -753,7 +760,7 @@ export default function BaoCaoTaiChinhPage() {
                     href={buildSalesReturnRangeLink(
                       range.from,
                       range.to,
-                      activeBranchId ?? undefined,
+                      activeBranchId ?? "all",
                     )}
                     className="inline-flex h-8 items-center gap-1 border border-border px-2.5 text-xs font-medium text-foreground hover:bg-surface-container-low"
                   >

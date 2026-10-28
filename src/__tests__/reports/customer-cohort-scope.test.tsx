@@ -21,6 +21,7 @@ const result = (branch = fake.branch, months = 6, label = "Cohort A") => {
   return value;
 };
 beforeEach(() => {
+  window.history.replaceState({}, "", "/phan-tich/customer-cohort");
   fake.branch = "a"; fake.actor = "one"; fake.allowed = true; fake.exportAllowed = true; fake.fullAllowed = true; fake.ready = true;
   fake.read.mockReset().mockImplementation(request => Promise.resolve(result(request.branchId, request.months)));
   fake.excel.mockReset().mockResolvedValue(undefined);
@@ -28,6 +29,37 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("customer cohort scope integrity", () => {
+  it("preserves24 months across the report shell's complete branch remount without a transient6-month request", async () => {
+    window.history.replaceState({}, "", "/phan-tich/customer-cohort?branch=a&months=24&view=table");
+    const view = render(<CustomerCohortPage key="a" />);
+    await screen.findByText("Cohort A");
+    expect(fake.read).toHaveBeenCalledExactlyOnceWith({ actorId: "one", tenantId: "tenant", branchId: "a", months: 24 });
+    fake.branch = "b";
+    window.history.replaceState({}, "", "/phan-tich/customer-cohort?branch=b&months=24&view=table");
+    view.rerender(<CustomerCohortPage key="b" />);
+    await screen.findByText("Cohort A");
+    expect(screen.getByRole("combobox", { name: "Số tháng theo dõi" })).toHaveValue("24");
+    expect(fake.read).toHaveBeenLastCalledWith({ actorId: "one", tenantId: "tenant", branchId: "b", months: 24 });
+    expect(fake.read.mock.calls.filter(([request]) => request.branchId === "b")).toHaveLength(1);
+    fireEvent.change(screen.getByRole("combobox", { name: "Số tháng theo dõi" }), { target: { value: "12" } });
+    await screen.findByText("Cohort A");
+    expect(new URLSearchParams(window.location.search).get("months")).toBe("12");
+    expect(new URLSearchParams(window.location.search).get("branch")).toBe("b");
+    expect(new URLSearchParams(window.location.search).get("view")).toBe("table");
+  });
+  it.each(["0", "25", "12.0", "wrong"])("normalizes invalid URL horizon %s before reading", async requested => {
+    window.history.replaceState({}, "", "/phan-tich/customer-cohort?months=" + requested);
+    render(<CustomerCohortPage />); await screen.findByText("Cohort A");
+    expect(fake.read).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ months: 6 }));
+    expect(new URLSearchParams(window.location.search).get("months")).toBe("6");
+  });
+  it("restores the horizon on browser history changes and refetches within the active branch", async () => {
+    render(<CustomerCohortPage />); await screen.findByText("Cohort A");
+    window.history.replaceState({}, "", "/phan-tich/customer-cohort?months=12");
+    act(() => window.dispatchEvent(new PopStateEvent("popstate")));
+    await screen.findByText("Cohort A");
+    expect(fake.read).toHaveBeenLastCalledWith(expect.objectContaining({ branchId: "a", months: 12 }));
+  });
   it("drops old rows immediately and blocks export when a new branch fails", async () => {
     const view = render(<CustomerCohortPage />); await screen.findByText("Cohort A");
     fake.branch = "b"; fake.read.mockRejectedValueOnce(new Error("Source unavailable")); view.rerender(<CustomerCohortPage />);

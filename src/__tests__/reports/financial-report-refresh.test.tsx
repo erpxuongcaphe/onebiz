@@ -3,8 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 
 const state = vi.hoisted(() => ({ periodReady: true, branchId: "fnb", range: { from: "2026-10-01", to: "2026-10-18" }, refresh: undefined as (() => void) | undefined, pnl: vi.fn(), consolidated: vi.fn(), details: vi.fn(), exportExcel: vi.fn(), toast: vi.fn() }));
+const actor = vi.hoisted(() => ({ id: "manager-a", allowExport: true }));
 vi.mock("@/lib/contexts", () => ({
-  useAuth: () => ({ tenant: { id: "onebiz" }, hasPermission: () => true }),
+  useAuth: () => ({ user: { id: actor.id }, tenant: { id: "onebiz" }, hasPermission: (permission: string) => !permission.startsWith("reports.export") || actor.allowExport }),
   useBranchFilter: () => ({ activeBranchId: state.branchId || undefined, branches: [], isReady: true }),
   useToast: () => ({ toast: state.toast }),
 }));
@@ -22,6 +23,8 @@ function result(value: number) {
 }
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; }
 beforeEach(() => {
+  actor.id = "manager-a";
+  actor.allowExport = true;
   state.periodReady = true;
   state.range = { from: "2026-10-01", to: "2026-10-18" };
   state.branchId = "fnb";
@@ -34,6 +37,60 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("financial report scope and refresh", () => {
+  it.each(["", "fnb"])("retains explicit scope in financial reconciliation links for %s", async (branch) => {
+    state.branchId = branch;
+    state.details.mockResolvedValue({ cogsItems: [], cogsTotalCount: 0, marginTrend: [], reconciliation: { invoiceCount: 1, returnCount: 1 }, granularity: "day", turnover: {}, dso: {} });
+    render(<FinancialReport />);
+    for (const label of ["Xem hóa đơn", "Xem dòng trả"]) {
+      const link = await screen.findByRole("link", { name: label });
+      const url = new URL(link.getAttribute("href")!, "https://example.test");
+      expect(url.searchParams.get("branch")).toBe(branch || "all");
+      expect(url.searchParams.get("from")).toBe(state.range.from);
+      expect(url.searchParams.get("to")).toBe(state.range.to);
+      expect(url.searchParams.get("view")).toBe("table");
+    }
+  });
+
+  it("reloads the same branch after the authenticated account changes", async () => {
+    const view = render(<FinancialReport />);
+    await screen.findByText("Doanh thu thuần: 123,456");
+    const next = deferred<ReturnType<typeof result>>();
+    state.pnl.mockReturnValueOnce(next.promise);
+    actor.id = "manager-b";
+    view.rerender(<FinancialReport />);
+    expect(screen.queryByText("Doanh thu thuần: 123,456")).not.toBeInTheDocument();
+    await waitFor(() => expect(state.pnl).toHaveBeenCalledTimes(2));
+    await act(async () => next.resolve(result(777777)));
+    expect(screen.getByText("Doanh thu thuần: 777,777")).toBeInTheDocument();
+  });
+
+  it.each(["Xuất bảng", "Xuất đầy đủ"])("masks incomplete operating results in %s", async (button) => {
+    const data = result(123456);
+    Object.assign(data.current, { operatingExpenseComplete: false });
+    state.pnl.mockResolvedValue(data);
+    render(<FinancialReport />);
+    await screen.findByRole("button", { name: button });
+    await act(async () => screen.getByRole("button", { name: button }).click());
+    const file = state.exportExcel.mock.calls[0][0];
+    const rows = file.sheets.flatMap((sheet: { rows: { label?: string }[] }) => sheet.rows ?? []);
+    const operating = rows.find((row: { label?: string }) => row.label === "= Kết quả vận hành");
+    expect(operating).toMatchObject({ current: null, previous: null });
+    expect(rows.find((row: { label?: string }) => row.label === "= Lãi gộp").current).toBeCloseTo(123454.71);
+  });
+
+  it("invalidates an export on permission change and unmount", async () => {
+    const view = render(<FinancialReport />);
+    await screen.findByRole("button", { name: "Xuất bảng" });
+    await act(async () => screen.getByRole("button", { name: "Xuất bảng" }).click());
+    const file = state.exportExcel.mock.calls[0][0];
+    expect(file.shouldSave()).toBe(true);
+    actor.allowExport = false;
+    view.rerender(<FinancialReport />);
+    expect(file.shouldSave()).toBe(false);
+    view.unmount();
+    expect(file.shouldSave()).toBe(false);
+  });
+
   it("waits for restored date filters before requesting any report source", async () => {
     state.periodReady = false;
     const view = render(<FinancialReport />);

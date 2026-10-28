@@ -36,9 +36,40 @@ try{
  if(process.argv.includes('--initialized')) assert.equal((await db.query("select pg_get_functiondef('public.resolve_sale_price_00363(uuid,uuid,uuid,uuid,text,text,numeric,timestamptz)'::regprocedure) d")).rows[0].d,resolverBefore,'preserves an already fixed concurrent resolver byte-for-byte');
  assert.equal((await db.query('select count(*) n from kitchen_orders')).rows[0].n,before);
  const stored=async(result)=>Number((await db.query('select unit_price from kitchen_order_items where kitchen_order_id=$1',[result.kitchen_order_id])).rows[0].unit_price);
- assert.equal(await stored(await send(25000)),25000);
+ const pricedOrder=await send(25000);assert.equal(await stored(pricedOrder),25000);
+ const supplement=async(order,price,variant,key)=>db.query("select _fnb_send_to_kitchen_impl_00303($1,null,'takeaway',null,$2,$3::jsonb,null,0,null,null,null,$4) result",[id(3),key,JSON.stringify([{productId:id(7),quantity:1,unitPrice:price,...(variant?{variantId:variant}:{})}]),order]);
+ await supplement(pricedOrder.kitchen_order_id,25000,null,'add-branch-price');
+ await supplement(pricedOrder.kitchen_order_id,25000,null,'add-branch-price');
+ assert.equal(Number((await db.query('select count(*) n from kitchen_order_items where kitchen_order_id=$1 and unit_price=25000',[pricedOrder.kitchen_order_id])).rows[0].n),2,'supplement uses branch price and retry does not duplicate');
  assert.equal(await stored(legacy),22000); // never reprice a previously saved bill
  assert.equal(await stored(await send(25000,null,'takeaway','direct',2)),25000);
+ // Every branch resolves its own assignment. A branch created after deployment
+ // needs no code change; assignment changes must not rewrite its previous bill.
+ await db.exec(`create or replace function user_has_branch_access(uuid,uuid) returns boolean language sql stable as $$select $2 in ('${id(3)}'::uuid,'${id(20)}'::uuid,'${id(21)}'::uuid)$$;
+ insert into branches(id,tenant_id) values('${id(20)}','${id(2)}'),('${id(21)}','${id(2)}'),('${id(30)}','${id(2)}');
+ insert into price_tiers values('${id(22)}','${id(2)}',true,'fnb');
+ insert into price_tier_items(price_tier_id,product_id,price) values('${id(22)}','${id(7)}',29000);
+ insert into branch_price_tier_assignments values('${id(2)}','${id(20)}','${id(22)}',now()-interval '1 day',null,now());`);
+ const branchSend=async(branch,price)=> (await db.query("select _fnb_send_to_kitchen_impl_00303($1,null,'takeaway',null,$2,$3::jsonb) result",[branch,'branch-'+sequence++,JSON.stringify([{productId:id(7),quantity:1,unitPrice:price}])])).rows[0].result;
+ await assert.rejects(()=>branchSend(id(30),22000),/BRANCH_ACCESS_DENIED/,'cross-branch tests preserve the access guard');
+ const branchBill=await branchSend(id(20),29000);
+ assert.equal(await stored(branchBill),29000);
+ assert.equal(await stored(await branchSend(id(21),22000)),22000,'new branch without tier uses catalog');
+ await assert.rejects(()=>branchSend(id(20),25000),/PRICE_CHANGED:Coffee:25000:29000/,'cannot use another branch price');
+ await db.exec(`insert into branch_price_tier_assignments values('${id(2)}','${id(21)}','${id(22)}',now()-interval '1 day',null,now());`);
+ assert.equal(await stored(await branchSend(id(21),29000)),29000,'new assignment applies without redeploy');
+ await db.exec(`update branch_price_tier_assignments set ends_at=now() where branch_id='${id(20)}';
+ insert into branch_price_tier_assignments values('${id(2)}','${id(20)}','${id(10)}',now(),null,now());`);
+ assert.equal(await stored(await branchSend(id(20),25000)),25000,'assignment changes take effect for new lines');
+ assert.equal(await stored(branchBill),29000,'previous bill retains saved branch price');
+ assert.equal(await stored(await send(25000)),25000,'other branch is unchanged');
+ await db.exec(`insert into price_tiers values('${id(23)}','${id(2)}',true,'fnb');
+ insert into price_tier_items(price_tier_id,product_id,price) values('${id(23)}','${id(7)}',33000);
+ insert into branch_price_tier_assignments values('${id(2)}','${id(20)}','${id(23)}',now()+interval '1 day',now()+interval '3 days',now());`);
+ assert.equal(await stored(await branchSend(id(20),25000)),25000,'future assignment cannot apply early');
+ const timedPrice=async(days)=>Number((await db.query("select resolve_sale_price_00363($1,null,$2,null,'fnb','direct',1,now()+($3::int*interval '1 day'))->>'unit_price' price",[id(7),id(20),days])).rows[0].price);
+ assert.equal(await timedPrice(2),33000,'scheduled tier resolves at its effective time');
+ assert.equal(await timedPrice(3),25000,'end boundary excludes expired assignment');
  await assert.rejects(()=>send(22000),/PRICE_CHANGED:Coffee:22000:25000/);
  await db.exec(`insert into product_variants values('${id(11)}','${id(2)}','${id(7)}','Size L',27000,true);`);
  assert.equal(await stored(await send(25000,id(11))),25000); // product tier applies to variant
@@ -47,7 +78,9 @@ try{
  await db.exec(`insert into product_platform_prices(tenant_id,product_id,platform,override_price) values('${id(2)}','${id(7)}','grab_food',35000);`);
  assert.equal(await stored(await send(35000,id(11),'delivery','grab_food')),35000);
  await db.exec(`insert into product_platform_prices(tenant_id,product_id,variant_id,platform,override_price) values('${id(2)}','${id(7)}','${id(11)}','grab_food',38000);`);
- assert.equal(await stored(await send(38000,id(11),'delivery','grab_food')),38000);
+ const platformOrder=await send(38000,id(11),'delivery','grab_food');assert.equal(await stored(platformOrder),38000);
+ await supplement(platformOrder.kitchen_order_id,38000,id(11),'add-platform-price');
+ assert.equal(Number((await db.query('select count(*) n from kitchen_order_items where kitchen_order_id=$1 and unit_price=38000',[platformOrder.kitchen_order_id])).rows[0].n),2,'supplement inherits original order platform instead of caller takeaway default');
  assert.equal(await stored(await send(30000,id(11),'delivery','shopee_food')),30000); // missing platform -> tier
  await db.exec('delete from branch_price_tier_assignments');
  const retail=(await db.query("select resolve_sale_price_00363($1,null,null,null,'retail','direct',1,now()) result",[id(7)])).rows[0].result;

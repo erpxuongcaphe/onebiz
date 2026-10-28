@@ -1,6 +1,7 @@
 "use client";
 import { billAuditHref } from "@/lib/operation-history-entry";
 import { useDeliveryStaff } from "./hooks/use-delivery-staff";
+import { useFnbDialogPrice } from "./hooks/use-fnb-dialog-price";
 import { useFnbTabReconciliation } from "@/lib/hooks/use-fnb-tab-reconciliation";
 
 import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from "react";
@@ -1453,6 +1454,8 @@ function FnbPosPageInner() {
     },
     [appliedTier, platformPriceMap, pos.activeTab?.deliveryPlatform],
   );
+
+  const selectedProductForActiveTab = useFnbDialogPrice(selectedProduct, resolveConfiguredFnbPrice);
 
   const priceVariantsForActiveTab = useCallback(
     (
@@ -3947,7 +3950,7 @@ function FnbPosPageInner() {
                 setItemModifierData(undefined);
               }
             }}
-            product={selectedProduct}
+            product={selectedProductForActiveTab}
             variants={itemVariants.length > 0 ? itemVariants : undefined}
             variantsLoading={itemVariantsLoading}
             variantsFailed={itemVariantsFailed}

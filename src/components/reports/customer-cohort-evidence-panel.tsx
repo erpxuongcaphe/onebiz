@@ -11,14 +11,40 @@ import { exportReportToExcel } from "@/lib/utils/excel-export";
 export interface CohortEvidenceRequest { actorId: string; tenantId: string; branchId: string | null; months: number }
 interface Props {
   actorId: string; tenantId: string; branchId: string | null; branchLabel: string;
-  allowed: boolean; canExport: boolean; canExportView?: boolean; ready?: boolean; initialMonths?: number;
+  allowed: boolean; canExport: boolean; canExportView?: boolean; ready?: boolean; initialMonths?: number; rememberMonths?: boolean;
   load: (request: CohortEvidenceRequest) => Promise<unknown>;
   renderHeader?: (options: { actions: ReactNode; disabled: boolean; onExportView?: () => void; onExportFull?: () => void }) => ReactNode;
 }
 
 /** Scope-bound rendering and exports for the validated read-only source. */
-export function CustomerCohortEvidencePanel({ actorId, tenantId, branchId, branchLabel, allowed, canExport, canExportView = false, ready = true, initialMonths = 6, load, renderHeader }: Props) {
+export function CustomerCohortEvidencePanel({ actorId, tenantId, branchId, branchLabel, allowed, canExport, canExportView = false, ready: sourceReady = true, initialMonths = 6, rememberMonths = false, load, renderHeader }: Props) {
   const [months, setMonths] = useState(initialMonths);
+  const [periodReady, setPeriodReady] = useState(!rememberMonths);
+  const ready = sourceReady && periodReady;
+  useEffect(() => {
+    if (!rememberMonths) return;
+    const restore = () => {
+      const url = new URL(window.location.href);
+      const requested = url.searchParams.get("months");
+      const next = requested && ["6", "12", "24"].includes(requested) ? Number(requested) : initialMonths;
+      setMonths(next);
+      setPeriodReady(true);
+      url.searchParams.set("months", String(next));
+      window.history.replaceState(window.history.state, "", url);
+    };
+    restore();
+    window.addEventListener("popstate", restore);
+    return () => window.removeEventListener("popstate", restore);
+  }, [initialMonths, rememberMonths]);
+  function changeMonths(next: number) {
+    if (![6, 12, 24].includes(next)) return;
+    if (rememberMonths) {
+      const url = new URL(window.location.href);
+      url.searchParams.set("months", String(next));
+      window.history.replaceState(window.history.state, "", url);
+    }
+    setMonths(next);
+  }
   const [revision, setRevision] = useState(0);
   const [loaded, setLoaded] = useState<{ scope: string; data: CohortEvidence } | null>(null);
   const [failure, setFailure] = useState<{ scope: string; message: string } | null>(null);
@@ -62,7 +88,7 @@ export function CustomerCohortEvidencePanel({ actorId, tenantId, branchId, branc
     } catch { if (current.current === scope) setExportFailure({ scope, message: "Không xuất được báo cáo. Vui lòng thử lại." }); }
     finally { setExporting(false); }
   }
-  const monthSelect = <select aria-label="Số tháng theo dõi" disabled={!ready} className="min-h-9 rounded border border-border bg-background px-2 text-sm" value={months} onChange={event => setMonths(Number(event.target.value))}>
+  const monthSelect = <select aria-label="Số tháng theo dõi" disabled={!ready} className="min-h-9 rounded border border-border bg-background px-2 text-sm" value={months} onChange={event => changeMonths(Number(event.target.value))}>
     {[6, 12, 24].map(value => <option key={value} value={value}>{value} tháng</option>)}
   </select>;
   const disabled = !ready || loading || !!error || exporting;
