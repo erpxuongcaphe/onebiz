@@ -225,6 +225,12 @@ export default function BaoCaoTaiChinhPage() {
   const [cogsTotalCount, setCogsTotalCount] = useState(0);
   const [loadingMoreCogs, setLoadingMoreCogs] = useState(false);
   const requestIdRef = useRef(0);
+  useLayoutEffect(() => {
+    if (!canReadReport) {
+      requestIdRef.current++;
+      requestState.current = { scope: "", inFlight: false, queued: false };
+    }
+  }, [canReadReport]);
   const [marginTrend, setMarginTrend] = useState<GrossMarginTrend[]>([]);
   const [reconciliation, setReconciliation] =
     useState<FinancialSalesReturnReconciliation | null>(null);

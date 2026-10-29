@@ -69,6 +69,10 @@ describe("financial report scope and refresh", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("chưa có đủ quyền");
     expect(screen.queryByText("Doanh thu thuần: 999,999")).not.toBeInTheDocument();
     expect(state.pnl).toHaveBeenCalledTimes(1);
+    actor.denied.clear();
+    view.rerender(<FinancialReport />);
+    await screen.findByText("Doanh thu thuần: 123,456");
+    expect(state.pnl).toHaveBeenCalledTimes(2);
   });
   it.each(["", "fnb"])("retains explicit scope in financial reconciliation links for %s", async (branch) => {
     state.branchId = branch;
