@@ -38,6 +38,29 @@ describe('F&B warehouse order form',()=>{
   expect(mocks.change.mock.calls[0][0]).toMatchObject({purchaseOrderId:'po',expectedRevision:2,action:'edit',items:[{productId:'milk',unit:'Thùng',expectedFactor:1,quantity:5,note:'  Nguyên thùng  '}],note:'Giao sáng',reason:'Đổi nhu cầu'});
   expect(mocks.submit).not.toHaveBeenCalled();await waitFor(()=>expect(close).toHaveBeenCalledWith(false));
  });
+ it('removes a row from an existing order only on save and preserves the remaining row',async()=>{
+  const tea={id:'tea',code:'SKU-B',name:'Trà B',unit:'Túi',quantity:3,note:'Giữ nguyên ghi chú B'};
+  mocks.detail.mockResolvedValue({purchaseOrderId:'po',code:'PO1',branchId:'store',warehouseId:'warehouse',revision:2,items:[{...milk,quantity:2,note:'A'},tea],note:'Giao sáng',blockedReason:null});
+  render(<CreateFnbWarehouseOrderDialog open onOpenChange={vi.fn()} branchId="store" editingOrderId="po"/>);
+  fireEvent.click(await screen.findByRole('button',{name:'Xóa Sữa A'}));
+  expect(screen.queryByLabelText('Số lượng Sữa A')).not.toBeInTheDocument();
+  expect(screen.getByLabelText('Số lượng Trà B')).toHaveValue(3);
+  expect(screen.getByLabelText('Ghi chú SKU-B')).toHaveValue(tea.note);
+  expect(mocks.change).not.toHaveBeenCalled();expect(mocks.submit).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByLabelText('Lý do thay đổi'),{target:{value:'Bỏ dòng nhập nhầm'}});
+  fireEvent.click(screen.getByRole('button',{name:'Lưu thay đổi'}));
+  await waitFor(()=>expect(mocks.change).toHaveBeenCalledTimes(1));
+  expect(mocks.change.mock.calls[0][0]).toMatchObject({purchaseOrderId:'po',expectedRevision:2,items:[{productId:'tea',unit:'Túi',expectedFactor:1,quantity:3,note:tea.note}],note:'Giao sáng'});
+  expect(mocks.submit).not.toHaveBeenCalled();
+ });
+ it.each([false,true])('disables sending after removing the last row (editing: %s)',async(editing)=>{
+  render(<CreateFnbWarehouseOrderDialog open onOpenChange={vi.fn()} branchId="store" editingOrderId={editing?'po':undefined}/>);
+  if(!editing) await addMilk();
+  fireEvent.click(await screen.findByRole('button',{name:'Xóa Sữa A'}));
+  if(editing) fireEvent.change(screen.getByLabelText('Lý do thay đổi'),{target:{value:'Bỏ dòng nhập nhầm'}});
+  expect(screen.getByRole('button',{name:editing?'Lưu thay đổi':'Gửi đặt hàng'})).toBeDisabled();
+  expect(mocks.change).not.toHaveBeenCalled();expect(mocks.submit).not.toHaveBeenCalled();
+ });
  it('blocks a shipped order and never silently recreates it as a new order',async()=>{
   mocks.detail.mockResolvedValue({purchaseOrderId:'po',code:'PO1',branchId:'store',warehouseId:'warehouse',revision:2,items:[],note:'',blockedReason:'Kho đã xuất/giao hàng.'});
   render(<CreateFnbWarehouseOrderDialog open onOpenChange={vi.fn()} branchId="store" editingOrderId="po"/>);
@@ -95,7 +118,7 @@ describe('F&B warehouse order form',()=>{
   fireEvent.click(await screen.findByRole('button',{name:/Trà B.*SKU-B/}));
   fireEvent.change(screen.getByLabelText('Ghi chú SKU-B'),{target:{value:'Ghi chú B'}});
   await addMilk();expect(screen.getByLabelText('Ghi chú SKU-A')).toHaveValue('Ghi chú A');
-  fireEvent.click(screen.getByRole('button',{name:'Bỏ Sữa A'}));
+  fireEvent.click(screen.getByRole('button',{name:'Xóa Sữa A'}));
   expect(screen.getByLabelText('Ghi chú SKU-B')).toHaveValue('Ghi chú B');
   fireEvent.click(screen.getByRole('button',{name:'Gửi đặt hàng'}));
   await waitFor(()=>expect(mocks.submit).toHaveBeenCalledTimes(1));

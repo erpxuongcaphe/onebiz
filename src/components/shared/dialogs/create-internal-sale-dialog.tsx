@@ -1,4 +1,5 @@
 "use client";
+import { RemoveTransactionLineButton } from "@/components/shared/remove-transaction-line-button";
 import { useProductUom } from "@/lib/hooks/use-product-uom";
 import { scaleUnitPrice } from "@/lib/operational-uom";
 import { TransactionUnitSelect } from "@/components/shared/transaction-unit-select";
@@ -374,9 +375,7 @@ export function CreateInternalSaleDialog({
                       {formatCurrency(item.quantity * item.unitPrice)}
                     </td>
                     <td className="p-2 text-center">
-                      <button onClick={() => removeItem(item.productId)} className="text-muted-foreground hover:text-destructive">
-                        <Icon name="close" size={16} />
-                      </button>
+                      <RemoveTransactionLineButton productName={item.productName} onClick={() => removeItem(item.productId)} />
                     </td>
                   </tr>
                 ))}
