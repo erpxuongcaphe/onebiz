@@ -9,7 +9,7 @@ import { formatFinancialBucket } from "@/lib/reports/financial-bucket-label";
 import { validateBranchProfitAndLossSource, validateProfitAndLossSource } from "@/lib/reports/financial-source-validation";
 import { financeReportRangeError } from "@/lib/reports/finance-report-input";
 import { toCreatedAtRangeWindow } from "@/lib/utils/list-date-preset-range";
-import { resolvePreset } from "@/lib/utils/date-presets";
+import { cashBookDate } from "@/lib/cash-time";
 interface ReportPagedQuery<T> {
   range(
     from: number,
@@ -614,7 +614,8 @@ export async function getFinancialAlerts(branchId?: string): Promise<FinancialAl
     .order("expiry_date", { ascending: true })
     .limit(20);
 
-  const cashPeriod = resolvePreset("thisMonth")!;
+  const cashToday = cashBookDate(new Date().toISOString());
+  const cashPeriod = { from: `${cashToday.slice(0, 7)}-01`, to: cashToday };
   let cashQuery = supabase
     .from("cash_transactions")
     .select("type, amount")
