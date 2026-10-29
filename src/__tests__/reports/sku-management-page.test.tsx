@@ -25,6 +25,22 @@ beforeEach(() => { window.history.replaceState(null, "", "/"); state.branch = "f
 afterEach(cleanup);
 
 describe("SKU management workflow", () => {
+  it("exports both sizes of one product with their own prices and previous-period amounts", async () => {
+    const small = { ...sku("SKU-RXA-002", 80000), name: "Xưởng Đặc Biệt - Túi · 250 gram", variantId: "250g", variantName: "250 gram", unit: "Cái", averageSalePrice: 80000 };
+    const large = { ...sku("SKU-RXA-002", 700000), name: "Xưởng Đặc Biệt - Túi · 500 gram", variantId: "500g", variantName: "500 gram", unit: "Cái", soldQty: 5, netQty: 5, averageSalePrice: 140000 };
+    state.fetch.mockImplementation((range: { from: string }) => Promise.resolve(result(range.from === "2026-10-01" ? [small, large] : [{ ...large, netRevenue: 280000 }])));
+    render(<SkuPage />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Xuất đầy đủ" })).toBeEnabled());
+    await act(async () => screen.getByRole("button", { name: "Xuất đầy đủ" }).click());
+    const sheet = state.exportExcel.mock.calls[0][0].sheets[0];
+    expect(sheet.rows).toHaveLength(2);
+    expect(sheet.rows).toContainEqual(expect.objectContaining({ name: small.name, soldQty: 1, averageSalePrice: 80000, previousRevenue: 0 }));
+    expect(sheet.rows).toContainEqual(expect.objectContaining({ name: large.name, soldQty: 5, averageSalePrice: 140000, previousRevenue: 280000 }));
+    expect(sheet.footer).toMatchObject({ salesAmount: 780000, soldQty: 6 });
+    fireEvent.change(screen.getByLabelText("Tìm SKU"), { target: { value: "500 gram" } });
+    await act(async () => screen.getByRole("button", { name: "Xuất bảng" }).click());
+    expect(state.exportExcel.mock.calls[1][0].sheets[0].rows).toEqual([expect.objectContaining({ name: large.name })]);
+  });
   it("presents free packaging as cost context and retains it in the filtered full export", async () => {
     state.fetch.mockImplementation((range: {from:string}) => Promise.resolve(result(range.from === "2026-10-01" ? [sku("Cup", 0, 12), sku("Tea", 50, 30)] : [])));
     render(<SkuPage />);

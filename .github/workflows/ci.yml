@@ -616,7 +616,7 @@ jobs:
           PGPASSWORD: postgres
         run: |
           createdb report_completeness_test
-          PGDATABASE=report_completeness_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00461_report_stock_and_sku_snapshots.integration.sql
+          PGDATABASE=report_completeness_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/sku_financial_variants.integration.sql
           createdb customer_financial_test
           PGDATABASE=customer_financial_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00565_customer_financial_report.integration.sql
           createdb report_movement_values_test
