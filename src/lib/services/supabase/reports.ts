@@ -6,7 +6,8 @@
 import { getClient, handleError, getCurrentTenantId } from "./base";
 import { formatNumber } from "@/lib/format";
 import { formatFinancialBucket } from "@/lib/reports/financial-bucket-label";
-import { validateProfitAndLossSource } from "@/lib/reports/financial-source-validation";
+import { validateBranchProfitAndLossSource, validateProfitAndLossSource } from "@/lib/reports/financial-source-validation";
+import { financeReportRangeError } from "@/lib/reports/finance-report-input";
 import { toCreatedAtRangeWindow } from "@/lib/utils/list-date-preset-range";
 interface ReportPagedQuery<T> {
   range(
@@ -955,12 +956,12 @@ export interface BranchPnLRow {
   totalRevenue: number;
   deliveryFee: number;
   goodsRevenue: number;
-  cogs: number;
-  grossProfit: number;
-  grossMargin: number;
+  cogs: number | null;
+  grossProfit: number | null;
+  grossMargin: number | null;
   opEx: number;
-  netProfit: number;
-  netMargin: number;
+  netProfit: number | null;
+  netMargin: number | null;
   cogsComplete: boolean;
   missingCostLines: number;
   otherIncome?: number;
@@ -972,14 +973,18 @@ export interface BranchPnLRow {
 export async function getBranchPnLComparison(
   dateRange?: { from: string; to: string },
 ): Promise<BranchPnLRow[]> {
+  if (dateRange && financeReportRangeError(dateRange.from, dateRange.to)) throw new Error("Khoảng thời gian không hợp lệ.");
+  const selectedRange = toCreatedAtRangeWindow(dateRange);
+  if (dateRange && !selectedRange) throw new Error("Khoảng thời gian không hợp lệ.");
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-  const range = toCreatedAtRangeWindow(dateRange) ?? thisMonthRange();
+  await getCurrentTenantId();
+  const range = selectedRange ?? thisMonthRange();
 
   // Migration 00198 keeps branch comparison on the same formulas as the
   // consolidated report and avoids client-side row caps.
   try {
-    const { data, error } = await (supabase.rpc as any)(
+    const rpc = supabase.rpc as unknown as (name: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string; code?: string } | null }>;
+    const { data, error } = await rpc.call(supabase,
       "get_branch_profit_and_loss_report_v2",
       {
         p_date_from: range.start,
@@ -991,12 +996,19 @@ export async function getBranchPnLComparison(
     const payload = data as {
       rows?: Array<Record<string, unknown>>;
     } | null;
-    if (!payload?.rows) throw new Error("Invalid branch P&L response");
+    if (!payload || !Array.isArray(payload.rows)) throw new Error("Chưa nhận đủ dữ liệu so sánh chi nhánh.");
+    const ids = new Set<string>();
+    for (const row of payload.rows) {
+      validateBranchProfitAndLossSource(row);
+      const id = row.branch_id as string;
+      if (ids.has(id)) throw new Error("Nguồn so sánh chi nhánh có dòng trùng.");
+      ids.add(id);
+    }
 
     const number = (value: unknown) => {
-      const parsed = Number(value ?? 0);
-      return Number.isFinite(parsed) ? parsed : 0;
+      return Number(value);
     };
+    const costValue = (row: Record<string, unknown>, key: string) => row.cogs_complete === true ? number(row[key]) : null;
 
     return payload.rows.map((row) => ({
       branchId: String(row.branch_id ?? ""),
@@ -1006,12 +1018,12 @@ export async function getBranchPnLComparison(
       totalRevenue: number(row.total_revenue),
       deliveryFee: number(row.delivery_fee),
       goodsRevenue: number(row.goods_revenue),
-      cogs: number(row.cogs),
-      grossProfit: number(row.gross_profit),
-      grossMargin: number(row.gross_margin),
+      cogs: costValue(row, "cogs"),
+      grossProfit: costValue(row, "gross_profit"),
+      grossMargin: costValue(row, "gross_margin"),
       opEx: number(row.operating_expense),
-      netProfit: number(row.operating_result),
-      netMargin: number(row.operating_margin),
+      netProfit: costValue(row, "operating_result"),
+      netMargin: costValue(row, "operating_margin"),
       cogsComplete: row.cogs_complete === true,
       missingCostLines: number(row.missing_cost_lines),
       otherIncome: number(row.other_income),
