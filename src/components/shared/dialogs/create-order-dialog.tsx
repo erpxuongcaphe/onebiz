@@ -1,4 +1,8 @@
 "use client";
+import { useProductUom } from "@/lib/hooks/use-product-uom";
+import { scaleUnitPrice } from "@/lib/operational-uom";
+import { TransactionUnitSelect } from "@/components/shared/transaction-unit-select";
+
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import {
@@ -139,6 +143,7 @@ export function CreateOrderDialog({
     BranchSalesChannel | undefined
   >(undefined);
   const [items, setItems] = useState<OrderLineItem[]>([]);
+  const uom = useProductUom(items.map(i => i.id));
   const [deliveryPartners, setDeliveryPartners] = useState<DeliveryPartner[]>([]);
   const [selectedPartner, setSelectedPartner] = useState("");
   const [shippingFee, setShippingFee] = useState(0);
@@ -481,6 +486,7 @@ export function CreateOrderDialog({
   }
 
   async function handleSave() {
+    if (uom.loading || uom.error) return;
     if (!validate()) return;
     setSaving(true);
     try {
@@ -505,6 +511,7 @@ export function CreateOrderDialog({
         receiverCustomerId,
         items: items.map((item) => ({
           productId: item.id,
+          unit: item.unit,
           quantity: item.quantity,
           unitPrice: item.price,
           note: item.note?.trim() || null,
@@ -534,6 +541,7 @@ export function CreateOrderDialog({
 
   /** CEO đã DUYỆT bảng cảnh báo → ghi thay đổi vào đơn (chỉ khi vẫn là nháp). */
   async function handleUpdate() {
+    if (uom.loading || uom.error) return;
     if (!editOrder || !validate()) return;
     setSaving(true);
     try {
@@ -558,6 +566,7 @@ export function CreateOrderDialog({
         receiverCustomerId,
         items: items.map((item) => ({
           productId: item.id,
+          unit: item.unit,
           quantity: item.quantity,
           unitPrice: item.price,
           note: item.note?.trim() || null,
@@ -896,15 +905,13 @@ export function CreateOrderDialog({
                         />
                       </div>
                       <div className="flex justify-center">
-                        <span className="min-w-[64px] rounded-md bg-muted/50 px-2 py-1 text-center text-xs font-semibold text-muted-foreground">
-                          {item.unit || "Cái"}
-                        </span>
+                        <TransactionUnitSelect label={`Đơn vị ${item.productName}`} value={item.unit} stockUnit={uom.units.get(item.id) ?? item.unit} conversions={uom.map.get(item.id)} quantity={item.quantity} disabled={saving || uom.loading || !!uom.error} onChange={(unit, ratio) => setItems(lines => lines.map(line => line.id === item.id ? { ...line, unit, price: scaleUnitPrice(item.price, ratio) } : line))} />
                       </div>
                       <NumericInput
                         value={item.quantity}
                         onChange={(value) => updateItem(item.id, "quantity", Math.max(0.01, value ?? 0.01))}
-                        min={0.01}
-                        decimals={2}
+                        min={0.0001}
+                        decimals={4}
                         className="h-8 text-right"
                         aria-label={`Số lượng ${item.productName}`}
                       />
@@ -947,6 +954,7 @@ export function CreateOrderDialog({
           </div>
         </div>
 
+        {uom.error && <p role="alert" className="text-sm text-destructive">Không tải được quy đổi đơn vị. Đóng và mở lại phiếu.</p>}
         <DialogFooter className="mx-0 mb-0 shrink-0 rounded-none border-t bg-white px-4 py-3">
           <div className="mx-auto grid w-full max-w-[1380px] grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto]">
             <div className="grid gap-2 text-sm sm:grid-cols-3 xl:grid-cols-5">
@@ -962,7 +970,7 @@ export function CreateOrderDialog({
               <Button variant="outline" onClick={() => onOpenChange(false)}>
                 {isEdit ? "Đóng" : "Hủy"}
               </Button>
-              <Button onClick={isEdit ? handleReviewChanges : handleSave} disabled={saving}>
+              <Button onClick={isEdit ? handleReviewChanges : handleSave} disabled={saving || uom.loading || !!uom.error}>
                 {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
                 {isEdit ? "Lưu thay đổi" : "Tạo đơn hàng"}
               </Button>
@@ -1015,7 +1023,7 @@ export function CreateOrderDialog({
           <Button variant="outline" onClick={() => setPendingChanges(null)} disabled={saving}>
             Xem lại
           </Button>
-          <Button onClick={handleUpdate} disabled={saving}>
+          <Button onClick={handleUpdate} disabled={saving || uom.loading || !!uom.error}>
             {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
             Đồng ý lưu
           </Button>

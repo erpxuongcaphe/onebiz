@@ -601,9 +601,9 @@ export async function getSalesOrderItems(
     id: row.id,
     productCode: row.products?.code ?? "",
     productName: row.product_name ?? "",
-    unit: row.unit ?? "",
-    quantity: Number(row.quantity ?? 0),
-    unitPrice: Number(row.unit_price ?? 0),
+    unit: row.transaction_unit ?? row.unit ?? "",
+    quantity: Number(row.transaction_quantity ?? row.quantity ?? 0),
+    unitPrice: Number(row.transaction_unit_price ?? row.unit_price ?? 0),
     discount: Number(row.discount ?? 0),
     total: Number(row.total ?? 0),
   }));
@@ -644,9 +644,9 @@ export async function getDraftOrderItems(
     id: row.id,
     productCode: row.products?.code ?? "",
     productName: row.product_name ?? "",
-    unit: row.unit ?? "",
-    quantity: Number(row.quantity ?? 0),
-    unitPrice: Number(row.unit_price ?? 0),
+    unit: row.transaction_unit ?? row.unit ?? "",
+    quantity: Number(row.transaction_quantity ?? row.quantity ?? 0),
+    unitPrice: Number(row.transaction_unit_price ?? row.unit_price ?? 0),
     discount: Number(row.discount ?? 0),
     total: Number(row.total ?? 0),
     note: row.note ?? undefined, // 00208
@@ -705,6 +705,7 @@ export interface DraftOrderDetail extends DraftOrderSummary {
 
 export interface SaveSalesOrderItemInput {
   productId: string;
+  unit?: string;
   quantity: number;
   unitPrice: number;
   note?: string | null;
@@ -748,6 +749,7 @@ export async function saveSalesOrderAtomic(
       p_customer_id: input.customerId ?? null,
       p_items: input.items.map((item) => ({
         product_id: item.productId,
+        ...(item.unit ? { unit: item.unit } : {}),
         quantity: Number(item.quantity),
         unit_price: Number(item.unitPrice),
         note: item.note ?? null,
@@ -924,7 +926,7 @@ export async function listDraftOrders(
  * re-opens a draft to finish checkout.
  */
 export async function getDraftOrderById(
-  invoiceId: string
+  invoiceId: string, transactionUnits = false
 ): Promise<DraftOrderDetail | null> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
@@ -969,9 +971,9 @@ export async function getDraftOrderById(
       productId: it.product_id,
       variantId: it.variant_id ?? undefined,
       productName: it.product_name,
-      unit: it.unit ?? "Cái",
-      quantity: it.quantity,
-      unitPrice: it.unit_price,
+      unit: (transactionUnits ? it.transaction_unit : null) ?? it.unit ?? "Cái",
+      quantity: (transactionUnits ? it.transaction_quantity : null) ?? it.quantity,
+      unitPrice: (transactionUnits ? it.transaction_unit_price : null) ?? it.unit_price,
       discount: it.discount ?? 0,
       total: it.total ?? 0,
       note: it.note ?? undefined, // 00208 — kẻo mở nháp rớt ghi chú món

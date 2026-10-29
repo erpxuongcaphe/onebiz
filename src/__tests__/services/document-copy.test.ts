@@ -24,6 +24,10 @@ describe('read-only document templates',()=>{
  it('fails closed on missing/inactive products and changed stock units',async()=>{
   state.rows.products_scoped=[];await expect(loadDocumentCopy('purchase','old','branch',true)).rejects.toThrow('Chưa sao chép');
  });
+ it('retains entered transaction units, quantity and price when copying',async()=>{
+  Object.assign((state.rows.purchase_order_items as Array<Record<string,unknown>>)[0],{quantity:24,unit_price:30,discount:0,transaction_quantity:2,transaction_unit:'Thùng',transaction_unit_price:360,conversion_factor:12});
+  expect((await loadDocumentCopy('purchase','old','branch',true)).items[0]).toMatchObject({quantity:2,unit:'Thùng',price:360});
+ });
  it('rejects changed units instead of guessing a conversion',async()=>{
   (state.rows.purchase_order_items as Array<Record<string,unknown>>)[0].unit='Thùng';await expect(loadDocumentCopy('purchase','old','branch',true)).rejects.toThrow('Đơn vị tồn');
  });

@@ -23,7 +23,8 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { formatCurrency, formatNumber } from "@/lib/format";
-import { getDirectConvertibleUnits } from "@/lib/format-uom";
+import { TransactionUnitSelect } from "@/components/shared/transaction-unit-select";
+import { scaleUnitPrice } from "@/lib/operational-uom";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
@@ -907,21 +908,7 @@ export function CreatePurchaseOrderDialog({
                           className="col-span-2 h-9 min-w-0 text-base xl:col-span-1 xl:h-8 xl:text-sm"
                         />
                       <label className="min-w-0"><span className="mb-1 block text-xs text-muted-foreground xl:hidden">Đơn vị tính</span><div className="flex xl:justify-center">
-                        <Select
-                          value={item.unit}
-                          onValueChange={(value) => {
-                            if (value) updateItem(item.id, "unit", value);
-                          }}
-                        >
-                          <SelectTrigger className="h-8 min-w-[78px] text-xs">
-                            <SelectValue>{item.unit || "Cái"}</SelectValue>
-                          </SelectTrigger>
-                          <SelectContent>
-                            {getDirectConvertibleUnits(item.stockUnit, item.conversions).map((unit) => (
-                              <SelectItem key={unit} value={unit}>{unit}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <TransactionUnitSelect value={item.unit} stockUnit={item.stockUnit} conversions={item.conversions} quantity={item.quantity} label={`Đơn vị ${item.productName}`} disabled={saving} onChange={(unit, ratio) => setItems(previous => previous.map(line => line.id === item.id ? { ...line, unit, price: scaleUnitPrice(line.price, ratio) } : line))} />
                       </div></label>
                       <label className="min-w-0"><span className="mb-1 block text-xs text-muted-foreground xl:hidden">Số lượng</span><NumericInput
                         value={item.quantity}

@@ -150,7 +150,7 @@ function InternalReceivingWorkspace() {
         </div>
         {!canReceiveOrder&&<p className="my-2 border-l-2 border-muted-foreground pl-2 text-sm text-muted-foreground">{order.status==='cancelled'?'Đơn đã hủy. Lịch sử nhận được giữ để đối chiếu.':order.receiptMode==='legacy'?'Đơn cũ đã nhập tự động theo phiếu gốc.':'Đơn chưa xuất, chưa thể nhận hàng.'}</p>}
         {detailTab==='items'&&!receiving&&<div role="tabpanel" aria-label="Hàng hóa" className="space-y-3">{order.items.map(i=><article key={i.id} className="border-b pb-3 last:border-0">
-          <div className="flex flex-wrap justify-between gap-2"><div><p className="font-medium">{i.name}</p><p className="text-xs text-muted-foreground">{i.code} · {i.unit}</p></div><span className={`border-l-2 pl-2 text-sm ${i.treatment==='expense'?'border-amber-500':i.treatment==='review'?'border-red-500':'border-emerald-500'}`}>{i.treatment==='expense'?'Chi phí vận hành':i.treatment==='review'?'Cần kiểm tra':'Nhập tồn'}</span></div>
+          <div className="flex flex-wrap justify-between gap-2"><div><p className="font-medium">{i.name}</p><p className="text-xs text-muted-foreground">{i.code}</p></div><span className={`border-l-2 pl-2 text-sm ${i.treatment==='expense'?'border-amber-500':i.treatment==='review'?'border-red-500':'border-emerald-500'}`}>{i.treatment==='expense'?'Chi phí vận hành':i.treatment==='review'?'Cần kiểm tra':'Nhập tồn'}</span></div>
           <dl className="mt-3 grid grid-cols-3 gap-3 text-sm"><div><dt className="text-muted-foreground">Theo đơn</dt><dd className="font-medium">{formatOperationalQuantity(i.dispatched)} {i.unit}</dd></div><div><dt className="text-muted-foreground">Đã nhận</dt><dd className="font-medium">{formatOperationalQuantity(i.received)} {i.unit}</dd></div><div><dt className="text-muted-foreground">Còn nhận</dt><dd className="font-medium">{order.status==='cancelled'?'—':`${formatOperationalQuantity(Math.max(0,i.dispatched-i.received))} ${i.unit}`}</dd></div></dl>
           {(i.treatment??'stock')==='stock'&&<p className="mt-2 text-sm text-emerald-700">Đã nhập: {formatOperationalQuantity(i.received*(i.receivingFactor??1))} {i.receivingUnit??i.unit} · {i.receivingProductCode??i.code}</p>}
           {i.treatment==='expense'&&<p className="mt-2 text-sm">Vật tư vận hành nội bộ · {order.toBranch??currentBranch?.name}</p>}
@@ -170,7 +170,7 @@ function InternalReceivingWorkspace() {
             const conversions = uom.map.get(i.productId) ?? []; const units = operationalUnits(i.unit,conversions);
             const treatment = receivingModes[i.id] ?? i.treatment;
             return <tr key={i.id} className="block space-y-2 border-b pb-4 md:table-row md:space-y-0 md:pb-0 last:border-0">
-              <td className="block py-3 pr-2 md:table-cell"><p className="font-medium">{i.name}</p><p className="text-xs text-muted-foreground">{i.code} · {i.unit}</p>
+              <td className="block py-3 pr-2 md:table-cell"><p className="font-medium">{i.name}</p><p className="text-xs text-muted-foreground">{i.code}</p>
                 <span className={`mt-1 inline-flex border-l-2 pl-2 text-xs font-medium ${treatment === 'expense' ? 'border-amber-500 text-amber-700' : treatment === 'review' ? 'border-red-500 text-red-700' : 'border-emerald-500 text-emerald-700'}`}>
                   {treatment === 'expense' ? 'Ghi chi phí vận hành' : treatment === 'review' ? 'Cần kiểm tra công dụng / quy đổi' : 'Nhập tồn'}
                 </span>

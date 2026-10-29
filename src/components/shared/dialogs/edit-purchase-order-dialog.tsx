@@ -198,6 +198,7 @@ export function EditPurchaseOrderDialog({ open, onOpenChange, order, onDone }: P
                 <thead>
                   <tr className="border-b text-left text-xs text-muted-foreground">
                     <th className="py-2 pr-2">Mặt hàng</th>
+                    <th className="w-20 py-2 pr-2">ĐVT</th>
                     <th className="w-24 py-2 pr-2 text-right">Số lượng</th>
                     <th className="w-32 py-2 pr-2 text-right">Đơn giá</th>
                     <th className="w-28 py-2 pr-2 text-right">Chiết khấu</th>
@@ -212,8 +213,9 @@ export function EditPurchaseOrderDialog({ open, onOpenChange, order, onDone }: P
                       <tr key={d.id} className="border-b last:border-0">
                         <td className="py-2 pr-2">
                           <div className="font-medium">{d.productName}</div>
-                          <div className="text-xs text-muted-foreground">{d.unit}</div>
+
                         </td>
+                        <td className="py-2 pr-2 text-muted-foreground" title="Đơn vị theo phiếu gốc">{d.unit}</td>
                         <td className="py-2 pr-2 text-right">
                           {/* Khoá — kèm lý do ở tooltip cho người tò mò */}
                           <span

@@ -864,7 +864,7 @@ export default function DatHangPage() {
     async (row: SalesOrder) => {
       setLoadingEdit(true);
       try {
-        const detail = await getDraftOrderById(row.id);
+        const detail = await getDraftOrderById(row.id, true);
         if (!detail) {
           toast({ title: "Không tải được đơn để sửa", variant: "error" });
           return;
