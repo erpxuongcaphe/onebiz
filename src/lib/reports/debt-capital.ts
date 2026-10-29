@@ -1,4 +1,5 @@
 import type { DebtPartyRow } from "@/lib/services/supabase/debt-workspace";
+import { searchOptions } from "@/lib/search-options";
 import { matchesMetricFilters, type MetricFilter } from "./metric-filter";
 import { sortReportRows } from "./table-sort";
 
@@ -49,9 +50,10 @@ export function debtCapitalRows(rows: DebtPartyRow[]) {
 }
 export type DebtCapitalRow = ReturnType<typeof debtCapitalRows>[number];
 export function debtCapitalView(rows: DebtCapitalRow[], filters: { search: string; review: DebtReview; metrics: MetricFilter[] }, sort: { id: string; direction: "asc" | "desc" } | null) {
-  const search = filters.search.trim().toLocaleLowerCase("vi");
-  const result = rows.filter(row => {
-    if (search && ![row.code, row.name, row.phone ?? ""].some(value => value.toLocaleLowerCase("vi").includes(search))) return false;
+  // Search only the already scoped rows. Keep every match; pagination/export happens downstream.
+  const result = searchOptions(rows, filters.search, row => ({
+    name: row.name, identifiers: [row.code, row.phone ?? ""],
+  })).map(({ item }) => item).filter(row => {
     const review = filters.review;
     const matches = review === "all" || (review === "debt" && row.debt > 0) || (review === "advance" && row.advance > 0) ||
       (review === "both" && row.availableOffset > 0) || (review === "older30" && (row.bucket31_60 ?? 0) + (row.bucket61_90 ?? 0) + (row.bucket91Plus ?? 0) > 0) ||
