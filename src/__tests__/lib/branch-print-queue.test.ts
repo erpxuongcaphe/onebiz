@@ -3,12 +3,20 @@ import { encodeRaster } from "@/lib/printer/raster-print";
 const mocks = vi.hoisted(() => ({ rpc: vi.fn(), raster: vi.fn() }));
 vi.mock("@/lib/supabase/client", () => ({ createClient: () => ({ rpc: mocks.rpc }) }));
 vi.mock("@/lib/printer/raster-print", async importOriginal => ({ ...await importOriginal<object>(), rasterPrintBytes: mocks.raster }));
-import { enqueueBranchPrint } from "@/lib/printer/branch-queue";
+import { enqueueBranchPrint, getBranchPrintJobState } from "@/lib/printer/branch-queue";
 // Standalone agent is also distributed as browser-downloadable JS.
 import { validateRaster, applyCutSetting } from "../../../public/print-point/agent.mjs";
 beforeEach(() => { vi.clearAllMocks(); });
 afterEach(() => { vi.useRealTimers(); });
 describe("branch print dispatch", () => {
+  it("passes the read cancellation signal to PostgREST without affecting writes", async () => {
+    const controller = new AbortController();
+    const abortSignal = vi.fn().mockResolvedValue({data:{point:null,jobs:[]},error:null});
+    mocks.rpc.mockReturnValueOnce({abortSignal});
+    await expect(getBranchPrintJobState("branch",["job"],controller.signal)).resolves.toEqual({point:null,jobs:[]});
+    expect(abortSignal).toHaveBeenCalledExactlyOnceWith(controller.signal);
+    expect(mocks.rpc).toHaveBeenCalledExactlyOnceWith("fnb_print_jobs_status_v1",{p_branch:"branch",p_ids:["job"]});
+  });
   it("never enqueues a render that completes after the preparation deadline", async () => {
     vi.useFakeTimers();
     mocks.rpc.mockResolvedValue({ data: { point: { enabled: true, routes: [{ key: "cashier", printer: "Quầy", paper: "80mm" }] } } });

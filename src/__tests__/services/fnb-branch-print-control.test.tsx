@@ -59,7 +59,7 @@ describe("POS print feedback without opening history",()=>{
    await act(async()=>{await vi.advanceTimersByTimeAsync(1);});
    expect(screen.getByText("! 1")).toBeVisible();
    expect(mock.toast).toHaveBeenCalledWith(expect.objectContaining({title:"Có phiếu chưa gửi được",variant:"error"}));
-   expect(mock.state).toHaveBeenCalledExactlyOnceWith("branch",["live"]);
+   expect(mock.state).toHaveBeenCalledExactlyOnceWith("branch",["live"],expect.any(AbortSignal));
   }finally{vi.useRealTimers();}
  });
 });

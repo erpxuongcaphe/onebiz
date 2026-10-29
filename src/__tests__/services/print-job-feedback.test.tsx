@@ -47,7 +47,7 @@ describe("live feedback for consecutive F&B bills",()=>{
   act(()=>accept("a"));await act(async()=>{await vi.advanceTimersByTimeAsync(1);});
   act(()=>accept("b"));await act(async()=>{finish({point:{connected:true},jobs:[job("a","handed_off")]});});
   expect(view.result.current.waiting).toBe(1);expect(view.result.current.jobs[0].id).toBe("b");
-  await act(async()=>{await vi.advanceTimersByTimeAsync(2000);});expect(mock.read).toHaveBeenLastCalledWith("branch",["b"]);
+  await act(async()=>{await vi.advanceTimersByTimeAsync(2000);});expect(mock.read).toHaveBeenLastCalledWith("branch",["b"],expect.any(AbortSignal));
  });
  it("restores only the same account/branch and ignores late results after changing branch",async()=>{
   let finish!:(result:unknown)=>void;mock.read.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
@@ -64,5 +64,72 @@ describe("live feedback for consecutive F&B bills",()=>{
   mock.read.mockResolvedValue({point:{connected:false},jobs:[job("a")]});
   act(()=>accept("a"));await act(async()=>{await vi.advanceTimersByTimeAsync(1);});
   expect(view.result.current.jobs[0].message).toMatch(/chưa kết nối/);expect(view.result.current.issues).toBe(1);
+ });
+ it("keeps terminal warnings visible with minute reconciliation and focus refresh",async()=>{
+  mock.read.mockResolvedValue({point:{connected:true},jobs:[job("a","unknown")]});
+  const view=renderHook(()=>usePrintJobFeedback("branch","tenant:user",vi.fn()));
+  act(()=>accept("a"));await act(async()=>{await vi.advanceTimersByTimeAsync(1);});
+  expect(view.result.current.issues).toBe(1);
+  await act(async()=>{await vi.advanceTimersByTimeAsync(59000);});
+  expect(mock.read).toHaveBeenCalledTimes(1);expect(view.result.current.issues).toBe(1);
+  mock.read.mockResolvedValue({point:{connected:true},jobs:[job("a","cancelled")]});
+  act(()=>window.dispatchEvent(new Event("focus")));
+  await act(async()=>{await vi.advanceTimersByTimeAsync(1);});
+  expect(view.result.current.issues).toBe(0);expect(mock.read).toHaveBeenCalledTimes(2);
+ });
+ it("caps bursts to one RPC of 100 IDs per cycle without losing later tickets",async()=>{
+  const view=renderHook(()=>usePrintJobFeedback("branch","tenant:user",vi.fn()));
+  mock.read.mockImplementation(async(_branch,ids:string[])=>({point:{connected:true},jobs:ids.map(id=>job(id,"handed_off"))}));
+  act(()=>{for(let i=0;i<250;i++)accept(`job${i}`);});
+  await act(async()=>{await vi.advanceTimersByTimeAsync(1);});
+  expect(mock.read).toHaveBeenCalledTimes(1);expect(view.result.current.waiting).toBe(150);
+  await act(async()=>{await vi.advanceTimersByTimeAsync(4000);});
+  expect(mock.read.mock.calls.map(c=>c[1].length)).toEqual([100,100,50]);
+  expect(new Set(mock.read.mock.calls.flatMap(c=>c[1])).size).toBe(250);
+  expect(view.result.current.waiting).toBe(0);
+ });
+ it("aborts timed out reads and backs off despite repeated focus/new-job events",async()=>{
+  mock.read.mockImplementation(()=>new Promise(()=>{}));
+  const view=renderHook(()=>usePrintJobFeedback("branch","tenant:user",vi.fn()));
+  act(()=>accept("a"));await act(async()=>{await vi.advanceTimersByTimeAsync(8001);});
+  expect(mock.read.mock.calls[0][2].aborted).toBe(true);
+  await act(async()=>{await vi.advanceTimersByTimeAsync(10000);});
+  expect(mock.read).toHaveBeenCalledTimes(2);expect(mock.read.mock.calls[1][2].aborted).toBe(true);
+  act(()=>{accept("b");for(let i=0;i<10;i++)window.dispatchEvent(new Event("focus"));});
+  await act(async()=>{await vi.advanceTimersByTimeAsync(3998);});
+  expect(mock.read).toHaveBeenCalledTimes(2);expect(view.result.current.error).toBeTruthy();
+  await act(async()=>{await vi.advanceTimersByTimeAsync(2);});
+  expect(mock.read).toHaveBeenCalledTimes(3);
+ });
+ it("aborts a read on account switch and does not query while browser is offline",async()=>{
+  mock.read.mockImplementation(()=>new Promise(()=>{}));
+  const view=renderHook(({scope})=>usePrintJobFeedback("branch",scope,vi.fn()),{initialProps:{scope:"tenant:user"}});
+  act(()=>accept("a"));await act(async()=>{await vi.advanceTimersByTimeAsync(1);});
+  const signal=mock.read.mock.calls[0][2];view.rerender({scope:"tenant:other"});
+  expect(signal.aborted).toBe(true);expect(view.result.current.waiting).toBe(0);
+  const online=vi.spyOn(navigator,"onLine","get").mockReturnValue(false);
+  act(()=>accept("b"));await act(async()=>{await vi.advanceTimersByTimeAsync(15000);});
+  expect(mock.read).toHaveBeenCalledTimes(1);
+  expect(view.result.current.jobs[0].message).toMatch(/Thiết bị đang mất mạng/);
+  expect(view.result.current.issues).toBe(1);online.mockRestore();
+ });
+ it("rotates a still queued batch so later jobs are checked and reconciles terminal jobs each minute",async()=>{
+  mock.read.mockImplementation(async(_branch,ids:string[])=>({point:{connected:true},jobs:ids.map(id=>job(id))}));
+  renderHook(()=>usePrintJobFeedback("branch","tenant:user",vi.fn()));
+  act(()=>{for(let i=0;i<150;i++)accept(`job${i}`);});
+  await act(async()=>{await vi.advanceTimersByTimeAsync(2001);});
+  expect(mock.read).toHaveBeenCalledTimes(2);
+  expect(mock.read.mock.calls[1][1].slice(0,50)).toEqual(Array.from({length:50},(_,i)=>`job${i+100}`));
+ });
+ it("does not read terminal jobs every two seconds but reconciles them after one minute",async()=>{
+  mock.read.mockResolvedValue({point:{connected:true},jobs:[job("a","failed")]});
+  const view=renderHook(()=>usePrintJobFeedback("branch","tenant:user",vi.fn()));
+  act(()=>accept("a"));await act(async()=>{await vi.advanceTimersByTimeAsync(1);});
+  expect(view.result.current.issues).toBe(1);
+  await act(async()=>{await vi.advanceTimersByTimeAsync(59998);});
+  expect(mock.read).toHaveBeenCalledTimes(1);
+  mock.read.mockResolvedValue({point:{connected:true},jobs:[job("a","cancelled")]});
+  await act(async()=>{await vi.advanceTimersByTimeAsync(2);});
+  expect(mock.read).toHaveBeenCalledTimes(2);expect(view.result.current.issues).toBe(0);
  });
 });
