@@ -6,7 +6,7 @@ import { getSalesReturnReport } from "@/lib/services/supabase/sales-reports";
 const range = { from: "2026-10-01", to: "2026-10-02" };
 beforeEach(() => {
   const period = { net_revenue: 0, delivery_fee: 0, invoice_count: 0, return_amount: 0, return_count: 0, sold_qty: 0 };
-  state.rpc.mockReset().mockResolvedValue({ data: { current: period, previous: period, daily: [], weekday: [], hourly: [], top_invoices: [], rows: [], has_more: false }, error: null });
+  state.rpc.mockReset().mockResolvedValue({ data: { current: period, previous: period, daily: [], weekday: [], hourly: [], top_invoices: [], rows: [], has_more: false, total_count: 0, scope_fingerprint: "a".repeat(32) }, error: null });
 });
 
 describe("explicit report basis contracts", () => {
@@ -39,8 +39,8 @@ describe("explicit report basis contracts", () => {
   });
   it("keeps the explicit basis through every full-export page", async () => {
     const raw = { id: "i1", code: "HD-A", subtotal: 1, discount_amount: 0, delivery_fee: 0, total: 1, paid: 1, debt: 0, issued_at: "2026-10-01T12:00:00+07:00" };
-    state.rpc.mockResolvedValueOnce({ data: { rows: [raw], has_more: true }, error: null })
-      .mockResolvedValueOnce({ data: { rows: [{ ...raw, id: "i2", code: "HD-B" }], has_more: false }, error: null });
+    state.rpc.mockResolvedValueOnce({ data: { rows: [raw], has_more: true, total_count: 2, scope_fingerprint: "a".repeat(32) }, error: null })
+      .mockResolvedValueOnce({ data: { rows: [{ ...raw, id: "i2", code: "HD-B" }], has_more: false, total_count: 2, scope_fingerprint: "a".repeat(32) }, error: null });
     const rows = await getSalesInvoiceExportRows(undefined, range, true);
     expect(rows).toHaveLength(2);
     expect(state.rpc.mock.calls.map(call => call[1].p_offset)).toEqual([0, 1]);
@@ -56,7 +56,17 @@ describe("explicit report basis contracts", () => {
   });
   it("rejects duplicate invoice identities between export pages", async () => {
     const row = { id: "i1", subtotal: 1, discount_amount: 0, delivery_fee: 0, total: 1, paid: 1, debt: 0 };
-    state.rpc.mockResolvedValueOnce({ data: { rows: [row], has_more: true }, error: null }).mockResolvedValueOnce({ data: { rows: [row], has_more: false }, error: null });
+    state.rpc.mockResolvedValueOnce({ data: { rows: [row], has_more: true, total_count: 2, scope_fingerprint: "a".repeat(32) }, error: null }).mockResolvedValueOnce({ data: { rows: [row], has_more: false, total_count: 2, scope_fingerprint: "a".repeat(32) }, error: null });
     await expect(getSalesInvoiceExportRows("branch-a", range, true)).rejects.toThrow("đã thay đổi");
+  });
+  it("rejects changed monetary data even when the total invoice count stays constant", async () => {
+    const row = { id: "i1", subtotal: 1, discount_amount: 0, delivery_fee: 0, total: 1, paid: 1, debt: 0 };
+    state.rpc.mockResolvedValueOnce({ data: { rows: [row], has_more: true, total_count: 2, scope_fingerprint: "a".repeat(32) }, error: null })
+      .mockResolvedValueOnce({ data: { rows: [{ ...row, id: "i2" }], has_more: false, total_count: 2, scope_fingerprint: "b".repeat(32) }, error: null });
+    await expect(getSalesInvoiceExportRows("branch-a", range, true)).rejects.toThrow("đã thay đổi");
+  });
+  it("rejects a terminal page whose total count exceeds the received rows", async () => {
+    state.rpc.mockResolvedValueOnce({ data: { rows: [], has_more: false, total_count: 1, scope_fingerprint: "a".repeat(32) }, error: null });
+    await expect(getSalesInvoiceExportRows("branch-a", range, true)).rejects.toThrow("Chưa tải đủ");
   });
 });

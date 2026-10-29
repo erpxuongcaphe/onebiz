@@ -961,6 +961,8 @@ export async function getSalesInvoiceExportRows(
   const pageSize = 1000;
   const rows: SalesInvoiceExportRow[] = [];
   const seen = new Set<string>();
+  let expectedCount: number | undefined;
+  let expectedFingerprint: string | undefined;
 
   try {
     let offset = 0;
@@ -981,6 +983,8 @@ export async function getSalesInvoiceExportRows(
       const payload = data as {
         rows?: Array<Record<string, unknown>>;
         has_more?: boolean;
+        total_count?: number | string;
+        scope_fingerprint?: string;
       } | null;
       if (excludeInternal !== undefined && (!payload || !Array.isArray(payload.rows) || typeof payload.has_more !== "boolean")) {
         throw new Error("Nguồn xuất hóa đơn chưa đầy đủ.");
@@ -988,6 +992,15 @@ export async function getSalesInvoiceExportRows(
       const page = payload?.rows ?? [];
       if (payload?.has_more && page.length === 0) throw new Error("Nguồn xuất hóa đơn thiếu trang dữ liệu.");
       if (excludeInternal !== undefined) {
+        const count = Number(payload?.total_count);
+        const fingerprint = payload?.scope_fingerprint;
+        if (payload?.total_count == null || !Number.isSafeInteger(count) || count < 0
+          || typeof fingerprint !== "string" || !/^[a-f0-9]{32}$/.test(fingerprint)
+          || expectedCount !== undefined && (count !== expectedCount || fingerprint !== expectedFingerprint)) {
+          throw new Error("Danh sách hóa đơn đã thay đổi hoặc chưa đầy đủ. Vui lòng xuất lại.");
+        }
+        expectedCount = count;
+        expectedFingerprint = fingerprint;
         for (const row of page) {
           requireReportNumbers(row, ["subtotal", "discount_amount", "delivery_fee", "total", "paid", "debt"]);
           if (typeof row.id !== "string" || !row.id || seen.has(row.id)) throw new Error("Danh sách hóa đơn đã thay đổi. Vui lòng xuất lại.");
@@ -995,7 +1008,10 @@ export async function getSalesInvoiceExportRows(
         }
       }
       rows.push(...page.map(mapSalesInvoiceExportRow));
-      if (!payload?.has_more || page.length === 0) return rows;
+      if (!payload?.has_more || page.length === 0) {
+        if (expectedCount !== undefined && rows.length !== expectedCount) throw new Error("Chưa tải đủ hóa đơn. Vui lòng xuất lại.");
+        return rows;
+      }
       offset += page.length;
     }
   } catch (error) {
