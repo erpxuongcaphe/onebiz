@@ -44,12 +44,12 @@ import {
   getProductsWithBranchStock,
   bulkCreateAdjustmentLots,
   getCategoriesByScope,
-  getSuppliers,
   type ProductWithBranchStock,
   type BulkAdjustmentLotItem,
   type BulkAdjustmentLotsResult,
 } from "@/lib/services";
-import type { ProductCategory, Supplier } from "@/lib/types";
+import type { ProductCategory } from "@/lib/types";
+import { getSupplierContacts, type CounterpartyContact } from "@/lib/services/supabase/counterparty-contacts";
 
 interface AssignExpiryDialogProps {
   open: boolean;
@@ -139,7 +139,7 @@ export function AssignExpiryDialog({
 
   // Data
   const [categories, setCategories] = useState<ProductCategory[]>([]);
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [suppliers, setSuppliers] = useState<CounterpartyContact[]>([]);
   const [products, setProducts] = useState<ProductWithBranchStock[]>([]);
   const [loadingList, setLoadingList] = useState(false);
 
@@ -174,7 +174,7 @@ export function AssignExpiryDialog({
       try {
         const [cats, sups] = await Promise.all([
           getCategoriesByScope("nvl"),
-          getSuppliers({ page: 0, pageSize: 200, filters: {} }),
+          getSupplierContacts({ page: 0, pageSize: 200 }),
         ]);
         setCategories(cats);
         setSuppliers(sups.data);
