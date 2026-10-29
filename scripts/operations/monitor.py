@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import shutil
 import time
 import urllib.error
 import urllib.request
@@ -14,6 +15,18 @@ CHECKS = (
     ("onebiz_login", "https://onebiz.com.vn/dang-nhap", False),
     ("xuongcaphe_home", "https://www.xuongcaphe.com/", False),
 )
+
+
+def probe_disk(path="/", usage=shutil.disk_usage):
+    """Warn before an existing disk needs expansion; never provision storage."""
+    try:
+        disk = usage(path)
+        used_percent = round((disk.total - disk.free) * 100 / disk.total, 1)
+        return {"ok": used_percent < 80 and disk.free >= 5 * 1024**3,
+                "status": 0, "elapsed_ms": 0, "used_percent": used_percent,
+                "free_bytes": disk.free, "immediate_alert": True}
+    except OSError:
+        return {"ok": False, "status": 0, "elapsed_ms": 0, "immediate_alert": True}
 
 
 def probe(url, database=False, opener=urllib.request.urlopen):
@@ -48,7 +61,7 @@ def sample(previous, results, timestamp):
     return {
         "checked_at": timestamp,
         "healthy": all(item["ok"] for item in checks.values()),
-        "alert": any(item["consecutive_failures"] >= 2 for item in checks.values()),
+        "alert": any(item["consecutive_failures"] >= (1 if item.get("immediate_alert") else 2) for item in checks.values()),
         "checks": checks,
         "history": history,
     }
@@ -70,17 +83,22 @@ def send_telegram(config, message):
 def notify(state, previous, config, sender=send_telegram):
     incident = previous.get("notified_incident", False)
     state["notified_incident"] = incident
+    issues = sorted(name for name, check in state["checks"].items()
+                    if check["consecutive_failures"] >= (1 if check.get("immediate_alert") else 2))
+    previous_issues = previous.get("notified_issues", [])
+    state["notified_issues"] = previous_issues
     message = None
-    if state["alert"] and not incident:
-        names = ", ".join(name for name, check in state["checks"].items() if check["consecutive_failures"] >= 2)
-        message = "ONEBIZ: kiểm tra lỗi liên tiếp: " + names + ". Cần kiểm tra kết nối và quán đang bán. Không tự in lại phiếu chưa rõ kết quả."
+    if state["alert"] and (not incident or set(issues) - set(previous_issues)):
+        names = ", ".join(issues)
+        message = "ONEBIZ: cần kiểm tra: " + names + ". Không tự nâng gói hoặc mua dung lượng. Kiểm tra kết nối và quán đang bán; không tự in lại phiếu chưa rõ kết quả."
     elif state["healthy"] and incident:
-        message = "ONEBIZ: web và kiểm tra database đã kết nối trở lại. Đây là kiểm tra kỹ thuật; cần xác nhận giấy tại quán nếu trước đó có phiếu in lỗi."
+        message = "ONEBIZ: các kiểm tra web, database và dung lượng đã bình thường trở lại. Đây là kiểm tra kỹ thuật; cần xác nhận giấy tại quán nếu trước đó có phiếu in lỗi."
     if message:
         sent = sender(config, message)
         state["notification_failed"] = not sent
         if sent:
             state["notified_incident"] = state["alert"]
+            state["notified_issues"] = issues if state["alert"] else []
 
 
 def main():
@@ -95,6 +113,7 @@ def main():
     except (OSError, ValueError):
         previous = {}
     results = {name: probe(url, database) for name, url, database in CHECKS}
+    results["hetzner_disk"] = probe_disk()
     state = sample(previous, results, datetime.now(timezone.utc).isoformat())
     credentials = Path(os.environ.get("CREDENTIALS_DIRECTORY", "/nonexistent")) / "telegram"
     if credentials.exists():

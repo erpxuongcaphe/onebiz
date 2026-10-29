@@ -25,6 +25,24 @@ class Response:
 
 
 class MonitorTests(unittest.TestCase):
+    def test_disk_alerts_on_first_sample_and_new_issue_during_existing_incident(self):
+        from collections import namedtuple
+        Usage = namedtuple("Usage", "total used free")
+        gib = 1024**3
+        good = monitor.probe_disk(usage=lambda _: Usage(40*gib, 26*gib, 14*gib))
+        bad = monitor.probe_disk(usage=lambda _: Usage(40*gib, 33*gib, 7*gib))
+        self.assertTrue(good["ok"])
+        self.assertFalse(bad["ok"])
+        state = monitor.sample({}, {"hetzner_disk": bad}, "now")
+        self.assertTrue(state["alert"])
+        messages = []
+        previous = {"notified_incident": True, "notified_issues": ["db"]}
+        monitor.notify(state, previous, {}, lambda c, m: messages.append(m) or True)
+        self.assertEqual(len(messages), 1)
+        again = monitor.sample(state, {"hetzner_disk": bad}, "later")
+        monitor.notify(again, state, {}, lambda c, m: messages.append(m) or True)
+        self.assertEqual(len(messages), 1)
+
     def test_database_requires_healthy_payload_not_just_http_200(self):
         self.assertFalse(monitor.probe("https://example.test", True, lambda *a, **k: Response(b'<html>login</html>'))["ok"])
         self.assertFalse(monitor.probe("https://example.test", True, lambda *a, **k: Response(b'{"status":"ok","db":"error"}'))["ok"])
