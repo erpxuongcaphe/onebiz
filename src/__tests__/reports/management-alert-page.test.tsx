@@ -30,6 +30,8 @@ it("exports units separately without adding currency, counts and percentages", a
   state.load.mockResolvedValue([alert("Stock"), alert("Lots", "expiring_lot"), alert("Ratio", "high_expense"), alert("Debt", "overdue_debt")]);
   render(<Page />);
   fireEvent.click(await screen.findByRole("button", { name: "Export fixture" }));
+  expect(screen.queryByText("% doanh thu")).toBeNull();
+  expect(screen.getByText("so với tổng thu")).toBeInTheDocument();
   await waitFor(() => expect(state.export).toHaveBeenCalled());
   const [summary, detail] = state.export.mock.calls[0][0].sheets;
   expect(summary.metrics.some((metric: { label: string }) => metric.label === "Tổng giá trị liên quan")).toBe(false);

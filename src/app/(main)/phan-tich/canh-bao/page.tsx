@@ -416,7 +416,7 @@ export default function CanhBaoPage() {
                                 ? "lô hàng"
                                 : alert.type === "negative_cashflow"
                                   ? "VND thiếu hụt"
-                                  : "% doanh thu"}
+                                  : "so với tổng thu"}
                         </p>
                       </div>
                     </div>
