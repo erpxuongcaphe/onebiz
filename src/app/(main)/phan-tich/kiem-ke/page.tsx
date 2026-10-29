@@ -211,15 +211,15 @@ export default function KiemKeReportPage() {
   }, [data, range, branchName, detailRows, tab]);
 
   const detailColumns: DataTableColumn<InventoryCheckDetailRow>[] = [
-    { key: "checkCode", label: "Mã phiếu", width: "150px" },
-    { key: "checkDate", label: "Ngày kiểm", width: "120px", cell: row => formatShortDate(row.checkDate) },
-    { key: "branchName", label: "Chi nhánh", width: "200px" },
-    { key: "productCode", label: "Mã hàng", width: "150px" },
-    { key: "productName", label: "Mặt hàng", width: "240px" },
+    { key: "productName", label: "Mặt hàng", width: "260px", sticky: true, cell: row => <div className="space-y-1"><span className="block font-medium">{row.productName}</span><span className="block text-xs text-muted-foreground">{row.productCode || "Chưa có mã"} · {reportUnitLabel(row)}</span><span className="block text-xs text-muted-foreground">Danh mục: {row.catalogUnit || "Chưa có ĐVT"}</span></div> },
     ...stockUnitColumns<InventoryCheckDetailRow>(),
     { key: "systemStock", label: "Sổ sách", align: "right", cell: row => formatNumber(row.systemStock) },
     { key: "actualStock", label: "Thực tế", align: "right", cell: row => formatNumber(row.actualStock) },
     { key: "difference", label: "Chênh lệch", align: "right", cell: row => formatNumber(row.difference) },
+    { key: "checkCode", label: "Mã phiếu", width: "150px" },
+    { key: "checkDate", label: "Ngày kiểm", width: "120px", cell: row => formatShortDate(row.checkDate) },
+    { key: "branchName", label: "Chi nhánh", width: "200px" },
+    { key: "productCode", label: "Mã hàng", width: "150px" },
   ];
 
   const columns: DataTableColumn<InventoryCheckReportRow>[] = [
@@ -322,7 +322,7 @@ export default function KiemKeReportPage() {
           {(search || unitFilter) && <button type="button" onClick={() => { setSearch(""); setUnitFilter(""); }} className="min-h-10 text-sm text-primary">Xóa lọc</button>}
         </div>}
         <p className="text-xs text-muted-foreground">Số lượng theo ĐVT ghi sổ. Quy cách hiện tại chỉ để tham chiếu; không dùng để quy đổi lại phiếu cũ chưa lưu ĐVT.</p>
-        {data && (
+        {data && tab === "checks" && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <KpiCard
               label="Số phiếu kiểm trong kỳ"

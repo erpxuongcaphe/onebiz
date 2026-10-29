@@ -20,7 +20,7 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 it("opens item detail with units, package rules, original count and explicit historical gaps", async () => {
-  render(<Page />); await screen.findByText("SKU-CUP");
+  render(<Page />); await screen.findAllByText(/SKU-CUP/);
   expect(screen.getByRole("tab", { name: "Chi tiết mặt hàng" })).toHaveAttribute("aria-selected", "true");
   expect(screen.getByText("1 Cây = 50 Cái")).toBeInTheDocument();
   expect(screen.getByText("2 Cây + 3 Cái")).toBeInTheDocument();
@@ -31,7 +31,7 @@ it("opens item detail with units, package rules, original count and explicit his
   expect(screen.getByText("Số sản phẩm")).toBeInTheDocument();
 });
 it("reopens the real full workbook with unit columns and filtered lines, without a mixed-unit quantity total", async () => {
-  render(<Page />); await screen.findByText("SKU-CUP");
+  render(<Page />); await screen.findAllByText(/SKU-CUP/);
   fireEvent.change(screen.getByRole("combobox", { name: "ĐVT danh mục" }), { target: { value: "Cái" } });
   fireEvent.click(screen.getByRole("button", { name: "Full export fixture" }));
   await waitFor(() => expect(state.save).toHaveBeenCalled());
