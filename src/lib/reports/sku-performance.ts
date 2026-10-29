@@ -11,19 +11,19 @@ export interface SkuPerformanceRow extends SkuFinancialRow {
   grossProfitDifference: number | null;
   previousRow: SkuFinancialRow | null;
 }
-const key = (row: SkuFinancialRow) => JSON.stringify([row.productId, row.unit]);
+export const skuRowKey = (row: SkuFinancialRow) => JSON.stringify([row.productId, row.variantId ?? null, row.unit]);
 
 export function compareSkuPeriods(current: SkuFinancialRow[], previous: SkuFinancialRow[]): SkuPerformanceRow[] {
-  const before = new Map(previous.map(row => [key(row), row]));
-  const now = new Map(current.map(row => [key(row), row]));
+  const before = new Map(previous.map(row => [skuRowKey(row), row]));
+  const now = new Map(current.map(row => [skuRowKey(row), row]));
   // Include items sold only in the previous period, otherwise lost revenue disappears.
-  for (const row of previous) if (!now.has(key(row))) now.set(key(row), {
+  for (const row of previous) if (!now.has(skuRowKey(row))) now.set(skuRowKey(row), {
     ...row, orders: 0, customers: 0, soldQty: 0, returnedQty: 0, netQty: 0,
     salesAmount: 0, returnAmount: 0, netRevenue: 0, cogs: 0, grossProfit: 0,
     marginPercent: null, averageSalePrice: null, missingCostLines: 0, lastActivityAt: "",
   });
   return [...now.values()].map(row => {
-    const prior = before.get(key(row));
+    const prior = before.get(skuRowKey(row));
     const previousGrossProfit = prior ? prior.grossProfit : 0;
     return { ...row, previousRow: prior ?? null, previousMissingCostLines: prior?.missingCostLines ?? 0, previousRevenue: prior?.netRevenue ?? 0,
       revenueDifference: row.netRevenue - (prior?.netRevenue ?? 0), previousGrossProfit,

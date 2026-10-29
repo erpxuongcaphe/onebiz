@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SkuFinancialRow } from "@/lib/services/supabase/sku-financial-report";
-import { compareSkuPeriods, filterSkuPerformance, skuCategoryPerformance, skuReviewEvidence } from "@/lib/reports/sku-performance";
+import { compareSkuPeriods, filterSkuPerformance, skuCategoryPerformance, skuReviewEvidence, skuRowKey } from "@/lib/reports/sku-performance";
 import { skuFinancialTotals, skuFinancialView } from "@/lib/reports/sku-financial-view";
 
 export function sku(id: string, revenue: number, cost: number | null = 40, unit = "Ly"): SkuFinancialRow {
@@ -12,6 +12,19 @@ export function sku(id: string, revenue: number, cost: number | null = 40, unit 
 }
 
 describe("SKU management evidence", () => {
+  it("keeps same-product sizes distinct across periods, including previous-only sizes", () => {
+    const small = { ...sku("coffee", 80000, 50000, "Cái"), variantId: "250g", variantName: "250 gram", name: "Coffee · 250 gram", soldQty: 1 };
+    const large = { ...sku("coffee", 700000, 500000, "Cái"), variantId: "500g", variantName: "500 gram", name: "Coffee · 500 gram", soldQty: 5 };
+    const old = { ...sku("coffee", 90000, 60000, "Cái"), variantId: "old" };
+    const rows = compareSkuPeriods([small, large], [{ ...large, netRevenue: 280000 }, { ...small, netRevenue: 160000 }, old]);
+    expect(rows).toHaveLength(3);
+    expect(new Set(rows.map(skuRowKey)).size).toBe(3);
+    expect(rows.find(row => row.variantId === "250g")).toMatchObject({ previousRevenue: 160000, revenueDifference: -80000 });
+    expect(rows.find(row => row.variantId === "500g")).toMatchObject({ previousRevenue: 280000, revenueDifference: 420000 });
+    expect(rows.find(row => row.variantId === "old")).toMatchObject({ soldQty: 0, netRevenue: 0, previousRevenue: 90000 });
+    expect(skuFinancialTotals(rows)).toMatchObject({ salesAmount: 780000, netRevenue: 780000, soldQty: 6 });
+    expect(skuFinancialView(rows, { search: "500 gram", category: "", unit: "" }, { id: "code", direction: "asc" })).toHaveLength(1);
+  });
   it("separates zero-revenue packaging cost from loss alerts without removing cost", () => {
     const rows = compareSkuPeriods([sku("cup", 0, 12), sku("sale", 20, 40), sku("unknown", 0, null)], []);
     expect(skuReviewEvidence(rows)).toMatchObject({ lossCount: 1, lossAmount: -20, zeroRevenueCostCount: 1, zeroRevenueCostAmount: 12, missingCount: 1 });
