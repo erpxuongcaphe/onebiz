@@ -38,6 +38,8 @@ import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { SettleDebtDialog } from "@/components/shared/dialogs/settle-debt-dialog";
 import { DebtDetailDialog } from "@/components/shared/dialogs/debt-detail-dialog";
 import { RecordAdvanceDialog } from "@/components/shared/dialogs/record-advance-dialog";
+import { SupplierAdvanceRefundDialog } from "@/components/shared/dialogs/supplier-advance-refund-dialog";
+import { usePermissions } from "@/lib/permissions/use-permission";
 import { PartyCashHistory } from "@/components/shared/party-cash-history";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
@@ -84,6 +86,9 @@ async function withReportTimeout<T>(promise: Promise<T>): Promise<T> {
 
 export default function CongNoPage() {
   const { toast } = useToast();
+  const { hasAll, isLoading: permissionsLoading } = usePermissions();
+  const canReceiveSupplierRefund = !permissionsLoading && hasAll(["finance.create_transaction", "finance.view_cash_book", "suppliers.view_debt"]);
+  const [supplierRefundTarget, setSupplierRefundTarget] = useState<{ partyId: string; partyName: string } | null>(null);
   const { activeBranchId, branchLabel, isReady } = useBranchFilter();
   const [mode, setMode] = useState<Mode>("customer");
   const [search, setSearch] = useState("");
@@ -533,6 +538,9 @@ export default function CongNoPage() {
               <Icon name="account_balance_wallet" size={14} />
               Ứng trước
             </Button>
+            {canReceiveSupplierRefund && <Button size="sm" variant="outline" className="h-7 px-2 text-xs gap-1" onClick={() => setSupplierRefundTarget({ partyId: row.original.id, partyName: row.original.name })} title="Nhận lại tiền nhà cung cấp hoàn từ khoản đã ứng">
+              <Icon name="south_west" size={14} />Nhận hoàn ứng
+            </Button>}
           </div>
         );
       },
@@ -1250,6 +1258,9 @@ export default function CongNoPage() {
         />
       )}
 
+      {supplierRefundTarget && <SupplierAdvanceRefundDialog key={`${supplierRefundTarget.partyId}:${activeBranchId ?? "all"}`} {...supplierRefundTarget} branchId={activeBranchId}
+        onClose={() => setSupplierRefundTarget(null)} onChanged={fetchData}
+        onHistory={() => { setHistoryTarget({ mode: "supplier", ...supplierRefundTarget }); setSupplierRefundTarget(null); }} />}
       {advanceTarget && (
         <RecordAdvanceDialog
           open={!!advanceTarget}

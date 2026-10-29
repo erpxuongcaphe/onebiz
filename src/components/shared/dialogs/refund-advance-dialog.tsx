@@ -87,6 +87,7 @@ export function RefundAdvanceDialog({
   const [account, setAccount] = useState(
     restored.attempt?.payload.moneyAccountId ?? "",
   );
+  const [accountRevision, setAccountRevision] = useState(0);
   const [at, setAt] = useState(
     restored.attempt
       ? cashDateTimeInput(new Date(restored.attempt.payload.occurredAt))
@@ -196,6 +197,7 @@ export function RefundAdvanceDialog({
             {formatCurrency(source.remainingAmount)}
           </dd>
         </dl>
+        {receiving && <p className="border-l-2 border-primary pl-3 text-sm"><strong>Tiền từ:</strong> {partyName} hoàn khoản ứng {source.cashCode}. <strong>Tiền vào:</strong> quỹ / tài khoản nhận tiền bên dưới. Không phát sinh chi tiền cho nhà cung cấp.</p>}
         {!review ? (
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="space-y-1 text-sm">
@@ -231,7 +233,11 @@ export function RefundAdvanceDialog({
                 value={account}
                 onChange={setAccount}
                 disabled={!!attempt}
+                label={receiving ? "Quỹ / tài khoản nhận tiền" : undefined}
+                refreshKey={accountRevision}
+                emptyHint={receiving ? "Chưa có tài khoản nhận phù hợp tại chi nhánh này. Thêm quỹ/tài khoản thực tế rồi tải lại; chưa thể ghi phiếu thu." : undefined}
               />
+              {receiving && <Button variant="outline" size="sm" disabled={saving || !!attempt} onClick={() => { setAccount(""); setAccountRevision(value => value + 1); }}>Tải lại tài khoản nhận</Button>}
               <Link
                 className="inline-flex py-1 text-sm text-primary"
                 href="/cai-dat/tai-khoan-tien"
@@ -308,6 +314,7 @@ export function RefundAdvanceDialog({
               value={account}
               onChange={setAccount}
               disabled
+              label={receiving ? "Quỹ / tài khoản nhận tiền" : undefined}
             />
             <p className="text-sm whitespace-pre-wrap break-words">{note}</p>
             {attempt && (

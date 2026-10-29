@@ -45,7 +45,6 @@ import {
   type DraftOrderSummary,
   type DraftOrderDetail,
   getProducts,
-  getOrCreateWalkInCustomer,
   attachDeliveryToInvoice,
   getPartnerOptionsAsync,
   getTenantBusinessInfo,
@@ -53,6 +52,7 @@ import {
   getInvoiceItems,
   type TenantBusinessInfo,
 } from "@/lib/services/supabase";
+import { useRetailCustomerSelection, hasSelectedRetailCustomer, RETAIL_CUSTOMER_REQUIRED_MESSAGE } from "./hooks/use-retail-customer-selection";
 import { useAutoSaveDraft, loadLocalCart } from "./hooks/use-auto-save-draft";
 import { RecoveryDialog } from "./components/recovery-dialog";
 import { getClient } from "@/lib/services/supabase/base";
@@ -114,6 +114,7 @@ import {
 import { Button } from "@/components/ui/button";
 
 import { usePosState, type OrderLine, type DiscountInput, type SellingMode, type DeliveryInfo, type PosSnapshot } from "./hooks/use-pos-state";
+import { loadRetailWorkspace, saveRetailWorkspace, planRetailWorkspaceRestore } from "./lib/retail-workspace-storage";
 import { chuyenTab, themTab, dongTab, doiChiNhanh } from "./lib/pos-tab-transitions";
 import { ProductGrid } from "./components/product-grid";
 import { CustomerPicker } from "./components/customer-picker";
@@ -300,6 +301,21 @@ function PosPageInner() {
       activeTabIdRef.current === token.tabId,
     [],
   );
+
+  const handleCustomerSelection = useRetailCustomerSelection({
+    branchId: currentBranch?.id ?? "",
+    beginRequest: beginCartLoad,
+    isCurrent: isCartLoadCurrent,
+    onSelected: (customer) => {
+      state.setCustomer(customer, "user-pick");
+      if (customer?.isInternal) state.setSellingMode("internal");
+    },
+    onError: (error) => toast({
+      title: "Chưa chọn được khách lẻ",
+      description: error instanceof Error ? error.message : "Vui lòng thử chọn lại. Giỏ hàng vẫn được giữ.",
+      variant: "error",
+    }),
+  });
 
   const applyDraftToActiveTab = useCallback(async (
     detail: DraftOrderDetail,
@@ -745,6 +761,60 @@ function PosPageInner() {
     else setOpenShiftDialogOpen(true);
   }, [currentShift]);
 
+  // Restore every invoice before recovery/autosave can read the initial empty cart.
+  const workspaceScope = tenant?.id && currentBranch?.id && user?.id
+    ? `${tenant.id}:${currentBranch.id}:${user.id}` : null;
+  const [hydratedWorkspace, setHydratedWorkspace] = useState<string | null>(null);
+  const workspaceReady = workspaceScope !== null && hydratedWorkspace === workspaceScope;
+  const workspaceRestoreRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!workspaceScope || !tenant?.id || !currentBranch?.id || !user?.id ||
+      workspaceRestoreRef.current === workspaceScope) return;
+    workspaceRestoreRef.current = workspaceScope;
+    recoveryShownRef.current = false;
+    const saved = loadRetailWorkspace(tenant.id, currentBranch.id, user.id);
+    if (saved) {
+      const url = new URL(window.location.href);
+      const requestedDraft = url.searchParams.get("draftId");
+      const plan = planRetailWorkspaceRestore(saved, requestedDraft, () => ({
+        id: nextTabId(), label: "Hoá đơn " + (saved.tabs.length + 1),
+        sessionId: nextClientSessionId(), snapshot: null, itemCount: 0,
+        ngayHoaDon: null, lyDoNgayHoaDon: "",
+      }));
+      const restored = plan.workspace;
+      const active = restored.tabs.find((tab) => tab.id === restored.activeTabId)!;
+      cartLoadRequestRef.current += 1;
+      activeTabIdRef.current = restored.activeTabId;
+      commitTabs(restored.tabs.map((tab) => tab.id === restored.activeTabId
+        ? { ...tab, snapshot: null } : tab));
+      setActiveTabId(restored.activeTabId);
+      if (active.snapshot) state.restoreSnapshot(active.snapshot);
+      else state.clearCart();
+      datNgayHoaDon(active.ngayHoaDon, active.lyDoNgayHoaDon);
+      recoveryShownRef.current = !plan.loadRequestedDraft;
+      // A lingering URL for a restored draft must not overwrite local edits.
+      if (requestedDraft && !plan.loadRequestedDraft) {
+        url.searchParams.delete("draftId");
+        window.history.replaceState(window.history.state, "", url);
+      }
+    }
+    setHydratedWorkspace(workspaceScope);
+  }, [workspaceScope, tenant?.id, currentBranch?.id, user?.id, commitTabs, datNgayHoaDon, state]);
+
+  // Capture a complete snapshot after every edit, including inactive tabs.
+  // pagehide also flushes the latest committed render before reload/navigation.
+  const persistWorkspaceRef = useRef<(() => void) | null>(null);
+  persistWorkspaceRef.current = workspaceReady && tenant && currentBranch && user
+    ? () => saveRetailWorkspace(tenant.id, currentBranch.id, user.id,
+      { tabs, activeTabId }, state.getSnapshot(), ngayHoaDonRef.current)
+    : null;
+  useEffect(() => { persistWorkspaceRef.current?.(); });
+  useEffect(() => {
+    const flush = () => persistWorkspaceRef.current?.();
+    window.addEventListener("pagehide", flush);
+    return () => window.removeEventListener("pagehide", flush);
+  }, []);
+
   // ─── Recovery: load draft list khi POS mount + cleanup expired ───
   // CEO 04/05/2026: nếu có nháp (manual F9 hoặc auto-save), mở dialog cho
   // cashier chọn tiếp tục hoặc bỏ qua. Chỉ chạy 1 lần per session (không
@@ -756,7 +826,7 @@ function PosPageInner() {
   // useSearchParams() để tránh phải wrap Suspense — POS đã là client component.
   useEffect(() => {
     if (!tenant?.id || !currentBranch?.id) return;
-    if (recoveryShownRef.current) return;
+    if (!workspaceReady || recoveryShownRef.current) return;
     recoveryShownRef.current = true;
 
     // Phase 6.2 (CEO 12/05): race protection. Nếu user switch chi nhánh giữa
@@ -822,20 +892,24 @@ function PosPageInner() {
       // trước khi thêm hàng rồi tablet reload. Khôi phục khách im lặng, không
       // toast "0 sản phẩm".
       const hasLines = localBackup.lines.length > 0;
-      state.restoreFromLocalBackup({
-        lines: localBackup.lines,
-        customer: localBackup.customer,
-        orderDiscount: localBackup.orderDiscount,
-        note: localBackup.note,
-        paymentMethod: localBackup.paymentMethod,
-      });
+      if (localBackup.fullSnapshot) {
+        state.restoreSnapshot(localBackup.fullSnapshot);
+      } else {
+        state.restoreFromLocalBackup({
+          lines: localBackup.lines,
+          customer: localBackup.customer,
+          orderDiscount: localBackup.orderDiscount,
+          note: localBackup.note,
+          paymentMethod: localBackup.paymentMethod,
+        });
+      }
       setClientSessionId(localBackup.sessionId);
       // 04/08/2026 — session cũ có thể ĐÃ có nháp trên server: seed đúng
       // {invoiceId, revision} để lần auto-save đầu tiên KHÔNG dính
       // POS_DRAFT_CONFLICT chắc chắn (00292 coi expected_revision null là
       // conflict khi nháp đã tồn tại → trước đây tablet idle-reload đêm nào
       // cũng kẹt dialog + bắn save hỏng). Best-effort — lỗi thì như cũ.
-      findDraftBySession(localBackup.sessionId)
+      if (!localBackup.fullSnapshot?.loadedDraftId) findDraftBySession(localBackup.sessionId)
         .then((serverDraft) => {
           if (cancelled || !isCartLoadCurrent(restoreToken) || !serverDraft) return;
           state.setLoadedDraftId(serverDraft.invoiceId);
@@ -910,7 +984,7 @@ function PosPageInner() {
     return () => {
       cancelled = true;
     };
-  }, [tenant?.id, currentBranch?.id]);
+  }, [tenant?.id, currentBranch?.id, workspaceReady]);
 
   // ─── Auto-save liên tục ───
   // Hook tự debounce 1500ms + skip nếu state không đổi. Disabled khi:
@@ -918,6 +992,7 @@ function PosPageInner() {
   // - Đang submit (tránh save state nửa chừng giữa lúc đang gửi RPC)
   // - Đang load draft từ recovery (avoid overwrite)
   const hasUnsavedCart = useAutoSaveDraft({
+    localSnapshot: state.getSnapshot(),
     sessionId: clientSessionId,
     snapshot: {
       lines: state.lines,
@@ -941,7 +1016,7 @@ function PosPageInner() {
             userId: user.id,
           }
         : null,
-    enabled: submitting === null && !recoveryOpen && !draftConflict,
+    enabled: workspaceReady && submitting === null && !recoveryOpen && !draftConflict,
     draftId: state.loadedDraftId,
     draftRevision: state.loadedDraftRevision,
     // CEO 04/05/2026 fix: khi auto-save tạo draft trên server → set
@@ -1973,12 +2048,12 @@ function PosPageInner() {
    * Flow CEO 04/05/2026 (POS Retail):
    *   - Khách đưa = total → bình thường, paid=total, không nợ
    *   - Khách đưa < total → ghi nợ phần thiếu vào customer.
-   *     Nếu cashier chưa chọn customer → auto-link "Khách lẻ vãng lai" (KL-VL).
+   *     Bắt buộc thu ngân chọn khách trước; Khách lẻ cũng phải được chọn chủ động.
    *   - Khách đưa > total → mở ChangeDialog hỏi cashier:
    *       * "Trả tiền thừa": invoice paid=total, không adjust debt
    *       * "Ghi số dư": invoice paid=total và server ghi tiền thừa vào sổ
    *         phát sinh của khách trong cùng giao dịch. Chỉ dùng khi có khách thật.
-   *   - Khách đưa = 0 (rỗng) → ghi nợ 100%, link customer (auto walk-in).
+   *   - Khách đưa = 0 (rỗng) → xác nhận ghi nợ cho khách đã chọn.
    *
    * intent param resolve khi user click button trong ChangeDialog:
    *   undefined → first call, decide path
@@ -1987,6 +2062,16 @@ function PosPageInner() {
    */
   const handleComplete = useCallback(async (intent?: "refund" | "credit", zeroConfirmed?: boolean) => {
     if (submitLockRef.current) return;
+    const checkoutCustomer = state.customer;
+    if (!hasSelectedRetailCustomer(checkoutCustomer)) {
+      toast({
+        title: RETAIL_CUSTOMER_REQUIRED_MESSAGE,
+        description: "Chọn khách hàng hoặc chọn Khách lẻ để tiếp tục. Giỏ hàng vẫn được giữ.",
+        variant: "warning", duration: 6000,
+      });
+      setCustomerModalOpen(true);
+      return;
+    }
 
     // State trên màn hình có thể đến chậm sau khi đổi mạng/tab. Trước khi bắt
     // mở ca lại, hỏi máy chủ một lần để khôi phục đúng ca đang mở.
@@ -2199,7 +2284,6 @@ function PosPageInner() {
     const paidForInvoice = Math.min(paidEntered, total);
     const creditExcess =
       intent === "credit" && paidEntered > total ? paidEntered - total : 0;
-    const needsCustomerForDebt = paidForInvoice < total || creditExcess > 0;
 
     if (creditExcess > 0 && !networkStatus.isOnline) {
       toast({
@@ -2297,22 +2381,9 @@ function PosPageInner() {
           );
         if (!ok) return;
       }
-      // Auto-link walk-in customer khi cần track debt/credit mà cashier
-      // chưa chọn customer thật. Lazy create — chỉ tạo lần đầu mỗi tenant.
-      let resolvedCustomerId: string | null = state.customer?.id ?? null;
-      let resolvedCustomerName: string = state.customer?.name ?? "Khách lẻ";
-      if (needsCustomerForDebt && !resolvedCustomerId) {
-        try {
-          const walkIn = await getOrCreateWalkInCustomer();
-          resolvedCustomerId = walkIn.id;
-          resolvedCustomerName = walkIn.name;
-        } catch (err) {
-          console.error("[POS] getOrCreateWalkInCustomer failed:", err);
-          throw new Error(
-            "Không tạo được khách lẻ vãng lai để ghi công nợ. Vui lòng thử lại.",
-          );
-        }
-      }
+      // Customer selection is required for cash, debt, delivery and every retry.
+      const resolvedCustomerId = checkoutCustomer.id;
+      const resolvedCustomerName = checkoutCustomer.name;
 
       const paid = paidForInvoice; // alias để tận dụng code dưới (receipt, RPC, ...)
       let invoiceCode: string;
@@ -2844,8 +2915,7 @@ function PosPageInner() {
   }, [state, toast, autoPrint, networkStatus.isOnline, currentShift, currentBranch?.id, user?.id, appliedPromotion, appliedRedeem, clientSessionId, hasUnsavedCart]);
 
   // CEO 04/05/2026: Bỏ handleDebtCheckout — nút "Ghi nợ" cũ thay bằng
-  // logic auto trong handleComplete (paid < total → auto-link walk-in
-  // customer + ghi nợ phần thiếu).
+  // handleComplete ghi nợ phần thiếu cho khách đã được thu ngân chọn.
 
   // ============================================================
   // Hotkeys
@@ -3323,7 +3393,7 @@ function PosPageInner() {
                         "inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full text-xs font-bold",
                         isActive ? "bg-primary-fixed text-primary" : "bg-muted text-muted-foreground"
                       )}>
-                        {count}
+                        {formatPosQuantityInput(count)}
                       </span>
                     )}
                     {/* Close tab button */}
@@ -3389,7 +3459,7 @@ function PosPageInner() {
           {state.lines.length > 0 && (
             <div className="flex items-center justify-between px-3 py-1 border-b border-border bg-surface-container-low shrink-0">
               <span className="text-xs font-semibold text-muted-foreground uppercase">
-                {state.lines.length} sản phẩm · {state.itemCount} món
+                {state.lines.length} sản phẩm · {formatPosQuantityInput(state.itemCount)} món
               </span>
               <button
                 type="button"
@@ -3459,7 +3529,7 @@ function PosPageInner() {
               <button
                 type="button"
                 onClick={() => setCustomerModalOpen(true)}
-                title={state.customer?.name ?? (state.sellingMode === "internal" ? "Chọn khách nội bộ" : "Khách lẻ")}
+                title={state.customer?.name ?? (state.sellingMode === "internal" ? "Chọn khách nội bộ" : "Chọn khách hàng")}
                 className={cn(
                   "flex-1 flex items-center gap-2 px-3 h-8 rounded-lg text-xs transition-colors press-scale-sm min-w-0",
                   state.customer
@@ -3473,7 +3543,7 @@ function PosPageInner() {
                   <Icon name="person" size={14} className="shrink-0" />
                 )}
                 <span className="flex-1 text-left truncate font-medium">
-                  {state.customer?.name ?? (state.sellingMode === "internal" ? "Chọn khách nội bộ" : "Khách lẻ")}
+                  {state.customer?.name ?? (state.sellingMode === "internal" ? "Chọn khách nội bộ" : "Chọn khách hàng")}
                 </span>
                 <kbd className="font-mono text-xs bg-surface-container-lowest border border-outline-variant/30 rounded px-1 py-0.5 text-muted-foreground shrink-0">
                   F4
@@ -3482,7 +3552,7 @@ function PosPageInner() {
               {state.customer && (
                 <button
                   type="button"
-                  onClick={() => state.setCustomer(null, "user-clear")}
+                  onClick={() => { beginCartLoad(); state.setCustomer(null, "user-clear"); }}
                   className="p-2 rounded-lg text-muted-foreground hover:text-status-error hover:bg-status-error/10 transition-colors"
                   title="Gỡ khách"
                 >
@@ -3578,7 +3648,7 @@ function PosPageInner() {
           {/* ── Totals section ── */}
           <div className="border-t border-border px-3 py-2 space-y-1 bg-surface-container-low/50">
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Tổng tiền hàng ({state.itemCount} SP)</span>
+              <span>Tổng tiền hàng ({formatPosQuantityInput(state.itemCount)} SP)</span>
               <span className="font-medium text-foreground tabular-nums">
                 {formatCurrency(state.subtotal)}
               </span>
@@ -4012,12 +4082,12 @@ function PosPageInner() {
               <Icon name="shopping_cart" />
               {state.itemCount > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 h-4 min-w-[16px] rounded-full bg-status-error text-white text-xs font-bold flex items-center justify-center px-0.5">
-                  {state.itemCount}
+                  {formatPosQuantityInput(state.itemCount)}
                 </span>
               )}
             </div>
             <span className="font-semibold text-sm">
-              {state.lines.length > 0 ? `${state.itemCount} sản phẩm` : "Xem giỏ hàng"}
+              {state.lines.length > 0 ? `${formatPosQuantityInput(state.itemCount)} sản phẩm` : "Xem giỏ hàng"}
             </span>
           </div>
           {state.lines.length > 0 && (
@@ -4031,25 +4101,25 @@ function PosPageInner() {
         {hasPermission("inventory.internal_export") && <SellingModeTab
           icon={<Icon name="domain" size={14} />} label="Bán nội bộ"
           active={state.sellingMode === "internal"}
-          onClick={() => { state.setSellingMode("internal"); if (!state.customer?.isInternal) state.setCustomer(null, "user-pick"); }}
+          onClick={() => { beginCartLoad(); state.setSellingMode("internal"); if (!state.customer?.isInternal) state.setCustomer(null, "user-pick"); }}
         />}
         <SellingModeTab
           icon={<Icon name="bolt" size={14} />}
           label="Bán nhanh"
           active={state.sellingMode === "fast"}
-          onClick={() => { state.setSellingMode("fast"); if (state.customer?.isInternal) state.setCustomer(null, "user-pick"); }}
+          onClick={() => { beginCartLoad(); state.setSellingMode("fast"); if (state.customer?.isInternal) state.setCustomer(null, "user-pick"); }}
         />
         <SellingModeTab
           icon={<Icon name="schedule" size={14} />}
           label="Bán thường"
           active={state.sellingMode === "normal"}
-          onClick={() => { state.setSellingMode("normal"); if (state.customer?.isInternal) state.setCustomer(null, "user-pick"); }}
+          onClick={() => { beginCartLoad(); state.setSellingMode("normal"); if (state.customer?.isInternal) state.setCustomer(null, "user-pick"); }}
         />
         <SellingModeTab
           icon={<Icon name="local_shipping" size={14} />}
           label="Bán giao hàng"
           active={state.sellingMode === "delivery"}
-          onClick={() => { state.setSellingMode("delivery"); if (state.customer?.isInternal) state.setCustomer(null, "user-pick"); }}
+          onClick={() => { beginCartLoad(); state.setSellingMode("delivery"); if (state.customer?.isInternal) state.setCustomer(null, "user-pick"); }}
         />
       </div>
 
@@ -4060,11 +4130,7 @@ function PosPageInner() {
         currentBranchId={currentBranch?.id}
         open={customerModalOpen}
         onClose={() => setCustomerModalOpen(false)}
-        onSelect={(customer) => {
-          cartLoadRequestRef.current += 1;
-          state.setCustomer(customer, "user-pick");
-          if (customer?.isInternal) state.setSellingMode("internal");
-        }}
+        onSelect={handleCustomerSelection}
         onRequestCreate={(initialName) => {
           setCreateCustomerInitial(initialName);
           setCreateCustomerOpen(true);
@@ -4391,7 +4457,7 @@ function PosPageInner() {
               <div className="flex justify-between text-xs text-muted-foreground">
                 <span>Số sản phẩm:</span>
                 <span className="font-medium text-foreground">
-                  {state.itemCount}
+                  {formatPosQuantityInput(state.itemCount)}
                 </span>
               </div>
               <div className="flex justify-between text-sm font-bold border-t border-border pt-2 mt-1">

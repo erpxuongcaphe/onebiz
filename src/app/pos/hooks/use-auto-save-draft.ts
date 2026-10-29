@@ -28,7 +28,7 @@ import {
   type PosCheckoutInput,
   type PosCheckoutItem,
 } from "@/lib/services/supabase";
-import type { OrderLine, DiscountInput, DeliveryInfo } from "./use-pos-state";
+import type { OrderLine, DiscountInput, DeliveryInfo, PosSnapshot } from "./use-pos-state";
 import { LatestOnlyAsyncQueue } from "../lib/latest-only-async-queue";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -49,6 +49,7 @@ function lsKey(tenantId: string, branchId: string): string {
 }
 
 export interface LocalCartBackup {
+  fullSnapshot?: PosSnapshot;
   lines: OrderLine[];
   /** Slim shape giống AutoSaveSnapshot — đủ để dựng lại tên hiển thị giỏ. */
   customer: { id: string; name: string } | null;
@@ -130,9 +131,9 @@ export interface DraftSaveState {
   revision: number;
 }
 
-type CartNavigationSnapshot = Pick<AutoSaveSnapshot, "lines" | "customer" | "orderDiscount" | "paymentMethod" | "note" | "orderVatRate">;
+type CartNavigationSnapshot = Pick<AutoSaveSnapshot, "lines" | "customer" | "orderDiscount" | "paymentMethod" | "note" | "orderVatRate"> & Partial<Pick<AutoSaveSnapshot, "shippingFee" | "deliveryInfo">>;
 function navigationCartSignature(snapshot: CartNavigationSnapshot) {
-  return JSON.stringify([computeStateHash(snapshot), snapshot.orderVatRate ?? 0]);
+  return JSON.stringify([computeStateHash({ ...snapshot, shippingFee: snapshot.shippingFee ?? snapshot.deliveryInfo?.shippingFee ?? 0 }), snapshot.orderVatRate ?? 0]);
 }
 
 export interface DraftSaveConflict {
@@ -141,6 +142,7 @@ export interface DraftSaveConflict {
 }
 
 interface UseAutoSaveDraftArgs {
+  localSnapshot?: PosSnapshot;
   /** UUID idempotency key — sticky cho session, regen khi clear cart. */
   sessionId: string | null;
   /** Trạng thái cart + customer + payment hiện tại. */
@@ -191,6 +193,7 @@ export interface DraftAutoSaveController {
  *   useAutoSaveDraft({ sessionId, snapshot: state, ctx, enabled: !submitting });
  */
 export function useAutoSaveDraft({
+  localSnapshot,
   sessionId,
   snapshot,
   ctx,
@@ -365,6 +368,7 @@ export function useAutoSaveDraft({
     // "Khách lẻ". Chỉ xoá khi cả giỏ lẫn khách đều trống.
     if (snapshot.lines.length > 0 || snapshot.customer) {
       saveLocalCart(ctx.tenantId, ctx.branchId, {
+        fullSnapshot: localSnapshot,
         lines: snapshot.lines,
         customer: snapshot.customer,
         orderDiscount: snapshot.orderDiscount,
@@ -429,7 +433,7 @@ export function useAutoSaveDraft({
       if (debouncedRef.current) clearTimeout(debouncedRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, sessionId, JSON.stringify(snapshot.lines), snapshot.customer?.id, snapshot.orderDiscount.value, snapshot.orderDiscount.mode, snapshot.paymentMethod, snapshot.shippingFee, snapshot.orderVatRate, snapshot.note, ctx?.tenantId, ctx?.branchId, visibilityTick]);
+  }, [enabled, sessionId, JSON.stringify(snapshot.lines), snapshot.customer?.id, snapshot.orderDiscount.value, snapshot.orderDiscount.mode, snapshot.paymentMethod, snapshot.shippingFee, snapshot.orderVatRate, snapshot.note, ctx?.tenantId, ctx?.branchId, visibilityTick, JSON.stringify(localSnapshot)]);
   const hasUnsavedCart = (session: string, cart: CartNavigationSnapshot) =>
     cart.lines.length > 0 && (!ctx || navigationCartSaved.current.get(`${ctx.tenantId}:${ctx.branchId}:${session}`) !== navigationCartSignature(cart));
 
@@ -469,7 +473,7 @@ export function useAutoSaveDraft({
  * lines (productId+qty+price+discount), customer, orderDiscount, payment, note.
  * Các UI state khác (modal mở/đóng, hover...) không trigger save.
  */
-function computeStateHash(s: Pick<AutoSaveSnapshot, "lines" | "customer" | "orderDiscount" | "paymentMethod" | "note">): string {
+function computeStateHash(s: Pick<AutoSaveSnapshot, "lines" | "customer" | "orderDiscount" | "paymentMethod" | "note"> & Partial<Pick<AutoSaveSnapshot, "shippingFee" | "orderVatRate">>): string {
   return JSON.stringify({
     l: s.lines.map((l) => [
       l.productId,
@@ -484,6 +488,8 @@ function computeStateHash(s: Pick<AutoSaveSnapshot, "lines" | "customer" | "orde
     od: [s.orderDiscount.value, s.orderDiscount.mode],
     pm: s.paymentMethod,
     n: s.note ?? "",
+    sf: s.shippingFee ?? 0,
+    vat: s.orderVatRate ?? 0,
   });
 }
 
