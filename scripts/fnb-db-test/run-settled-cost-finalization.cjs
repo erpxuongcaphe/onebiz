@@ -4,6 +4,7 @@ const assert=require('node:assert/strict');
 const {PGlite}=require(process.env.FNB_PGLITE_DIR||'@electric-sql/pglite');
 const id=n=>`00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
 const migration='supabase/migrations/20261029103039_fnb_settled_invoice_cost_finalize.sql';
+const hotfix='supabase/migrations/20261029131731_fnb_invoice_line_cost_total_variable_hotfix.sql';
 (async()=>{const db=new PGlite();try{
 const schema=`do $$begin
  if not exists(select 1 from pg_roles where rolname='anon') then create role anon;end if;
@@ -13,7 +14,7 @@ end$$;create schema private;create schema auth;
 create function auth.uid() returns uuid language sql as $$ select '${id(1)}'::uuid $$;
 create table products(id uuid primary key,inventory_role text);
 create table invoices(id uuid primary key,tenant_id uuid,branch_id uuid,source text,status text,deleted_at timestamptz,created_by uuid);
-create table invoice_items(id uuid primary key,invoice_id uuid,product_id uuid,quantity numeric,unit_cost numeric(15,4));
+create table invoice_items(id uuid primary key,invoice_id uuid,product_id uuid,quantity numeric,unit_cost numeric(15,4),total numeric default 0);
 create table sales_returns(id uuid primary key,invoice_id uuid,status text);
 create table fnb_branch_product_cost_events(id uuid primary key default gen_random_uuid(),tenant_id uuid,branch_id uuid,product_id uuid,direction text,source_type text,source_reference_type text,source_reference_id uuid,source_stock_movement_id uuid,quantity numeric,unit_cost numeric,total_cost numeric,note text,created_by uuid);
 create table fnb_invoice_item_bom_snapshot_components_00410(id bigint generated always as identity,invoice_item_id uuid,material_id uuid,quantity numeric);
@@ -24,19 +25,20 @@ await db.exec(schema);
 const oldSnapshot=fs.readFileSync('scripts/fnb-db-test/fixtures/snapshot-cost-before-finalization.sql','utf8');
 await db.exec(oldSnapshot);
 await db.exec(fs.readFileSync(migration,'utf8'));
+await db.exec(fs.readFileSync(hotfix,'utf8'));
 if(process.env.FNB_RECORD_COST_SQL){
  const seed=`insert into invoices values('${id(900)}','${id(1)}','${id(2)}','fnb','completed',null,'${id(1)}');
  insert into invoice_items values('${id(901)}','${id(900)}','${id(3)}',1,null);
  insert into fnb_branch_product_cost_events(id,tenant_id,branch_id,product_id,direction,source_type,source_reference_type,source_reference_id,source_stock_movement_id,quantity,unit_cost,total_cost) values('${id(902)}','${id(1)}','${id(2)}','${id(4)}','out','bom_consume','bom_consume','${id(900)}','${id(904)}',10,0,0);
  insert into fnb_invoice_item_bom_snapshot_components_00410(invoice_item_id,material_id,quantity) values('${id(901)}','${id(4)}',10);
  insert into fnb_sale_cost_shortfalls_00473(id,tenant_id,branch_id,product_id,invoice_id,cost_event_id,quantity,pending_quantity,estimated_unit_cost,settled_actual_cost) values('${id(903)}','${id(1)}','${id(2)}','${id(4)}','${id(900)}','${id(902)}',10,10,0,0);`;
- fs.writeFileSync(process.env.FNB_RECORD_COST_SQL,schema+'\n'+oldSnapshot+'\n'+fs.readFileSync(migration,'utf8')+'\n'+seed);
+ fs.writeFileSync(process.env.FNB_RECORD_COST_SQL,schema+'\n'+oldSnapshot+'\n'+fs.readFileSync(migration,'utf8')+'\n'+fs.readFileSync(hotfix,'utf8')+'\n'+seed);
 }
 const value=async(sql,params=[])=> (await db.query(sql,params)).rows;
-async function setup(n,{mapped=false,pending=10,quantity=1,price=0,source='fnb',material=4}={}){
+async function setup(n,{mapped=false,pending=10,quantity=1,price=0,source='fnb',material=4,saleTotal=0}={}){
  const inv=id(n),line=id(n+1),event=id(n+2),short=id(n+3);
  await db.query(`insert into invoices values($1,$2,$3,$4,'completed',null,$2)`,[inv,id(1),id(2),source]);
- await db.query(`insert into invoice_items values($1,$2,$3,$4,null)`,[line,inv,id(3),quantity]);
+ await db.query(`insert into invoice_items values($1,$2,$3,$4,null,$5)`,[line,inv,id(3),quantity,saleTotal]);
  await db.query(`insert into fnb_branch_product_cost_events(id,tenant_id,branch_id,product_id,direction,source_type,source_reference_type,source_reference_id,source_stock_movement_id,quantity,unit_cost,total_cost) values($1,$2,$3,$4,'out','bom_consume','bom_consume',$5,$6,10,$7::numeric,10*$7::numeric)`,[event,id(1),id(2),id(material),inv,id(n+4),price]);
  await db.query(`insert into fnb_invoice_item_bom_snapshot_components_00410(invoice_item_id,material_id,quantity) values($1,$2,10)`,[line,id(material)]);
  await db.query(`insert into fnb_sale_cost_shortfalls_00473(id,tenant_id,branch_id,product_id,invoice_id,cost_event_id,quantity,pending_quantity,estimated_unit_cost,settled_actual_cost) values($1,$2,$3,$4,$5,$6,10,$7,$8,0)`,[short,id(1),id(2),id(material),inv,event,pending,price]);
@@ -44,9 +46,21 @@ async function setup(n,{mapped=false,pending=10,quantity=1,price=0,source='fnb',
  return {inv,line,event,short};
 }
 const cost=async line=>(await value('select unit_cost from invoice_items where id=$1',[line]))[0].unit_cost;
+// Real invoice rows also have a sale `total`. Execute the ordinary checkout
+// path with no shortage, rather than only testing its early-return branch.
+const sufficient=await setup(50,{mapped:true,pending:0,quantity:2,price:3,saleTotal:99000});
+assert.equal(Number(await cost(sufficient.line)),15);
+assert.equal(Number((await value('select total from invoice_items where id=$1',[sufficient.line]))[0].total),99000);
+assert.equal((await value('select count(*)::int n from private.fnb_cost_event_lines_20261029 where invoice_item_id=$1',[sufficient.line]))[0].n,1);
+await db.query(`insert into invoice_items values($1,$2,$3,4,null,88000)`,[id(60),sufficient.inv,id(3)]);
+await db.query(`insert into fnb_branch_product_cost_events(id,tenant_id,branch_id,product_id,direction,source_type,source_reference_type,source_reference_id,quantity,unit_cost,total_cost) values($1,$2,$3,$4,'out','bom_consume','bom_consume',$5,10,4,40)`,[id(61),id(1),id(2),id(4),sufficient.inv]);
+await db.query('select public._snapshot_fnb_invoice_line_cost_00412($1,1,30)',[id(60)]);
+assert.equal(Number(await cost(id(60))),10);
+assert.equal(Number(await cost(sufficient.line)),15);
+assert.equal(Number((await value('select total from invoice_items where id=$1',[id(60)]))[0].total),88000);
 // Partial receipt keeps the unknown snapshot; two actual receipt prices finish it.
 const a=await setup(100,{mapped:true});
-assert.equal((await value('select count(*)::int n from private.fnb_cost_event_lines_20261029'))[0].n,1);
+assert.equal((await value('select count(*)::int n from private.fnb_cost_event_lines_20261029 where invoice_item_id=$1',[a.line]))[0].n,1);
 await db.query('update fnb_sale_cost_shortfalls_00473 set pending_quantity=6,settled_actual_cost=8 where id=$1',[a.short]);
 assert.equal(await cost(a.line),null);
 await db.query('update fnb_sale_cost_shortfalls_00473 set pending_quantity=0,settled_actual_cost=26 where id=$1',[a.short]);
