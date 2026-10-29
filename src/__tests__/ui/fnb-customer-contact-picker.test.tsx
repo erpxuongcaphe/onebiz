@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const api = vi.hoisted(() => ({ read: vi.fn() }));
-vi.mock("@/lib/services/supabase/pos-customer-contacts", () => ({ getFnbCustomerContacts: api.read }));
+vi.mock("@/lib/services/supabase/pos-customer-contacts", () => ({ getFnbBuyerContacts: api.read }));
 vi.mock("@/lib/utils/use-debounce", () => ({ useDebounce: (value: string) => value }));
 import { FnbCustomerPicker } from "@/app/pos/fnb/components/fnb-customer-picker";
 const customer = { id: "a", code: "KH001", name: "Customer A", phone: "0900000000" };
@@ -43,5 +43,45 @@ describe("FNB contact-only picker", () => {
     fireEvent.click(screen.getByRole("button", { name: "Thử lại" }));
     await screen.findByText("Customer A");
     await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+  });
+  it("switches to employees, keeps the query, displays benefit group and returns the linked customer",async()=>{
+    const staff={id:'staff-customer',name:'Cao Thị Huyền Trang',code:'KHA-NV-005',phone:'',employeeId:'staff',benefitGroups:['Manager']};
+    api.read.mockImplementation(async({kind})=>kind==='employee'?[staff]:[customer]);
+    render(<FnbCustomerPicker {...props}/>);
+    await screen.findByText('Customer A');
+    fireEvent.change(screen.getByRole('combobox'),{target:{value:'trang'}});
+    fireEvent.click(screen.getByRole('tab',{name:'Nhân viên'}));
+    await screen.findByText('Cao Thị Huyền Trang');
+    expect(screen.getByRole('combobox')).toHaveValue('trang');
+    expect(screen.getByText('Manager')).toBeVisible();
+    expect(screen.queryByText('Khách lẻ')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('option',{name:/Cao Thị Huyền Trang/}));
+    expect(props.onSelect).toHaveBeenCalledWith(staff);
+    expect(api.read).toHaveBeenLastCalledWith(expect.objectContaining({kind:'employee',search:'trang'}));
+  });
+  it("ignores old-customer results after tab switch and never picks a hidden result on Enter",async()=>{
+    let finish!:(value:typeof customer[])=>void;
+    api.read.mockReturnValueOnce(new Promise(done=>{finish=done;})).mockResolvedValue([]);
+    render(<FnbCustomerPicker {...props}/>);
+    fireEvent.click(screen.getByRole('tab',{name:'Nhân viên'}));
+    await screen.findByText(/Chưa tìm thấy hồ sơ ưu đãi/);
+    await act(async()=>finish([customer]));
+    fireEvent.keyDown(screen.getByRole('combobox'),{key:'Enter'});
+    expect(props.onSelect).not.toHaveBeenCalled();
+    expect(screen.queryByText('Customer A')).not.toBeInTheDocument();
+  });
+  it("selects an employee by keyboard once and keeps the picker open while persisting",async()=>{
+    let finish!:()=>void;
+    const select=vi.fn(()=>new Promise<void>(done=>{finish=done;}));
+    api.read.mockResolvedValue([{...customer,employeeId:'staff',benefitGroups:['Manager']}]);
+    render(<FnbCustomerPicker {...props} onSelect={select}/>);
+    fireEvent.click(screen.getByRole('tab',{name:'Nhân viên'}));
+    await screen.findByText('Customer A');
+    fireEvent.keyDown(screen.getByRole('combobox'),{key:'Enter'});
+    fireEvent.click(screen.getByRole('option',{name:/Customer A/}));
+    expect(select).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Đang lưu người mua…')).toBeVisible();
+    expect(props.onClose).not.toHaveBeenCalled();
+    await act(async()=>finish());
   });
 });
