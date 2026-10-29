@@ -7,7 +7,7 @@
  * Bảng: List phiếu kiểm kê trong kỳ với từng metric.
  */
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useBranchFilter, useToast } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
 import { formatNumber, formatCurrency, formatShortDate } from "@/lib/format";
@@ -21,14 +21,20 @@ import {
   exportReportToExcel,
   buildReportTitleRows,
   buildMetricSummarySheet,
+  type ExcelSheet,
 } from "@/lib/utils/excel-export";
 import { getInventoryCheckReport } from "@/lib/services/supabase/inventory-check-report";
 import type {
   InventoryCheckReportRow,
   InventoryCheckReportResult,
+  InventoryCheckDetailRow,
 } from "@/lib/services/supabase/inventory-check-report";
 import { KpiCard } from "../_components";
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
+import { searchOptions } from "@/lib/search-options";
+import { stockUnitColumns, STOCK_UNIT_EXCEL_COLUMNS } from "@/components/shared/report/stock-unit-columns";
+import { reportUnitLabel } from "@/lib/reports/stock-unit-context";
 
 function pctChange(current: number, previous: number): string {
   if (previous === 0) return current > 0 ? "+100%" : "0%";
@@ -51,10 +57,25 @@ export default function KiemKeReportPage() {
   const [data, setData] = useState<InventoryCheckReportResult | null>(null);
   const [loading, setLoading] = useState(true);
   const requestIdRef = useRef(0);
+  const [tab, setTab] = useState<"checks" | "items">("items");
+  const [search, setSearch] = useState("");
+  const [unitFilter, setUnitFilter] = useState("");
+  const [sort, setSort] = useState({ id: "checkDate", direction: "desc" as "asc" | "desc" });
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const detailRows = useMemo(() => searchOptions(data?.details ?? [], search, row => ({ name: `${row.productName} ${row.branchName}`, identifiers: [row.productCode ?? "", row.checkCode] })).map(match => match.item)
+    .filter(row => !unitFilter || row.catalogUnit === unitFilter)
+    .sort((a, b) => {
+      const left = a[sort.id as keyof InventoryCheckDetailRow], right = b[sort.id as keyof InventoryCheckDetailRow];
+      const result = typeof left === "number" && typeof right === "number" ? left - right : String(left ?? "").localeCompare(String(right ?? ""), "vi");
+      return (sort.direction === "asc" ? result : -result) || a.id.localeCompare(b.id);
+    }), [data, search, unitFilter, sort]);
+  const unitOptions = useMemo(() => [...new Set((data?.details ?? []).flatMap(row => row.catalogUnit ? [row.catalogUnit] : []))].sort((a, b) => a.localeCompare(b, "vi")), [data]);
 
   const fetchData = useCallback(async () => {
     const requestId = ++requestIdRef.current;
     setLoading(true);
+    setData(null);
+    setLoadError(null);
     try {
       const result = await getInventoryCheckReport({
         range,
@@ -65,6 +86,7 @@ export default function KiemKeReportPage() {
     } catch (err) {
       if (requestId !== requestIdRef.current) return;
       console.error("Failed to fetch inventory check report:", err);
+      setLoadError(err instanceof Error ? err.message : "Không tải được báo cáo kiểm kê.");
       toast({
         title: "Lỗi tải báo cáo kiểm kê",
         description: err instanceof Error ? err.message : "Vui lòng thử lại",
@@ -78,6 +100,7 @@ export default function KiemKeReportPage() {
   useEffect(() => {
     if (!isReady) return;
     fetchData();
+    return () => { requestIdRef.current += 1; };
   }, [fetchData, isReady]);
 
   const branchName =
@@ -91,6 +114,23 @@ export default function KiemKeReportPage() {
       branchName,
       generatedAt: new Date(),
     });
+    const detailSheet: ExcelSheet = {
+      name: "Chi tiết mặt hàng", titleRows,
+      tablePreferenceKey: "report.kiem-ke.items",
+      columns: [
+        { key: "checkCode", label: "Mã phiếu", width: 18 },
+        { key: "checkDate", label: "Ngày kiểm", width: 18 },
+        { key: "branchName", label: "Chi nhánh", width: 26 },
+        { key: "productCode", label: "Mã hàng", width: 18 },
+        { key: "productName", label: "Mặt hàng", width: 36 },
+        ...STOCK_UNIT_EXCEL_COLUMNS,
+        { key: "systemStock", label: "Sổ sách", width: 18, format: "number" as const },
+        { key: "actualStock", label: "Thực tế", width: 18, format: "number" as const },
+        { key: "difference", label: "Chênh lệch", width: 18, format: "number" as const },
+      ],
+      rows: detailRows.map(row => ({ ...row, checkDate: formatShortDate(row.checkDate), recordedUnit: reportUnitLabel(row), recordedConversion: row.recordedConversion ?? "Chưa lưu", recordedCount: row.recordedCount ?? "Chưa lưu" })),
+      footerLabel: `${detailRows.length} dòng mặt hàng; không cộng số lượng khác ĐVT`,
+    };
     exportReportToExcel({
       kind: "kiem-ke",
       mode,
@@ -131,7 +171,7 @@ export default function KiemKeReportPage() {
               }),
             ]
           : []),
-        {
+        ...(mode === "full" || tab === "checks" ? [{
           name: "Báo cáo kiểm kê",
           titleRows,
           tablePreferenceKey: "report.kiem-ke.checks",
@@ -164,10 +204,23 @@ export default function KiemKeReportPage() {
             totalDecrease: data.summary.totalDecrease,
             netImpact: data.summary.netImpact,
           },
-        },
+        } satisfies ExcelSheet] : []),
+        ...(mode === "full" || tab === "items" ? [detailSheet] : []),
       ],
     });
-  }, [data, range, branchName]);
+  }, [data, range, branchName, detailRows, tab]);
+
+  const detailColumns: DataTableColumn<InventoryCheckDetailRow>[] = [
+    { key: "checkCode", label: "Mã phiếu", width: "150px" },
+    { key: "checkDate", label: "Ngày kiểm", width: "120px", cell: row => formatShortDate(row.checkDate) },
+    { key: "branchName", label: "Chi nhánh", width: "200px" },
+    { key: "productCode", label: "Mã hàng", width: "150px" },
+    { key: "productName", label: "Mặt hàng", width: "240px" },
+    ...stockUnitColumns<InventoryCheckDetailRow>(),
+    { key: "systemStock", label: "Sổ sách", align: "right", cell: row => formatNumber(row.systemStock) },
+    { key: "actualStock", label: "Thực tế", align: "right", cell: row => formatNumber(row.actualStock) },
+    { key: "difference", label: "Chênh lệch", align: "right", cell: row => formatNumber(row.difference) },
+  ];
 
   const columns: DataTableColumn<InventoryCheckReportRow>[] = [
     { label: "Mã phiếu", key: "code", align: "left", width: "120px" },
@@ -260,6 +313,15 @@ export default function KiemKeReportPage() {
       />
 
       <div className="flex-1 overflow-auto p-4 lg:p-6 space-y-4">
+        <div role="tablist" aria-label="Góc nhìn kiểm kê" className="flex border-b gap-4">
+          {([ ["items", "Chi tiết mặt hàng"], ["checks", "Theo phiếu"] ] as const).map(([value, label]) => <button type="button" role="tab" key={value} aria-selected={tab === value} onClick={() => setTab(value)} className={cn("min-h-10 border-b-2 px-1 text-sm", tab === value ? "border-primary text-primary font-semibold" : "border-transparent text-muted-foreground")}>{label}</button>)}
+        </div>
+        {tab === "items" && <div className="flex flex-wrap gap-2">
+          <Input className="max-w-sm" aria-label="Tìm dòng kiểm kê" placeholder="Mã phiếu, mã hàng, tên hàng" value={search} onChange={event => setSearch(event.target.value)} />
+          <select className="h-10 border rounded bg-background px-3 text-sm" aria-label="ĐVT danh mục" value={unitFilter} onChange={event => setUnitFilter(event.target.value)}><option value="">Tất cả ĐVT danh mục</option>{unitOptions.map(unit => <option key={unit} value={unit}>{unit}</option>)}</select>
+          {(search || unitFilter) && <button type="button" onClick={() => { setSearch(""); setUnitFilter(""); }} className="min-h-10 text-sm text-primary">Xóa lọc</button>}
+        </div>}
+        <p className="text-xs text-muted-foreground">Số lượng theo ĐVT ghi sổ. Quy cách hiện tại chỉ để tham chiếu; không dùng để quy đổi lại phiếu cũ chưa lưu ĐVT.</p>
         {data && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <KpiCard
@@ -340,10 +402,12 @@ export default function KiemKeReportPage() {
               Đang tải báo cáo kiểm kê...
             </p>
           </div>
-        ) : !data || data.rows.length === 0 ? (
+        ) : loadError ? <div role="alert" className="space-y-2"><p>{loadError}</p><button type="button" className="min-h-10 text-primary" onClick={() => void fetchData()}>Thử lại</button></div> : !data || data.rows.length === 0 ? (
           <div className="text-center py-16 text-sm text-muted-foreground">
             Chưa có phiếu kiểm kê nào trong kỳ này
           </div>
+        ) : tab === "items" ? (
+          <ReportDataTable<InventoryCheckDetailRow> columns={detailColumns} tablePreferenceKey="report.kiem-ke.items" rows={detailRows} getRowKey={row => row.id} sortState={sort} onSortChange={setSort} subtotalLabel={`${detailRows.length} dòng mặt hàng`} emptyState="Không có dòng kiểm kê phù hợp" />
         ) : (
           <div className="bg-surface-container-lowest rounded-lg ambient-shadow">
             <ReportDataTable<InventoryCheckReportRow>

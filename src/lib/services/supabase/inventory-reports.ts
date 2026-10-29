@@ -10,12 +10,14 @@
 import { getClient, handleError } from "./base";
 import { isRpcUnavailable } from "./rpc-utils";
 import { inclusiveReportRpcRange } from "@/lib/reports/inclusive-rpc-range";
+import { getStockReportUnits, stockUnitReferenceKey } from "./report-stock-units";
+import type { StockReportUnits } from "@/lib/reports/stock-unit-context";
 
 // ============================================================
 // 1. Aging tồn kho / Dead-stock
 // ============================================================
 
-export interface InventoryAgingRow {
+export interface InventoryAgingRow extends Partial<StockReportUnits> {
   productId: string;
   code: string;
   name: string;
@@ -64,6 +66,7 @@ export async function getInventoryAgingReport(params?: {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const raw = data as any;
+  const units = await getStockReportUnits((raw.rows ?? []).map((row: { product_id: string; current_qty: number }) => ({ referenceId: row.product_id, productId: row.product_id, actualQuantity: Number(row.current_qty) })), "current_stock");
   return {
     generatedAt: raw.generated_at,
     tenantId: raw.tenant_id,
@@ -71,6 +74,7 @@ export async function getInventoryAgingReport(params?: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     rows: (raw.rows ?? []).map((r: any) => ({
       productId: r.product_id,
+      ...units.get(stockUnitReferenceKey(r.product_id, r.product_id)),
       code: r.code,
       name: r.name,
       currentQty: Number(r.current_qty ?? 0),
@@ -91,7 +95,7 @@ export async function getInventoryAgingReport(params?: {
 // 2. Tổn thất tồn kho (Disposal Loss)
 // ============================================================
 
-export interface DisposalLossRow {
+export interface DisposalLossRow extends Partial<StockReportUnits> {
   disposalId: string;
   disposalCode: string;
   disposalDate: string;
@@ -152,6 +156,7 @@ export async function getDisposalLossReport(params?: {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const raw = data as any;
+  const units = await getStockReportUnits((raw.rows ?? []).map((row: { disposal_id: string; product_id: string; quantity: number }) => ({ referenceId: row.disposal_id, productId: row.product_id, actualQuantity: Number(row.quantity) })), "disposal");
   return {
     generatedAt: raw.generated_at,
     dateFrom: raw.date_from,
@@ -168,6 +173,7 @@ export async function getDisposalLossReport(params?: {
       reason: r.reason,
       productId: r.product_id,
       productName: r.product_name,
+      ...units.get(stockUnitReferenceKey(r.disposal_id, r.product_id)),
       quantity: Number(r.quantity ?? 0),
       unitCost: Number(r.unit_cost ?? 0),
       lossValue: Number(r.loss_value ?? 0),
@@ -188,7 +194,7 @@ export async function getDisposalLossReport(params?: {
 // 3. Chênh lệch kiểm kê (Inventory Variance)
 // ============================================================
 
-export interface InventoryVarianceRow {
+export interface InventoryVarianceRow extends Partial<StockReportUnits> {
   checkId: string;
   checkCode: string;
   checkDate: string;
@@ -246,6 +252,7 @@ export async function getInventoryVarianceReport(params?: {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const raw = data as any;
+  const units = await getStockReportUnits((raw.rows ?? []).map((row: { check_id: string; product_id: string; actual_stock: number }) => ({ referenceId: row.check_id, productId: row.product_id, actualQuantity: Number(row.actual_stock) })));
   return {
     generatedAt: raw.generated_at,
     dateFrom: raw.date_from,
@@ -261,6 +268,7 @@ export async function getInventoryVarianceReport(params?: {
       branchName: r.branch_name,
       productId: r.product_id,
       productName: r.product_name,
+      ...units.get(stockUnitReferenceKey(r.check_id, r.product_id)),
       systemStock: Number(r.system_stock ?? 0),
       actualStock: Number(r.actual_stock ?? 0),
       difference: Number(r.difference ?? 0),

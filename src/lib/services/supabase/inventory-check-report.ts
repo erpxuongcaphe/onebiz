@@ -12,6 +12,8 @@
 import { getClient, getCurrentTenantId, handleError } from "./base";
 import type { DateRange } from "@/lib/types/report";
 import { toCreatedAtRangeWindow } from "@/lib/utils/list-date-preset-range";
+import { getStockReportUnits, stockUnitReferenceKey } from "./report-stock-units";
+import type { StockReportUnits } from "@/lib/reports/stock-unit-context";
 interface InventoryCheckPagedQuery<T> {
   range(
     from: number,
@@ -73,6 +75,20 @@ export interface InventoryCheckReportResult {
   summary: InventoryCheckReportSummary;
   rows: InventoryCheckReportRow[];
   range: DateRange;
+  details: InventoryCheckDetailRow[];
+}
+
+export interface InventoryCheckDetailRow extends Partial<StockReportUnits> {
+  id: string;
+  checkId: string;
+  checkCode: string;
+  checkDate: string;
+  branchName: string;
+  productId: string;
+  productName: string;
+  systemStock: number;
+  actualStock: number;
+  difference: number;
 }
 
 interface Options {
@@ -111,7 +127,7 @@ export async function getInventoryCheckReport(
   let query = (supabase as any)
     .from("inventory_checks")
     .select(
-      "id, code, created_at, branch_id, status, profiles!inventory_checks_created_by_fkey(full_name), branches(name), inventory_check_items:inventory_check_items_scoped(id, difference, products:products_scoped(cost_price))",
+      "id, code, created_at, branch_id, status, profiles!inventory_checks_created_by_fkey(full_name), branches(name)",
     )
     .eq("tenant_id", tenantId)
     // A5 (07/07): chỉ tính phiếu ĐÃ CÂN BẰNG (balanced) — bỏ draft/in_progress/
@@ -123,12 +139,35 @@ export async function getInventoryCheckReport(
   if (branchId) query = query.eq("branch_id", branchId);
   const checks = await fetchAllInventoryCheckRows<Record<string, unknown>>(() => query.order("created_at", { ascending: true }), "getInventoryCheckReport.checks");
 
+  const itemsByCheck = new Map<string, Record<string, unknown>[]>();
+  const checkIds = checks.map(check => String(check.id));
+  for (let start = 0; start < checkIds.length; start += 100) {
+    const items = await fetchAllInventoryCheckRows<Record<string, unknown>>(
+      () => supabase.from("inventory_check_items_scoped").select("id,check_id,product_id,product_name,system_stock,actual_stock,difference,products:products_scoped(cost_price)").in("check_id", checkIds.slice(start, start + 100)).order("id", { ascending: true }),
+      "getInventoryCheckReport.items",
+    );
+    for (const item of items) {
+      const key = String(item.check_id);
+      const list = itemsByCheck.get(key) ?? [];
+      list.push(item);
+      itemsByCheck.set(key, list);
+    }
+  }
+  const details: InventoryCheckDetailRow[] = checks.flatMap(check => (itemsByCheck.get(String(check.id)) ?? []).map(item => ({
+    id: String(item.id), checkId: String(check.id), checkCode: String(check.code), checkDate: String(check.created_at),
+    branchName: (check.branches as { name?: string } | null)?.name ?? "—",
+    productId: String(item.product_id), productName: String(item.product_name ?? ""),
+    systemStock: Number(item.system_stock), actualStock: Number(item.actual_stock), difference: Number(item.difference),
+  })));
+  const units = await getStockReportUnits(details.map(item => ({ referenceId: item.checkId, productId: item.productId, actualQuantity: item.actualStock })));
+  for (const item of details) Object.assign(item, units.get(stockUnitReferenceKey(item.checkId, item.productId)));
+
   // 2. Build rows + aggregate
   let totalIncrease = 0;
   let totalDecrease = 0;
   const rows: InventoryCheckReportRow[] = (checks ?? []).map(
     (c: Record<string, unknown>) => {
-      const items = (c.inventory_check_items as Array<{
+      const items = (itemsByCheck.get(String(c.id)) as Array<{
         difference: number;
         products?: { cost_price?: number | null } | null;
       }>) ?? [];
@@ -201,5 +240,6 @@ export async function getInventoryCheckReport(
     },
     rows,
     range,
+    details,
   };
 }
