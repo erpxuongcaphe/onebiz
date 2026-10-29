@@ -47,5 +47,5 @@ update public.invoice_items
                           else null end
    where id = p_invoice_item_id;
 end;
-$function$
+$function$;
 
