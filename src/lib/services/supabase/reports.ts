@@ -9,6 +9,7 @@ import { formatFinancialBucket } from "@/lib/reports/financial-bucket-label";
 import { validateBranchProfitAndLossSource, validateProfitAndLossSource } from "@/lib/reports/financial-source-validation";
 import { financeReportRangeError } from "@/lib/reports/finance-report-input";
 import { toCreatedAtRangeWindow } from "@/lib/utils/list-date-preset-range";
+import { resolvePreset } from "@/lib/utils/date-presets";
 interface ReportPagedQuery<T> {
   range(
     from: number,
@@ -613,12 +614,14 @@ export async function getFinancialAlerts(branchId?: string): Promise<FinancialAl
     .order("expiry_date", { ascending: true })
     .limit(20);
 
+  const cashPeriod = resolvePreset("thisMonth")!;
   let cashQuery = supabase
     .from("cash_transactions")
     .select("type, amount")
     .eq("tenant_id", tenantId)
-    .gte("created_at", thisMonthRange().start)
-    .lt("created_at", thisMonthRange().end);
+    .eq("status", "completed")
+    .gte("transaction_date", cashPeriod.from)
+    .lte("transaction_date", cashPeriod.to);
 
   if (branchId) {
     cashQuery = cashQuery.eq("branch_id", branchId);
@@ -634,10 +637,13 @@ export async function getFinancialAlerts(branchId?: string): Promise<FinancialAl
     ),
     lotQuery,
     fetchAllReportRows(
-      () => cashQuery.order("created_at", { ascending: true }),
+      () => cashQuery.order("transaction_date", { ascending: true }).order("id", { ascending: true }),
       "getFinancialAlerts.cash",
     ),
   ]);
+
+  if (debtors.error) handleError(debtors.error, "getFinancialAlerts.debt");
+  if (lotsData.error) handleError(lotsData.error, "getFinancialAlerts.lots");
 
   // --- 1. Overdue debt alerts ---
   const debtorRows = (debtors.data ?? []).map((c: any) => ({
@@ -651,8 +657,8 @@ export async function getFinancialAlerts(branchId?: string): Promise<FinancialAl
       id: "debt_total",
       type: "overdue_debt",
       severity: totalDebt > 10_000_000 ? "critical" : "warning",
-      title: "Tổng công nợ phải thu",
-      description: `${debtorRows.length} khách hàng còn nợ`,
+      title: "Nhóm công nợ cần xem",
+      description: `${debtorRows.length} ${branchId ? "hóa đơn" : "khách hàng"} nợ cao nhất; tối đa 20, không phải tổng công nợ.`,
       value: totalDebt,
       link: "/phan-tich/khach-hang",
     });
@@ -668,7 +674,7 @@ export async function getFinancialAlerts(branchId?: string): Promise<FinancialAl
         type: "overdue_debt",
         severity: "warning",
         title: `Công nợ: ${c.name}`,
-        description: `Khách hàng nợ lâu chưa thanh toán`,
+        description: "Còn nợ trên 5 triệu; kiểm tra hạn thanh toán tại công nợ.",
         value: c.debt,
         link: "/phan-tich/khach-hang",
       });
@@ -821,8 +827,8 @@ export async function getFinancialAlerts(branchId?: string): Promise<FinancialAl
         id: "high_expense",
         type: "high_expense",
         severity: expenseRatio > 1 ? "critical" : "warning",
-        title: "Tỷ lệ chi phí cao",
-        description: `Chi phí chiếm ${Math.round(expenseRatio * 100)}% doanh thu`,
+      title: "Chi so với thu cao",
+      description: `Tổng chi bằng ${Math.round(expenseRatio * 100)}% tổng thu tháng này; không phải tỷ lệ chi phí trên doanh thu.`,
         value: Math.round(expenseRatio * 100),
         link: "/phan-tich/tai-chinh",
       });
