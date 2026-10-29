@@ -33,6 +33,36 @@ interface HealthResponse {
 }
 
 const startedAt = Date.now();
+let pendingProbe: Promise<boolean> | undefined;
+let lastProbe: { ok: boolean; expiresAt: number } | undefined;
+
+async function probeDatabase(): Promise<boolean> {
+  if (lastProbe && Date.now() < lastProbe.expiresAt) return lastProbe.ok;
+  if (pendingProbe) return pendingProbe;
+  pendingProbe = (async () => {
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const deadline = new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => { controller.abort(); resolve(false); }, 5000);
+      });
+      // One row is sufficient. An exact table count adds work without making
+      // connectivity checks more useful. Deduplicate concurrent public probes.
+      const query = getAdminClient().from("tenants").select("id", { head: true })
+        .limit(1).abortSignal(controller.signal);
+      const ok = await Promise.race([
+        deadline,
+        Promise.resolve(query).then(({ error }) => !error, () => false),
+      ]);
+      lastProbe = { ok, expiresAt: Date.now() + (ok ? 10000 : 2000) };
+      return ok;
+    } catch {
+      lastProbe = { ok: false, expiresAt: Date.now() + 2000 };
+      return false;
+    } finally { clearTimeout(timer); }
+  })().finally(() => { pendingProbe = undefined; });
+  return pendingProbe;
+}
 
 export async function GET() {
   const response: HealthResponse = {
@@ -46,24 +76,16 @@ export async function GET() {
 
   // Check DB connectivity — simple query
   try {
-    const supabase = getAdminClient();
-
-    // Lightweight query — đếm 1 row trong tenants table (luôn có ít nhất 1)
-    const { error } = await supabase
-      .from("tenants")
-      .select("id", { count: "exact", head: true })
-      .limit(1);
-
-    if (error) {
+    if (!(await probeDatabase())) {
       response.status = "degraded";
       response.db = "error";
-      response.error = error.message;
+      response.error = "DATABASE_UNAVAILABLE";
       return NextResponse.json(response, { status: 503 });
     }
-  } catch (err) {
+  } catch {
     response.status = "degraded";
     response.db = "error";
-    response.error = err instanceof Error ? err.message : "Unknown error";
+    response.error = "DATABASE_UNAVAILABLE";
     return NextResponse.json(response, { status: 503 });
   }
 

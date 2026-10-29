@@ -1,0 +1,21 @@
+[Unit]
+Description=ONEBIZ external website and database health checks
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+DynamicUser=yes
+StateDirectory=onebiz-ops
+StateDirectoryMode=0700
+LoadCredential=telegram:/etc/onebiz-ops/telegram.json
+ExecStart=/usr/bin/python3 /opt/onebiz-ops/monitor.py --state-dir /var/lib/onebiz-ops
+TimeoutStartSec=40
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=80M
+CPUQuota=10%
+UMask=0077

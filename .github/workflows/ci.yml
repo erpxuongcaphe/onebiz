@@ -717,6 +717,9 @@ jobs:
       - name: Verify USB worker lifecycle without a physical printer
         run: node --test scripts/test-usb-worker.mjs scripts/test-print-recovery.mjs
 
+      - name: Verify external monitor without contacting production or Telegram
+        run: python3 scripts/operations/test_monitor.py
+
       - name: Verify print supervisor recovery with fake processes
         shell: pwsh
         run: |
