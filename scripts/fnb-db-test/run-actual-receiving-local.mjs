@@ -418,7 +418,9 @@ try {
     await db.exec(migration.match(/alter table public\.internal_sale_items[\s\S]*?;/)[0]);
     await db.exec(migration.match(/CREATE OR REPLACE FUNCTION public\._create_internal_sale_auth_impl_00243[\s\S]*?\$function\$\s*;/)[0]);
     const baseResolver=(await db.query("select pg_get_functiondef('resolve_product_uom_factor(uuid,uuid,text)'::regprocedure) d")).rows[0].d;
-    await db.exec(`create or replace function resolve_product_uom_factor(uuid,uuid,text) returns numeric language sql as $$select case when $3='TestPack12' then 12 else 1 end::numeric$$;`);
+    const fixtureResolver=baseResolver.replace(/LANGUAGE plpgsql/i,'LANGUAGE sql').replace(/AS \$function\$[\s\S]*?\$function\$/i,"AS $function$ select case when $3='TestPack12' then 12 else 1 end::numeric $function$");
+    assert.notEqual(fixtureResolver,baseResolver,'resolver fixture must retain the current parameter names');
+    await db.exec(fixtureResolver);
     const before=await stock();
     const sourceBefore=Number((await db.query('select quantity from branch_stock where branch_id=$1 and product_id=$2',[source,context.product])).rows[0]?.quantity ?? 0);
     const sale=(await db.query(`select create_internal_sale_atomic($1,$2,$3,$4,null,null,null,null,$5::jsonb,'debt',false,'UOM isolated fixture') r`,[context.tenant_id,source,context.dest,context.actor,JSON.stringify([{productId:context.product,unit:'TestPack12',quantity:2,unitPrice:1200,vatRate:0}])])).rows[0].r;
