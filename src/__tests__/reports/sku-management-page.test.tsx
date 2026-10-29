@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SkuFinancialResult, SkuFinancialRow } from "@/lib/services/supabase/sku-financial-report";
 
@@ -9,7 +9,7 @@ vi.mock("@/lib/hooks/use-report-state", () => ({ useReportState: () => ({ preset
 vi.mock("@/lib/hooks/use-live-data-refresh", () => ({ useLiveDataRefresh: (refresh: () => void) => { state.refresh = refresh; } }));
 vi.mock("@/lib/services/supabase/sku-financial-report", () => ({ getSkuFinancialReport: state.fetch }));
 vi.mock("@/lib/utils/excel-export", async original => ({ ...await original<typeof import("@/lib/utils/excel-export")>(), exportReportToExcel: state.exportExcel }));
-vi.mock("@/components/ui/searchable-select", () => ({ SearchableSelect: ({ value, onValueChange, placeholder, options }: { value: string; onValueChange: (v: string) => void; placeholder: string; options: {value: string; label: string}[] }) => <select aria-label={placeholder} value={value} onChange={e => onValueChange(e.target.value)}>{options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select> }));
+vi.mock("@/components/ui/searchable-select", () => ({ SearchableSelect: ({ value, onValueChange, placeholder, options, disabled }: { value: string; onValueChange: (v: string) => void; placeholder: string; options: {value: string; label: string}[]; disabled?: boolean }) => <select disabled={disabled} aria-label={placeholder} value={value} onChange={e => onValueChange(e.target.value)}>{options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select> }));
 vi.mock("@/components/shared/report", () => ({
   ReportPageHeader: ({ onExportView, onExportFull, exportDisabled, subtitle }: { onExportView: () => void; onExportFull: () => void; exportDisabled: boolean; subtitle: string }) => <><p>{subtitle}</p><button disabled={exportDisabled} onClick={onExportView}>Xuất bảng</button><button disabled={exportDisabled} onClick={onExportFull}>Xuất đầy đủ</button></>,
   ReportDataTable: ({ rows, onSortChange, tablePreferenceKey }: { rows: {code?: string; category?: string}[]; tablePreferenceKey: string; onSortChange?: (sort: {id: string; direction: string}) => void }) => <div>{onSortChange && <button onClick={() => onSortChange({ id: "netRevenue", direction: "desc" })}>{tablePreferenceKey.endsWith("categories") ? "Sắp nhóm" : "Sắp doanh thu"}</button>}{rows.map((row,i) => <span key={i} data-testid="report-row">{row.code ?? row.category}</span>)}</div>,
@@ -25,6 +25,53 @@ beforeEach(() => { window.history.replaceState(null, "", "/"); state.branch = "f
 afterEach(cleanup);
 
 describe("SKU management workflow", () => {
+  it("offers every scoped item, size and unit from both periods and exports the selected size", async () => {
+    const small = { ...sku("A", 100), name: "Item A · Small", variantId: "small" };
+    const large = { ...sku("A", 200), name: "Item A · Large", variantId: "large" };
+    const old = { ...sku("OLD", 50), unit: "Kg", category: "Coffee" };
+    const extra = Array.from({ length: 75 }, (_, index) => sku(`SKU-${index}`, index + 1));
+    state.fetch.mockImplementation((range: { from: string }) => Promise.resolve({ rows: range.from === "2026-10-01" ? [small, large, ...extra] : [old], customers: [{ id: range.from === "2026-10-01" ? "current" : "previous", code: "TEST", name: range.from === "2026-10-01" ? "Current customer" : "Previous customer" }] }));
+    render(<SkuPage />);
+    await waitFor(() => expect(screen.getByLabelText("Mặt hàng")).toBeEnabled());
+    expect(within(screen.getByLabelText("Mặt hàng")).getAllByRole("option")).toHaveLength(79);
+    expect(within(screen.getByLabelText("Khách hàng")).getAllByRole("option")).toHaveLength(3);
+    expect(within(screen.getByLabelText("Đơn vị tính")).getByRole("option", { name: "Kg" })).toBeInTheDocument();
+    expect(within(screen.getByLabelText("Nhóm hàng")).getByRole("option", { name: "Coffee" })).toBeInTheDocument();
+    expect(within(screen.getByLabelText("Nghiệp vụ cần xem")).getByRole("option", { name: "Tất cả nghiệp vụ" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Mặt hàng"), { target: { value: JSON.stringify(["A", "large", "Ly"]) } });
+    expect(state.fetch).toHaveBeenCalledTimes(2);
+    await act(async () => screen.getByRole("button", { name: "Xuất đầy đủ" }).click());
+    const file = state.exportExcel.mock.calls[0][0];
+    expect(file.sheets[0].rows).toEqual([expect.objectContaining({ name: large.name, salesAmount: 200 })]);
+    expect(file.sheets[0].titleRows.join(" ")).toContain("Mặt hàng: A · Item A · Large · Ly");
+    expect(file.sheets.some((sheet: { name: string }) => sheet.name === "Đối chiếu hóa đơn")).toBe(false);
+    expect(new URLSearchParams(window.location.search).get("skuItem")).toBe(JSON.stringify(["A", "large", "Ly"]));
+    fireEvent.click(screen.getByRole("button", { name: "Xóa bộ lọc" }));
+    expect(screen.getByLabelText("Mặt hàng")).toHaveValue("all");
+    expect(new URLSearchParams(window.location.search).has("skuItem")).toBe(false);
+  });
+  it("does not expose old-scope filter choices while another branch is loading", async () => {
+    const view = render(<SkuPage />);
+    await waitFor(() => expect(screen.getByLabelText("Khách hàng")).toBeEnabled());
+    const next = deferred<SkuFinancialResult>();
+    state.fetch.mockReturnValue(next.promise); state.branch = "next-branch"; view.rerender(<SkuPage />);
+    for (const label of ["Khách hàng", "Mặt hàng", "Nhóm hàng", "Đơn vị tính", "Nghiệp vụ cần xem"]) expect(screen.getByLabelText(label)).toBeDisabled();
+    expect(within(screen.getByLabelText("Khách hàng")).queryByRole("option", { name: "Khách 1" })).not.toBeInTheDocument();
+    expect(within(screen.getByLabelText("Mặt hàng")).queryByRole("option", { name: "A" })).not.toBeInTheDocument();
+    await act(async () => next.resolve({ rows: [{ ...sku("NEW", 300), unit: "G" }], customers: [{ id: "new", code: "NEW", name: "New customer" }] }));
+    await waitFor(() => expect(screen.getByLabelText("Mặt hàng")).toBeEnabled());
+    expect(within(screen.getByLabelText("Khách hàng")).getByRole("option", { name: "New customer" })).toBeInTheDocument();
+    expect(within(screen.getByLabelText("Đơn vị tính")).queryByRole("option", { name: "Ly" })).not.toBeInTheDocument();
+  });
+  it("keeps a selected item visible when it has no activity after a scope change", async () => {
+    window.history.replaceState(null, "", `/?skuItem=${encodeURIComponent(JSON.stringify(["MISSING", null, "Ly"]))}`);
+    render(<SkuPage />);
+    await waitFor(() => expect(screen.getByLabelText("Mặt hàng")).toBeEnabled());
+    expect(screen.getByLabelText("Mặt hàng")).toHaveDisplayValue("Mặt hàng đã chọn · không có phát sinh");
+    expect(screen.getByRole("button", { name: "Xuất đầy đủ" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Xóa bộ lọc" }));
+    expect(screen.getByRole("button", { name: "Xuất đầy đủ" })).toBeEnabled();
+  });
   it("exports both sizes of one product with their own prices and previous-period amounts", async () => {
     const small = { ...sku("SKU-RXA-002", 80000), name: "Xưởng Đặc Biệt - Túi · 250 gram", variantId: "250g", variantName: "250 gram", unit: "Cái", averageSalePrice: 80000 };
     const large = { ...sku("SKU-RXA-002", 700000), name: "Xưởng Đặc Biệt - Túi · 500 gram", variantId: "500g", variantName: "500 gram", unit: "Cái", soldQty: 5, netQty: 5, averageSalePrice: 140000 };
@@ -89,6 +136,9 @@ describe("SKU management workflow", () => {
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Mất kết nối"));
     expect(screen.queryByTestId("report-row")).not.toBeInTheDocument();
     expect(screen.getByRole("button", {name:"Xuất bảng"})).toBeDisabled();
+    expect(screen.getByLabelText("Khách hàng")).toBeDisabled();
+    expect(screen.getByLabelText("Mặt hàng")).toBeDisabled();
+    expect(screen.getByLabelText("Đơn vị tính")).toBeDisabled();
     state.fetch.mockResolvedValue(result([sku("OK",100)]));
     fireEvent.click(screen.getByRole("button",{name:"Thử lại"}));
     await waitFor(()=>expect(screen.getAllByTestId("report-row").map(row=>row.textContent)).toContain("OK"));
