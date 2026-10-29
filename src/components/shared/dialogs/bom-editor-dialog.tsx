@@ -558,9 +558,9 @@ export function BOMEditorDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid min-h-0 gap-4 overflow-y-auto py-2 pr-1">
+        <div className="grid min-h-0 min-w-0 grid-cols-1 gap-4 overflow-x-hidden overflow-y-auto py-2 pr-1">
           {/* Output SKU + Name */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <label className="text-sm font-medium">
                 SKU đầu ra <span className="text-destructive">*</span>
@@ -653,7 +653,7 @@ export function BOMEditorDialog({
           {!output?.isFnbStockItem && (
             <>
           {/* Batch / Yield */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="space-y-2">
               <label className="text-sm font-medium">Batch size</label>
               <Input
@@ -714,7 +714,7 @@ export function BOMEditorDialog({
             {errors.items && <p className="text-xs text-destructive">{errors.items}</p>}
 
             {items.length > 0 && (
-              <div className="border rounded-lg overflow-x-auto">
+              <div className="min-w-0 overflow-x-auto rounded-lg border">
                 {output?.isFnbStockItem && <PreparedRecipeYield value={yieldQty} unit={yieldUnit} onChange={setYieldQty} error={errors.yieldQty} />}
                 {!output?.isFnbStockItem && <div className="border-b bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
                   Nhập theo đơn vị pha chế. Hệ thống tự quy đổi sang đơn vị tồn của SKU retail khi tính giá vốn, trừ kho và hoàn kho.
