@@ -3,7 +3,7 @@ const fs=require('node:fs');
 const assert=require('node:assert/strict');
 const {PGlite}=require(process.env.FNB_PGLITE_DIR||'@electric-sql/pglite');
 const id=n=>`00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
-const migration='supabase/migrations/20261029065652_fnb_settled_invoice_cost_finalize.sql';
+const migration='supabase/migrations/20261029103039_fnb_settled_invoice_cost_finalize.sql';
 (async()=>{const db=new PGlite();try{
 const schema=`do $$begin
  if not exists(select 1 from pg_roles where rolname='anon') then create role anon;end if;
