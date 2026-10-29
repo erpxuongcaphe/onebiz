@@ -1,6 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from "react";
+import { useReportBasis } from "@/lib/hooks/use-report-basis";
+import { ReportBasisSelector } from "@/components/shared/report/report-basis-selector";
+import { LoadErrorState } from "@/components/shared/load-error-state";
 import {
   LineChart,
   Line,
@@ -175,6 +178,7 @@ export default function BanHangPage() {
   const { activeBranchId, isReady, branches } = useBranchFilter();
   const { toast } = useToast();
   const {
+    isReady: periodReady,
     preset,
     range,
     setPreset,
@@ -182,6 +186,16 @@ export default function BanHangPage() {
     viewMode,
     setViewMode,
   } = useReportState({ defaultPreset: "thisMonth", defaultViewMode: "chart" });
+  const { excludeInternal, setExcludeInternal, ready: basisReady, basisLabel } = useReportBasis();
+  const ready = isReady && periodReady && basisReady;
+  const scopeKey = JSON.stringify([activeBranchId, range.from, range.to, excludeInternal]);
+  const scopeRef = useRef(scopeKey);
+  useLayoutEffect(() => {
+    scopeRef.current = scopeKey;
+    return () => { if (scopeRef.current === scopeKey) scopeRef.current = ""; };
+  }, [scopeKey]);
+  const [loadedScope, setLoadedScope] = useState("");
+  const [summaryError, setSummaryError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [kpis, setKpis] = useState<SalesKpis | null>(null);
@@ -233,15 +247,20 @@ export default function BanHangPage() {
     const requestId = ++requestIdRef.current;
     setLoading(true);
     try {
-      const summary = await getSalesReportSummary(activeBranchId, range);
-      if (requestId !== requestIdRef.current) return;
+      const summary = await getSalesReportSummary(activeBranchId, range, excludeInternal);
+      if (requestId !== requestIdRef.current || scopeRef.current !== scopeKey) return;
+      setSummaryError(null);
+      setLoadedScope(scopeKey);
       setKpis(summary.kpis);
       setDailyRevenue(summary.dailyRevenue);
       setRevenueByWeekday(summary.revenueByWeekday);
       setRevenueByHour(summary.revenueByHour);
       setTopInvoicesList(summary.topInvoices);
     } catch (err) {
-      if (requestId !== requestIdRef.current) return;
+      if (requestId !== requestIdRef.current || scopeRef.current !== scopeKey) return;
+      setSummaryError(err instanceof Error ? err.message : "Không tải được báo cáo.");
+      setLoadedScope(scopeKey);
+      setKpis(null);
       console.error("Failed to fetch sales analytics:", err);
       toast({
         title: "Lỗi tải báo cáo bán hàng",
@@ -251,23 +270,24 @@ export default function BanHangPage() {
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [activeBranchId, range, toast]);
+  }, [activeBranchId, range, toast, excludeInternal, scopeKey]);
 
   useEffect(() => {
-    if (!isReady) return;
+    if (!ready) return;
     fetchData();
-  }, [fetchData, isReady]);
+  }, [fetchData, ready]);
 
   const fetchDailyRows = useCallback(async () => {
     const requestId = ++dailyRequestIdRef.current;
     setDailyLoading(true);
+    setDailyRows([]);
     setDailyError(null);
     try {
-      const rows = await getSalesReportDailyRows(activeBranchId, range);
-      if (requestId !== dailyRequestIdRef.current) return;
+      const rows = await getSalesReportDailyRows(activeBranchId, range, excludeInternal);
+      if (requestId !== dailyRequestIdRef.current || scopeRef.current !== scopeKey) return;
       setDailyRows(rows);
     } catch (error) {
-      if (requestId !== dailyRequestIdRef.current) return;
+      if (requestId !== dailyRequestIdRef.current || scopeRef.current !== scopeKey) return;
       const message =
         error instanceof Error ? error.message : "Vui long thu lai.";
       setDailyError(message);
@@ -279,25 +299,31 @@ export default function BanHangPage() {
     } finally {
       if (requestId === dailyRequestIdRef.current) setDailyLoading(false);
     }
-  }, [activeBranchId, range, toast]);
+  }, [activeBranchId, range, toast, excludeInternal, scopeKey]);
 
   const fetchInvoiceRows = useCallback(async (offset: number) => {
     const requestId = ++invoiceRequestIdRef.current;
     setInvoiceLoading(true);
+    if (offset === 0) {
+      setInvoiceRows([]);
+      setInvoiceRowsHasMore(false);
+    }
     setInvoiceError(null);
     try {
       const page = await getSalesReportInvoiceDetailPage(
         activeBranchId,
         range,
         offset,
+        50,
+        excludeInternal,
       );
-      if (requestId !== invoiceRequestIdRef.current) return;
+      if (requestId !== invoiceRequestIdRef.current || scopeRef.current !== scopeKey) return;
       setInvoiceRows((current) =>
         offset === 0 ? page.rows : [...current, ...page.rows],
       );
       setInvoiceRowsHasMore(page.hasMore);
     } catch (error) {
-      if (requestId !== invoiceRequestIdRef.current) return;
+      if (requestId !== invoiceRequestIdRef.current || scopeRef.current !== scopeKey) return;
       const message =
         error instanceof Error ? error.message : "Vui long thu lai.";
       setInvoiceError(message);
@@ -309,27 +335,27 @@ export default function BanHangPage() {
     } finally {
       if (requestId === invoiceRequestIdRef.current) setInvoiceLoading(false);
     }
-  }, [activeBranchId, range, toast]);
+  }, [activeBranchId, range, toast, excludeInternal, scopeKey]);
 
   // Daily rows power both the detailed table and the operational chart. Loading
   // once per range keeps the two modes consistent instead of showing two
   // different revenue definitions.
   useEffect(() => {
-    if (!isReady) return;
+    if (!ready) return;
     fetchDailyRows();
-  }, [fetchDailyRows, isReady]);
+  }, [fetchDailyRows, ready]);
 
   useEffect(() => {
-    if (!isReady || viewMode !== "table" || tableMode !== "invoices") return;
+    if (!ready || viewMode !== "table" || tableMode !== "invoices") return;
     fetchInvoiceRows(0);
-  }, [fetchInvoiceRows, isReady, tableMode, viewMode]);
+  }, [fetchInvoiceRows, ready, tableMode, viewMode]);
 
   const branchName =
     branches.find((b) => b.id === activeBranchId)?.name ?? "Tất cả chi nhánh";
 
   // ===== Excel exports =====
   const handleExportView = useCallback(async () => {
-    if (!kpis) return;
+    if (!kpis || loadedScope !== scopeKey || summaryError || dailyLoading || dailyError || invoiceLoading || invoiceError) return;
     if (viewMode === "table") {
       const tableTitleRows = buildReportTitleRows({
         title:
@@ -340,6 +366,7 @@ export default function BanHangPage() {
         branchName,
         generatedAt: new Date(),
       });
+      tableTitleRows.push(`Cơ sở: ${basisLabel}`);
       const tableSheet =
         tableMode === "daily"
           ? {
@@ -349,9 +376,9 @@ export default function BanHangPage() {
               columns: [
                 { label: periodLabel, key: "date", width: 24 },
                 { label: "Đơn", key: "orderCount", width: 10 },
-                { label: "Bán gộp", key: "grossRevenue", width: 18, format: "currency" as const },
+                { label: "Bán trước trả", key: "grossRevenue", width: 18, format: "currency" as const },
                 { label: "Trả trong ngày", key: "returnAmount", width: 18, format: "currency" as const },
-                { label: "Doanh thu thuần", key: "netRevenue", width: 18, format: "currency" as const },
+                { label: "Sau trả (gồm phí)", key: "netRevenue", width: 18, format: "currency" as const },
                 { label: "Đã thu", key: "paid", width: 18, format: "currency" as const },
                 { label: "Còn nợ", key: "debt", width: 18, format: "currency" as const },
               ],
@@ -414,6 +441,7 @@ export default function BanHangPage() {
         range,
         branchName,
         sheets: [tableSheet],
+        shouldSave: () => scopeRef.current === scopeKey,
       });
       return;
     }
@@ -423,11 +451,13 @@ export default function BanHangPage() {
       branchName,
       generatedAt: new Date(),
     });
+    titleRows.push(`Cơ sở: ${basisLabel}`);
     await exportReportToExcel({
       kind: "ban-hang",
       mode: "view",
       range,
       branchName,
+      shouldSave: () => scopeRef.current === scopeKey,
       sheets: [
         {
           name: "KPI bán hàng",
@@ -441,7 +471,7 @@ export default function BanHangPage() {
             { label: "Doanh thu hàng hóa", current: kpis.goodsRevenue, previous: kpis.prevGoodsRevenue },
             { label: "Phí giao hàng thu hộ", current: kpis.deliveryFee, previous: kpis.prevDeliveryFee },
               { label: "(-) Giá trị trả hàng", current: kpis.returnAmount, previous: kpis.prevReturnAmount },
-            { label: "Tổng thu (gồm phí giao)", current: kpis.netRevenue, previous: kpis.prevNetRevenue },
+            { label: "Giá trị sau trả (gồm phí giao)", current: kpis.netRevenue, previous: kpis.prevNetRevenue },
             { label: "Số hóa đơn", current: kpis.invoiceCount ?? 0, previous: kpis.prevInvoiceCount ?? 0 },
             { label: "Giá trị trung bình mỗi đơn", current: kpis.avgOrderValue, previous: kpis.prevAvgOrderValue },
             { label: "Tỷ lệ trả hàng (%)", current: kpis.returnRate, previous: kpis.prevReturnRate },
@@ -449,13 +479,14 @@ export default function BanHangPage() {
         },
       ],
     });
-  }, [branchName, dailyRows, periodRows, periodLabel, formatPeriod, invoiceRows, kpis, range, tableMode, viewMode]);
+  }, [branchName, dailyRows, periodRows, periodLabel, formatPeriod, invoiceRows, kpis, range, tableMode, viewMode, loadedScope, scopeKey, summaryError, dailyLoading, dailyError, invoiceLoading, invoiceError, basisLabel]);
 
   const handleExportFull = useCallback(async () => {
-    if (!kpis) return;
+    if (!kpis || loadedScope !== scopeKey || summaryError || dailyLoading || dailyError) return;
     setExporting(true);
     try {
-      const invoiceRows = await getSalesInvoiceExportRows(activeBranchId, range);
+      const invoiceRows = await getSalesInvoiceExportRows(activeBranchId, range, excludeInternal);
+      if (scopeRef.current !== scopeKey) throw new Error("Bộ lọc đã thay đổi. Vui lòng xuất lại.");
       const branchNames = new Map(branches.map((branch) => [branch.id, branch.name]));
       const titleRows = buildReportTitleRows({
         title: "Báo cáo bán hàng — Đầy đủ",
@@ -463,11 +494,13 @@ export default function BanHangPage() {
         branchName,
         generatedAt: new Date(),
       });
+      titleRows.push(`Cơ sở: ${basisLabel}`);
       await exportReportToExcel({
         kind: "ban-hang",
         mode: "full",
         range,
         branchName,
+        shouldSave: () => scopeRef.current === scopeKey,
         reportTitle: "Báo cáo bán hàng",
         description:
           "Doanh thu, xu hướng bán hàng và toàn bộ hóa đơn hoàn tất trong phạm vi đã chọn.",
@@ -486,7 +519,7 @@ export default function BanHangPage() {
               { label: "Doanh thu hàng hóa", current: kpis.goodsRevenue, previous: kpis.prevGoodsRevenue },
               { label: "Phí giao hàng thu hộ", current: kpis.deliveryFee, previous: kpis.prevDeliveryFee },
               { label: "(-) Giá trị trả hàng", current: kpis.returnAmount, previous: kpis.prevReturnAmount },
-              { label: "Tổng thu (gồm phí giao)", current: kpis.netRevenue, previous: kpis.prevNetRevenue },
+              { label: "Giá trị sau trả (gồm phí giao)", current: kpis.netRevenue, previous: kpis.prevNetRevenue },
               { label: "Số hóa đơn", current: kpis.invoiceCount ?? 0, previous: kpis.prevInvoiceCount ?? 0 },
               { label: "Giá trị trung bình mỗi đơn", current: kpis.avgOrderValue, previous: kpis.prevAvgOrderValue },
               { label: "Tỷ lệ trả hàng (%)", current: kpis.returnRate, previous: kpis.prevReturnRate },
@@ -599,11 +632,13 @@ export default function BanHangPage() {
     revenueByWeekday,
     toast,
     topInvoicesList,
+    loadedScope, scopeKey, summaryError, dailyLoading, dailyError, excludeInternal, basisLabel,
   ]);
 
   const reportHeader = (
     <ReportPageHeader
       title="Báo cáo bán hàng"
+      actions={<ReportBasisSelector value={excludeInternal} onChange={setExcludeInternal} disabled={!ready} />}
       preset={preset}
       range={range}
       onPresetChange={setPreset}
@@ -616,11 +651,11 @@ export default function BanHangPage() {
       }}
       onExportView={handleExportView}
       onExportFull={handleExportFull}
-      exportDisabled={loading || exporting}
+      exportDisabled={!ready || loadedScope !== scopeKey || loading || exporting || Boolean(summaryError) || dailyLoading || Boolean(dailyError) || invoiceLoading || Boolean(invoiceError)}
     />
   );
 
-  if (loading) {
+  if (!ready || loading || loadedScope !== scopeKey) {
     return (
       <div className="flex flex-col h-[calc(100vh-4rem)]">
         {reportHeader}
@@ -633,6 +668,8 @@ export default function BanHangPage() {
       </div>
     );
   }
+
+  if (summaryError) return <div className="p-4 space-y-4">{reportHeader}<LoadErrorState title="Không tải được báo cáo bán hàng" description={summaryError} onRetry={() => void fetchData()} /></div>;
 
   const hasData =
     kpis ||
@@ -684,13 +721,13 @@ export default function BanHangPage() {
       key: "orderCount",
       align: "right",
       cell: (row) => row.orderCount > 0 ? (
-        <a href={buildSalesInvoiceRangeLink(salesPeriodRange(row.date, salesPeriod, range).from, salesPeriodRange(row.date, salesPeriod, range).to, activeBranchId)} className="font-medium text-primary underline-offset-2 hover:underline" aria-label={`Xem ${row.orderCount} hóa đơn ${formatPeriod(row.date)}`}>
+        <a href={buildSalesInvoiceRangeLink(salesPeriodRange(row.date, salesPeriod, range).from, salesPeriodRange(row.date, salesPeriod, range).to, activeBranchId ?? "all", excludeInternal)} className="font-medium text-primary underline-offset-2 hover:underline" aria-label={`Xem ${row.orderCount} hóa đơn ${formatPeriod(row.date)}`}>
           {formatNumber(row.orderCount)}
         </a>
       ) : formatNumber(row.orderCount),
     },
     {
-      label: "Bán gộp",
+      label: "Bán trước trả",
       key: "grossRevenue",
       align: "right",
       cell: (row) => formatCurrency(row.grossRevenue) + "đ",
@@ -700,13 +737,13 @@ export default function BanHangPage() {
       key: "returnAmount",
       align: "right",
       cell: (row) => row.returnAmount > 0 ? (
-        <a href={buildSalesReturnRangeLink(salesPeriodRange(row.date, salesPeriod, range).from, salesPeriodRange(row.date, salesPeriod, range).to, activeBranchId)} className="font-medium text-primary underline-offset-2 hover:underline" aria-label={`Xem phiếu trả ${formatPeriod(row.date)}`}>
+        <a href={buildSalesReturnRangeLink(salesPeriodRange(row.date, salesPeriod, range).from, salesPeriodRange(row.date, salesPeriod, range).to, activeBranchId ?? "all", excludeInternal)} className="font-medium text-primary underline-offset-2 hover:underline" aria-label={`Xem phiếu trả ${formatPeriod(row.date)}`}>
           {formatCurrency(row.returnAmount)}đ
         </a>
       ) : formatCurrency(row.returnAmount) + "đ",
     },
     {
-      label: "Doanh thu thuần",
+      label: "Sau trả (gồm phí)",
       key: "netRevenue",
       align: "right",
       hideable: false,
@@ -810,7 +847,7 @@ export default function BanHangPage() {
             subValue={
               // Doanh thu thuần đã trừ trả hàng; phí giao thu hộ được trình bày riêng.
               <span className="flex flex-wrap gap-x-2 gap-y-0.5">
-                <span>Doanh thu thuần {formatCurrency(kpis?.netRevenue ?? 0)}đ</span>
+                <span>Sau trả, gồm phí giao {formatCurrency(kpis?.netRevenue ?? 0)}đ</span>
                 {(kpis?.returnAmount ?? 0) > 0 && (
                   <span>· Trả hàng {formatCurrency(kpis?.returnAmount ?? 0)}đ</span>
                 )}
@@ -921,7 +958,7 @@ export default function BanHangPage() {
                 onSortChange={setPeriodSort}
                 getRowKey={(row) => row.date}
                 subtotalLabel={
-                  "Doanh thu thuần: " +
+                  "Sau trả, gồm phí giao: " +
                   formatCurrency(
                     dailyRows.reduce((sum, row) => sum + row.netRevenue, 0),
                   ) +

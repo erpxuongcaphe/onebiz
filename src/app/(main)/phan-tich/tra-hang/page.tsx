@@ -12,7 +12,9 @@
  *   - NV nào xử lý nhiều trả hàng? (review training)
  */
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState, useCallback, useRef } from "react";
+import { useReportBasis } from "@/lib/hooks/use-report-basis";
+import { ReportBasisSelector } from "@/components/shared/report/report-basis-selector";
 import {
   BarChart,
   Bar,
@@ -39,7 +41,7 @@ import {
 } from "@/lib/utils/excel-export";
 import {
   getSalesReturnReport,
-  getDailyRevenue,
+  getSalesReportSummary,
   type SalesReturnRow,
 } from "@/lib/services";
 import {
@@ -64,6 +66,7 @@ export default function SalesReturnReportPage() {
   const { activeBranchId, branchLabel, isReady } = useBranchFilter();
   const { toast } = useToast();
   const {
+    isReady: periodReady,
     preset,
     range,
     setPreset,
@@ -71,6 +74,8 @@ export default function SalesReturnReportPage() {
     viewMode,
     setViewMode,
   } = useReportState({ defaultViewMode: "table" });
+  const { excludeInternal, setExcludeInternal, ready: basisReady, basisLabel } = useReportBasis();
+  const ready = isReady && periodReady && basisReady;
 
   const [reportResult, setReportResult] = useState<{
     key: string;
@@ -86,14 +91,19 @@ export default function SalesReturnReportPage() {
     if (detail === "items") setTableMode("item");
     if (detail === "documents") setTableMode("document");
   }, []);
-  const requestKey = `${activeBranchId ?? "all"}:${range.from}:${range.to}:${reloadToken}`;
-  const loading = !isReady || reportResult?.key !== requestKey;
+  const requestKey = `${activeBranchId ?? "all"}:${range.from}:${range.to}:${excludeInternal}:${reloadToken}`;
+  const scopeRef = useRef(requestKey);
+  useLayoutEffect(() => {
+    scopeRef.current = requestKey;
+    return () => { if (scopeRef.current === requestKey) scopeRef.current = ""; };
+  }, [requestKey]);
+  const loading = !ready || reportResult?.key !== requestKey;
   const rows = useMemo(() => loading ? [] : reportResult.rows, [loading, reportResult]);
   const periodRevenue = loading ? 0 : reportResult.periodRevenue;
   const loadError = loading ? null : reportResult.error;
 
   useEffect(() => {
-    if (!isReady) return;
+    if (!ready) return;
     let cancelled = false;
     // Fetch song song: báo cáo trả hàng + tổng doanh thu cùng kỳ
     Promise.all([
@@ -101,18 +111,16 @@ export default function SalesReturnReportPage() {
         branchId: activeBranchId ?? null,
         dateFrom: range.from,
         dateTo: range.to,
+        excludeInternal,
       }),
-      getDailyRevenue(0, activeBranchId ?? undefined, {
-        from: range.from,
-        to: range.to,
-      }),
+      getSalesReportSummary(activeBranchId, range, excludeInternal),
     ])
-      .then(([returnRes, salesDays]) => {
+      .then(([returnRes, sales]) => {
         if (cancelled) return;
         setReportResult({
           key: requestKey,
           rows: returnRes.rows,
-          periodRevenue: salesDays.reduce((sum, day) => sum + day.revenue, 0),
+          periodRevenue: sales.kpis.goodsRevenue + sales.kpis.returnAmount,
           error: null,
         });
       })
@@ -129,7 +137,7 @@ export default function SalesReturnReportPage() {
     return () => {
       cancelled = true;
     };
-  }, [isReady, activeBranchId, range.from, range.to, requestKey]);
+  }, [ready, activeBranchId, range, requestKey, excludeInternal]);
 
   const reasonOptions = useMemo(() => summarizeSalesReturns(rows).byReason, [rows]);
   const filteredRows = useMemo(() => {
@@ -233,8 +241,8 @@ export default function SalesReturnReportPage() {
   ];
 
   // ── Export ──
-  const handleExport = useCallback(() => {
-    if (filteredRows.length === 0) {
+  const handleExport = useCallback(async () => {
+    if (loading || loadError || filteredRows.length === 0) {
       toast({ title: "Không có dữ liệu để xuất", variant: "warning" });
       return;
     }
@@ -242,7 +250,7 @@ export default function SalesReturnReportPage() {
 
       const infoSheet = buildInfoSheet({
         title: "BÁO CÁO TRẢ HÀNG CHI TIẾT",
-        description: `Theo ngày, phiếu và dòng hàng. Lý do: ${reasonFilter === "all" ? "Tất cả" : reasonFilter}.`,
+        description: `${basisLabel}. Theo ngày, phiếu và dòng hàng. Lý do: ${reasonFilter === "all" ? "Tất cả" : reasonFilter}.`,
         range,
         branchName: branchLabel,
         tenantName: "OneBiz",
@@ -387,13 +395,14 @@ export default function SalesReturnReportPage() {
         withSignature: true,
       };
 
-      exportReportToExcel({
+      await exportReportToExcel({
         kind: "tra-hang",
         mode: "full",
         range,
         branchName: branchLabel,
         tenantName: "OneBiz",
         sheets: [infoSheet, daySheet, documentSheet, reasonSheet, productSheet, staffSheet, detailSheet],
+        shouldSave: () => scopeRef.current === requestKey,
       });
 
       toast({
@@ -408,11 +417,12 @@ export default function SalesReturnReportPage() {
         variant: "error",
       });
     }
-  }, [filteredRows, byDay, byDocument, byReason, byProduct, byStaff, kpis, range, branchLabel, reasonFilter, toast]);
+  }, [filteredRows, byDay, byDocument, byReason, byProduct, byStaff, kpis, range, branchLabel, reasonFilter, toast, loading, loadError, requestKey, basisLabel]);
 
   const reportHeader = (
     <ReportPageHeader
       title="Trả hàng chi tiết"
+      actions={<ReportBasisSelector value={excludeInternal} onChange={setExcludeInternal} disabled={!ready} />}
       subtitle="Đối chiếu theo ngày, phiếu và mặt hàng; mở chứng từ gốc từ bảng chi tiết"
       preset={preset}
       range={range}

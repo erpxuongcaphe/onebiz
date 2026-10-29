@@ -91,7 +91,7 @@ describe("report branch scope integration", () => {
     expect(hook).toContain("if (!synchronizeUrl || !authReady");
     expect(selector).toContain("useReportScope({ synchronizeUrl: false })");
     expect(shell).toContain("isLoading || !isScopeReady");
-    expect(shell).toContain('key={activeBranchId ?? "__all__"}');
+    expect(shell).toContain("key={reportStateKey}");
   });
 
 });

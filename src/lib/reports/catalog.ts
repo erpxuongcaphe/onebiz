@@ -182,7 +182,7 @@ export const REPORT_CATALOG: ReportCatalogItem[] = [
     category: "sales",
     icon: "groups",
     keywords: ["khách hàng", "doanh thu", "lãi gộp", "giá vốn", "hiệu quả"],
-    permissions: [PERMISSIONS.REPORTS_ANALYTICS, PERMISSIONS.REPORTS_VIEW_DETAIL],
+    permissions: [PERMISSIONS.REPORTS_ANALYTICS, PERMISSIONS.REPORTS_VIEW_DETAIL, PERMISSIONS.REPORTS_VIEW_PROFIT],
     permissionMode: "all",
   },
   {
@@ -193,7 +193,7 @@ export const REPORT_CATALOG: ReportCatalogItem[] = [
     category: "sales",
     icon: "table_rows",
     keywords: ["sku", "sản phẩm", "khách hàng", "giá vốn", "lãi gộp"],
-    permissions: [PERMISSIONS.REPORTS_ANALYTICS, PERMISSIONS.REPORTS_VIEW_DETAIL],
+    permissions: [PERMISSIONS.REPORTS_ANALYTICS, PERMISSIONS.REPORTS_VIEW_DETAIL, PERMISSIONS.REPORTS_VIEW_PROFIT],
     permissionMode: "all",
   },
   {

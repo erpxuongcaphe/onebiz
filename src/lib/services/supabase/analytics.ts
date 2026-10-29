@@ -716,15 +716,17 @@ export async function getTopInvoices(
 export async function getSalesReportSummary(
   branchId?: string,
   range?: { from: string; to: string },
+  excludeInternal?: boolean,
 ): Promise<SalesReportSummary> {
   const supabase = getClient();
   const resolved = resolveRange(range, thisMonthRange());
 
   try {
-    const { data, error } = await (supabase.rpc as any)("get_sales_report_summary", {
+    const { data, error } = await (supabase.rpc as any)(excludeInternal !== undefined ? "get_sales_report_summary_basis_v1" : "get_sales_report_summary", {
       p_date_from: resolved.start,
       p_date_to: resolved.end,
       p_branch_id: branchId ?? null,
+      ...(excludeInternal !== undefined ? { p_exclude_internal: excludeInternal } : {}),
     });
     if (error) throw error;
 
@@ -738,6 +740,14 @@ export async function getSalesReportSummary(
     } | null;
     if (!payload?.current || !payload.previous) {
       throw new Error("Invalid sales summary response");
+    }
+    if (excludeInternal !== undefined) {
+      for (const row of [payload.current, payload.previous]) {
+        requireReportNumbers(row, ["net_revenue", "delivery_fee", "invoice_count", "return_amount", "return_count", "sold_qty"]);
+      }
+      if (![payload.daily, payload.weekday, payload.hourly, payload.top_invoices].every(Array.isArray)) {
+        throw new Error("Nguồn báo cáo bán hàng chưa đầy đủ.");
+      }
     }
 
     const number = (value: unknown) => {
@@ -801,6 +811,13 @@ function salesReportNumber(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function requireReportNumbers(row: Record<string, unknown>, keys: string[]) {
+  if (keys.some(key => (typeof row[key] !== "number" && typeof row[key] !== "string")
+    || String(row[key]).trim() === "" || !Number.isFinite(Number(row[key])))) {
+    throw new Error("Nguồn báo cáo bán hàng thiếu số liệu. Vui lòng tải lại.");
+  }
+}
+
 function salesReportText(value: unknown, fallback = ""): string {
   return typeof value === "string" && value.trim() ? value : fallback;
 }
@@ -822,22 +839,28 @@ function getReportRpc() {
 export async function getSalesReportDailyRows(
   branchId?: string,
   range?: { from: string; to: string },
+  excludeInternal?: boolean,
 ): Promise<SalesReportDailyRow[]> {
   const resolved = resolveRange(range, thisMonthRange());
 
   try {
     // RPC is added by migration 00382 and is not yet present in generated types.
     const { data, error } = await getReportRpc()(
-      "get_sales_report_daily_rows",
+      excludeInternal !== undefined ? "get_sales_report_daily_rows_basis_v1" : "get_sales_report_daily_rows",
       {
         p_date_from: resolved.start,
         p_date_to: resolved.end,
         p_branch_id: branchId ?? null,
+        ...(excludeInternal !== undefined ? { p_exclude_internal: excludeInternal } : {}),
       },
     );
     if (error) throw error;
 
+    if (excludeInternal !== undefined && !Array.isArray(data)) throw new Error("Nguồn báo cáo theo ngày chưa đầy đủ.");
     const rows = Array.isArray(data) ? data : [];
+    if (excludeInternal !== undefined) {
+      for (const row of rows) requireReportNumbers(row, ["order_count", "sold_qty", "gross_revenue", "return_amount", "net_revenue", "paid", "debt"]);
+    }
     return rows.map((row) => ({
       date: salesReportText(row?.date),
       orderCount: salesReportNumber(row?.order_count),
@@ -866,19 +889,21 @@ export async function getSalesReportInvoiceDetailPage(
   range?: { from: string; to: string },
   offset = 0,
   limit = 50,
+  excludeInternal?: boolean,
 ): Promise<SalesReportInvoiceDetailPage> {
   const resolved = resolveRange(range, thisMonthRange());
 
   try {
     // RPC is added by migration 00382 and is not yet present in generated types.
     const { data, error } = await getReportRpc()(
-      "get_sales_report_invoice_detail_page",
+      excludeInternal !== undefined ? "get_sales_report_invoice_detail_page_basis_v1" : "get_sales_report_invoice_detail_page",
       {
         p_date_from: resolved.start,
         p_date_to: resolved.end,
         p_branch_id: branchId ?? null,
         p_offset: Math.max(0, offset),
         p_limit: Math.min(Math.max(1, limit), 200),
+        ...(excludeInternal !== undefined ? { p_exclude_internal: excludeInternal } : {}),
       },
     );
     if (error) throw error;
@@ -887,6 +912,11 @@ export async function getSalesReportInvoiceDetailPage(
       rows?: Array<Record<string, unknown>>;
       has_more?: boolean;
     } | null;
+    if (excludeInternal !== undefined) {
+      if (!payload || !Array.isArray(payload.rows) || typeof payload.has_more !== "boolean"
+        || payload.rows.length === 0 && payload.has_more) throw new Error("Nguồn hóa đơn chưa đầy đủ.");
+      for (const row of payload.rows) requireReportNumbers(row, ["subtotal", "discount_amount", "delivery_fee", "total", "paid", "debt", "item_count", "sold_qty", "return_amount", "net_amount"]);
+    }
     return {
       rows: (payload?.rows ?? []).map((row) => ({
         id: salesReportText(row.id),
@@ -924,23 +954,26 @@ export async function getSalesReportInvoiceDetailPage(
 export async function getSalesInvoiceExportRows(
   branchId?: string,
   range?: { from: string; to: string },
+  excludeInternal?: boolean,
 ): Promise<SalesInvoiceExportRow[]> {
   const supabase = getClient();
   const resolved = resolveRange(range, thisMonthRange());
   const pageSize = 1000;
   const rows: SalesInvoiceExportRow[] = [];
+  const seen = new Set<string>();
 
   try {
     let offset = 0;
     while (true) {
       const { data, error } = await (supabase.rpc as any)(
-        "get_sales_report_invoice_page",
+        excludeInternal !== undefined ? "get_sales_report_invoice_page_basis_v1" : "get_sales_report_invoice_page",
         {
           p_date_from: resolved.start,
           p_date_to: resolved.end,
           p_branch_id: branchId ?? null,
           p_offset: offset,
           p_limit: pageSize,
+          ...(excludeInternal !== undefined ? { p_exclude_internal: excludeInternal } : {}),
         },
       );
       if (error) throw error;
@@ -949,7 +982,18 @@ export async function getSalesInvoiceExportRows(
         rows?: Array<Record<string, unknown>>;
         has_more?: boolean;
       } | null;
+      if (excludeInternal !== undefined && (!payload || !Array.isArray(payload.rows) || typeof payload.has_more !== "boolean")) {
+        throw new Error("Nguồn xuất hóa đơn chưa đầy đủ.");
+      }
       const page = payload?.rows ?? [];
+      if (payload?.has_more && page.length === 0) throw new Error("Nguồn xuất hóa đơn thiếu trang dữ liệu.");
+      if (excludeInternal !== undefined) {
+        for (const row of page) {
+          requireReportNumbers(row, ["subtotal", "discount_amount", "delivery_fee", "total", "paid", "debt"]);
+          if (typeof row.id !== "string" || !row.id || seen.has(row.id)) throw new Error("Danh sách hóa đơn đã thay đổi. Vui lòng xuất lại.");
+          seen.add(row.id);
+        }
+      }
       rows.push(...page.map(mapSalesInvoiceExportRow));
       if (!payload?.has_more || page.length === 0) return rows;
       offset += page.length;

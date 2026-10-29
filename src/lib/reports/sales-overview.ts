@@ -7,7 +7,7 @@ export const SALES_OVERVIEW_METRICS: Record<
   { label: string; shortLabel: string; icon: string; color: string }
 > = {
   netRevenue: {
-    label: "Doanh thu thuần",
+    label: "Sau trả, gồm phí giao",
     shortLabel: "Doanh thu",
     icon: "payments",
     color: "#004AC6",

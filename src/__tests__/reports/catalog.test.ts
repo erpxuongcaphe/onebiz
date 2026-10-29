@@ -10,6 +10,12 @@ import {
 } from "@/lib/reports/catalog";
 
 describe("report catalog", () => {
+  it.each(["/phan-tich/hieu-qua-khach-hang", "/phan-tich/sku-chi-tiet"])("requires profit access for %s", (path) => {
+    const report = getReportByPath(path);
+    if (!report) throw new Error("Missing report fixture");
+    expect(canAccessReport(report, permission => permission !== PERMISSIONS.REPORTS_VIEW_PROFIT)).toBe(false);
+    expect(canAccessReport(report, () => true)).toBe(true);
+  });
   it("registers every report route once", () => {
     const paths = REPORT_CATALOG.map((report) => report.href);
 

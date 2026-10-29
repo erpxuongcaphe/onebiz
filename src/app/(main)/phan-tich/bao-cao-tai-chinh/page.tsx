@@ -750,6 +750,7 @@ export default function BaoCaoTaiChinhPage() {
                       range.from,
                       range.to,
                       activeBranchId ?? "all",
+                      useConsolidated,
                     )}
                     className="inline-flex h-8 items-center gap-1 border border-border px-2.5 text-xs font-medium text-foreground hover:bg-surface-container-low"
                   >
@@ -761,6 +762,7 @@ export default function BaoCaoTaiChinhPage() {
                       range.from,
                       range.to,
                       activeBranchId ?? "all",
+                      useConsolidated,
                     )}
                     className="inline-flex h-8 items-center gap-1 border border-border px-2.5 text-xs font-medium text-foreground hover:bg-surface-container-low"
                   >
