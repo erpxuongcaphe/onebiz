@@ -36,6 +36,9 @@ describe("prepared batch prices in the size matrix", () => {
     rerender(<PerSizeRecipeMatrix {...props} costUnavailable />);
     expect(screen.getAllByText("Chưa đủ giá BTP")).toHaveLength(2);
     expect(screen.queryByText("1,260 đ")).not.toBeInTheDocument();
+    rerender(<PerSizeRecipeMatrix {...props} costError />);
+    expect(screen.getAllByText("Không tải được giá vốn")).toHaveLength(2);
+    expect(screen.queryByText("Chưa đủ giá BTP")).not.toBeInTheDocument();
   });
 
   it("the product editor supplies the same branch-adjusted prices to header and matrix", () => {

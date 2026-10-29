@@ -108,9 +108,10 @@ import { Icon } from "@/components/ui/icon";
 import { SettingsSwitch } from "@/components/shared/settings-toggle";
 import { setProductTradingStatus } from "@/lib/services/supabase/product-trading-status";
 import { findLatestFormDraft } from "@/lib/hooks/use-durable-form-draft";
+import { RecipeCostLoadError } from "@/components/shared/recipe-cost-load-error";
 
 type ProductScope = "nvl" | "sku";
-type PreparedCostDisplay = { value: number; source: "batch" | "recipe" };
+type PreparedCostDisplay = { value: number; source: "batch" | "recipe" } | { source: "error" };
 
 function PreparedCost({ product, cost, loading, estimate }: {
   product: Product;
@@ -123,6 +124,7 @@ function PreparedCost({ product, cost, loading, estimate }: {
     <span className="block text-xs font-normal text-muted-foreground">Dự toán BOM{estimate?.variantName ? ` · ${estimate.variantName}` : ""}</span>
   </span>;
   if (!product.isFnbStockItem) return <>{formatCurrency(product.costPrice)}</>;
+  if (cost?.source === "error") return <span className="text-destructive">Không tải được giá vốn</span>;
   if (!cost) return <span className="text-muted-foreground">{loading ? "Đang tính..." : "Chưa có dự toán"}</span>;
   return (
     <span className="block text-right" title={cost.source === "batch"
@@ -242,7 +244,7 @@ function ProductDetail({
                           value: isFnbMenuRecipe(product)
                             ? menuEstimate?.value != null ? formatCurrency(menuEstimate.value) : menuEstimate?.reason ?? "Đang tính..."
                             : product.isFnbStockItem
-                            ? preparedCost ? formatUnitPrice(preparedCost.value)
+                            ? preparedCost?.source === "error" ? "Không tải được giá vốn" : preparedCost ? formatUnitPrice(preparedCost.value)
                               : preparedCostLoading ? "Đang tính..." : "Chưa có dự toán"
                             : formatCurrency(product.costPrice),
                         }]
@@ -793,7 +795,7 @@ export default function HangHoaPage() {
           const [estimates, branchCosts] = await Promise.all([
             getFnbPreparedBomEstimates(preparedIds, isFnbOutletView ? activeBranchId : undefined),
             isFnbOutletView && activeBranchId
-              ? getFnbBranchComponentCosts(activeBranchId, preparedIds).catch(() => new Map())
+              ? getFnbBranchComponentCosts(activeBranchId, preparedIds)
               : Promise.resolve(new Map()),
           ]);
           const next = new Map<string, PreparedCostDisplay>();
@@ -809,7 +811,7 @@ export default function HangHoaPage() {
           if (requestId === listRequestId.current) setPreparedCosts(next);
         } catch (error) {
           console.warn("Không tính được dự toán BOM bán thành phẩm:", error);
-          if (requestId === listRequestId.current) setPreparedCosts(new Map());
+          if (requestId === listRequestId.current) setPreparedCosts(new Map(preparedIds.map(id => [id, { source: "error" } as const])));
         } finally {
           if (requestId === listRequestId.current) setPreparedCostsLoading(false);
         }
@@ -2126,6 +2128,8 @@ export default function HangHoaPage() {
             </div>
           ))}
 
+        {canViewCost && Array.from(preparedCosts.values()).some(cost => cost.source === "error") &&
+          <RecipeCostLoadError onRetry={() => { void fetchData(); }} />}
         <DataTable
           compactMobileToolbar
           fitDetailToViewport
