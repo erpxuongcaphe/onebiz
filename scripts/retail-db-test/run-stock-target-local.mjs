@@ -61,6 +61,7 @@ try {
  check(await balance()===8,'replay never subtracts twice');
  check((await db.query('select count(*) n from stock_movements')).rows[0].n===1,'only one movement');
  await rejected({target:7},/REQUEST_REUSED/);
+ await rejected({expected:20,target:18},/REQUEST_REUSED/);
  await rejected({request:id(41),expected:10,target:12},/STOCK_TARGET_CHANGED/);
  check(await balance()===8,'concurrent sale/stale screen cannot change stock');
  await call({request:id(42),expected:8,target:12});check(await balance()===12,'increase target applied');
