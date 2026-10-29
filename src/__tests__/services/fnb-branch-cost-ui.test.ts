@@ -25,31 +25,16 @@ describe("F&B branch opening cost UI", () => {
     expect(page).toContain("Cần rà soát lệch");
   });
 
-  it("uses Retail supply price for recipe estimates and batch cost only for prepared-stock consumption", () => {
-    expect(productDialog).toMatch(
-      /material\.isFnbStockItem\s*\?\s*\{[\s\S]*sellPrice: fnbPreparedCostByProductId\[material\.id\]\?\.unitCost \?\? 0/,
-    );
-    expect(productDialog).toMatch(
-      /product\?\.isFnbStockItem\s*\?\s*fnbPreparedCostByProductId\[product\.id\]\?\.unitCost \?\? 0\s*:\s*product \? getBomComponentUnitPrice\(product, "fnb"\) : item\.costPrice/,
-    );
-    expect(productDialog).toContain("const fnbBomCostPending =");
-    expect(productDialog).toContain("Chưa có giá vốn BTP");
-    expect(productDialog).toContain("SKU Retail dùng giá cấp nội bộ hiện hành");
-    expect(productDialog).toContain("Bán thành phẩm · Bình quân tại quán");
-    expect(productDialog).toContain("SKU Retail · Giá cấp nội bộ");
-    expect(productDialog).toContain('const usesFnbRecipeCosts = channel === "fnb" || isFnbStockItem;');
-    expect(productDialog).toContain('getBomComponentUnitPrice(p, usesFnbRecipeCosts ? "fnb" : channel)');
-    expect(productDialog).toMatch(
-      /usedMaterialIds\.has\(material\.id\) &&\s*!material\.isFnbStockItem &&/,
-    );
-    expect(productDialog).toMatch(
-      /hasMissingPreparedComponentCost\s*\? \(isEdit \? Number\(initialData\?\.costPrice \?\? 0\) : 0\)/,
-    );
+  it("never writes a branch estimate to the shared product cost while saving a recipe", () => {
+    expect(productDialog).toContain("costPrice: canViewCost && !usesFnbRecipeCosts ? representativeCostPrice : undefined");
+    expect(productDialog).toContain("costPrice: v.costPrice");
+    expect(productDialog).not.toContain("? Number(product.sellPrice) || 0");
+    expect(productDialog).toContain("Nguyên liệu · Bình quân chi nhánh");
   });
 
   it("keeps dedicated F&B BOM preview separate from Retail cost and allows pre-batch setup", () => {
     expect(bomEditor).toContain('const isFnbRecipe = output?.channel === "fnb" || output?.isFnbStockItem === true;');
-    expect(bomEditor).toContain("return material?.sellPrice ?? null;");
+    expect(bomEditor).not.toContain("return material?.sellPrice ?? null;");
     expect(bomEditor).toContain("return getPreparedRecipeEstimateUnitCost(preparedCosts[item.materialId]);");
     expect(bomEditor).toContain("Vẫn lưu được công thức");
   });

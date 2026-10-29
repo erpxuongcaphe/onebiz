@@ -29,9 +29,14 @@ describe("live menu recipe estimates", () => {
     expect(selectMenuRecipe(rows, "tea", "ORPHAN", "xtb")).toBeUndefined();
   });
 
-  it("uses normalized stock quantity once, supply price for Retail and branch cost for BTP", () => {
-    const value = sumMenuRecipeEstimate([line("cup", 0.02, 85000), line("prepared", 120, 999999, true)], new Map([["prepared", balance("prepared", 12.09)]]));
-    expect(value).toBeCloseTo(3150.8);
+  it("uses normalized stock quantities and branch costs for both purchased and prepared ingredients", () => {
+    const lines = [line("cup", 0.02, 85000), line("prepared", 120, 999999, true)];
+    const costs = new Map([["prepared", balance("prepared", 12.09)], ["cup", balance("cup", 80000)]]);
+    expect(sumMenuRecipeEstimate(lines, costs)).toBeCloseTo(3050.8);
+    costs.set("cup", balance("cup", 70000));
+    expect(sumMenuRecipeEstimate(lines, costs)).toBeCloseTo(2850.8);
+    costs.delete("cup");
+    expect(sumMenuRecipeEstimate(lines, costs)).toBeNull();
   });
 
   it("never substitutes the old menu cost when BTP has no costed batch", () => {

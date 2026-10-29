@@ -41,8 +41,8 @@ export function sumMenuRecipeEstimate(lines: RecipeCostLine[], costs: Map<string
     if (!material || !Number.isFinite(quantity) || quantity < 0) return null;
     if (quantity === 0) continue;
     const balance = costs.get(material.id);
-    const unitCost = material.is_fnb_stock_item ? getPreparedRecipeUnitCost(balance) : material.sell_price;
-    if (unitCost == null || !Number.isFinite(Number(unitCost)) || Number(unitCost) < 0 || (!material.is_fnb_stock_item && Number(unitCost) === 0)) return null;
+    const unitCost = getPreparedRecipeUnitCost(balance);
+    if (unitCost == null || !Number.isFinite(Number(unitCost)) || Number(unitCost) < 0) return null;
     total += quantity * Number(unitCost);
   }
   return Number.isFinite(total) ? total : null;
@@ -108,7 +108,7 @@ export async function getFnbMenuEstimates(products: Product[], branchId?: string
         if ((data ?? []).length < 500) break;
       }
     }
-    const preparedIds = [...new Set(lines.flatMap((line) => line.products?.is_fnb_stock_item ? [line.products.id] : []))];
+    const preparedIds = [...new Set(lines.flatMap((line) => line.products ? [line.products.id] : []))];
     const costs = new Map<string, FnbBranchComponentCost>();
     if (branchId) {
       for (let offset = 0; offset < preparedIds.length; offset += 500) {
@@ -121,7 +121,7 @@ export async function getFnbMenuEstimates(products: Product[], branchId?: string
       result.set(product.id, {
         value,
         variantName: size?.name,
-        reason: value === null ? !header ? "Chưa có BOM phù hợp" : !branchId && preparedIds.length ? "Chọn chi nhánh để tính giá BTP" : "Chưa đủ giá thành phần" : undefined,
+        reason: value === null ? !header ? "Chưa có BOM phù hợp" : !branchId ? "Chọn chi nhánh để tính giá vốn" : "Chưa đủ giá thành phần" : undefined,
       });
     }
   }

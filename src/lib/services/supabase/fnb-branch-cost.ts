@@ -51,8 +51,8 @@ export async function getFnbProductionStockHealth(branchId: string, productIds: 
 }
 
 /**
- * Branch cost is needed only for prepared F&B stock. Regular Retail SKUs in a
- * recipe continue to use their Retail sell price as the branch's supply price.
+ * Every F&B recipe component uses the selected branch's cost ledger.
+ * Retail selling prices are never a substitute for a branch receipt cost.
  */
 export async function getFnbBranchComponentCosts(
   branchId: string,
@@ -61,6 +61,16 @@ export async function getFnbBranchComponentCosts(
 ) {
   if (!branchId || productIds.length === 0) {
     return new Map<string, FnbBranchComponentCost>();
+  }
+  const uniqueIds = Array.from(new Set(productIds));
+  if (uniqueIds.length > 500) {
+    const result = new Map<string, FnbBranchComponentCost>();
+    for (let offset = 0; offset < uniqueIds.length; offset += 500) {
+      if (signal?.aborted) return new Map<string, FnbBranchComponentCost>();
+      const chunk = await getFnbBranchComponentCosts(branchId, uniqueIds.slice(offset, offset + 500), signal);
+      chunk.forEach((cost, id) => result.set(id, cost));
+    }
+    return result;
   }
   const tenantId = await getCurrentTenantId();
   const ids = Array.from(new Set(productIds)).slice(0, 500);
