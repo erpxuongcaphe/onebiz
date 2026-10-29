@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseDestination, isConnectionProbe } from './destination.mjs';
 import { sendNetworkPrint } from './network.mjs';
-import { createUsbWorker } from './usb-worker.mjs';
+import { createUsbWorker, nativeUsbExecutable, printFailureStatus } from './usb-worker.mjs';
 import { createAgentRpc, createProgressWatchdog } from './recovery.mjs';
 
 export function validateRaster(bytes, paper) {
@@ -48,8 +48,9 @@ export async function runAgent(configPath) {
   if(url.protocol!=='https:' || !/^[0-9a-f-]{36}$/.test(config.pointId) || !/^[0-9a-f]{64}$/.test(config.token) || !config.publicKey) throw new Error('Tệp cấu hình không hợp lệ.');
   const call=createAgentRpc(config);
   const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+  const nativeUsb = nativeUsbExecutable(join(dirname(fileURLToPath(import.meta.url)), 'spool.ps1'));
   const discover=()=>new Promise(done=>{
-    const child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-Command','[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); @(Get-CimInstance Win32_Printer | Select-Object -ExpandProperty Name) | ConvertTo-Json -Compress'],{windowsHide:true,stdio:['ignore','pipe','pipe']});
+    const child=spawn(nativeUsb || 'powershell.exe',nativeUsb ? ['--list'] : ['-NoProfile','-NonInteractive','-Command','[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); @(Get-CimInstance Win32_Printer | Select-Object -ExpandProperty Name) | ConvertTo-Json -Compress'],{windowsHide:true,stdio:['ignore','pipe','pipe']});
     let out='';child.stdout.on('data',b=>{out+=b.toString();});child.stderr.on('data',()=>{});
     const timer=setTimeout(()=>{child.kill();done([]);},10000);
     child.on('error',()=>{clearTimeout(timer);done([]);});
@@ -97,7 +98,7 @@ export async function runAgent(configPath) {
         message=status==='handed_off'?'Windows đã nhận lệnh. Kiểm tra giấy tại máy; chưa xác nhận giấy đã ra.':status==='failed'?'Windows chưa nhận lệnh. Kiểm tra tên máy, driver và quyền dùng máy in.':'Chưa xác nhận đủ dữ liệu gửi. Kiểm tra giấy trước khi in lại.';
         if(!['handed_off','failed','unknown'].includes(status)) throw new Error('Kết quả điểm in không hợp lệ.');
         }
-      }catch(error){status=attempted?'unknown':'failed';message=error.message;}
+      }catch(error){status=printFailureStatus(error,attempted);message=error.message;}
       finally{if(tempPath)await unlink(tempPath).catch(()=>{});}
       watchdog.pulse();
       const acknowledgementStarted = Date.now();

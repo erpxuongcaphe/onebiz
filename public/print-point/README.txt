@@ -8,6 +8,15 @@ ZIP co ma ghep rieng: giu tai may quay, khong chia se ra ngoai.
 
 ONEBIZ — ĐIỂM IN CHI NHÁNH (Windows, ESC/POS 58/80 mm)
 
+USB native: bộ mới có OnebizUsbWorker.exe và mã nguồn OnebizUsbWorker.cs.
+Gửi RAW và đọc tên máy in dùng Winspool trực tiếp, không khởi động PowerShell/
+biên dịch Add-Type trên đường in. EXE dùng .NET Framework có sẵn trong Windows.
+Thử OnebizUsbWorker.exe --probe chỉ báo ready rồi thoát, không gửi giấy.
+Nếu EXE bị chính sách Windows chặn, không tắt bảo vệ; báo quản trị máy.
+Giữ spool.ps1 để tương thích bộ cũ khi chưa có EXE, không âm thầm đổi cách
+gửi sau một lệnh đã gửi hoặc mất xác nhận. Lỗi trước dispatch báo chưa gửi;
+sau dispatch vẫn giữ chưa xác nhận, không tự in lại.
+
 Điện thoại nhân viên chỉ dùng trình duyệt và tài khoản riêng.
 Máy quầy cần bật, có Internet và tiến trình điểm in đang chạy.
 Phiên bản 2 — LAN/Wi-Fi dùng IP và cổng TCP (thường 9100), không cần driver
