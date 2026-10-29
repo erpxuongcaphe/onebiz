@@ -17,6 +17,8 @@ import { aggregateProductSaleLines } from "@/lib/reports/product-sales-aggregati
 import { aggregateStockMovementRows, type MovementReportRow, type MovementSourceRow } from "@/lib/reports/stock-movement-aggregation";
 import { getProfitAndLoss, getConsolidatedPnL } from "./reports";
 import { supplierPurchaseBridge, sumSupplierDocumentAmounts, type SupplierPurchaseBridge } from "@/lib/reports/supplier-purchase-bridge";
+import { parseFinanceDashboard, type FinanceDashboardReport } from "@/lib/reports/finance-dashboard-source";
+export type { FinanceDashboardReport } from "@/lib/reports/finance-dashboard-source";
 
 // === Shared Types ===
 
@@ -2684,22 +2686,6 @@ export async function getSupplierSummary(
 // TÀI CHÍNH (Finance) - /phan-tich/tai-chinh
 // ========================================
 
-export interface FinanceDashboardReport {
-  kpis: {
-    revenue: number;
-    prevRevenue: number;
-    expense: number;
-    prevExpense: number;
-    profit: number;
-    prevProfit: number;
-    profitMargin: number;
-    prevProfitMargin: number;
-  };
-  trend: MultiSeriesPoint[];
-  expenseBreakdown: Array<{ name: string; value: number }>;
-  granularity: "day" | "month" | "year";
-}
-
 function formatFinanceBucketLabel(value: string, granularity: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
@@ -2737,7 +2723,7 @@ export async function getFinanceDashboardReport(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase.rpc as any)(
-    "get_finance_dashboard_report",
+    "get_finance_dashboard_report_v2",
     {
       p_current_from: current.start,
       p_current_to: current.end,
@@ -2751,64 +2737,7 @@ export async function getFinanceDashboardReport(
     throw new Error("Máy chủ không trả kết quả báo cáo tài chính.");
   }
 
-  const raw = data as Record<string, unknown>;
-  const currentRow = (raw.current ?? {}) as Record<string, unknown>;
-  const previousRow = (raw.previous ?? {}) as Record<string, unknown>;
-  const number = (value: unknown): number => {
-    const parsed = Number(value ?? 0);
-    return Number.isFinite(parsed) ? parsed : 0;
-  };
-  const buildPeriod = (row: Record<string, unknown>) => {
-    const revenue = number(row.revenue) - number(row.delivery_fee);
-    const expense = number(row.cogs) + number(row.operating_expense);
-    const profit = revenue - expense;
-    return {
-      revenue,
-      expense,
-      profit,
-      profitMargin:
-        revenue > 0 ? Math.round((profit / revenue) * 1000) / 10 : 0,
-    };
-  };
-  const currentPeriod = buildPeriod(currentRow);
-  const previousPeriod = buildPeriod(previousRow);
-  const granularity =
-    raw.granularity === "day" || raw.granularity === "year"
-      ? raw.granularity
-      : "month";
-
-  const trend = Array.isArray(raw.trend)
-    ? (raw.trend as Array<Record<string, unknown>>).map((row) => ({
-        label: formatFinanceBucketLabel(String(row.bucket_start ?? ""), granularity),
-        revenue: number(row.goods_revenue),
-        expense: number(row.total_expense),
-        cogs: number(row.cogs),
-        operatingExpense: number(row.operating_expense),
-        profit: number(row.profit),
-      }))
-    : [];
-  const expenseBreakdown = Array.isArray(raw.expense_breakdown)
-    ? (raw.expense_breakdown as Array<Record<string, unknown>>).map((row) => ({
-        name: String(row.name ?? "Khác"),
-        value: number(row.value),
-      }))
-    : [];
-
-  return {
-    kpis: {
-      revenue: currentPeriod.revenue,
-      prevRevenue: previousPeriod.revenue,
-      expense: currentPeriod.expense,
-      prevExpense: previousPeriod.expense,
-      profit: currentPeriod.profit,
-      prevProfit: previousPeriod.profit,
-      profitMargin: currentPeriod.profitMargin,
-      prevProfitMargin: previousPeriod.profitMargin,
-    },
-    trend,
-    expenseBreakdown,
-    granularity,
-  };
+  return parseFinanceDashboard(data, formatFinanceBucketLabel, !branchId);
 }
 
 export async function getFinanceKpis(

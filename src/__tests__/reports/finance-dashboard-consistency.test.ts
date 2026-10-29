@@ -51,22 +51,26 @@ beforeEach(() => {
   rpc.mockResolvedValue({
     data: {
       current: {
+        cogs_complete: true, missing_sales_cost_lines: 0, missing_return_cost_lines: 0, missing_expense_cost_lines: 0, other_income: 0,
         revenue: 1_000,
         delivery_fee: 100,
         cogs: 300,
         operating_expense: 100,
       },
       previous: {
+        cogs_complete: true, missing_sales_cost_lines: 0, missing_return_cost_lines: 0, missing_expense_cost_lines: 0, other_income: 0,
         revenue: 800,
         delivery_fee: 50,
         cogs: 250,
         operating_expense: 100,
       },
       granularity: "month",
+      cost_basis: "finalized_snapshot", exclude_internal: false,
       trend: [
         {
           bucket_start: "2026-07-01T00:00:00Z",
-          goods_revenue: 900,
+          cogs_complete: true, missing_sales_cost_lines: 0, missing_return_cost_lines: 0, missing_expense_cost_lines: 0, other_income: 0,
+          revenue: 1000, delivery_fee: 100,
           cogs: 300,
           operating_expense: 100,
           total_expense: 400,
@@ -85,8 +89,9 @@ beforeEach(() => {
 describe("finance dashboard consistency", () => {
   it("labels a Vietnam midnight bucket as October rather than September", async () => {
     rpc.mockResolvedValueOnce({ data: {
-      current: {}, previous: {}, granularity: "day",
-      trend: [{ bucket_start: "2026-09-30T17:00:00Z" }], expense_breakdown: [],
+      current: { revenue: 0, delivery_fee: 0, cogs: 0, operating_expense: 0, other_income: 0, cogs_complete: true, missing_sales_cost_lines: 0, missing_return_cost_lines: 0, missing_expense_cost_lines: 0 },
+      previous: { revenue: 0, delivery_fee: 0, cogs: 0, operating_expense: 0, other_income: 0, cogs_complete: true, missing_sales_cost_lines: 0, missing_return_cost_lines: 0, missing_expense_cost_lines: 0 }, granularity: "day",
+      trend: [{ bucket_start: "2026-09-30T17:00:00Z", revenue: 0, delivery_fee: 0, cogs: 0, operating_expense: 0, other_income: 0, cogs_complete: true, missing_sales_cost_lines: 0, missing_return_cost_lines: 0, missing_expense_cost_lines: 0 }], expense_breakdown: [], cost_basis: "finalized_snapshot", exclude_internal: false,
     }, error: null });
     const report = await getFinanceDashboardReport("branch-1", { from: "2026-10-01", to: "2026-10-09" });
     expect(report.trend[0].label).toBe("01/10");
