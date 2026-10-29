@@ -3,7 +3,8 @@ import { useEffect, useId, useRef, useState } from "react";
 import { getClient } from "@/lib/services/supabase/base";
 import { createRefreshScheduler } from "@/lib/refresh-scheduler";
 /** Realtime invalidation plus visible-page polling/reconnect recovery. Queries remain tenant/branch scoped. */
-export function useLiveDataRefresh(refresh: () => void | Promise<void>, tenantId: string | undefined, branchId: string | undefined, tables: string[], enabled = true, pollIntervalMs = 30_000) {
+export function useLiveDataRefresh(refresh: () => void | Promise<void>, tenantId: string | undefined, branchId: string | undefined, tables: string[], enabled = true, pollIntervalMs = 30_000, options: { refreshOnOrderChange?: boolean } = {}) {
+  const refreshOnOrderChange = options.refreshOnOrderChange !== false;
   const tableKey = tables.join(",");
   const intervalMs = Number.isFinite(pollIntervalMs) ? Math.max(30_000, pollIntervalMs) : 30_000;
   const instanceId = useId();
@@ -26,7 +27,7 @@ export function useLiveDataRefresh(refresh: () => void | Promise<void>, tenantId
     const interval = setInterval(() => scheduler.poll(), intervalMs);
     window.addEventListener("focus", schedule);
     window.addEventListener("online", schedule);
-    window.addEventListener("fnb-open-orders-changed", schedule);
+    if (refreshOnOrderChange) window.addEventListener("fnb-open-orders-changed", schedule);
     document.addEventListener("visibilitychange", schedule);
     return () => {
       disposed = true; scheduler.dispose(); clearInterval(interval);
@@ -34,6 +35,6 @@ export function useLiveDataRefresh(refresh: () => void | Promise<void>, tenantId
       window.removeEventListener("fnb-open-orders-changed", schedule); document.removeEventListener("visibilitychange", schedule);
       void client.removeChannel(channel);
     };
-  }, [refresh, tenantId, branchId, tableKey, enabled, scope, instanceId, intervalMs]);
+  }, [refresh, tenantId, branchId, tableKey, enabled, scope, instanceId, intervalMs, refreshOnOrderChange]);
   return connection.scope === scope && connection.connected && enabled;
 }

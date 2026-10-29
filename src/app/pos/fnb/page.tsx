@@ -506,12 +506,13 @@ function FnbPosPageInner() {
   const [catalogRefreshRevision, setCatalogRefreshRevision] = useState(0);
   const catalogScopeRef = useRef<string | null>(null);
   const refreshLiveCatalog = useCallback(() => setCatalogRefreshRevision(value => value + 1), []);
-  // Catalog tables are tenant-scoped, not branch-scoped.
+  // Catalog changes arrive through Realtime; order edits do not invalidate prices/menu.
+  // Keep a two-minute fallback for missed events, plus focus/reconnect recovery.
   useLiveDataRefresh(refreshLiveCatalog, tenantId, undefined, [
     "products", "product_variants", "product_platform_prices", "categories",
     "fnb_product_branch_menu_scopes", "fnb_product_branch_menu_policies",
     "price_tiers", "branch_price_tier_assignments", "branches",
-  ], Boolean(tenantId && networkStatus.isOnline));
+  ], Boolean(tenantId && networkStatus.isOnline), 120_000, { refreshOnOrderChange: false });
 
   // ── Load data (cache-first, then network refresh) ──
   useEffect(() => {

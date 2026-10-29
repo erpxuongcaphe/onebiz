@@ -36,6 +36,26 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe("F&B live refresh recovery", () => {
+  it("catalog ignores order edits but retains live price changes and recovery", () => {
+    const catalog = vi.fn();
+    const orders = vi.fn();
+    renderHook(() => useLiveDataRefresh(catalog, "tenant", undefined, ["products"], true, 120_000, { refreshOnOrderChange: false }));
+    const productChanged = mocks.events[0];
+    renderHook(() => useLiveDataRefresh(orders, "tenant", "branch", ["kitchen_orders"]));
+    act(() => { window.dispatchEvent(new Event("fnb-open-orders-changed")); vi.advanceTimersByTime(350); });
+    expect(catalog).not.toHaveBeenCalled();
+    expect(orders).toHaveBeenCalledTimes(1);
+    act(() => { productChanged(); vi.advanceTimersByTime(350); });
+    expect(catalog).toHaveBeenCalledTimes(1);
+    for (const event of ["focus", "online"]) {
+      act(() => { window.dispatchEvent(new Event(event)); vi.advanceTimersByTime(350); });
+    }
+    expect(catalog).toHaveBeenCalledTimes(3);
+    act(() => { vi.advanceTimersByTime(30_000); });
+    expect(catalog).toHaveBeenCalledTimes(3);
+    act(() => { vi.advanceTimersByTime(90_000); });
+    expect(catalog).toHaveBeenCalledTimes(4);
+  });
   it("does not overlap slow realtime reads and retains the last invalidation", async () => {
     let finish!: () => void;
     const refresh = vi.fn().mockReturnValueOnce(new Promise<void>(resolve => { finish = resolve; }));
