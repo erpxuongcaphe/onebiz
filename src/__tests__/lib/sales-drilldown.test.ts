@@ -7,6 +7,13 @@ import {
 } from "@/lib/reports/sales-drilldown";
 
 describe("sales report day drill-down", () => {
+  it("retains the external basis when drilling into invoices and returns", () => {
+    for (const makeLink of [buildSalesInvoiceRangeLink, buildSalesReturnRangeLink]) {
+      const url = new URL(makeLink("2026-10-01", "2026-10-28", "all", true), "https://example.test");
+      expect(url.searchParams.get("basis")).toBe("external");
+      expect(url.searchParams.get("branch")).toBe("all");
+    }
+  });
   it("keeps the selected branch and day for invoice detail", () => {
     const url = new URL(buildSalesInvoiceDayLink("2026-09-16", "branch-1"), "https://onebiz.test");
     expect(url.pathname).toBe("/phan-tich/ban-hang");

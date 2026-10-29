@@ -45,6 +45,7 @@ describe("financial report scope and refresh", () => {
       const link = await screen.findByRole("link", { name: label });
       const url = new URL(link.getAttribute("href")!, "https://example.test");
       expect(url.searchParams.get("branch")).toBe(branch || "all");
+      expect(url.searchParams.get("basis")).toBe(branch ? null : "external");
       expect(url.searchParams.get("from")).toBe(state.range.from);
       expect(url.searchParams.get("to")).toBe(state.range.to);
       expect(url.searchParams.get("view")).toBe("table");

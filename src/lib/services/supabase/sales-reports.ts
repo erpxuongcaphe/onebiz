@@ -49,16 +49,18 @@ export async function getSalesReturnReport(params?: {
   dateFrom?: string | null;
   dateTo?: string | null;
   branchId?: string | null;
+  excludeInternal?: boolean;
 }): Promise<SalesReturnReport> {
   const supabase = getClient();
   const { from, to } = inclusiveReportRpcRange(params?.dateFrom, params?.dateTo);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase.rpc as any)(
-    "get_sales_return_report",
+    params?.excludeInternal !== undefined ? "get_sales_return_report_basis_v1" : "get_sales_return_report",
     {
       p_date_from: from,
       p_date_to: to,
       p_branch_id: params?.branchId ?? null,
+      ...(params?.excludeInternal !== undefined ? { p_exclude_internal: params.excludeInternal } : {}),
     },
   );
 
@@ -75,6 +77,13 @@ export async function getSalesReturnReport(params?: {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const raw = data as any;
+  if (params?.excludeInternal !== undefined) {
+    if (!Array.isArray(raw.rows) || raw.exclude_internal !== params.excludeInternal
+      || raw.rows.some((row: Record<string, unknown>) => ["quantity", "unit_price", "return_value"].some(key =>
+        (typeof row[key] !== "number" && typeof row[key] !== "string") || String(row[key]).trim() === "" || !Number.isFinite(Number(row[key]))))) {
+      throw new Error("Nguồn báo cáo trả hàng chưa đầy đủ hoặc sai cơ sở giao dịch.");
+    }
+  }
   return {
     generatedAt: raw.generated_at,
     dateFrom: raw.date_from,

@@ -26,7 +26,7 @@ import { rememberRecentReportPath } from "@/lib/reports/preferences";
 
 export function ReportShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { activeBranchId, isLoading, hasPermission } = useAuth();
+  const { user, tenant, permissions, branches, activeBranchId, isLoading, hasPermission } = useAuth();
   const { isReady: isScopeReady } = useReportScope();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -36,6 +36,13 @@ export function ReportShell({ children }: { children: React.ReactNode }) {
   };
 
   const currentReport = getReportByPath(pathname);
+  const reportStateKey = JSON.stringify([
+    user?.id,
+    tenant?.id,
+    activeBranchId ?? "__all__",
+    [...(permissions ?? [])].sort(),
+    (branches ?? []).map(branch => branch.id).sort(),
+  ]);
   const accessibleReports = useMemo(
     () => REPORT_CATALOG.filter((report) => canAccessReport(report, hasPermission)),
     [hasPermission],
@@ -117,10 +124,10 @@ export function ReportShell({ children }: { children: React.ReactNode }) {
         </button>
       </div>
 
-      {/* Remount report state so an older branch response cannot overwrite the new scope. */}
+      {/* Cached report state must not cross account, permission or branch boundaries. */}
 
       <div
-        key={activeBranchId ?? "__all__"}
+        key={reportStateKey}
         className="min-h-0 flex-1"
       >
         {children}

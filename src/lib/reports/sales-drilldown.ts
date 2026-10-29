@@ -34,8 +34,10 @@ export function buildSalesInvoiceRangeLink(
   from: string,
   to: string,
   branchId?: string,
+  excludeInternal = false,
 ) {
   const params = rangeReportParams(from, to, branchId);
+  if (excludeInternal) params.set("basis", "external");
   params.set("detail", "invoices");
   return `/phan-tich/ban-hang?${params.toString()}`;
 }
@@ -44,8 +46,10 @@ export function buildSalesReturnRangeLink(
   from: string,
   to: string,
   branchId?: string,
+  excludeInternal = false,
 ) {
   const params = rangeReportParams(from, to, branchId);
+  if (excludeInternal) params.set("basis", "external");
   params.set("detail", "items");
   return `/phan-tich/tra-hang?${params.toString()}`;
 }
