@@ -24,7 +24,7 @@ import { skuFinancialView, skuFinancialTotals } from "@/lib/reports/sku-financia
 import { buildReportTitleRows, exportReportToExcel } from "@/lib/utils/excel-export";
 
 const KEY = "report.sku-financial.detail";
-const REVIEW_LABELS: Record<SkuReviewFilter, string> = { all: "Tất cả mặt hàng", loss: "Lãi gộp âm · có doanh thu", zeroRevenueCost: "Hàng doanh thu 0 · có giá vốn", missing: "Thiếu giá vốn", returns: "Có hàng trả", decline: "Doanh thu giảm" };
+const REVIEW_LABELS: Record<SkuReviewFilter, string> = { all: "Tất cả nghiệp vụ", loss: "Lãi gộp âm · có doanh thu", zeroRevenueCost: "Hàng doanh thu 0 · có giá vốn", missing: "Thiếu giá vốn", returns: "Có hàng trả", decline: "Doanh thu giảm" };
 const SORT_KEYS = ["code", "name", "category", "unit", "soldQty", "averageSalePrice", "salesAmount", "returnedQty", "returnAmount", "netQty", "netRevenue", "previousRevenue", "revenueDifference", "cogs", "grossProfit", "previousGrossProfit", "grossProfitDifference", "marginPercent", "orders", "customers", "missingCostLines", "previousMissingCostLines", "lastActivityAt"];
 const METRIC_KEYS = SORT_KEYS.filter(key => !["code", "name", "category", "unit", "lastActivityAt"].includes(key));
 const money = (value: number | null) => value === null ? "Chưa đủ giá vốn" : formatCurrency(value);
@@ -40,6 +40,7 @@ export default function SkuFinancialPage() {
   const [invoiceRevenue, setInvoiceRevenue] = useState<{ current: number; previous: number } | null>(null);
   const [reconciliationError, setReconciliationError] = useState<string | null>(null);
   const [customer, setCustomer] = useState("");
+  const [item, setItem] = useState("");
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
   const [unit, setUnit] = useState("");
@@ -71,6 +72,7 @@ export default function SkuFinancialPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     setCustomer(params.get("customer") ?? ""); setSearch(params.get("skuSearch") ?? "");
+    setItem(params.get("skuItem") ?? "");
     setCategory(params.get("skuCategory") ?? ""); setUnit(params.get("skuUnit") ?? "");
     setMetricFilters(parseMetricFilters(params.get("skuMetrics"), METRIC_KEYS));
     const review = params.get("skuReview");
@@ -82,11 +84,11 @@ export default function SkuFinancialPage() {
   useEffect(() => {
     if (!filtersReady) return;
     const url = new URL(window.location.href);
-    for (const [key, value] of Object.entries({ customer, skuSearch: search, skuCategory: category, skuUnit: unit, skuReview: reviewFilter === "all" ? "" : reviewFilter, skuSort: sort.id, skuDirection: sort.direction, skuMetrics: metricFilters.length ? JSON.stringify(metricFilters) : "" })) {
+    for (const [key, value] of Object.entries({ customer, skuItem: item, skuSearch: search, skuCategory: category, skuUnit: unit, skuReview: reviewFilter === "all" ? "" : reviewFilter, skuSort: sort.id, skuDirection: sort.direction, skuMetrics: metricFilters.length ? JSON.stringify(metricFilters) : "" })) {
       if (value) url.searchParams.set(key, value); else url.searchParams.delete(key);
     }
     window.history.replaceState(window.history.state, "", url);
-  }, [filtersReady, customer, search, category, unit, reviewFilter, sort, metricFilters]);
+  }, [filtersReady, customer, item, search, category, unit, reviewFilter, sort, metricFilters]);
   useEffect(() => {
     const id = ++request.current;
     let cancelled = false;
@@ -113,7 +115,8 @@ export default function SkuFinancialPage() {
       });
     return () => { cancelled = true; };
   }, [range, activeBranchId, customer, isReady, filtersReady, scope, comparison, revision]);
-  const baseRows = useMemo(() => skuFinancialView(compareSkuPeriods(data.rows, previous.rows), { search, category, unit }, sort), [data.rows, previous.rows, search, category, unit, sort]);
+  const comparisonRows = useMemo(() => compareSkuPeriods(data.rows, previous.rows), [data.rows, previous.rows]);
+  const baseRows = useMemo(() => skuFinancialView(comparisonRows.filter(row => !item || skuRowKey(row) === item), { search, category, unit }, sort), [comparisonRows, item, search, category, unit, sort]);
   const rows = useMemo(() => filterSkuPerformance(baseRows, reviewFilter).filter(row => matchesMetricFilters(row, metricFilters)), [baseRows, reviewFilter, metricFilters]);
   const totals = useMemo(() => skuFinancialTotals(rows), [rows]);
   const priorTotals = useMemo(() => skuFinancialTotals(rows.flatMap(row => row.previousRow ? [row.previousRow] : [])), [rows]);
@@ -125,11 +128,20 @@ export default function SkuFinancialPage() {
     { metric: "Chênh lệch", current: invoiceRevenue.current - skuFinancialTotals(data.rows).netRevenue, previous: invoiceRevenue.previous - skuFinancialTotals(previous.rows).netRevenue },
   ] : [], [invoiceRevenue, data.rows, previous.rows]);
   const revenueMismatch = reconciliationRows.some(row => row.metric === "Chênh lệch" && (Math.abs(row.current) >= 0.005 || Math.abs(row.previous) >= 0.005));
-  const unfiltered = !customer && !search && !category && !unit && reviewFilter === "all" && metricFilters.length === 0;
-  const customers = useMemo(() => [...new Map([...data.customers, ...previous.customers].map(row => [row.id, row])).values()], [data.customers, previous.customers]);
-  const resetFilters = () => { setSearch(""); setCustomer(""); setCategory(""); setUnit(""); setReviewFilter("all"); setMetricFilters([]); };
-  const options = (key: "category" | "unit") => [{ value: "all", label: key === "category" ? "Tất cả nhóm hàng" : "Tất cả ĐVT" },
-    ...[...new Set([...data.rows, ...previous.rows].map(row => row[key]))].filter(Boolean).sort((a,b) => a.localeCompare(b,"vi")).map(value => ({ value, label: value }))];
+  const unfiltered = !customer && !item && !search && !category && !unit && reviewFilter === "all" && metricFilters.length === 0;
+  const customers = useMemo(() => pending || error ? [] : [...new Map([...data.customers, ...previous.customers].map(row => [row.id, row])).values()], [data.customers, previous.customers, pending, error]);
+  const filterRows = pending || error ? [] : comparisonRows;
+  const itemOptions = filterRows.map(row => ({ value: skuRowKey(row), label: row.name, meta: `${row.code} · ${row.unit || "Chưa có ĐVT"}` }));
+  const selectedItem = filterRows.find(row => skuRowKey(row) === item);
+  const filtersUnavailable = pending || Boolean(error);
+  const resetFilters = () => { setSearch(""); setCustomer(""); setItem(""); setCategory(""); setUnit(""); setReviewFilter("all"); setMetricFilters([]); };
+  const options = (key: "category" | "unit") => {
+    const selected = key === "unit" ? unit : category;
+    const values = new Set(filterRows.map(row => row[key]));
+    if (!filtersUnavailable && selected) values.add(selected);
+    return [{ value: "all", label: key === "category" ? "Tất cả nhóm hàng" : "Tất cả ĐVT" },
+      ...[...values].filter(Boolean).sort((a,b) => a.localeCompare(b,"vi")).map(value => ({ value, label: value }))];
+  };
   const columns: DataTableColumn<SkuPerformanceRow>[] = [
     { key: "code", label: "Mã hàng", sticky: true, hideable: false, width: "160px" },
     { key: "name", label: "Mặt hàng", width: "280px" },
@@ -162,7 +174,7 @@ export default function SkuFinancialPage() {
       const titles = buildReportTitleRows({ title: "CHI TIẾT BÁN HÀNG VÀ LÃI GỘP SKU", range, branchName: branchLabel });
       titles.push(comparisonLabel);
       titles.push(`Lọc chỉ tiêu: ${metricFilterLabel(metricFilters, columns.map(column => ({ key: String(column.key), label: column.label })))}`);
-      titles.push(`Khách hàng: ${customer ? customers.find(row => row.id === customer)?.name ?? customer : "Tất cả"}; Nhóm: ${category || "Tất cả"}; ĐVT: ${unit || "Tất cả"}; Tìm: ${search || "Tất cả"}; Kiểm tra: ${REVIEW_LABELS[reviewFilter]}; Sắp xếp: ${columns.find(column => column.key === sort.id)?.label ?? sort.id} ${sort.direction === "asc" ? "tăng dần" : "giảm dần"}`);
+      titles.push(`Khách hàng: ${customer ? customers.find(row => row.id === customer)?.name ?? customer : "Tất cả"}; Mặt hàng: ${item ? selectedItem ? `${selectedItem.code} · ${selectedItem.name} · ${selectedItem.unit}` : "Không có phát sinh" : "Tất cả"}; Nhóm: ${category || "Tất cả"}; ĐVT: ${unit || "Tất cả"}; Tìm: ${search || "Tất cả"}; Kiểm tra: ${REVIEW_LABELS[reviewFilter]}; Sắp xếp: ${columns.find(column => column.key === sort.id)?.label ?? sort.id} ${sort.direction === "asc" ? "tăng dần" : "giảm dần"}`);
       titles.push("Gồm nội bộ; không phải tổng hợp nhất. Mỗi size/quy cách là một dòng riêng. Mặt hàng chỉ bán kỳ trước vẫn được đối chiếu.");
       const reconciliationSheet = unfiltered ? [{ name: "Đối chiếu hóa đơn", titleRows: titles,
         columns: [{ key: "metric", label: "Chỉ tiêu", width: 38 }, { key: "current", label: "Kỳ này (đ)", format: "number" as const, decimalPlaces: 2, width: 24 }, { key: "previous", label: "Kỳ trước (đ)", format: "number" as const, decimalPlaces: 2, width: 24 }],
@@ -193,18 +205,20 @@ export default function SkuFinancialPage() {
         <SummaryCard label="Doanh thu thuần" value={pending || error ? "—" : money(totals.netRevenue)} hint={pending || error ? "" : reportChange(totals.netRevenue, priorTotals.netRevenue)} highlight />
         <SummaryCard label="Lãi gộp" value={pending || error ? "—" : money(totals.grossProfit)} hint={pending || error || totals.grossProfit === null || priorTotals.grossProfit === null ? "" : reportChange(totals.grossProfit, priorTotals.grossProfit)} />
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <Input aria-label="Tìm SKU" placeholder="Mã, tên hoặc nhóm hàng" value={search} onChange={event => setSearch(event.target.value)} />
-        <SearchableSelect value={customer || "all"} onValueChange={value => setCustomer(value === "all" ? "" : value)} placeholder="Khách hàng"
-          options={[{ value: "all", label: "Tất cả khách hàng" }, ...customers.map(row => ({ value: row.id, label: row.name, meta: row.code }))]} />
-        <SearchableSelect value={category || "all"} onValueChange={value => setCategory(value === "all" ? "" : value)} placeholder="Nhóm hàng" options={options("category")} />
-        <SearchableSelect value={unit || "all"} onValueChange={value => setUnit(value === "all" ? "" : value)} placeholder="Đơn vị tính" options={options("unit")} />
-      </div>
-      <div className="flex flex-wrap items-center gap-3">
-        <select aria-label="Nghiệp vụ cần xem" className="h-10 rounded border bg-background px-3 text-sm" value={reviewFilter} onChange={event => setReviewFilter(event.target.value as SkuReviewFilter)}>
+        <SearchableSelect disabled={filtersUnavailable} value={customer || "all"} onValueChange={value => setCustomer(value === "all" ? "" : value)} placeholder="Khách hàng"
+          options={[{ value: "all", label: "Tất cả khách hàng" }, ...customers.map(row => ({ value: row.id, label: row.name, meta: row.code })), ...(!filtersUnavailable && customer && !customers.some(row => row.id === customer) ? [{ value: customer, label: "Khách đã chọn · không có phát sinh" }] : [])]} />
+        <SearchableSelect disabled={filtersUnavailable} value={item || "all"} onValueChange={value => setItem(value === "all" ? "" : value)} placeholder="Mặt hàng"
+          options={[{ value: "all", label: "Tất cả mặt hàng" }, ...itemOptions, ...(!filtersUnavailable && item && !selectedItem ? [{ value: item, label: "Mặt hàng đã chọn · không có phát sinh" }] : [])]} />
+        <SearchableSelect disabled={filtersUnavailable} value={category || "all"} onValueChange={value => setCategory(value === "all" ? "" : value)} placeholder="Nhóm hàng" options={options("category")} />
+        <SearchableSelect disabled={filtersUnavailable} value={unit || "all"} onValueChange={value => setUnit(value === "all" ? "" : value)} placeholder="Đơn vị tính" options={options("unit")} />
+        <select aria-label="Nghiệp vụ cần xem" disabled={filtersUnavailable} className="h-9 min-w-0 rounded border bg-background px-3 text-sm disabled:opacity-50" value={reviewFilter} onChange={event => setReviewFilter(event.target.value as SkuReviewFilter)}>
           {Object.entries(REVIEW_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select>
-        {(search || customer || category || unit || reviewFilter !== "all" || metricFilters.length > 0) && <button type="button" onClick={resetFilters} className="inline-flex min-h-9 items-center gap-1 text-sm text-primary"><Icon name="filter_alt_off" size={18} />Xóa bộ lọc</button>}
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        {(search || customer || item || category || unit || reviewFilter !== "all" || metricFilters.length > 0) && <button type="button" onClick={resetFilters} className="inline-flex min-h-9 items-center gap-1 text-sm text-primary"><Icon name="filter_alt_off" size={18} />Xóa bộ lọc</button>}
         <Link href={managementReportLink("/phan-tich/bao-cao-tai-chinh", activeBranchId, range)} className="inline-flex min-h-9 items-center gap-1 text-sm text-primary">Kết quả kinh doanh<Icon name="arrow_forward" size={16} /></Link>
       </div>
       <MetricFilters fields={columns.filter(column => !["code", "name", "category", "unit", "lastActivityAt"].includes(String(column.key))).map(column => ({ key: String(column.key), label: column.label }))} value={metricFilters} onChange={setMetricFilters} />

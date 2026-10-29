@@ -20,9 +20,12 @@ export async function getSkuFinancialReport(range: { from: string; to: string },
   const { data, error } = await rpc.call(client, "get_sku_financial_report", { p_from: dates.start, p_to: dates.end, p_branch_id: branchId ?? null, p_customer_id: customerId || null });
   if (error) handleError(error, "getSkuFinancialReport");
   const result = data as { rows?: Record<string, unknown>[]; customers?: SkuFinancialResult["customers"] } | null;
+  if (!result || !Array.isArray(result.rows) || !Array.isArray(result.customers)) {
+    throw new Error("Chưa nhận đủ dữ liệu mặt hàng và khách hàng. Vui lòng thử lại.");
+  }
   const number = (value: unknown) => Number(value ?? 0);
   const nullable = (value: unknown) => value == null ? null : number(value);
-  return { customers: result?.customers ?? [], rows: (result?.rows ?? []).map(row => ({
+  return { customers: result.customers, rows: result.rows.map(row => ({
     productId: String(row.product_id), variantId: row.variant_id == null ? null : String(row.variant_id), variantName: row.variant_name == null ? null : String(row.variant_name),
     code: String(row.code ?? ""), name: String(row.name ?? ""), category: String(row.category_name ?? ""), unit: String(row.unit ?? ""),
     orders: number(row.order_count), customers: number(row.customer_count), soldQty: number(row.sold_qty), returnedQty: number(row.returned_qty), netQty: number(row.net_qty),
