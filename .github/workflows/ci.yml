@@ -706,7 +706,9 @@ jobs:
 
       - name: Verify print supervisor recovery with fake processes
         shell: pwsh
-        run: ./scripts/test-print-supervisor.ps1
+        run: |
+          ./scripts/test-print-supervisor.ps1
+          ./scripts/test-print-autostart.ps1
 
       - name: Build
         run: npm run build
