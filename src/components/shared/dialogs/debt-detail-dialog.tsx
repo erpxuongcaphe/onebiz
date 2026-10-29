@@ -48,6 +48,7 @@ interface DebtDetailDialogProps {
   estimatedDebt?: number;
   /** Tiền ứng/đặt cọc còn lại, cùng phạm vi chi nhánh của dòng công nợ. */
   availableAdvance?: number;
+  readOnly?: boolean;
   onSuccess?: () => void;
 }
 
@@ -63,6 +64,7 @@ export function DebtDetailDialog({
   partyCode,
   estimatedDebt = 0,
   availableAdvance = 0,
+  readOnly = false,
   onSuccess,
 }: DebtDetailDialogProps) {
   const { toast } = useToast();
@@ -118,7 +120,7 @@ export function DebtDetailDialog({
   const detailRoute = mode === "customer" ? "/don-hang/hoa-don" : "/hang-hoa/nhap-hang";
   // The summary can span many branches, but an allocation must never do so.
   // Keep the action unavailable until the manager narrows the page scope.
-  const canApplyAdvance = Boolean(branchId) && remainingAdvance > 0;
+  const canApplyAdvance = !readOnly && Boolean(branchId) && remainingAdvance > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -133,7 +135,7 @@ export function DebtDetailDialog({
               <span className="font-mono text-xs">{partyCode}</span>
             )}
             <span className="text-xs">
-              {mode === "customer" ? "Khách hàng" : "Nhà cung cấp"} đang nợ{" "}
+              {mode === "customer" ? "Khách còn phải trả" : "Còn phải trả NCC"}{" "}
               <strong className="text-status-error tabular-nums">
                 {loadError ? "Chưa xác minh" : `${formatCurrency(loading ? estimatedDebt : totalDebt)}đ`}
               </strong>{" "}
@@ -141,6 +143,13 @@ export function DebtDetailDialog({
             </span>
           </DialogDescription>
         </DialogHeader>
+
+        {remainingAdvance > 0 && (
+          <dl className="mx-6 mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-sm">
+            <dt>{mode === "customer" ? "Khách trả trước còn dư" : "Ứng NCC còn dư"}</dt>
+            <dd className="font-semibold tabular-nums">{formatCurrency(remainingAdvance)}đ</dd>
+          </dl>
+        )}
 
         {/* Tổng quan */}
         {!loading && docs.length > 0 && (
@@ -176,7 +185,7 @@ export function DebtDetailDialog({
 
         {!branchId && availableAdvance > 0 && (
           <div className="mx-6 mt-3 rounded-md border border-status-warning/30 bg-status-warning/5 px-3 py-2 text-xs text-status-warning">
-            Chọn một chi nhánh cụ thể tại thanh phạm vi để cấn tiền ứng vào chứng từ. Số dư đang xem là tổng hợp toàn hệ thống.
+            {readOnly ? "Chọn chi nhánh để đối chiếu nguồn tiền ứng." : "Chọn một chi nhánh cụ thể tại thanh phạm vi để cấn tiền ứng vào chứng từ. Số dư đang xem là tổng hợp toàn hệ thống."}
           </div>
         )}
 
@@ -201,9 +210,9 @@ export function DebtDetailDialog({
               />
               <p className="font-semibold">Không có {docLabel.toLowerCase()} nào còn nợ</p>
               <p className="text-xs text-muted-foreground">
-                {estimatedDebt > 0 ? "Số dư tổng hợp còn khác danh sách chứng từ. Kiểm tra số dư đầu kỳ và tải lại trước khi đối soát." : mode === "customer"
-                  ? "Khách hàng này đã thanh toán hết tất cả hóa đơn."
-                  : "Đã trả hết nợ cho nhà cung cấp này."}
+                {estimatedDebt > 0 ? "Số dư tổng hợp còn khác danh sách chứng từ. Kiểm tra số dư đầu kỳ và tải lại trước khi đối soát." : remainingAdvance > 0
+                  ? "Tiền ứng còn dư được theo dõi riêng, chưa tự cấn hoặc hoàn."
+                  : "Chưa có chứng từ còn nợ trong phạm vi đang xem."}
               </p>
             </div>
           ) : (
