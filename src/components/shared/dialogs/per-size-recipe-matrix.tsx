@@ -93,6 +93,7 @@ interface Props {
   >;
   loading?: boolean;
   costPending?: boolean;
+  costError?: boolean;
   costUnavailable?: boolean;
   showCost?: boolean;
 }
@@ -290,6 +291,7 @@ export function PerSizeRecipeMatrix({
   supplyStatusByProductId,
   loading,
   costPending,
+  costError,
   costUnavailable,
   showCost = true,
 }: Props) {
@@ -642,7 +644,7 @@ export function PerSizeRecipeMatrix({
                     key={s.key}
                     className="px-2 py-2 text-center font-semibold tabular-nums"
                   >
-                    {costPending ? "Đang tính..." : costUnavailable ? "Chưa đủ giá BTP" : `${fmtMoney(costBySize[s.key] ?? 0)} đ`}
+                    {costPending ? "Đang tính..." : costError ? "Không tải được giá vốn" : costUnavailable ? "Chưa đủ giá BTP" : `${fmtMoney(costBySize[s.key] ?? 0)} đ`}
                   </td>
                 ))}
                 <td />

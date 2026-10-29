@@ -112,7 +112,9 @@ import {
   getFnbSupplyBranchScope,
   listFnbSupplyCatalogProductIds,
 } from "@/lib/services/supabase/fnb-supply-catalog";
-import { getFnbBranchComponentCosts, getPreparedRecipeUnitCost, getPreparedRecipeEstimateUnitCost } from "@/lib/services/supabase/fnb-branch-cost";
+import { getPreparedRecipeUnitCost, getPreparedRecipeEstimateUnitCost } from "@/lib/services/supabase/fnb-branch-cost";
+import { useFnbBranchCosts } from "@/lib/hooks/use-fnb-branch-costs";
+import { RecipeCostLoadError } from "@/components/shared/recipe-cost-load-error";
 import { invalidateMenuCache } from "@/lib/offline";
 import { useDurableFormDraft } from "@/lib/hooks/use-durable-form-draft";
 
@@ -611,14 +613,12 @@ export function CreateProductDialog({
     .map((group) => group.id)
     .sort()
     .join(",");
-  const [fnbPreparedCostByProductId, setFnbPreparedCostByProductId] = useState<
-    Record<string, { unitCost: number; costedQuantity: number; physicalQuantity: number }>
-  >({});
-  const [fnbPreparedCostLoading, setFnbPreparedCostLoading] = useState(false);
   const recipeCostBranchId = bomBranchId ?? activeBranchId;
   // Prepared stock remains off the F&B sales menu. Recipe cost previews always
   // use the recipe's branch, or the active branch for a shared recipe.
   const usesFnbRecipeCosts = channel === "fnb" || isFnbStockItem;
+  const { costs: fnbPreparedCostByProductId, loading: fnbPreparedCostLoading, error: fnbCostLoadError, retry: retryFnbCosts } =
+    useFnbBranchCosts(canViewCost && open && usesFnbRecipeCosts, recipeCostBranchId, materialOptions.map(material => material.id));
   const recipeCatalog = useRecipeMaterialCatalog(
     open && scope === "sku" && (
       (hasBom && (innerTab === "bom" || (usesFnbRecipeCosts && innerTab === "pricing"))) ||
@@ -726,6 +726,7 @@ export function CreateProductDialog({
     if (perSizeCostDataPending || fnbPreparedCostLoading) {
       return <span className="text-muted-foreground">Đang tính…</span>;
     }
+    if (fnbCostLoadError) return <span className="text-destructive">Không tải được giá vốn</span>;
     if (hasUnpricedPreparedComponent) {
       return <span className="text-status-warning">Chưa đủ giá vốn chi nhánh</span>;
     }
@@ -1833,43 +1834,6 @@ export function CreateProductDialog({
   }, [channel, fnbTargetBranchKey, hasBom, innerTab, open]);
 
 
-  // Read all ingredient costs from the selected branch in batches. Missing
-  // receipt/batch prices are explicit and never block recipe setup.
-  useEffect(() => {
-    const preparedProductIds = materialOptions.map((material) => material.id);
-    if (!canViewCost || !open || !usesFnbRecipeCosts || !recipeCostBranchId || preparedProductIds.length === 0) {
-      setFnbPreparedCostByProductId({});
-      setFnbPreparedCostLoading(false);
-      return;
-    }
-    const controller = new AbortController();
-    setFnbPreparedCostLoading(true);
-    getFnbBranchComponentCosts(recipeCostBranchId, preparedProductIds, controller.signal)
-      .then((costs) => {
-        if (controller.signal.aborted) return;
-        setFnbPreparedCostByProductId(
-          Object.fromEntries(
-            Array.from(costs.entries()),
-          ),
-        );
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) setFnbPreparedCostByProductId({});
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setFnbPreparedCostLoading(false);
-      });
-    return () => {
-      controller.abort();
-    };
-  }, [
-    recipeCostBranchId,
-    canViewCost,
-    usesFnbRecipeCosts,
-    materialOptions,
-    open,
-  ]);
-
   useEffect(() => {
     if (!usesFnbRecipeCosts || materialOptions.length === 0 || bomItems.length === 0) return;
     const unitCostById = new Map(
@@ -2807,6 +2771,7 @@ export function CreateProductDialog({
               : "Chọn loại hàng (NVL hoặc SKU) và điền thông tin. Mã sẽ tự sinh theo nhóm."}
           </DialogDescription>
         </DialogHeader>
+        {canViewCost && usesFnbRecipeCosts && fnbCostLoadError && <RecipeCostLoadError onRetry={retryFnbCosts} />}
 
         <DialogBody>
         <Tabs
@@ -3339,14 +3304,14 @@ export function CreateProductDialog({
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Dự toán theo công thức (₫)</label>
                     <div className="flex min-h-10 items-center rounded-md border bg-muted/30 px-3 text-sm font-semibold tabular-nums">
-                      {fnbBomCostPending ? "Đang tính..." : hasUnpricedPreparedComponent
+                      {fnbBomCostPending ? "Đang tính..." : fnbCostLoadError ? "Không tải được giá vốn" : hasUnpricedPreparedComponent
                         ? "Chưa đủ giá vốn chi nhánh"
                         : formatCurrency(inlineFnbBomCost)}
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Chưa có giá vốn vẫn lưu được công thức. Giá thực tế ghi theo từng lần nhập và sản xuất tại chi nhánh.
                     </p>
-                    {unreconciledPreparedNames.length > 0 && <p role="status" className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                    {!fnbPreparedCostLoading && !fnbCostLoadError && unreconciledPreparedNames.length > 0 && <p role="status" className="text-sm font-medium text-amber-900 dark:text-amber-100">
                       Dự toán theo đơn giá đã có. Cần đối soát tồn và giá vốn: {unreconciledPreparedNames.join(", ")}.
                     </p>}
                   </div>
@@ -3697,6 +3662,7 @@ export function CreateProductDialog({
                           onChange={setRecipeRows}
                           materials={fnbCostMaterials}
                           costPending={fnbPreparedCostLoading || perSizeCostDataPending}
+                          costError={fnbCostLoadError}
                           costUnavailable={hasUnpricedPreparedComponent}
                           showCost={canViewCost}
                           selectableMaterials={selectableFnbComponentOptions}
@@ -4082,6 +4048,7 @@ export function CreateProductDialog({
                               {canViewCost && <td className="px-3 py-2 text-right text-sm tabular-nums">
                                 {fnbBomCostPending
                                   ? <span className="text-muted-foreground">Đang tính...</span>
+                                  : fnbCostLoadError ? <span className="text-destructive">Không tải được giá vốn</span>
                                   : usesFnbRecipeCosts && getPreparedRecipeEstimateUnitCost(fnbPreparedCostByProductId[it.materialId]) === null
                                   ? <span className="text-status-warning">Chưa có giá vốn thực tế</span>
                                   : formatCurrency(lineCost)}
@@ -4113,6 +4080,7 @@ export function CreateProductDialog({
                           <td className="px-3 py-2 text-right font-bold text-primary">
                             {fnbBomCostPending
                               ? <span className="text-muted-foreground">Đang tính...</span>
+                              : fnbCostLoadError ? <span className="text-destructive">Không tải được giá vốn</span>
                               : usesFnbRecipeCosts && hasUnpricedPreparedComponent
                               ? <span className="text-status-warning">Chưa đủ giá vốn chi nhánh; vẫn lưu được BOM</span>
                               : formatCurrency(inlineFnbBomCost)}
@@ -4121,7 +4089,7 @@ export function CreateProductDialog({
                         </tr>
                         {isFnbStockItem && Number(bomYieldQty) > 0 && <tr>
                           <td colSpan={(channel === "fnb" ? 4 : 3) + 1} className="px-3 py-2 text-right text-xs text-muted-foreground">Dự toán / 1 {stockUnit.trim() || initialData?.unit || "G"} BTP:</td>
-                          <td className="px-3 py-2 text-right text-xs tabular-nums">{fnbBomCostPending || hasUnpricedPreparedComponent ? "—" : formatStockQuantity(inlineFnbBomCost / Number(bomYieldQty))}</td><td />
+                          <td className="px-3 py-2 text-right text-xs tabular-nums">{fnbBomCostPending || fnbCostLoadError || hasUnpricedPreparedComponent ? "—" : formatStockQuantity(inlineFnbBomCost / Number(bomYieldQty))}</td><td />
                         </tr>}
                       </tfoot>}
                     </table>
@@ -4129,7 +4097,7 @@ export function CreateProductDialog({
                 )}
               </div>
 
-              {canViewCost && usesFnbRecipeCosts && unreconciledPreparedNames.length > 0 && (
+              {canViewCost && usesFnbRecipeCosts && !fnbPreparedCostLoading && !fnbCostLoadError && unreconciledPreparedNames.length > 0 && (
                 <p role="status" className="rounded-md border border-amber-500/40 bg-amber-50 p-3 text-sm font-medium text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
                   Tổng đang là dự toán theo đơn giá đã có. {unreconciledPreparedNames.join(", ")}: tồn đang âm hoặc lượng có giá vốn chưa đủ; cần đối soát hoặc hoàn tất mẻ. Chưa ghi nhận lại giá vốn thực tế.
                 </p>

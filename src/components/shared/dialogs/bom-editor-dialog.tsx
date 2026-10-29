@@ -53,7 +53,9 @@ import {
 } from "@/lib/format-uom";
 import type { Product, UOMConversion } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
-import { getFnbBranchComponentCosts, getPreparedRecipeUnitCost, getPreparedRecipeEstimateUnitCost, type FnbBranchComponentCost } from "@/lib/services/supabase/fnb-branch-cost";
+import { getPreparedRecipeUnitCost, getPreparedRecipeEstimateUnitCost } from "@/lib/services/supabase/fnb-branch-cost";
+import { useFnbBranchCosts } from "@/lib/hooks/use-fnb-branch-costs";
+import { RecipeCostLoadError } from "@/components/shared/recipe-cost-load-error";
 
 interface BOMEditorDialogProps {
   open: boolean;
@@ -130,7 +132,6 @@ export function BOMEditorDialog({
 
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [preparedCosts, setPreparedCosts] = useState<Record<string, FnbBranchComponentCost>>({});
 
   // Load options on open
   useEffect(() => {
@@ -298,26 +299,9 @@ export function BOMEditorDialog({
   const preparedIds = items
     .filter((item) => !!item.materialId)
     .map((item) => item.materialId);
-  const preparedIdsKey = preparedIds.join(",");
   const costBranchId = branchId ?? activeBranchId;
-
-  useEffect(() => {
-    if (!canViewCost || !open || !isFnbRecipe || !costBranchId || !preparedIdsKey) {
-      setPreparedCosts({});
-      return;
-    }
-    let cancelled = false;
-    setPreparedCosts({});
-    getFnbBranchComponentCosts(costBranchId, preparedIdsKey.split(","))
-      .then((costs) => {
-        if (cancelled) return;
-        setPreparedCosts(Object.fromEntries(
-          Array.from(costs.entries()),
-        ));
-      })
-      .catch(() => { if (!cancelled) setPreparedCosts({}); });
-    return () => { cancelled = true; };
-  }, [canViewCost, open, isFnbRecipe, costBranchId, preparedIdsKey]);
+  const { costs: preparedCosts, loading: costLoading, error: costLoadError, retry: retryCosts } =
+    useFnbBranchCosts(canViewCost && open && isFnbRecipe, costBranchId, preparedIds);
 
   const previewUnitCost = (item: MaterialLine) => {
     if (!isFnbRecipe) return item.costPrice;
@@ -767,7 +751,7 @@ export function BOMEditorDialog({
                           <td className="p-2">
                             <div className="font-medium">{it.materialName}</div>
                             <div className="text-xs text-muted-foreground">
-                              {it.materialCode}{canViewCost && <> · {unitCost == null ? "Chưa có giá tại quán" : formatUnitPrice(unitCost)}/{it.stockUnit}</>}
+                              {it.materialCode}{canViewCost && <> · {costLoading ? "Đang tải giá..." : costLoadError ? "Không tải được giá" : unitCost == null ? "Chưa có giá tại quán" : formatUnitPrice(unitCost)}/{it.stockUnit}</>}
                             </div>
                             {isConverted && stockQuantity != null && (
                               <div className="mt-1 text-xs text-primary">
@@ -847,7 +831,7 @@ export function BOMEditorDialog({
                             />
                           </td>
                           {canViewCost && <td className="p-2 text-right font-medium">
-                            {formatCurrency(lineCost)}
+                            {costLoading ? "Đang tải giá..." : costLoadError ? "Không tải được giá" : unitCost == null ? "Chưa có giá" : formatCurrency(lineCost)}
                           </td>}
                           <td className="p-2">
                             <button
@@ -868,7 +852,7 @@ export function BOMEditorDialog({
                         {isFnbRecipe ? "Dự toán / mẻ:" : "Tổng giá vốn / batch:"}
                       </td>
                       <td className="p-2 text-right font-semibold text-primary">
-                        {hasPendingPreparedCost ? "Chưa đủ giá vốn chi nhánh" : formatCurrency(previewTotal)}
+                        {costLoading ? "Đang tải giá vốn..." : costLoadError ? "Không tải được giá vốn" : hasPendingPreparedCost ? "Chưa đủ giá vốn chi nhánh" : formatCurrency(previewTotal)}
                       </td>
                       <td />
                     </tr>
@@ -878,19 +862,20 @@ export function BOMEditorDialog({
                           {isFnbRecipe ? "Dự toán" : "Giá vốn"} / {yieldUnit}:
                         </td>
                         <td className="p-2 text-right text-xs">
-                          {hasPendingPreparedCost ? "—" : formatStockQuantity(previewTotal / Number(yieldQty))}
+                          {costLoading || costLoadError || hasPendingPreparedCost ? "—" : formatStockQuantity(previewTotal / Number(yieldQty))}
                         </td>
                         <td />
                       </tr>
                     )}
                   </tfoot>}
                 </table>
-                {canViewCost && unreconciledPreparedNames.length > 0 && (
+                {canViewCost && costLoadError && <RecipeCostLoadError onRetry={retryCosts} />}
+                {canViewCost && !costLoading && !costLoadError && unreconciledPreparedNames.length > 0 && (
                   <p role="status" className="border-t bg-amber-50 px-3 py-2 text-sm font-medium text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
                     Dự toán theo đơn giá đã có. {unreconciledPreparedNames.join(", ")}: tồn đang âm hoặc lượng có giá vốn chưa đủ; cần đối soát hoặc hoàn tất mẻ. Chưa ghi nhận lại giá vốn thực tế.
                   </p>
                 )}
-                {canViewCost && hasPendingPreparedCost && (
+                {canViewCost && !costLoading && !costLoadError && hasPendingPreparedCost && (
                   <p className="border-t px-3 py-2 text-xs text-muted-foreground">
                     Vẫn lưu được công thức. Giá vốn được ghi khi nhận hàng hoặc hoàn tất sản xuất tại chi nhánh.
                   </p>
