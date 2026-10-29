@@ -179,6 +179,6 @@ export default function DebtAgingReportPage() {
       </ReportSection>
       <p className="text-xs text-muted-foreground">Cập nhật: {data ? new Date(data.generatedAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "—"}. Không bù trừ giữa các đối tác.</p>
     </>}
-    {detail && !unavailable && <DebtDetailDialog open onOpenChange={open => { if (!open) setDetail(null); }} mode={mode === "receivable" ? "customer" : "supplier"} partyId={detail.id} branchId={activeBranchId} partyName={detail.name} partyCode={detail.code} estimatedDebt={detail.debt} />}
+    {detail && !unavailable && <DebtDetailDialog open onOpenChange={open => { if (!open) setDetail(null); }} mode={mode === "receivable" ? "customer" : "supplier"} partyId={detail.id} branchId={activeBranchId} partyName={detail.name} partyCode={detail.code} estimatedDebt={detail.debt} availableAdvance={detail.advance} readOnly />}
   </div>;
 }

@@ -20,7 +20,7 @@ vi.mock("@/components/shared/dialogs/apply-advance-dialog", () => ({
 import { DebtDetailDialog } from "@/components/shared/dialogs/debt-detail-dialog";
 const document = { id: "po-1", code: "NH1", date: "2026-10-01", total: 5000, paid: 0, debt: 5000, ageDays: 1 };
 describe("debt detail refresh", () => {
-  beforeEach(() => { cleanup(); vi.clearAllMocks(); mocked.purchases.mockResolvedValue([document]); });
+  beforeEach(() => { cleanup(); vi.clearAllMocks(); mocked.purchases.mockResolvedValue([document]); mocked.invoices.mockResolvedValue([document]); });
   it("reloads open documents and reduces usable balance after allocating", async () => {
     render(<DebtDetailDialog open onOpenChange={() => {}} mode="supplier" partyId="supplier-1" partyName="Trung Kiên" branchId="branch-1" availableAdvance={10000} />);
     fireEvent.click(await screen.findByRole("button", { name: "Dùng tiền ứng" }));
@@ -36,5 +36,20 @@ describe("debt detail refresh", () => {
     render(<DebtDetailDialog open onOpenChange={() => {}} mode="supplier" partyId="supplier-1" partyName="Trung Kiên" branchId="branch-1" />);
     expect(await screen.findByRole("alert")).toHaveTextContent("Không có quyền đọc phiếu");
     expect(screen.queryByText("Đã trả hết nợ cho nhà cung cấp này.")).toBeNull();
+  });
+  it("keeps unused advances visible when no supplier document remains open", async () => {
+    mocked.purchases.mockResolvedValue([]);
+    render(<DebtDetailDialog open onOpenChange={() => {}} mode="supplier" partyId="supplier-1" partyName="Supplier A" availableAdvance={12000} readOnly />);
+    expect(await screen.findByText("Không có phiếu nhập nào còn nợ")).toBeInTheDocument();
+    expect(screen.getByText("Ứng NCC còn dư")).toBeInTheDocument();
+    expect(screen.getByText("12,000đ")).toBeInTheDocument();
+    expect(screen.getByText("Tiền ứng còn dư được theo dõi riêng, chưa tự cấn hoặc hoàn.")).toBeInTheDocument();
+    expect(screen.queryByText("Nhà cung cấp đang nợ")).not.toBeInTheDocument();
+  });
+  it("does not expose an allocation action from a read-only report", async () => {
+    render(<DebtDetailDialog open onOpenChange={() => {}} mode="customer" partyId="customer-1" partyName="Customer A" branchId="branch-1" availableAdvance={12000} readOnly />);
+    expect(await screen.findByText("NH1")).toBeInTheDocument();
+    expect(screen.getByText("Khách trả trước còn dư")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Dùng tiền ứng" })).not.toBeInTheDocument();
   });
 });

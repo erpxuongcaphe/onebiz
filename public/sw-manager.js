@@ -26,7 +26,7 @@
  *   - Bypass: auth routes, Supabase, /api/*, /monitoring (Sentry tunnel)
  */
 
-const CACHE_NAME = "onebiz-manager-v4";
+const CACHE_NAME = "onebiz-manager-v5";
 
 // Pre-cache CHỈ static assets — KHÔNG pre-cache HTML routes nữa.
 // Sprint LT-6 27/05: HTML phải đi qua network để middleware refresh cookie.
@@ -53,10 +53,10 @@ self.addEventListener("install", (event) => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    // Clean caches cũ (v1, v2) — buộc clear HTML đã cache sai trước đây.
+    // Only retire this worker's caches; preserve POS and other offline stores.
     caches.keys().then((keys) =>
       Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)),
+        keys.filter((key) => key.startsWith("onebiz-manager-") && key !== CACHE_NAME).map((key) => caches.delete(key)),
       ),
     ),
   );
@@ -69,6 +69,8 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
+  // Do not restore the retired standalone dashboard from offline HTML.
+  const legacyManagerEntry = url.pathname === "/manager" || url.pathname === "/manager/";
 
   // Local development must always use the latest Next.js bundle.
   if (url.hostname === "localhost" || url.hostname === "127.0.0.1") return;
@@ -146,7 +148,7 @@ self.addEventListener("fetch", (event) => {
           // Cache response thành công để fallback khi offline sau này.
           // KHÔNG dùng cached version cho request hiện tại — luôn return
           // fresh response từ network để middleware đã chạy (cookie refreshed).
-          if (resp && resp.status === 200) {
+          if (resp && resp.status === 200 && !legacyManagerEntry) {
             const clone = resp.clone();
             caches
               .open(CACHE_NAME)
@@ -159,7 +161,7 @@ self.addEventListener("fetch", (event) => {
           // Network die thật sự (offline, DNS timeout) → fallback:
           // 1) Cached HTML của exact URL (nếu user đã visit trước đó)
           // 2) /offline.html (page "Đang kết nối lại…" auto-reload)
-          caches.match(event.request).then((cached) => {
+          (legacyManagerEntry ? Promise.resolve(undefined) : caches.match(event.request)).then((cached) => {
             if (cached) return cached;
             return caches.match("/offline.html").then(
               (offline) =>
