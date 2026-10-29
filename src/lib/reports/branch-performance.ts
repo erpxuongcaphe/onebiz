@@ -71,7 +71,7 @@ export function branchPerformanceRows(source: BranchPnLRow[], filter: BranchPerf
     netMargin: row.cogsComplete && row.goodsRevenue > 0 ? row.netMargin : null,
     previousGoodsRevenue, previousCogs, previousGrossProfit, previousNetProfit,
     revenueDifference: previousGoodsRevenue === null ? null : row.goodsRevenue - previousGoodsRevenue,
-    netProfitDifference: row.cogsComplete && previousNetProfit !== null ? row.netProfit - previousNetProfit : null,
+    netProfitDifference: row.cogsComplete && row.netProfit !== null && previousNetProfit !== null ? row.netProfit - previousNetProfit : null,
     previousMissingCostLines: previous ? prior?.missingCostLines ?? 0 : null,
   }; }).filter(row => (!query || `${row.branchName} ${row.typeLabel}`.toLocaleLowerCase("vi").includes(query)) &&
     (!filter.type || row.branchType === filter.type) &&

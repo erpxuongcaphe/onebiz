@@ -52,7 +52,7 @@ describe("shared management financial source", () => {
   });
 
   it("retains non-selling office branches and their other income", async () => {
-    rpc.mockResolvedValue({ data: { rows: [{ branch_id: "office-1", branch_name: "Văn phòng", branch_type: "office", goods_revenue: 0, other_income: 50, operating_expense: 200, operating_result: -150, cogs_complete: true }] }, error: null });
+    rpc.mockResolvedValue({ data: { rows: [{ branch_id: "office-1", branch_name: "Văn phòng", branch_type: "office", goods_revenue: 0, total_revenue: 0, delivery_fee: 0, cogs: 0, gross_profit: 0, gross_margin: 0, operating_margin: 0, missing_cost_lines: 0, other_income: 50, operating_expense: 200, operating_result: -150, cogs_complete: true }] }, error: null });
     const rows = await getBranchPnLComparison();
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ branchId: "office-1", branchType: "office", otherIncome: 50, netProfit: -150 });

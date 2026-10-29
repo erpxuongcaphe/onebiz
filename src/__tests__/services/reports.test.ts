@@ -265,6 +265,7 @@ function buildBranchProfitAndLossRpc() {
       gross_profit: grossProfit,
       gross_margin: goodsRevenue > 0 ? Math.round((grossProfit / goodsRevenue) * 1000) / 10 : 0,
       operating_expense: operatingExpense,
+      other_income: 0,
       operating_result: operatingResult,
       operating_margin: goodsRevenue > 0 ? Math.round((operatingResult / goodsRevenue) * 1000) / 10 : 0,
       cogs_complete: true,

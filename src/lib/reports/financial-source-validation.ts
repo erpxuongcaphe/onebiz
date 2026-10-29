@@ -48,3 +48,28 @@ export function validateProfitAndLossSource(row: Record<string, unknown>): void 
     if (!hasAmount(row[key])) throw new Error(`Nguồn báo cáo thiếu hoặc sai ${label}.`);
   }
 }
+
+export function validateBranchProfitAndLossSource(value: unknown): asserts value is Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Nguồn so sánh chi nhánh có dòng không hợp lệ.");
+  const row = value as Record<string, unknown>;
+  if (typeof row.branch_id !== "string" || !row.branch_id.trim() || typeof row.branch_name !== "string" || typeof row.cogs_complete !== "boolean") {
+    throw new Error("Nguồn so sánh chi nhánh thiếu định danh hoặc trạng thái giá vốn.");
+  }
+  for (const key of ["goods_revenue", "total_revenue", "delivery_fee", "operating_expense", "other_income", "missing_cost_lines"]) {
+    if (!hasAmount(row[key])) throw new Error("Nguồn so sánh chi nhánh thiếu hoặc sai chỉ tiêu bắt buộc.");
+  }
+  if (!Number.isSafeInteger(Number(row.missing_cost_lines)) || Number(row.missing_cost_lines) < 0 || (row.cogs_complete && Number(row.missing_cost_lines) > 0)) {
+    throw new Error("Nguồn so sánh chi nhánh có trạng thái giá vốn không nhất quán.");
+  }
+  for (const key of ["cogs", "gross_profit", "gross_margin", "operating_result", "operating_margin"]) {
+    if (!Object.hasOwn(row, key) || (!hasAmount(row[key]) && !(row[key] === null && row.cogs_complete === false))) {
+      throw new Error("Nguồn so sánh chi nhánh thiếu hoặc sai giá vốn/lợi nhuận.");
+    }
+  }
+  const matches = (left: number, right: number) => Math.abs(left - right) <= 0.01 + Math.max(Math.abs(left), Math.abs(right)) * Number.EPSILON * 8;
+  if (!matches(Number(row.goods_revenue), Number(row.total_revenue) - Number(row.delivery_fee)) ||
+    (row.cogs_complete && (!matches(Number(row.gross_profit), Number(row.goods_revenue) - Number(row.cogs)) ||
+      !matches(Number(row.operating_result), Number(row.gross_profit) + Number(row.other_income) - Number(row.operating_expense))))) {
+    throw new Error("Nguồn so sánh chi nhánh không khớp doanh thu và kết quả vận hành.");
+  }
+}
