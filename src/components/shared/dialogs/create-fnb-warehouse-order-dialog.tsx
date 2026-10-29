@@ -1,4 +1,5 @@
 "use client";
+import { RemoveTransactionLineButton } from "@/components/shared/remove-transaction-line-button";
 
 import { TransactionUnitSelect } from "@/components/shared/transaction-unit-select";
 import { useProductUom } from "@/lib/hooks/use-product-uom";
@@ -170,7 +171,7 @@ export function CreateFnbWarehouseOrderDialog({ open, onOpenChange, onSuccess, b
               <div className="min-w-0"><p className="break-words font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{item.code}</p></div>
               <div className="col-start-1 row-start-2 md:col-start-3 md:row-start-1"><label className="text-xs text-muted-foreground md:sr-only">ĐVT</label><TransactionUnitSelect label={`Đơn vị ${item.name}`} value={item.unit} stockUnit={uom.units.get(item.id) ?? item.unit} conversions={uom.map.get(item.id)} quantity={item.quantity} disabled={uom.loading || !!uom.error} onChange={unit => setItems(lines => lines.map(i => i.id === item.id ? {...i, unit} : i))} /></div>
               <NumericInput aria-label={`Số lượng ${item.name}`} className="col-start-2 row-start-2 h-9 w-full text-right md:col-start-4 md:row-start-1" value={item.quantity} min={0} decimals={4} onChange={value => setItems(lines => lines.map(i => i.id === item.id ? { ...i, quantity: value ?? 0 } : i))} />
-              <Button variant="ghost" className="col-start-3 row-start-1 h-9 px-1 text-xs text-muted-foreground md:col-start-5" aria-label={`Bỏ ${item.name}`} onClick={() => setItems(lines => lines.filter(i => i.id !== item.id))}>Bỏ</Button>
+              <RemoveTransactionLineButton productName={item.name} className="col-start-3 row-start-1 md:col-start-5" onClick={() => setItems(lines => lines.filter(i => i.id !== item.id))} />
               <div className="col-span-3 row-start-3 min-w-0 md:col-span-1 md:col-start-6 md:row-start-1">
                 <label className="mb-1 block text-xs text-muted-foreground md:sr-only" htmlFor={`fnb-line-note-${item.id}`}>Ghi chú {item.code}</label>
                 <textarea id={`fnb-line-note-${item.id}`} aria-label={`Ghi chú ${item.code}`} title={item.note || 'Ghi chú riêng cho mã hàng này'} value={item.note ?? ''} maxLength={2000} rows={1} className="h-9 min-h-9 w-full resize-none overflow-hidden rounded-md border border-border/60 bg-muted/15 px-2 py-0 text-xs leading-[34px] placeholder:text-muted-foreground/60 focus:min-h-20 focus:resize-y focus:overflow-y-auto focus:bg-background focus:py-2 focus:leading-5 focus:outline-none focus:ring-2 focus:ring-primary/30" placeholder="Ghi chú…" onChange={e => setItems(lines => lines.map(i => i.id === item.id ? { ...i, note: e.target.value } : i))} />

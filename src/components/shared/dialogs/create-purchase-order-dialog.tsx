@@ -1,4 +1,5 @@
 "use client";
+import { RemoveTransactionLineButton } from "@/components/shared/remove-transaction-line-button";
 
 import { useFnbCatalogScope } from "@/lib/hooks/use-fnb-catalog-scope";
 import { searchSupplierPurchaseProducts } from "@/lib/services/supabase/supplier-purchase-products";
@@ -943,15 +944,7 @@ export function CreatePurchaseOrderDialog({
                       <div className="text-right text-sm font-bold tabular-nums text-primary sm:col-span-3 xl:col-span-1">
                         {formatCurrency(lineTotal(item))}
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => removeItem(item.id)}
-                        className="justify-self-end text-muted-foreground hover:text-destructive"
-                        aria-label={`Xóa ${item.productName}`}
-                      >
-                        <Icon name="delete" size={14} />
-                      </Button>
+                      <RemoveTransactionLineButton productName={item.productName} onClick={() => removeItem(item.id)} />
                     </div>
                     <details className="text-xs"><summary className="cursor-pointer py-1 text-muted-foreground">Chiết khấu · Lô / hạn dùng{item.expiryDate || item.lotNumber || item.discount ? " · Đã nhập" : " (tùy chọn)"}</summary>
                     {/* Day 05/06/2026 (CEO): row con Chiết khấu — % hoặc đ, hiện đơn giá sau CK */}

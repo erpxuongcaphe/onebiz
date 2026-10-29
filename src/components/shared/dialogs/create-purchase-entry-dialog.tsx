@@ -1,4 +1,5 @@
 "use client";
+import { RemoveTransactionLineButton } from "@/components/shared/remove-transaction-line-button";
 import { useProductUom } from "@/lib/hooks/use-product-uom";
 import { scaleUnitPrice } from "@/lib/operational-uom";
 import { TransactionUnitSelect } from "@/components/shared/transaction-unit-select";
@@ -573,15 +574,7 @@ function CreateLegacyPurchaseEntryDialog({
                       <div className="text-right text-sm font-bold tabular-nums text-primary">
                         {formatCurrency(lineTotal(item))}
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => removeItem(item.id)}
-                        className="justify-self-end text-muted-foreground hover:text-destructive"
-                        aria-label={`Xóa ${item.productName}`}
-                      >
-                        <Icon name="delete" size={14} />
-                      </Button>
+                      <RemoveTransactionLineButton productName={item.productName} onClick={() => removeItem(item.id)} />
                     </div>
                   ))}
                 </div>
