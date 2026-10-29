@@ -50,13 +50,14 @@ const EXPENSE_COLORS = ["#004AC6", "#ea580c", "#16a34a", "#9333ea", "#6b7280"];
 
 function pctChange(current: number | null, previous: number | null): string {
   if (current === null || previous === null) return "—";
-  if (previous === 0) return current > 0 ? "+100%" : "0%";
+  if (previous === 0) return current === 0 ? "0%" : "—";
   const pct = ((current - previous) / Math.abs(previous)) * 100;
   const sign = pct >= 0 ? "+" : "";
   return `${sign}${pct.toFixed(1)}%`;
 }
 const money = (value: number | null) => value === null ? "Chưa xác định" : formatCurrency(value);
 const difference = (current: number | null, previous: number | null) => current === null || previous === null ? null : current - previous;
+const comparisonText = (current: number | null, previous: number | null) => current === null || previous === null || (previous === 0 && current !== 0) ? "" : `${pctChange(current, previous)} so với kỳ trước`;
 
 // === Custom Tooltips ===
 
@@ -572,7 +573,7 @@ export default function TaiChinhPage() {
             value={kpis ? formatCurrency(kpis.revenue) : "—"}
             change={
               kpis
-                ? `${pctChange(kpis.revenue, kpis.prevRevenue)} so với kỳ trước`
+                ? comparisonText(kpis.revenue, kpis.prevRevenue)
                 : ""
             }
             positive={kpis ? kpis.revenue >= kpis.prevRevenue : true}
@@ -586,7 +587,7 @@ export default function TaiChinhPage() {
             value={kpis ? money(kpis.expense) : "—"}
             change={
               kpis && kpis.expense !== null && kpis.prevExpense !== null
-                ? `${pctChange(kpis.expense, kpis.prevExpense)} so với kỳ trước`
+                ? comparisonText(kpis.expense, kpis.prevExpense)
                 : ""
             }
             positive={kpis && kpis.expense !== null && kpis.prevExpense !== null ? kpis.expense <= kpis.prevExpense : false}
@@ -600,7 +601,7 @@ export default function TaiChinhPage() {
             value={kpis ? money(kpis.profit) : "—"}
             change={
               kpis && kpis.profit !== null && kpis.prevProfit !== null
-                ? `${pctChange(kpis.profit, kpis.prevProfit)} so với kỳ trước`
+                ? comparisonText(kpis.profit, kpis.prevProfit)
                 : ""
             }
             positive={kpis && kpis.profit !== null && kpis.prevProfit !== null ? kpis.profit >= kpis.prevProfit : false}
@@ -611,10 +612,10 @@ export default function TaiChinhPage() {
           />
           <KpiCard
             label="Tỷ suất LN"
-            value={kpis ? kpis.profitMargin === null ? "Chưa xác định" : `${kpis.profitMargin}%` : "—"}
+            value={kpis ? kpis.profitMargin === null ? kpis.cogsComplete && kpis.revenue === 0 ? "—" : "Chưa xác định" : `${kpis.profitMargin}%` : "—"}
             change={
               kpis && kpis.profitMargin !== null && kpis.prevProfitMargin !== null
-                ? `${pctChange(kpis.profitMargin, kpis.prevProfitMargin)} so với kỳ trước`
+                ? comparisonText(kpis.profitMargin, kpis.prevProfitMargin)
                 : ""
             }
             positive={kpis && kpis.profitMargin !== null && kpis.prevProfitMargin !== null ? kpis.profitMargin >= kpis.prevProfitMargin : false}

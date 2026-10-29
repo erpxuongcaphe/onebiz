@@ -22,7 +22,7 @@ vi.mock("@/components/shared/report", () => ({
   ReportTableFrame: ({ children }: { children: React.ReactNode }) => children,
 }));
 vi.mock("@/app/(main)/phan-tich/_components", () => ({
-  KpiCard: ({ label, value }: { label: string; value: string }) => <div>{label}: {value}</div>,
+  KpiCard: ({ label, value, change }: { label: string; value: string; change?: string }) => <div><span>{label}: {value}</span><small>{change}</small></div>,
   ChartCard: ({ children }: { children: React.ReactNode }) => children,
 }));
 
@@ -64,6 +64,7 @@ describe("financial analysis loading and export", () => {
     finish();
     await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ variant: "success" })));
     expect(mocks.excel.mock.calls[0][0].sheets[1].rows).toEqual(result.trend);
+    expect(screen.queryByText(/\+100%/)).not.toBeInTheDocument();
   });
   it("preserves unknown costs and profit on screen and both export modes", async () => {
     mocks.finance.mockResolvedValue({ ...result,
