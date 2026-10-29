@@ -11,6 +11,12 @@ Telegram sends once for an incident and once on recovery. Failed delivery is
 retried on the next sample. HTTP 200 alone is insufficient for database health:
 the JSON must also contain `status=ok` and `db=connected`.
 
+The existing Hetzner root disk is also checked every five minutes. At 80% used
+or less than 5 GiB free, notify on the first affected sample. A new failing check
+also sends a notification during an already-open incident. This monitor never
+buys storage, resizes compute or changes spending caps. It does not read vendor
+invoices and must not be described as a hard monetary billing cap.
+
 Install the three monitor files under `/opt/onebiz-ops`, and the service/timer
 under `/etc/systemd/system`. The service uses a dynamic user, a private state
 directory, read-only system paths, 80 MB memory and a 10% CPU limit. Its Telegram
