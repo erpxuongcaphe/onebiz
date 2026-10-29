@@ -1,4 +1,5 @@
 "use client";
+import { getSupplierContacts } from "@/lib/services/supabase/counterparty-contacts";
 
 import { PreparedRecipeYield } from "@/components/shared/prepared-recipe-yield";
 import { PreparedRecipePerUnit } from "@/components/shared/prepared-recipe-per-unit";
@@ -36,7 +37,6 @@ import {
   createProduct,
   updateProduct,
   getProductCategoriesAsync,
-  getSuppliers,
   getAllUnits,
 } from "@/lib/services";
 import {
@@ -1771,7 +1771,7 @@ export function CreateProductDialog({
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    getSuppliers({ page: 0, pageSize: 500, sortBy: "name", sortOrder: "asc" })
+    getSupplierContacts({ page: 0, pageSize: 500, sortBy: "name", sortOrder: "asc" })
       .then((res) => {
         if (cancelled) return;
         setSuppliers(

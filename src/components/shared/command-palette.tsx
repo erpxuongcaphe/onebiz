@@ -21,7 +21,8 @@ import {
 import { useRouter } from "next/navigation";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { sidebarNavGroups } from "./nav-config";
-import { getProducts, getCustomers, getSuppliers } from "@/lib/services";
+import { getProducts } from "@/lib/services";
+import { getCustomerContacts, getSupplierContacts } from "@/lib/services/supabase/counterparty-contacts";
 import { searchOptions } from "@/lib/search-options";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
@@ -260,11 +261,11 @@ function CommandPaletteDialog({
             data: [],
             total: 0,
           })),
-          getCustomers({ page: 0, pageSize: 5, search: q, filters: {} }).catch(() => ({
+          getCustomerContacts({ page: 0, pageSize: 5, search: q }).catch(() => ({
             data: [],
             total: 0,
           })),
-          getSuppliers({ page: 0, pageSize: 5, search: q, filters: {} }).catch(() => ({
+          getSupplierContacts({ page: 0, pageSize: 5, search: q }).catch(() => ({
             data: [],
             total: 0,
           })),
