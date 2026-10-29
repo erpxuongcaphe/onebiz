@@ -102,11 +102,11 @@ describe("product dialog draft and inline BOM flow", () => {
   it("checks supply approval in both regular and per-size recipes without writing catalog data", () => {
     expect(dialog).toContain("listFnbSupplyCatalogProductIds");
     expect(dialog).toContain("getFnbSupplyBranchScope");
-    expect(dialog).toContain("SKU thành phần chưa được duyệt đủ");
+    expect(dialog).toContain("SKU thành phần chưa có trong danh mục cấp đủ");
     expect(dialog).toContain("Kiểm tra Hàng cấp cho quán");
     expect(dialog).toContain("supplyStatusByProductId={supplyStatusByProductId}");
-    expect(perSizeMatrix).toContain("Đã duyệt cấp cho");
-    expect(perSizeMatrix).toContain("Chưa duyệt");
+    expect(perSizeMatrix).toContain("Có trong danh mục cấp");
+    expect(perSizeMatrix).toContain("Chưa có trong danh mục cấp");
     expect(dialog).not.toContain("saveFnbSupplyCatalog(");
   });
 

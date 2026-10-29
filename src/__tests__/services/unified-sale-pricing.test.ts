@@ -89,10 +89,11 @@ describe("unified sale pricing 00363", () => {
     expect(productPlatformTab).toContain("if (!r.variantId)");
   });
 
-  it("uses component Retail selling prices for FnB costing in both UI and database", () => {
+  it("keeps the legacy Retail calculator while new F&B previews use branch costs", () => {
     expect(productDialog).toContain('productChannel === "fnb"');
-    expect(productDialog).toContain("Number(product.sellPrice) || 0");
-    expect(productDialog).toContain("chưa có giá bán Retail lớn hơn 0");
+    expect(productDialog).not.toContain("Number(product.sellPrice) || 0");
+    expect(productDialog).toContain("Number(branchCosts?.[product.id]?.unitCost) || 0");
+    expect(productDialog).not.toContain("chưa có giá bán Retail lớn hơn 0");
     expect(migration).toContain("calculate_fnb_bom_retail_cost_00363");
     expect(migration).toContain("FNB_COMPONENT_RETAIL_PRICE_MISSING");
     expect(migration).toContain("component_retail_sell_price");

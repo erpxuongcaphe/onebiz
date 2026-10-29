@@ -81,12 +81,12 @@ describe("quản trị FnB nhiều size dùng một nguồn dữ liệu", () => 
     );
   });
 
-  it("món FnB một size lấy SKU Retail theo giá cấp nội bộ và BTP theo bình quân tại quán", () => {
+  it("món FnB một size lấy giá vốn nguyên liệu và BTP tại chi nhánh", () => {
     expect(source).toContain("const inlineFnbBomCost = useMemo(");
-    expect(source).toContain("getBomComponentUnitPrice(material, \"fnb\")");
+    expect(source).toContain("getBomComponentUnitPrice(material, \"fnb\", fnbPreparedCostByProductId)");
     expect(source).toContain("fnbPreparedCostByProductId[product.id]?.unitCost");
-    expect(source).toContain("Chưa có giá vốn BTP");
-    expect(source).toContain("SKU Retail dùng giá cấp nội bộ hiện hành");
+    expect(source).toContain("Chưa có giá vốn chi nhánh");
+    expect(source).toContain("Dự toán theo giá vốn bình quân của chi nhánh đang chọn.");
   });
 
   it("chốt SKU cha theo size mặc định sau khi toàn bộ BOM size đã lưu", () => {

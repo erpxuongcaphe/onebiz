@@ -218,7 +218,7 @@ function FnbSupplyCatalogNote({
   } else if (missingComponents > 0) {
     icon = "warning";
     tone = "border-status-warning/30 bg-status-warning/5 text-status-warning";
-    message = `${missingComponents} SKU thành phần chưa được duyệt đủ cho ${enforcedBranches} quán đang kiểm soát.`;
+    message = `${missingComponents} SKU thành phần chưa có trong danh mục cấp đủ cho ${enforcedBranches} quán đang kiểm soát.`;
   } else {
     icon = "verified";
     tone = "border-status-success/30 bg-status-success/5 text-status-success";
@@ -2143,31 +2143,9 @@ export function CreateProductDialog({
         toast({ variant: "error", title: "Đang tải giá công thức", description: "Chờ giá thành phần tải xong rồi lưu lại." });
         return;
       }
-      const usedMaterialIds = new Set<string>();
-      if (hasBom && !bomCodeTrim && variantItems.length === 0) {
-        for (const item of bomItems) usedMaterialIds.add(item.materialId);
-      }
-      if (recipeEnabled) {
-        for (const row of recipeRows) {
-          if (row.materialId) usedMaterialIds.add(row.materialId);
-        }
-      }
-      const missingRetailPrice = materialOptions.find(
-        (material) =>
-          usedMaterialIds.has(material.id) &&
-          !material.isFnbStockItem &&
-          !(Number(material.sellPrice) > 0),
-      );
-      if (missingRetailPrice) {
-        setInnerTab("bom");
-        toast({
-          variant: "error",
-          title: "Chưa thể tính giá vốn F&B",
-          description: `${missingRetailPrice.code} · ${missingRetailPrice.name} chưa có giá bán Retail lớn hơn 0. Hãy thiết lập giá Retail của thành phần trước khi lưu công thức.`,
-          duration: 10000,
-        });
-        return;
-      }
+      // A recipe can be configured before the outlet's first receipt/batch.
+      // Missing branch cost stays explicit in previews and never falls back
+      // to a Retail selling price or becomes a shared product cost.
     }
 
     const invalidRecipeUnit = recipeRows.find((row) => {
