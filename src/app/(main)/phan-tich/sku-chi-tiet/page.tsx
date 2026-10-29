@@ -221,6 +221,10 @@ export default function SkuFinancialPage() {
         {(search || customer || item || category || unit || reviewFilter !== "all" || metricFilters.length > 0) && <button type="button" onClick={resetFilters} className="inline-flex min-h-9 items-center gap-1 text-sm text-primary"><Icon name="filter_alt_off" size={18} />Xóa bộ lọc</button>}
         <Link href={managementReportLink("/phan-tich/bao-cao-tai-chinh", activeBranchId, range)} className="inline-flex min-h-9 items-center gap-1 text-sm text-primary">Kết quả kinh doanh<Icon name="arrow_forward" size={16} /></Link>
       </div>
+      {!filtersUnavailable && comparisonRows.length > 0 && customers.length === 0 && <div role="status" className="flex flex-wrap items-center justify-between gap-2 border-l-2 border-amber-500 bg-amber-50/60 px-3 py-2 text-sm dark:bg-amber-950/20">
+        <span>Chưa có khách định danh trong kỳ và kỳ đối chiếu.</span>
+        <Link href={managementReportLink("/phan-tich/hieu-qua-khach-hang", activeBranchId, range) + "&customerReview=anonymous"} className="inline-flex min-h-9 items-center gap-1 font-medium text-primary">Xem doanh số chưa gắn khách<Icon name="arrow_forward" size={16} /></Link>
+      </div>}
       <MetricFilters fields={columns.filter(column => !["code", "name", "category", "unit", "lastActivityAt"].includes(String(column.key))).map(column => ({ key: String(column.key), label: column.label }))} value={metricFilters} onChange={setMetricFilters} />
       <p className="text-xs leading-5 text-muted-foreground">Đơn vị: đồng · Gồm nội bộ · Mỗi size/quy cách là một dòng riêng · Sau chiết khấu, chưa gồm VAT/phí giao · Lãi gộp chưa trừ chi phí vận hành.</p>
       {!pending && !error && unfiltered && <ReportSection title="Đối chiếu doanh thu" tone="primary" actions={<Link className="inline-flex min-h-9 items-center gap-1 text-sm text-primary" href={managementReportLink("/phan-tich/ban-hang", activeBranchId, range) + "&detail=invoices"}>Xem hóa đơn<Icon name="arrow_forward" size={16} /></Link>}>

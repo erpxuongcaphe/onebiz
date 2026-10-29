@@ -1,5 +1,6 @@
 import { getClient, handleError } from "./base";
 import { toCreatedAtRangeWindow } from "@/lib/utils/list-date-preset-range";
+import { validateFinancialDetailSource } from "@/lib/reports/financial-source-validation";
 
 export interface CustomerFinancialRow {
   customerId: string | null; code: string; name: string;
@@ -17,9 +18,11 @@ export async function getCustomerFinancialReport(range: { from: string; to: stri
   const { data, error } = await rpc.call(client, "get_customer_financial_report", { p_from: dates.start, p_to: dates.end, p_branch_id: branchId ?? null });
   if (error) handleError(error, "getCustomerFinancialReport");
   const result = data as { rows?: Record<string, unknown>[] } | null;
-  const number = (value: unknown) => Number(value ?? 0);
+  if (!result || !Array.isArray(result.rows)) throw new Error("Chưa nhận đủ dữ liệu khách hàng. Vui lòng thử lại.");
+  result.rows.forEach(row => validateFinancialDetailSource(row, "customer"));
+  const number = (value: unknown) => Number(value);
   const nullable = (value: unknown) => value == null ? null : number(value);
-  return (result?.rows ?? []).map(row => ({
+  return result.rows.map(row => ({
     customerId: row.customer_id == null ? null : String(row.customer_id), code: String(row.code ?? ""), name: String(row.name ?? ""),
     orders: number(row.order_count), returns: number(row.return_count), products: number(row.product_count),
     salesAmount: number(row.sales_amount), returnAmount: number(row.return_amount), netRevenue: number(row.net_revenue),

@@ -25,6 +25,16 @@ beforeEach(() => { window.history.replaceState(null, "", "/"); state.branch = "f
 afterEach(cleanup);
 
 describe("SKU management workflow", () => {
+  it("explains an empty customer selector and links to scoped unnamed-customer evidence", async () => {
+    state.fetch.mockResolvedValue({ rows: [sku("TEST", 100)], customers: [] });
+    render(<SkuPage />);
+    await waitFor(() => expect(screen.getByLabelText("Mặt hàng")).toBeEnabled());
+    expect(screen.getByText("Chưa có khách định danh trong kỳ và kỳ đối chiếu.").closest('[role="status"]')).not.toBeNull();
+    const link = screen.getByRole("link", { name: "Xem doanh số chưa gắn khách" });
+    expect(link).toHaveAttribute("href", expect.stringContaining("branch=fnb"));
+    expect(link).toHaveAttribute("href", expect.stringContaining("customerReview=anonymous"));
+    expect(screen.getByRole("button", { name: "Xuất đầy đủ" })).toBeEnabled();
+  });
   it("offers every scoped item, size and unit from both periods and exports the selected size", async () => {
     const small = { ...sku("A", 100), name: "Item A · Small", variantId: "small" };
     const large = { ...sku("A", 200), name: "Item A · Large", variantId: "large" };
