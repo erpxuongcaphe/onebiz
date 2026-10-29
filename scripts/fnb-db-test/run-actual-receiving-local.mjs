@@ -412,7 +412,7 @@ try {
 
   // Exercise the real internal-sale chain with selected package units. Never use a remote database.
   {
-    const migration=fs.readFileSync('supabase/migrations/20261028120921_unified_transaction_uom.sql','utf8');
+    const migration=fs.readFileSync('supabase/migrations/20261029005208_unified_transaction_uom.sql','utf8');
     await db.exec("alter table branches add column is_active boolean default true, add column branch_type text default 'warehouse';");
     await db.exec(migration.match(/alter table public\.invoice_items[\s\S]*?;/)[0]);
     await db.exec(migration.match(/alter table public\.internal_sale_items[\s\S]*?;/)[0]);
