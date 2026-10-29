@@ -97,6 +97,15 @@ export async function GET(req: NextRequest) {
     const driftTenants: { tenantId: string; tenantName: string; drifts: number }[] = [];
 
     for (const tenant of tenants) {
+      // Retry cost finalization skipped while an invoice was busy. This is
+      // service-only and never changes stock, sales totals or cash entries.
+      const { error: costRetryError } = await supabase.rpc(
+        "process_fnb_cost_finalize_queue_20261029" as never,
+        { p_tenant_id: tenant.id, p_limit: 100 } as never,
+      );
+      if (costRetryError) {
+        console.error("F&B cost finalization retry failed", tenant.id, costRetryError.message);
+      }
       // Verify invariants cho tenant này
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data, error } = await (supabase.rpc as any)(
