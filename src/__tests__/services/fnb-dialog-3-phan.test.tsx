@@ -88,9 +88,9 @@ describe("Panel tìm kiếm / chọn khách — chiều cao theo màn hình th�
     ["fnb-search-modal", "src/app/pos/fnb/components/fnb-search-modal.tsx"],
   ])("%s: danh sách dùng dvh (không px cứng đơn độc) + kbd ẩn ở màn nhỏ", (_t, p) => {
     const src = readFileSync(p, "utf8");
-    expect(src).toContain("max-h-[calc(100dvh-14rem)]");
+    expect(src).toContain(p.includes("fnb-customer-picker") ? "max-h-[min(32rem,calc(100dvh-4rem))]" : "max-h-[calc(100dvh-14rem)]");
     // dàn phím tắt vô nghĩa trên màn cảm ứng nhỏ
-    expect(src).toMatch(/hidden sm:flex[^"]*text-xs/);
+    expect(src).toMatch(p.includes("fnb-customer-picker") ? /hidden shrink-0 sm:inline/ : /hidden sm:flex[^"]*text-xs/);
   });
 });
 

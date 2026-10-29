@@ -5,6 +5,30 @@ export interface PosCustomerIdentity {
   code: string;
   name: string;
   phone: string;
+  employeeId?: string;
+  benefitGroups?: string[];
+}
+
+export type FnbBuyerKind = "customer" | "employee";
+export async function getFnbBuyerContacts({ branchId, search, signal, kind }: ContactRequest & {kind:FnbBuyerKind}): Promise<PosCustomerIdentity[]> {
+  signal?.throwIfAborted();
+  const query=search?.trim()||null;
+  if(!branchId.trim() || branchId==="all" || (query?.length??0)>128 || !["customer","employee"].includes(kind)) throw new Error("Phạm vi tìm người mua chưa hợp lệ.");
+  const request=getClient().rpc("fnb_buyer_lookup_v1" as never,{p_branch_id:branchId,p_search:query,p_kind:kind} as never);
+  const {data,error}=await(signal?request.abortSignal(signal):request);
+  signal?.throwIfAborted();
+  if(error){
+    if(error.code==="PGRST202") throw new Error("Chức năng chọn nhân viên đang được cập nhật. Vui lòng thử lại sau.");
+    handleError(error,"getFnbBuyerContacts");
+  }
+  const identities=parsePosCustomerIdentities(data);
+  return identities.map((identity,index)=>{
+    if(kind!=="employee")return identity;
+    const row=(data as Record<string,unknown>[])[index];
+    if(typeof row.employee_id!=="string" || !row.employee_id || !Array.isArray(row.benefit_groups)
+      || row.benefit_groups.some(g=>typeof g!=="string")) throw new Error("Hồ sơ ưu đãi nhân viên chưa hợp lệ.");
+    return {...identity,employeeId:row.employee_id,benefitGroups:row.benefit_groups as string[]};
+  });
 }
 
 interface ContactRequest {
