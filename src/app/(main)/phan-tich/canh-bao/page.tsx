@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { ReportPageHeader } from "@/components/shared/report";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -56,7 +56,7 @@ const TYPE_LABELS: Record<FinancialAlert["type"], string> = {
   low_stock: "Tồn kho",
   expiring_lot: "Hạn sử dụng",
   negative_cashflow: "Dòng tiền",
-  high_expense: "Chi phí",
+  high_expense: "Dòng tiền",
 };
 
 export default function CanhBaoPage() {
@@ -73,6 +73,8 @@ export default function CanhBaoPage() {
   const [loading, setLoading] = useState(true);
   const [alerts, setAlerts] = useState<FinancialAlert[]>([]);
   const [filterType, setFilterType] = useState<string>("all");
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const requestRef = useRef(0);
 
   const handleExportExcel = useCallback(async (mode: "view" | "full") => {
     try {
@@ -100,11 +102,6 @@ export default function CanhBaoPage() {
             value: alerts.filter((alert) => alert.severity === "info").length,
             format: "number",
           },
-          {
-            label: "Tổng giá trị liên quan",
-            value: alerts.reduce((sum, alert) => sum + (alert.value ?? 0), 0),
-            format: "currency",
-          },
         ],
       });
       const title = buildReportTitleRows({
@@ -121,7 +118,8 @@ export default function CanhBaoPage() {
           { label: "Loại", key: "type", width: 16 },
           { label: "Tiêu đề", key: "title", width: 36 },
           { label: "Mô tả", key: "description", width: 48 },
-          { label: "Giá trị (VND)", key: "amount", width: 18, format: "currency" },
+          { label: "Giá trị", key: "amount", width: 18, format: "number" },
+          { label: "Đơn vị", key: "unit", width: 14 },
         ],
         rows: exportAlerts.map((alert) => ({
           severity: SEVERITY_CONFIG[alert.severity].label,
@@ -129,13 +127,13 @@ export default function CanhBaoPage() {
           title: alert.title,
           description: alert.description ?? "",
           amount: alert.value ?? 0,
+          unit: alert.type === "low_stock" ? "Mặt hàng" : alert.type === "expiring_lot" ? "Lô" : alert.type === "high_expense" ? "%" : "VND",
         })),
         footer: {
           severity: "TỔNG",
           type: "",
           title: `${exportAlerts.length} cảnh báo`,
           description: "",
-          amount: exportAlerts.reduce((sum, alert) => sum + (alert.value ?? 0), 0),
         },
       };
       await exportReportToExcel({
@@ -158,20 +156,26 @@ export default function CanhBaoPage() {
   }, [alerts, branchLabel, filterType, range, toast]);
 
   const fetchData = useCallback(async () => {
+    const request = ++requestRef.current;
+    setLoading(true);
+    setAlerts([]);
+    setLoadError(null);
     try {
-      setLoading(true);
       const data = await getFinancialAlerts(activeBranchId);
+      if (request !== requestRef.current) return;
       setAlerts(data);
     } catch (err) {
-      console.error("Failed to fetch alerts:", err);
+      if (request !== requestRef.current) return;
+      setLoadError(err instanceof Error ? err.message : "Không tải được nguồn cảnh báo.");
     } finally {
-      setLoading(false);
+      if (request === requestRef.current) setLoading(false);
     }
   }, [activeBranchId]);
 
   useEffect(() => {
     if (!isReady) return;
-    fetchData();
+    void fetchData();
+    return () => { requestRef.current += 1; };
   }, [fetchData, isReady]);
 
   const filteredAlerts =
@@ -195,6 +199,12 @@ export default function CanhBaoPage() {
       </div>
     );
   }
+
+  if (loadError) return <div role="alert" className="p-6 space-y-3">
+    <h1 className="text-lg font-semibold">Chưa tải được cảnh báo</h1>
+    <p className="text-sm text-muted-foreground">{loadError}</p>
+    <button type="button" onClick={() => void fetchData()} className="inline-flex min-h-10 items-center gap-2 rounded border px-3 text-sm"><Icon name="refresh" size={18} />Thử lại</button>
+  </div>;
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] overflow-y-auto">
@@ -406,7 +416,7 @@ export default function CanhBaoPage() {
                                 ? "lô hàng"
                                 : alert.type === "negative_cashflow"
                                   ? "VND thiếu hụt"
-                                  : "% doanh thu"}
+                                  : "so với tổng thu"}
                         </p>
                       </div>
                     </div>

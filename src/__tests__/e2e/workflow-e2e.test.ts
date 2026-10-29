@@ -46,6 +46,7 @@ function createChain(resolvedValue: unknown = { data: null, error: null }) {
   chain.gt = vi.fn(self);
   chain.gte = vi.fn(self);
   chain.lt = vi.fn(self);
+  chain.lte = vi.fn(self);
   chain.not = vi.fn(self);
   chain.filter = vi.fn(self);
   chain.order = vi.fn(self);

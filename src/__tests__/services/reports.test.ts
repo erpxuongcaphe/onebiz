@@ -11,6 +11,7 @@ function createChain(resolvedValue: unknown = { data: [], error: null }) {
   chain.gt = vi.fn(self);
   chain.gte = vi.fn(self);
   chain.lt = vi.fn(self);
+  chain.lte = vi.fn(self);
   chain.in = vi.fn(self);
   chain.or = vi.fn(self);
   chain.not = vi.fn(self);
@@ -72,6 +73,7 @@ const mockCashFlowNegative = [
 
 // Shared table data map — override per test
 let tableDataMap: Record<string, unknown> = {};
+let queryHistory: { table: string; chain: ReturnType<typeof createChain> }[] = [];
 
 function defaultTableData(): Record<string, unknown> {
   return {
@@ -279,7 +281,9 @@ vi.mock("@/lib/services/supabase/base", () => ({
   getClient: () => ({
     from: vi.fn((table: string) => {
       const data = tableDataMap[table.replace(/_scoped$/, "")] ?? { data: [], error: null };
-      return createChain(data);
+      const chain = createChain(data);
+      queryHistory.push({ table, chain });
+      return chain;
     }),
     rpc: vi.fn((fn: string, params?: Record<string, unknown>) => {
       if (fn === "get_profit_and_loss_report_v2") {
@@ -535,6 +539,35 @@ describe("getDSO", () => {
 });
 
 describe("getFinancialAlerts", () => {
+  it.each(["customers", "product_lots"])("does not interpret a failed %s source as no alerts", async table => {
+    tableDataMap = { ...defaultTableData(), [table]: { data: null, error: { message: "SOURCE_UNAVAILABLE" } } };
+    await expect(getFinancialAlerts()).rejects.toThrow("SOURCE_UNAVAILABLE");
+  });
+
+  it("uses only completed cash documents and business dates in the Vietnam month", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-31T18:00:00Z"));
+    try {
+      queryHistory = [];
+      tableDataMap = defaultTableData();
+      await getFinancialAlerts("synthetic-branch");
+      const query = queryHistory.find(row => row.table === "cash_transactions")!.chain;
+      expect(query.eq).toHaveBeenCalledWith("status", "completed");
+      expect(query.eq).toHaveBeenCalledWith("branch_id", "synthetic-branch");
+      expect(query.gte).toHaveBeenCalledWith("transaction_date", "2026-11-01");
+      expect(query.lte).toHaveBeenCalledWith("transaction_date", "2026-11-01");
+      expect(query.gte).not.toHaveBeenCalledWith("created_at", expect.anything());
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("does not describe cash movements as revenue, expense or proven overdue debt", async () => {
+    tableDataMap = { ...defaultTableData(), cash_transactions: { data: mockCashFlowNegative, error: null } };
+    const alerts = await getFinancialAlerts();
+    expect(alerts.find(row => row.id === "high_expense")?.title).toBe("Chi so với thu cao");
+    expect(alerts.find(row => row.id === "debt_total")?.description).toContain("không phải tổng công nợ");
+    expect(alerts.find(row => row.id === "debt_c1")?.description).not.toContain("nợ lâu");
+  });
+
   it("generates debt alerts for customers with debt > 0", async () => {
     tableDataMap = {
       ...defaultTableData(),
