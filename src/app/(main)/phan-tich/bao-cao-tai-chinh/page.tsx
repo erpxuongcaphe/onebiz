@@ -161,7 +161,9 @@ function COGSTooltip({
 
 export default function BaoCaoTaiChinhPage() {
   const { toast } = useToast();
-  const { user, tenant, hasPermission } = useAuth();
+  const { user, tenant, hasPermission, isLoading: authLoading } = useAuth();
+  const canReadReport = !authLoading && hasPermission("reports.analytics")
+    && hasPermission("reports.view_detail") && hasPermission("reports.view_profit");
   const {
     isReady: periodReady,
     preset,
@@ -179,7 +181,7 @@ export default function BaoCaoTaiChinhPage() {
   // (loại trừ doanh thu/COGS nội bộ) thay vì getProfitAndLoss thông thường.
   const [ceoView, setCeoView] = useState<boolean>(true);
   const scopeKey = JSON.stringify([user?.id, tenant?.id, activeBranchId ?? "all", range.from, range.to, ceoView,
-    hasPermission("reports.export"), hasPermission("reports.export_detail"), hasPermission("reports.view_profit")]);
+    hasPermission("reports.export"), hasPermission("reports.export_detail"), canReadReport]);
   const scopeRef = useRef(scopeKey);
   useLayoutEffect(() => {
     scopeRef.current = scopeKey;
@@ -233,7 +235,7 @@ export default function BaoCaoTaiChinhPage() {
   const [dso, setDso] = useState<DSOResult | null>(null);
 
   const fetchData = useCallback(async () => {
-    if (!isReady || !periodReady) return;
+    if (!isReady || !periodReady || !canReadReport) return;
     if (requestState.current.scope === scopeKey && requestState.current.inFlight) {
       requestState.current.queued = true;
       return;
@@ -305,13 +307,13 @@ export default function BaoCaoTaiChinhPage() {
         if (queued) queueMicrotask(() => void fetchRef.current());
       }
     }
-  }, [activeBranchId, ceoView, isReady, periodReady, range, toast, scopeKey]);
+  }, [activeBranchId, ceoView, isReady, periodReady, canReadReport, range, toast, scopeKey]);
 
   useEffect(() => { fetchRef.current = fetchData; }, [fetchData]);
-  useLiveDataRefresh(fetchData, tenant?.id, activeBranchId, ["dashboard_live_signals"], isReady && periodReady, 120_000);
+  useLiveDataRefresh(fetchData, tenant?.id, activeBranchId, ["dashboard_live_signals"], isReady && periodReady && canReadReport, 120_000);
 
   const loadMoreCogs = async () => {
-    if (loadingMoreCogs || cogsItems.length >= cogsTotalCount) return;
+    if (!canReadReport || loadingMoreCogs || cogsItems.length >= cogsTotalCount) return;
     const requestId = requestIdRef.current;
     setLoadingMoreCogs(true);
     try {
@@ -634,6 +636,11 @@ export default function BaoCaoTaiChinhPage() {
     }
   }
 
+  if (!canReadReport) {
+    return <div role={authLoading ? "status" : "alert"} className="p-6 text-sm text-muted-foreground">
+      {authLoading ? "Đang xác thực quyền truy cập..." : "Bạn chưa có đủ quyền xem báo cáo kết quả kinh doanh. Liên hệ quản trị viên để kiểm tra quyền."}
+    </div>;
+  }
   if (loading || (!loadError && loadedScope !== scopeKey)) {
     return (
       <div className="flex flex-col h-[calc(100vh-4rem)] items-center justify-center">

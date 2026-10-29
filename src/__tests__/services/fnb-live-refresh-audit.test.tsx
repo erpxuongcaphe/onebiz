@@ -173,7 +173,7 @@ describe("F&B live refresh recovery", () => {
 describe("F&B live data wiring", () => {
   it("uses a slower fallback only for the financial report", () => {
     const report = readFileSync("src/app/(main)/phan-tich/bao-cao-tai-chinh/page.tsx", "utf8");
-    expect(report).toContain('["dashboard_live_signals"], isReady && periodReady, 120_000)');
+    expect(report).toContain('["dashboard_live_signals"], isReady && periodReady && canReadReport, 120_000)');
   });
   it("refreshes online catalog and variant prices without repricing existing bills", () => {
     const source = readFileSync("src/app/pos/fnb/page.tsx", "utf8");

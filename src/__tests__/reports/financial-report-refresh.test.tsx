@@ -3,9 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 
 const state = vi.hoisted(() => ({ periodReady: true, branchId: "fnb", range: { from: "2026-10-01", to: "2026-10-18" }, refresh: undefined as (() => void) | undefined, pnl: vi.fn(), consolidated: vi.fn(), details: vi.fn(), exportExcel: vi.fn(), toast: vi.fn() }));
-const actor = vi.hoisted(() => ({ id: "manager-a", allowExport: true }));
+const actor = vi.hoisted(() => ({ id: "manager-a", allowExport: true, loading: false, denied: new Set<string>() }));
 vi.mock("@/lib/contexts", () => ({
-  useAuth: () => ({ user: { id: actor.id }, tenant: { id: "onebiz" }, hasPermission: (permission: string) => !permission.startsWith("reports.export") || actor.allowExport }),
+  useAuth: () => ({ user: { id: actor.id }, tenant: { id: "onebiz" }, isLoading: actor.loading, hasPermission: (permission: string) => !actor.denied.has(permission) && (!permission.startsWith("reports.export") || actor.allowExport) }),
   useBranchFilter: () => ({ activeBranchId: state.branchId || undefined, branches: [], isReady: true }),
   useToast: () => ({ toast: state.toast }),
 }));
@@ -25,6 +25,8 @@ function deferred<T>() { let resolve!: (value: T) => void; const promise = new P
 beforeEach(() => {
   actor.id = "manager-a";
   actor.allowExport = true;
+  actor.loading = false;
+  actor.denied.clear();
   state.periodReady = true;
   state.range = { from: "2026-10-01", to: "2026-10-18" };
   state.branchId = "fnb";
@@ -37,6 +39,37 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("financial report scope and refresh", () => {
+  it.each(["reports.analytics", "reports.view_detail", "reports.view_profit"])("does not query financial sources without %s", async permission => {
+    actor.denied.add(permission);
+    render(<FinancialReport />);
+    expect(screen.getByRole("alert")).toHaveTextContent("chưa có đủ quyền");
+    await act(async () => { state.refresh?.(); });
+    expect(state.pnl).not.toHaveBeenCalled();
+    expect(state.details).not.toHaveBeenCalled();
+    expect(state.consolidated).not.toHaveBeenCalled();
+  });
+  it("waits for authentication then loads the same authorized branch report", async () => {
+    actor.loading = true;
+    const view = render(<FinancialReport />);
+    expect(screen.getByRole("status")).toHaveTextContent("xác thực");
+    expect(state.pnl).not.toHaveBeenCalled();
+    actor.loading = false;
+    view.rerender(<FinancialReport />);
+    await screen.findByText("Doanh thu thuần: 123,456");
+    expect(state.pnl).toHaveBeenCalledExactlyOnceWith("fnb", state.range);
+  });
+  it("discards a pending response after report access is revoked", async () => {
+    const pending = deferred<ReturnType<typeof result>>();
+    state.pnl.mockReturnValueOnce(pending.promise);
+    const view = render(<FinancialReport />);
+    await waitFor(() => expect(state.pnl).toHaveBeenCalledTimes(1));
+    actor.denied.add("reports.view_profit");
+    view.rerender(<FinancialReport />);
+    await act(async () => pending.resolve(result(999999)));
+    expect(screen.getByRole("alert")).toHaveTextContent("chưa có đủ quyền");
+    expect(screen.queryByText("Doanh thu thuần: 999,999")).not.toBeInTheDocument();
+    expect(state.pnl).toHaveBeenCalledTimes(1);
+  });
   it.each(["", "fnb"])("retains explicit scope in financial reconciliation links for %s", async (branch) => {
     state.branchId = branch;
     state.details.mockResolvedValue({ cogsItems: [], cogsTotalCount: 0, marginTrend: [], reconciliation: { invoiceCount: 1, returnCount: 1 }, granularity: "day", turnover: {}, dso: {} });
