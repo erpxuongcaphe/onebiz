@@ -12,7 +12,7 @@ export async function runUnifiedWarehouseUom(db,{id,tenant,actor,store,warehouse
   const before=(await db.query('select * from effects')).rows;
   await db.exec('create table internal_sale_items(id uuid);');
   // The fixture has no reporting view; verify its unchanged scope predicate in production rollback validation.
-  await db.exec(readFileSync('supabase/migrations/20261028120921_unified_transaction_uom.sql','utf8').replace(/-- BEGIN scoped snapshot view[\s\S]*?-- END scoped snapshot view/,'').replace(/-- BEGIN production drift guard[\s\S]*?-- END production drift guard/,''));
+  await db.exec(readFileSync('supabase/migrations/20261029005208_unified_transaction_uom.sql','utf8').replace(/-- BEGIN scoped snapshot view[\s\S]*?-- END scoped snapshot view/,'').replace(/-- BEGIN production drift guard[\s\S]*?-- END production drift guard/,''));
   await db.exec(`set test.actor='${actor}';set test.branch='${store}';set test.denied='no';`);
   const input=[{productId:product,quantity:2,unit:'Thùng',expectedFactor:12,note:'Giao nguyên thùng'}];
   const result=await submit(id(9971),input);
@@ -50,7 +50,7 @@ export async function runUnifiedWarehouseUom(db,{id,tenant,actor,store,warehouse
   await db.exec("set test.denied='yes'"); await assert.rejects(()=>save(null,salesLines),/ORDER_SAVE_DENIED/); await db.exec("set test.denied='no'");
   assert.deepEqual((await db.query('select * from effects')).rows,before);
   await db.exec('create view invoice_items_scoped as select id from invoice_items;');
-  await db.exec(readFileSync('supabase/migrations/20261029005434_restore_uom_scoped_view_barrier.sql','utf8'));
+  await db.exec(readFileSync('supabase/migrations/20261029005415_restore_uom_scoped_view_barrier.sql','utf8'));
   assert.deepEqual((await db.query("select reloptions from pg_class where oid='invoice_items_scoped'::regclass")).rows[0].reloptions,['security_barrier=true']);
   console.log('PASS unified UOM: paired PO/order, server pricing, selected-unit readback, retry, conversion guard and edit; no stock/cash effects');
 }
