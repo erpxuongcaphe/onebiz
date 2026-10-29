@@ -296,7 +296,7 @@ export function BOMEditorDialog({
   const output = skuOptions.find((sku) => sku.id === productId);
   const isFnbRecipe = output?.channel === "fnb" || output?.isFnbStockItem === true;
   const preparedIds = items
-    .filter((item) => nvlOptions.find((product) => product.id === item.materialId)?.isFnbStockItem)
+    .filter((item) => !!item.materialId)
     .map((item) => item.materialId);
   const preparedIdsKey = preparedIds.join(",");
   const costBranchId = branchId ?? activeBranchId;
@@ -321,9 +321,7 @@ export function BOMEditorDialog({
 
   const previewUnitCost = (item: MaterialLine) => {
     if (!isFnbRecipe) return item.costPrice;
-    const material = nvlOptions.find((product) => product.id === item.materialId);
-    if (material?.isFnbStockItem) return getPreparedRecipeEstimateUnitCost(preparedCosts[item.materialId]);
-    return material?.sellPrice ?? null;
+    return getPreparedRecipeEstimateUnitCost(preparedCosts[item.materialId]);
   };
   const hasPendingPreparedCost = isFnbRecipe && preparedIds.some(
     (id) => getPreparedRecipeEstimateUnitCost(preparedCosts[id]) === null,
@@ -870,7 +868,7 @@ export function BOMEditorDialog({
                         {isFnbRecipe ? "Dự toán / mẻ:" : "Tổng giá vốn / batch:"}
                       </td>
                       <td className="p-2 text-right font-semibold text-primary">
-                        {hasPendingPreparedCost ? "Chờ giá vốn bán thành phẩm" : formatCurrency(previewTotal)}
+                        {hasPendingPreparedCost ? "Chưa đủ giá vốn chi nhánh" : formatCurrency(previewTotal)}
                       </td>
                       <td />
                     </tr>
@@ -880,7 +878,7 @@ export function BOMEditorDialog({
                           {isFnbRecipe ? "Dự toán" : "Giá vốn"} / {yieldUnit}:
                         </td>
                         <td className="p-2 text-right text-xs">
-                          {hasPendingPreparedCost ? "Sau mẻ đầu" : formatStockQuantity(previewTotal / Number(yieldQty))}
+                          {hasPendingPreparedCost ? "—" : formatStockQuantity(previewTotal / Number(yieldQty))}
                         </td>
                         <td />
                       </tr>
@@ -894,7 +892,7 @@ export function BOMEditorDialog({
                 )}
                 {canViewCost && hasPendingPreparedCost && (
                   <p className="border-t px-3 py-2 text-xs text-muted-foreground">
-                    Vẫn lưu được công thức. Giá vốn thực tế của bán thành phẩm sẽ có sau khi hoàn tất mẻ tại quán.
+                    Vẫn lưu được công thức. Giá vốn được ghi khi nhận hàng hoặc hoàn tất sản xuất tại chi nhánh.
                   </p>
                 )}
               </div>

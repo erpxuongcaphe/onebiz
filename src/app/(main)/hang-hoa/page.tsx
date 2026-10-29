@@ -127,7 +127,7 @@ function PreparedCost({ product, cost, loading, estimate }: {
   return (
     <span className="block text-right" title={cost.source === "batch"
       ? "Giá vốn bình quân từ các mẻ đã chốt tại quán này"
-      : "Dự toán BOM theo giá bán Retail hiện hành; không phải giá vốn tồn thực tế"}>
+      : "Dự toán BOM theo giá vốn nguyên liệu tại chi nhánh; không phải giá vốn tồn thực tế"}>
       {formatUnitPrice(cost.value)}
       <span className="block text-xs font-normal text-muted-foreground">
         {cost.source === "batch" ? "Bình quân quán" : "Dự toán BOM"}

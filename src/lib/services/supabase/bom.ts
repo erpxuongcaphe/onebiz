@@ -1,6 +1,7 @@
 // BOM service — CRUD for production formulas
 
 import { getClient } from "./base";
+import { getFnbBranchComponentCosts, getPreparedRecipeUnitCost } from "./fnb-branch-cost";
 import { getCurrentTenantId } from "./base";
 import type { BOM, BOMItem, BOMCostBreakdown } from "@/lib/types";
 
@@ -505,7 +506,7 @@ export async function getFnbPreparedBomEstimates(
   branchId?: string,
 ): Promise<Map<string, number>> {
   const estimates = new Map<string, number>();
-  if (productIds.length === 0) return estimates;
+  if (productIds.length === 0 || !branchId) return estimates;
   const tenantId = await getCurrentTenantId();
   const ids = [...new Set(productIds)];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -559,24 +560,24 @@ export async function getFnbPreparedBomEstimates(
   if (!bomIds.length) return estimates;
 
   const { data: items, error: itemError } = await client.from("bom_items")
-    .select("bom_id, quantity, waste_percent, products:products_scoped!bom_items_material_id_fkey(sell_price, is_fnb_stock_item)")
+    .select("bom_id, quantity, waste_percent, products:products_scoped!bom_items_material_id_fkey(id, sell_price, is_fnb_stock_item)")
     .in("bom_id", bomIds);
   if (itemError) throw itemError;
-  const lines = new Map<string, Array<{ quantity: number; waste_percent: number; products: { sell_price: number; is_fnb_stock_item: boolean } | null }>>();
+  const lines = new Map<string, Array<{ quantity: number; waste_percent: number; products: { id: string; sell_price: number; is_fnb_stock_item: boolean } | null }>>();
   for (const item of items ?? []) {
     const rows = lines.get(item.bom_id) ?? [];
     rows.push(item);
     lines.set(item.bom_id, rows);
   }
+  const costs = await getFnbBranchComponentCosts(branchId, [...new Set<string>((items ?? []).flatMap((row: { products: { id: string } | null }) => row.products ? [row.products.id] : []))]);
   for (const [productId, header] of selected) {
     const rows = lines.get(header.id) ?? [];
     const yieldQty = Number(header.yield_qty);
     if (!rows.length || !Number.isFinite(yieldQty) || yieldQty <= 0 ||
-      rows.some((row) => !row.products || row.products.is_fnb_stock_item ||
-        !(Number(row.products.sell_price) > 0))) continue;
+      rows.some((row) => !row.products || getPreparedRecipeUnitCost(costs.get(row.products.id)) === null)) continue;
     const total = rows.reduce((sum, row) =>
       sum + Number(row.quantity) * (1 + Number(row.waste_percent ?? 0) / 100) *
-        Number(row.products!.sell_price), 0);
+        getPreparedRecipeUnitCost(costs.get(row.products!.id))!, 0);
     if (Number.isFinite(total)) estimates.set(productId, total / yieldQty);
   }
   return estimates;

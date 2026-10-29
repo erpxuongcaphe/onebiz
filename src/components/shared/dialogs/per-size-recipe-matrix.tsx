@@ -112,8 +112,8 @@ function SupplyCatalogBadge({
     >
       <Icon name={ready ? "verified" : "warning"} size={12} />
       {ready
-        ? `Đã duyệt cấp cho ${status.requiredBranches} quán`
-        : `Chưa duyệt ${status.requiredBranches - status.approvedBranches}/${status.requiredBranches} quán`}
+        ? `Có trong danh mục cấp ${status.requiredBranches} quán`
+        : `Chưa có trong danh mục cấp ${status.requiredBranches - status.approvedBranches}/${status.requiredBranches} quán`}
     </span>
   );
 }
