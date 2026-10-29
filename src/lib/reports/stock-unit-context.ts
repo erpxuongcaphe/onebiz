@@ -1,5 +1,6 @@
 import { operationalFactor, operationalUnits, formatOperationalQuantity } from "@/lib/operational-uom";
 import type { UOMConversion } from "@/lib/types";
+import Decimal from "decimal.js-light";
 
 export interface StockReportUnits {
   productCode: string | null;
@@ -10,10 +11,15 @@ export interface StockReportUnits {
   recordedConversion?: string | null;
 }
 const factorLabel = (value: number) => new Intl.NumberFormat("en-US", { maximumSignificantDigits: 12 }).format(value);
+function conversionLabel(inputUnit: string, stockUnit: string, factor: number): string {
+  return factor < 1
+    ? `1 ${stockUnit} = ${factorLabel(new Decimal(1).div(factor).toNumber())} ${inputUnit}`
+    : `1 ${inputUnit} = ${factorLabel(factor)} ${stockUnit}`;
+}
 
 export function currentUnitRules(unit: string, conversions: UOMConversion[]): string {
   return operationalUnits(unit, conversions).filter(candidate => candidate.trim().toLocaleLowerCase("vi") !== unit.trim().toLocaleLowerCase("vi"))
-    .map(candidate => `1 ${candidate} = ${factorLabel(operationalFactor(unit, candidate, conversions)!.toNumber())} ${unit}`)
+    .map(candidate => conversionLabel(candidate, unit, operationalFactor(unit, candidate, conversions)!.toNumber()))
     .sort((a, b) => a.localeCompare(b, "vi")).join("; ");
 }
 
@@ -27,13 +33,13 @@ export function recordedCountUnits(value: unknown, actualQuantity: number): Pick
   const stock = Number(row.stockQuantity), input = Number(row.inputQuantity), factor = Number(row.conversionFactor);
   if (factor <= 0 || input < 0 || Math.abs(stock - actualQuantity) > 0.00005 || Math.abs(input * factor - stock) > 0.00005) return missing;
   let count = `${formatOperationalQuantity(input)} ${row.inputUnit}`;
-  let rule = row.inputUnit.trim().toLocaleLowerCase("vi") === row.stockUnit.trim().toLocaleLowerCase("vi") ? null : `1 ${row.inputUnit} = ${factorLabel(factor)} ${row.stockUnit}`;
+  let rule = row.inputUnit.trim().toLocaleLowerCase("vi") === row.stockUnit.trim().toLocaleLowerCase("vi") ? null : conversionLabel(row.inputUnit, row.stockUnit, factor);
   if (Array.isArray(row.parts) && row.parts.length) {
     const parts = row.parts as Record<string, unknown>[];
     if (parts.every(part => typeof part?.unit === "string" && part.unit.trim() && typeof part.quantity === "number" && Number.isFinite(part.quantity) && part.quantity >= 0)) {
       count = parts.map(part => `${formatOperationalQuantity(Number(part.quantity))} ${part.unit}`).join(" + ");
       if (parts.every(part => typeof part.expectedFactor === "number" && Number.isFinite(part.expectedFactor) && part.expectedFactor > 0) && Math.abs(parts.reduce((sum, part) => sum + Number(part.quantity) * Number(part.expectedFactor), 0) - stock) <= 0.00005) {
-        rule = [...new Set(parts.filter(part => String(part.unit).trim().toLocaleLowerCase("vi") !== String(row.stockUnit).trim().toLocaleLowerCase("vi")).map(part => `1 ${part.unit} = ${factorLabel(Number(part.expectedFactor))} ${row.stockUnit}`))].join("; ") || rule;
+        rule = [...new Set(parts.filter(part => String(part.unit).trim().toLocaleLowerCase("vi") !== String(row.stockUnit).trim().toLocaleLowerCase("vi")).map(part => conversionLabel(String(part.unit), String(row.stockUnit), Number(part.expectedFactor))))].join("; ") || rule;
       }
     }
   }

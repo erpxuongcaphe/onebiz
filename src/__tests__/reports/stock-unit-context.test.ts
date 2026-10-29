@@ -4,9 +4,15 @@ import type { UOMConversion } from "@/lib/types";
 const conversion = (factor = 50, isActive = true): UOMConversion => ({ id: "u", tenantId: "t", productId: "p", fromUnit: "Cây", toUnit: "Cái", factor, isActive, createdAt: "" });
 it("uses only the product's configured direct conversions, including inverse and fractional units", () => {
   expect(currentUnitRules("Cái", [conversion()])).toBe("1 Cây = 50 Cái");
-  expect(currentUnitRules("Cây", [conversion()])).toBe("1 Cái = 0.02 Cây");
+  expect(currentUnitRules("Cây", [conversion()])).toBe("1 Cây = 50 Cái");
   expect(currentUnitRules("Cái", [])).toBe("");
-  expect(currentUnitRules("Cái", [conversion(0.000001)])).toBe("1 Cây = 0.000001 Cái");
+  expect(currentUnitRules("Cái", [conversion(0.000001)])).toBe("1 Cái = 1,000,000 Cây");
+});
+it("shows whole-package equivalence without changing recorded quantities or factors", () => {
+  const snapshot = { stockUnit: "Cây", stockQuantity: 5.9, inputUnit: "Cái", inputQuantity: 295, conversionFactor: 0.02 };
+  expect(recordedCountUnits(snapshot, 5.9)).toEqual({ recordedUnit: "Cây", recordedCount: "295 Cái", recordedConversion: "1 Cây = 50 Cái" });
+  expect(snapshot.conversionFactor).toBe(0.02);
+  expect(currentUnitRules("Hộp", [{ ...conversion(1000), fromUnit: "Hộp", toUnit: "G" }])).toBe("1 Hộp = 1,000 G");
 });
 it("does not guess conflicting, inactive, invalid or unrelated package sizes", () => {
   expect(currentUnitRules("Cái", [conversion(50), conversion(100)])).toBe("");
