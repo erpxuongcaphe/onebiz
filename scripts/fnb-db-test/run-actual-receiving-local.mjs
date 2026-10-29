@@ -410,6 +410,32 @@ try {
   }
 
 
+  // Exercise the real internal-sale chain with selected package units. Never use a remote database.
+  {
+    const migration=fs.readFileSync('supabase/migrations/20261028120921_unified_transaction_uom.sql','utf8');
+    await db.exec("alter table branches add column is_active boolean default true, add column branch_type text default 'warehouse';");
+    await db.exec(migration.match(/alter table public\.invoice_items[\s\S]*?;/)[0]);
+    await db.exec(migration.match(/alter table public\.internal_sale_items[\s\S]*?;/)[0]);
+    await db.exec(migration.match(/CREATE OR REPLACE FUNCTION public\._create_internal_sale_auth_impl_00243[\s\S]*?\$function\$\s*;/)[0]);
+    const baseResolver=(await db.query("select pg_get_functiondef('resolve_product_uom_factor(uuid,uuid,text)'::regprocedure) d")).rows[0].d;
+    const fixtureResolver=baseResolver.replace(/LANGUAGE plpgsql/i,'LANGUAGE sql').replace(/AS \$function\$[\s\S]*?\$function\$/i,"AS $function$ select case when $3='TestPack12' then 12 else 1 end::numeric $function$");
+    assert.notEqual(fixtureResolver,baseResolver,'resolver fixture must retain the current parameter names');
+    await db.exec(fixtureResolver);
+    const before=await stock();
+    const sourceBefore=Number((await db.query('select quantity from branch_stock where branch_id=$1 and product_id=$2',[source,context.product])).rows[0]?.quantity ?? 0);
+    const sale=(await db.query(`select create_internal_sale_atomic($1,$2,$3,$4,null,null,null,null,$5::jsonb,'debt',false,'UOM isolated fixture') r`,[context.tenant_id,source,context.dest,context.actor,JSON.stringify([{productId:context.product,unit:'TestPack12',quantity:2,unitPrice:1200,vatRate:0}])])).rows[0].r;
+    const row=(await db.query('select * from internal_sale_items where internal_sale_id=$1',[sale.internal_sale_id])).rows[0];
+    assert.equal(Number(row.quantity),24); assert.equal(row.unit,context.unit); assert.equal(Number(row.unit_price),100);
+    assert.equal(Number(row.transaction_quantity),2); assert.equal(row.transaction_unit,'TestPack12'); assert.equal(Number(row.transaction_unit_price),1200);
+    assert.equal(Number(sale.total),2400); assert.equal(await stock(),before,'actual receiving stays deferred');
+    const movement=(await db.query("select sum(quantity) q from stock_movements where reference_id=$1 and type='out'",[sale.invoice_id])).rows[0];
+    assert.equal(Number(movement.q),24);
+    await db.query(`select cancel_internal_sale_atomic($1,'Cancel UOM fixture')`,[sale.internal_sale_id]);
+    assert.equal(await stock(),before);
+    assert.equal(Number((await db.query('select quantity from branch_stock where branch_id=$1 and product_id=$2',[source,context.product])).rows[0]?.quantity ?? 0),sourceBefore);
+    await db.exec(baseResolver);
+    console.log('PASS: selected internal-sale package normalizes stock and price once, retains snapshots, defers receiving, and cancellation restores source stock.');
+  }
   const reportDb=new PGlite();
   try {
     await reportDb.exec('create role anon; create role authenticated;');

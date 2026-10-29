@@ -21,10 +21,10 @@ export async function loadDocumentCopy(kind: 'purchase' | 'inventory', sourceId:
   if (error) handleError(error, 'loadDocumentCopy.source');
   if (!source) throw new Error('Không đọc được phiếu nguồn trong chi nhánh đang chọn.');
   const { data: rows, error: itemError } = await client.from(kind === 'purchase' ? 'purchase_order_items' : 'inventory_check_items')
-    .select(kind === 'purchase' ? 'product_id,quantity,unit,unit_price,discount,vat_rate,note' : 'product_id')
+    .select(kind === 'purchase' ? 'product_id,quantity,unit,unit_price,discount,vat_rate,note,transaction_quantity,transaction_unit,transaction_unit_price,conversion_factor' : 'product_id')
     .eq(kind === 'purchase' ? 'purchase_order_id' : 'check_id', sourceId).order('id').limit(1001);
   if (itemError) handleError(itemError, 'loadDocumentCopy.items');
-  const lines = (rows ?? []) as Array<{ product_id: string; quantity?: number; unit?: string; unit_price?: number; discount?: number; vat_rate?: number; note?: string }>;
+  const lines = (rows ?? []) as Array<{ product_id: string; quantity?: number; unit?: string; unit_price?: number; transaction_quantity?: number; transaction_unit?: string; transaction_unit_price?: number; conversion_factor?: number; discount?: number; vat_rate?: number; note?: string }>;
   if (!lines.length || lines.length > 500) throw new Error('Chỉ sao chép phiếu có từ 1 đến 500 mặt hàng.');
   const ids = [...new Set(lines.map(row => row.product_id))];
   if (ids.length !== lines.length || ids.some(id => !id)) throw new Error('Phiếu có dòng hàng trùng hoặc không còn mã sản phẩm. Vui lòng tạo phiếu mới và kiểm tra từng dòng.');
@@ -45,7 +45,7 @@ export async function loadDocumentCopy(kind: 'purchase' | 'inventory', sourceId:
   if (kind === 'purchase' && lines.some(row => row.unit && row.unit !== catalog.get(row.product_id)?.unit)) {
     throw new Error('Đơn vị tồn của hàng đã thay đổi so với phiếu nguồn. Vui lòng tạo mới để kiểm tra quy đổi.');
   }
-  const items = lines.map(row => ({ ...catalog.get(row.product_id)!, quantity: Number(row.quantity ?? 0), price: Math.max(0,Number(row.unit_price ?? 0) - Number(row.discount ?? 0)/Number(row.quantity || 1)), vatRate: Number(row.vat_rate ?? 0), note: row.note ?? '' }));
+  const items = lines.map(row => { const quantity=Number(row.transaction_quantity ?? row.quantity ?? 0); return { ...catalog.get(row.product_id)!, unit: row.transaction_unit ?? catalog.get(row.product_id)!.unit, quantity, price: Math.max(0,Number(row.transaction_unit_price ?? row.unit_price ?? 0) - Number(row.discount ?? 0)/(quantity || 1)), vatRate: Number(row.vat_rate ?? 0), note: row.note ?? '' }; });
   if (kind === 'inventory') return { code: String(source.code), items, supplier: null, note: '' };
   const { data: supplier, error: supplierError } = await client.from('suppliers').select('id,name,branch_id,is_active')
     .eq('tenant_id', tenantId).eq('id', source.supplier_id).single();

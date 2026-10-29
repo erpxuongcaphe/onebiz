@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   sync: vi.fn(),
 }));
 
+vi.mock('@/lib/hooks/use-product-uom',()=>({useProductUom:()=>({map:new Map(),units:new Map(),loading:false,error:''})}));
 vi.mock("@/lib/contexts", () => ({
   useToast: () => ({ toast: mocks.toast }),
   useAuth: () => ({ user: { tenantId: "tenant" } }),

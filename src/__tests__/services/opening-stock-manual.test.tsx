@@ -1,6 +1,7 @@
 import {render,screen,fireEvent,waitFor,cleanup} from "@testing-library/react";
 import {afterEach,beforeEach,expect,it,vi} from "vitest";
 const mocks=vi.hoisted(()=>({search:vi.fn(),preview:vi.fn(),commit:vi.fn(),prices:vi.fn()}));
+vi.mock("@/lib/hooks/use-product-uom",()=>({useProductUom:()=>({map:new Map([["p",[{fromUnit:"Kg",toUnit:"G",factor:1000,isActive:true}]]]),units:new Map([["p","G"]]),loading:false,error:""})}));
 vi.mock("@/lib/contexts",()=>({useAuth:()=>({branches:[{id:"b",code:"QUAN",name:"Quán",branchType:"store"}],activeBranchId:"b"})}));
 vi.mock("@/lib/services/supabase/opening-stock",async()=>({...await vi.importActual("@/lib/services/supabase/opening-stock"),
  searchOpeningStockCandidates:mocks.search,previewOpeningStock:mocks.preview,commitOpeningStock:mocks.commit,getOpeningWarehousePrices:mocks.prices}));
@@ -8,6 +9,17 @@ import {OpeningStockDialog} from "@/components/shared/dialogs/opening-stock-dial
 const snapshot={productId:"p",productCode:"TRA",productName:"Trà",unit:"G",branchId:"b",branchCode:"QUAN",quantityBefore:0,quantity:2.0042,costPrice:250.000001,costBefore:null,delta:2.0042,value:501.05,latestMovement:null,latestCost:null,costTracked:false,fnb:true,lotNumber:null,expiryDate:null};
 beforeEach(()=>{vi.clearAllMocks();mocks.search.mockResolvedValue([{id:"p",code:"TRA",name:"Trà",unit:"G"}]);mocks.preview.mockResolvedValue([snapshot]);mocks.commit.mockResolvedValue({count:1});});
 afterEach(cleanup);
+
+it("keeps entry units separate and previews canonical quantity and cost together",async()=>{
+ render(<OpeningStockDialog open mode="manual" onOpenChange={()=>{}} onFinished={()=>{}}/>);await add();
+ fireEvent.change(screen.getByLabelText("Đơn vị TRA"),{target:{value:"Kg"}});
+ fireEvent.change(screen.getByLabelText("Số lượng (Kg)"),{target:{value:"2"}});
+ fireEvent.change(screen.getByLabelText("Giá vốn / Kg"),{target:{value:"45000"}});
+ fireEvent.change(screen.getByLabelText("Lý do / nguồn đối chiếu"),{target:{value:"Tồn đầu kỳ theo bao"}});
+ fireEvent.click(screen.getByRole("button",{name:"Xem trước tồn"}));
+ await waitFor(()=>expect(mocks.preview).toHaveBeenCalledWith([expect.objectContaining({unit:"G",quantity:2000,costPrice:45})]));
+ expect(mocks.commit).not.toHaveBeenCalled();
+});
 
 it("fills only empty costs using inventory-unit quotes and keeps deliberate zero values",async()=>{
  render(<OpeningStockDialog open mode="manual" onOpenChange={()=>{}} onFinished={()=>{}}/>);await add();

@@ -4,7 +4,7 @@ export interface SupplyProduct { id: string; code: string; name: string; unit: s
 export interface SupplyWarehouse { id: string; name: string; supplierId: string }
 export interface SupplyOrderInput {
   branchId: string; warehouseId: string; requestId: string;
-  items: Array<{ productId: string; quantity: number; note?: string }>; note: string;
+  items: Array<{ productId: string; quantity: number; unit?: string; expectedFactor?: number; note?: string }>; note: string;
 }
 export interface SupplyOrderResult {
   purchaseOrderId: string; code: string; salesOrderId: string; salesOrderCode: string; total: number;
@@ -18,7 +18,7 @@ function handleWarehouseError(error: { message: string; code?: string }, context
 export interface SupplyOrderLink { purchaseOrderId: string; salesOrderCode: string; processed: boolean; cancelled: boolean; revision?: number; blockedReason?: string | null }
 export interface SupplyOrderChangeDetail {
   purchaseOrderId: string; code: string; salesOrderCode: string; branchId: string; warehouseId: string;
-  revision: number; items: Array<SupplyProduct & { quantity: number; note?: string }>; note: string; blockedReason: string | null;
+  revision: number; items: Array<SupplyProduct & { quantity: number; unit?: string; expectedFactor?: number; note?: string }>; note: string; blockedReason: string | null;
 }
 export async function getWarehouseOrderForChange(id: string): Promise<SupplyOrderChangeDetail> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

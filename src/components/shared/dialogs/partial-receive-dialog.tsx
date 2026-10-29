@@ -238,9 +238,10 @@ export function PartialReceiveDialog({
               </div>
 
               <div className="rounded-lg border border-border bg-surface-container-lowest">
-                <div className="hidden grid-cols-[40px_minmax(220px,1fr)_150px_150px_140px] gap-3 border-b bg-surface-container-low px-3 py-2 text-xs font-semibold uppercase text-muted-foreground md:grid">
+                <div className="hidden grid-cols-[40px_minmax(160px,1fr)_80px_130px_150px_120px] gap-3 border-b bg-surface-container-low px-3 py-2 text-xs font-semibold uppercase text-muted-foreground md:grid">
                   <span />
                   <span>Mặt hàng</span>
+                  <span>ĐVT phiếu</span>
                   <span className="text-right">Tiến độ</span>
                   <span className="text-right">Nhập lần này</span>
                   <span className="text-right">Thành tiền</span>
@@ -252,7 +253,7 @@ export function PartialReceiveDialog({
                     return (
                       <div
                         key={l.id}
-                        className="grid gap-3 px-3 py-3 md:grid-cols-[40px_minmax(220px,1fr)_150px_150px_140px] md:items-center"
+                        className="grid gap-3 px-3 py-3 md:grid-cols-[40px_minmax(160px,1fr)_80px_130px_150px_120px] md:items-center"
                       >
                         <div className="flex items-center justify-between md:block">
                           <Checkbox
@@ -273,6 +274,7 @@ export function PartialReceiveDialog({
                           </div>
                         </div>
 
+                        <div className="text-sm text-muted-foreground" title="Nhận theo đơn vị đã lưu trên phiếu; hệ thống tự quy đổi về tồn kho."><span className="mr-2 md:hidden">ĐVT phiếu:</span>{l.unit}</div>
                         <div className="space-y-1 text-xs md:text-right">
                           <div className="font-medium tabular-nums">
                             {formatNumber(l.receivedQuantity)} / {formatNumber(l.quantity)} {l.unit}
