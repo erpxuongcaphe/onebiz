@@ -1,5 +1,6 @@
 import { getClient, handleError } from "./base";
 import { toCreatedAtRangeWindow } from "@/lib/utils/list-date-preset-range";
+import { validateFinancialDetailSource } from "@/lib/reports/financial-source-validation";
 
 export interface SkuFinancialRow {
   variantId?: string | null; variantName?: string | null;
@@ -23,7 +24,8 @@ export async function getSkuFinancialReport(range: { from: string; to: string },
   if (!result || !Array.isArray(result.rows) || !Array.isArray(result.customers)) {
     throw new Error("Chưa nhận đủ dữ liệu mặt hàng và khách hàng. Vui lòng thử lại.");
   }
-  const number = (value: unknown) => Number(value ?? 0);
+  result.rows.forEach(row => validateFinancialDetailSource(row, "sku"));
+  const number = (value: unknown) => Number(value);
   const nullable = (value: unknown) => value == null ? null : number(value);
   return { customers: result.customers, rows: result.rows.map(row => ({
     productId: String(row.product_id), variantId: row.variant_id == null ? null : String(row.variant_id), variantName: row.variant_name == null ? null : String(row.variant_name),
