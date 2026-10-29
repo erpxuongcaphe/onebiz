@@ -45,6 +45,7 @@ jobs:
           npm install --prefix "$RUNNER_TEMP/internal-pos-runtime" --no-save --ignore-scripts --no-audit --no-fund @electric-sql/pglite@0.5.8
           node scripts/fnb-db-test/run-internal-pos-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
           node scripts/fnb-db-test/run-scoped-read-context-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
+          node scripts/fnb-db-test/run-employee-group-branch-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
           node scripts/fnb-db-test/run-actual-receiving-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
           FNB_PGLITE_DIR="$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js" node scripts/fnb-db-test/run-trading-status.cjs
           FNB_PGLITE_DIR="$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js" node scripts/fnb-db-test/run-negative-stock.cjs
@@ -594,6 +595,8 @@ jobs:
           node scripts/fnb-db-test/extract-effective-quantity-chain.mjs /tmp/fnb-effective-quantity-chain.sql
           createdb fnb_effective_qty_test
           PGDATABASE=fnb_effective_qty_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00463_employee_benefit_groups.integration.sql
+          createdb fnb_employee_group_branch_test
+          PGDATABASE=fnb_employee_group_branch_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/employee_group_promotion_branch_scope.integration.sql
 
       - name: Verify exact FNB item cancellation approvals
         env:
