@@ -8,6 +8,7 @@ import { parseDestination, isConnectionProbe } from './destination.mjs';
 import { sendNetworkPrint } from './network.mjs';
 import { createUsbWorker, nativeUsbExecutable, printFailureStatus } from './usb-worker.mjs';
 import { createAgentRpc, createProgressWatchdog } from './recovery.mjs';
+import { createIdlePolling } from './polling.mjs';
 
 export function validateRaster(bytes, paper) {
   if (!['58mm', '80mm'].includes(paper) || bytes.length > 1800000) throw new Error('INVALID_RASTER');
@@ -57,6 +58,7 @@ export async function runAgent(configPath) {
     child.on('close',()=>{clearTimeout(timer);try{const names=JSON.parse(out||'[]');done((Array.isArray(names)?names:[names]).filter(n=>typeof n==='string').slice(0,100));}catch{done([]);}});
   });
   const refreshPrinters = createPrinterRefresh(discover, data => call('heartbeat', data), error => console.error(error.message));
+  const polling = createIdlePolling();
   const usbWorker = createUsbWorker(join(dirname(fileURLToPath(import.meta.url)), 'spool.ps1'));
   void usbWorker.warm().catch(error => console.error(error.message));
   let stopped=false;
@@ -74,7 +76,8 @@ export async function runAgent(configPath) {
       const claimStarted = Date.now();
       const job=await call('claim');
       watchdog.pulse();
-      if(!job){await sleep(1000);continue;}
+      if(!job){await sleep(polling.emptyDelayMs());continue;}
+      polling.received();
       const sendStarted = Date.now();
       let status='failed',message='Không dựng được dữ liệu in.',attempted=false,tempPath;
       try {

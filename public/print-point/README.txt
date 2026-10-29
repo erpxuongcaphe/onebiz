@@ -45,7 +45,12 @@ khổ giấy cho từng nơi nhận và lưu. Danh sách máy được quét l�
 Nhân viên mở POS → Nơi nhận & lệnh in → Dùng điểm in chi nhánh.
 Trên POS, nút “In & lệnh” mở ngay lịch sử, tự cập nhật mỗi 5 giây.
 Dò máy Windows chạy nền, không chặn lệnh LAN. Khi hàng đợi trống,
-điểm in kiểm tra lệnh mới sau 1 giây; lệnh đang gửi vẫn xử lý tuần tự.
+điểm in kiểm tra sau 1 giây trong 10 giây đầu, sau 2 giây khi rảnh
+từ 10 đến 30 giây, rồi sau 5 giây nếu vẫn rảnh. Phiếu đầu sau lúc nghỉ
+có thể chờ tối đa một nhịp 5 giây cộng thời gian mạng. Khi nhận phiếu,
+trở về nhịp nhanh; các phiếu đang chờ vẫn được lấy liên tục, xử lý tuần tự.
+Thay đổi nhịp cần cập nhật chương trình tại máy quầy; chỉ cập nhật web
+hoặc database không tự thay phiên bản đang chạy trên Windows.
 USB giữ một tiến trình gửi Windows sẵn sàng, không khởi tạo lại cho mỗi bill.
 Sau khi cập nhật, phải dừng và chạy lại task để nạp phiên bản mới.
 Nếu mất phản hồi từ Windows, không tự gửi lại bill; kiểm tra giấy trước.

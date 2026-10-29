@@ -24,6 +24,7 @@ describe("private branch print setup archive", () => {
       const files = await getPrintSetupFiles();
       expect(files.map(file => file.name)).toContain("usb-worker.mjs");
       expect(files.map(file => file.name)).toContain("recovery.mjs");
+      expect(files.map(file => file.name)).toContain("polling.mjs");
       expect(files.map(file => file.name)).toEqual(expect.arrayContaining(["start-hidden.vbs", "autostart.ps1", "update-autostart.ps1"]));
       expect(files.map(file => file.name)).toEqual(expect.arrayContaining(["OnebizUsbWorker.exe", "OnebizUsbWorker.cs"]));
       expect(fetchMock).toHaveBeenCalledWith("/print-point/usb-worker.mjs", { cache: "no-store" });

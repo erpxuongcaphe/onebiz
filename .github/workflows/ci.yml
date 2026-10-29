@@ -135,7 +135,7 @@ jobs:
           PGPASSWORD: postgres
         run: |
           createdb fnb_print_queue_test
-          PGDATABASE=fnb_print_queue_test psql -v ON_ERROR_STOP=1 -f supabase/tests/fnb_print_recoverable_claim.integration.sql
+          PGDATABASE=fnb_print_queue_test psql -v ON_ERROR_STOP=1 -f supabase/tests/fnb_print_idle.integration.sql
           PGDATABASE=fnb_print_queue_test node scripts/test-print-burst-concurrency.mjs
 
       - name: Verify invoice code allocation in an isolated database
@@ -715,7 +715,7 @@ jobs:
         run: npm run test:run
 
       - name: Verify USB worker lifecycle without a physical printer
-        run: node --test scripts/test-usb-worker.mjs scripts/test-print-recovery.mjs
+        run: node --test scripts/test-usb-worker.mjs scripts/test-print-recovery.mjs scripts/test-print-polling.mjs
 
       - name: Verify external monitor without contacting production or Telegram
         run: python3 scripts/operations/test_monitor.py
