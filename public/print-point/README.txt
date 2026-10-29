@@ -51,14 +51,27 @@ Cắt giấy sau phiếu bật mặc định; tắt nếu máy không có dao c�
 cắt không thay nội dung ảnh/phiếu. Lưu cấu hình trước khi kiểm tra/in thử.
 
 KHỞI ĐỘNG CÙNG WINDOWS
+Task dùng wscript.exe và start-hidden.vbs để mở supervisor PowerShell ẩn,
+không có cửa sổ console để nhân viên đóng nhầm. Trình chạy đợi supervisor
+kết thúc và trả mã thoát cho Task Scheduler; không chạy thả nổi tiến trình.
+Windows Script Host bị chặn thì bộ cài dừng trước khi đổi task, không tắt
+bảo vệ hoặc đổi execution policy. Máy vẫn cần giữ đăng nhập Windows.
+Nâng cấp task đã cài: chép start-hidden.vbs, autostart.ps1 và
+update-autostart.ps1 vào đúng thư mục điểm in, rồi chạy:
+  .\update-autostart.ps1 -PointId <ID điểm in>
+Script sao lưu XML task, giữ tài khoản/trigger/cấu hình in và bật chạy bù.
+Không dừng/chạy lại receiver hiện tại. Action mới có hiệu lực lần chạy sau;
+chỉ kiểm tra restart lúc quán thuận tiện, xác nhận kết nối và giấy thực tế.
+Quay lại: quản trị có thể khôi phục XML autostart-backup-*.xml vừa tạo
+bằng Register-ScheduledTask; giữ đúng tài khoản quầy, không tạo task thứ hai.
 setup.ps1 tạo task cho tài khoản Windows hiện tại, chạy với quyền thường,
 không lưu mật khẩu và không cài service. Nếu task cùng điểm đã tồn tại,
 script dừng để quản lý kiểm tra, không ghi đè.
 Nếu cần cấu hình thủ công, dùng Task Scheduler:
 - Trigger: At log on (đăng nhập tài khoản quầy).
-- Action: node.exe (chọn đường dẫn Node.js đã cài).
-- Arguments: agent.mjs
-- Start in: thư mục riêng có 3 tệp trên.
+- Action: Windows\System32\wscript.exe.
+- Arguments: //B //NoLogo "<thư mục điểm in>\start-hidden.vbs"
+- Start in: thư mục điểm in.
 - Tự khởi động lại khi lỗi; bỏ giới hạn thời gian chạy task.
 - Chỉ chạy một instance; máy phải giữ đăng nhập, tắt sleep khi phục vụ.
 Kiểm tra task sau khi khởi động lại trước khi đưa vào vận hành.

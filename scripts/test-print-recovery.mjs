@@ -60,7 +60,7 @@ test('public ZIP includes matching recovery/supervisor files and no point creden
     const body=zip.subarray(start,start+size);entries.set(name,method===8?inflateRawSync(body):body);offset=start+size;
   }
   assert.equal(entries.has('onebiz-print-point.json'),false);
-  for(const name of ['agent.mjs','recovery.mjs','run.ps1','usb-worker.mjs','README.txt']){
+  for(const name of ['agent.mjs','recovery.mjs','run.ps1','usb-worker.mjs','README.txt','setup.ps1','autostart.ps1','start-hidden.vbs','update-autostart.ps1']){
     // Git checks out LF on Linux and CRLF on Windows; compare text, not platform newlines.
     assert.equal(entries.get(name)?.toString('utf8').replace(/\r\n/g,'\n'),(await readFile(new URL('../public/print-point/'+name,import.meta.url),'utf8')).replace(/\r\n/g,'\n'));
   }
