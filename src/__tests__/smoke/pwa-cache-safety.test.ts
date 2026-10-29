@@ -13,8 +13,8 @@ describe("PWA cache safety", () => {
   });
 
   it("uses a new manager cache and never intercepts local development", () => {
-    expect(managerWorker).toContain('onebiz-manager-v4');
-    expect(managerWorker).not.toContain('onebiz-manager-v3');
+    expect(managerWorker).toContain('onebiz-manager-v5');
+    expect(managerWorker).not.toContain('onebiz-manager-v4');
     expect(managerWorker).toContain('url.hostname === "localhost"');
     expect(managerWorker).toContain('url.hostname === "127.0.0.1"');
   });

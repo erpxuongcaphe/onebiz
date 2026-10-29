@@ -1,57 +1,23 @@
-import { cleanup, render, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-const state = vi.hoisted(() => ({
-  ready: true, loading: false, permitted: false,
-  user: { id: "actor-a", fullName: "Demo" } as { id: string; fullName: string } | null,
-  read: vi.fn(),
-}));
-vi.mock("@/lib/contexts", () => ({
-  useAuth: () => ({ user: state.user }),
-  useBranchFilter: () => ({ activeBranchId: "branch-a", currentBranch: { name: "Demo" }, isReady: state.ready }),
-}));
-vi.mock("@/lib/permissions/use-permission", () => ({
-  usePermissions: () => ({ hasPermission: () => state.permitted, isLoading: state.loading }),
-}));
-vi.mock("@/lib/services", () => ({
-  getDashboardKpis: (...args: unknown[]) => state.read("kpis", ...args),
-  getFinancialAlerts: (...args: unknown[]) => state.read("alerts", ...args),
-  getManagerLowStockProducts: (...args: unknown[]) => state.read("stock", ...args),
-  getOrdersByWeekday: (...args: unknown[]) => state.read("orders", ...args),
-  getRecentActivities: (...args: unknown[]) => state.read("activities", ...args),
-  getRevenueByDay: (...args: unknown[]) => state.read("days", ...args),
-  getRevenueByHour: (...args: unknown[]) => state.read("hours", ...args),
-  getStockoutForecast: (...args: unknown[]) => state.read("forecast", ...args),
-  getTopProducts: (...args: unknown[]) => state.read("products", ...args),
-}));
-import ManagerPwaPage from "@/app/manager/page";
-
+import { beforeEach, describe, expect, it, vi } from "vitest";
+const state = vi.hoisted(() => ({ redirect: vi.fn() }));
+vi.mock("next/navigation", () => ({ redirect: state.redirect }));
+import ManagerEntryPage from "@/app/manager/page";
 beforeEach(() => {
-  vi.clearAllMocks(); state.ready = true; state.loading = false; state.permitted = false;
-  state.user = { id: "actor-a", fullName: "Demo" };
-  state.read.mockResolvedValue([]);
+  state.redirect.mockReset().mockImplementation((url: string) => { throw new Error("REDIRECT:" + url); });
 });
-afterEach(cleanup);
-
-describe("manager data access gate", () => {
-  it.each(["denied", "pending", "branch", "anonymous"])("does not fetch while access is %s", (condition) => {
-    state.permitted = condition !== "denied";
-    if (condition === "pending") state.loading = true;
-    if (condition === "branch") state.ready = false;
-    if (condition === "anonymous") state.user = null;
-    render(<ManagerPwaPage />);
-    expect(state.read).not.toHaveBeenCalled();
+describe("manager entry shares the main dashboard", () => {
+  it("redirects an installed shortcut without loading another data source", async () => {
+    await expect(ManagerEntryPage({})).rejects.toThrow("REDIRECT:/");
+    expect(state.redirect).toHaveBeenCalledOnce();
   });
-
-  it("starts loading only after permission resolution", async () => {
-    state.loading = true; state.permitted = true;
-    state.read.mockImplementation((kind: string) => Promise.resolve(kind === "kpis" ? null : []));
-    const view = render(<ManagerPwaPage />);
-    expect(state.read).not.toHaveBeenCalled();
-    state.loading = false;
-    view.rerender(<ManagerPwaPage />);
-    await waitFor(() => expect(state.read).toHaveBeenCalledTimes(9));
-    expect(state.read).toHaveBeenCalledWith("kpis", "branch-a");
-    expect(state.read).toHaveBeenCalledWith("alerts", "branch-a");
+  it.each(["all", "00000000-0000-4000-8000-000000000001", "019a2b39-0000-7000-8000-000000000001"])("preserves requested branch %s for the main scope guard", async branch => {
+    await expect(ManagerEntryPage({ searchParams: Promise.resolve({ branch }) })).rejects.toThrow("REDIRECT:/?branch=" + branch);
+  });
+  it.each(["https://example.com", "../pos", "invalid", ["all", "other"]])("ignores invalid or repeated branch input %s", async branch => {
+    await expect(ManagerEntryPage({ searchParams: Promise.resolve({ branch }) })).rejects.toThrow("REDIRECT:/");
+    expect(state.redirect).toHaveBeenCalledWith("/");
+  });
+  it("does not forward unrelated navigation or stale date parameters", async () => {
+    await expect(ManagerEntryPage({ searchParams: Promise.resolve({ next: "https://example.com", preset: "thisMonth", from: "2026-10-01", branch: "all" }) })).rejects.toThrow("REDIRECT:/?branch=all");
   });
 });
