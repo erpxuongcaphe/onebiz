@@ -1,7 +1,9 @@
 -- Disposable database only. No external services or real invoices.
 create schema if not exists extensions;
-create role anon nologin;
-create role authenticated nologin;
+do $$ begin
+ if not exists(select 1 from pg_roles where rolname='anon') then create role anon nologin; end if;
+ if not exists(select 1 from pg_roles where rolname='authenticated') then create role authenticated nologin; end if;
+end $$;
 create function test_id(n integer) returns uuid language sql immutable as
 $$ select ('00000000-0000-0000-0000-' || lpad(n::text,12,'0'))::uuid $$;
 create table branches(id uuid primary key,tenant_id uuid,is_active boolean default true);
