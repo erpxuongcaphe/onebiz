@@ -10,8 +10,9 @@ export interface PrintPoint { id: string; name: string; enabled: boolean; connec
 export interface BranchPrintJob { id: string; label: string; route_label: string; status: "queued" | "sending" | "handed_off" | "failed" | "unknown" | "cancelled"; created_at: string; actor_name: string; message: string | null }
 
 // New RPCs are typed here until the generated production schema is refreshed.
-async function rpc<T>(name: string, args: Record<string, unknown>): Promise<T> {
-  const { data, error } = await (createClient() as SupabaseClient).rpc(name, args);
+async function rpc<T>(name: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<T> {
+  const request = (createClient() as SupabaseClient).rpc(name, args);
+  const { data, error } = await (signal ? request.abortSignal(signal) : request);
   if (error) throw new Error(error.code === "PGRST202" ? "Hệ thống chưa cập nhật chức năng điểm in chi nhánh. Hãy dùng phương thức in hiện có trong lúc chờ cập nhật." : error.message);
   return data as T;
 }
@@ -45,4 +46,4 @@ export async function enqueueBranchPrint(args: { branchId: string; routeKey: str
 }
 
 /** Exact job IDs: never infer a receipt result from the latest 50 other tickets. */
-export const getBranchPrintJobState = (branchId: string, ids: string[]) => rpc<{ point: Pick<PrintPoint, "enabled" | "connected" | "last_seen_at"> | null; jobs: BranchPrintJob[] }>("fnb_print_jobs_status_v1", { p_branch: branchId, p_ids: ids });
+export const getBranchPrintJobState = (branchId: string, ids: string[], signal?: AbortSignal) => rpc<{ point: Pick<PrintPoint, "enabled" | "connected" | "last_seen_at"> | null; jobs: BranchPrintJob[] }>("fnb_print_jobs_status_v1", { p_branch: branchId, p_ids: ids }, signal);
