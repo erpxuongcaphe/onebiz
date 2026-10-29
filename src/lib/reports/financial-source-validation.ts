@@ -24,9 +24,9 @@ export function validateFinancialDetailSource(value: unknown, kind: "customer" |
       throw new Error("Nguồn báo cáo thiếu hoặc sai chỉ tiêu tài chính.");
     }
   }
-  const matches = (left: number, right: number) => Math.abs(left - right) <= 0.01 + Math.max(Math.abs(left), Math.abs(right)) * Number.EPSILON * 8;
+  const matches = (left: number, right: number, tolerance = 0.01) => Math.abs(left - right) <= tolerance + Math.max(Math.abs(left), Math.abs(right)) * Number.EPSILON * 8;
   if (!matches(Number(row.sales_amount) - Number(row.return_amount), Number(row.net_revenue)) ||
-    (kind === "sku" && !matches(Number(row.sold_qty) - Number(row.returned_qty), Number(row.net_qty)))) {
+    (kind === "sku" && !matches(Number(row.sold_qty) - Number(row.returned_qty), Number(row.net_qty), 1e-8))) {
     throw new Error("Nguồn báo cáo không khớp bán và trả hàng.");
   }
   if ((row.cogs === null) !== (row.gross_profit === null) ||

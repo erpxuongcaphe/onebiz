@@ -34,4 +34,5 @@ describe.each(["customer", "sku"] as const)("%s financial source integrity", kin
 
 it("rejects a SKU whose net quantity does not match its unit-bound sales and returns", () => {
   expect(() => validateFinancialDetailSource({ ...valid(), net_qty: 3 }, "sku")).toThrow("bán và trả hàng");
+  expect(() => validateFinancialDetailSource({ ...valid(), net_qty: 2.5001 }, "sku")).toThrow("bán và trả hàng");
 });
