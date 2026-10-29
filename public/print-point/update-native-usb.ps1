@@ -10,7 +10,10 @@ foreach($file in $files){if(-not(Test-Path -LiteralPath (Join-Path $PSScriptRoot
 $probeLog=Join-Path $PSScriptRoot 'native-probe.log'
 $probe=Start-Process -FilePath (Join-Path $PSScriptRoot 'OnebizUsbWorker.exe') -ArgumentList '--probe' -WindowStyle Hidden -RedirectStandardOutput $probeLog -RedirectStandardError (Join-Path $PSScriptRoot 'native-probe-error.log') -PassThru
 if(-not $probe.WaitForExit(10000)){$probe.Kill();throw 'Native probe timeout. Current receiver unchanged.'}
-if($probe.ExitCode -ne 0 -or -not ((Get-Content -LiteralPath $probeLog -Raw | ConvertFrom-Json).ready)){throw 'Native worker blocked/not ready. Current receiver unchanged.'}
+# Windows PowerShell 5.1 Start-Process can lose ExitCode for a short-lived child.
+# WaitForExit has confirmed termination; require explicit ready JSON and reject
+# every available nonzero exit code. A missing code alone is not a failure.
+if(($null -ne $probe.ExitCode -and $probe.ExitCode -ne 0) -or -not ((Get-Content -LiteralPath $probeLog -Raw | ConvertFrom-Json).ready)){throw 'Native worker blocked/not ready. Current receiver unchanged.'}
 $backup=Join-Path $TargetFolder ('usb-backup-'+[Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $backup | Out-Null
 foreach($file in $files){$old=Join-Path $TargetFolder $file;if(Test-Path -LiteralPath $old){Copy-Item -LiteralPath $old -Destination (Join-Path $backup $file)}}
