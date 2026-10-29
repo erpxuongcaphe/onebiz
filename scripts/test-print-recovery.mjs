@@ -4,16 +4,59 @@ import { createAgentRpc, createProgressWatchdog } from '../public/print-point/re
 const config = { url: 'https://test.invalid', pointId: 'point', token: 'private-token', publicKey: 'public-key' };
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 test('stalled fetch ignoring abort expires, then the next claim can proceed', async () => {
-  let calls = 0, signal;
+  let calls = 0, signal, clock = 0;
   const rpc = createAgentRpc(config, async (_url, options) => {
     signal = options.signal;
     if (++calls === 1) return new Promise(() => {});
     return { ok: true, json: async () => null };
-  }, 20);
+  }, 20, () => clock);
   await assert.rejects(rpc('claim'), /PRINT_RPC_TIMEOUT/);
   assert.equal(signal.aborted, true);
   assert.equal(calls, 1, 'a lost claim must not be automatically retried');
+  clock = 5000;
   assert.equal(await rpc('claim'), null);
+});
+
+test('invalid receiver backs off claim and background heartbeat together, then can recover', async () => {
+  let clock = 0, calls = 0;
+  const rpc = createAgentRpc(config, async () => {
+    calls++;
+    return calls === 1 ? { ok: false, status: 401 } : { ok: true, json: async () => null };
+  }, 100, () => clock);
+  await assert.rejects(rpc('claim'), error => error.message === 'PRINT_RPC_HTTP_401' && error.retryAfterMs === 300000);
+  for (const action of ['claim', 'heartbeat', 'finish']) {
+    await assert.rejects(rpc(action), /PRINT_RPC_BACKOFF/);
+  }
+  assert.equal(calls, 1);
+  clock = 300000;
+  assert.equal(await rpc('claim'), null);
+  assert.equal(calls, 2);
+  assert.equal(await rpc('claim'), null, 'healthy polling is not delayed');
+});
+
+test('transient outage increases cooldown and successful response resets it', async () => {
+  let clock = 0, calls = 0;
+  const rpc = createAgentRpc(config, async () => {
+    calls++;
+    return calls === 3 ? { ok: true, json: async () => null } : { ok: false, status: 503 };
+  }, 100, () => clock);
+  await assert.rejects(rpc('claim'), error => error.retryAfterMs === 5000);
+  clock += 5000;
+  await assert.rejects(rpc('claim'), error => error.retryAfterMs === 10000);
+  clock += 10000;
+  assert.equal(await rpc('claim'), null);
+  await assert.rejects(rpc('claim'), error => error.retryAfterMs === 5000);
+});
+
+test('rate limited receiver respects bounded Retry-After without replaying a claim', async () => {
+  let calls = 0;
+  const rpc = createAgentRpc(config, async () => {
+    calls++;
+    return { ok: false, status: 429, headers: new Headers({ 'retry-after': '120' }) };
+  });
+  await assert.rejects(rpc('claim'), error => error.retryAfterMs === 120000);
+  await assert.rejects(rpc('claim'), /PRINT_RPC_BACKOFF/);
+  assert.equal(calls, 1);
 });
 test('headers arrive but a stuck JSON body still expires', async () => {
   const rpc = createAgentRpc(config, async () => ({ok:true,json:()=>new Promise(()=>{})}), 20);

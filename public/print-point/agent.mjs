@@ -108,7 +108,17 @@ export async function runAgent(configPath) {
         catch(error){console.error(error.message);await sleep(2500);}
       }
       console.log(`${new Date().toISOString()} · ${job.id} · ${status} · lấy lệnh ${sendStarted-claimStarted}ms · gửi máy ${acknowledgementStarted-sendStarted}ms · xác nhận ${Date.now()-acknowledgementStarted}ms`);
-    }catch(error){console.error(`${new Date().toISOString()} · ${error.message}`);watchdog.pulse();await sleep(5000);}
+    }catch(error){
+      console.error(`${new Date().toISOString()} · ${error.message}`);
+      // Pulse during a deliberate cooldown so the supervisor cannot defeat
+      // backoff by restarting the receiver. Healthy claim latency is unchanged.
+      let remaining = Math.max(5000, Math.min(900000, error.retryAfterMs || 5000));
+      while (!stopped && remaining > 0) {
+        watchdog.pulse();
+        const pause = Math.min(5000, remaining);
+        await sleep(pause); remaining -= pause;
+      }
+    }
   }
   watchdog.close();
   usbWorker.close();

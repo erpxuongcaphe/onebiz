@@ -1,5 +1,10 @@
 # Backup & Disaster Recovery — OneBiz ERP
 
+> Reviewed 29/10/2026: the independent backup is not configured until its database
+> access, encryption and restore verification have been approved and completed.
+> `scripts/backup-db.mjs` is an application-data export, not a full disaster-recovery
+> backup. See `scripts/operations/README.md` for the monitoring/backup boundary.
+
 > **Sprint LT-4** (CEO 04/05/2026)
 > Tài liệu hướng dẫn khôi phục dữ liệu khi sự cố. Đọc kỹ khi setup, in ra để dán cạnh máy hoặc lưu trên điện thoại để dùng khi khẩn cấp.
 
@@ -29,16 +34,16 @@
 
 ## 2. Supabase backup — cơ chế tự động
 
-### Free Plan (current)
-- **Auto backup hằng ngày** (3:00 AM UTC = 10:00 AM giờ VN)
-- **Retention 7 ngày** — chỉ giữ 7 backup gần nhất
+### Free Plan
+- Không có managed daily backup để người dùng khôi phục qua Dashboard.
+- Cần tự xuất bản sao độc lập và kiểm thử khôi phục.
 - **No PITR** (Point-In-Time Recovery)
 - Truy cập: Supabase Dashboard → Database → **Backups**
 
-### Pro Plan ($25/tháng) — đề xuất nếu chuỗi mở rộng
-- Auto backup hằng ngày, retention **14 ngày**
-- **PITR** — restore tới giây bất kỳ trong **7 ngày** gần nhất
-- Backup retention up to 30 ngày
+### Pro Plan — đang dùng từ 29/10/2026
+- Managed backup hằng ngày, giữ **7 ngày**; kiểm tra bản sao thực tế trong Dashboard.
+- **PITR là add-on trả phí riêng, chưa bật**, không nằm trong ngân sách hiện tại.
+- Backup database không bao gồm nội dung file Storage; cần sao chép file riêng.
 - Nâng cấp: Supabase Dashboard → Settings → Subscription
 
 ### Tự backup thêm (recommended)
@@ -190,11 +195,11 @@ VALUES (...);
 
 **Procedure**:
 
-1. **KHÔNG hoảng** — Supabase giữ deleted projects 1 thời gian
-2. Vào https://supabase.com/dashboard/account → **Recently Deleted**
-3. Click **Restore** trong vòng 7 ngày
-4. Nếu quá 7 ngày → liên hệ support@supabase.io ngay (có thể recover nhưng không guarantee)
-5. Cùng lúc, restore từ bản local backup (§2 — tự backup)
+1. Khi xóa project, Supabase xóa vĩnh viễn dữ liệu và backup liên quan; không dựa vào Recently Deleted.
+2. Tìm bản sao độc lập đã kiểm thử ở ngoài Supabase.
+3. Chuẩn bị dự án đích và kiểm kê Auth, schema, quyền, lịch chạy và file Storage.
+4. Liên hệ hỗ trợ khi cần, không giả định có thể khôi phục dự án đã xóa.
+5. Khôi phục từ bản sao độc lập, đối chiếu trước khi chuyển website/bộ nhận sang đích mới.
 6. Update env var `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY` trên Vercel nếu URL đổi
 7. Redeploy Vercel
 
