@@ -19,7 +19,10 @@ alter table private.fnb_cost_event_lines_20261029 enable row level security;
 revoke all on private.fnb_cost_event_lines_20261029 from public,anon,authenticated;
 
 create table private.fnb_cost_finalize_queue_20261029 (
-  invoice_id uuid primary key references public.invoices(id) on delete restrict,
+  -- Operational pointer, deliberately no FK: its implicit KEY SHARE lock would
+  -- block a receipt behind a concurrently edited/voided invoice. Worker checks
+  -- the invoice tenant/branch/state and removes orphaned jobs explicitly.
+  invoice_id uuid primary key,
   tenant_id uuid not null,
   branch_id uuid not null,
   actor_id uuid not null,
@@ -98,7 +101,13 @@ begin
  if not found then return 'not_queued'; end if;
  if job.attempted_at=transaction_timestamp() then return 'already_attempted'; end if;
  select * into inv from public.invoices where id=p_invoice for update skip locked;
- if not found then return 'busy'; end if;
+ if not found then
+  if not exists(select 1 from public.invoices where id=p_invoice) then
+   delete from private.fnb_cost_finalize_queue_20261029 where invoice_id=p_invoice;
+   return 'not_applicable';
+  end if;
+  return 'busy';
+ end if;
  if inv.source is distinct from 'fnb' or inv.status<>'completed' or inv.deleted_at is not null
  or inv.tenant_id<>job.tenant_id or inv.branch_id<>job.branch_id then
   update private.fnb_cost_finalize_queue_20261029 set reason='not_applicable',attempted_at=now() where invoice_id=p_invoice;
