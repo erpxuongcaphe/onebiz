@@ -1,4 +1,5 @@
 "use client";
+import { stockUnitColumns, STOCK_UNIT_EXCEL_COLUMNS } from "@/components/shared/report/stock-unit-columns";
 
 /**
  * Báo cáo Aging tồn kho / Dead-stock (Phase A.1 — CEO 16/05/2026).
@@ -142,6 +143,7 @@ export default function AgingReportPage() {
   // ── Columns table ──
   const columns: DataTableColumn<InventoryAgingRow>[] = [
     { label: "Mã hàng", key: "code", width: "100px" },
+    ...stockUnitColumns<InventoryAgingRow>({ unitLabel: "ĐVT tồn hiện tại", hideCount: true }),
     { label: "Tên sản phẩm", key: "name", width: "240px" },
     {
       label: "Tồn",
@@ -271,6 +273,7 @@ export default function AgingReportPage() {
         columns: [
           { label: "Mã hàng", key: "code", width: 12 },
           { label: "Tên hàng", key: "name", width: 30 },
+          ...STOCK_UNIT_EXCEL_COLUMNS.filter(column => column.key === "catalogUnit" || column.key === "currentConversion"),
           { label: "Tồn", key: "qty", width: 12, format: "number" },
           { label: "Giá vốn", key: "cost", width: 14, format: "currency" },
           { label: "Giá trị tồn", key: "value", width: 16, format: "currency" },
@@ -283,6 +286,8 @@ export default function AgingReportPage() {
         rows: exportRows.map((r) => ({
           code: r.code,
           name: r.name,
+          catalogUnit: r.catalogUnit ?? "Chưa có ĐVT",
+          currentConversion: r.currentConversion ?? "Chưa có quy đổi phụ",
           qty: r.currentQty,
           cost: r.costPrice,
           value: r.stockValue,
@@ -315,6 +320,7 @@ export default function AgingReportPage() {
         columns: [
           { label: "Mã hàng", key: "code", width: 12 },
           { label: "Tên hàng", key: "name", width: 30 },
+          ...STOCK_UNIT_EXCEL_COLUMNS.filter(column => column.key === "catalogUnit" || column.key === "currentConversion"),
           { label: "Tồn", key: "qty", width: 12, format: "number" },
           { label: "Giá trị vốn chết", key: "value", width: 18, format: "currency" },
           { label: "Tồn ngày", key: "days", width: 12, format: "number" },
@@ -324,6 +330,8 @@ export default function AgingReportPage() {
         rows: deadRows.map((r) => ({
           code: r.code,
           name: r.name,
+          catalogUnit: r.catalogUnit ?? "Chưa có ĐVT",
+          currentConversion: r.currentConversion ?? "Chưa có quy đổi phụ",
           qty: r.currentQty,
           value: r.stockValue,
           days: r.daysInStock ?? 0,
@@ -336,7 +344,7 @@ export default function AgingReportPage() {
         footer: {
           code: "",
           name: "TỔNG GIÁ TRỊ VỐN CHẾT",
-          qty: deadRows.reduce((s, r) => s + r.currentQty, 0),
+          qty: "",
           value: kpis.deadValue,
           days: "",
           noSale: "",

@@ -1,4 +1,6 @@
 "use client";
+import { stockUnitColumns, STOCK_UNIT_EXCEL_COLUMNS } from "@/components/shared/report/stock-unit-columns";
+import { reportUnitLabel } from "@/lib/reports/stock-unit-context";
 
 /**
  * Báo cáo Tổn thất tồn kho (Phase A.2 — CEO 16/05/2026).
@@ -107,19 +109,17 @@ export default function DisposalLossReportPage() {
   // ── KPI ──
   const kpis = useMemo(() => {
     const totalLoss = rows.reduce((s, r) => s + r.lossValue, 0);
-    const totalItems = rows.reduce((s, r) => s + r.quantity, 0);
     const disposalCount = new Set(rows.map((r) => r.disposalId)).size;
     const productCount = new Set(rows.map((r) => r.productId)).size;
-    return { totalLoss, totalItems, disposalCount, productCount };
+    return { totalLoss, disposalCount, productCount };
   }, [rows]);
 
   // ── Aggregations ──
   const byReason = useMemo(() => {
-    const map = new Map<string, { value: number; items: number; count: number }>();
+    const map = new Map<string, { value: number; count: number }>();
     for (const r of rows) {
-      const ex = map.get(r.reason) ?? { value: 0, items: 0, count: 0 };
+      const ex = map.get(r.reason) ?? { value: 0, count: 0 };
       ex.value += r.lossValue;
-      ex.items += r.quantity;
       ex.count += 1;
       map.set(r.reason, ex);
     }
@@ -131,17 +131,19 @@ export default function DisposalLossReportPage() {
   const byProduct = useMemo(() => {
     const map = new Map<
       string,
-      { productName: string; value: number; quantity: number }
+      { productName: string; unit: string; value: number; quantity: number }
     >();
     for (const r of rows) {
-      const ex = map.get(r.productId) ?? {
+      const key = `${r.productId}:${r.recordedUnit || r.disposalId}`;
+      const ex = map.get(key) ?? {
         productName: r.productName,
+        unit: reportUnitLabel(r),
         value: 0,
         quantity: 0,
       };
       ex.value += r.lossValue;
       ex.quantity += r.quantity;
-      map.set(r.productId, ex);
+      map.set(key, ex);
     }
     return Array.from(map.entries())
       .map(([productId, data]) => ({ productId, ...data }))
@@ -183,6 +185,8 @@ export default function DisposalLossReportPage() {
     { label: "Mã phiếu", key: "disposalCode", width: "120px" },
     { label: "Chi nhánh", key: "branchName", width: "140px" },
     { label: "Sản phẩm", key: "productName", width: "220px" },
+    { label: "Mã hàng", key: "productCode", width: "150px" },
+    ...stockUnitColumns<DisposalLossRow>({ countLabel: "SL xuất theo ĐVT nhập" }),
     {
       label: "SL hủy",
       key: "quantity",
@@ -242,20 +246,17 @@ export default function DisposalLossReportPage() {
         titleRows: ["TỔN THẤT THEO LÝ DO"],
         columns: [
           { label: "Lý do", key: "reason", width: 28 },
-          { label: "Số phiếu", key: "count", width: 14, format: "number" },
-          { label: "SL hủy", key: "items", width: 14, format: "number" },
+          { label: "Số dòng", key: "count", width: 14, format: "number" },
           { label: "Tổng tổn thất", key: "value", width: 18, format: "currency" },
         ],
         rows: byReason.map((r) => ({
           reason: r.reason,
           count: r.count,
-          items: r.items,
           value: r.value,
         })),
         footer: {
           reason: "TỔNG",
-          count: kpis.disposalCount,
-          items: kpis.totalItems,
+          count: rows.length,
           value: kpis.totalLoss,
         },
       };
@@ -265,17 +266,18 @@ export default function DisposalLossReportPage() {
         titleRows: ["TỔN THẤT THEO SẢN PHẨM"],
         columns: [
           { label: "Sản phẩm", key: "productName", width: 32 },
+          { label: "ĐVT ghi sổ", key: "unit", width: 18 },
           { label: "SL hủy", key: "quantity", width: 14, format: "number" },
           { label: "Tổng tổn thất", key: "value", width: 18, format: "currency" },
         ],
         rows: byProduct.map((r) => ({
           productName: r.productName,
+          unit: r.unit,
           quantity: r.quantity,
           value: r.value,
         })),
         footer: {
           productName: "TỔNG",
-          quantity: kpis.totalItems,
           value: kpis.totalLoss,
         },
       };
@@ -308,6 +310,8 @@ export default function DisposalLossReportPage() {
           { label: "Mã phiếu", key: "code", width: 14 },
           { label: "Chi nhánh", key: "branch", width: 22 },
           { label: "Sản phẩm", key: "product", width: 28 },
+          { label: "Mã hàng", key: "productCode", width: 18 },
+          ...STOCK_UNIT_EXCEL_COLUMNS.map(column => column.key === "recordedCount" ? { ...column, label: "SL xuất theo ĐVT nhập" } : column),
           { label: "SL", key: "qty", width: 10, format: "number" },
           { label: "Giá vốn", key: "cost", width: 14, format: "currency" },
           { label: "Tổn thất", key: "loss", width: 16, format: "currency" },
@@ -318,6 +322,12 @@ export default function DisposalLossReportPage() {
           code: r.disposalCode,
           branch: r.branchName ?? "",
           product: r.productName,
+          productCode: r.productCode ?? "",
+          recordedUnit: reportUnitLabel(r),
+          recordedConversion: r.recordedConversion ?? "Chưa lưu",
+          catalogUnit: r.catalogUnit ?? "",
+          currentConversion: r.currentConversion ?? "",
+          recordedCount: r.recordedCount ?? "Chưa lưu",
           qty: r.quantity,
           cost: r.unitCost,
           loss: r.lossValue,
@@ -328,7 +338,6 @@ export default function DisposalLossReportPage() {
           code: "",
           branch: "",
           product: `${rows.length} dòng`,
-          qty: kpis.totalItems,
           cost: "",
           loss: kpis.totalLoss,
           reason: "",
@@ -415,7 +424,7 @@ export default function DisposalLossReportPage() {
         <KpiCard
           label="Số SP bị hủy"
           value={formatNumber(kpis.productCount)}
-          change={`${formatNumber(kpis.totalItems)} SL hủy`}
+          change={`${rows.length} dòng hủy`}
           positive
           icon="category"
           bg="bg-status-info/10"

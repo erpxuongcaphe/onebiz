@@ -49,6 +49,8 @@ import {
 } from "@/lib/services";
 import { KpiCard } from "../_components/kpi-card";
 import { ChartCard } from "../_components/chart-card";
+import { stockUnitColumns, STOCK_UNIT_EXCEL_COLUMNS } from "@/components/shared/report/stock-unit-columns";
+import { reportUnitLabel } from "@/lib/reports/stock-unit-context";
 
 type VarianceFilter = "all" | "thiếu" | "thừa";
 
@@ -148,11 +150,13 @@ export default function InventoryVarianceReportPage() {
   const byProduct = useMemo(() => {
     const map = new Map<
       string,
-      { productName: string; totalDiff: number; totalValue: number; count: number }
+      { productName: string; unit: string; totalDiff: number; totalValue: number; count: number }
     >();
     for (const r of rows) {
-      const ex = map.get(r.productId) ?? {
+      const key = `${r.productId}:${r.recordedUnit || r.checkId}`;
+      const ex = map.get(key) ?? {
         productName: r.productName,
+        unit: reportUnitLabel(r),
         totalDiff: 0,
         totalValue: 0,
         count: 0,
@@ -160,7 +164,7 @@ export default function InventoryVarianceReportPage() {
       ex.totalDiff += r.difference;
       ex.totalValue += r.varianceValue;
       ex.count += 1;
-      map.set(r.productId, ex);
+      map.set(key, ex);
     }
     return Array.from(map.entries())
       .map(([productId, data]) => ({ productId, ...data }))
@@ -184,6 +188,8 @@ export default function InventoryVarianceReportPage() {
     { label: "Mã phiếu", key: "checkCode", width: "120px" },
     { label: "Chi nhánh", key: "branchName", width: "140px" },
     { label: "Sản phẩm", key: "productName", width: "220px" },
+    { label: "Mã hàng", key: "productCode", width: "150px", cell: row => row.productCode || "Chưa có mã" },
+    ...stockUnitColumns<InventoryVarianceRow>(),
     {
       label: "Sổ sách",
       key: "systemStock",
@@ -359,12 +365,14 @@ export default function InventoryVarianceReportPage() {
         titleRows: ["CHÊNH LỆCH THEO SẢN PHẨM"],
         columns: [
           { label: "Sản phẩm", key: "productName", width: 30 },
+          { label: "ĐVT ghi sổ", key: "unit", width: 18 },
           { label: "Số lần lệch", key: "count", width: 14, format: "number" },
           { label: "Tổng lệch SL", key: "totalDiff", width: 14, format: "number" },
           { label: "Giá trị lệch", key: "value", width: 18, format: "currency" },
         ],
         rows: byProduct.map((p) => ({
           productName: p.productName,
+          unit: p.unit,
           count: p.count,
           totalDiff: p.totalDiff,
           value: p.totalValue,
@@ -372,7 +380,6 @@ export default function InventoryVarianceReportPage() {
         footer: {
           productName: "TỔNG",
           count: rows.length,
-          totalDiff: rows.reduce((s, r) => s + r.difference, 0),
           value: rows.reduce((s, r) => s + r.varianceValue, 0),
         },
       };
@@ -385,6 +392,8 @@ export default function InventoryVarianceReportPage() {
           { label: "Mã phiếu", key: "code", width: 14 },
           { label: "Chi nhánh", key: "branch", width: 20 },
           { label: "Sản phẩm", key: "product", width: 28 },
+          { label: "Mã hàng", key: "productCode", width: 18 },
+          ...STOCK_UNIT_EXCEL_COLUMNS,
           { label: "Sổ", key: "system", width: 10, format: "number" },
           { label: "Thực", key: "actual", width: 10, format: "number" },
           { label: "Lệch", key: "diff", width: 10, format: "number" },
@@ -397,6 +406,12 @@ export default function InventoryVarianceReportPage() {
           code: r.checkCode,
           branch: r.branchName ?? "",
           product: r.productName,
+          productCode: r.productCode ?? "",
+          recordedUnit: reportUnitLabel(r),
+          recordedConversion: r.recordedConversion ?? "Chưa lưu",
+          catalogUnit: r.catalogUnit ?? "",
+          currentConversion: r.currentConversion ?? "",
+          recordedCount: r.recordedCount ?? "Chưa lưu",
           system: r.systemStock,
           actual: r.actualStock,
           diff: r.difference,
@@ -411,7 +426,6 @@ export default function InventoryVarianceReportPage() {
           product: `${rows.length} dòng`,
           system: "",
           actual: "",
-          diff: rows.reduce((s, r) => s + r.difference, 0),
           cost: "",
           value: rows.reduce((s, r) => s + r.varianceValue, 0),
           type: "",
