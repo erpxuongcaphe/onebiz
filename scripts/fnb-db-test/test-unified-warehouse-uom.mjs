@@ -49,6 +49,9 @@ export async function runUnifiedWarehouseUom(db,{id,tenant,actor,store,warehouse
   await assert.rejects(()=>save(null,[{...salesLines[0],unit:'Undefined'}]),/UOM_/);
   await db.exec("set test.denied='yes'"); await assert.rejects(()=>save(null,salesLines),/ORDER_SAVE_DENIED/); await db.exec("set test.denied='no'");
   assert.deepEqual((await db.query('select * from effects')).rows,before);
+  await db.exec('create view invoice_items_scoped as select id from invoice_items;');
+  await db.exec(readFileSync('supabase/migrations/20261029005434_restore_uom_scoped_view_barrier.sql','utf8'));
+  assert.deepEqual((await db.query("select reloptions from pg_class where oid='invoice_items_scoped'::regclass")).rows[0].reloptions,['security_barrier=true']);
   console.log('PASS unified UOM: paired PO/order, server pricing, selected-unit readback, retry, conversion guard and edit; no stock/cash effects');
 }
 
