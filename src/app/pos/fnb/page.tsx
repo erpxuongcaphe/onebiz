@@ -2560,6 +2560,10 @@ function FnbPosPageInner() {
         const soMonChuaGui = tab?.lines.length ?? 0;
         if (tab && soMonChuaGui > 0) {
           koId = await handleSendToKitchen(true);
+          // The send handler already explains the actual failure (menu scope,
+          // price, pending acknowledgement, or required selection). Do not
+          // replace it with an inaccurate generic "not sent to kitchen" toast.
+          if (!koId) return false;
         }
 
         if (!tab || !koId) {
