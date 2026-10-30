@@ -10,6 +10,7 @@ import { getClient, handleError } from "./base";
 import { isRpcUnavailable } from "./rpc-utils";
 import { getStockReportUnits, stockUnitReferenceKey } from "./report-stock-units";
 import { getBomSaleUnits } from "./bom-sale-units";
+import { toCreatedAtRangeWindow } from "@/lib/utils/list-date-preset-range";
 
 // ============================================================
 // 1. Tiêu hao NVL theo chi nhánh
@@ -104,13 +105,22 @@ export async function getCogsByBom(params: {
   branchId?: string | null;
 }): Promise<CogsByBomRow[]> {
   const supabase = getClient();
+  const window = toCreatedAtRangeWindow({ from: params.fromDate, to: params.toDate });
+  if (!window || !Number.isFinite(Date.parse(window.start)) || !Number.isFinite(Date.parse(window.end)) || Date.parse(window.start) >= Date.parse(window.end)) {
+    throw new Error("Khoảng ngày báo cáo không hợp lệ.");
+  }
+  // The legacy RPC casts created_at to a UTC date. Widen its calendar window,
+  // then apply exact Vietnam timestamps on the returned relation before paging.
+  const sourceFrom = window.start.slice(0, 10);
+  const sourceTo = new Date(Date.parse(window.end) - 1).toISOString().slice(0, 10);
   const data: Record<string, unknown>[] = [];
   for (let offset = 0; ; offset += 1000) {
     // Stable ordering must be applied before each page, not after aggregation.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: page, error } = await (supabase.rpc as any)("report_cogs_by_bom", {
-      p_from_date: params.fromDate, p_to_date: params.toDate, p_branch_id: params.branchId === "all" ? null : params.branchId ?? null,
-    }).order("invoice_id", { ascending: true }).order("product_id", { ascending: true })
+      p_from_date: sourceFrom, p_to_date: sourceTo, p_branch_id: params.branchId === "all" ? null : params.branchId ?? null,
+    }).gte("invoice_date", window.start).lt("invoice_date", window.end)
+      .order("invoice_id", { ascending: true }).order("product_id", { ascending: true })
       .order("product_name", { ascending: true }).order("qty_sold", { ascending: true }).order("revenue", { ascending: true })
       .order("cogs_real", { ascending: true, nullsFirst: false }).order("margin", { ascending: true, nullsFirst: false }).range(offset, offset + 999);
     if (error) {

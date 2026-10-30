@@ -13,6 +13,7 @@ it("roundtrips quantity, unit references, unknown cost and the non-additive quan
   const header = grid.find(row => row.includes("ĐVT lịch sử"))!;
   const value = grid.find(row => row[0] === "HD-TEST-1")!;
   expect(value[header.indexOf("SL chứng từ")]).toBe(5.9);
+  expect(value[header.indexOf("Ngày tạo (giờ Việt Nam)")]).toBe("01/10/2026 07:00");
   expect(value[header.indexOf("ĐVT lịch sử")]).toBe("Chưa có ĐVT lịch sử");
   expect(value[header.indexOf("Quy đổi hiện tại (tham khảo)")]).toBe("1 Cây = 50 Cái");
   expect(value[header.indexOf("Giá vốn")]).toBe("");

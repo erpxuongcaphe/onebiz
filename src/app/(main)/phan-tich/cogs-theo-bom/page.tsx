@@ -60,7 +60,7 @@ export default function CogsTheoBomPage() {
   }, [source, unit]);
   const columns: DataTableColumn<BomCogsViewRow>[] = [
     { key: "invoiceCode", label: "Hóa đơn", hideable: false, cell: row => <a className="font-medium text-primary hover:underline" href={buildInvoiceListDeepLink(row.invoiceCode)}>{row.invoiceCode}</a> },
-    { key: "invoiceDate", label: "Ngày", cell: row => formatDate(row.invoiceDate) },
+    { key: "invoiceDate", label: "Ngày tạo (VN)", cell: row => formatDate(row.invoiceDate) },
     { key: "branchName", label: "Chi nhánh" }, { key: "productCode", label: "Mã hàng" }, { key: "productName", label: "Mặt hàng", width: "240px" },
     { key: "qtySold", label: "SL chứng từ", align: "right", cell: row => formatStockQuantity(row.qtySold), subtotalCell: "Không cộng khác ĐVT" },
     { key: "recordedUnit", label: "ĐVT lịch sử" }, { key: "unitReference", label: "ĐVT hiện tại" },
@@ -78,7 +78,7 @@ export default function CogsTheoBomPage() {
       const detail = bomCogsSheet(rows);
       if (mode === "full") delete detail.tablePreferenceKey;
       detail.titleRows = buildReportTitleRows({ title: "GIÁ VỐN THEO CÔNG THỨC", range, branchName: branchLabel });
-      detail.titleRows.push("ĐVT lịch sử theo dòng hóa đơn khớp. ĐVT và quy đổi hiện tại chỉ tham khảo, không tính lại chứng từ.");
+      detail.titleRows.push("Theo ngày tạo hóa đơn, giờ Việt Nam. ĐVT lịch sử theo dòng hóa đơn khớp; quy đổi hiện tại chỉ tham khảo.");
       detail.titleRows.push(`Tìm: ${search || "Tất cả"}; ĐVT hiện tại: ${unit || "Tất cả"}; Giá vốn: ${status || "Tất cả"}; Sắp xếp: ${sort.id} ${sort.direction}`);
       const sheets: ExcelSheet[] = [detail];
       if (mode === "full") sheets.unshift({ name: "Tổng hợp", columns: [
@@ -99,7 +99,7 @@ export default function CogsTheoBomPage() {
   if (isLoading) return <p role="status" className="p-6">Đang xác thực quyền báo cáo...</p>;
   if (!allowed) return <p role="alert" className="p-6">Chưa được cấp quyền xem báo cáo giá vốn và lợi nhuận.</p>;
   return <div className="flex min-h-full flex-col">
-    <ReportPageHeader title="Giá vốn theo công thức" subtitle="Giá vốn lịch sử · Doanh thu trước hàng trả"
+    <ReportPageHeader title="Giá vốn theo công thức" subtitle="Ngày tạo hóa đơn · Giờ Việt Nam · Trước hàng trả"
       preset={preset} range={range} onPresetChange={setPreset} onCustomRangeChange={setCustomRange}
       onExportView={() => exportRows("view")} onExportFull={() => exportRows("full")} exportDisabled={pending || !!error || exporting || !rows.length} />
     <div className="space-y-4 p-4 lg:p-6">
