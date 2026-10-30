@@ -116,7 +116,7 @@ begin
   if not found then return new; end if;
   insert into public.sales_order_processing_closures(order_id,tenant_id,branch_id,closed_by,reason,origin)
   values(v_parent.id,v_parent.tenant_id,v_parent.branch_id,coalesce(auth.uid(),new.created_by),
-    'Đã xuất hóa đơn '||new.code,'invoice')
+    left('Đã xuất hóa đơn '||coalesce(new.code,new.id::text),500),'invoice')
   on conflict(order_id) do update set closed_at=now(),closed_by=excluded.closed_by,
     reason=excluded.reason,origin='invoice'
     where sales_order_processing_closures.closed_at is null
