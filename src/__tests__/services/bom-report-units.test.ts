@@ -29,9 +29,16 @@ it("reads past the server page limit before loading the exact unit references", 
   expect(rows).toHaveLength(1001); expect(query.range).toHaveBeenNthCalledWith(1, 0, 999); expect(query.range).toHaveBeenNthCalledWith(2, 1000, 1999);
   expect(state.units.mock.calls[0][0]).toHaveLength(1001);
 });
-it.each(["duplicate", "foreign-branch"])("rejects %s source rows rather than exporting partial data", async mode => {
-  const item = { invoice_id: "bill", product_id: "p1", branch_id: mode === "foreign-branch" ? "another" : "branch-1" };
+it("retains separate identical product lines on the same bill with distinct row keys", async () => {
+  const item = { invoice_id: "bill", product_id: "p1", branch_id: "branch-1", qty_sold: 2, revenue: 10, cogs_real: 0, margin: 10 };
   state.rpc().range.mockResolvedValue({ data: [item, item], error: null });
+  const rows = await getCogsByBom(params);
+  expect(rows).toHaveLength(2); expect(new Set(rows.map(row => row.rowKey)).size).toBe(2);
+  expect(rows.reduce((sum, row) => sum + row.revenue, 0)).toBe(20);
+});
+it("rejects foreign-branch source rows rather than exporting them", async () => {
+  const item = { invoice_id: "bill", product_id: "p1", branch_id: "another" };
+  state.rpc().range.mockResolvedValue({ data: [item], error: null });
   await expect(getCogsByBom(params)).rejects.toThrow("không khớp chi nhánh"); expect(state.units).not.toHaveBeenCalled();
 });
 it("fails rather than silently dropping missing metadata source errors", async () => {

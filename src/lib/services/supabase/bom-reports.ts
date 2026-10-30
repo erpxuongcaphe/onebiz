@@ -78,6 +78,7 @@ export async function getNvlConsumptionByBranch(params: {
 // ============================================================
 
 export interface CogsByBomRow {
+  rowKey?: string;
   invoiceId: string;
   invoiceCode: string;
   invoiceDate: string;
@@ -102,30 +103,31 @@ export async function getCogsByBom(params: {
 }): Promise<CogsByBomRow[]> {
   const supabase = getClient();
   const data: Record<string, unknown>[] = [];
-  const keys = new Set<string>();
   for (let offset = 0; ; offset += 1000) {
     // Stable ordering must be applied before each page, not after aggregation.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: page, error } = await (supabase.rpc as any)("report_cogs_by_bom", {
-      p_from_date: params.fromDate, p_to_date: params.toDate, p_branch_id: params.branchId ?? null,
-    }).order("invoice_id", { ascending: true }).order("product_id", { ascending: true }).range(offset, offset + 999);
+      p_from_date: params.fromDate, p_to_date: params.toDate, p_branch_id: params.branchId === "all" ? null : params.branchId ?? null,
+    }).order("invoice_id", { ascending: true }).order("product_id", { ascending: true })
+      .order("product_name", { ascending: true }).order("qty_sold", { ascending: true }).order("revenue", { ascending: true })
+      .order("cogs_real", { ascending: true, nullsFirst: false }).order("margin", { ascending: true, nullsFirst: false }).range(offset, offset + 999);
     if (error) {
       if (isRpcUnavailable(error)) throw new Error("Nguồn báo cáo giá vốn chưa được cập nhật. Vui lòng liên hệ quản trị viên.");
       handleError(error, "getCogsByBom");
     }
     for (const row of page ?? []) {
-      const key = `${row.invoice_id}:${row.product_id}`;
-      if (keys.has(key) || (params.branchId && params.branchId !== "all" && row.branch_id !== params.branchId)) {
+      if (params.branchId && params.branchId !== "all" && row.branch_id !== params.branchId) {
         throw new Error("Nguồn báo cáo thay đổi hoặc không khớp chi nhánh. Vui lòng tải lại.");
       }
-      keys.add(key); data.push(row);
+      data.push(row);
     }
     if (!page || page.length < 1000) break;
     if (data.length >= 50000) throw new Error("Báo cáo quá lớn. Vui lòng chọn khoảng thời gian ngắn hơn.");
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rows: CogsByBomRow[] = ((data ?? []) as any[]).map((r) => ({
+  const rows: CogsByBomRow[] = ((data ?? []) as any[]).map((r, index) => ({
+    rowKey: `${r.invoice_id}:${r.product_id}:${index}`,
     invoiceId: r.invoice_id,
     invoiceCode: r.invoice_code,
     invoiceDate: r.invoice_date,

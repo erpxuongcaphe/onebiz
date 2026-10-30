@@ -15,7 +15,7 @@ import { buildInvoiceListDeepLink } from "@/lib/utils/invoice-list-deep-link";
 import { bomCogsView, bomCogsTotals, bomCogsSheet, type BomCogsViewRow } from "@/lib/reports/bom-cogs-view";
 import { buildReportTitleRows, exportReportToExcel, type ExcelSheet } from "@/lib/utils/excel-export";
 
-const PERMISSIONS = ["reports.analytics", "reports.view_detail", "reports.view_profit"];
+const PERMISSIONS = ["reports.analytics", "reports.view_detail", "reports.view_profit", "products.view_cost"];
 const money = (value: number | null) => value === null ? "Chưa xác định" : formatCurrency(value);
 
 export default function CogsTheoBomPage() {
@@ -118,7 +118,7 @@ export default function CogsTheoBomPage() {
         </div>
         {pending && <p role="status">Đang tải báo cáo...</p>}
         <ReportDataTable columns={columns} rows={rows} sortState={sort} onSortChange={setSort} tablePreferenceKey="report.bom-cogs.rows"
-          getRowKey={row => `${row.invoiceId}:${row.productId}`} subtotalLabel={`${rows.length} dòng`} emptyState={pending ? "Đang tải..." : "Không có dòng phù hợp."} />
+          getRowKey={(row, index) => row.rowKey ?? `${row.invoiceId}:${row.productId}:${index}`} subtotalLabel={`${rows.length} dòng`} emptyState={pending ? "Đang tải..." : "Không có dòng phù hợp."} />
       </>}
       {exportError && <p role="alert">{exportError}</p>}
     </div>
