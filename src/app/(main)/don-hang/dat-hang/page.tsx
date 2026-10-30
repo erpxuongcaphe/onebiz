@@ -1109,6 +1109,7 @@ export default function DatHangPage() {
       <DataTable
         columns={columns}
         data={data}
+        getRowId={(row) => row.id}
         loading={loading}
         total={total}
         density="compact"
