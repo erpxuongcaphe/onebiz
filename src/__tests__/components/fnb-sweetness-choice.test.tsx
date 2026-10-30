@@ -83,6 +83,15 @@ describe('F&B sweetness choice at the point of adding or editing a cart item', (
     fireEvent.click(screen.getByRole('button', { name: /Thêm vào đơn/ }));
     expect(confirm.mock.calls[0][0].modifierSelections[0].options[0].optionId).toBe('less');
   });
+  it('corrects multiple saved choices to the exact option tapped by the cashier', () => {
+    const confirm = mount({ initial: snapshot(['normal', 'less']) });
+    fireEvent.click(screen.getByRole('button', { name: '80% (ít đường)' }));
+    expect(screen.getByRole('button', { name: '100% (bình thường)' })).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(screen.getByRole('button', { name: /Thêm vào đơn/ }));
+    expect(confirm.mock.calls[0][0].modifierSelections[0].options).toEqual([
+      expect.objectContaining({ optionId: 'less', scaleFactor: 0.8 }),
+    ]);
+  });
   it('keeps unrelated optional single-choice groups clearable', () => {
     const confirm = mount({ name: 'Topping tùy chọn' });
     fireEvent.click(screen.getByRole('button', { name: '100% (bình thường)' }));

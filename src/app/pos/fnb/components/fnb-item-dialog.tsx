@@ -461,9 +461,13 @@ export function FnbItemDialog({
     setDynamicChoices((prev) => {
       const next = new Map(prev);
       const current = new Set(next.get(group.id) ?? []);
+      if (requiresSweetnessChoice(group)) {
+        next.set(group.id, new Set([optionId]));
+        return next;
+      }
       if (current.has(optionId)) {
         // Required preparation choices behave like radio buttons.
-        if ((group.rule === "single_required" || requiresSweetnessChoice(group)) && current.size === 1) {
+        if (group.rule === "single_required" && current.size === 1) {
           return prev; // không cho bỏ chọn nếu bắt buộc
         }
         current.delete(optionId);
