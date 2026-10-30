@@ -1,0 +1,21 @@
+import { expect, it, vi } from "vitest";
+import * as XLSX from "xlsx-js-style";
+const saved = vi.hoisted(() => ({ save: vi.fn() }));
+vi.mock("file-saver", () => ({ saveAs: saved.save }));
+import { bomCogsView, bomCogsSheet } from "@/lib/reports/bom-cogs-view";
+import { exportReportToExcel } from "@/lib/utils/excel-export";
+it("roundtrips quantity, unit references, unknown cost and the non-additive quantity total", async () => {
+  const rows = bomCogsView([{ invoiceId: "fake-bill", invoiceCode: "HD-TEST-1", invoiceDate: "2026-10-01T00:00:00Z", branchId: "fake-branch", branchName: "Test", productId: "fake-p", productCode: "SKU-TEST", productName: "Ly giấy", qtySold: 5.9, revenue: 100000, cogsReal: null, margin: null, catalogUnit: "Cây", currentConversion: "1 Cây = 50 Cái" }], "", "", "", { id: "invoiceCode", direction: "asc" });
+  await exportReportToExcel({ kind: "cogs-theo-bom", mode: "full", range: { from: "2026-10-01", to: "2026-10-30" }, branchName: "Test", sheets: [bomCogsSheet(rows)] });
+  const bytes = await new Promise<ArrayBuffer>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result as ArrayBuffer); reader.onerror = reject; reader.readAsArrayBuffer(saved.save.mock.calls[0][0]); });
+  const workbook = XLSX.read(bytes, { type: "array" });
+  const grid = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets["Chi tiết giá vốn"], { header: 1, defval: null });
+  const header = grid.find(row => row.includes("ĐVT lịch sử"))!;
+  const value = grid.find(row => row[0] === "HD-TEST-1")!;
+  expect(value[header.indexOf("SL chứng từ")]).toBe(5.9);
+  expect(value[header.indexOf("ĐVT lịch sử")]).toBe("Chưa lưu ĐVT");
+  expect(value[header.indexOf("Quy đổi hiện tại (tham khảo)")]).toBe("1 Cây = 50 Cái");
+  expect(value[header.indexOf("Giá vốn")]).toBe("");
+  expect(grid.find(row => row[0] === "TỔNG")?.[header.indexOf("SL chứng từ")]).toBe("");
+  expect(grid.find(row => row[0] === "TỔNG")?.[header.indexOf("ĐVT lịch sử")]).toBe("Không cộng khác ĐVT");
+});

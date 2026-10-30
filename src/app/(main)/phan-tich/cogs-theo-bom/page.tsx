@@ -1,261 +1,126 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ReportPageHeader, ReportDataTable, type DataTableColumn } from "@/components/shared/report";
 import { SummaryCard } from "@/components/shared/summary-card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Icon } from "@/components/ui/icon";
-import { useBranchFilter, useToast } from "@/lib/contexts";
-import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
+import { useAuth, useBranchFilter } from "@/lib/contexts";
+import { formatCurrency, formatDate, formatStockQuantity } from "@/lib/format";
 import { useReportState } from "@/lib/hooks/use-report-state";
 import { getCogsByBom, type CogsByBomRow } from "@/lib/services";
 import { buildInvoiceListDeepLink } from "@/lib/utils/invoice-list-deep-link";
-import {
-  buildReportTitleRows,
-  exportReportToExcel,
-  type ExcelSheet,
-} from "@/lib/utils/excel-export";
+import { bomCogsView, bomCogsTotals, bomCogsSheet, type BomCogsViewRow } from "@/lib/reports/bom-cogs-view";
+import { buildReportTitleRows, exportReportToExcel, type ExcelSheet } from "@/lib/utils/excel-export";
 
-function formatDateTime(iso: string): string {
-  return formatDate(iso);
-}
+const PERMISSIONS = ["reports.analytics", "reports.view_detail", "reports.view_profit"];
+const money = (value: number | null) => value === null ? "Chưa xác định" : formatCurrency(value);
 
 export default function CogsTheoBomPage() {
-  const { toast } = useToast();
+  const { tenant, user, permissions, hasPermission, isLoading } = useAuth();
   const { activeBranchId, branchLabel, isReady } = useBranchFilter();
-  const { preset, range, setPreset, setCustomRange } = useReportState({
-    defaultPreset: "thisMonth",
-    defaultViewMode: "table",
-    forceTable: true,
-  });
-  const [rows, setRows] = useState<CogsByBomRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { preset, range, setPreset, setCustomRange } = useReportState({ defaultPreset: "thisMonth", defaultViewMode: "table", forceTable: true });
+  const allowed = !isLoading && PERMISSIONS.every(hasPermission);
+  const [data, setData] = useState<CogsByBomRow[]>([]), [loadedScope, setLoadedScope] = useState("");
+  const [loading, setLoading] = useState(false), [error, setError] = useState<string | null>(null), [revision, setRevision] = useState(0);
+  const [search, setSearch] = useState(""), [unit, setUnit] = useState(""), [status, setStatus] = useState("");
+  const [sort, setSort] = useState<{ id: string; direction: "asc" | "desc" }>({ id: "invoiceDate", direction: "desc" });
+  const [exporting, setExporting] = useState(false), [exportError, setExportError] = useState<string | null>(null);
+  const scope = JSON.stringify([tenant?.id, user?.id, [...permissions ?? []].sort(), activeBranchId, range.from, range.to, allowed]);
+  const scopeRef = useRef(scope); scopeRef.current = scope;
   const requestIdRef = useRef(0);
-
-  const fetchData = useCallback(async () => {
-    if (!isReady) return;
-    const requestId = ++requestIdRef.current;
-    setLoading(true);
-    try {
-      const data = await getCogsByBom({
-        fromDate: range.from,
-        toDate: range.to,
-        branchId: activeBranchId,
-      });
-      if (requestId !== requestIdRef.current) return;
-      setRows(data);
-    } catch (err) {
-      if (requestId !== requestIdRef.current) return;
-      setRows([]);
-      toast({
-        variant: "error",
-        title: "Không tải được báo cáo",
-        description: err instanceof Error ? err.message : "Lỗi không xác định",
-      });
-    } finally {
-      if (requestId === requestIdRef.current) setLoading(false);
-    }
-  }, [activeBranchId, isReady, range.from, range.to, toast]);
+  const pending = !isReady || loading || loadedScope !== scope;
+  const source = useMemo(() => allowed && !pending && !error ? data : [], [allowed, pending, error, data]);
+  const rows = useMemo(() => bomCogsView(source, search, unit, status, sort), [source, search, unit, status, sort]);
+  const totals = useMemo(() => bomCogsTotals(rows), [rows]);
+  const exportKey = JSON.stringify([scope, search, unit, status, sort, loadedScope, loading, error, revision]);
+  const exportKeyRef = useRef(exportKey); exportKeyRef.current = exportKey;
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  const totalRevenue = rows.reduce((sum, row) => sum + row.revenue, 0);
-  const knownRows = rows.filter((row) => row.cogsReal != null);
-  const missingCostCount = rows.length - knownRows.length;
-  const knownRevenue = knownRows.reduce((sum, row) => sum + row.revenue, 0);
-  const totalCogs = knownRows.reduce((sum, row) => sum + (row.cogsReal ?? 0), 0);
-  const totalMargin = knownRevenue - totalCogs;
-  const marginPercent = knownRevenue > 0 ? (totalMargin / knownRevenue) * 100 : 0;
-  const negativeMargin = knownRows.filter((row) => (row.margin ?? 0) < 0);
-
-  const detailSheet = useCallback((): ExcelSheet => ({
-    name: "Chi tiết giá vốn",
-    titleRows: buildReportTitleRows({
-      title: "BÁO CÁO GIÁ VỐN THEO CÔNG THỨC",
-      range,
-      branchName: branchLabel,
-    }),
-    columns: [
-      { label: "Hóa đơn", key: "invoiceCode", width: 16 },
-      { label: "Thời gian", key: "invoiceDate", width: 18 },
-      { label: "Chi nhánh", key: "branchName", width: 24 },
-      { label: "Mã hàng", key: "productCode", width: 14 },
-      { label: "Tên sản phẩm", key: "productName", width: 32 },
-      { label: "Số lượng", key: "qtySold", width: 12, format: "number" },
-      { label: "Doanh thu", key: "revenue", width: 18, format: "currency" },
-      { label: "Giá vốn", key: "cogsReal", width: 18, format: "currency" },
-      { label: "Lợi nhuận gộp", key: "margin", width: 18, format: "currency" },
-      { label: "Tình trạng giá vốn", key: "costStatus", width: 20 },
-    ],
-    rows: rows.map((row) => ({
-      invoiceCode: row.invoiceCode,
-      invoiceDate: formatDateTime(row.invoiceDate),
-      branchName: row.branchName,
-      productCode: row.productCode,
-      productName: row.productName,
-      qtySold: row.qtySold,
-      revenue: row.revenue,
-      cogsReal: row.cogsReal,
-      margin: row.margin,
-      costStatus: row.cogsReal == null ? "Chưa xác định" : "Đã ghi nhận",
-    })),
-    footer: {
-      invoiceCode: "TỔNG",
-      invoiceDate: "",
-      branchName: "",
-      productCode: "",
-      productName: "",
-      qtySold: rows.reduce((sum, row) => sum + row.qtySold, 0),
-      revenue: totalRevenue,
-      cogsReal: totalCogs,
-      margin: missingCostCount ? null : totalMargin,
-    },
-  }), [branchLabel, missingCostCount, range, rows, totalCogs, totalMargin, totalRevenue]);
-
-  const handleExport = useCallback(async (mode: "view" | "full") => {
-    try {
-      const sheets: ExcelSheet[] = [];
-      if (mode === "full") {
-        sheets.push({
-          name: "Tổng hợp",
-          titleRows: buildReportTitleRows({
-            title: "TỔNG HỢP GIÁ VỐN THEO CÔNG THỨC",
-            range,
-            branchName: branchLabel,
-          }),
-          columns: [
-            { label: "Chỉ tiêu", key: "metric", width: 30 },
-            { label: "Giá trị", key: "value", width: 22, format: "currency" },
-          ],
-          rows: [
-            { metric: "Doanh thu sản phẩm có công thức", value: totalRevenue },
-            { metric: "Giá vốn đã ghi nhận", value: totalCogs },
-            { metric: "Lợi nhuận gộp (dòng đủ giá)", value: totalMargin },
-            { metric: "Số dòng có lợi nhuận âm", value: negativeMargin.length },
-            { metric: "Số dòng chưa có giá vốn", value: missingCostCount },
-          ],
-        });
+    const requestId = ++requestIdRef.current; let cancelled = false;
+    if (!allowed || !isReady || !tenant?.id) return;
+    setLoading(true); setError(null);
+    getCogsByBom({ fromDate: range.from, toDate: range.to, branchId: activeBranchId }).then(result => {
+      if (cancelled || requestId !== requestIdRef.current || scopeRef.current !== scope) return;
+      setData(result); setLoadedScope(scope);
+    }).catch(reason => {
+      if (!cancelled && requestId === requestIdRef.current && scopeRef.current === scope) {
+        setData([]); setLoadedScope(scope); setError(reason instanceof Error ? reason.message : "Không tải được báo cáo.");
       }
-      sheets.push(detailSheet());
-      await exportReportToExcel({
-        kind: "cogs-theo-bom",
-        mode,
-        range,
-        branchName: branchLabel,
-        reportTitle: "Báo cáo giá vốn theo công thức",
-        description: "Giá vốn tại thời điểm bán, chưa trừ hàng trả; dòng chưa có giá không được tính thành 0.",
-        sheets,
-      });
-      toast({ title: "Đã xuất báo cáo giá vốn theo công thức", variant: "success" });
-    } catch (err) {
-      toast({
-        title: "Lỗi xuất Excel",
-        description: err instanceof Error ? err.message : "Không thể tạo file",
-        variant: "error",
-      });
-    }
-  }, [branchLabel, detailSheet, missingCostCount, negativeMargin.length, range, toast, totalCogs, totalMargin, totalRevenue]);
+    }).finally(() => { if (!cancelled && requestId === requestIdRef.current && scopeRef.current === scope) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [allowed, isReady, tenant?.id, activeBranchId, range.from, range.to, scope, revision]);
 
-  return (
-    <div className="flex min-h-full flex-col">
-      <ReportPageHeader
-        title="Giá vốn theo công thức"
-        subtitle="Giá vốn đã chốt trên hóa đơn có BOM; doanh thu trước hàng trả"
-        preset={preset}
-        range={range}
-        onPresetChange={setPreset}
-        onCustomRangeChange={setCustomRange}
-        onExportView={() => handleExport("view")}
-        onExportFull={() => handleExport("full")}
-        exportDisabled={loading || rows.length === 0}
-      />
+  const unitOptions = useMemo(() => {
+    const values = [...new Set(source.map(row => row.catalogUnit || "Chưa có ĐVT"))];
+    if (unit && !values.includes(unit)) values.push(unit);
+    return values.sort((a, b) => a.localeCompare(b, "vi")).map(value => ({ value, label: value }));
+  }, [source, unit]);
+  const columns: DataTableColumn<BomCogsViewRow>[] = [
+    { key: "invoiceCode", label: "Hóa đơn", hideable: false, cell: row => <a className="font-medium text-primary hover:underline" href={buildInvoiceListDeepLink(row.invoiceCode)}>{row.invoiceCode}</a> },
+    { key: "invoiceDate", label: "Ngày", cell: row => formatDate(row.invoiceDate) },
+    { key: "branchName", label: "Chi nhánh" }, { key: "productCode", label: "Mã hàng" }, { key: "productName", label: "Mặt hàng", width: "240px" },
+    { key: "qtySold", label: "SL chứng từ", align: "right", cell: row => formatStockQuantity(row.qtySold), subtotalCell: "Không cộng khác ĐVT" },
+    { key: "recordedUnit", label: "ĐVT lịch sử" }, { key: "unitReference", label: "ĐVT hiện tại" },
+    { key: "conversionReference", label: "Quy đổi hiện tại", width: "260px" },
+    { key: "revenue", label: "Doanh thu trước hàng trả", align: "right", cell: row => money(row.revenue), subtotalCell: money(totals.revenue) },
+    { key: "cogsReal", label: "Giá vốn", align: "right", cell: row => money(row.cogsReal), subtotalCell: money(totals.missing ? null : totals.knownCost) },
+    { key: "margin", label: "Lãi gộp", align: "right", cell: row => money(row.margin), subtotalCell: money(totals.missing ? null : totals.knownMargin) },
+    { key: "costStatus", label: "Trạng thái giá vốn" },
+  ];
+  const exportRows = useCallback(async (mode: "view" | "full") => {
+    if (!allowed || pending || error || exporting || !rows.length || !hasPermission(mode === "full" ? "reports.export_detail" : "reports.export")) return;
+    const key = exportKeyRef.current;
+    setExporting(true); setExportError(null);
+    try {
+      const detail = bomCogsSheet(rows);
+      if (mode === "full") delete detail.tablePreferenceKey;
+      detail.titleRows = buildReportTitleRows({ title: "GIÁ VỐN THEO CÔNG THỨC", range, branchName: branchLabel });
+      detail.titleRows.push("ĐVT và quy đổi hiện tại chỉ tham khảo, không xác nhận ĐVT lịch sử của số lượng chứng từ.");
+      detail.titleRows.push(`Tìm: ${search || "Tất cả"}; ĐVT hiện tại: ${unit || "Tất cả"}; Giá vốn: ${status || "Tất cả"}; Sắp xếp: ${sort.id} ${sort.direction}`);
+      const sheets: ExcelSheet[] = [detail];
+      if (mode === "full") sheets.unshift({ name: "Tổng hợp", columns: [
+        { key: "metric", label: "Chỉ tiêu", width: 36 }, { key: "value", label: "Giá trị", width: 22, format: "number", decimalPlaces: 4 }, { key: "unit", label: "Đơn vị", width: 12 },
+      ], rows: [
+        { metric: "Doanh thu trước hàng trả", value: totals.revenue, unit: "VND" },
+        { metric: "Giá vốn đủ căn cứ", value: totals.knownCost, unit: "VND" },
+        { metric: "Lãi gộp dòng đủ giá", value: totals.knownMargin, unit: "VND" },
+        { metric: "Dòng chưa đủ giá vốn", value: totals.missing, unit: "Dòng" },
+      ] });
+      await exportReportToExcel({ kind: "cogs-theo-bom", mode, range, branchName: branchLabel, sheets,
+        description: "Giá vốn lịch sử; doanh thu trước hàng trả. Không dùng quy đổi hiện tại để tính lại chứng từ.",
+        shouldSave: () => exportKeyRef.current === key });
+    } catch (reason) { if (exportKeyRef.current === key) setExportError(reason instanceof Error ? reason.message : "Không xuất được Excel."); }
+    finally { setExporting(false); }
+  }, [allowed, pending, error, exporting, rows, hasPermission, range, branchLabel, search, unit, status, sort, totals]);
 
-      <div className="space-y-4 p-4 pb-8 lg:p-6">
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <SummaryCard
-            icon={<Icon name="trending_up" size={16} />}
-            label="Doanh thu gộp của dòng có BOM"
-            value={loading ? "—" : formatCurrency(totalRevenue)}
-            highlight
-          />
-          <SummaryCard
-            icon={<Icon name="payments" size={16} />}
-            label="Giá vốn đã ghi nhận"
-            value={loading ? "—" : formatCurrency(totalCogs)}
-          />
-          <SummaryCard
-            icon={<Icon name="account_balance" size={16} />}
-            label={`Lãi gộp dòng đủ giá (${marginPercent.toFixed(1)}%)`}
-            value={loading ? "—" : formatCurrency(totalMargin)}
-            danger={totalMargin < 0}
-          />
-          <SummaryCard
-            icon={<Icon name="warning" size={16} />}
-            label="Dòng chưa có giá vốn"
-            value={loading ? "—" : formatNumber(missingCostCount)}
-            danger={missingCostCount > 0}
-          />
-        </div>
-
-        <p className="text-sm text-muted-foreground">
-          Giá vốn lấy từ dòng hóa đơn lúc bán, không tính lại theo giá nguyên liệu hôm nay.
-          Hàng trả xem riêng ở báo cáo Trả hàng; dòng thiếu giá không được cộng vào lãi gộp.
-        </p>
-
-        <ReportTableFrame tablePreferenceKey="report.bom-cogs.rows">
-          <div className="overflow-x-auto rounded-lg border border-border bg-card">
-          <table className="w-full text-sm">
-            <thead className="bg-surface-container-low text-xs uppercase text-muted-foreground">
-              <tr>
-                <th className="px-4 py-3 text-left font-semibold">Hóa đơn</th>
-                <th className="px-4 py-3 text-left font-semibold">Thời gian</th>
-                <th className="px-4 py-3 text-left font-semibold">Chi nhánh</th>
-                <th className="px-4 py-3 text-left font-semibold">Mã hàng</th>
-                <th className="px-4 py-3 text-right font-semibold">SL</th>
-                <th className="px-4 py-3 text-right font-semibold">Doanh thu</th>
-                <th className="px-4 py-3 text-right font-semibold">Giá vốn</th>
-                <th className="px-4 py-3 text-right font-semibold">Lợi nhuận gộp</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td colSpan={8} className="py-8 text-center text-muted-foreground">Đang tải...</td></tr>
-              ) : rows.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="py-12 text-center text-muted-foreground">
-                    <Icon name="info" size={32} className="mx-auto mb-2 opacity-40" />
-                    <p className="text-sm">Chưa có dữ liệu giá vốn theo công thức trong kỳ và phạm vi đã chọn.</p>
-                    <p className="mt-1 text-xs">Báo cáo chỉ tính dòng hóa đơn của sản phẩm có BOM.</p>
-                  </td>
-                </tr>
-              ) : rows.map((row) => (
-                <tr key={`${row.invoiceId}-${row.productId}`} className={`border-t border-border hover:bg-surface-container-low/50 ${(row.margin ?? 0) < 0 ? "bg-status-danger/5" : ""}`}>
-                  <td className="px-4 py-2 font-medium text-primary"><a href={buildInvoiceListDeepLink(row.invoiceCode)} className="underline-offset-2 hover:underline">{row.invoiceCode}</a></td>
-                  <td className="px-4 py-2 text-xs text-muted-foreground">{formatDateTime(row.invoiceDate)}</td>
-                  <td className="px-4 py-2">{row.branchName}</td>
-                  <td className="px-4 py-2"><div>{row.productName}</div><div className="text-xs text-muted-foreground">{row.productCode}</div></td>
-                  <td className="px-4 py-2 text-right">{formatNumber(row.qtySold)}</td>
-                  <td className="px-4 py-2 text-right font-medium">{formatCurrency(row.revenue)}</td>
-                  <td className="px-4 py-2 text-right">{row.cogsReal == null ? "Chưa xác định" : formatCurrency(row.cogsReal)}</td>
-                  <td className={`px-4 py-2 text-right font-semibold ${(row.margin ?? 0) < 0 ? "text-status-danger" : "text-status-success"}`}>{row.margin == null ? "—" : formatCurrency(row.margin)}</td>
-                </tr>
-              ))}
-            </tbody>
-            {rows.length > 0 && (
-              <tfoot className="border-t-2 border-border bg-surface-container-low/30">
-                <tr>
-                  <td colSpan={5} className="px-4 py-3 text-right font-semibold">Tổng cộng:</td>
-                  <td className="px-4 py-3 text-right font-semibold text-primary">{formatCurrency(totalRevenue)}</td>
-                  <td className="px-4 py-3 text-right font-semibold">{formatCurrency(totalCogs)}</td>
-                  <td className={`px-4 py-3 text-right font-semibold ${totalMargin < 0 ? "text-status-danger" : "text-status-success"}`}>{missingCostCount ? "Chưa đủ giá" : formatCurrency(totalMargin)}</td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-          </div>
-        </ReportTableFrame>
+  if (isLoading) return <p role="status" className="p-6">Đang xác thực quyền báo cáo...</p>;
+  if (!allowed) return <p role="alert" className="p-6">Chưa được cấp quyền xem báo cáo giá vốn và lợi nhuận.</p>;
+  return <div className="flex min-h-full flex-col">
+    <ReportPageHeader title="Giá vốn theo công thức" subtitle="Giá vốn lịch sử · Doanh thu trước hàng trả"
+      preset={preset} range={range} onPresetChange={setPreset} onCustomRangeChange={setCustomRange}
+      onExportView={() => exportRows("view")} onExportFull={() => exportRows("full")} exportDisabled={pending || !!error || exporting || !rows.length} />
+    <div className="space-y-4 p-4 lg:p-6">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <SummaryCard label="Doanh thu trước hàng trả" value={pending || error ? "—" : money(totals.revenue)} highlight />
+        <SummaryCard label="Giá vốn đủ căn cứ" value={pending || error ? "—" : money(totals.knownCost)} />
+        <SummaryCard label="Lãi gộp dòng đủ giá" value={pending || error ? "—" : money(totals.knownMargin)} danger={totals.knownMargin < 0} />
+        <SummaryCard label="Dòng chưa đủ giá vốn" value={pending || error ? "—" : String(totals.missing)} danger={totals.missing > 0} />
       </div>
+      <p className="border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-950">Nguồn chưa lưu ĐVT lịch sử. ĐVT và quy đổi hiện tại chỉ tham khảo; không dùng để tính lại số lượng hoặc giá vốn cũ.</p>
+      {error ? <div role="alert" className="space-y-2"><p>{error}</p><Button onClick={() => setRevision(value => value + 1)}><Icon name="refresh" size={16} />Thử lại</Button></div> : <>
+        <div className="flex flex-wrap gap-3">
+          <Input aria-label="Tìm hóa đơn hoặc mặt hàng" placeholder="Mã bill, mã hàng, tên hàng, chi nhánh" value={search} onChange={event => setSearch(event.target.value)} className="min-w-48 flex-1" />
+          <SearchableSelect aria-label="ĐVT hiện tại" options={[{ value: "", label: "Tất cả ĐVT hiện tại" }, ...unitOptions]} value={unit} onValueChange={setUnit} placeholder="Tất cả ĐVT hiện tại" className="w-52" />
+          <SearchableSelect aria-label="Trạng thái giá vốn" options={[{ value: "", label: "Tất cả trạng thái" }, { value: "known", label: "Đã ghi nhận" }, { value: "missing", label: "Chưa xác định" }]} value={status} onValueChange={setStatus} placeholder="Tất cả trạng thái" className="w-48" />
+        </div>
+        {pending && <p role="status">Đang tải báo cáo...</p>}
+        <ReportDataTable columns={columns} rows={rows} sortState={sort} onSortChange={setSort} tablePreferenceKey="report.bom-cogs.rows"
+          getRowKey={row => `${row.invoiceId}:${row.productId}`} subtotalLabel={`${rows.length} dòng`} emptyState={pending ? "Đang tải..." : "Không có dòng phù hợp."} />
+      </>}
+      {exportError && <p role="alert">{exportError}</p>}
     </div>
-  );
+  </div>;
 }
