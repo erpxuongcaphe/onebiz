@@ -87,6 +87,12 @@ describe("floor plan zones → RPC", () => {
       /chuyển bàn sang khu khác/,
     );
   });
+  it("explains a deleted zone name collision without reactivating or deleting the old zone", async () => {
+    mockRpc.mockResolvedValue({data:null,error:{code:'23505',message:'duplicate key'}});
+    await expect(createFloorPlanZone({branchId:'dx',name:'Sảnh chính'})).rejects.toThrow('kể cả khu đã xóa');
+    expect(mockRpc).toHaveBeenCalledTimes(1);
+    expect(mockRpc.mock.calls[0][1].p_action).toBe('create');
+  });
 });
 
 // ============================================================

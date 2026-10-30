@@ -75,7 +75,6 @@ export async function getFloorPlanZones(
     .order("sort_order", { ascending: true })
     .order("id", { ascending: true });
   if (error) handleError(error, "getZonesByBranch");
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map(mapZone) as FloorPlanZone[];
 }
 
@@ -94,6 +93,9 @@ async function goiCauHinhKhuSoDo(
     p_branch_id: branchId,
     p_payload: payload,
   });
+  if (error?.code === "23505" && action === "create") {
+    throw new Error("Tên khu vực này đã được dùng, kể cả khu đã xóa. Vui lòng chọn tên mới để bố trí lại.");
+  }
   if (error) handleError(error, context);
   return data;
 }
@@ -157,8 +159,25 @@ export async function getTablesByZone(zoneId: string): Promise<TableLayout[]> {
     .eq("zone_id", zoneId)
     .eq("is_active", true);
   if (error) handleError(error, "getTablesByZone");
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((r: any) => ({
+  return (data ?? []).map(mapTableLayoutRow);
+}
+
+/** Existing active tables without a visual zone; reading must never assign or recreate them. */
+export async function getUnassignedFloorPlanTables(branchId: string): Promise<TableLayout[]> {
+  if (!branchId) throw new Error("Chọn chi nhánh trước khi tải bàn chưa xếp khu.");
+  const supabase = getClient();
+  const ctx = await getCurrentContext();
+  const { data, error } = await supabase.from("restaurant_tables")
+    .select("id, zone_id, table_number, name, capacity, status, shape, width, height, rotation, position_x, position_y, color, locked")
+    .eq("tenant_id", ctx.tenantId).eq("branch_id", branchId).eq("is_active", true)
+    .is("zone_id", null).order("table_number", { ascending: true });
+  if (error) handleError(error, "getUnassignedFloorPlanTables");
+  return (data ?? []).map(mapTableLayoutRow);
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapTableLayoutRow(r: any): TableLayout {
+  return {
     id: r.id,
     zoneId: r.zone_id,
     tableNumber: r.table_number,
@@ -173,7 +192,7 @@ export async function getTablesByZone(zoneId: string): Promise<TableLayout[]> {
     positionY: r.position_y ?? 0,
     color: r.color,
     locked: r.locked ?? false,
-  }));
+  };
 }
 
 type LayoutPatch = Partial<
