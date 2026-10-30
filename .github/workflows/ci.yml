@@ -54,9 +54,6 @@ jobs:
           FNB_PGLITE_DIR="$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js" node scripts/fnb-db-test/run-trading-status.cjs
           FNB_PGLITE_DIR="$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js" node scripts/fnb-db-test/run-negative-stock.cjs
           FNB_RECORD_ORDER_CLOSURE_SQL="$RUNNER_TEMP/order-closure-fixture.sql" FNB_PGLITE_DIR="$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js" node scripts/test-order-processing-closure.cjs
-          createdb order_processing_closure_test
-          PGDATABASE=order_processing_closure_test psql -X -v ON_ERROR_STOP=1 -f "$RUNNER_TEMP/order-closure-fixture.sql"
-          PGDATABASE=order_processing_closure_test python3 scripts/test-order-processing-concurrency.py
           FNB_RECORD_COST_SQL="$RUNNER_TEMP/settled-cost-fixture.sql" FNB_PGLITE_DIR="$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js" node scripts/fnb-db-test/run-settled-cost-finalization.cjs
           FNB_PGLITE_DIR="$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js" node scripts/fnb-db-test/run-stocktake-depleted.mjs
           FNB_RECORD_SQL="$RUNNER_TEMP/inventory-count-fixture.sql" FNB_PGLITE_DIR="$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js" node scripts/fnb-db-test/run-inventory-check-amendment.mjs
@@ -66,6 +63,9 @@ jobs:
           createdb fnb_cost_settlement_test
           PGDATABASE=fnb_cost_settlement_test psql -X -v ON_ERROR_STOP=1 -f "$RUNNER_TEMP/settled-cost-fixture.sql"
           PGDATABASE=fnb_cost_settlement_test python3 scripts/fnb-db-test/settled-cost-concurrency.py
+          createdb order_processing_closure_test
+          PGDATABASE=order_processing_closure_test psql -X -v ON_ERROR_STOP=1 -f "$RUNNER_TEMP/order-closure-fixture.sql"
+          PGDATABASE=order_processing_closure_test python3 scripts/test-order-processing-concurrency.py
           mkdir -p .tmp
           node scripts/fnb-db-test/run-modifier-scale-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
           node scripts/fnb-db-test/run-branch-bom-clone-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
