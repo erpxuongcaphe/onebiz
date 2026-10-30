@@ -51,7 +51,10 @@ describe("branch print dispatch", () => {
     const build = vi.fn(() => "58mm receipt");
     await enqueueBranchPrint({ branchId: "b", routeKey: "station", label: "Món gọi thêm", html: "80mm receipt", paper: "80mm", buildHtml: build, jobId: "job" });
     expect(build).toHaveBeenCalledWith("58mm"); expect(mocks.raster).toHaveBeenCalledWith("58mm receipt", "58mm");
-    expect(mocks.rpc).toHaveBeenLastCalledWith("fnb_print_enqueue_v1", expect.objectContaining({ p_id: "job", p_route: "station", p_paper: "58mm" }));
+    expect(mocks.rpc).toHaveBeenNthCalledWith(1, "fnb_print_routes_v1", { p_branch: "b" });
+    expect(mocks.rpc).toHaveBeenLastCalledWith("fnb_print_enqueue_v2", expect.objectContaining({ p_id: "job", p_route: "station", p_paper: "58mm",
+      p_prepare_ms: expect.any(Number), p_render_ms: expect.any(Number), p_encode_ms: expect.any(Number) }));
+    expect(mocks.rpc).toHaveBeenCalledTimes(2); // No history query or telemetry request.
   });
   it("does not redirect missing station to the shared kitchen", async () => {
     mocks.rpc.mockResolvedValue({ data: { point: { enabled: true, routes: [{ key: "kitchen", printer: "Bếp", paper: "80mm" }] } } });

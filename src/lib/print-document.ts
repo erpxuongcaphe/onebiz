@@ -422,7 +422,7 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
 ${
   isThermal
     ? `<div class="head-c">
-  ${d.businessLogoUrl ? `<img class="logo" src="${esc(d.businessLogoUrl)}" alt="logo" />` : ""}
+  ${d.businessLogoUrl ? `<img class="logo" data-print-logo src="${esc(d.businessLogoUrl)}" alt="logo" />` : ""}
   ${d.businessName ? `<div class="store">${esc(d.businessName)}</div>` : d.storeName ? `<div class="store">${esc(d.storeName)}</div>` : ""}
   ${d.businessTaxCode ? `<div class="line">MST: ${esc(d.businessTaxCode)}</div>` : ""}
   ${d.businessAddress ? `<div class="line">${esc(d.businessAddress)}</div>` : ""}
@@ -432,7 +432,7 @@ ${
   <div class="doc-code">${d.documentCode ? `${esc(d.documentCode)} — ` : ""}${d.dateOnly ? formatCashBookDate(d.date) : formatDate(d.date)}</div>
 </div>`
     : `<div class="doc-title-band">
-  ${d.businessLogoUrl ? `<img class="logo" src="${esc(d.businessLogoUrl)}" alt="logo" />` : ""}
+  ${d.businessLogoUrl ? `<img class="logo" data-print-logo src="${esc(d.businessLogoUrl)}" alt="logo" />` : ""}
   <div class="doc-type">${esc(d.documentType)}</div>
   <div class="doc-sub">${d.documentCode ? `Số: <b>${esc(d.documentCode)}</b> &nbsp;·&nbsp; ` : ""}Ngày: ${d.dateOnly ? formatCashBookDate(d.date) : formatShortDate(d.date)}</div>
 </div>

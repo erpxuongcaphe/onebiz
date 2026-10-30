@@ -144,7 +144,7 @@ jobs:
           PGPASSWORD: postgres
         run: |
           createdb fnb_print_queue_test
-          PGDATABASE=fnb_print_queue_test psql -v ON_ERROR_STOP=1 -f supabase/tests/fnb_print_idle.integration.sql
+          PGDATABASE=fnb_print_queue_test psql -v ON_ERROR_STOP=1 -f supabase/tests/print_dispatch_preparation.integration.sql
           PGDATABASE=fnb_print_queue_test node scripts/test-print-burst-concurrency.mjs
 
       - name: Verify invoice code allocation in an isolated database

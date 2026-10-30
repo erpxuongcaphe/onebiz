@@ -1,6 +1,7 @@
 import { bridgeHtml } from "./qz-bridge";
 import type { PaperWidth } from "./escpos";
 import { waitForPrint } from "./print-wait";
+import { printImageData } from "./print-logo-cache";
 
 export function needsIosPrintRenderer(userAgent: string, platform: string, maxTouchPoints: number): boolean {
   return /iPad|iPhone|iPod/.test(userAgent) || (platform === "MacIntel" && maxTouchPoints > 1);
@@ -45,20 +46,17 @@ export async function renderPrintRaster(html: string, paper: PaperWidth): Promis
     });
     const doc = frame.contentDocument;
     if (!doc?.body) throw new Error("Không dựng được bản in USB.");
-    await waitForPrint(Promise.all(Array.from(doc.images).map(async img => {
-      if (!img.src.startsWith("data:")) {
-        const response = await fetch(img.src, {signal:AbortSignal.timeout(5000)});
-        if (!response.ok) throw new Error("Không tải được logo/QR cho bản in.");
-        const blob = await response.blob();
-        img.src = await new Promise<string>((resolve,reject) => {
-          const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = reject; reader.readAsDataURL(blob);
-        });
-      }
-      await img.decode();
-    })), "Không tải xong logo/QR. Chưa gửi phiếu tới máy quầy.", 8000);
-    if (doc.fonts) await waitForPrint(doc.fonts.ready, "Trình duyệt chưa tải xong phông chữ. Chưa gửi phiếu tới máy quầy.", 5000);
     const ios = needsIosPrintRenderer(navigator.userAgent, navigator.platform, navigator.maxTouchPoints);
-    const { default: html2canvas } = await waitForPrint(ios ? import("./ios-print-renderer") : import("html2canvas"), "Không tải được bộ dựng bản in. Chưa gửi phiếu tới máy quầy.");
+    const [,, { default: html2canvas }] = await Promise.all([
+      waitForPrint(Promise.all(Array.from(doc.images).map(async img => {
+        if (!img.src.startsWith("data:")) {
+          img.src = await printImageData(img.src, img.hasAttribute("data-print-logo"));
+        }
+        await img.decode();
+      })), "Không tải xong logo/QR. Chưa gửi phiếu tới máy quầy.", 8000),
+      doc.fonts ? waitForPrint(doc.fonts.ready, "Trình duyệt chưa tải xong phông chữ. Chưa gửi phiếu tới máy quầy.", 5000) : Promise.resolve(),
+      waitForPrint(ios ? import("./ios-print-renderer") : import("html2canvas"), "Không tải được bộ dựng bản in. Chưa gửi phiếu tới máy quầy."),
+    ]);
     const height = Math.ceil(Math.max(doc.body.scrollHeight, doc.documentElement.scrollHeight));
     if (height * dots / cssWidth > 24000) throw new Error("Đơn quá dài cho một bản in USB. Hãy dùng in qua trình duyệt.");
     const canvas = await waitForPrint(html2canvas(doc.body, { width:cssWidth, height, scale:dots / cssWidth, backgroundColor:"#ffffff", logging:false, scrollX:0, scrollY:0, windowWidth:Math.ceil(cssWidth), useCORS:true }), "Trình duyệt chưa dựng được ảnh in. Chưa gửi phiếu tới máy quầy. Tải lại trang rồi thử một lần.", 20000);
