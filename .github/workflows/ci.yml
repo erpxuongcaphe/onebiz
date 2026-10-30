@@ -144,7 +144,7 @@ jobs:
           PGPASSWORD: postgres
         run: |
           createdb fnb_print_queue_test
-          PGDATABASE=fnb_print_queue_test psql -v ON_ERROR_STOP=1 -f supabase/tests/print_dispatch_preparation.integration.sql
+          PGDATABASE=fnb_print_queue_test psql -v ON_ERROR_STOP=1 -f supabase/tests/print_private_wake.integration.sql
           PGDATABASE=fnb_print_queue_test node scripts/test-print-burst-concurrency.mjs
 
       - name: Verify invoice code allocation in an isolated database
@@ -703,6 +703,9 @@ jobs:
       - name: Verify native USB sender without a printer
         shell: pwsh
         run: ./scripts/test-native-usb.ps1
+      - name: Verify Win7 receiver with local fake HTTP and printer
+        shell: pwsh
+        run: ./scripts/test-win7-print.ps1
 
   test-and-build:
     runs-on: ubuntu-latest
@@ -721,6 +724,12 @@ jobs:
       - name: Pin npm
         run: npm install --global npm@11.6.2
 
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.9.6
+      - name: Validate print wake edge module and pinned dependencies
+        run: deno check --no-config --lock=supabase/functions/print-wake/deno.lock --frozen-lockfile supabase/functions/print-wake/index.js
+
       - name: Install dependencies
         run: npm ci
 
@@ -728,7 +737,7 @@ jobs:
         run: npm run test:run
 
       - name: Verify USB worker lifecycle without a physical printer
-        run: node --test scripts/test-usb-worker.mjs scripts/test-print-recovery.mjs scripts/test-print-polling.mjs
+        run: node --test scripts/test-usb-worker.mjs scripts/test-print-recovery.mjs scripts/test-print-polling.mjs scripts/test-print-durable.mjs
 
       - name: Verify external monitor without contacting production or Telegram
         run: python3 scripts/operations/test_monitor.py

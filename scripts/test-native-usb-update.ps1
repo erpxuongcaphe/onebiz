@@ -2,7 +2,7 @@
 $ErrorActionPreference='Stop'
 $stage=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot ('../.tmp/native-update-'+[Guid]::NewGuid().ToString('N'))))
 New-Item -ItemType Directory -Path $stage -Force | Out-Null
-foreach($name in @('agent.mjs','usb-worker.mjs','OnebizUsbWorker.exe','OnebizUsbWorker.cs','update-native-usb.ps1')){Copy-Item -LiteralPath (Join-Path $PSScriptRoot ('../public/print-point/'+$name)) -Destination (Join-Path $stage $name)}
+foreach($name in @('agent.mjs','recovery.mjs','durable-queue.mjs','wake.mjs','polling.mjs','destination.mjs','network.mjs','usb-worker.mjs','OnebizUsbWorker.exe','OnebizUsbWorker.cs','update-native-usb.ps1')){Copy-Item -LiteralPath (Join-Path $PSScriptRoot ('../public/print-point/'+$name)) -Destination (Join-Path $stage $name)}
 $global:UsbUpdateTest=@{root='';state='Running';stops=0;starts=0;probe=0;ready=$true;failCopy=$false}
 function Get-ScheduledTask {param($TaskName,$ErrorAction) return [pscustomobject]@{TaskName=$TaskName;State=$global:UsbUpdateTest.state;Actions=@([pscustomobject]@{WorkingDirectory=$global:UsbUpdateTest.root})}}
 function Start-Process {
