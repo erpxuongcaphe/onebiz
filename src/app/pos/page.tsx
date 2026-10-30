@@ -31,6 +31,7 @@ import {
   listDraftOrders,
   getDraftOrderById,
   getOrders,
+  closeSalesOrderProcessing,
   trangThaiXuLyDon,
   NHAN_TRANG_THAI_XU_LY,
   adoptDraftSession,
@@ -5391,6 +5392,12 @@ function ProcessOrderModal({
 
   const [page, setPage] = useState(0);
   const [totalOrders, setTotalOrders] = useState(0);
+  const { hasPermission } = useAuth();
+  const canCloseProcessing = hasPermission("orders.create");
+  const [closingOrder, setClosingOrder] = useState<SalesOrder | null>(null);
+  const [closeReason, setCloseReason] = useState("Đã xử lý bằng hóa đơn khác");
+  const [savingClosure, setSavingClosure] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -5447,7 +5454,22 @@ function ProcessOrderModal({
       cancelled = true;
       clearTimeout(t);
     };
-  }, [open, search, searchField, branchId, page, toast]);
+  }, [open, search, searchField, branchId, page, toast, refreshKey]);
+
+  useEffect(() => { setClosingOrder(null); }, [open, branchId]);
+
+  const confirmCloseProcessing = async () => {
+    if (!closingOrder || savingClosure || !canCloseProcessing) return;
+    setSavingClosure(true);
+    try {
+      await closeSalesOrderProcessing(closingOrder.id, closeReason);
+      setClosingOrder(null);
+      setRefreshKey((value) => value + 1);
+      toast({ title: "Đã đánh dấu xử lý", description: `${closingOrder.code} vẫn được lưu tại Đơn đặt hàng.` });
+    } catch (error) {
+      toast({ title: "Chưa đánh dấu được đơn", description: error instanceof Error ? error.message : "Vui lòng thử lại.", variant: "error" });
+    } finally { setSavingClosure(false); }
+  };
 
   if (!open) return null;
 
@@ -5460,7 +5482,8 @@ function ProcessOrderModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+    <>
+    <Dialog open={open} onOpenChange={(o) => !o && !savingClosure && onClose()}>
       <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -5468,7 +5491,7 @@ function ProcessOrderModal({
             Xử lý đặt hàng
           </DialogTitle>
           <p className="text-sm text-muted-foreground">
-            Chỉ hiện đơn chưa có hóa đơn xuất còn hiệu lực. Đơn đã xuất hóa đơn được tra cứu tại Đơn đặt hàng.
+            Các đơn còn cần xử lý. Đơn đã xử lý được tra cứu tại Đơn đặt hàng.
           </p>
         </DialogHeader>
 
@@ -5521,12 +5544,12 @@ function ProcessOrderModal({
             </div>
           ) : (
             orders.map((o) => (
-              <button
+              <div
                 key={o.id}
-                type="button"
-                onClick={() => onPick(o.id)}
-                className="w-full text-left rounded-lg border bg-card p-3 hover:border-primary hover:bg-primary/5 transition-colors flex items-center gap-3 press-scale-sm"
+                className="w-full rounded-lg border bg-card flex items-center gap-1 pr-2 hover:border-primary transition-colors"
               >
+              <button type="button" onClick={() => onPick(o.id)} disabled={savingClosure}
+                className="flex min-w-0 flex-1 items-center gap-3 p-3 text-left rounded-lg hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-primary font-mono text-sm">
@@ -5575,6 +5598,15 @@ function ProcessOrderModal({
                   </div>
                 </div>
               </button>
+              {canCloseProcessing && (
+                <Button variant="ghost" size="icon" className="shrink-0 h-10 w-10 text-muted-foreground hover:text-status-success"
+                  title="Đánh dấu đã xử lý" aria-label={`Đánh dấu ${o.code} đã xử lý`}
+                  disabled={savingClosure}
+                  onClick={() => { setClosingOrder(o); setCloseReason("Đã xử lý bằng hóa đơn khác"); }}>
+                  <Icon name="check_circle" size={20} />
+                </Button>
+              )}
+              </div>
             ))
           )}
         </div>
@@ -5593,6 +5625,19 @@ function ProcessOrderModal({
         </div>
       </DialogContent>
     </Dialog>
+    <ConfirmDialog open={Boolean(closingOrder)} onOpenChange={(value) => { if (!value && !savingClosure) setClosingOrder(null); }}
+      title={`Đánh dấu ${closingOrder?.code ?? ""} đã xử lý?`}
+      description={<span className="grid gap-3">
+        <span>Đơn rời danh sách này, vẫn lưu trong lịch sử. Không tạo hóa đơn hay ghi nhận thêm tiền, hàng.</span>
+        <label className="grid gap-1 text-foreground">Lý do
+          <textarea aria-label="Lý do đánh dấu đã xử lý" maxLength={500} rows={2}
+            className="w-full rounded-md border border-border bg-background p-2 text-sm"
+            value={closeReason} onChange={(event) => setCloseReason(event.target.value)} />
+        </label>
+      </span>}
+      confirmLabel="Đã xử lý" loading={savingClosure} confirmDisabled={closeReason.trim().length < 3}
+      onConfirm={() => void confirmCloseProcessing()} />
+    </>
   );
 }
 

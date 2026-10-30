@@ -161,7 +161,7 @@ describe("Màn đơn gốc — khối đơn bán con", () => {
     // Chưa gọi RPC — phải qua xác nhận trước.
     expect(markOrderProcessed).not.toHaveBeenCalled();
     expect(screen.getByText("Hoàn tất xử lý đơn đặt hàng?")).toBeTruthy();
-    expect(screen.getByText(/Doanh thu, kho, công nợ KHÔNG đổi/)).toBeTruthy();
+    expect(screen.getByText(/Không tạo hóa đơn, ghi nhận thêm tiền hoặc hàng/)).toBeTruthy();
 
     fireEvent.click(screen.getByText("Hoàn tất"));
     // Ưu tiên gắn đơn con ĐÃ THANH TOÁN, không phải đơn đầu danh sách.
