@@ -44,7 +44,8 @@ import {
 import { cn } from "@/lib/utils";
 import { TableIdentityEditor } from "./table-identity-editor";
 import { getTableLabel } from "@/lib/fnb/table-label";
-import { reorderFloorPlanZones } from "@/lib/services/supabase/floor-plan";
+import { getUnassignedFloorPlanTables, reorderFloorPlanZones } from "@/lib/services/supabase/floor-plan";
+import { LoadErrorState } from "@/components/shared/load-error-state";
 
 // Lazy load Konva canvas (tránh SSR + giảm bundle)
 const FloorPlanCanvas = dynamic(
@@ -69,6 +70,19 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [selectedDecorationId, setSelectedDecorationId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [zoneLoading, setZoneLoading] = useState(false);
+  const [zoneLoadError, setZoneLoadError] = useState("");
+  const [unassignedTables, setUnassignedTables] = useState<TableLayout[]>([]);
+  const [assigningTable, setAssigningTable] = useState<string | null>(null);
+  const assignmentPending = useRef(false);
+  const zoneCreatePending = useRef(false);
+  const [creatingZone, setCreatingZone] = useState(false);
+  const branchScope = useRef(branchId);
+  const zoneScope = useRef(activeZoneId);
+  branchScope.current = branchId;
+  zoneScope.current = activeZoneId;
   const [uploadingBg, setUploadingBg] = useState(false);
   const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
   const [deletingDecoration, setDeletingDecoration] = useState(false);
@@ -149,65 +163,66 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
     if (!branchId) return;
     let cancelled = false;
     setLoading(true);
+    setLoadError("");
     setZones([]);
     setActiveZoneId(null);
     setTables([]);
     setDecorations([]);
-    getFloorPlanZones(branchId)
-      .then(async (zs) => {
+    setUnassignedTables([]);
+    let timeout: ReturnType<typeof setTimeout>;
+    const deadline = new Promise<never>((_, reject) => {
+      timeout = setTimeout(() => reject(new Error("Kết nối đang chậm. Vui lòng thử tải lại sơ đồ.")), 15000);
+    });
+    Promise.race([Promise.all([getFloorPlanZones(branchId), getUnassignedFloorPlanTables(branchId)]), deadline])
+      .then(([zs, unassigned]) => {
         if (cancelled) return;
         setZones(zs);
-        if (zs.length > 0) {
-          setActiveZoneId(zs[0].id);
-        } else {
-          // Auto-tạo zone "Sảnh chính" nếu chưa có
-          const newZ = await createFloorPlanZone({ branchId, name: "Sảnh chính" });
-          setZones([newZ]);
-          setActiveZoneId(newZ.id);
-        }
+        setUnassignedTables(unassigned);
+        setActiveZoneId(zs[0]?.id ?? null);
       })
-      .catch((err) =>
-        toast({
-          title: "Không tải được khu vực",
-          description: (err as Error).message,
-          variant: "error",
-        }),
-      )
-      .finally(() => !cancelled && setLoading(false));
+      .catch((err) => { if (!cancelled) setLoadError(err instanceof Error ? err.message : "Không tải được khu vực."); })
+      .finally(() => { clearTimeout(timeout); if (!cancelled) setLoading(false); });
     return () => {
       cancelled = true;
+      clearTimeout(timeout);
     };
-  }, [branchId, toast, createFloorPlanZone]);
+  }, [branchId, loadAttempt]);
 
   // ─── Load tables + decorations theo zone ───
   useEffect(() => {
     if (!activeZoneId) {
       setTables([]);
       setDecorations([]);
+      setZoneLoading(false);
+      setZoneLoadError("");
       return;
     }
     let cancelled = false;
-    Promise.all([
+    setZoneLoading(true);
+    setZoneLoadError("");
+    setTables([]);
+    setDecorations([]);
+    let timeout: ReturnType<typeof setTimeout>;
+    const deadline = new Promise<never>((_, reject) => {
+      timeout = setTimeout(() => reject(new Error("Kết nối đang chậm. Vui lòng thử tải lại sơ đồ.")), 15000);
+    });
+    Promise.race([Promise.all([
       getTablesByZone(activeZoneId),
-      getDecorationsByZone(activeZoneId).catch(() => [] as FloorPlanDecoration[]),
-    ])
+      getDecorationsByZone(activeZoneId),
+    ]), deadline])
       .then(([ts, ds]) => {
         if (!cancelled) {
           setTables(ts.map((t) => ({ ...t } as CanvasTable)));
           setDecorations(ds);
         }
       })
-      .catch((err) =>
-        toast({
-          title: "Không tải được bàn / đồ trang trí",
-          description: (err as Error).message,
-          variant: "error",
-        }),
-      );
+      .catch((err) => { if (!cancelled) setZoneLoadError(err instanceof Error ? err.message : "Không tải được bàn / đồ trang trí."); })
+      .finally(() => { clearTimeout(timeout); if (!cancelled) setZoneLoading(false); });
     return () => {
       cancelled = true;
+      clearTimeout(timeout);
     };
-  }, [activeZoneId, toast]);
+  }, [activeZoneId]);
 
   // ─── ResizeObserver canvas container ───
   useEffect(() => {
@@ -264,7 +279,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
 
   // ─── Thêm bàn mới từ palette ───
   const handleAddShape = async (preset: ShapePreset) => {
-    if (!activeZone || !tenant?.id) return;
+    if (!activeZone || !tenant?.id || zoneLoading || zoneLoadError) return;
     try {
       // Numbering is branch-wide, not per floor-plan zone. Reusing
       // `tables.length + 1` made a new zone try to create an existing Bàn 1.
@@ -345,19 +360,56 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
 
   // ─── Thêm zone mới ───
   const handleAddZone = async () => {
+    if (loading || loadError || zoneCreatePending.current) return;
     const name = prompt("Tên khu vực mới (vd: Sân vườn, Tầng 2)");
     if (!name?.trim()) return;
+    const targetBranch = branchId;
+    zoneCreatePending.current = true;
+    setCreatingZone(true);
     try {
       const z = await createFloorPlanZone({ branchId, name: name.trim() });
+      if (branchScope.current !== targetBranch) return;
       setZones((prev) => [...prev, z]);
       setActiveZoneId(z.id);
+      setMobileToolsOpen(true);
       toast({ title: `Đã thêm khu vực ${z.name}`, variant: "success" });
     } catch (err) {
+      if (branchScope.current !== targetBranch) return;
       toast({
         title: "Không tạo được",
         description: (err as Error).message,
         variant: "error",
       });
+    } finally {
+      zoneCreatePending.current = false;
+      setCreatingZone(false);
+    }
+  };
+
+  const handleAssignExistingTable = async (table: TableLayout) => {
+    if (!activeZone || loading || zoneLoading || zoneLoadError || assignmentPending.current) return;
+    const targetBranch = branchId;
+    const targetZone = activeZone;
+    const layout = { zoneId: targetZone.id,
+      positionX: Math.max(0, Math.round((targetZone.canvasWidth - table.width) / 2)),
+      positionY: Math.max(0, Math.round((targetZone.canvasHeight - table.height) / 2)) };
+    assignmentPending.current = true;
+    setAssigningTable(table.id);
+    try {
+      await updateTableLayout(table.id, layout);
+      if (branchScope.current !== targetBranch) return;
+      setUnassignedTables(current => current.filter(item => item.id !== table.id));
+      if (zoneScope.current === targetZone.id) {
+        setTables(current => [...current.filter(item => item.id !== table.id), { ...table, ...layout }]);
+        setSelectedTableId(table.id);
+        setSelectedDecorationId(null);
+      }
+      toast({ title: `Đã xếp ${getTableLabel(table)} vào ${targetZone.name}`, variant: "success" });
+    } catch (err) {
+      if (branchScope.current === targetBranch) toast({ title: "Chưa xếp được bàn", description: err instanceof Error ? err.message : "Vui lòng thử lại.", variant: "error" });
+    } finally {
+      assignmentPending.current = false;
+      setAssigningTable(null);
     }
   };
 
@@ -383,7 +435,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
 
   // ─── Decoration handlers ───
   const handleAddDecoration = async (preset: DecorationPreset) => {
-    if (!activeZone) return;
+    if (!activeZone || zoneLoading || zoneLoadError) return;
     try {
       const d = await createDecoration({
         branchId,
@@ -669,6 +721,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
           ))}
         <button
           onClick={handleAddZone}
+          disabled={loading || !!loadError || creatingZone}
           className="px-2 py-1.5 rounded-lg text-xs text-primary hover:bg-primary/10 transition-colors flex items-center gap-1"
         >
           <Icon name="add" size={14} /> Khu vực
@@ -754,6 +807,12 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
               )}
             </div>
           )}
+          {unassignedTables.length > 0 && <section className="space-y-2 border-b pb-3" aria-label="Bàn chưa xếp khu">
+            <p className="text-sm font-semibold">Bàn chưa xếp khu ({unassignedTables.length})</p>
+            <p className="text-xs text-muted-foreground">{activeZone ? `Chọn bàn có sẵn để đưa vào ${activeZone.name}, rồi kéo đến vị trí mong muốn.` : "Tạo khu vực mới để xếp các bàn có sẵn. Không cần tạo lại bàn."}</p>
+            <div className="max-h-48 space-y-1 overflow-y-auto">{unassignedTables.map(table => <Button key={table.id} type="button" variant="outline" size="sm" className="w-full justify-start" disabled={!activeZone || zoneLoading || !!zoneLoadError || !!assigningTable}
+              onClick={() => void handleAssignExistingTable(table)}>{assigningTable === table.id ? "Đang xếp…" : getTableLabel(table)}</Button>)}</div>
+          </section>}
           <div className="space-y-2 border-b pb-3">
             <Label htmlFor="floor-table-search">Bàn trong khu vực ({tables.length})</Label>
             <Input id="floor-table-search" value={tableSearch} onChange={event => setTableSearch(event.target.value)}
@@ -868,8 +927,18 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
           ref={containerRef}
           className="flex min-h-0 flex-1 items-start justify-center overflow-auto bg-muted/30 p-2 sm:p-4"
         >
-          {loading || !activeZone ? (
+          {loading || zoneLoading ? (
             <CanvasSkeleton />
+          ) : loadError || zoneLoadError ? (
+            <LoadErrorState title="Không tải được sơ đồ bàn" description={loadError || zoneLoadError} onRetry={() => setLoadAttempt(value => value + 1)} />
+          ) : !activeZone ? (
+            <section className="w-full max-w-xl space-y-3 rounded-xl border bg-background p-6 text-center" aria-label="Sơ đồ chưa có khu vực">
+              <Icon name="map" size={32} className="text-primary" />
+              <h3 className="text-lg font-semibold">Chưa có khu sơ đồ</h3>
+              <p className="text-sm text-muted-foreground">{unassignedTables.length ? `${unassignedTables.length} bàn có sẵn đang chờ xếp khu. Tạo khu vực mới, sau đó mở Công cụ để đưa bàn vào sơ đồ.` : "Tạo khu vực đầu tiên để bắt đầu bố trí bàn."} Khu đã xóa được giữ nguyên, không tự khôi phục.</p>
+              <Button type="button" disabled={creatingZone} onClick={handleAddZone}><Icon name="add" size={18} />{creatingZone ? "Đang tạo khu vực…" : "Tạo khu vực mới"}</Button>
+              {unassignedTables.length > 0 && <div className="flex max-h-48 flex-wrap justify-center gap-2 overflow-y-auto" aria-label="Các bàn có sẵn chưa xếp khu">{unassignedTables.map(table => <span key={table.id} className="rounded-md border px-2 py-1 text-sm">{getTableLabel(table)}</span>)}</div>}
+            </section>
           ) : (
             <FloorPlanCanvas
               zone={activeZone}
@@ -908,7 +977,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
 
 function CanvasSkeleton() {
   return (
-    <div className="flex items-center justify-center text-muted-foreground">
+    <div role="status" aria-label="Đang tải sơ đồ" className="flex items-center justify-center text-muted-foreground">
       <Icon name="progress_activity" className="animate-spin" size={20} />
     </div>
   );

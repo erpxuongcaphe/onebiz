@@ -4,12 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   zones: vi.fn(), tables: vi.fn(), decorations: vi.fn(),
   deleteDecoration: vi.fn(), deleteZone: vi.fn(), deleteTable: vi.fn(), updateTable: vi.fn(), toast: vi.fn(), canManage: vi.fn(),
+  unassigned: vi.fn(), createZone: vi.fn(), updateLayout: vi.fn(), createTable: vi.fn(),
 }));
+vi.mock("@/lib/services/supabase/floor-plan", () => ({getUnassignedFloorPlanTables:mocks.unassigned,reorderFloorPlanZones:vi.fn()}));
 vi.mock("@/lib/services", () => ({
   getFloorPlanZones: mocks.zones, getTablesByZone: mocks.tables,
-  getTablesByBranch: vi.fn(), createFloorPlanZone: vi.fn(),
+  getTablesByBranch: vi.fn(), createFloorPlanZone: mocks.createZone,
   updateFloorPlanZone: vi.fn(), deleteFloorPlanZone: mocks.deleteZone,
-  updateTableLayout: vi.fn(), createTable: vi.fn(), updateTable: mocks.updateTable, deleteTable: mocks.deleteTable,
+  updateTableLayout: mocks.updateLayout, createTable: mocks.createTable, updateTable: mocks.updateTable, deleteTable: mocks.deleteTable,
 }));
 vi.mock("@/lib/services/supabase/floor-plan-decorations", () => ({
   getDecorationsByZone: mocks.decorations, deleteDecoration: mocks.deleteDecoration,
@@ -45,6 +47,8 @@ describe("floor plan deletion targets", () => {
   beforeEach(() => {
     configure({ asyncUtilTimeout: 10000 });
     vi.clearAllMocks();
+    mocks.unassigned.mockResolvedValue([]);
+    mocks.updateLayout.mockResolvedValue(undefined);
     mocks.canManage.mockReturnValue(true);
     mocks.zones.mockResolvedValue([{ id: "inside", name: "Trong Nhà", canvasWidth: 1000,
       canvasHeight: 700, gridSize: 16, floorLevel: 0, backgroundOpacity: 100 }]);
@@ -57,7 +61,7 @@ describe("floor plan deletion targets", () => {
     vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
     vi.stubGlobal("confirm", vi.fn(() => false));
   });
-  afterEach(() => { cleanup(); vi.unstubAllGlobals(); configure({ asyncUtilTimeout: 1000 }); });
+  afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); configure({ asyncUtilTimeout: 1000 }); });
 
   it("deletes only the selected decoration and retains all tables", async () => {
     fireEvent.click(await selectTree());
@@ -208,5 +212,97 @@ describe("floor plan deletion targets", () => {
     expect(tools.firstElementChild).toHaveTextContent("Vật đang chọn");
     expect(tools.className).toContain("lg:max-h-none");
     expect(screen.getByLabelText("Tên hiển thị")).toHaveValue("Cây cảnh");
+  });
+
+  it("opens an empty plan without recreating a deleted zone or altering existing tables", async () => {
+    mocks.zones.mockResolvedValue([]);
+    mocks.unassigned.mockResolvedValue([{id:'dx-01',zoneId:null,name:'ĐX 01',tableNumber:1,width:80,height:80}]);
+    render(<FloorPlanEditor branchId="dong-xoai" branchName="Đồng Xoài" scope="global" />);
+    expect(await screen.findByRole('heading',{name:'Chưa có khu sơ đồ'})).toBeVisible();
+    expect(screen.getByLabelText('Các bàn có sẵn chưa xếp khu')).toHaveTextContent('ĐX 01');
+    expect(screen.queryByLabelText('Đang tải sơ đồ')).not.toBeInTheDocument();
+    expect(mocks.createZone).not.toHaveBeenCalled();
+    expect(mocks.updateLayout).not.toHaveBeenCalled();
+    expect(screen.getByRole('status')).toHaveTextContent('Chưa có thao tác chỉnh sửa');
+  });
+
+  it("creates a zone only on request, then assigns the original table ID without creating another table", async () => {
+    mocks.zones.mockResolvedValue([]);
+    mocks.tables.mockResolvedValue([]);
+    const table={id:'dx-01',zoneId:null,name:'ĐX 01',tableNumber:1,width:80,height:80,status:'available',positionX:0,positionY:0};
+    mocks.unassigned.mockResolvedValue([table]);
+    mocks.createZone.mockResolvedValue({id:'new-zone',name:'Trong nhà mới',canvasWidth:1024,canvasHeight:720,floorLevel:1,gridSize:16});
+    vi.stubGlobal('prompt',vi.fn(()=>'Trong nhà mới'));
+    render(<FloorPlanEditor branchId="dong-xoai" scope="global" />);
+    fireEvent.click(await screen.findByRole('button',{name:'Tạo khu vực mới'}));
+    await waitFor(()=>expect(mocks.createZone).toHaveBeenCalledExactlyOnceWith({branchId:'dong-xoai',name:'Trong nhà mới'}));
+    const existing=await screen.findByRole('button',{name:'ĐX 01'});
+    await waitFor(()=>expect(existing).toBeEnabled());
+    fireEvent.click(existing);
+    await waitFor(()=>expect(mocks.updateLayout).toHaveBeenCalledExactlyOnceWith('dx-01',{zoneId:'new-zone',positionX:472,positionY:320}));
+    await waitFor(()=>expect(screen.queryByLabelText('Bàn chưa xếp khu')).not.toBeInTheDocument());
+    expect(mocks.createTable).not.toHaveBeenCalled();
+    expect(table.zoneId).toBeNull();
+  });
+
+  it("offers retry for read errors without reporting unsaved edits", async () => {
+    mocks.zones.mockRejectedValueOnce(new Error('Mất kết nối đọc khu vực'));
+    render(<FloorPlanEditor branchId="dong-xoai" scope="global" />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Mất kết nối đọc khu vực');
+    expect(screen.getByRole('status')).toHaveTextContent('Chưa có thao tác chỉnh sửa');
+    fireEvent.click(screen.getByRole('button',{name:'Thử lại'}));
+    expect(await screen.findByRole('button',{name:'Chọn Cây cảnh'})).toBeVisible();
+    expect(mocks.createZone).not.toHaveBeenCalled();
+  });
+
+  it("does not silently replace decorations with an empty layout after a read failure", async () => {
+    mocks.decorations.mockRejectedValueOnce(new Error('Không đọc được trang trí'));
+    render(<FloorPlanEditor branchId="dong-xoai" scope="global" />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Không đọc được trang trí');
+    expect(screen.queryByRole('button',{name:'Chọn Bàn 1'})).not.toBeInTheDocument();
+    expect(mocks.updateLayout).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button',{name:'Thử lại'}));
+    expect(await screen.findByRole('button',{name:'Chọn Cây cảnh'})).toBeVisible();
+  });
+
+  it("stops waiting after a stalled read and does not treat it as a save failure", async () => {
+    vi.useFakeTimers();
+    mocks.zones.mockReturnValueOnce(new Promise(()=>{}));
+    render(<FloorPlanEditor branchId="dong-xoai" scope="global" />);
+    expect(screen.getByLabelText('Đang tải sơ đồ')).toBeVisible();
+    await act(async()=>{await vi.advanceTimersByTimeAsync(15000);});
+    expect(screen.getByRole('alert')).toHaveTextContent('Kết nối đang chậm');
+    expect(screen.queryByLabelText('Đang tải sơ đồ')).not.toBeInTheDocument();
+    expect(mocks.createZone).not.toHaveBeenCalled();
+  });
+
+  it("ignores a late branch read when the user has switched branches", async () => {
+    let finish!:(zones:unknown[])=>void;
+    mocks.zones.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
+    mocks.zones.mockResolvedValueOnce([]);
+    mocks.unassigned.mockResolvedValueOnce([{id:'old-table',name:'Bàn chi nhánh cũ'}]);
+    mocks.unassigned.mockResolvedValueOnce([{id:'new-table',name:'Bàn chi nhánh mới'}]);
+    const view=render(<FloorPlanEditor branchId="old" scope="global" />);
+    view.rerender(<FloorPlanEditor branchId="new" scope="global" />);
+    expect(await screen.findByRole('heading',{name:'Chưa có khu sơ đồ'})).toBeVisible();
+    await act(async()=>finish([]));
+    expect(screen.getByLabelText('Các bàn có sẵn chưa xếp khu')).toHaveTextContent('Bàn chi nhánh mới');
+    expect(screen.queryByText('Bàn chi nhánh cũ')).not.toBeInTheDocument();
+    expect(mocks.createZone).not.toHaveBeenCalled();
+  });
+
+  it("keeps an existing table available for retry after assignment fails and blocks double clicks", async () => {
+    let fail!:(error:Error)=>void;
+    mocks.unassigned.mockResolvedValue([{id:'dx-01',zoneId:null,name:'ĐX 01',tableNumber:1,width:80,height:80}]);
+    mocks.updateLayout.mockImplementationOnce(()=>new Promise((_,reject)=>{fail=reject;}));
+    render(<FloorPlanEditor branchId="dong-xoai" scope="global" />);
+    const button=await screen.findByRole('button',{name:'ĐX 01'});
+    await waitFor(()=>expect(button).toBeEnabled());
+    act(()=>{fireEvent.click(button);fireEvent.click(button);});
+    expect(mocks.updateLayout).toHaveBeenCalledTimes(1);
+    await act(async()=>fail(new Error('Lưu thất bại')));
+    expect(screen.getByRole('button',{name:'ĐX 01'})).toBeEnabled();
+    expect(mocks.createTable).not.toHaveBeenCalled();
+    expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({title:'Chưa xếp được bàn'}));
   });
 });
