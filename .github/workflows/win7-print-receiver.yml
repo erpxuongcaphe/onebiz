@@ -28,6 +28,8 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           & $compiler /nologo /platform:x86 /out:TransportTests.exe TransportTests.cs
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & $compiler /nologo /platform:x86 /out:WakeTests.exe WakeTests.cs
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Verify recovery with loopback HTTP, journals and a fake printer
         run: |
           .\OnebizWin7.exe --self-test
@@ -38,9 +40,11 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           .\TransportTests.exe
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          .\WakeTests.exe
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         with:
-          name: Onebiz-Win7-20261025-1
+          name: Onebiz-Win7-20261030-1
           path: |
             tools/win7-print-point/OnebizWin7.exe
             tools/win7-print-point/OnebizWin7.cs

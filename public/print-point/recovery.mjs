@@ -24,6 +24,12 @@ export function createAgentRpc(config, fetchRequest = fetch, timeoutMs = 15000, 
         });
         if (!response.ok) {
           const error = new Error(`PRINT_RPC_HTTP_${response.status}`);
+          // Recognize only this explicit server code, never log a response which
+          // could contain configuration or job data. Deadline still covers body.
+          if (action === 'finish' && response.status === 400 && response.json) {
+            const failure = await response.json().catch(() => null);
+            error.claimExpired = failure?.message === 'PRINT_CLAIM_EXPIRED';
+          }
           if (response.status === 401 || response.status === 403) error.retryAfterMs = 300000;
           if (response.status === 429) {
             const header = response.headers?.get('retry-after');
@@ -35,8 +41,8 @@ export function createAgentRpc(config, fetchRequest = fetch, timeoutMs = 15000, 
         // The deadline covers headers AND the response body, including an uncooperative fetch.
         return await response.json();
       })()]);
-      failures = 0;
-      retryAt = 0;
+      // A slower background heartbeat must not erase a newer failure/cooldown.
+      if (now() >= retryAt) { failures = 0; retryAt = 0; }
       return result;
     } catch (cause) {
       const error = cause instanceof Error ? cause : new Error('PRINT_RPC_FAILED');

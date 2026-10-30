@@ -4,6 +4,10 @@
 # working directory name when running `supabase init`.
 project_id = "onebiz-erp"
 
+[functions.print-wake]
+verify_jwt = false
+entrypoint = "./functions/print-wake/index.js"
+
 [api]
 enabled = true
 # Port to use for the API URL.

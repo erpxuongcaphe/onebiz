@@ -9,6 +9,8 @@ import { sendNetworkPrint } from './network.mjs';
 import { createUsbWorker, nativeUsbExecutable, printFailureStatus } from './usb-worker.mjs';
 import { createAgentRpc, createProgressWatchdog } from './recovery.mjs';
 import { createIdlePolling } from './polling.mjs';
+import { acquireReceiverLease, createDurableQueue } from './durable-queue.mjs';
+import { createPrintWake } from './wake.mjs';
 
 export function validateRaster(bytes, paper) {
   if (!['58mm', '80mm'].includes(paper) || bytes.length > 1800000) throw new Error('INVALID_RASTER');
@@ -48,6 +50,8 @@ export async function runAgent(configPath) {
   const config=JSON.parse(await readFile(configPath,'utf8')), url=new URL(config.url);
   if(url.protocol!=='https:' || !/^[0-9a-f-]{36}$/.test(config.pointId) || !/^[0-9a-f]{64}$/.test(config.token) || !config.publicKey) throw new Error('Tệp cấu hình không hợp lệ.');
   const call=createAgentRpc(config);
+  const releaseLease = await acquireReceiverLease(config.pointId);
+  const queue = createDurableQueue(dirname(resolve(configPath)), config.pointId, call);
   const sleep=ms=>new Promise(r=>setTimeout(r,ms));
   const nativeUsb = nativeUsbExecutable(join(dirname(fileURLToPath(import.meta.url)), 'spool.ps1'));
   const discover=()=>new Promise(done=>{
@@ -59,10 +63,11 @@ export async function runAgent(configPath) {
   });
   const refreshPrinters = createPrinterRefresh(discover, data => call('heartbeat', data), error => console.error(error.message));
   const polling = createIdlePolling();
+  const wake = createPrintWake(config);
   const usbWorker = createUsbWorker(join(dirname(fileURLToPath(import.meta.url)), 'spool.ps1'));
   void usbWorker.warm().catch(error => console.error(error.message));
   let stopped=false;
-  process.on('SIGINT',()=>{stopped=true;}); process.on('SIGTERM',()=>{stopped=true;});
+  process.on('SIGINT',()=>{stopped=true;wake.close();}); process.on('SIGTERM',()=>{stopped=true;wake.close();});
   const watchdog = createProgressWatchdog(() => {
     console.error('PRINT_QUEUE_STALLED_RESTARTING_CHECK_UNCERTAIN_JOBS');
     usbWorker.close();
@@ -74,9 +79,10 @@ export async function runAgent(configPath) {
       void refreshPrinters();
       watchdog.pulse();
       const claimStarted = Date.now();
-      const job=await call('claim');
+      const job=await queue.claim();
       watchdog.pulse();
-      if(!job){await sleep(polling.emptyDelayMs());continue;}
+      if(job?.recovered) continue;
+      if(!job){await wake.wait(wake.connected() ? 15000 : polling.emptyDelayMs());continue;}
       polling.received();
       const sendStarted = Date.now();
       let status='failed',message='Không dựng được dữ liệu in.',attempted=false,tempPath;
@@ -105,11 +111,9 @@ export async function runAgent(configPath) {
       finally{if(tempPath)await unlink(tempPath).catch(()=>{});}
       watchdog.pulse();
       const acknowledgementStarted = Date.now();
-      // Retry acknowledgement only. Never repeat the physical send.
-      for(let attempt=0;attempt<3;attempt++){
-        try{await call('finish',{id:job.id,claim_id:job.claim_id,status,message});break;}
-        catch(error){console.error(error.message);await sleep(2500);}
-      }
+      // A failed acknowledgement remains durable and is retried BEFORE another
+      // claim, using the RPC cooldown. Never repeat the physical send.
+      await queue.finish(job,status,message);
       console.log(`${new Date().toISOString()} · ${job.id} · ${status} · lấy lệnh ${sendStarted-claimStarted}ms · gửi máy ${acknowledgementStarted-sendStarted}ms · xác nhận ${Date.now()-acknowledgementStarted}ms`);
     }catch(error){
       console.error(`${new Date().toISOString()} · ${error.message}`);
@@ -124,6 +128,8 @@ export async function runAgent(configPath) {
     }
   }
   watchdog.close();
+  wake.close();
+  releaseLease();
   usbWorker.close();
 }
 if(process.argv[1] && pathToFileURL(resolve(process.argv[1])).href===import.meta.url){

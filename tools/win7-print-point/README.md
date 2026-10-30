@@ -1,4 +1,4 @@
-# Win7 receipt receiver 2026.10.25.1
+# Win7 receipt receiver 2026.10.30.1
 
 Requires .NET Framework 4.8 and the `202610250400_fnb_print_recoverable_claim` server migration. Startup verifies the server capability before claiming any job.
 
@@ -11,7 +11,7 @@ The migration remains compatible with old agents. The one-sending-job guard, 2 m
 1. Review unresolved tickets in Onebiz; do not automatically reprint them.
 2. Stop only the print receiver at the counter; keep POS open.
 3. Back up the current OnebizWin7.exe. Replace that executable only, preserving onebiz-print-point.json, all pending-ack/pending-claim files and the existing startup launcher/input/marker.
-4. Start the existing launcher. Confirm the displayed version is 2026.10.25.1 and there is only one receiver. The server capability check must succeed.
+4. Start the existing launcher. Confirm the displayed version is 2026.10.30.1 and there is only one receiver. The server capability check must succeed.
 5. Send one new test ticket and have someone at the counter confirm the paper. Then test several new tickets in sequence, checking one paper per ticket and visible errors for a disconnected printer.
 6. Retain the old executable for rollback. If a pending-claim file exists, resolve that assignment with this version before downgrading; do not delete journals or silently fall back to an older receiver.
 
@@ -20,3 +20,5 @@ No credentials, printer routes or queues are bundled. No automatic Windows resta
 ## Validation
 
 The SQL integration suite covers legacy queue/access behavior, lost claim responses, idempotent acknowledgements, terminal/expired claim guards and 50 sequential tickets with deliberately discarded responses. CI also runs real PostgreSQL concurrent ownership tests. The .NET tests use loopback HTTP, disposable journals and a fake TCP printer; they never connect to a live queue or physical device.
+
+The optional private wake channel, reduced idle polling, and staged activation procedure are described in [print wake rollout](../../docs/operations/print-wake-rollout.md). Installing this build does not activate a point's server flag. A wake hint only ends idle sleep; every print still requires the existing authenticated claim.

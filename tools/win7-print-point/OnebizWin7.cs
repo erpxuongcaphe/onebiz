@@ -21,7 +21,44 @@ class OnebizWin7 {
  static int RpcDeadlineMs=15000;
  static long progress=Stopwatch.GetTimestamp();
  static Timer watchdog;
- const string Version="2026.10.25.1";
+ const string Version="2026.10.30.1";
+ // Wake hints carry no bill. Keep one background HTTPS stream, with bounded
+ // reconnect and normal authenticated claim as the only path to physical paper.
+ class WakeListener {
+  public volatile bool Connected;
+  readonly AutoResetEvent signal=new AutoResetEvent(false);
+  readonly Dictionary<string,object> settings;
+  public WakeListener(Dictionary<string,object> value){settings=value;}
+  public void Start(){if(S(settings,"wakeEnabled").ToLowerInvariant()=="false")return;var thread=new Thread(Run);thread.IsBackground=true;thread.Start();}
+  public void Wait(int fallback){signal.WaitOne(Connected?15000:fallback);}
+  static string Line(StreamReader reader){var value=new StringBuilder();int c;while((c=reader.Read())>=0){if(c==10)return value.ToString().TrimEnd('\r');if(value.Length>=512)throw new Exception("WAKE_FRAME_TOO_LARGE");value.Append((char)c);}return value.Length==0?null:value.ToString();}
+  void Run(){int failures=0;while(true){int pause=5000;HttpWebRequest req=null;bool ready=false;try{
+   req=(HttpWebRequest)WebRequest.Create(new Uri(new Uri(S(settings,"url")),"/functions/v1/print-wake"));
+   req.Method="POST";req.ContentType="application/json";req.Headers["apikey"]=S(settings,"publicKey");
+   req.AllowAutoRedirect=false;req.Timeout=10000;req.ReadWriteTimeout=35000;req.ConnectionGroupName="OnebizWake";
+   req.ServicePoint.ConnectionLimit=Math.Max(4,req.ServicePoint.ConnectionLimit);
+   using(var deadline=new Timer(delegate{try{req.Abort();}catch{}},null,120000,Timeout.Infinite)){
+    var serializer=new JavaScriptSerializer();byte[] body=Encoding.UTF8.GetBytes(serializer.Serialize(new {pointId=S(settings,"pointId"),token=S(settings,"token")}));
+    req.ContentLength=body.Length;using(var stream=req.GetRequestStream()){stream.Write(body,0,body.Length);}
+    using(var response=(HttpWebResponse)req.GetResponse()){
+     if(!response.ContentType.StartsWith("text/event-stream",StringComparison.OrdinalIgnoreCase))throw new Exception("WAKE_INVALID_STREAM");
+     using(var reader=new StreamReader(response.GetResponseStream())){string line,kind="",data="";int total=0;long last=0;
+      while((line=Line(reader))!=null){total+=line.Length;if(total>65536)throw new Exception("WAKE_STREAM_TOO_LARGE");
+       if(line==""){if(data=="1"&&kind=="ready"){ready=true;Connected=true;failures=0;signal.Set();}
+        if(ready&&data=="1"&&kind=="wake"&&(Stopwatch.GetTimestamp()-last)*1000.0/Stopwatch.Frequency>=250){last=Stopwatch.GetTimestamp();signal.Set();}kind="";data="";
+       }else if(line.StartsWith("event: "))kind=line.Substring(7);else if(line.StartsWith("data: "))data=line.Substring(6);
+      }
+     }
+    }
+   }
+   pause=ready?1000:5000;
+  }catch(WebException e){if(e.Response!=null)using(var response=e.Response){var http=response as HttpWebResponse;if(http!=null){int code=(int)http.StatusCode;if(code==401||code==403||code==404)pause=300000;if(code==429){int seconds;if(Int32.TryParse(http.Headers["Retry-After"],out seconds))pause=Math.Max(30000,Math.Min(900000,Math.Min(seconds,900)*1000));else pause=30000;}}}failures++;}
+   catch{failures++;}
+   finally{Connected=false;signal.Set();if(req!=null)req.Abort();}
+   if(!ready)pause=Math.Max(pause,Math.Min(60000,5000*(1<<Math.Min(failures,4))));
+   Thread.Sleep(pause+new Random().Next(0,1000));
+  }}
+ }
  static void Pulse(){Interlocked.Exchange(ref progress,Stopwatch.GetTimestamp());}
  static void StartWatchdog(int milliseconds){
   StopWatchdog();
@@ -215,11 +252,12 @@ class OnebizWin7 {
     // Refuse to print with an old server which cannot recover this request ID.
     var capability=Call("heartbeat",new {printers=names}) as Dictionary<string,object>;
     if(capability==null||S(capability,"recoverable_claim_v1")!="True")throw new Exception("May chu chua san sang phuc hoi phieu. Chua gui may in.");
+    var wake=new WakeListener(config);wake.Start();DateTime idleSince=DateTime.UtcNow;
     Log("Dang nhan phieu. Giu cua so nay mo; Ctrl+C de dung.");DateTime next=DateTime.UtcNow.AddMinutes(5);int failures=0;
     while(true) {try {
      Pulse();if(File.Exists(journal)){Ack(Read(journal));Pulse();continue;}
      if(DateTime.UtcNow>=next){Call("heartbeat",new {printers=names});next=DateTime.UtcNow.AddMinutes(5);}
-     var job=Claim();Pulse();if(job==null)Thread.Sleep(1000);else Process(job);failures=0;
+     var job=Claim();Pulse();if(job==null){double idle=(DateTime.UtcNow-idleSince).TotalSeconds;wake.Wait(idle<10?1000:idle<30?2000:5000);}else{idleSince=DateTime.UtcNow;Process(job);}failures=0;
     }catch(Exception e){failures++;int delay=failures<=3?1000:5000;Log("Thu lai ket noi sau "+(delay/1000)+" giay: "+e.Message);Thread.Sleep(delay);}}
    }
   }catch(Exception e){Console.WriteLine("LOI: "+e.Message);Console.WriteLine("Giu cua so nay va chup loi. Khong can tai lai ma ket noi.");try{Log("Khoi dong that bai: "+e.GetType().Name+" "+e.Message);}catch{}return 1;}
