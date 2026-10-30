@@ -19,6 +19,8 @@ create policy order_processing_closures_read on public.sales_order_processing_cl
 for select to authenticated using (
   tenant_id = public.get_user_tenant_id()
   and public.user_has_branch_access(auth.uid(),branch_id)
+  and exists (select 1 from public.invoices visible_order
+    where visible_order.id=order_id and visible_order.source='order')
 );
 
 create function public.close_sales_order_processing(p_order_id uuid,p_reason text)

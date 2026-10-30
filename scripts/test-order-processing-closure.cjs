@@ -56,7 +56,7 @@ const uuid = n => `00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
  assert.ok((await db.query('select closed_at from sales_order_processing_closures where order_id=$1',[uuid(11)])).rows[0].closed_at);
  assert.deepEqual((await db.query(`select * from invoices where id<>'${uuid(20)}' order by id`)).rows,before);
  // Direct browser writes are denied; same-branch metadata can be read, other scope cannot.
- await db.exec('grant usage on schema auth to authenticated; grant select on profiles to authenticated; set role authenticated');
+ await db.exec('grant usage on schema auth to authenticated; grant select on profiles,invoices to authenticated; set role authenticated');
  assert.equal((await db.query('select count(*)::int n from sales_order_processing_closures')).rows[0].n,2);
  await assert.rejects(db.exec('delete from sales_order_processing_closures'));
  await db.exec(`select set_config('test.branch','${uuid(4)}',false)`);
