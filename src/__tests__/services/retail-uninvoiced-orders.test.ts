@@ -36,6 +36,14 @@ describe('POS only uninvoiced orders without embedded self-relation loss',()=>{
   expect((await getOrders({page:0,pageSize:50,filters:{fulfillmentState:'processing'}})).data.map(o=>o.id)).toEqual(['invoiced']);
   f.missing=true;await expect(getOrders({page:0,pageSize:50,filters:{fulfillmentState:'pending'}})).rejects.toThrow('Chưa xác định');
  });
+ it('hides manual closures before pagination and includes deliberately reopened orders with older invoices',async()=>{
+  f.rows=[{...parent('manual'),processing:{closed_at:'2026-10-30',reason:'Đã xuất riêng'},active_processing:{closed_at:'2026-10-30'}},
+    {...parent('reopened'),processing:{closed_at:null,reopened_at:'2026-10-30'},active_processing:null},
+    parent('pending'),child('hd-reopened','reopened')];
+  const r=await getOrders({page:0,pageSize:1,branchId:'warehouse',filters:{fulfillmentState:'pending'}});
+  expect(r.total).toBe(2);expect(r.data[0].id).toBe('reopened');
+  expect(r.data[0].processingReopenedAt).toBe('2026-10-30');
+ });
 });
 
 vi.mock("@/lib/services/supabase/customer-identity",async importOriginal=>({

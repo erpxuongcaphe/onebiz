@@ -416,6 +416,8 @@ function OrderDetail({
                 <ChildSalesBlock
                   orderId={order.id}
                   fulfilledById={order.fulfilledById}
+                  processingClosedAt={order.processingClosedAt}
+                  processingClosedReason={order.processingClosedReason}
                   onDataChanged={onDataChanged}
                 />
               </div>
@@ -1028,6 +1030,12 @@ export default function DatHangPage() {
         // Việc nhân viên đã xác nhận kết thúc xử lý vẫn được giữ trong audit và
         // bộ lọc nội bộ, nhưng không tạo thêm một nhãn dễ gây hiểu nhầm.
         const codes = getOrderInvoiceCodes(row.original);
+        if (row.original.processingClosedAt) {
+          return <div className="grid gap-1">
+            <Badge variant="outline" className="text-status-success" title={row.original.processingClosedReason}>Đã xử lý</Badge>
+            {codes.length > 0 && <FulfilledOrderStatus invoiceCodes={codes} />}
+          </div>;
+        }
         if (codes.length > 0) {
           return <FulfilledOrderStatus invoiceCodes={codes} />;
         }

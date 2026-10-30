@@ -53,6 +53,7 @@ jobs:
           node scripts/fnb-db-test/run-actual-receiving-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
           FNB_PGLITE_DIR="$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js" node scripts/fnb-db-test/run-trading-status.cjs
           FNB_PGLITE_DIR="$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js" node scripts/fnb-db-test/run-negative-stock.cjs
+          FNB_PGLITE_DIR="$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js" node scripts/test-order-processing-closure.cjs
           FNB_RECORD_COST_SQL="$RUNNER_TEMP/settled-cost-fixture.sql" FNB_PGLITE_DIR="$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js" node scripts/fnb-db-test/run-settled-cost-finalization.cjs
           FNB_PGLITE_DIR="$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js" node scripts/fnb-db-test/run-stocktake-depleted.mjs
           FNB_RECORD_SQL="$RUNNER_TEMP/inventory-count-fixture.sql" FNB_PGLITE_DIR="$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js" node scripts/fnb-db-test/run-inventory-check-amendment.mjs

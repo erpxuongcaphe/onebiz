@@ -143,20 +143,22 @@ export async function getOrders(
     if (candidates.some(o => o.completedChildCount == null)) {
       throw new Error('Chưa xác định được hóa đơn của đơn đặt hàng. Vui lòng tải lại.');
     }
-    const matching = candidates.filter(o => !o.fulfilledById &&
-      (fulfillmentState === "pending" ? o.completedChildCount === 0 : (o.completedChildCount ?? 0) > 0));
+    const matching = candidates.filter(o => !o.fulfilledById && !o.processingClosedAt &&
+      (fulfillmentState === "pending" ? (o.completedChildCount === 0 || Boolean(o.processingReopenedAt)) : (o.completedChildCount ?? 0) > 0));
     return { data: matching.slice(from, to + 1), total: matching.length };
   }
   let query = (supabase as any)
     .from("invoices")
     .select(
-      `*, profiles!invoices_created_by_fkey(full_name), branches!invoices_branch_id_fkey(name), ${customerRelation}${shipmentRelation}`,
+      `*, processing:sales_order_processing_closures!sales_order_processing_closures_order_id_fkey(closed_at,reason,reopened_at), active_processing:sales_order_processing_closures!sales_order_processing_closures_order_id_fkey(closed_at), profiles!invoices_created_by_fkey(full_name), branches!invoices_branch_id_fkey(name), ${customerRelation}${shipmentRelation}`,
       { count: "exact" },
     )
     .eq("tenant_id", tenantId)
     .eq("source", "order")
     // 00173: ẩn đơn đã xóa mềm (đơn đặt hàng vốn KHÔNG bị xóa — guard cho chắc).
     .is("deleted_at", null);
+  // Filter only the embedded active marker, preserving parents without a marker.
+  query = query.not("active_processing.closed_at", "is", null);
 
   // Explicit selected-order export; still subject to tenant, branch and RLS.
   if (Array.isArray(params.filters?.ids)) query = query.in("id", params.filters.ids);
@@ -200,10 +202,11 @@ export async function getOrders(
   // gắn hóa đơn VÀ chưa có đơn con nào đã thanh toán. Đơn đã có hóa đơn nhưng
   // chưa gắn là "processing" — không được gọi là chờ xử lý nữa.
   if (fulfillmentState === "fulfilled") {
-    query = query.not("fulfilled_by_id", "is", null);
+    query = query.or("fulfilled_by_id.not.is.null,active_processing.not.is.null");
   } else if (fulfillmentState === "open") {
     // Includes both pending and partially processed orders, before pagination.
     query = query.is("fulfilled_by_id", null);
+    query = query.is("active_processing", null);
   }
 
   if (debtState === "outstanding") {
@@ -290,6 +293,9 @@ export async function getOrders(
       statusName: STATUS_LABEL[row.status] ?? row.status ?? "",
       // CEO 14/07: link tới hóa đơn đã xuất (nếu có) — hiện "Đã xuất hóa đơn".
       fulfilledById: row.fulfilled_by_id ?? undefined,
+      processingClosedAt: row.processing?.closed_at ?? row.processing?.[0]?.closed_at ?? undefined,
+      processingClosedReason: row.processing?.reason ?? row.processing?.[0]?.reason ?? undefined,
+      processingReopenedAt: row.processing?.reopened_at ?? row.processing?.[0]?.reopened_at ?? undefined,
       // Ghi chú người bán — in trên phiếu đặt hàng (CEO 08/07).
       note: row.note ?? undefined,
       createdBy: row.created_by ?? "",
@@ -1361,9 +1367,10 @@ export type TrangThaiXuLyDon = "cho_xu_ly" | "dang_xu_ly" | "hoan_tat";
 
 export function trangThaiXuLyDon(o: {
   fulfilledById?: string | null;
+  processingClosedAt?: string | null;
   completedChildCount?: number;
 }): TrangThaiXuLyDon {
-  if (o.fulfilledById) return "hoan_tat";
+  if (o.fulfilledById || o.processingClosedAt) return "hoan_tat";
   // undefined = máy chủ chưa trả số đếm ⇒ giữ nguyên hành vi cũ (chờ xử lý),
   // không đoán bừa thành "đang xử lý".
   if ((o.completedChildCount ?? 0) > 0) return "dang_xu_ly";
@@ -1665,4 +1672,18 @@ export async function markOrderProcessed(
     }
     handleError(error, "markOrderProcessed");
   }
+}
+
+/** Close the work item without inventing an invoice link or posting money/stock. */
+export async function closeSalesOrderProcessing(orderId: string, reason: string): Promise<void> {
+  const { error } = await (getClient() as any).rpc("close_sales_order_processing", {
+    p_order_id: orderId,
+    p_reason: reason.trim(),
+  });
+  if (error) handleError(error, "closeSalesOrderProcessing");
+}
+
+export async function reopenSalesOrderProcessing(orderId: string): Promise<void> {
+  const { error } = await (getClient() as any).rpc("reopen_sales_order_processing", { p_order_id: orderId });
+  if (error) handleError(error, "reopenSalesOrderProcessing");
 }

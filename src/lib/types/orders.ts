@@ -175,6 +175,9 @@ export interface PurchaseOrderDetail {
 
 // Mục trong danh sách đơn bán hàng
 export interface SalesOrder {
+  processingClosedAt?: string;
+  processingReopenedAt?: string;
+  processingClosedReason?: string;
   id: string;
   /** Mã ĐƠN gốc hiển thị (DH — giữ nguyên cả sau khi hoàn tất). */
   code: string;

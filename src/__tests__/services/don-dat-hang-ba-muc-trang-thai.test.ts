@@ -173,6 +173,6 @@ describe("Modal POS chỉ hiện đơn chưa có hóa đơn", () => {
     expect(pos).toContain("NHAN_TRANG_THAI_XU_LY.dang_xu_ly.nhan");
     expect(pos).toContain("Đã xuất {o.completedChildCount} hóa đơn");
     expect(pos).not.toContain("Còn có thể bán tiếp");
-    expect(pos).toContain("Chỉ hiện đơn chưa có hóa đơn xuất còn hiệu lực");
+    expect(pos).toContain("Các đơn còn cần xử lý");
   });
 });

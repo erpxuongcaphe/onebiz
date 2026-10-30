@@ -27,6 +27,7 @@ import {
   createChildSaleFromOrder,
   getOrderReconciliation,
   markOrderProcessed,
+  reopenSalesOrderProcessing,
   donConDungDuoc,
   type ChildSaleInfo,
   type OrderReconRow,
@@ -48,10 +49,14 @@ const NHAN_VOID = {
 export function ChildSalesBlock({
   orderId,
   fulfilledById,
+  processingClosedAt,
+  processingClosedReason,
   onDataChanged,
 }: {
   orderId: string;
   fulfilledById?: string;
+  processingClosedAt?: string;
+  processingClosedReason?: string;
   onDataChanged?: () => void;
 }) {
   const { toast } = useToast();
@@ -159,7 +164,8 @@ export function ChildSalesBlock({
 
   const moLai = useCallback(async () => {
     try {
-      await markOrderProcessed(orderId, null);
+      if (processingClosedAt) await reopenSalesOrderProcessing(orderId);
+      else await markOrderProcessed(orderId, null);
       toast({
         variant: "success",
         title: "Đã mở lại xử lý",
@@ -174,7 +180,7 @@ export function ChildSalesBlock({
         description: err instanceof Error ? err.message : "Lỗi",
       });
     }
-  }, [orderId, taiDoiChieu, toast, onDataChanged]);
+  }, [orderId, processingClosedAt, taiDoiChieu, toast, onDataChanged]);
 
   // Máy chủ chưa bật 00331 → không vẽ gì, giữ màn cũ nguyên vẹn.
   if (!batTinhNang) return null;
@@ -205,7 +211,7 @@ export function ChildSalesBlock({
             <Icon name="add" size={15} className="mr-1" />
             {dangTao ? "Đang tạo..." : "Tạo thêm đơn bán"}
           </Button>
-          {fulfilledById ? (
+          {fulfilledById || processingClosedAt ? (
             <Button
               type="button"
               variant="outline"
@@ -235,6 +241,10 @@ export function ChildSalesBlock({
           )}
         </div>
       </div>
+
+      {processingClosedAt && <p className="text-xs text-status-success">
+        Đã xử lý · {processingClosedReason} · {new Date(processingClosedAt).toLocaleString("vi-VN")}
+      </p>}
 
       {canhBaoDonConGan && (
         <div
@@ -353,7 +363,7 @@ export function ChildSalesBlock({
         open={confirmHoanTat}
         onOpenChange={setConfirmHoanTat}
         title="Hoàn tất xử lý đơn đặt hàng?"
-        description={`Đơn sẽ hiện "Hoàn tất" cùng tất cả hóa đơn đã thanh toán${donConGan ? ` (neo tại ${donConGan.code})` : ""} và rời danh sách chờ ở POS. Chênh lệch số lượng chỉ là thông tin đối chiếu, không chặn chốt. Doanh thu, kho, công nợ KHÔNG đổi — chỉ các hóa đơn con đã thanh toán mới có sổ. Sau này vẫn mở lại hoặc tạo thêm đơn bán được.`}
+        description="Đơn rời danh sách cần xử lý, vẫn lưu trong lịch sử. Không tạo hóa đơn, ghi nhận thêm tiền hoặc hàng. Có thể chủ động mở lại khi cần."
         confirmLabel="Hoàn tất"
         cancelLabel="Chưa"
         onConfirm={() => {
