@@ -16,21 +16,22 @@ vi.mock("@/lib/utils/excel-export", () => ({
   exportReportToExcel: mocks.excel, buildReportTitleRows: () => [], buildInfoSheet: () => ({}),
 }));
 vi.mock("@/components/shared/report", () => ({
-  ReportPageHeader: ({ exportDisabled, onExportView }: { exportDisabled: boolean; onExportView: () => void }) =>
-    <button disabled={exportDisabled} onClick={onExportView}>Export</button>,
+  ReportPageHeader: ({ exportDisabled, onExportView, onExportFull }: { exportDisabled: boolean; onExportView: () => void; onExportFull: () => void }) =>
+    <><button disabled={exportDisabled} onClick={onExportView}>Export</button><button disabled={exportDisabled} onClick={onExportFull}>Full export</button></>,
   ReportDataTable: ({ rows }: { rows: unknown[] }) => <pre>{JSON.stringify(rows)}</pre>,
   ReportTableFrame: ({ children }: { children: React.ReactNode }) => children,
 }));
 vi.mock("@/app/(main)/phan-tich/_components", () => ({
-  KpiCard: ({ label, value }: { label: string; value: string }) => <div>{label}: {value}</div>,
+  KpiCard: ({ label, value, change }: { label: string; value: string; change?: string }) => <div><span>{label}: {value}</span><small>{change}</small></div>,
   ChartCard: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 import FinancePage from "@/app/(main)/phan-tich/tai-chinh/page";
 
 const result = {
-  kpis: { revenue: 100, prevRevenue: 0, expense: 40, prevExpense: 0, profit: 60, prevProfit: 0, profitMargin: 60, prevProfitMargin: 0 },
-  trend: [{ label: "T10/2026", revenue: 100, cogs: 30, operatingExpense: 10, expense: 40, profit: 60 }],
+  kpis: { revenue: 100, prevRevenue: 0, expense: 40, prevExpense: 0, profit: 60, prevProfit: 0, profitMargin: 60, prevProfitMargin: null,
+    cogsComplete: true, prevCogsComplete: true, missingCostLines: 0, prevMissingCostLines: 0, otherIncome: 0, prevOtherIncome: 0 },
+  trend: [{ label: "T10/2026", revenue: 100, cogs: 30, operatingExpense: 10, expense: 40, profit: 60, otherIncome: 0, missingCostLines: 0 }],
   expenseBreakdown: [],
 };
 
@@ -63,5 +64,33 @@ describe("financial analysis loading and export", () => {
     finish();
     await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ variant: "success" })));
     expect(mocks.excel.mock.calls[0][0].sheets[1].rows).toEqual(result.trend);
+    expect(screen.queryByText(/\+100%/)).not.toBeInTheDocument();
+  });
+  it("preserves unknown costs and profit on screen and both export modes", async () => {
+    mocks.finance.mockResolvedValue({ ...result,
+      kpis: { ...result.kpis, expense: null, profit: null, profitMargin: null, cogsComplete: false, missingCostLines: 2 },
+      trend: [{ ...result.trend[0], cogs: null, expense: null, profit: null, missingCostLines: 2 }],
+      expenseBreakdown: [{ name: "Giá vốn hàng bán", value: null }, { name: "Chi phí vận hành", value: 10 }],
+    });
+    render(<FinancePage />);
+    expect(await screen.findByText("Chưa đủ giá vốn")).toBeInTheDocument();
+    expect(screen.getByText("Tổng chi phí: Chưa xác định")).toBeInTheDocument();
+    expect(screen.getByText("Lợi nhuận: Chưa xác định")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Đối chiếu nguồn" })).toHaveAttribute("href", expect.stringContaining("branch=branch"));
+    fireEvent.click(screen.getByRole("button", { name: "Export" }));
+    await waitFor(() => expect(mocks.excel).toHaveBeenCalledTimes(1));
+    const view = mocks.excel.mock.calls[0][0].sheets;
+    expect(view[0].rows.find((row: { metric: string }) => row.metric === "Lợi nhuận").current).toBeNull();
+    expect(view[1].rows[0].profit).toBeNull();
+    expect(view[0].titleRows.join(" ")).toContain("không phải 0");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Full export" })).not.toBeDisabled());
+    fireEvent.click(screen.getByRole("button", { name: "Full export" }));
+    await waitFor(() => expect(mocks.excel).toHaveBeenCalledTimes(2));
+    const full = mocks.excel.mock.calls[1][0].sheets;
+    expect(full[1].rows.find((row: { metric: string }) => row.metric === "LỢI NHUẬN HOẠT ĐỘNG").current).toBeNull();
+    expect(full[2].footer.value).toBeNull();
+    expect(full[2].rows.every((row: { share: unknown }) => row.share === null)).toBe(true);
+    expect(full[3].footer.profit).toBeNull();
+    expect(full[4].footer.value).toBeNull();
   });
 });
