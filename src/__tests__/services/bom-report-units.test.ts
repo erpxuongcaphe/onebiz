@@ -8,7 +8,7 @@ const params = { fromDate: "2026-10-01", toDate: "2026-10-30", branchId: "branch
 beforeEach(() => {
   vi.clearAllMocks();
   const result = { data: [{ invoice_id: "bill-1", invoice_code: "HD001", product_id: "p1", branch_id: "branch-1", qty_sold: 2, revenue: 70000, cogs_real: null, margin: null }], error: null };
-  const query = { order: vi.fn(() => query), range: vi.fn().mockResolvedValue(result) };
+  const query = { order: vi.fn(() => query), gte: vi.fn(() => query), lt: vi.fn(() => query), range: vi.fn().mockResolvedValue(result) };
   state.rpc.mockReturnValue(query);
   state.units.mockResolvedValue(new Map([["bill-1:p1", { catalogUnit: "Ly", recordedUnit: "Ly", currentConversion: "1 Khay = 6 Ly" }]]));
   state.recorded.mockImplementation(async (rows: unknown[]) => rows.map(() => "Cái"));
@@ -18,6 +18,16 @@ it("loads current references only for authorized report IDs without promoting th
   expect(state.units).toHaveBeenCalledExactlyOnceWith([{ referenceId: "bill-1", productId: "p1", actualQuantity: 2 }], "current_stock");
   expect(rows[0]).toMatchObject({ qtySold: 2, catalogUnit: "Ly", currentConversion: "1 Khay = 6 Ly", cogsReal: null });
   expect(rows[0].recordedUnit).toBe("Cái");
+});
+it("widens the UTC calendar source and filters exact Vietnam dates before paging", async () => {
+  const query = state.rpc(); state.rpc.mockClear();
+  await getCogsByBom({ fromDate: "2026-10-01", toDate: "2026-10-29", branchId: "branch-1" });
+  expect(state.rpc).toHaveBeenCalledWith("report_cogs_by_bom", { p_from_date: "2026-09-30", p_to_date: "2026-10-29", p_branch_id: "branch-1" });
+  expect(query.gte).toHaveBeenCalledWith("invoice_date", "2026-09-30T17:00:00.000Z");
+  expect(query.lt).toHaveBeenCalledWith("invoice_date", "2026-10-29T17:00:00.000Z");
+});
+it("rejects an inverted date range before reading financial data", async () => {
+  await expect(getCogsByBom({ ...params, fromDate: "2026-11-01" })).rejects.toThrow("Khoảng ngày"); expect(state.rpc).not.toHaveBeenCalled();
 });
 it("does not read product metadata when the report is denied", async () => {
   state.rpc().range.mockResolvedValue({ data: null, error: { code: "42501", message: "REPORT_PERMISSION_DENIED" } });
