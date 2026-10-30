@@ -50,6 +50,14 @@ describe('F&B sweetness choice at the point of adding or editing a cart item', (
     ]);
     expect(confirm.mock.calls[0][0].unitPrice).toBe(42000);
   });
+  it.each(['none', 'more'])('uses the configured default rather than assuming 100 percent: %s', id => {
+    const confirm = mount({ configured: options.map(o => ({ ...o, isDefault: o.id === id })) });
+    expect(screen.getByRole('button', { name: options.find(o => o.id === id)!.label })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: /Thêm vào đơn/ }));
+    expect(confirm.mock.calls[0][0].modifierSelections[0].options).toEqual([
+      expect.objectContaining({ optionId: id, scaleFactor: id === 'none' ? 0 : 1.2 }),
+    ]);
+  });
   it.each([{ ids: [] }, { ids: ['normal', 'less'] }, { ids: ['removed-option'] }])('requires correction of an invalid saved snapshot $ids', ({ ids }) => {
     const saved = snapshot(ids);
     const before = JSON.stringify(saved);
