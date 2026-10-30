@@ -470,6 +470,17 @@ export const REPORT_CATALOG: ReportCatalogItem[] = [
     permissionMode: "all",
   },
   {
+    href: "/phan-tich/doi-soat-gia-von",
+    title: "Đối soát giá vốn",
+    shortTitle: "Đối soát giá vốn",
+    description: "Chứng từ chưa chốt giá vốn, nguồn đối chiếu và bước xử lý.",
+    category: "finance",
+    icon: "fact_check",
+    keywords: ["giá vốn", "thiếu giá vốn", "khôi phục", "đối soát", "cogs"],
+    permissions: [...PROFIT_PERMISSIONS, PERMISSIONS.PRODUCTS_VIEW_COST],
+    permissionMode: "all",
+  },
+  {
     href: "/phan-tich/luong-tien",
     title: "Thu chi và dòng tiền theo chứng từ",
     shortTitle: "Thu chi và dòng tiền",

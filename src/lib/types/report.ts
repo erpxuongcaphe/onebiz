@@ -93,6 +93,7 @@ export type ReportKind =
   | "cogs-theo-bom"
   | "tai-chinh"
   | "bao-cao-tai-chinh"
+  | "doi-soat-gia-von"
   | "luong-tien"
   | "vat"
   | "cong-no-aging"

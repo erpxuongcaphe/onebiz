@@ -563,6 +563,7 @@ const REPORT_KIND_LABELS: Record<ReportKind, string> = {
   "cogs-theo-bom": "Báo cáo giá vốn theo BOM",
   "tai-chinh": "Báo cáo tài chính quản trị",
   "bao-cao-tai-chinh": "Báo cáo kết quả vận hành",
+  "doi-soat-gia-von": "Đối soát giá vốn",
   "luong-tien": "Báo cáo lưu chuyển tiền",
   vat: "Báo cáo VAT",
   "cong-no-aging": "Báo cáo tuổi công nợ",

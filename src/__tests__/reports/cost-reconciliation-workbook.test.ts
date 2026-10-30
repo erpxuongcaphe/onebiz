@@ -1,0 +1,26 @@
+import { afterEach, expect, it, vi } from "vitest";
+import * as XLSX from "xlsx-js-style";
+const state = vi.hoisted(() => ({ save: vi.fn() }));
+vi.mock("file-saver", () => ({ saveAs: state.save }));
+import { exportReportToExcel } from "@/lib/utils/excel-export";
+import { costPendingComponentsSheet, costReconciliationSheet, type CostReconciliationRow } from "@/lib/reports/cost-reconciliation";
+afterEach(() => vi.clearAllMocks());
+it("reopens every exported row with genuine zero, missing cost and secondary units preserved", async () => {
+  const base: CostReconciliationRow = { id: "line-1", invoiceId: "invoice-1", invoiceCode: "HD-TEST", issuedAt: "2026-10-27T10:00:00Z", branchId: "branch-test", branchName: "Chi nhánh thử", productId: "product-test", code: "SKU-TEST", name: "Ly giấy", quantity: 50, unit: "Cái", transactionQuantity: 1, transactionUnit: "Cây", conversionFactor: 50, storedUnitCost: null, candidateUnitCost: 0, status: "ready", evidence: { mode: "historical_component_match", eventCount: 1, hasReturns: false, lastAttemptAt: null }, pendingComponents: [] };
+  const rows = Array.from({ length: 251 }, (_, n) => ({ ...base, id: `line-${n}`, candidateUnitCost: n === 0 ? 0 : null, status: n === 0 ? "ready" as const : "missing" as const }));
+  await exportReportToExcel({ kind: "doi-soat-gia-von", mode: "full", range: { from: "2026-10-01", to: "2026-10-30" }, sheets: [costReconciliationSheet(rows), costPendingComponentsSheet(rows)] });
+  expect(state.save).toHaveBeenCalledOnce();
+  const buffer = await new Promise<ArrayBuffer>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result as ArrayBuffer); reader.onerror = reject; reader.readAsArrayBuffer(state.save.mock.calls[0][0]); });
+  const book = XLSX.read(buffer, { type: "array" });
+  const matrix = XLSX.utils.sheet_to_json<unknown[]>(book.Sheets["Đối soát giá vốn"], { header: 1, defval: null });
+  const headerIndex = matrix.findIndex(row => row.includes("Hệ số quy đổi"));
+  const header = matrix[headerIndex], data = matrix.slice(headerIndex + 1).filter(row => row.includes("HD-TEST"));
+  expect(data).toHaveLength(251);
+  const costIndex = header.indexOf("Giá vốn ứng viên (đ/ĐVT)");
+  expect(data[0][costIndex]).toBe(0); expect(data[1][costIndex]).toBe("");
+  expect(data[0][header.indexOf("Giá đang lưu, chưa chốt (đ/ĐVT)")]).toBe("");
+  expect(data[0][header.indexOf("ĐVT")]).toBe("Cái");
+  expect(data[0][header.indexOf("ĐVT giao dịch")]).toBe("Cây");
+  expect(data[0][header.indexOf("Hệ số quy đổi")]).toBe(50);
+  expect(book.SheetNames).toContain("Thành phần chờ");
+});
