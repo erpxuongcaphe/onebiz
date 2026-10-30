@@ -7,7 +7,7 @@
  *   - getInventoryVarianceReport: chênh lệch kiểm kê giá trị
  */
 
-import { getClient, handleError } from "./base";
+import { getClient, getCurrentTenantId, handleError } from "./base";
 import { isRpcUnavailable } from "./rpc-utils";
 import { inclusiveReportRpcRange } from "@/lib/reports/inclusive-rpc-range";
 import { getStockReportUnits, stockUnitReferenceKey } from "./report-stock-units";
@@ -22,8 +22,8 @@ export interface InventoryAgingRow extends Partial<StockReportUnits> {
   code: string;
   name: string;
   currentQty: number;
-  costPrice: number;
-  stockValue: number;
+  costPrice: number | null;
+  stockValue: number | null;
   lastInDate: string | null;
   daysInStock: number | null;
   lastSaleDate: string | null;
@@ -43,11 +43,13 @@ export async function getInventoryAgingReport(params?: {
   branchId?: string | null;
 }): Promise<InventoryAgingReport> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+  const branchId = params?.branchId === "all" ? null : params?.branchId ?? null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase.rpc as any)(
     "get_inventory_aging_report",
     {
-      p_branch_id: params?.branchId ?? null,
+      p_branch_id: branchId,
     },
   );
 
@@ -58,6 +60,7 @@ export async function getInventoryAgingReport(params?: {
       );
     }
     handleError(error, "getInventoryAgingReport");
+    throw new Error("Không tải được nguồn tồn kho.");
   }
 
   if (!data) {
@@ -66,6 +69,21 @@ export async function getInventoryAgingReport(params?: {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const raw = data as any;
+  if (raw.tenant_id !== tenantId || (raw.branch_id ?? null) !== branchId || !Array.isArray(raw.rows) || !Number.isFinite(Date.parse(raw.generated_at))) {
+    throw new Error("Nguồn tồn kho không khớp phạm vi báo cáo.");
+  }
+  const ids = new Set<string>();
+  for (const row of raw.rows) {
+    if (!row.product_id || ids.has(row.product_id)) throw new Error("Nguồn tồn kho trùng hoặc thiếu mã hàng. Cần đối chiếu trước khi tổng hợp.");
+    ids.add(row.product_id);
+    if (row.current_qty == null || !Number.isFinite(Number(row.current_qty)) || !["0-30", "31-60", "61-90", "91+", "unknown"].includes(row.aging_bucket)) throw new Error("Nguồn tồn kho thiếu căn cứ tổng hợp.");
+    for (const key of ["cost_price", "stock_value", "days_in_stock", "days_since_last_sale"]) {
+      if (row[key] != null && !Number.isFinite(Number(row[key]))) throw new Error("Nguồn tồn kho có chỉ tiêu không hợp lệ.");
+    }
+    for (const key of ["last_in_date", "last_sale_date"]) {
+      if (row[key] != null && !Number.isFinite(Date.parse(row[key]))) throw new Error("Nguồn tồn kho có ngày không hợp lệ.");
+    }
+  }
   const units = await getStockReportUnits((raw.rows ?? []).map((row: { product_id: string; current_qty: number }) => ({ referenceId: row.product_id, productId: row.product_id, actualQuantity: Number(row.current_qty) })), "current_stock");
   return {
     generatedAt: raw.generated_at,
@@ -78,15 +96,15 @@ export async function getInventoryAgingReport(params?: {
       code: r.code,
       name: r.name,
       currentQty: Number(r.current_qty ?? 0),
-      costPrice: Number(r.cost_price ?? 0),
-      stockValue: Number(r.stock_value ?? 0),
-      lastInDate: r.last_in_date,
-      daysInStock: r.days_in_stock !== null ? Number(r.days_in_stock) : null,
-      lastSaleDate: r.last_sale_date,
+      costPrice: r.cost_price == null ? null : Number(r.cost_price),
+      stockValue: r.stock_value == null ? null : Number(r.stock_value),
+      lastInDate: r.last_in_date ?? null,
+      daysInStock: r.days_in_stock == null ? null : Number(r.days_in_stock),
+      lastSaleDate: r.last_sale_date ?? null,
       daysSinceLastSale:
-        r.days_since_last_sale !== null ? Number(r.days_since_last_sale) : null,
+        r.days_since_last_sale == null ? null : Number(r.days_since_last_sale),
       agingBucket: r.aging_bucket,
-      isDeadStock: Boolean(r.is_dead_stock),
+      isDeadStock: r.is_dead_stock === true,
     })),
   };
 }
