@@ -1687,3 +1687,24 @@ export async function reopenSalesOrderProcessing(orderId: string): Promise<void>
   const { error } = await (getClient() as any).rpc("reopen_sales_order_processing", { p_order_id: orderId });
   if (error) handleError(error, "reopenSalesOrderProcessing");
 }
+
+export interface OrderProcessingBatch {
+  orders: { id: string; code: string; already_closed: boolean }[];
+  selected_count: number;
+  already_closed_count: number;
+  to_close_count: number;
+  applied: boolean;
+}
+
+export async function closeSalesOrdersProcessing(
+  orderIds: string[], options: { reason?: string; apply?: boolean } = {},
+): Promise<OrderProcessingBatch> {
+  const { data, error } = await (getClient() as any).rpc("close_sales_orders_processing", {
+    p_order_ids: [...new Set(orderIds)],
+    p_reason: options.reason?.trim() ?? null,
+    p_apply: options.apply === true,
+  });
+  if (error) handleError(error, "closeSalesOrdersProcessing");
+  if (!data || !Array.isArray(data.orders)) throw new Error("Chưa nhận được kết quả xử lý đơn. Tải lại danh sách để kiểm tra.");
+  return data as OrderProcessingBatch;
+}
