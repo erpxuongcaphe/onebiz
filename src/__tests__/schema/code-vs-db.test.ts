@@ -47,6 +47,9 @@ const RPC = new Set(schema.rpc as string[]);
  * dưới sẽ BẮT XOÁ dòng ngay khi dump đã có (sau `node scripts/dump-db-schema.mjs`).
  */
 const RPC_CHO_MIGRATION = new Map<string, string>([
+  // Applied 30/10 and verified via information_schema.routines; remove on next full schema dump.
+  ["close_sales_order_processing", "20261030092555_sales_order_processing_closure.sql"],
+  ["reopen_sales_order_processing", "20261030092555_sales_order_processing_closure.sql"],
   ["adjust_stock_to_value_atomic", "20261029170929_stock_adjustment_target_guard.sql"],
   ["fnb_buyer_lookup_v1", "20261029134118_fnb_buyer_employee_lookup.sql"],
   ["process_fnb_cost_finalize_queue_20261029", "20261029103039_fnb_settled_invoice_cost_finalize.sql"],
