@@ -5,7 +5,7 @@ $TargetFolder=[IO.Path]::GetFullPath($TargetFolder).TrimEnd('\')
 $taskName='Onebiz Print Point '+$PointId.ToString()
 $task=Get-ScheduledTask -TaskName $taskName -ErrorAction Stop
 if($task.State -eq 'Disabled' -or $task.Actions.Count -ne 1 -or $task.Actions[0].WorkingDirectory.TrimEnd('\') -ne $TargetFolder){throw 'Task/folder mismatch or disabled task. Nothing changed.'}
-$files=@('agent.mjs','usb-worker.mjs','OnebizUsbWorker.exe','OnebizUsbWorker.cs')
+$files=@('agent.mjs','recovery.mjs','durable-queue.mjs','wake.mjs','polling.mjs','destination.mjs','network.mjs','usb-worker.mjs','OnebizUsbWorker.exe','OnebizUsbWorker.cs')
 foreach($file in $files){if(-not(Test-Path -LiteralPath (Join-Path $PSScriptRoot $file))){throw 'Update is incomplete. Nothing changed.'}}
 $probeLog=Join-Path $PSScriptRoot 'native-probe.log'
 $probe=Start-Process -FilePath (Join-Path $PSScriptRoot 'OnebizUsbWorker.exe') -ArgumentList '--probe' -WindowStyle Hidden -RedirectStandardOutput $probeLog -RedirectStandardError (Join-Path $PSScriptRoot 'native-probe-error.log') -PassThru
