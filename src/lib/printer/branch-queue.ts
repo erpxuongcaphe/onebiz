@@ -32,17 +32,27 @@ export async function checkBranchPrinter(branchId: string, route: PrintRoute) {
 }
 
 export async function enqueueBranchPrint(args: { branchId: string; routeKey: string; label: string; html: string; paper: string; buildHtml?: (paper: PaperWidth) => string; jobId: string; onProgress?: (message: string) => void }): Promise<{ id: string; route_label: string }> {
+  const started = performance.now();
   args.onProgress?.("Đang kiểm tra điểm in… Chưa gửi phiếu.");
-  const state = await waitForPrint(getBranchPrintState(args.branchId), "Không tải được trạng thái điểm in. Chưa gửi phiếu tới máy quầy.");
+  // Parallel preparation only. Rendering and sending still require the live route.
+  const [state, { rasterPrintBytes }] = await Promise.all([
+    waitForPrint(rpc<{ point: Pick<PrintPoint, "enabled" | "routes"> | null }>("fnb_print_routes_v1", { p_branch: args.branchId }), "Không tải được trạng thái điểm in. Chưa gửi phiếu tới máy quầy."),
+    waitForPrint(import("./raster-print"), "Không tải được bộ dựng bản in. Chưa gửi phiếu tới máy quầy."),
+  ]);
   if (!state.point?.enabled) throw new Error("Chi nhánh chưa bật điểm in. Nhờ quản lý vào Cài đặt → In ấn để thiết lập.");
   const route = state.point.routes.find(r => r.key === args.routeKey);
   if (!route?.printer) throw new Error("Chưa gán máy cho nơi nhận này. Nhờ quản lý kiểm tra tuyến in; hệ thống không chuyển sang máy khác.");
-  const { rasterPrintBytes } = await waitForPrint(import("./raster-print"), "Không tải được bộ dựng bản in. Chưa gửi phiếu tới máy quầy.");
   if (!args.buildHtml && route.paper !== args.paper) throw new Error("Khổ giấy mẫu khác máy đích. Nhờ quản lý chọn cùng khổ giấy trước khi gửi.");
+  const prepared = performance.now();
   args.onProgress?.("Đang dựng ảnh in trên thiết bị này… Chưa gửi phiếu.");
   const bytes = await waitForPrint(rasterPrintBytes(args.buildHtml?.(route.paper) ?? args.html, route.paper), "Chuẩn bị bản in quá thời gian. Chưa gửi phiếu tới máy quầy. Tải lại trang rồi thử một lần.", 45000);
+  const rendered = performance.now();
+  const encoded = bytesToBase64(bytes);
+  // Bounded client observations, not proof of physical printing.
+  const elapsed = (from: number, to: number, limit: number) => Math.min(limit, Math.max(0, Math.round(to - from)));
   args.onProgress?.("Đang gửi phiếu tới máy quầy… Chờ kết quả, chưa bấm in lại.");
-  return rpc("fnb_print_enqueue_v1", { p_branch: args.branchId, p_id: args.jobId, p_route: args.routeKey, p_label: args.label, p_paper: route.paper, p_bytes: bytesToBase64(bytes) });
+  return rpc("fnb_print_enqueue_v2", { p_branch: args.branchId, p_id: args.jobId, p_route: args.routeKey, p_label: args.label, p_paper: route.paper, p_bytes: encoded,
+    p_prepare_ms: elapsed(started, prepared, 60000), p_render_ms: elapsed(prepared, rendered, 120000), p_encode_ms: elapsed(rendered, performance.now(), 60000) });
 }
 
 /** Exact job IDs: never infer a receipt result from the latest 50 other tickets. */
