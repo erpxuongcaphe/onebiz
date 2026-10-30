@@ -14,6 +14,18 @@ export interface RetailContactRequest {
   signal?: AbortSignal;
 }
 
+/** Explicit Guest selection uses scoped contact reads, never the debt/customer aggregate. */
+export async function getOrCreateWalkInRetailContact(branchId: string): Promise<RetailCustomerContact> {
+  if (!branchId || branchId === "all") throw new Error("Vui lòng chọn chi nhánh bán hàng.");
+  const { data, error } = await getClient().rpc("get_or_create_walk_in_customer" as never);
+  if (error) handleError(error, "getOrCreateWalkInRetailContact");
+  const id = (data as { id?: unknown } | null)?.id;
+  if (typeof id !== "string" || !id) throw new Error("Chưa xác định được khách lẻ. Vui lòng chọn lại.");
+  const contact = await resolveRetailCustomerContact(id, branchId);
+  if (!contact || !contact.isWalkIn) throw new Error("Hồ sơ khách lẻ chưa hợp lệ. Vui lòng chọn lại.");
+  return contact;
+}
+
 type Row = Record<string, unknown>;
 function invalid(): never { throw new Error("Hồ sơ khách bán hàng chưa hợp lệ."); }
 function record(value: unknown): Row {

@@ -114,6 +114,7 @@ export async function applyManualStockMovement(
  * referenceType = 'stock_adjustment' để phân biệt với nhập/xuất thường.
  */
 export async function adjustStockToValue(params: {
+  requestId: string;
   productId: string;
   branchId: string;
   currentQty: number;
@@ -125,20 +126,17 @@ export async function adjustStockToValue(params: {
   if (await isInventoryLocked()) {
     throw new Error("Tồn kho đang khóa — cần mở khóa trước khi điều chỉnh.");
   }
-  const delta = params.newQty - params.currentQty;
-  if (Math.abs(delta) < 1e-9) return; // không đổi → bỏ qua
-  await applyManualStockMovement(
-    [
-      {
-        productId: params.productId,
-        quantity: Math.abs(delta),
-        type: delta > 0 ? "in" : "out",
-        referenceType: "stock_adjustment",
-        note: params.reason,
-      },
-    ],
-    { branchId: params.branchId },
-  );
+  // Target and current balance are compared under a database lock, never a stale browser delta.
+  const { error } = await getClient().rpc("adjust_stock_to_value_atomic" as never, {
+    p_request_id: params.requestId, p_branch_id: params.branchId, p_product_id: params.productId,
+    p_expected_quantity: params.currentQty, p_new_quantity: params.newQty, p_reason: params.reason.trim(),
+  } as never);
+  if (error?.message.includes("STOCK_TARGET_CHANGED")) throw new Error("Tồn kho đã thay đổi. Hãy tải lại và kiểm tra số tồn trước khi điều chỉnh.");
+  if (error?.message.includes("STOCK_TARGET_VARIANT_REQUIRES_CHECK")) throw new Error("Mặt hàng có biến thể. Hãy lập phiếu kiểm kho để điều chỉnh đúng từng biến thể.");
+  if (error?.message.includes("STOCK_TARGET_REQUEST_REUSED")) throw new Error("Yêu cầu này đã được ghi nhận với nội dung khác. Hãy tải lại lịch sử trước khi tiếp tục.");
+  if (error?.message.includes("FNB_MANUAL_STOCK_GAIN_COST_REQUIRED")) throw new Error("Chưa có giá vốn tại chi nhánh để tăng tồn. Hãy xác nhận giá vốn trước khi điều chỉnh.");
+  if (error?.message.includes("FNB_BRANCH_COST_REQUIRED")) throw new Error("Lượng có giá vốn không đủ để xuất điều chỉnh. Hãy đối soát tồn và giá vốn trước.");
+  if (error) handleError(error,"adjustStockToValue");
 }
 
 /**

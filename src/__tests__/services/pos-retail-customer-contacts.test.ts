@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const api = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn() }));
 vi.mock("@/lib/services/supabase/base", () => ({ getClient: () => api,
   handleError: (error: { message: string }) => { throw new Error(error.message); } }));
-import { getRetailCustomerContacts, getRetailCustomerContactById, parseRetailCustomerContacts, resolveRetailCustomerContact } from "@/lib/services/supabase/pos-retail-customer-contacts";
+import { getOrCreateWalkInRetailContact, getRetailCustomerContacts, getRetailCustomerContactById, parseRetailCustomerContacts, resolveRetailCustomerContact } from "@/lib/services/supabase/pos-retail-customer-contacts";
 const request = { branchId: "branch-a" };
 const contact = { id: "customer-a", code: "KH001", name: "Customer A", phone: null, is_internal: false,
   customer_type: "company", is_walk_in: false, branch_id: null, price_tier_id: "price-a",
@@ -12,6 +12,22 @@ const contact = { id: "customer-a", code: "KH001", name: "Customer A", phone: nu
   email: "fixture@example.test", address: "Address A", tax_code: "FIXTURE" };
 beforeEach(() => vi.resetAllMocks());
 describe("Retail contact profile boundary", () => {
+  it("resolves explicit Guest through scoped contacts without reading customer money", async () => {
+    api.rpc.mockResolvedValueOnce({ data: { id: contact.id }, error: null })
+      .mockResolvedValueOnce({ data: [{ ...contact, is_walk_in: true }], error: null });
+    const result = await getOrCreateWalkInRetailContact("branch-a");
+    expect(result.isWalkIn).toBe(true);
+    expect(result).not.toHaveProperty("currentDebt");
+    expect(api.from).not.toHaveBeenCalled();
+    expect(api.rpc).toHaveBeenNthCalledWith(1,"get_or_create_walk_in_customer");
+  });
+  it("rejects missing branch before creating Guest and rejects a mismatched Guest profile", async () => {
+    await expect(getOrCreateWalkInRetailContact("all")).rejects.toThrow("chi nhánh");
+    expect(api.rpc).not.toHaveBeenCalled();
+    api.rpc.mockResolvedValueOnce({ data: { id: contact.id }, error: null })
+      .mockResolvedValueOnce({ data: [contact], error: null });
+    await expect(getOrCreateWalkInRetailContact("branch-a")).rejects.toThrow("khách lẻ chưa hợp lệ");
+  });
   it("falls back only when the new identity RPC is not installed", async () => {
     api.rpc.mockResolvedValueOnce({data:null,error:{code:"PGRST202",message:"Function not found"}})
       .mockResolvedValueOnce({data:[contact],error:null});

@@ -47,6 +47,7 @@ const RPC = new Set(schema.rpc as string[]);
  * dưới sẽ BẮT XOÁ dòng ngay khi dump đã có (sau `node scripts/dump-db-schema.mjs`).
  */
 const RPC_CHO_MIGRATION = new Map<string, string>([
+  ["adjust_stock_to_value_atomic", "20261029170929_stock_adjustment_target_guard.sql"],
   ["fnb_buyer_lookup_v1", "20261029134118_fnb_buyer_employee_lookup.sql"],
   ["process_fnb_cost_finalize_queue_20261029", "20261029103039_fnb_settled_invoice_cost_finalize.sql"],
   ["get_customer_identity_directory", "20261027005706_internal_customer_canonical_identity.sql"],
@@ -69,6 +70,7 @@ const RPC_CHO_MIGRATION = new Map<string, string>([
     .map(({name}): [string, string] => [name, bundle.migration])),
   ["clone_bom_for_branch_atomic", "202610230001_atomic_branch_bom_clone.sql"],
   ["get_operational_sales_dashboard", "202610200007_operational_sales_dashboard.sql"],
+  ["get_inventory_catalog_00573", "20261029171144_inventory_active_catalog_read.sql"],
   // 00390 đã chạy trên Production; snapshot không thể làm mới tại workspace này
   // vì không có service-role credential. Xóa các dòng này ngay lần dump schema kế tiếp.
 ]);
