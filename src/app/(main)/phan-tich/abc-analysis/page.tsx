@@ -1,17 +1,10 @@
 "use client";
 
-/**
- * Báo cáo ABC Analysis + Slow Movers — REP-3 (CEO 06/05/2026).
- *
- * Phân loại SP theo Pareto 80/15/5:
- * - A: top 80% doanh thu (priority high)
- * - B: 15% kế tiếp
- * - C: 5% cuối (cân nhắc cắt)
- * - Slow: KHÔNG bán trong kỳ
- */
-
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { useBranchFilter } from "@/lib/contexts";
+import { useAuth, useBranchFilter } from "@/lib/contexts";
+import { Input } from "@/components/ui/input";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import { searchOptions } from "@/lib/search-options";
 import { Icon } from "@/components/ui/icon";
 import { formatNumber, formatCurrency } from "@/lib/format";
 import {
@@ -28,50 +21,63 @@ import { getAbcReport } from "@/lib/services/supabase/abc-analysis";
 import type { AbcRow, AbcReportResult } from "@/lib/services/supabase/abc-analysis";
 import { cn } from "@/lib/utils";
 import { sortedReportView } from "@/lib/reports/table-sort";
-import { KpiCard } from "../_components";
+import { SummaryCard } from "@/components/shared/summary-card";
 
 type FilterMode = "all" | "A" | "B" | "C" | "slow";
 
 const FILTER_OPTIONS: { key: FilterMode; label: string; bg: string; icon: string }[] = [
   { key: "all", label: "Tất cả", bg: "bg-surface-container-low", icon: "category" },
-  { key: "A", label: "Nhóm A (80% doanh thu)", bg: "bg-status-success/10", icon: "star" },
-  { key: "B", label: "Nhóm B (15% doanh thu)", bg: "bg-status-info/10", icon: "trending_up" },
-  { key: "C", label: "Nhóm C (5% doanh thu)", bg: "bg-status-warning/10", icon: "trending_flat" },
-  { key: "slow", label: "Bán chậm (không bán trong kỳ)", bg: "bg-status-error/10", icon: "trending_down" },
+  { key: "A", label: "Nhóm A", bg: "bg-status-success/10", icon: "star" },
+  { key: "B", label: "Nhóm B", bg: "bg-status-info/10", icon: "trending_up" },
+  { key: "C", label: "Nhóm C", bg: "bg-status-warning/10", icon: "trending_flat" },
+  { key: "slow", label: "Không có doanh số", bg: "bg-status-error/10", icon: "trending_down" },
 ];
 
 export default function AbcAnalysisPage() {
+  const { tenant, user, permissions, hasPermission, isLoading } = useAuth();
+  const allowed = !isLoading && hasPermission("reports.analytics") && hasPermission("reports.view_detail");
   const { activeBranchId, isReady, branches } = useBranchFilter();
   const { preset, range, setPreset, setCustomRange } =
     useReportState({ defaultPreset: "thisMonth", defaultViewMode: "table" });
 
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
   const [sort, setSort] = useState<{ id: string; direction: "asc" | "desc" } | null>(null);
-  const [data, setData] = useState<AbcReportResult | null>(null);
+  const [resultData, setData] = useState<AbcReportResult | null>(null);
+  const [loadedScope, setLoadedScope] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [search, setSearch] = useState(""), [unit, setUnit] = useState("");
+  const scope = JSON.stringify([tenant?.id, user?.id, [...permissions ?? []].sort(), activeBranchId, range.from, range.to, allowed]);
+  const scopeRef = useRef(scope); scopeRef.current = scope;
+  const data = allowed && isReady && loadedScope === scope && !error ? resultData : null;
   const [loading, setLoading] = useState(true);
   const requestIdRef = useRef(0);
 
   const fetchData = useCallback(async () => {
     const requestId = ++requestIdRef.current;
+    if (!allowed || !isReady || !tenant?.id) return;
     setLoading(true);
+    setError(null); setData(null);
     try {
       const result = await getAbcReport({
         range,
         branchId: activeBranchId ?? undefined,
       });
-      if (requestId !== requestIdRef.current) return;
-      setData(result);
+      if (requestId !== requestIdRef.current || scopeRef.current !== scope) return;
+      setData(result); setLoadedScope(scope);
     } catch (err) {
-      if (requestId !== requestIdRef.current) return;
-      console.error("Failed to fetch ABC report:", err);
+      if (requestId !== requestIdRef.current || scopeRef.current !== scope) return;
+      setData(null); setLoadedScope(scope);
+      setError(err instanceof Error ? err.message : "Không tải được báo cáo.");
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [range, activeBranchId]);
+  }, [range, activeBranchId, allowed, isReady, tenant?.id, scope]);
 
   useEffect(() => {
     if (!isReady) return;
     fetchData();
+    return () => { requestIdRef.current += 1; };
   }, [fetchData, isReady]);
 
   const branchName =
@@ -79,25 +85,37 @@ export default function AbcAnalysisPage() {
 
   const filteredRows = useMemo(
     () =>
-      sortedReportView(data && filterMode !== "all"
-        ? data.rows.filter((row) => row.abcClass === filterMode)
-        : data?.rows ?? [], sort),
-    [data, filterMode, sort],
+      sortedReportView(searchOptions(data?.rows ?? [], search, row => ({ name: row.name, identifiers: [row.code] }))
+        .map(({ item }) => item).filter(row => (filterMode === "all" || row.abcClass === filterMode) && (!unit || row.catalogUnit === unit)), sort),
+    [data, filterMode, search, unit, sort],
   );
+  const unitOptions = [...new Set([...(data?.rows.map(row => row.catalogUnit) ?? []), ...(unit ? [unit] : [])])]
+    .sort((a, b) => a.localeCompare(b, "vi")).map(value => ({ value, label: value }));
+  const visibleStats = (group: FilterMode) => {
+    const selected = filteredRows.filter(row => row.abcClass === group);
+    return { count: selected.length, pct: selected.reduce((sum, row) => sum + row.pct, 0).toFixed(1) };
+  };
+  const exportKey = JSON.stringify([scope, loadedScope, search, unit, filterMode, sort, loading, error]);
+  const exportKeyRef = useRef(exportKey); exportKeyRef.current = exportKey;
 
   const handleExportView = useCallback(() => {
-    if (!data) return;
+    if (!data || loading || !hasPermission("reports.export")) return;
+    const key = exportKeyRef.current;
+    setExportError(null);
     const titleRows = buildReportTitleRows({
       title: `Phân tích ABC ${filterMode !== "all" ? `(Lớp ${filterMode})` : ""}`,
       range,
       branchName,
       generatedAt: new Date(),
     });
-    exportReportToExcel({
+    titleRows.push("Doanh số dòng hàng trước hàng trả và chiết khấu toàn đơn. ĐVT hiện tại chỉ tham khảo.");
+    titleRows.push(`Tìm: ${search || "Tất cả"}; ĐVT hiện tại: ${unit || "Tất cả"}; Nhóm: ${filterMode}`);
+    void exportReportToExcel({
       kind: "abc-analysis",
       mode: "view",
       range,
       branchName,
+      shouldSave: () => exportKeyRef.current === key,
       sheets: [
         {
           name: "ABC Analysis",
@@ -108,6 +126,7 @@ export default function AbcAnalysisPage() {
             { label: "Mã hàng", key: "code", width: 14, hideable: false },
             { label: "Tên hàng", key: "name", width: 32 },
             { label: "ĐVT", key: "unit", width: 8 },
+            { label: "ĐVT hiện tại (tham khảo)", key: "catalogUnit", width: 24 },
             { label: "SL bán", key: "qtySold", width: 10, format: "number" },
             { label: "Doanh thu", key: "revenue", width: 16, format: "currency" },
             { label: "% Doanh thu", key: "pct", width: 12, format: "number" },
@@ -115,58 +134,74 @@ export default function AbcAnalysisPage() {
             { label: "Bán cuối (ngày)", key: "lastSoldDaysAgo", width: 14, format: "number" },
           ],
           rows: filteredRows.map((r) => ({
-            abcClass: r.abcClass === "slow" ? "Bán chậm" : r.abcClass,
+            abcClass: r.abcClass === "slow" ? "Không có doanh số" : r.abcClass,
             code: r.code,
             name: r.name,
             unit: r.unit,
+            catalogUnit: r.catalogUnit,
             qtySold: r.qtySold,
             revenue: r.revenue,
             pct: r.pct,
             cumPct: r.cumPct,
-            lastSoldDaysAgo: r.lastSoldDaysAgo ?? "—",
+            lastSoldDaysAgo: r.lastSoldDaysAgo,
           })),
           footerLabel: `SL mặt hàng: ${filteredRows.length}`,
         },
       ],
-    });
-  }, [data, filteredRows, filterMode, range, branchName]);
+    }).catch(reason => { if (exportKeyRef.current === key) setExportError(reason instanceof Error ? reason.message : "Không xuất được Excel."); });
+  }, [data, filteredRows, filterMode, range, branchName, loading, hasPermission, search, unit]);
 
   const handleExportFull = useCallback(() => {
-    if (!data) return;
+    if (!data || loading || !hasPermission("reports.export_detail")) return;
+    const key = exportKeyRef.current;
+    setExportError(null);
+    const summary = (["A", "B", "C", "slow"] as const).map(group => {
+      const rows = filteredRows.filter(row => row.abcClass === group);
+      return { label: group === "slow" ? "Không có doanh số" : `Nhóm ${group}`, count: rows.length,
+        revenue: rows.reduce((sum, row) => sum + row.revenue, 0), pct: rows.reduce((sum, row) => sum + row.pct, 0) };
+    });
     const titleRows = buildReportTitleRows({
-      title: "Phân tích ABC + Slow Movers — Đầy đủ",
+      title: "Phân loại ABC — Đầy đủ theo bộ lọc",
       range,
       branchName,
       generatedAt: new Date(),
     });
+    titleRows.push("Doanh số dòng hàng trước hàng trả và chiết khấu toàn đơn. ĐVT hiện tại chỉ tham khảo.");
+    titleRows.push(`Tìm: ${search || "Tất cả"}; ĐVT hiện tại: ${unit || "Tất cả"}; Nhóm: ${filterMode}`);
     const buildSheet = (cls: "A" | "B" | "C" | "slow", label: string) => ({
       name: label,
+      titleRows,
       columns: [
         { label: "Mã hàng", key: "code", width: 14 },
         { label: "Tên hàng", key: "name", width: 32 },
         { label: "ĐVT", key: "unit", width: 8 },
+        { label: "ĐVT hiện tại (tham khảo)", key: "catalogUnit", width: 24 },
         { label: "SL bán", key: "qtySold", width: 10, format: "number" as const },
         { label: "Doanh thu", key: "revenue", width: 16, format: "currency" as const },
         { label: "% Doanh thu", key: "pct", width: 12, format: "number" as const },
         { label: "% Lũy kế", key: "cumPct", width: 12, format: "number" as const },
+        { label: "Bán cuối trong kỳ (cách nay số ngày)", key: "lastSoldDaysAgo", width: 26, format: "number" as const },
       ],
-      rows: data.rows
+      rows: filteredRows
         .filter((r) => r.abcClass === cls)
         .map((r) => ({
           code: r.code,
           name: r.name,
           unit: r.unit,
+          catalogUnit: r.catalogUnit,
           qtySold: r.qtySold,
           revenue: r.revenue,
           pct: r.pct,
           cumPct: r.cumPct,
+          lastSoldDaysAgo: r.lastSoldDaysAgo,
         })),
     });
-    exportReportToExcel({
+    void exportReportToExcel({
       kind: "abc-analysis",
       mode: "full",
       range,
       branchName,
+      shouldSave: () => exportKeyRef.current === key,
       sheets: [
         {
           name: "1. Tổng quan",
@@ -177,26 +212,21 @@ export default function AbcAnalysisPage() {
             { label: "Doanh thu", key: "revenue", width: 18, format: "currency" },
             { label: "% Doanh thu", key: "pct", width: 12, format: "number" },
           ],
-          rows: [
-            { label: "Lớp A (top 80%)", count: data.classStats.A.count, revenue: data.classStats.A.revenue, pct: data.classStats.A.revenuePct },
-            { label: "Lớp B (kế 15%)", count: data.classStats.B.count, revenue: data.classStats.B.revenue, pct: data.classStats.B.revenuePct },
-            { label: "Lớp C (cuối 5%)", count: data.classStats.C.count, revenue: data.classStats.C.revenue, pct: data.classStats.C.revenuePct },
-            { label: "Bán chậm (KHÔNG bán)", count: data.classStats.slow.count, revenue: 0, pct: 0 },
-          ],
+          rows: summary,
           footerLabel: "Tổng",
           footer: {
-            count: data.classStats.A.count + data.classStats.B.count + data.classStats.C.count + data.classStats.slow.count,
-            revenue: data.totalRevenue,
-            pct: 100,
+            count: filteredRows.length,
+            revenue: filteredRows.reduce((sum, row) => sum + row.revenue, 0),
+            pct: filteredRows.reduce((sum, row) => sum + row.pct, 0),
           },
         },
         buildSheet("A", "2. Lớp A"),
         buildSheet("B", "3. Lớp B"),
         buildSheet("C", "4. Lớp C"),
-        buildSheet("slow", "5. Bán chậm"),
+        buildSheet("slow", "5. Không có doanh số"),
       ],
-    });
-  }, [data, range, branchName]);
+    }).catch(reason => { if (exportKeyRef.current === key) setExportError(reason instanceof Error ? reason.message : "Không xuất được Excel."); });
+  }, [data, range, branchName, filteredRows, loading, hasPermission, search, unit, filterMode]);
 
   const columns: DataTableColumn<AbcRow>[] = [
     {
@@ -213,18 +243,19 @@ export default function AbcAnalysisPage() {
             r.abcClass === "slow" && "bg-status-error/15 text-status-error",
           )}
         >
-          {r.abcClass === "slow" ? "Bán chậm" : r.abcClass}
+          {r.abcClass === "slow" ? "Không có doanh số" : r.abcClass}
         </span>
       ),
     },
     { label: "Mã hàng", key: "code", align: "left", width: "110px", hideable: false },
     { label: "Tên hàng", key: "name", align: "left" },
-    { label: "Đơn vị tính", key: "unit", align: "left", width: "90px" },
+    { label: "ĐVT lịch sử", key: "unit", align: "left", width: "150px" },
+    { label: "ĐVT hiện tại", key: "catalogUnit", align: "left", width: "100px" },
     {
       label: "Số lượng bán",
       key: "qtySold",
       align: "right",
-      cell: (r) => formatNumber(r.qtySold),
+      cell: (r) => r.qtySold === null ? "Không cộng khác ĐVT" : formatNumber(r.qtySold),
     },
     {
       label: "Doanh thu",
@@ -245,74 +276,49 @@ export default function AbcAnalysisPage() {
       cell: (r) => `${r.cumPct.toFixed(2)}%`,
     },
     {
-      label: "Lần bán cuối",
+      label: "Bán cuối trong kỳ",
       key: "lastSoldDaysAgo",
       align: "right",
       cell: (r) =>
         r.lastSoldDaysAgo == null
-          ? <span className="text-status-error font-medium">Chưa bán</span>
+          ? <span className="text-muted-foreground">Không phát sinh trong kỳ</span>
           : `Cách đây ${r.lastSoldDaysAgo} ngày`,
     },
   ];
 
+  if (isLoading) return <p role="status" className="p-6">Đang xác thực quyền báo cáo...</p>;
+  if (!allowed) return <p role="alert" className="p-6">Chưa được cấp quyền xem phân tích chi tiết.</p>;
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] overflow-hidden">
       <ReportPageHeader
         title="Phân loại sản phẩm theo doanh thu"
-        subtitle="Nhóm A 80% — Nhóm B 15% — Nhóm C 5% — kèm danh sách bán chậm"
+        subtitle="Dòng hàng hóa đơn hoàn tất · Ngày chứng từ · Giờ Việt Nam"
         preset={preset}
         range={range}
         onPresetChange={setPreset}
         onCustomRangeChange={setCustomRange}
-        onExportView={handleExportView}
-        onExportFull={handleExportFull}
+        onExportView={hasPermission("reports.export") ? handleExportView : undefined}
+        onExportFull={hasPermission("reports.export_detail") ? handleExportFull : undefined}
         exportDisabled={loading || !data}
       />
 
       <div className="flex-1 overflow-auto p-4 lg:p-6 space-y-4">
+        {exportError && <p role="alert">{exportError}</p>}
+        <div className="border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-950">
+          <p>Doanh số trước trả hàng, chưa trừ chiết khấu toàn đơn.</p>
+          <details className="mt-1"><summary className="cursor-pointer font-medium">Cơ sở phân loại</summary><p className="mt-2">Ngưỡng lũy kế 80% / 95%; mặt hàng vượt ngưỡng giữ trong nhóm đang xét. Tỷ trọng tính trên toàn kỳ, không xếp nhóm lại khi tìm kiếm. ĐVT hiện tại chỉ tham khảo. Nhóm không có doanh số gồm danh mục dùng chung chưa có doanh số dương tại phạm vi đã chọn; không đồng nghĩa hàng tồn chậm luân chuyển.</p></details>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <Input aria-label="Tìm mặt hàng" placeholder="Mã hoặc tên mặt hàng" value={search} onChange={event => setSearch(event.target.value)} className="min-w-48 flex-1" />
+          <SearchableSelect aria-label="ĐVT hiện tại" options={[{ value: "", label: "Tất cả ĐVT hiện tại" }, ...unitOptions]} value={unit} onValueChange={setUnit} placeholder="Tất cả ĐVT hiện tại" className="w-52" />
+        </div>
         {/* KPI cards */}
         {data && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <KpiCard
-              label="Nhóm A — Sản phẩm chủ lực"
-              value={String(data.classStats.A.count)}
-              change={`Chiếm ${data.classStats.A.revenuePct}% doanh thu`}
-              positive
-              icon="star"
-              bg="bg-status-success/10"
-              iconColor="text-status-success"
-              valueColor="text-foreground"
-            />
-            <KpiCard
-              label="Nhóm B — Sản phẩm trung bình"
-              value={String(data.classStats.B.count)}
-              change={`Chiếm ${data.classStats.B.revenuePct}% doanh thu`}
-              positive
-              icon="trending_up"
-              bg="bg-status-info/10"
-              iconColor="text-status-info"
-              valueColor="text-foreground"
-            />
-            <KpiCard
-              label="Nhóm C — Sản phẩm ít bán"
-              value={String(data.classStats.C.count)}
-              change={`Chiếm ${data.classStats.C.revenuePct}% doanh thu`}
-              positive={false}
-              icon="trending_flat"
-              bg="bg-status-warning/10"
-              iconColor="text-status-warning"
-              valueColor="text-foreground"
-            />
-            <KpiCard
-              label="Bán chậm"
-              value={String(data.classStats.slow.count)}
-              change="Sản phẩm không bán trong kỳ"
-              positive={false}
-              icon="trending_down"
-              bg="bg-status-error/10"
-              iconColor="text-status-error"
-              valueColor="text-foreground"
-            />
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <SummaryCard label="Nhóm A · Chủ lực" value={String(visibleStats("A").count)} hint={`${visibleStats("A").pct}% doanh số kỳ`} className="border-l-emerald-500 bg-emerald-50/60" />
+            <SummaryCard label="Nhóm B · Tiếp theo" value={String(visibleStats("B").count)} hint={`${visibleStats("B").pct}% doanh số kỳ`} className="border-l-sky-500 bg-sky-50/60" />
+            <SummaryCard label="Nhóm C · Còn lại" value={String(visibleStats("C").count)} hint={`${visibleStats("C").pct}% doanh số kỳ`} className="border-l-amber-500 bg-amber-50/60" />
+            <SummaryCard label="Không có doanh số" value={String(visibleStats("slow").count)} hint="Danh mục trong kỳ" className="border-l-rose-400 bg-rose-50/60" />
           </div>
         )}
 
@@ -347,6 +353,8 @@ export default function AbcAnalysisPage() {
               Đang tải dữ liệu phân tích ABC...
             </p>
           </div>
+        ) : error ? (
+          <div role="alert" className="space-y-2"><p>{error}</p><button onClick={fetchData} className="text-primary underline">Thử lại</button></div>
         ) : !data ? (
           <div className="text-center py-16 text-sm text-muted-foreground">
             Không có dữ liệu
@@ -361,11 +369,7 @@ export default function AbcAnalysisPage() {
               onSortChange={setSort}
               getRowKey={(r) => r.productId}
               subtotalLabel={`SL mặt hàng: ${filteredRows.length}`}
-              emptyState={
-                filterMode === "slow"
-                  ? "Không có SP bán chậm — tốt!"
-                  : "Không có SP trong nhóm này"
-              }
+              emptyState="Không có mặt hàng phù hợp."
             />
           </div>
         )}

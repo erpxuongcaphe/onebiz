@@ -1,274 +1,39 @@
-/**
- * ABC Analysis + Slow movers — REP-3 (CEO 06/05/2026).
- *
- * Pareto 80/15/5:
- * - A: 80% doanh thu (top SP)
- * - B: 15% doanh thu kế tiếp
- * - C: 5% doanh thu cuối
- * - Slow movers: SP doanh thu = 0 trong kỳ
- *
- * Quyết định kinh doanh:
- * - A: Stock buffer cao, ưu tiên display, đảm bảo không hết hàng
- * - B: Stock vừa
- * - C: Cân nhắc cắt SKU nếu margin thấp
- * - Slow: Khuyến mãi xả / cắt
- */
-
 import { getClient, getCurrentTenantId, handleError } from "./base";
 import type { DateRange } from "@/lib/types/report";
 import { toCreatedAtRangeWindow } from "@/lib/utils/list-date-preset-range";
-interface AbcPagedQuery<T> {
-  range(
-    from: number,
-    to: number,
-  ): PromiseLike<{
-    data: T[] | null;
-    error: { message: string } | null;
-  }>;
-}
+import { buildAbcReport, type AbcProduct, type AbcSaleLine, type AbcReportResult } from "@/lib/reports/abc-model";
+export type { AbcRow, AbcClass, AbcReportResult } from "@/lib/reports/abc-model";
 
-async function fetchAllAbcRows<T>(
-  buildQuery: () => AbcPagedQuery<T>,
-  context: string,
-): Promise<T[]> {
-  const pageSize = 1000;
-  const rows: T[] = [];
-  for (let offset = 0; ; offset += pageSize) {
-    const { data, error } = await buildQuery().range(
-      offset,
-      offset + pageSize - 1,
-    );
-    if (error) {
-      handleError(error, context);
-      return [];
-    }
+interface AbcPagedQuery<T> {
+  range(from: number, to: number): PromiseLike<{ data: T[] | null; error: { message: string } | null }>;
+}
+async function fetchAllAbcRows<T>(buildQuery: () => AbcPagedQuery<T>, context: string): Promise<T[]> {
+  const pageSize = 1000, rows: T[] = [];
+  for (let offset = 0; offset <= 100000; offset += pageSize) {
+    const { data, error } = await buildQuery().range(offset, offset + pageSize - 1);
+    if (error) { handleError(error, context); throw new Error("Không tải được nguồn báo cáo ABC."); }
     const page = data ?? [];
     rows.push(...page);
-    if (page.length < pageSize) break;
+    if (rows.length > 100000) break;
+    if (page.length < pageSize) return rows;
   }
-  return rows;
+  throw new Error("Kỳ báo cáo quá lớn. Vui lòng chọn khoảng thời gian ngắn hơn.");
 }
+interface AbcOptions { range: DateRange; branchId?: string; thresholdA?: number; thresholdB?: number }
 
-interface AbcProductQueryRow {
-  id: string;
-  code: string;
-  name: string;
-  unit: string | null;
-}
-
-interface AbcItemQueryRow {
-  product_id: string;
-  product_name: string;
-  quantity: number;
-  total: number;
-  invoices: { ngay_chung_tu: string };
-}
-
-export type AbcClass = "A" | "B" | "C" | "slow";
-
-export interface AbcRow {
-  productId: string;
-  code: string;
-  name: string;
-  unit: string;
-  qtySold: number;
-  revenue: number;
-  /** Cumulative % doanh thu (đã sort desc) */
-  cumPct: number;
-  /** % của SP này trong tổng doanh thu */
-  pct: number;
-  abcClass: AbcClass;
-  /** Số ngày cuối cùng có giao dịch bán */
-  lastSoldDaysAgo: number | null;
-}
-
-export interface AbcReportResult {
-  rows: AbcRow[];
-  /** Phân loại stats */
-  classStats: {
-    A: { count: number; revenue: number; revenuePct: number };
-    B: { count: number; revenue: number; revenuePct: number };
-    C: { count: number; revenue: number; revenuePct: number };
-    slow: { count: number };
-  };
-  totalRevenue: number;
-  range: DateRange;
-}
-
-interface AbcOptions {
-  range: DateRange;
-  branchId?: string;
-  /** % ngưỡng class A (default 80) */
-  thresholdA?: number;
-  /** % ngưỡng class B (default 95 — A+B = 95% → C = 5%) */
-  thresholdB?: number;
-}
-
-/**
- * Get ABC analysis report.
- *
- * Strategy:
- * - Fetch all invoice_items trong kỳ + join product
- * - Aggregate qty + revenue per product
- * - Sort desc by revenue → cumulative % → classify
- * - Slow movers = products active KHÔNG có sales trong kỳ
- */
 export async function getAbcReport(options: AbcOptions): Promise<AbcReportResult> {
-  const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
+  const supabase = getClient(), tenantId = await getCurrentTenantId();
   const { range, branchId } = options;
-  const thresholdA = options.thresholdA ?? 80;
-  const thresholdB = options.thresholdB ?? 95;
-
-  const rangeWindow = toCreatedAtRangeWindow(range);
-  if (!rangeWindow) throw new Error("Invalid report date range");
-
-  // 1. Fetch all active products
-  const products = await fetchAllAbcRows<AbcProductQueryRow>(
-    () => supabase
-      .from("products_scoped")
-      .select("id, code, name, unit")
-      .eq("tenant_id", tenantId)
-      .eq("is_active", true)
-      .order("id", { ascending: true }),
-    "getAbcReport.products",
-  );
-
-  // 2. Fetch all invoice_items in range (joined with completed invoices)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let itemsQuery = (supabase as any)
-    .from("invoice_items_scoped")
-    .select(
-      "product_id, product_name, quantity, total, invoices!inner(ngay_chung_tu, status, branch_id, tenant_id)",
-    )
-    .eq("invoices.tenant_id", tenantId)
-    .eq("invoices.status", "completed")
-    // 00335: lọc theo NGÀY CHỨNG TỪ của hoá đơn
-    .gte("invoices.ngay_chung_tu", rangeWindow.start)
-    .lt("invoices.ngay_chung_tu", rangeWindow.end);
-  if (branchId) itemsQuery = itemsQuery.eq("invoices.branch_id", branchId);
-  const items = await fetchAllAbcRows<AbcItemQueryRow>(() => itemsQuery.order("id", { ascending: true }), "getAbcReport.items");
-
-  // 3. Aggregate
-  const aggMap = new Map<
-    string,
-    { qty: number; revenue: number; lastSoldAt: string | null }
-  >();
-  for (const item of items ?? []) {
-    const pid = item.product_id as string;
-    const inv = item.invoices as { ngay_chung_tu: string };
-    const existing = aggMap.get(pid) ?? {
-      qty: 0,
-      revenue: 0,
-      lastSoldAt: null as string | null,
-    };
-    existing.qty += Number(item.quantity ?? 0);
-    existing.revenue += Number(item.total ?? 0);
-    if (
-      !existing.lastSoldAt ||
-      new Date(inv.ngay_chung_tu) > new Date(existing.lastSoldAt)
-    ) {
-      existing.lastSoldAt = inv.ngay_chung_tu;
-    }
-    aggMap.set(pid, existing);
-  }
-
-  // 4. Build rows + sort desc by revenue
-  const productMap = new Map((products ?? []).map((p) => [p.id, p]));
-  const totalRevenue = Array.from(aggMap.values()).reduce(
-    (s, a) => s + a.revenue,
-    0,
-  );
-
-  // Active products with sales
-  const sold: AbcRow[] = [];
-  let cumRevenue = 0;
-  for (const [pid, agg] of Array.from(aggMap.entries()).sort(
-    (a, b) => b[1].revenue - a[1].revenue,
-  )) {
-    const p = productMap.get(pid);
-    if (!p) continue;
-    const pct = totalRevenue > 0 ? (agg.revenue / totalRevenue) * 100 : 0;
-    cumRevenue += agg.revenue;
-    const cumPct = totalRevenue > 0 ? (cumRevenue / totalRevenue) * 100 : 0;
-    const abcClass: AbcClass =
-      cumPct <= thresholdA ? "A" : cumPct <= thresholdB ? "B" : "C";
-    const lastSoldDaysAgo = agg.lastSoldAt
-      ? Math.floor(
-          (Date.now() - new Date(agg.lastSoldAt).getTime()) /
-            (1000 * 60 * 60 * 24),
-        )
-      : null;
-    sold.push({
-      productId: pid,
-      code: p.code,
-      name: p.name,
-      unit: p.unit ?? "",
-      qtySold: agg.qty,
-      revenue: agg.revenue,
-      pct: Math.round(pct * 100) / 100,
-      cumPct: Math.round(cumPct * 100) / 100,
-      abcClass,
-      lastSoldDaysAgo,
-    });
-  }
-
-  // Slow movers (active products NOT in aggMap)
-  const slow: AbcRow[] = [];
-  for (const p of products ?? []) {
-    if (aggMap.has(p.id)) continue;
-    slow.push({
-      productId: p.id,
-      code: p.code,
-      name: p.name,
-      unit: p.unit ?? "",
-      qtySold: 0,
-      revenue: 0,
-      pct: 0,
-      cumPct: 0,
-      abcClass: "slow",
-      lastSoldDaysAgo: null,
-    });
-  }
-
-  const rows = [...sold, ...slow];
-
-  // Class stats
-  const aRows = sold.filter((r) => r.abcClass === "A");
-  const bRows = sold.filter((r) => r.abcClass === "B");
-  const cRows = sold.filter((r) => r.abcClass === "C");
-  const sumRev = (arr: AbcRow[]) => arr.reduce((s, r) => s + r.revenue, 0);
-
-  return {
-    rows,
-    classStats: {
-      A: {
-        count: aRows.length,
-        revenue: sumRev(aRows),
-        revenuePct:
-          totalRevenue > 0
-            ? Math.round((sumRev(aRows) / totalRevenue) * 1000) / 10
-            : 0,
-      },
-      B: {
-        count: bRows.length,
-        revenue: sumRev(bRows),
-        revenuePct:
-          totalRevenue > 0
-            ? Math.round((sumRev(bRows) / totalRevenue) * 1000) / 10
-            : 0,
-      },
-      C: {
-        count: cRows.length,
-        revenue: sumRev(cRows),
-        revenuePct:
-          totalRevenue > 0
-            ? Math.round((sumRev(cRows) / totalRevenue) * 1000) / 10
-            : 0,
-      },
-      slow: { count: slow.length },
-    },
-    totalRevenue,
-    range,
-  };
+  const window = toCreatedAtRangeWindow(range);
+  if (!window || !Number.isFinite(Date.parse(window.start)) || Date.parse(window.start) >= Date.parse(window.end)) throw new Error("Kỳ báo cáo không hợp lệ.");
+  // Inactive products remain necessary for historical sales.
+  const products = await fetchAllAbcRows<AbcProduct>(() => supabase.from("products_scoped")
+    .select("id, code, name, unit, is_active").eq("tenant_id", tenantId).order("id", { ascending: true }), "getAbcReport.products");
+  let query = supabase.from("invoice_items_scoped")
+    .select("product_id, product_name, quantity, total, unit, invoices!inner(ngay_chung_tu, status, branch_id, tenant_id)")
+    .eq("invoices.tenant_id", tenantId).eq("invoices.status", "completed")
+    .gte("invoices.ngay_chung_tu", window.start).lt("invoices.ngay_chung_tu", window.end);
+  if (branchId && branchId !== "all") query = query.eq("invoices.branch_id", branchId);
+  const items = await fetchAllAbcRows<AbcSaleLine>(() => query.order("id", { ascending: true }) as unknown as AbcPagedQuery<AbcSaleLine>, "getAbcReport.items");
+  return buildAbcReport(products, items, range, options.thresholdA, options.thresholdB);
 }
