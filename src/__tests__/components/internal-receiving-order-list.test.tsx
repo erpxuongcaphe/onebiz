@@ -1,5 +1,5 @@
 import {beforeEach,describe,expect,it,vi} from 'vitest';
-import {fireEvent,render,screen,waitFor} from '@testing-library/react';
+import {fireEvent,render,screen,waitFor,within} from '@testing-library/react';
 const mocks=vi.hoisted(()=>({export:vi.fn()}));
 vi.mock('@/lib/utils/export',()=>({exportToExcel:mocks.export}));
 import {InternalReceivingOrderList} from '@/components/shared/internal-receiving-order-list';
@@ -25,10 +25,43 @@ describe('receiving document management table',()=>{
   });
   it('blocks export when the date range is invalid',()=>{
     render(<InternalReceivingOrderList initialPreset="all" orders={orders} loading={false} busy={false} canExport onOpen={()=>{}} onClose={()=>{}} detail={null}/>);
+    fireEvent.change(screen.getByLabelText('Thời gian nhận nội bộ'),{target:{value:'custom'}});
     fireEvent.change(screen.getByLabelText('Từ ngày'),{target:{value:'2026-10-20'}});
     fireEvent.change(screen.getByLabelText('Đến ngày'),{target:{value:'2026-10-01'}});
     expect(screen.getByRole('alert')).toHaveTextContent('Ngày bắt đầu');
     expect(screen.getByRole('button',{name:'Danh sách'})).toBeDisabled();
+  });
+  it('shows editable dates immediately after choosing custom without opening document filters',()=>{
+    render(<InternalReceivingOrderList initialPreset="all" orders={orders} loading={false} busy={false} canExport onOpen={()=>{}} onClose={()=>{}} detail={null}/>);
+    expect(screen.queryByLabelText('Từ ngày')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Thời gian nhận nội bộ'),{target:{value:'custom'}});
+    expect(screen.getByLabelText('Từ ngày')).toBeVisible();
+    expect(screen.getByLabelText('Đến ngày')).toBeVisible();
+    expect(screen.getByText('Lọc theo: Ngày xuất')).toBeVisible();
+    expect(screen.getByText('Bộ lọc chứng từ').closest('details')).not.toHaveAttribute('open');
+    expect(screen.queryByText('Tất cả thời gian',{selector:'span'})).not.toBeInTheDocument();
+  });
+  it('uses the visible custom range for both table and exports, including Vietnam day boundaries',async()=>{
+    const rows=['2026-10-28T16:59:00Z','2026-10-28T17:00:00Z','2026-10-29T16:59:00Z','2026-10-29T17:00:00Z']
+      .map((createdAt,n)=>({...orders[n],code:`BOUNDARY-${n}`,createdAt}));
+    render(<InternalReceivingOrderList initialPreset="all" orders={rows} loading={false} busy={false} canExport onOpen={()=>{}} onClose={()=>{}} detail={null}/>);
+    fireEvent.change(screen.getByLabelText('Thời gian nhận nội bộ'),{target:{value:'custom'}});
+    fireEvent.change(screen.getByLabelText('Từ ngày'),{target:{value:'2026-10-29'}});
+    fireEvent.change(screen.getByLabelText('Đến ngày'),{target:{value:'2026-10-29'}});
+    expect(within(screen.getByRole('table')).getByText('BOUNDARY-1')).toBeVisible();
+    expect(within(screen.getByRole('table')).getByText('BOUNDARY-2')).toBeVisible();
+    expect(screen.queryByText('BOUNDARY-0')).not.toBeInTheDocument();
+    expect(screen.queryByText('BOUNDARY-3')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button',{name:'Danh sách'}));
+    await waitFor(()=>expect(mocks.export).toHaveBeenCalledTimes(1));
+    expect(mocks.export.mock.calls[0][0].map((r:{code:string})=>r.code)).toEqual(['BOUNDARY-2','BOUNDARY-1']);
+    fireEvent.click(screen.getByRole('button',{name:'Chi tiết hàng'}));
+    await waitFor(()=>expect(mocks.export).toHaveBeenCalledTimes(2));
+    expect(mocks.export.mock.calls[1][0].map((r:{code:string})=>r.code)).toEqual(['BOUNDARY-2','BOUNDARY-1']);
+    fireEvent.change(screen.getByLabelText('Thời gian nhận nội bộ'),{target:{value:'all'}});
+    expect(screen.queryByLabelText('Từ ngày')).not.toBeInTheDocument();
+    expect(within(screen.getByRole('table')).getByText('BOUNDARY-0')).toBeVisible();
+    expect(within(screen.getByRole('table')).getByText('BOUNDARY-3')).toBeVisible();
   });
   it('offers a compact view without losing the full columns or any historical status',()=>{
     render(<InternalReceivingOrderList initialPreset="all" orders={orders} loading={false} busy={false} canExport onOpen={()=>{}} onClose={()=>{}} detail={null}/>);
