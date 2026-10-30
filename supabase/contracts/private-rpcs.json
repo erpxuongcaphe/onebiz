@@ -197,6 +197,19 @@
           { "name": "p_branch_id", "optional": true }
         ] }
       ]
+    },
+    {
+      "migration": "cost_reconciliation_workspace_v1",
+      "migrationSha256": "decfbdae03e79a444e00d85745ef62bb203074e6ee06bde605a326a8c247b13e",
+      "functions": [
+        { "name": "get_cost_reconciliation_workspace_v1", "params": [
+          { "name": "p_from", "optional": false },
+          { "name": "p_to", "optional": false },
+          { "name": "p_branch_id", "optional": true },
+          { "name": "p_offset", "optional": true },
+          { "name": "p_limit", "optional": true }
+        ] }
+      ]
     }
   ]
 }

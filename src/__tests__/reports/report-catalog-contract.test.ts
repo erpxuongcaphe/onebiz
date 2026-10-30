@@ -10,8 +10,8 @@ function reportPagePath(href: string): string {
 }
 
 describe("report catalog implementation contract", () => {
-  it("keeps all 38 catalog pages on the shared report foundation", () => {
-    expect(REPORT_CATALOG).toHaveLength(38);
+  it("keeps all 39 catalog pages on the shared report foundation", () => {
+    expect(REPORT_CATALOG).toHaveLength(39);
 
     for (const report of REPORT_CATALOG) {
       const page = readFileSync(resolve(reportPagePath(report.href)), "utf8");
