@@ -184,6 +184,19 @@
           { "name": "p_branch_id", "optional": true }
         ] }
       ]
+    },
+    {
+      "migration": "finance_dashboard_finalized_snapshot_v2",
+      "migrationSha256": "0055d68e4fcf9e97c3890f1a619ed22fde6a47878f4db2d937b0cedc69c48f1a",
+      "functions": [
+        { "name": "get_finance_dashboard_report_v2", "params": [
+          { "name": "p_current_from", "optional": false },
+          { "name": "p_current_to", "optional": false },
+          { "name": "p_previous_from", "optional": false },
+          { "name": "p_previous_to", "optional": false },
+          { "name": "p_branch_id", "optional": true }
+        ] }
+      ]
     }
   ]
 }
