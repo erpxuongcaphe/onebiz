@@ -15,7 +15,7 @@ afterEach(cleanup);
 it("exports the same middle-name filtered rows with historical and current unit labels", async () => {
   render(<Page />); await screen.findByText(/SKU-1/);
   fireEvent.change(screen.getByRole("textbox", { name: "Tìm hóa đơn hoặc mặt hàng" }), { target: { value: "cot dua" } });
-  expect(screen.getByTestId("rows")).toHaveTextContent("Chưa lưu ĐVT Ly");
+  expect(screen.getByTestId("rows")).toHaveTextContent("Chưa có ĐVT lịch sử Ly");
   fireEvent.click(screen.getByRole("button", { name: "Full" }));
   await waitFor(() => expect(state.excel).toHaveBeenCalledOnce());
   const detail = state.excel.mock.calls[0][0].sheets[1];

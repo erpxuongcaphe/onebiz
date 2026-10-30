@@ -78,7 +78,7 @@ export default function CogsTheoBomPage() {
       const detail = bomCogsSheet(rows);
       if (mode === "full") delete detail.tablePreferenceKey;
       detail.titleRows = buildReportTitleRows({ title: "GIÁ VỐN THEO CÔNG THỨC", range, branchName: branchLabel });
-      detail.titleRows.push("ĐVT và quy đổi hiện tại chỉ tham khảo, không xác nhận ĐVT lịch sử của số lượng chứng từ.");
+      detail.titleRows.push("ĐVT lịch sử theo dòng hóa đơn khớp. ĐVT và quy đổi hiện tại chỉ tham khảo, không tính lại chứng từ.");
       detail.titleRows.push(`Tìm: ${search || "Tất cả"}; ĐVT hiện tại: ${unit || "Tất cả"}; Giá vốn: ${status || "Tất cả"}; Sắp xếp: ${sort.id} ${sort.direction}`);
       const sheets: ExcelSheet[] = [detail];
       if (mode === "full") sheets.unshift({ name: "Tổng hợp", columns: [
@@ -109,7 +109,7 @@ export default function CogsTheoBomPage() {
         <SummaryCard label="Lãi gộp dòng đủ giá" value={pending || error ? "—" : money(totals.knownMargin)} danger={totals.knownMargin < 0} />
         <SummaryCard label="Dòng chưa đủ giá vốn" value={pending || error ? "—" : String(totals.missing)} danger={totals.missing > 0} />
       </div>
-      <p className="border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-950">Nguồn chưa lưu ĐVT lịch sử. ĐVT và quy đổi hiện tại chỉ tham khảo; không dùng để tính lại số lượng hoặc giá vốn cũ.</p>
+      <p className="border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-950">ĐVT lịch sử theo dòng hóa đơn khớp. Quy đổi hiện tại chỉ tham khảo, không tính lại chứng từ cũ.</p>
       {error ? <div role="alert" className="space-y-2"><p>{error}</p><Button onClick={() => setRevision(value => value + 1)}><Icon name="refresh" size={16} />Thử lại</Button></div> : <>
         <div className="flex flex-wrap gap-3">
           <Input aria-label="Tìm hóa đơn hoặc mặt hàng" placeholder="Mã bill, mã hàng, tên hàng, chi nhánh" value={search} onChange={event => setSearch(event.target.value)} className="min-w-48 flex-1" />

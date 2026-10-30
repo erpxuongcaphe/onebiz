@@ -6,7 +6,7 @@ import type { ExcelSheet } from "@/lib/utils/excel-export";
 export type BomCogsViewRow = CogsByBomRow & { recordedUnit: string; unitReference: string; conversionReference: string; costStatus: string };
 export function bomCogsView(source: CogsByBomRow[], search: string, unit: string, status: string, sort: { id: string; direction: "asc" | "desc" }): BomCogsViewRow[] {
   const rows = searchOptions(source, search, row => ({ name: `${row.productName} ${row.branchName}`, identifiers: [row.productCode, row.invoiceCode] }))
-    .map(({ item }) => ({ ...item, recordedUnit: "Chưa lưu ĐVT", unitReference: item.catalogUnit || "Chưa có ĐVT", conversionReference: item.currentConversion || "Chưa có dữ liệu quy đổi", costStatus: item.cogsReal == null ? "Chưa xác định" : "Đã ghi nhận" }))
+    .map(({ item }) => ({ ...item, recordedUnit: item.recordedUnit || "Chưa có ĐVT lịch sử", unitReference: item.catalogUnit || "Chưa có ĐVT", conversionReference: item.currentConversion || "Chưa có dữ liệu quy đổi", costStatus: item.cogsReal == null ? "Chưa xác định" : "Đã ghi nhận" }))
     .filter(row => (!unit || row.unitReference === unit) && (!status || (status === "missing" ? row.cogsReal == null : row.cogsReal != null)));
   return sortReportRows(rows, row => row[sort.id as keyof BomCogsViewRow] ?? null, sort.direction);
 }

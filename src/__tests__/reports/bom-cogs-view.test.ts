@@ -10,8 +10,11 @@ it.each(["cốt dừa", "cot dua", "CỐT DỪA"])("finds middle-name text %s wi
 });
 it("labels catalog conversions as references, never as historical quantity denominators", () => {
   const view = bomCogsView(rows, "", "", "", sort);
-  expect(view.every(row => row.recordedUnit === "Chưa lưu ĐVT")).toBe(true);
+  expect(view.every(row => row.recordedUnit === "Chưa có ĐVT lịch sử")).toBe(true);
   expect(view[1]).toMatchObject({ unitReference: "Hộp", conversionReference: "1 Hộp = 6 Cái", qtySold: 1 });
+});
+it("uses a matched historical unit even when the current catalog unit differs", () => {
+  expect(bomCogsView([{ ...rows[0], recordedUnit: "Cái", catalogUnit: "Cây" }], "", "", "", sort)[0]).toMatchObject({ recordedUnit: "Cái", unitReference: "Cây", qtySold: 2 });
 });
 it("keeps global numeric sorting and unit/status filters aligned with export", () => {
   const view = bomCogsView(rows, "", "Hộp", "missing", { id: "qtySold", direction: "asc" });

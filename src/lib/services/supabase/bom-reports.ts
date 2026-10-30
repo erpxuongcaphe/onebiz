@@ -9,6 +9,7 @@
 import { getClient, handleError } from "./base";
 import { isRpcUnavailable } from "./rpc-utils";
 import { getStockReportUnits, stockUnitReferenceKey } from "./report-stock-units";
+import { getBomSaleUnits } from "./bom-sale-units";
 
 // ============================================================
 // 1. Tiêu hao NVL theo chi nhánh
@@ -94,6 +95,7 @@ export interface CogsByBomRow {
   /** Current catalog reference, never a reconstructed historical sale unit. */
   catalogUnit?: string | null;
   currentConversion?: string;
+  recordedUnit?: string | null;
 }
 
 export async function getCogsByBom(params: {
@@ -141,9 +143,12 @@ export async function getCogsByBom(params: {
     cogsReal: r.cogs_real == null ? null : Number(r.cogs_real),
     margin: r.margin == null ? null : Number(r.margin),
   }));
-  const units = await getStockReportUnits(rows.map(row => ({ referenceId: row.invoiceId, productId: row.productId, actualQuantity: row.qtySold })), "current_stock");
-  return rows.map(row => {
+  const [units, recordedUnits] = await Promise.all([
+    getStockReportUnits(rows.map(row => ({ referenceId: row.invoiceId, productId: row.productId, actualQuantity: row.qtySold })), "current_stock"),
+    getBomSaleUnits(rows),
+  ]);
+  return rows.map((row, index) => {
     const unit = units.get(stockUnitReferenceKey(row.invoiceId, row.productId));
-    return { ...row, catalogUnit: unit?.catalogUnit ?? null, currentConversion: unit?.currentConversion ?? "Chưa có dữ liệu quy đổi" };
+    return { ...row, recordedUnit: recordedUnits[index] ?? null, catalogUnit: unit?.catalogUnit ?? null, currentConversion: unit?.currentConversion ?? "Chưa có dữ liệu quy đổi" };
   });
 }

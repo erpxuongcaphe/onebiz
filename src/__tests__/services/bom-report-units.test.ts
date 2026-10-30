@@ -1,5 +1,6 @@
 import { beforeEach, expect, it, vi } from "vitest";
-const state = vi.hoisted(() => ({ rpc: vi.fn(), units: vi.fn() }));
+const state = vi.hoisted(() => ({ rpc: vi.fn(), units: vi.fn(), recorded: vi.fn() }));
+vi.mock("@/lib/services/supabase/bom-sale-units", () => ({ getBomSaleUnits: state.recorded }));
 vi.mock("@/lib/services/supabase/base", () => ({ getClient: () => ({ rpc: state.rpc }), handleError: (error: { message: string }) => { throw new Error(error.message); } }));
 vi.mock("@/lib/services/supabase/report-stock-units", () => ({ getStockReportUnits: state.units, stockUnitReferenceKey: (a: string, b: string) => `${a}:${b}` }));
 import { getCogsByBom } from "@/lib/services/supabase/bom-reports";
@@ -10,12 +11,13 @@ beforeEach(() => {
   const query = { order: vi.fn(() => query), range: vi.fn().mockResolvedValue(result) };
   state.rpc.mockReturnValue(query);
   state.units.mockResolvedValue(new Map([["bill-1:p1", { catalogUnit: "Ly", recordedUnit: "Ly", currentConversion: "1 Khay = 6 Ly" }]]));
+  state.recorded.mockImplementation(async (rows: unknown[]) => rows.map(() => "Cái"));
 });
 it("loads current references only for authorized report IDs without promoting them to historical units", async () => {
   const rows = await getCogsByBom(params);
   expect(state.units).toHaveBeenCalledExactlyOnceWith([{ referenceId: "bill-1", productId: "p1", actualQuantity: 2 }], "current_stock");
   expect(rows[0]).toMatchObject({ qtySold: 2, catalogUnit: "Ly", currentConversion: "1 Khay = 6 Ly", cogsReal: null });
-  expect(rows[0]).not.toHaveProperty("recordedUnit");
+  expect(rows[0].recordedUnit).toBe("Cái");
 });
 it("does not read product metadata when the report is denied", async () => {
   state.rpc().range.mockResolvedValue({ data: null, error: { code: "42501", message: "REPORT_PERMISSION_DENIED" } });
