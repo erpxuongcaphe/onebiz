@@ -94,12 +94,16 @@ describe('F&B configured preparation options', () => {
     expect(screen.getByRole('button',{name:/^100% bình thường/})).toHaveAttribute('aria-pressed',['missing','cleared'].includes(mode)?'true':'false');
     expect(screen.getByRole('button',{name:/^80% ít ngọt/})).toHaveAttribute('aria-pressed',mode==='selected'?'true':'false');
     if(mode==='cleared')fireEvent.click(screen.getByRole('button',{name:/^100% bình thường/}));
+    if(['empty','ambiguous','paid','linked'].includes(mode)) {
+      expect(screen.getByRole('button',{name:'Kiểm tra Mức ngọt'})).toBeDisabled();
+      expect(onConfirm).not.toHaveBeenCalled();
+      return;
+    }
     fireEvent.click(screen.getByRole('button',{name:/Thêm vào đơn/}));
     const selections=onConfirm.mock.calls[0][0].modifierSelections ?? [];
     if(mode==='missing')expect(selections).toEqual(expect.arrayContaining([expect.objectContaining({groupId:'sweet',options:[expect.objectContaining({optionId:'normal'})]})]));
     if(mode==='selected')expect(selections[0].options[0].optionId).toBe('less');
-    if(['empty','cleared'].includes(mode))expect(selections).toEqual([expect.objectContaining({groupId:'sweet',options:[]})]);
-    if(['ambiguous','paid','linked'].includes(mode))expect(selections).toEqual([]);
+    if(mode==='cleared')expect(selections[0].options[0].optionId).toBe('normal');
   });
 
 });

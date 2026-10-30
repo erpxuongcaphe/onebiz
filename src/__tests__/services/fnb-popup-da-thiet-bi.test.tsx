@@ -291,20 +291,22 @@ describe("PR-B · tự vệ khi dữ liệu nhóm 'Chọn 1' có nhiều mặc �
     return { groups: [g], optionsByGroup: new Map([["g-duong", [a, b]]]) };
   }
 
-  it("chỉ giữ MỘT lựa chọn, không cộng phụ thu hai lần", () => {
+  it("không tự chọn khi mức đường có hai mặc định, không cộng phụ thu", () => {
     moPopup({ dynamicModifiers: duLieuHaiMacDinh() });
     // Thấy tận mắt trên bản xem trước: cả "Không đường" và "100%" cùng sáng.
     // 35.000 + 3.000 + 5.000 = 43.000 là con số SAI phải chặn.
     expect(screen.queryByText(/43.000đ/)).toBeNull();
-    expect(screen.getByText(/Thêm vào đơn — 38.000đ/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Kiểm tra Mức đường' })).toBeDisabled();
+    expect(screen.getAllByText(/35.000đ/)).toHaveLength(2);
   });
 
-  it("giữ cái đứng TRƯỚC trong danh sách để đoán được", () => {
+  it("yêu cầu người bán chọn rõ thay vì lấy mức đường đứng trước", () => {
     moPopup({ dynamicModifiers: duLieuHaiMacDinh() });
     const dangSang = [...document.body.querySelectorAll("button[aria-pressed='true']")]
       .map((b) => (b.textContent || "").trim());
-    expect(dangSang).toHaveLength(1);
-    expect(dangSang[0]).toContain("Không đường");
+    expect(dangSang).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: /100%/ }));
+    expect(screen.getByRole('button', { name: /Thêm vào đơn — 40.000đ/ })).toBeEnabled();
   });
 
   it("nhóm CHỌN NHIỀU thì KHÔNG bị cắt bớt", () => {

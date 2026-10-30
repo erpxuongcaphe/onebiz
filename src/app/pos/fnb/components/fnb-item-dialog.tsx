@@ -124,6 +124,14 @@ function isLegacySizeModifierGroup(group: ModifierGroup): boolean {
   return group.name.trim().toLocaleLowerCase("vi") === "size";
 }
 
+// Sweetness controls recipe quantities even when the legacy group rule is
+// optional `single`. Clearing it must not become an empty kitchen snapshot.
+function requiresSweetnessChoice(group: ModifierGroup): boolean {
+  const name = group.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d").replace(/Đ/g, "D").trim().toLowerCase();
+  return group.rule !== "multi" && /^(muc ngot|muc duong|do ngot|luong duong)(?:\s|$|[-–—:])/.test(name);
+}
+
 /**
  * 07/08 (CEO chốt) — VÙNG CHẠM CĂN THEO LOẠI CON TRỎ, KHÔNG THEO BỀ RỘNG.
  *
@@ -407,6 +415,9 @@ export function FnbItemDialog({
          * trước thắng. Nhóm chọn-nhiều giữ nguyên.
          */
         const epChonMot = (g: ModifierGroup, ids: Set<string>) => {
+          // Keep invalid saved sweetness visible for correction; never pick a
+          // customer's recipe choice merely by display order.
+          if (requiresSweetnessChoice(g)) return ids;
           if (g.rule === "multi" || ids.size <= 1) return ids;
           const opts = dynamicModifiers.optionsByGroup.get(g.id) ?? [];
           const dau = opts.find((o) => ids.has(o.id));
@@ -420,6 +431,7 @@ export function FnbItemDialog({
           }
           const opts = dynamicModifiers.optionsByGroup.get(g.id) ?? [];
           const defaults = opts.filter((o) => o.isDefault && o.isActive);
+          if (requiresSweetnessChoice(g) && defaults.length !== 1) continue;
           // A legacy snapshot may predate a group. Fill only one free, non-topping
           // default; preserve saved choices (including an explicitly empty group).
           const safeMissingDefault = !savedByGroup.has(g.id) && g.rule !== "multi" &&
@@ -450,8 +462,8 @@ export function FnbItemDialog({
       const next = new Map(prev);
       const current = new Set(next.get(group.id) ?? []);
       if (current.has(optionId)) {
-        // Click lại → toggle off (trừ khi single_required + đang chỉ có 1)
-        if (group.rule === "single_required" && current.size === 1) {
+        // Required preparation choices behave like radio buttons.
+        if ((group.rule === "single_required" || requiresSweetnessChoice(group)) && current.size === 1) {
           return prev; // không cho bỏ chọn nếu bắt buộc
         }
         current.delete(optionId);
@@ -518,6 +530,12 @@ export function FnbItemDialog({
     for (const g of effectiveModifierGroups) {
       // Group có options? (nếu group rỗng coi như N/A)
       const opts = dynamicModifiers.optionsByGroup.get(g.id) ?? [];
+      if (requiresSweetnessChoice(g)) {
+        const choices = dynamicChoices.get(g.id);
+        const validChoices = opts.filter((o) => o.isActive && choices?.has(o.id));
+        if (choices?.size !== 1 || validChoices.length !== 1) missing.add(g.id);
+        continue;
+      }
       if (opts.length === 0) continue;
       const choices = dynamicChoices.get(g.id);
       const selectedCount = choices?.size ?? 0;
@@ -670,7 +688,7 @@ export function FnbItemDialog({
     if (opts.length === 0) return null;
     const choices = dynamicChoices.get(g.id) ?? new Set<string>();
     const ruleLabel =
-      g.rule === "single_required"
+      g.rule === "single_required" || requiresSweetnessChoice(g)
         ? "Bắt buộc chọn 1"
         : g.rule === "single"
           ? "Chọn 1"
@@ -704,7 +722,7 @@ export function FnbItemDialog({
         <NhanNhomTuyChon
           ten={g.name}
           nhanQuyTac={ruleLabel}
-          thongBaoThieu={g.rule === "multi" ? `${ruleLabel} — chưa đủ` : undefined}
+          thongBaoThieu={requiresSweetnessChoice(g) ? "Chọn đúng 1 mức ngọt" : g.rule === "multi" ? `${ruleLabel} — chưa đủ` : undefined}
           conThieu={conThieu}
           daChonNhan={daChonNhan}
           thuGonDuoc={!conThieu}
