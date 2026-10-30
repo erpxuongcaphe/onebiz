@@ -5,7 +5,11 @@ const uuid = n => `00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
 (async () => {
  const db = new PGlite();
  try {
- await db.exec(`create role anon; create role authenticated; create role service_role;
+ const schema=`do $$ begin
+ if not exists(select from pg_roles where rolname='anon') then create role anon; end if;
+ if not exists(select from pg_roles where rolname='authenticated') then create role authenticated; end if;
+ if not exists(select from pg_roles where rolname='service_role') then create role service_role; end if;
+ end $$;
  create schema auth;
  create function auth.uid() returns uuid language sql as $$select nullif(current_setting('test.actor',true),'')::uuid$$;
  create table tenants(id uuid primary key); create table branches(id uuid primary key);
@@ -27,9 +31,15 @@ const uuid = n => `00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
  ('${uuid(11)}','${uuid(1)}','${uuid(3)}','DH11','order','draft'),
  ('${uuid(12)}','${uuid(2)}','${uuid(3)}','OTHER','order','draft'),
  ('${uuid(13)}','${uuid(1)}','${uuid(4)}','BRANCH','order','draft'),
- ('${uuid(14)}','${uuid(1)}','${uuid(3)}','SALE','pos','draft');`);
+ ('${uuid(14)}','${uuid(1)}','${uuid(3)}','SALE','pos','draft');`;
+ await db.exec(schema);
  const before = (await db.query('select * from invoices order by id')).rows;
- await db.exec(fs.readFileSync('supabase/migrations/20261030092555_sales_order_processing_closure.sql','utf8'));
+ const migration=fs.readFileSync('supabase/migrations/20261030092555_sales_order_processing_closure.sql','utf8');
+ const lockOrder=fs.readFileSync('supabase/migrations/20261030104530_sales_order_processing_lock_order.sql','utf8');
+ await db.exec(migration); await db.exec(lockOrder);
+ if(process.env.FNB_RECORD_ORDER_CLOSURE_SQL) fs.writeFileSync(process.env.FNB_RECORD_ORDER_CLOSURE_SQL,schema+'\n'+migration+'\n'+lockOrder+`\n
+ insert into invoices(id,tenant_id,branch_id,code,source,status,created_by) values('${uuid(30)}','${uuid(1)}','${uuid(3)}','DH30','order','draft','${uuid(5)}');
+ insert into invoices(id,tenant_id,branch_id,code,source,status,created_by,source_order_id) values('${uuid(31)}','${uuid(1)}','${uuid(3)}','HD31','pos','draft','${uuid(5)}','${uuid(30)}');`);
  assert.equal((await db.query('select count(*)::int n from sales_order_processing_closures')).rows[0].n,0);
  await db.query(`select close_sales_order_processing($1,$2)`,[uuid(10),'Đã bán bằng hóa đơn riêng']);
  await db.query(`select close_sales_order_processing($1,$2)`,[uuid(10),'Gửi lại']);
