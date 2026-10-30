@@ -16,7 +16,7 @@ it("reopens every exported row with genuine zero, missing cost and secondary uni
   const headerIndex = matrix.findIndex(row => row.includes("Hệ số quy đổi"));
   const header = matrix[headerIndex], data = matrix.slice(headerIndex + 1).filter(row => row.includes("HD-TEST"));
   expect(data).toHaveLength(251);
-  const costIndex = header.indexOf("Giá vốn ứng viên (đ/ĐVT)");
+  const costIndex = header.indexOf("Giá vốn đối chiếu (đ/ĐVT)");
   expect(data[0][costIndex]).toBe(0); expect(data[1][costIndex]).toBe("");
   expect(data[0][header.indexOf("Giá đang lưu, chưa chốt (đ/ĐVT)")]).toBe("");
   expect(data[0][header.indexOf("ĐVT")]).toBe("Cái");

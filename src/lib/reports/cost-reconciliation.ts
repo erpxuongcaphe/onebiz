@@ -3,7 +3,7 @@ import { sortReportRows } from "@/lib/reports/table-sort";
 import type { ExcelSheet } from "@/lib/utils/excel-export";
 
 export const COST_STATUSES = {
-  ready: { label: "Có thể khôi phục", action: "Rà bằng chứng và lập danh sách duyệt" },
+  ready: { label: "Đủ căn cứ chốt", action: "Rà soát nguồn và duyệt chốt giá vốn" },
   waiting: { label: "Chờ nguồn thực tế", action: "Đối chiếu thực nhận hoặc mẻ sản xuất" },
   ambiguous: { label: "Đối soát lịch sử", action: "Xác định liên kết chứng từ và sự kiện giá vốn" },
   missing: { label: "Thiếu nguồn ban đầu", action: "Truy chứng từ nhập hoặc tồn đầu kỳ" },
@@ -56,7 +56,7 @@ export function costReconciliationSheet(rows: CostReconciliationRow[]): ExcelShe
     { key: "quantity", label: "Số lượng", format: "number", decimalPlaces: 4 }, { key: "unit", label: "ĐVT" },
     { key: "transactionQuantity", label: "SL giao dịch", format: "number", decimalPlaces: 4 }, { key: "transactionUnit", label: "ĐVT giao dịch" },
     { key: "conversionFactor", label: "Hệ số quy đổi", format: "number", decimalPlaces: 4 },
-    { key: "statusLabel", label: "Trạng thái" }, { key: "candidateUnitCost", label: "Giá vốn ứng viên (đ/ĐVT)", format: "number", decimalPlaces: 4 },
+    { key: "statusLabel", label: "Trạng thái" }, { key: "candidateUnitCost", label: "Giá vốn đối chiếu (đ/ĐVT)", format: "number", decimalPlaces: 4 },
     { key: "storedUnitCost", label: "Giá đang lưu, chưa chốt (đ/ĐVT)", format: "number", decimalPlaces: 4 },
     { key: "sourceMode", label: "Nguồn đối chiếu", width: 32 }, { key: "eventCount", label: "Sự kiện giá vốn", format: "number" },
     { key: "hasReturns", label: "Có trả hàng" }, { key: "lastAttempt", label: "Lần xử lý gần nhất" },

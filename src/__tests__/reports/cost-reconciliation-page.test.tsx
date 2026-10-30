@@ -22,7 +22,7 @@ describe("cost reconciliation review-only screen", () => {
   it("shows loaded counts, scoped rows and exact filtered exports without a repair action", async () => {
     render(<Page />); await waitFor(() => expect(screen.getByTestId("table")).toHaveTextContent("SKU-TEST-A"));
     expect(screen.queryByRole("button", { name: /Khôi phục ngay|Ghi điều chỉnh|Xác nhận sửa/ })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Có thể khôi phục/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Đủ căn cứ chốt/ }));
     expect(screen.getByTestId("table")).not.toHaveTextContent("SKU-TEST-B");
     fireEvent.click(screen.getByRole("button", { name: "Full" }));
     await waitFor(() => expect(state.excel).toHaveBeenCalledOnce());
