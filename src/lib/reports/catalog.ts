@@ -408,13 +408,13 @@ export const REPORT_CATALOG: ReportCatalogItem[] = [
   },
   {
     href: "/phan-tich/aging",
-    title: "Tuổi tồn kho & hàng chậm bán",
-    shortTitle: "Tuổi tồn kho",
-    description: "Nhận diện hàng tồn lâu, chậm luân chuyển và dead-stock.",
+    title: "Luân chuyển tồn kho",
+    shortTitle: "Luân chuyển tồn kho",
+    description: "Tồn hiện tại, lần nhập cuối và mặt hàng cần rà soát nhu cầu.",
     category: "inventory",
     icon: "hourglass_top",
     keywords: ["aging", "dead stock", "chậm bán", "tuổi tồn"],
-    permissions: ANALYTICS_PERMISSIONS,
+    permissions: [...ANALYTICS_PERMISSIONS, PERMISSIONS.REPORTS_VIEW_DETAIL, PERMISSIONS.PRODUCTS_VIEW_COST],
   },
   {
     href: "/phan-tich/ton-that",
