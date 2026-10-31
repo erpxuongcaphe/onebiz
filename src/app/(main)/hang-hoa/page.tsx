@@ -109,6 +109,8 @@ import { SettingsSwitch } from "@/components/shared/settings-toggle";
 import { setProductTradingStatus } from "@/lib/services/supabase/product-trading-status";
 import { findLatestFormDraft } from "@/lib/hooks/use-durable-form-draft";
 import { RecipeCostLoadError } from "@/components/shared/recipe-cost-load-error";
+import { MenuCostDiagnostics } from "@/components/shared/menu-cost-diagnostics";
+import { menuCostIssuesText } from "@/lib/reports/menu-cost-diagnostics";
 
 type ProductScope = "nvl" | "sku";
 type PreparedCostDisplay = { value: number; source: "batch" | "recipe" } | { source: "error" };
@@ -119,10 +121,11 @@ function PreparedCost({ product, cost, loading, estimate }: {
   loading: boolean;
   estimate?: FnbMenuEstimate;
 }) {
-  if (isFnbMenuRecipe(product)) return <span className="block text-right" title="Dự toán công thức hiện tại, không phải giá vốn hóa đơn đã bán">
+  if (isFnbMenuRecipe(product)) return <div className="block text-right" title="Dự toán công thức hiện tại, không phải giá vốn hóa đơn đã bán">
     {loading ? "Đang tính..." : estimate?.value != null ? formatCurrency(estimate.value) : estimate?.reason ?? "Chưa có dự toán"}
     <span className="block text-xs font-normal text-muted-foreground">Dự toán BOM{estimate?.variantName ? ` · ${estimate.variantName}` : ""}</span>
-  </span>;
+    {!loading && estimate?.value == null && <MenuCostDiagnostics issues={estimate?.issues} />}
+  </div>;
   if (!product.isFnbStockItem) return <>{formatCurrency(product.costPrice)}</>;
   if (cost?.source === "error") return <span className="text-destructive">Không tải được giá vốn</span>;
   if (!cost) return <span className="text-muted-foreground">{loading ? "Đang tính..." : "Chưa có dự toán"}</span>;
@@ -1381,6 +1384,7 @@ export default function HangHoaPage() {
             costPrice: canViewCost ? isFnbMenuRecipe(product) ? estimates.get(product.id)?.value ?? null : product.costPrice : null,
             costSource: isFnbMenuRecipe(product) ? `Dự toán BOM${estimates.get(product.id)?.variantName ? ` · ${estimates.get(product.id)?.variantName}` : ""}` : "Giá vốn lưu sẵn",
             costStatus: estimates.get(product.id)?.reason ?? "",
+            costIssues: canViewCost ? menuCostIssuesText(estimates.get(product.id)?.issues) : "",
           }));
         await exportToExcel(
           reportRows,
@@ -1393,6 +1397,7 @@ export default function HangHoaPage() {
               { header: "Giá vốn / dự toán BOM", key: "costPrice" as const, width: 22 },
               { header: "Nguồn giá", key: "costSource" as const, width: 26 },
               { header: "Trạng thái giá", key: "costStatus" as const, width: 28 },
+              { header: "Thành phần cần đối soát", key: "costIssues" as const, width: 48 },
             ] : []),
             { header: "Giá bán", key: "sellPrice", width: 14 },
             { header: "Tồn kho", key: "stock", width: 12 },

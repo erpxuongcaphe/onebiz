@@ -7,6 +7,17 @@ export interface FnbMenuEstimate {
   value: number | null;
   variantName?: string;
   reason?: string;
+  issues?: MenuCostIssue[];
+}
+
+export interface MenuCostIssue {
+  componentId: string | null;
+  code: string;
+  name: string;
+  unit: string;
+  reason: "missing_component" | "invalid_quantity" | "missing_cost" | "invalid_cost" | "negative_stock" | "quantity_mismatch";
+  physicalQuantity: number | null;
+  costedQuantity: number | null;
 }
 
 export interface RecipeHeader {
@@ -28,7 +39,36 @@ export function selectMenuRecipe(headers: RecipeHeader[], productId: string, cod
 
 export interface RecipeCostLine {
   quantity: number;
-  products: { id: string; sell_price: number | null; is_fnb_stock_item: boolean } | null;
+  products: { id: string; code?: string; name?: string; unit?: string; sell_price: number | null; is_fnb_stock_item: boolean } | null;
+}
+
+/** Diagnostics only; never substitute an estimated price into cost-posting guards. */
+export function getMenuCostIssues(lines: RecipeCostLine[], costs: Map<string, FnbBranchComponentCost>): MenuCostIssue[] {
+  const issues: MenuCostIssue[] = [];
+  for (const line of lines) {
+    const material = line.products;
+    const quantity = Number(line.quantity);
+    const cost = material ? costs.get(material.id) : undefined;
+    let reason: MenuCostIssue["reason"] | undefined;
+    if (!material) reason = "missing_component";
+    else if (!Number.isFinite(quantity) || quantity < 0) reason = "invalid_quantity";
+    else if (quantity === 0) continue;
+    else if (!cost) reason = "missing_cost";
+    else if (![cost.unitCost, cost.physicalQuantity, cost.costedQuantity].every(Number.isFinite) || cost.unitCost < 0) reason = "invalid_cost";
+    else if (cost.physicalQuantity < 0) reason = "negative_stock";
+    else if (Math.abs(cost.physicalQuantity - cost.costedQuantity) > 0.0001) reason = "quantity_mismatch";
+    else if (getPreparedRecipeUnitCost(cost) === null) reason = "missing_cost";
+    if (reason) issues.push({
+      componentId: material?.id ?? null,
+      code: material?.code ?? "",
+      name: material?.name ?? "Thành phần chưa xác định",
+      unit: material?.unit ?? "",
+      reason,
+      physicalQuantity: cost && Number.isFinite(cost.physicalQuantity) ? cost.physicalQuantity : null,
+      costedQuantity: cost && Number.isFinite(cost.costedQuantity) ? cost.costedQuantity : null,
+    });
+  }
+  return issues;
 }
 
 /** Saved quantities are already normalized by the BOM unit-conversion trigger. */
@@ -101,7 +141,7 @@ export async function getFnbMenuEstimates(products: Product[], branchId?: string
     if (bomIds.length) {
       for (let offset = 0; ; offset += 500) {
         const { data, error: itemError } = await client.from("bom_items")
-          .select("id,bom_id,quantity,products:products_scoped!bom_items_material_id_fkey(id,sell_price,is_fnb_stock_item)")
+          .select("id,bom_id,quantity,products:products_scoped!bom_items_material_id_fkey(id,code,name,unit,sell_price,is_fnb_stock_item)")
           .in("bom_id", bomIds).order("id").range(offset, offset + 499);
         if (itemError) throw itemError;
         lines.push(...(data ?? []));
@@ -117,11 +157,13 @@ export async function getFnbMenuEstimates(products: Product[], branchId?: string
       }
     }
     for (const { product, size, header } of selected) {
-      const value = header ? sumMenuRecipeEstimate(lines.filter((line) => line.bom_id === header.id), costs) : null;
+      const recipeLines = header ? lines.filter((line) => line.bom_id === header.id) : [];
+      const value = header ? sumMenuRecipeEstimate(recipeLines, costs) : null;
       result.set(product.id, {
         value,
         variantName: size?.name,
         reason: value === null ? !header ? "Chưa có BOM phù hợp" : !branchId ? "Chọn chi nhánh để tính giá vốn" : "Chưa đủ giá thành phần" : undefined,
+        issues: branchId && header && value === null ? getMenuCostIssues(recipeLines, costs) : [],
       });
     }
   }
