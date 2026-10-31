@@ -1,16 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Product } from "@/lib/types";
-import { getFnbMenuEstimates, getMenuCostIssues, selectMenuRecipe, sumMenuRecipeEstimate, sortByMenuEstimate, type RecipeHeader } from "@/lib/services/supabase/fnb-menu-estimates";
+import { getFnbMenuEstimates, getMenuCostIssues, selectMenuRecipe, sumMenuRecipeEstimate, sumMenuRecipePreview, sortByMenuEstimate, type RecipeHeader } from "@/lib/services/supabase/fnb-menu-estimates";
 
 const mocks = vi.hoisted(() => ({
-  from: vi.fn(), tenant: vi.fn(), variants: vi.fn(), costs: vi.fn(),
+  from: vi.fn(), tenant: vi.fn(), variants: vi.fn(), costs: vi.fn(), units: vi.fn(),
 }));
 vi.mock("@/lib/services/supabase/base", () => ({ getClient: () => ({ from: mocks.from }), getCurrentTenantId: mocks.tenant }));
 vi.mock("@/lib/services/supabase/variants", () => ({ getVariantsByProductIds: mocks.variants }));
+vi.mock("@/lib/services/supabase/uom", () => ({ getUOMConversionsByProductIds: mocks.units }));
 vi.mock("@/lib/services/supabase/fnb-branch-cost", async (importOriginal) => ({ ...await importOriginal<typeof import("@/lib/services/supabase/fnb-branch-cost")>(), getFnbBranchComponentCosts: mocks.costs }));
 
 const product = { id: "tea", code: "SKU-TOL-006", channel: "fnb", hasBom: true, costPrice: 2685.62 } as Product;
-const header = (id: string, branch: string | null, code: string | null = "TEA", version = 1): RecipeHeader => ({ id, branch_id: branch, code, version, product_id: "tea" });
+const header = (id: string, branch: string | null, code: string | null = "TEA", version = 1): RecipeHeader => ({ id, branch_id: branch, code, version, product_id: "tea", yield_qty: 1, yield_unit: "G" });
 const line = (id: string, quantity: number, price: number | null, prepared = false) => ({ quantity, products: { id, sell_price: price, is_fnb_stock_item: prepared } });
 const balance = (productId: string, unitCost: number, costedQuantity = 100) => ({ productId, unitCost, costedQuantity, physicalQuantity: costedQuantity });
 
@@ -18,10 +19,63 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.tenant.mockResolvedValue("tenant-a");
   mocks.variants.mockResolvedValue(new Map());
+  mocks.units.mockResolvedValue(new Map());
   mocks.costs.mockResolvedValue(new Map([["prepared", balance("prepared", 12.09)]]));
 });
 
 describe("live menu recipe estimates", () => {
+  it("loads nested branch recipes and refreshes leaf prices without requiring a prepared batch", async () => {
+    const menuHeader: RecipeHeader = { ...header("drink-bom", null, "DRINK"), yield_qty: 1, yield_unit: "cái" };
+    const preparedHeader = { ...header("prepared-bom", "xtb", "PREP"), product_id: "prepared", yield_qty: 200, yield_unit: "G" };
+    const preparedMaterial = { id: "prepared", code: "BTP-TEST", name: "Prepared test", unit: "G", bom_code: "PREP", sell_price: 999999, is_fnb_stock_item: true };
+    const rows = [
+      { bom_id: "drink-bom", quantity: 30, waste_percent: 0, products: preparedMaterial },
+      { bom_id: "prepared-bom", quantity: 100, waste_percent: 0, products: { id: "raw", unit: "G", sell_price: 999999, is_fnb_stock_item: false } },
+    ];
+    mocks.from.mockImplementation((table: string) => {
+      let filtered: unknown[] = table === "bom_scoped" ? [menuHeader, preparedHeader] : rows;
+      const builder = { select: () => builder, eq: () => builder, order: () => builder,
+        in: (field: string, values: string[]) => { filtered = filtered.filter(row => values.includes(String((row as unknown as Record<string, unknown>)[field]))); return builder; },
+        range: () => builder, then: (resolve: (value: unknown) => unknown) => Promise.resolve({ data: filtered, error: null }).then(resolve) };
+      return builder;
+    });
+    const costs = new Map([["raw", balance("raw", 20)], ["prepared", { ...balance("prepared", 0, 0), physicalQuantity: -30 }]]);
+    mocks.costs.mockResolvedValue(costs);
+    const menu = { ...product, unit: "Ly" };
+    const first = (await getFnbMenuEstimates([menu], "xtb")).get("tea");
+    expect(first?.value).toBe(300);
+    expect(mocks.costs).toHaveBeenCalledWith("xtb", ["prepared", "raw"]);
+    expect(first?.reason).toBeUndefined();
+    expect(first?.issues).toEqual([expect.objectContaining({ code: "BTP-TEST", reason: "negative_stock" })]);
+    menuHeader.yield_qty = null;
+    expect((await getFnbMenuEstimates([menu], "xtb")).get("tea")?.value).toBeNull();
+    menuHeader.yield_qty = 1;
+    costs.set("raw", balance("raw", 24));
+    expect((await getFnbMenuEstimates([menu], "xtb")).get("tea")?.value).toBe(360);
+    preparedHeader.yield_qty = 2;
+    preparedHeader.yield_unit = "Kg";
+    expect((await getFnbMenuEstimates([menu], "xtb")).get("tea")?.value).toBeNull();
+    mocks.units.mockResolvedValue(new Map([["prepared", [{ fromUnit: "Kg", toUnit: "G", factor: 1000, isActive: true }]]]));
+    expect((await getFnbMenuEstimates([menu], "xtb")).get("tea")?.value).toBe(36);
+    preparedHeader.code = "OTHER-RECIPE";
+    costs.set("prepared", balance("prepared", 99));
+    expect((await getFnbMenuEstimates([menu], "xtb")).get("tea")).toMatchObject({ value: null, issues: expect.arrayContaining([expect.objectContaining({ reason: "invalid_recipe" })]) });
+    preparedHeader.code = "PREP";
+    rows[1].products = preparedMaterial;
+    expect((await getFnbMenuEstimates([menu], "xtb")).get("tea")).toMatchObject({ value: null, issues: expect.arrayContaining([expect.objectContaining({ reason: "recipe_cycle" })]) });
+  });
+
+  it("keeps a sourced current formula preview while the posting cost remains unresolved", () => {
+    const costs = new Map([["syrup", { ...balance("syrup", 20, 0), physicalQuantity: -100 }]]);
+    const lines = [line("syrup", 30, 99999, true)];
+    expect(sumMenuRecipePreview(lines, costs)).toBe(600);
+    expect(sumMenuRecipeEstimate(lines, costs)).toBeNull();
+    expect(getMenuCostIssues(lines, costs)[0].reason).toBe("negative_stock");
+    expect(sumMenuRecipePreview(lines, new Map())).toBeNull();
+    costs.set("syrup", { ...balance("syrup", 0, 0), physicalQuantity: -100 });
+    expect(sumMenuRecipePreview(lines, costs)).toBeNull();
+  });
+
   it("identifies the affected component without substituting its saved price", () => {
     const lines = [{ ...line("syrup", 26, 999, true), products: { ...line("syrup", 26, 999, true).products, code: "BTP-TEST", name: "Test syrup", unit: "G" } }];
     const costs = new Map([["syrup", { ...balance("syrup", 16, 0), physicalQuantity: -100 }]]);
@@ -90,8 +144,10 @@ describe("live menu recipe estimates", () => {
     expect(eq).toHaveBeenCalledWith("tenant_id", "tenant-a");
     expect(mocks.costs).toHaveBeenCalledWith("xtb", ["prepared"]);
     expect(product.costPrice).toBe(2685.62);
+    const costReadsBeforeAll = mocks.costs.mock.calls.length;
     const allBranch = await getFnbMenuEstimates([product]);
     expect(allBranch.get("tea")?.value).toBeNull();
     expect(allBranch.get("tea")?.issues).toEqual([]);
+    expect(mocks.costs.mock.calls.length).toBe(costReadsBeforeAll);
   });
 });

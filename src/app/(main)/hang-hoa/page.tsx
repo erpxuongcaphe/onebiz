@@ -109,8 +109,8 @@ import { SettingsSwitch } from "@/components/shared/settings-toggle";
 import { setProductTradingStatus } from "@/lib/services/supabase/product-trading-status";
 import { findLatestFormDraft } from "@/lib/hooks/use-durable-form-draft";
 import { RecipeCostLoadError } from "@/components/shared/recipe-cost-load-error";
-import { MenuCostDiagnostics } from "@/components/shared/menu-cost-diagnostics";
-import { menuCostIssuesText } from "@/lib/reports/menu-cost-diagnostics";
+import { MenuRecipeCost } from "@/components/shared/menu-recipe-cost";
+import { menuRecipeExportFields } from "@/lib/reports/menu-recipe-export";
 
 type ProductScope = "nvl" | "sku";
 type PreparedCostDisplay = { value: number; source: "batch" | "recipe" } | { source: "error" };
@@ -121,11 +121,7 @@ function PreparedCost({ product, cost, loading, estimate }: {
   loading: boolean;
   estimate?: FnbMenuEstimate;
 }) {
-  if (isFnbMenuRecipe(product)) return <div className="block text-right" title="Dự toán công thức hiện tại, không phải giá vốn hóa đơn đã bán">
-    {loading ? "Đang tính..." : estimate?.value != null ? formatCurrency(estimate.value) : estimate?.reason ?? "Chưa có dự toán"}
-    <span className="block text-xs font-normal text-muted-foreground">Dự toán BOM{estimate?.variantName ? ` · ${estimate.variantName}` : ""}</span>
-    {!loading && estimate?.value == null && <MenuCostDiagnostics issues={estimate?.issues} />}
-  </div>;
+  if (isFnbMenuRecipe(product)) return <MenuRecipeCost estimate={estimate} loading={loading} />;
   if (!product.isFnbStockItem) return <>{formatCurrency(product.costPrice)}</>;
   if (cost?.source === "error") return <span className="text-destructive">Không tải được giá vốn</span>;
   if (!cost) return <span className="text-muted-foreground">{loading ? "Đang tính..." : "Chưa có dự toán"}</span>;
@@ -1381,10 +1377,12 @@ export default function HangHoaPage() {
         const reportRows = (sorting[0]?.id === "costPrice" && isFnbOutletView && scope === "sku"
           ? sortByMenuEstimate(rows, estimates, sorting[0].desc) : rows).map((product) => ({
             ...product,
-            costPrice: canViewCost ? isFnbMenuRecipe(product) ? estimates.get(product.id)?.value ?? null : product.costPrice : null,
-            costSource: isFnbMenuRecipe(product) ? `Dự toán BOM${estimates.get(product.id)?.variantName ? ` · ${estimates.get(product.id)?.variantName}` : ""}` : "Giá vốn lưu sẵn",
-            costStatus: estimates.get(product.id)?.reason ?? "",
-            costIssues: canViewCost ? menuCostIssuesText(estimates.get(product.id)?.issues) : "",
+            ...(canViewCost && isFnbMenuRecipe(product) ? menuRecipeExportFields(estimates.get(product.id)) : {
+              costPrice: canViewCost ? product.costPrice : null,
+              costSource: canViewCost ? "Giá vốn lưu sẵn" : "",
+              costStatus: "",
+              costIssues: "",
+            }),
           }));
         await exportToExcel(
           reportRows,
