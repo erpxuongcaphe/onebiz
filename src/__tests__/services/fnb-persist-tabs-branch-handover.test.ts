@@ -22,6 +22,11 @@ const TABS = [
 ] as unknown as FnbTabSnapshot[];
 
 describe("persisted FnB tabs - ban giao quay", () => {
+  it("keeps unsent dishes older than a day instead of dropping the only local copy", async () => {
+    const pending = [{ id: "overnight", lines: [{ id: "unconfirmed" }] }] as unknown as FnbTabSnapshot[];
+    getMeta.mockResolvedValueOnce({ branchId: "branch-xdc", tabs: pending, activeTabId: "overnight", savedAt: Date.now() - 48 * 60 * 60 * 1000 });
+    expect(await loadPersistedTabs("branch-xdc")).toEqual({ tabs: pending, activeTabId: "overnight" });
+  });
   it("does not mistake a failed storage read for an absent cart", async () => {
     const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {

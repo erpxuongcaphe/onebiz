@@ -17,7 +17,7 @@ import { getMeta, setMeta } from "@/lib/offline/db";
 import type { FnbTabSnapshot } from "@/lib/types/fnb";
 
 const KEY_PREFIX = "fnb-tabs:";
-/** Tabs cũ hơn 24h → bỏ qua để không kéo giỏ dở qua ngày vận hành mới. */
+/** Sent-only tabs may expire; unsent dishes must survive overnight. */
 const STALE_MS = 24 * 60 * 60 * 1000;
 
 interface PersistedTabsRecord {
@@ -38,8 +38,8 @@ export async function loadPersistedTabs(
   try {
     const record = await getMeta<PersistedTabsRecord>(getFnbTabsStorageKey(branchId));
     if (!record) return null;
-    if (Date.now() - record.savedAt > STALE_MS) return null;
     if (!record.tabs || record.tabs.length === 0) return null;
+    if (Date.now() - record.savedAt > STALE_MS && !record.tabs.some(tab => tab.lines?.length > 0)) return null;
     return { tabs: record.tabs, activeTabId: record.activeTabId };
   } catch (err) {
     console.warn("[FnB] loadPersistedTabs failed:", err);

@@ -228,8 +228,8 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
     else await savePersistedTabs(branchId, tabs, activeTabId);
   }, [branchId, tabs, activeTabId]);
 
-  // R12: Restore persisted tabs khi branch change. Tabs cũ hơn 24h tự bỏ
-  // qua. Nếu không có persist → giữ tab default đã init. Một thao tác tại
+  // Restore persisted tabs on branch change; unsent dishes survive overnight.
+  // Nếu không có persist → giữ tab default đã init. Một thao tác tại
   // quầy có thể xảy ra trước khi IndexedDB trả về: phải ưu tiên thao tác mới,
   // không để snapshot cũ tải muộn ghi đè lên giỏ hiện tại.
   const tabsMutationVersionRef = useRef(0);
