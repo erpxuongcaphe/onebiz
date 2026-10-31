@@ -1299,9 +1299,7 @@ export default function HangHoaPage() {
     });
   };
 
-  const totalStock = summarizePhysicalStock(data, branchStockView)
-    .map(({ unit, quantity }) => `${formatNumber(quantity)} ${unit}`)
-    .join(" · ");
+  const stockTotalsByUnit = summarizePhysicalStock(data, branchStockView);
   const totalOrdered = data.reduce((sum, p) => sum + p.ordered, 0);
 
   /**
@@ -2227,6 +2225,23 @@ export default function HangHoaPage() {
                 filters={filterChips}
                 onClearAll={filterChips.length > 1 ? clearListFilters : undefined}
               />
+              {stockTotalsByUnit.length > 0 && (
+                <details key={`${activeBranchId ?? "all"}:${scope}`} className="min-w-0 px-3 py-1 text-sm">
+                  <summary className="w-fit max-w-full cursor-pointer rounded py-1 text-xs font-medium text-primary outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary pointer-coarse:min-h-11 pointer-coarse:py-3">
+                    Xem tổng tồn theo đơn vị
+                  </summary>
+                  <p className="mb-2 text-xs text-muted-foreground">Cộng các mã trên trang đang xem, tách riêng từng đơn vị.</p>
+                  <dl className="mb-1 flex min-w-0 flex-wrap gap-2">
+                    {stockTotalsByUnit.map(({ unit, quantity }) => (
+                      <div key={unit} className="flex max-w-full items-baseline gap-2 rounded-md border bg-background px-2 py-1">
+                        <dt className="text-xs text-muted-foreground">{unit}</dt>
+                        <dd className="break-all text-sm font-medium tabular-nums">{formatNumber(quantity)}</dd>
+                      </div>
+                    ))}
+                    {totalOrdered > 0 && <div className="flex items-baseline gap-2 rounded-md border bg-background px-2 py-1"><dt className="text-xs text-muted-foreground">Đang đặt</dt><dd className="text-sm font-medium tabular-nums">{formatNumber(totalOrdered)}</dd></div>}
+                  </dl>
+                </details>
+              )}
             </>
           }
           // CEO 22/05/2026 (UX P0 #1): empty state context-aware
@@ -2350,10 +2365,6 @@ export default function HangHoaPage() {
                 ]
               : []),
           ]}
-          summaryRow={{
-            stock: totalStock || "—",
-            ordered: formatNumber(totalOrdered),
-          }}
           expandedRow={expandedRow}
           onExpandedRowChange={setExpandedRow}
           renderDetail={(product, onClose) => (
