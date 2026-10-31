@@ -19,13 +19,14 @@ import { sortReportRows } from "@/lib/reports/table-sort";
 import { getProfitAndLoss } from "@/lib/services/supabase/reports";
 import { useReportState } from "@/lib/hooks/use-report-state";
 import { formatCurrency, formatStockQuantity, formatShortDate } from "@/lib/format";
-import { getSkuFinancialReport, type SkuFinancialResult } from "@/lib/services/supabase/sku-financial-report";
+import { getSkuPeriodCostReport as getSkuFinancialReport, type SkuFinancialResult } from "@/lib/services/supabase/sku-financial-report";
 import { skuFinancialView, skuFinancialTotals } from "@/lib/reports/sku-financial-view";
 import { buildReportTitleRows, exportReportToExcel } from "@/lib/utils/excel-export";
 
 const KEY = "report.sku-financial.detail";
 const REVIEW_LABELS: Record<SkuReviewFilter, string> = { all: "Tất cả nghiệp vụ", loss: "Lãi gộp âm · có doanh thu", zeroRevenueCost: "Hàng doanh thu 0 · có giá vốn", missing: "Thiếu giá vốn", returns: "Có hàng trả", decline: "Doanh thu giảm" };
 const SORT_KEYS = ["code", "name", "category", "unit", "soldQty", "averageSalePrice", "salesAmount", "returnedQty", "returnAmount", "netQty", "netRevenue", "previousRevenue", "revenueDifference", "cogs", "grossProfit", "previousGrossProfit", "grossProfitDifference", "marginPercent", "orders", "customers", "missingCostLines", "previousMissingCostLines", "lastActivityAt"];
+SORT_KEYS.push("salesCost", "averageSalesCost", "returnsCost", "averageReturnsCost", "knownSoldQuantity", "missingSoldQuantity", "knownReturnedQuantity", "missingReturnedQuantity", "averageKnownSalesCost");
 const METRIC_KEYS = SORT_KEYS.filter(key => !["code", "name", "category", "unit", "lastActivityAt"].includes(key));
 const money = (value: number | null) => value === null ? "Chưa đủ giá vốn" : formatCurrency(value);
 const quantity = (value: number | null) => value === null ? "Nhiều ĐVT" : formatStockQuantity(value);
@@ -156,6 +157,15 @@ export default function SkuFinancialPage() {
     { key: "netRevenue", label: "Doanh thu thuần", align: "right", width: "180px", cell: row => money(row.netRevenue), subtotalCell: money(totals.netRevenue) },
     { key: "previousRevenue", label: "Doanh thu kỳ trước", align: "right", width: "180px", cell: row => money(row.previousRevenue), subtotalCell: money(priorTotals.netRevenue) },
     { key: "revenueDifference", label: "Chênh lệch doanh thu", align: "right", width: "180px", cell: row => money(row.revenueDifference), subtotalCell: money(totals.netRevenue - priorTotals.netRevenue) },
+    { key: "salesCost", label: "Giá vốn hàng bán", align: "right", width: "180px", cell: row => money(row.salesCost ?? null), subtotalCell: money(totals.salesCost) },
+    { key: "averageSalesCost", label: "Đơn giá vốn bán BQ", align: "right", width: "180px", cell: row => row.soldQty === 0 ? "—" : money(row.averageSalesCost ?? null) },
+    { key: "returnsCost", label: "Giá vốn hàng trả", align: "right", width: "180px", cell: row => money(row.returnsCost ?? null), subtotalCell: money(totals.returnsCost) },
+    { key: "averageReturnsCost", label: "Đơn giá vốn trả BQ", align: "right", width: "180px", cell: row => row.returnedQty === 0 ? "—" : money(row.averageReturnsCost ?? null) },
+    { key: "knownSoldQuantity", label: "SL bán có giá vốn", align: "right", width: "170px", cell: row => quantity(row.knownSoldQuantity ?? null) },
+    { key: "missingSoldQuantity", label: "SL bán thiếu giá vốn", align: "right", width: "180px", cell: row => quantity(row.missingSoldQuantity ?? null) },
+    { key: "knownReturnedQuantity", label: "SL trả có giá vốn", align: "right", width: "170px", cell: row => quantity(row.knownReturnedQuantity ?? null) },
+    { key: "missingReturnedQuantity", label: "SL trả thiếu giá vốn", align: "right", width: "180px", cell: row => quantity(row.missingReturnedQuantity ?? null) },
+    { key: "averageKnownSalesCost", label: "Đơn giá BQ phần đủ giá", align: "right", width: "200px", cell: row => (row.knownSoldQuantity ?? 0) === 0 ? "—" : money(row.averageKnownSalesCost ?? null) },
     { key: "cogs", label: "Giá vốn ròng", align: "right", width: "180px", cell: row => money(row.cogs), subtotalCell: money(totals.cogs) },
     { key: "grossProfit", label: "Lãi gộp", align: "right", width: "180px", cell: row => money(row.grossProfit), subtotalCell: money(totals.grossProfit) },
     { key: "previousGrossProfit", label: "Lãi gộp kỳ trước", align: "right", width: "180px", cell: row => money(row.previousGrossProfit), subtotalCell: money(priorTotals.grossProfit) },
@@ -181,6 +191,7 @@ export default function SkuFinancialPage() {
         rows: reconciliationError ? [{ metric: "Chưa đối chiếu được", current: null, previous: null }] : reconciliationRows,
       }] : [];
       titles.push("Tiền hàng sau chiết khấu, không gồm VAT/phí giao hàng. Chiết khấu hóa đơn phân bổ theo tiền hàng; trả hàng ghi nhận theo ngày phiếu trả. Giá vốn theo snapshot gốc, ô trống không phải 0.");
+      titles.push("Đơn giá vốn bán BQ = giá vốn hàng bán / SL bán cùng SKU, size và ĐVT. Hàng trả tính riêng; BQ phần đủ giá không đại diện phần thiếu giá vốn. Không cộng đơn giá giữa các mặt hàng.");
       await exportReportToExcel({ kind: "sku-chi-tiet", mode, range, branchName: branchLabel, sheets: [{ name: "Chi tiết SKU", titleRows: titles, autoFilter: true,
         columnGroups: SKU_COLUMN_GROUPS,
         tablePreferenceKey: mode === "view" ? KEY : undefined,

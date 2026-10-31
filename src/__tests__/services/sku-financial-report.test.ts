@@ -4,11 +4,21 @@ vi.mock("@/lib/services/supabase/base", () => ({
   getClient: () => ({ rpc }),
   handleError: (error: { message: string }) => { throw new Error(error.message); },
 }));
-import { getSkuFinancialReport } from "@/lib/services/supabase/sku-financial-report";
+import { getSkuFinancialReport, getSkuPeriodCostReport } from "@/lib/services/supabase/sku-financial-report";
 
 const range = { from: "2026-10-01", to: "2026-10-29" };
 beforeEach(() => rpc.mockReset());
 describe("SKU report filter source contract", () => {
+  it("uses the additive period source with the same branch and customer boundaries", async () => {
+    rpc.mockResolvedValue({ data: { rows: [], customers: [], source_revision: "sku_cost_period_v1", as_of: "2026-10-31T00:00:00Z" }, error: null });
+    expect(await getSkuPeriodCostReport(range, "branch-a", "customer-a")).toEqual({ rows: [], customers: [], asOf: "2026-10-31T00:00:00Z" });
+    expect(rpc).toHaveBeenCalledWith("get_sku_cost_period_report_v1", expect.objectContaining({ p_branch_id: "branch-a", p_customer_id: "customer-a" }));
+  });
+  it("never falls back to legacy averages when the period source is absent or denied", async () => {
+    rpc.mockResolvedValue({ data: { rows: [], customers: [] }, error: null });
+    await expect(getSkuPeriodCostReport(range)).rejects.toThrow("Chưa nhận đúng nguồn");
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
   it.each([null, {}, { rows: [] }, { customers: [] }, { rows: {}, customers: [] }])("rejects an incomplete payload instead of inventing empty filters: %j", async data => {
     rpc.mockResolvedValue({ data, error: null });
     await expect(getSkuFinancialReport(range, "branch-a", "customer-a")).rejects.toThrow("Chưa nhận đủ dữ liệu");

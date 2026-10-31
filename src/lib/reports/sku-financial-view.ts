@@ -6,11 +6,12 @@ export function skuFinancialView<T extends SkuFinancialRow>(rows: T[], filters: 
     (!query || [row.code,row.name,row.category].some(value => value.toLocaleLowerCase("vi").includes(query)))), row => row[sort.id as keyof T], sort.direction);
 }
 export function skuFinancialTotals(rows: SkuFinancialRow[]) {
+  const costTotal = (key: "salesCost" | "returnsCost") => rows.some(row => row[key] == null) ? null : rows.reduce((sum, row) => sum + (row[key] ?? 0), 0);
   const netRevenue = rows.reduce((sum,row) => sum+row.netRevenue,0);
   const missing = rows.reduce((sum,row) => sum+row.missingCostLines,0);
   const cogs = rows.some(row => row.cogs === null) ? null : rows.reduce((sum,row) => sum+(row.cogs ?? 0),0);
   const quantity = (key: "soldQty" | "returnedQty" | "netQty") => new Set(rows.map(row => row.unit)).size > 1 ? null : rows.reduce((sum,row) => sum+row[key],0);
-  return { netRevenue, missing, cogs, grossProfit: cogs === null ? null : netRevenue-cogs,
+  return { netRevenue, missing, cogs, salesCost: costTotal("salesCost"), returnsCost: costTotal("returnsCost"), grossProfit: cogs === null ? null : netRevenue-cogs,
     soldQty: quantity("soldQty"), returnedQty: quantity("returnedQty"), netQty: quantity("netQty"),
     salesAmount: rows.reduce((sum,row) => sum+row.salesAmount,0), returnAmount: rows.reduce((sum,row) => sum+row.returnAmount,0) };
 }

@@ -1,8 +1,12 @@
 import { getClient, handleError } from "./base";
 import { toCreatedAtRangeWindow } from "@/lib/utils/list-date-preset-range";
 import { validateFinancialDetailSource } from "@/lib/reports/financial-source-validation";
+import { readPeriodCostSource } from "@/lib/reports/period-cost-source";
 
 export interface SkuFinancialRow {
+  salesCost?: number | null; returnsCost?: number | null;
+  averageSalesCost?: number | null; averageReturnsCost?: number | null; averageKnownSalesCost?: number | null;
+  knownSoldQuantity?: number; knownReturnedQuantity?: number; missingSoldQuantity?: number; missingReturnedQuantity?: number;
   variantId?: string | null; variantName?: string | null;
   productId: string; code: string; name: string; category: string; unit: string;
   orders: number; customers: number; soldQty: number; returnedQty: number; netQty: number;
@@ -13,21 +17,37 @@ export interface SkuFinancialRow {
 export interface SkuFinancialResult {
   rows: SkuFinancialRow[]; customers: { id: string; code: string; name: string }[];
 }
+export type SkuPeriodCostRow = SkuFinancialRow & ReturnType<typeof readPeriodCostSource>;
+export interface SkuPeriodCostResult { rows: SkuPeriodCostRow[]; customers: SkuFinancialResult["customers"]; asOf: string }
+
 export async function getSkuFinancialReport(range: { from: string; to: string }, branchId?: string | null, customerId?: string) : Promise<SkuFinancialResult> {
+  return loadSkuFinancialReport(range, branchId, customerId, false);
+}
+
+/** Additive source; callers switch only after server-side acceptance. */
+export async function getSkuPeriodCostReport(range: { from: string; to: string }, branchId?: string | null, customerId?: string): Promise<SkuPeriodCostResult> {
+  return loadSkuFinancialReport(range, branchId, customerId, true) as Promise<SkuPeriodCostResult>;
+}
+
+async function loadSkuFinancialReport(range: { from: string; to: string }, branchId: string | null | undefined, customerId: string | undefined, periodCosts: boolean): Promise<SkuFinancialResult | SkuPeriodCostResult> {
   const dates = toCreatedAtRangeWindow(range);
   if (!dates) throw new Error("Khoảng thời gian không hợp lệ");
   const client = getClient();
   const rpc = client.rpc as unknown as (name: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string; code?: string } | null }>;
-  const { data, error } = await rpc.call(client, "get_sku_financial_report", { p_from: dates.start, p_to: dates.end, p_branch_id: branchId ?? null, p_customer_id: customerId || null });
+  const { data, error } = await rpc.call(client, periodCosts ? "get_sku_cost_period_report_v1" : "get_sku_financial_report", { p_from: dates.start, p_to: dates.end, p_branch_id: branchId ?? null, p_customer_id: customerId || null });
   if (error) handleError(error, "getSkuFinancialReport");
-  const result = data as { rows?: Record<string, unknown>[]; customers?: SkuFinancialResult["customers"] } | null;
+  const result = data as { rows?: Record<string, unknown>[]; customers?: SkuFinancialResult["customers"]; source_revision?: string; as_of?: string } | null;
   if (!result || !Array.isArray(result.rows) || !Array.isArray(result.customers)) {
     throw new Error("Chưa nhận đủ dữ liệu mặt hàng và khách hàng. Vui lòng thử lại.");
   }
   result.rows.forEach(row => validateFinancialDetailSource(row, "sku"));
+  if (periodCosts && (result.source_revision !== "sku_cost_period_v1" || !result.as_of || !Number.isFinite(Date.parse(result.as_of)))) {
+    throw new Error("Chưa nhận đúng nguồn giá vốn bình quân theo kỳ.");
+  }
   const number = (value: unknown) => Number(value);
   const nullable = (value: unknown) => value == null ? null : number(value);
-  return { customers: result.customers, rows: result.rows.map(row => ({
+  return { customers: result.customers, ...(periodCosts ? { asOf: result.as_of! } : {}), rows: result.rows.map(row => ({
+    ...(periodCosts ? readPeriodCostSource(row) : {}),
     productId: String(row.product_id), variantId: row.variant_id == null ? null : String(row.variant_id), variantName: row.variant_name == null ? null : String(row.variant_name),
     code: String(row.code ?? ""), name: String(row.name ?? ""), category: String(row.category_name ?? ""), unit: String(row.unit ?? ""),
     orders: number(row.order_count), customers: number(row.customer_count), soldQty: number(row.sold_qty), returnedQty: number(row.returned_qty), netQty: number(row.net_qty),
