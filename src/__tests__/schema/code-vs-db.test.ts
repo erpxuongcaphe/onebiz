@@ -47,6 +47,7 @@ const RPC = new Set(schema.rpc as string[]);
  * dưới sẽ BẮT XOÁ dòng ngay khi dump đã có (sau `node scripts/dump-db-schema.mjs`).
  */
 const RPC_CHO_MIGRATION = new Map<string, string>([
+  ["close_sales_orders_processing", "20261030161847_sales_order_processing_bulk_close.sql"],
   // Applied 30/10 and verified via information_schema.routines; remove on next full schema dump.
   ["close_sales_order_processing", "20261030092555_sales_order_processing_closure.sql"],
   ["reopen_sales_order_processing", "20261030092555_sales_order_processing_closure.sql"],

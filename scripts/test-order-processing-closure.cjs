@@ -18,7 +18,7 @@ const uuid = n => `00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
  create function user_has_permission(uuid,text) returns boolean language sql as $$select current_setting('test.permission',true)='yes'$$;
  create function user_has_branch_access(uuid,uuid) returns boolean language sql as $$select $2::text=current_setting('test.branch',true)$$;
  create table invoices(id uuid primary key,tenant_id uuid,branch_id uuid,code text,source text,status text,
- deleted_at timestamptz,voided_at timestamptz,cancelled_at timestamptz,created_by uuid,source_order_id uuid,
+ deleted_at timestamptz,voided_at timestamptz,cancelled_at timestamptz,created_by uuid,source_order_id uuid,fulfilled_by_id uuid,
  total numeric default 123,paid numeric default 123,debt numeric default 0);
  create table audit_log(tenant_id uuid,user_id uuid,action text,entity_type text,entity_id uuid,old_data jsonb,new_data jsonb);
  create function mark_order_processed(uuid,uuid) returns jsonb language sql as $$select '{}'::jsonb$$;
@@ -49,6 +49,7 @@ const uuid = n => `00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
  await assert.rejects(db.query(`select close_sales_order_processing($1,' ')`,[uuid(11)]));
  await db.exec(`select set_config('test.permission','no',false)`);
  await assert.rejects(db.query(`select close_sales_order_processing($1,'Đã xử lý')`,[uuid(11)]));
+
  await db.exec(`select set_config('test.permission','yes',false)`);
  // Issuance is independent from ordered quantity / total and remembers cancellation.
  await db.exec(`insert into invoices(id,tenant_id,branch_id,code,source,status,created_by,source_order_id,total)
@@ -74,6 +75,34 @@ const uuid = n => `00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
  await db.exec('reset role; set role anon');
  await assert.rejects(db.exec('select * from sales_order_processing_closures'));
  await assert.rejects(db.query(`select close_sales_order_processing($1,'Đã xử lý')`,[uuid(11)]));
+ await db.exec('reset role');
+ await db.exec(fs.readFileSync('supabase/migrations/20261030161847_sales_order_processing_bulk_close.sql','utf8'));
+ await db.exec(`select set_config('test.permission','yes',false),set_config('test.branch','${uuid(3)}',false);
+ insert into invoices(id,tenant_id,branch_id,code,source,status) values
+ ('${uuid(40)}','${uuid(1)}','${uuid(3)}','DH40','order','draft'),
+ ('${uuid(41)}','${uuid(1)}','${uuid(4)}','DH41','order','draft'),
+ ('${uuid(42)}','${uuid(1)}','${uuid(3)}','DH42','order','draft');`);
+ const beforeBatch=(await db.query('select * from invoices order by id')).rows;
+ const batchAudit=(await db.query('select count(*)::int n from audit_log')).rows[0].n;
+ const preview=(await db.query(`select close_sales_orders_processing($1) value`,[[uuid(42),uuid(40),uuid(40)]])).rows[0].value;
+ assert.equal(preview.selected_count,2); assert.equal(preview.to_close_count,2); assert.equal(preview.applied,false);
+ assert.equal((await db.query('select count(*)::int n from audit_log')).rows[0].n,batchAudit,'preview never writes audit');
+ await assert.rejects(db.query(`select close_sales_orders_processing($1,'Đã xử lý',true)`,[[uuid(40),uuid(41)]]));
+ assert.equal((await db.query('select count(*)::int n from sales_order_processing_closures where order_id=$1',[uuid(40)])).rows[0].n,0,'mixed-scope failure rolls back every order');
+ const applied=(await db.query(`select close_sales_orders_processing($1,'Đã xuất riêng',true) value`,[[uuid(42),uuid(40),uuid(40)]])).rows[0].value;
+ assert.equal(applied.to_close_count,2);
+ const repeated=(await db.query(`select close_sales_orders_processing($1,'Gửi lại',true) value`,[[uuid(40),uuid(42)]])).rows[0].value;
+ assert.equal(repeated.to_close_count,0); assert.equal(repeated.already_closed_count,2);
+ assert.equal((await db.query('select count(*)::int n from audit_log')).rows[0].n,batchAudit+2,'exactly one audit per order');
+ assert.deepEqual((await db.query('select * from invoices order by id')).rows,beforeBatch,'bulk does not modify financial documents');
+ for(const values of [[],[null],Array.from({length:101},()=>uuid(40))]) {
+   await assert.rejects(db.query(`select close_sales_orders_processing($1,'Đã xử lý',true)`,[values]));
+ }
+ await db.exec(`select set_config('test.permission','no',false)`);
+ await assert.rejects(db.query(`select close_sales_orders_processing($1,'Đã xử lý',true)`,[[uuid(40)]]));
+ await db.exec(`select set_config('test.permission','yes',false); set role anon`);
+ await assert.rejects(db.query(`select close_sales_orders_processing($1,'Đã xử lý',true)`,[[uuid(40)]]));
+ console.log('PASS: bulk preview, selected IDs across pages, deduplication, all-or-none on forbidden branch, replay, no financial mutation, permissions and limits.');
  console.log('PASS: manual closure, replay, no financial mutation, tenant/branch/type/permission validation, automatic issuance, draft exclusion, cancellation persistence, RLS and ACL.');
  } finally { await db.close(); }
 })().catch(e=>{console.error(e);process.exitCode=1;});

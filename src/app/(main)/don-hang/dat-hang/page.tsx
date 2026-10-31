@@ -80,6 +80,7 @@ const CreateOrderDialog = dynamic(
 );
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { ChildSalesBlock } from "./child-sales-block";
+import { BulkProcessingDialog } from "./bulk-processing-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { usePermissions, useTxRowPermissions } from "@/lib/permissions";
 import { Icon } from "@/components/ui/icon";
@@ -448,6 +449,9 @@ export default function DatHangPage() {
   const { printWithPicker, printerDialog } = usePrintWithPicker();
   const txPerms = useTxRowPermissions("sales_order");
   const { hasAny } = usePermissions();
+  const canCloseProcessing = hasAny(["orders.create"]);
+  const [bulkProcessingIds, setBulkProcessingIds] = useState<string[]>([]);
+  const [clearOrderSelection, setClearOrderSelection] = useState(0);
   const duocXemToanChuoi = hasAny([
     "reports.view_all_branches",
   ]);
@@ -700,6 +704,11 @@ export default function DatHangPage() {
   ]);
 
   const orderListKey=JSON.stringify([phamViHienTai,buildFilters(),debouncedSearch,searchField,page,pageSize]);
+  const orderSelectionScopeKey=JSON.stringify([phamViHienTai,buildFilters(),debouncedSearch,searchField]);
+  useEffect(() => {
+    setBulkProcessingIds([]);
+    setClearOrderSelection(value => value + 1);
+  }, [orderSelectionScopeKey]);
   const fetchData = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
     if (!branchScopeReady) return;
     const luot = ++fetchLuotRef.current;
@@ -1100,6 +1109,7 @@ export default function DatHangPage() {
       <DataTable
         columns={columns}
         data={data}
+        getRowId={(row) => row.id}
         loading={loading}
         total={total}
         density="compact"
@@ -1208,7 +1218,19 @@ export default function DatHangPage() {
           setPage(0);
         }}
         selectable
+        clearSelectionTrigger={clearOrderSelection}
         bulkActions={[
+          ...(canCloseProcessing ? [{
+            label: "Đánh dấu đã xử lý",
+            icon: <Icon name="check_circle" size={16} />,
+            disabled: loading || loadedListKey !== orderListKey || bulkProcessingIds.length > 0,
+            onClick: (_rows: SalesOrder[], selectedIds: string[]) => {
+              if (selectedIds.length > 100) {
+                toast({ title: "Chọn tối đa 100 đơn mỗi lần", variant: "info" }); return;
+              }
+              setBulkProcessingIds([...new Set(selectedIds)]);
+            },
+          }] : []),
           {
             label: "Xuất Excel",
             icon: <Icon name="download" size={16} />,
@@ -1238,7 +1260,7 @@ export default function DatHangPage() {
                 (r) =>
                   r.status !== "completed" &&
                   r.status !== "cancelled" &&
-                  !r.fulfilledById, // đơn đã xuất hóa đơn: đã bán rồi, không hủy
+                  !r.fulfilledById && !r.processingClosedAt,
               );
               if (cancellable.length === 0) {
                 toast({
@@ -1518,6 +1540,11 @@ export default function DatHangPage() {
         </FilterGroup>
       </FilterPanel>
     </ListPageLayout>
+
+    <BulkProcessingDialog orderIds={bulkProcessingIds} onClose={() => setBulkProcessingIds([])} onDone={async () => {
+      setClearOrderSelection(value => value + 1);
+      await taiLaiSauKhiDoiDuLieu();
+    }} />
 
     <CreateOrderDialog
       open={createOpen}

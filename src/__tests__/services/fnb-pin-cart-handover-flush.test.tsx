@@ -46,6 +46,7 @@ function makeLine() {
 describe("bàn giao PIN F&B giữ giỏ theo chi nhánh", () => {
   it("saves the exact current cart immediately in strict mode and propagates storage failure", async () => {
     const { result, unmount } = renderHook(() => useFnbPosState(branchId));
+    await act(async () => {}); // Finish the existing startup read before handover.
     act(() => result.current.addLine(makeLine()));
     await act(async () => { await result.current.flushPersistedTabs(true); });
     expect(savePersistedTabs).toHaveBeenLastCalledWith(branchId, result.current.tabs, result.current.activeTabId, true);
