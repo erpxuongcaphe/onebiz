@@ -22,6 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import { Icon } from "@/components/ui/icon";
+import { SPLIT_UNCONFIRMED, splitBillErrorMessage } from "@/lib/fnb/split-error";
 
 export interface SplitQuantitySelection {
   itemId: string;
@@ -59,14 +60,14 @@ export function SplitBillDialog({
   const requestRef = useRef<{ key: string; id: string } | null>(null);
   const [numberOfWays, setNumberOfWays] = useState(2);
   const [loading, setLoading] = useState(false);
-  const [submitError, setSubmitError] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const submitLock = useRef(false);
   const itemIdentity = items.map(item => `${item.id}:${item.quantity}:${item.unitPrice}`).join("|");
   useEffect(() => {
     if (open && !submitLock.current) {
       setQuantities({});
       requestRef.current = null;
-      setSubmitError(false);
+      setSubmitError(null);
       setNumberOfWays(2);
       setActiveTab("items");
     }
@@ -86,20 +87,20 @@ export function SplitBillDialog({
     if (!validSelection || submitLock.current) return;
     submitLock.current = true;
     setLoading(true);
-    setSubmitError(false);
+    setSubmitError(null);
     try {
       const selection = items.filter(item => selectedIds.has(item.id)).map(item => ({ itemId: item.id, quantity: quantities[item.id], expectedQuantity: item.quantity }));
       const key = JSON.stringify(selection);
       if (requestRef.current?.key !== key) requestRef.current = { key, id: crypto.randomUUID() };
       if (!(await onSplitByItems(selection, requestRef.current.id))) {
-        setSubmitError(true);
+        setSubmitError(SPLIT_UNCONFIRMED);
         return;
       }
       setQuantities({});
       requestRef.current = null;
       onOpenChange(false);
-    } catch {
-      setSubmitError(true);
+    } catch (error) {
+      setSubmitError(splitBillErrorMessage(error));
     } finally {
       submitLock.current = false;
       setLoading(false);
@@ -110,15 +111,15 @@ export function SplitBillDialog({
     if (!validNumberOfWays || submitLock.current) return;
     submitLock.current = true;
     setLoading(true);
-    setSubmitError(false);
+    setSubmitError(null);
     try {
       if (!(await onSplitEqually(numberOfWays))) {
-        setSubmitError(true);
+        setSubmitError(SPLIT_UNCONFIRMED);
         return;
       }
       onOpenChange(false);
-    } catch {
-      setSubmitError(true);
+    } catch (error) {
+      setSubmitError(splitBillErrorMessage(error));
     } finally {
       submitLock.current = false;
       setLoading(false);
@@ -256,7 +257,7 @@ export function SplitBillDialog({
           )}
         </div>
 
-        {submitError && <p role="alert" className="text-sm text-destructive">Chưa xác nhận được kết quả tách bill. Kiểm tra danh sách đơn trước khi thử lại.</p>}
+        {submitError && <p role="alert" className="text-sm text-destructive">{submitError}</p>}
         </DialogBody>
         <DialogFooter>
           <Button variant="outline" disabled={loading} onClick={() => onOpenChange(false)}>

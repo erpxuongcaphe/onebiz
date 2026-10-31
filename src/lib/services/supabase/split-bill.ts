@@ -2,7 +2,8 @@
  * Split Bill Service - all mutations run in one database transaction.
  */
 
-import { getClient, handleError, getCurrentTenantId } from "./base";
+import { getClient, getCurrentTenantId } from "./base";
+import { splitBillFailure } from "@/lib/fnb/split-error";
 
 export interface SplitChildResult {
   orderId: string;
@@ -58,7 +59,7 @@ export async function splitByQuantities(orderId: string, selection: SplitQuantit
   const { data, error } = await getClient().rpc("split_kitchen_order_quantities_20261020", {
     p_order_id: orderId, p_items: selection.map(item => ({ item_id: item.itemId, quantity: item.quantity, expected_quantity: item.expectedQuantity })), p_request_id: requestId,
   });
-  if (error) handleError(error, "splitByQuantities.rpc");
+  if (error) throw splitBillFailure(error);
   const result = parseSplitResult(data); const child = result.children[0];
   return { childOrderId: child.orderId, childDiscountAmount: child.discountAmount, parentItemsLeft: result.parentItemsLeft, parentDiscountAmount: result.parentDiscountAmount };
 }
@@ -79,7 +80,7 @@ export async function splitByItems(
       p_number_of_ways: null,
     },
   );
-  if (error) handleError(error, "splitByItems.rpc");
+  if (error) throw splitBillFailure(error);
 
   const result = parseSplitResult(data);
   const child = result.children[0];
@@ -113,7 +114,7 @@ export async function splitEqually(
       p_number_of_ways: numberOfWays,
     },
   );
-  if (error) handleError(error, "splitEqually.rpc");
+  if (error) throw splitBillFailure(error);
 
   const result = parseSplitResult(data);
   return {

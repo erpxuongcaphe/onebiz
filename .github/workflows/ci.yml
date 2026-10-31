@@ -8,6 +8,38 @@ on:
       - staging
 
 jobs:
+  fnb-direct-delivery-split-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: fnb_effective_qty_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d fnb_effective_qty_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v5
+      - name: Verify direct delivery split and actual checkout on disposable PostgreSQL
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: fnb_effective_qty_test
+        run: |
+          node scripts/fnb-db-test/extract-payment-posting-chain.mjs /tmp/fnb-payment-posting-chain.sql
+          node scripts/fnb-db-test/extract-payment-replay-chain.mjs /tmp/fnb-payment-replay-chain.sql
+          node scripts/fnb-db-test/extract-effective-quantity-chain.mjs /tmp/fnb-effective-quantity-chain.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/tests/fnb_direct_delivery_split.integration.sql
+
   fnb-return-cost-postgres-integration:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -92,6 +124,7 @@ jobs:
           node scripts/fnb-db-test/run-selected-discount-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
           node scripts/fnb-db-test/run-paid-context-zero-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
           node scripts/fnb-db-test/run-split-quantities-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
+          node scripts/fnb-db-test/run-split-quantities-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js" supabase/tests/fnb_direct_delivery_split.integration.sql
           node scripts/fnb-db-test/run-multiple-bills-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
           node scripts/fnb-db-test/run-delivery-dispatch-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
           node scripts/fnb-db-test/run-dashboard-sales-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
