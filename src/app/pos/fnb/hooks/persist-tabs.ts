@@ -43,7 +43,7 @@ export async function loadPersistedTabs(
     return { tabs: record.tabs, activeTabId: record.activeTabId };
   } catch (err) {
     console.warn("[FnB] loadPersistedTabs failed:", err);
-    return null;
+    throw new Error("Chưa đọc được giỏ đã lưu trên thiết bị. Tải lại POS để khôi phục trước khi gửi món; không xóa dữ liệu trình duyệt.", { cause: err });
   }
 }
 

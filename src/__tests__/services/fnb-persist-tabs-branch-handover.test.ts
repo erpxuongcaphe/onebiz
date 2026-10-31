@@ -22,6 +22,14 @@ const TABS = [
 ] as unknown as FnbTabSnapshot[];
 
 describe("persisted FnB tabs - ban giao quay", () => {
+  it("does not mistake a failed storage read for an absent cart", async () => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      getMeta.mockRejectedValueOnce(new Error("temporary read failure"));
+      await expect(loadPersistedTabs("branch-xdc")).rejects.toThrow("Chưa đọc được giỏ");
+      expect(setMeta).not.toHaveBeenCalled();
+    } finally { warning.mockRestore(); }
+  });
   it("strict pre-send persistence fails closed while autosave remains best effort", async () => {
     const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {

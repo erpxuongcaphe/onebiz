@@ -199,9 +199,18 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
   // Sent lines are already on the server. Only warn for dishes not sent yet.
   useUnsavedWork(tabs.some(tab => tab.lines.length > 0));
 
+  const [hydratedBranch, setHydratedBranch] = useState<string>();
+  const restoreState = useRef<{ branch?: string; ready: boolean; error?: string }>({ ready: false });
+
   const flushPersistedTabs = useCallback(async (strict = false) => {
     if (!branchId) {
       if (strict) throw new Error("Chọn chi nhánh trước khi gửi bếp.");
+      return;
+    }
+    // An unreadable/slow store is not an empty cart. Never overwrite its last
+    // snapshot with the initial empty tab, including during StrictMode replay.
+    if (restoreState.current.branch !== branchId || !restoreState.current.ready) {
+      if (strict) throw new Error(restoreState.current.error ?? "Đang khôi phục giỏ đã lưu. Đợi một chút rồi gửi lại.");
       return;
     }
 
@@ -223,24 +232,37 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
   // qua. Nếu không có persist → giữ tab default đã init. Một thao tác tại
   // quầy có thể xảy ra trước khi IndexedDB trả về: phải ưu tiên thao tác mới,
   // không để snapshot cũ tải muộn ghi đè lên giỏ hiện tại.
-  const restoredBranchRef = useRef<string | undefined>(undefined);
   const tabsMutationVersionRef = useRef(0);
   useEffect(() => {
     if (!branchId) return;
-    if (restoredBranchRef.current === branchId) return; // đã restore branch này
-    restoredBranchRef.current = branchId;
+    restoreState.current = { branch: branchId, ready: false };
     const mutationVersionAtStart = tabsMutationVersionRef.current;
     let cancelled = false;
     loadPersistedTabs(branchId).then((restored) => {
       if (
         cancelled ||
-        !restored ||
-        tabsMutationVersionRef.current !== mutationVersionAtStart
+        restoreState.current.branch !== branchId
       ) {
         return;
       }
-      setTabs(restored.tabs.map(tab => ({ ...tab, customerName: tab.customerId ? tab.customerName : "Khách lẻ", customerConfirmationRequired: false })));
-      setActiveTabId(restored.activeTabId);
+      if (restored && tabsMutationVersionRef.current === mutationVersionAtStart) {
+        setTabs(restored.tabs.map(tab => ({ ...tab, customerName: tab.customerId ? tab.customerName : "Khách lẻ", customerConfirmationRequired: false })));
+        setActiveTabId(restored.activeTabId);
+      } else if (restored) {
+        // A cashier can start a new tab while disk initialization is slow.
+        // Preserve that work AND the saved bills instead of discarding either.
+        setTabs(current => {
+          const currentIds = new Set(current.map(tab => tab.id));
+          return [...restored.tabs.filter(tab => !currentIds.has(tab.id)
+            && (tab.lines.length > 0 || (tab.sentLines?.length ?? 0) > 0 || !!tab.kitchenOrderId)), ...current];
+        });
+      }
+      restoreState.current = { branch: branchId, ready: true };
+      setHydratedBranch(branchId);
+    }).catch(error => {
+      if (!cancelled && restoreState.current.branch === branchId) {
+        restoreState.current = { branch: branchId, ready: false, error: error instanceof Error ? error.message : "Chưa khôi phục được giỏ đã lưu." };
+      }
     });
     return () => {
       cancelled = true;
@@ -250,7 +272,7 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
   // R12: Auto-save tabs sau mỗi thay đổi (debounced 400ms để không spam).
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (!branchId) return;
+    if (!branchId || hydratedBranch !== branchId || !restoreState.current.ready) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
       void flushPersistedTabs();
@@ -258,7 +280,7 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-  }, [branchId, tabs, activeTabId, flushPersistedTabs]);
+  }, [branchId, tabs, activeTabId, flushPersistedTabs, hydratedBranch]);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
