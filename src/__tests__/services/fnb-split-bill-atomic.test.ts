@@ -56,6 +56,14 @@ describe("atomic F&B split bill", () => {
     await expect(splitByQuantities("order-1", [{itemId:"coffee",quantity:3,expectedQuantity:2}],"request-1")).rejects.toThrow("Kiểm tra số lượng");
     expect(rpc).not.toHaveBeenCalled();
   });
+  it("reports a confirmed delivery rejection instead of an unknown outcome", async () => {
+    rpc.mockResolvedValue({data:null,error:{code:"22023",message:"DELIVERY_ORDER_CANNOT_SPLIT"}});
+    await expect(splitByQuantities("order-1", [{itemId:"coffee",quantity:1,expectedQuantity:2}],"request-1")).rejects.toThrow("Đơn qua đối tác");
+  });
+  it("keeps transport failures uncertain and never exposes server details", async () => {
+    rpc.mockResolvedValue({data:null,error:{code:"",message:"Failed to fetch"}});
+    await expect(splitByItems("order-1",["item-1"])).rejects.toThrow("Chưa xác nhận được kết quả");
+  });
   it("splits selected items through one RPC", async () => {
     const result = await splitByItems("order-1", ["item-1"]);
 

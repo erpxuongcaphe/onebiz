@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { SplitBillDialog } from "@/app/pos/fnb/components/split-bill-dialog";
+import { splitBillFailure } from "@/lib/fnb/split-error";
 
 const items = [
   { id: "one", name: "Coffee", quantity: 1, unitPrice: 30_000 },
@@ -14,6 +15,20 @@ function setup(byItems = vi.fn().mockResolvedValue(true), equally = vi.fn().mock
 }
 
 describe("F&B split result", () => {
+  it.each(["items", "equal"])("shows the confirmed business reason in %s mode", async (mode) => {
+    const rejected=vi.fn().mockRejectedValue(splitBillFailure({message:"DELIVERY_ORDER_CANNOT_SPLIT",code:"22023"}));
+    const {onOpenChange}=setup(rejected,rejected);
+    if(mode==="equal") {
+      fireEvent.click(screen.getByRole("button",{name:"Chia nhiều bill"}));
+      fireEvent.click(screen.getByRole("button",{name:"Chia 2 phần"}));
+    } else {
+      fireEvent.click(screen.getAllByRole("checkbox")[0]);
+      fireEvent.click(screen.getByRole("button",{name:"Tách 1 món"}));
+    }
+    expect(await screen.findByRole("alert")).toHaveTextContent("Đơn qua đối tác");
+    expect(screen.getByRole("alert")).not.toHaveTextContent("Chưa xác nhận");
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
   it("preserves selection and dialog when server does not confirm success", async () => {
     const { byItems, onOpenChange } = setup(vi.fn().mockResolvedValue(false));
     fireEvent.click(screen.getAllByRole("checkbox")[0]);
