@@ -1,7 +1,10 @@
 import type { Product } from "@/lib/types";
 import { getClient, getCurrentTenantId } from "./base";
 import { getVariantsByProductIds } from "./variants";
-import { getFnbBranchComponentCosts, getPreparedRecipeUnitCost, type FnbBranchComponentCost } from "./fnb-branch-cost";
+import { getFnbBranchComponentCosts, getPreparedRecipeUnitCost, getPreparedRecipeEstimateUnitCost, type FnbBranchComponentCost } from "./fnb-branch-cost";
+import { calculateRecipePreview, type PreviewRecipeNode, type RecipePreviewFailure } from "@/lib/reports/recipe-cost-preview";
+import { getDirectConversionFactor } from "@/lib/format-uom";
+import { getUOMConversionsByProductIds } from "./uom";
 
 export interface FnbMenuEstimate {
   value: number | null;
@@ -15,7 +18,7 @@ export interface MenuCostIssue {
   code: string;
   name: string;
   unit: string;
-  reason: "missing_component" | "invalid_quantity" | "missing_cost" | "invalid_cost" | "negative_stock" | "quantity_mismatch";
+  reason: "missing_component" | "invalid_quantity" | "missing_cost" | "invalid_cost" | "negative_stock" | "quantity_mismatch" | "invalid_recipe" | "recipe_cycle" | "recipe_depth";
   physicalQuantity: number | null;
   costedQuantity: number | null;
 }
@@ -26,6 +29,8 @@ export interface RecipeHeader {
   code: string | null;
   branch_id: string | null;
   version: number | null;
+  yield_qty?: number | null;
+  yield_unit?: string | null;
 }
 
 /** Mirrors get_active_bom_for_branch: an explicit code must never fall back to another recipe. */
@@ -39,7 +44,8 @@ export function selectMenuRecipe(headers: RecipeHeader[], productId: string, cod
 
 export interface RecipeCostLine {
   quantity: number;
-  products: { id: string; code?: string; name?: string; unit?: string; sell_price: number | null; is_fnb_stock_item: boolean } | null;
+  waste_percent?: number;
+  products: { id: string; code?: string; name?: string; unit?: string; bom_code?: string | null; sell_price: number | null; is_fnb_stock_item: boolean } | null;
 }
 
 /** Diagnostics only; never substitute an estimated price into cost-posting guards. */
@@ -73,6 +79,15 @@ export function getMenuCostIssues(lines: RecipeCostLine[], costs: Map<string, Fn
 
 /** Saved quantities are already normalized by the BOM unit-conversion trigger. */
 export function sumMenuRecipeEstimate(lines: RecipeCostLine[], costs: Map<string, FnbBranchComponentCost>): number | null {
+  return sumRecipeCosts(lines, costs, false);
+}
+
+/** Current formula preview only, never a historical invoice cost. */
+export function sumMenuRecipePreview(lines: RecipeCostLine[], costs: Map<string, FnbBranchComponentCost>): number | null {
+  return sumRecipeCosts(lines, costs, true);
+}
+
+function sumRecipeCosts(lines: RecipeCostLine[], costs: Map<string, FnbBranchComponentCost>, preview: boolean): number | null {
   if (!lines.length) return null;
   let total = 0;
   for (const line of lines) {
@@ -81,7 +96,7 @@ export function sumMenuRecipeEstimate(lines: RecipeCostLine[], costs: Map<string
     if (!material || !Number.isFinite(quantity) || quantity < 0) return null;
     if (quantity === 0) continue;
     const balance = costs.get(material.id);
-    const unitCost = getPreparedRecipeUnitCost(balance);
+    const unitCost = preview ? getPreparedRecipeEstimateUnitCost(balance) : getPreparedRecipeUnitCost(balance);
     if (unitCost == null || !Number.isFinite(Number(unitCost)) || Number(unitCost) < 0) return null;
     total += quantity * Number(unitCost);
   }
@@ -120,7 +135,7 @@ export async function getFnbMenuEstimates(products: Product[], branchId?: string
       return { product, size, code: size?.bomCode || (product.bomCode ?? null) };
     });
     const codes = [...new Set(chosen.flatMap(({ code }) => code === null ? [] : [code]))];
-    const select = "id,product_id,code,branch_id,version";
+    const select = "id,product_id,code,branch_id,version,yield_qty,yield_unit";
     const loadHeaders = async (field: "product_id" | "code", values: string[]) => {
       const rows: RecipeHeader[] = [];
       if (!values.length) return rows;
@@ -137,17 +152,56 @@ export async function getFnbMenuEstimates(products: Product[], branchId?: string
     const headers = [...direct, ...linked];
     const selected = chosen.map((item) => ({ ...item, header: selectMenuRecipe(headers, item.product.id, item.code, branchId) }));
     const bomIds = [...new Set(selected.flatMap(({ header }) => header ? [header.id] : []))];
-    const lines: Array<RecipeCostLine & { bom_id: string }> = [];
-    if (bomIds.length) {
+    const loadLines = async (recipeIds: string[]) => {
+      const rows: Array<RecipeCostLine & { bom_id: string }> = [];
+      if (!recipeIds.length) return rows;
       for (let offset = 0; ; offset += 500) {
         const { data, error: itemError } = await client.from("bom_items")
-          .select("id,bom_id,quantity,products:products_scoped!bom_items_material_id_fkey(id,code,name,unit,sell_price,is_fnb_stock_item)")
-          .in("bom_id", bomIds).order("id").range(offset, offset + 499);
+          .select("id,bom_id,quantity,waste_percent,products:products_scoped!bom_items_material_id_fkey(id,code,name,unit,bom_code,sell_price,is_fnb_stock_item)")
+          .in("bom_id", recipeIds).order("id").range(offset, offset + 499);
         if (itemError) throw itemError;
-        lines.push(...(data ?? []));
+        rows.push(...(data ?? []));
+        if (rows.length > 10000) throw new Error("Công thức quá lớn để tải đầy đủ. Chọn ít mặt hàng hơn.");
         if ((data ?? []).length < 500) break;
       }
+      return rows;
+    };
+    const lines = await loadLines(bomIds);
+    const materials = new Map<string, NonNullable<RecipeCostLine["products"]>>();
+    const preparedRecipes = new Map<string, RecipeHeader>();
+    const unresolvedRecipes = new Set<string>();
+    const visited = new Set<string>();
+    const loadedBoms = new Set(bomIds);
+    let frontier = lines;
+    if (branchId) for (let depth = 0; ; depth++) {
+      for (const line of frontier) if (line.products) materials.set(line.products.id, line.products);
+      const pending = [...materials.values()].filter(material => material.is_fnb_stock_item && !visited.has(material.id));
+      if (!pending.length) break;
+      if (depth >= 12 || materials.size > 5000) throw new Error("Công thức vượt giới hạn kiểm tra nhiều cấp.");
+      const newlySelected: string[] = [];
+      for (let offset = 0; offset < pending.length; offset += 100) {
+        const chunk = pending.slice(offset, offset + 100);
+        const [byId, byCode] = await Promise.all([
+          loadHeaders("product_id", chunk.map(material => material.id)),
+          loadHeaders("code", [...new Set(chunk.flatMap(material => material.bom_code ? [material.bom_code] : []))]),
+        ]);
+        for (const material of chunk) {
+          visited.add(material.id);
+          const recipe = selectMenuRecipe([...byId, ...byCode], material.id, material.bom_code ?? null, branchId);
+          if (!recipe) {
+            if (material.bom_code) unresolvedRecipes.add(material.id);
+            continue;
+          }
+          preparedRecipes.set(material.id, recipe);
+          if (!loadedBoms.has(recipe.id)) { loadedBoms.add(recipe.id); newlySelected.push(recipe.id); }
+        }
+      }
+      frontier = [];
+      for (let offset = 0; offset < newlySelected.length; offset += 100) frontier.push(...await loadLines(newlySelected.slice(offset, offset + 100)));
+      lines.push(...frontier);
+      if (lines.length > 10000) throw new Error("Công thức quá lớn để tải đầy đủ. Chọn ít mặt hàng hơn.");
     }
+    for (const line of lines) if (line.products) materials.set(line.products.id, line.products);
     const preparedIds = [...new Set(lines.flatMap((line) => line.products ? [line.products.id] : []))];
     const costs = new Map<string, FnbBranchComponentCost>();
     if (branchId) {
@@ -156,14 +210,43 @@ export async function getFnbMenuEstimates(products: Product[], branchId?: string
         chunk.forEach((cost, id) => costs.set(id, cost));
       }
     }
+    const conversions = branchId ? await getUOMConversionsByProductIds([...preparedRecipes.keys(), ...ids]) : new Map();
+    const graph = new Map<string, PreviewRecipeNode>();
+    const nodeForRecipe = (header: RecipeHeader, stockUnit: string, perServing = false): PreviewRecipeNode => ({
+      unitPrice: null,
+      recipe: {
+        outputQuantity: header.yield_qty == null ? Number.NaN : Number(header.yield_qty),
+        // Menu BOM output counts servings, unlike a stock-managed prepared batch.
+        outputToStockFactor: perServing ? 1 : !header.yield_unit ? 0 : getDirectConversionFactor(stockUnit, header.yield_unit, conversions.get(header.product_id ?? "") ?? []) ?? 0,
+        lines: lines.filter(line => line.bom_id === header.id).map((line, index) => ({
+          component: line.products?.id ?? `missing:${header.id}:${index}`,
+          quantity: Number(line.quantity), wastePercent: Number(line.waste_percent ?? 0),
+        })),
+      },
+    });
+    for (const [id, material] of materials) {
+      const recipe = preparedRecipes.get(id);
+      graph.set(id, recipe ? nodeForRecipe({ ...recipe, product_id: id }, material.unit ?? "") : unresolvedRecipes.has(id)
+        ? { unitPrice: null, recipe: { outputQuantity: 0, outputToStockFactor: 0, lines: [] } }
+        : { unitPrice: getPreparedRecipeEstimateUnitCost(costs.get(id)) });
+    }
     for (const { product, size, header } of selected) {
       const recipeLines = header ? lines.filter((line) => line.bom_id === header.id) : [];
-      const value = header ? sumMenuRecipeEstimate(recipeLines, costs) : null;
+      const confirmed = header ? sumMenuRecipeEstimate(recipeLines, costs) : null;
+      const root = `menu:${product.id}`;
+      if (header) graph.set(root, nodeForRecipe({ ...header, product_id: product.id }, product.unit ?? "", true));
+      const preview = header && branchId ? calculateRecipePreview(root, graph) : null;
+      const value = preview?.value ?? null;
       result.set(product.id, {
         value,
         variantName: size?.name,
-        reason: value === null ? !header ? "Chưa có BOM phù hợp" : !branchId ? "Chọn chi nhánh để tính giá vốn" : "Chưa đủ giá thành phần" : undefined,
-        issues: branchId && header && value === null ? getMenuCostIssues(recipeLines, costs) : [],
+        reason: value === null ? !header ? "Chưa có BOM phù hợp" : !branchId ? "Chọn chi nhánh để tính giá vốn" : "Chưa đủ dữ liệu công thức hoặc đơn giá" : undefined,
+        issues: [...(branchId && header && confirmed === null ? getMenuCostIssues(recipeLines, costs).filter(issue => ["negative_stock", "quantity_mismatch"].includes(issue.reason)) : []),
+          ...(preview?.issues ?? []).map(issue => {
+            const material = materials.get(issue.component);
+            const reasonMap: Record<RecipePreviewFailure, MenuCostIssue["reason"]> = { missing_price: "missing_cost", missing_component: "missing_component", invalid_recipe: "invalid_recipe", recipe_cycle: "recipe_cycle", recipe_depth: "recipe_depth" };
+            return { componentId: material?.id ?? null, code: material?.code ?? product.code, name: material?.name ?? product.name, unit: material?.unit ?? "", reason: reasonMap[issue.reason], physicalQuantity: null, costedQuantity: null };
+          })],
       });
     }
   }
