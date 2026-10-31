@@ -3397,7 +3397,7 @@ function FnbPosPageInner() {
           description: err instanceof Error ? err.message : "Lỗi không xác định",
           variant: "error",
         });
-        return false;
+        throw err;
       }
     },
     [pos, networkStatus.isOnline, toast, loadChildOrderIntoTab, hydrateKitchenOrderIntoTab, openOrders]
@@ -3453,7 +3453,7 @@ function FnbPosPageInner() {
           description: err instanceof Error ? err.message : "Lỗi không xác định",
           variant: "error",
         });
-        return false;
+        throw err;
       }
     },
     [pos, networkStatus.isOnline, toast, loadChildOrderIntoTab, hydrateKitchenOrderIntoTab]
