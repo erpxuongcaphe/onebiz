@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Product } from "@/lib/types";
-import { getFnbMenuEstimates, selectMenuRecipe, sumMenuRecipeEstimate, sortByMenuEstimate, type RecipeHeader } from "@/lib/services/supabase/fnb-menu-estimates";
+import { getFnbMenuEstimates, getMenuCostIssues, selectMenuRecipe, sumMenuRecipeEstimate, sortByMenuEstimate, type RecipeHeader } from "@/lib/services/supabase/fnb-menu-estimates";
 
 const mocks = vi.hoisted(() => ({
   from: vi.fn(), tenant: vi.fn(), variants: vi.fn(), costs: vi.fn(),
@@ -22,6 +22,28 @@ beforeEach(() => {
 });
 
 describe("live menu recipe estimates", () => {
+  it("identifies the affected component without substituting its saved price", () => {
+    const lines = [{ ...line("syrup", 26, 999, true), products: { ...line("syrup", 26, 999, true).products, code: "BTP-TEST", name: "Test syrup", unit: "G" } }];
+    const costs = new Map([["syrup", { ...balance("syrup", 16, 0), physicalQuantity: -100 }]]);
+    expect(getMenuCostIssues(lines, costs)).toEqual([expect.objectContaining({ code: "BTP-TEST", reason: "negative_stock", physicalQuantity: -100, costedQuantity: 0, unit: "G" })]);
+    expect(sumMenuRecipeEstimate(lines, costs)).toBeNull();
+    expect(costs.get("syrup")?.unitCost).toBe(16);
+  });
+
+  it("separates missing prices, quantity mismatches and invalid data", () => {
+    const lines = [line("missing", 1, null), line("mismatch", 1, null), line("invalid", 1, null), line("free", 1, null), line("unused", 0, null)];
+    const costs = new Map([
+      ["mismatch", { ...balance("mismatch", 10, 5), physicalQuantity: 8 }],
+      ["invalid", balance("invalid", Number.NaN)],
+      ["free", balance("free", 0)],
+    ]);
+    expect(getMenuCostIssues(lines, costs).map(issue => [issue.componentId, issue.reason])).toEqual([
+      ["missing", "missing_cost"], ["mismatch", "quantity_mismatch"], ["invalid", "invalid_cost"],
+    ]);
+    expect(getMenuCostIssues([{ quantity: 1, products: null }, line("bad", -1, null)], costs).map(issue => issue.reason))
+      .toEqual(["missing_component", "invalid_quantity"]);
+  });
+
   it("prefers the local recipe then latest global version, never another branch", () => {
     const rows = [header("foreign", "other", "TEA", 99), header("global", null, "TEA", 4), header("local", "xtb", "TEA", 1)];
     expect(selectMenuRecipe(rows, "tea", "TEA", "xtb")?.id).toBe("local");
@@ -70,5 +92,6 @@ describe("live menu recipe estimates", () => {
     expect(product.costPrice).toBe(2685.62);
     const allBranch = await getFnbMenuEstimates([product]);
     expect(allBranch.get("tea")?.value).toBeNull();
+    expect(allBranch.get("tea")?.issues).toEqual([]);
   });
 });
