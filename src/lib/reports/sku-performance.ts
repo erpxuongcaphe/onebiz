@@ -2,7 +2,7 @@ import type { SkuFinancialRow } from "@/lib/services/supabase/sku-financial-repo
 import { skuFinancialTotals } from "./sku-financial-view";
 
 export type SkuReviewFilter = "all" | "loss" | "zeroRevenueCost" | "missing" | "returns" | "decline";
-export const SKU_COLUMN_GROUPS = [{ label: "Mặt hàng", span: 4 }, { label: "Bán và trả", span: 7 }, { label: "Đối chiếu doanh thu", span: 2 }, { label: "Giá vốn và lãi gộp", span: 5 }, { label: "Kiểm soát", span: 5 }];
+export const SKU_COLUMN_GROUPS = [{ label: "Mặt hàng", span: 4 }, { label: "Bán và trả", span: 7 }, { label: "Đối chiếu doanh thu", span: 2 }, { label: "Giá vốn và lãi gộp", span: 14 }, { label: "Kiểm soát", span: 5 }];
 export interface SkuPerformanceRow extends SkuFinancialRow {
   previousRevenue: number;
   revenueDifference: number;
@@ -21,6 +21,8 @@ export function compareSkuPeriods(current: SkuFinancialRow[], previous: SkuFinan
     ...row, orders: 0, customers: 0, soldQty: 0, returnedQty: 0, netQty: 0,
     salesAmount: 0, returnAmount: 0, netRevenue: 0, cogs: 0, grossProfit: 0,
     marginPercent: null, averageSalePrice: null, missingCostLines: 0, lastActivityAt: "",
+    salesCost: 0, returnsCost: 0, averageSalesCost: null, averageReturnsCost: null, averageKnownSalesCost: null,
+    knownSoldQuantity: 0, knownReturnedQuantity: 0, missingSoldQuantity: 0, missingReturnedQuantity: 0,
   });
   return [...now.values()].map(row => {
     const prior = before.get(skuRowKey(row));

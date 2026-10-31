@@ -7,7 +7,7 @@ vi.mock("@/lib/services/supabase/reports", () => ({ getProfitAndLoss: state.invo
 vi.mock("@/lib/contexts", () => ({ useAuth: () => ({ tenant: { id: "onebiz" } }), useBranchFilter: () => ({ activeBranchId: state.branch, branchLabel: state.branch, isReady: true }), useToast: () => ({ toast: state.toast }) }));
 vi.mock("@/lib/hooks/use-report-state", () => ({ useReportState: () => ({ preset: "custom", range: state.range, setPreset: vi.fn(), setCustomRange: vi.fn() }) }));
 vi.mock("@/lib/hooks/use-live-data-refresh", () => ({ useLiveDataRefresh: (refresh: () => void) => { state.refresh = refresh; } }));
-vi.mock("@/lib/services/supabase/sku-financial-report", () => ({ getSkuFinancialReport: state.fetch }));
+vi.mock("@/lib/services/supabase/sku-financial-report", () => ({ getSkuPeriodCostReport: state.fetch }));
 vi.mock("@/lib/utils/excel-export", async original => ({ ...await original<typeof import("@/lib/utils/excel-export")>(), exportReportToExcel: state.exportExcel }));
 vi.mock("@/components/ui/searchable-select", () => ({ SearchableSelect: ({ value, onValueChange, placeholder, options, disabled }: { value: string; onValueChange: (v: string) => void; placeholder: string; options: {value: string; label: string}[]; disabled?: boolean }) => <select disabled={disabled} aria-label={placeholder} value={value} onChange={e => onValueChange(e.target.value)}>{options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select> }));
 vi.mock("@/components/shared/report", () => ({
@@ -116,8 +116,8 @@ describe("SKU management workflow", () => {
     await act(async () => screen.getByRole("button", { name: "Xuất đầy đủ" }).click());
     const file = state.exportExcel.mock.calls[0][0];
     expect(file.sheets[0].rows.map((row: {code:string}) => row.code)).toEqual(["B"]);
-    expect(file.sheets[0].columns).toHaveLength(23);
-    expect(file.sheets[0].columnGroups.map((group: {span:number}) => group.span)).toEqual([4, 7, 2, 5, 5]);
+    expect(file.sheets[0].columns).toHaveLength(32);
+    expect(file.sheets[0].columnGroups.map((group: {span:number}) => group.span)).toEqual([4, 7, 2, 14, 5]);
     expect(file.sheets[0].tablePreferenceKey).toBeUndefined();
     expect(file.sheets[0].titleRows.join(" ")).toContain("Doanh thu thuần: 50 đến Không giới hạn");
     expect(file.sheets.some((sheet: {name:string}) => sheet.name === "Đối chiếu hóa đơn")).toBe(false);
