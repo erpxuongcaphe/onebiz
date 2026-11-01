@@ -27,10 +27,12 @@ export default function DeliveryInvoiceManagementReport() {
   const [sort, setSort] = useState<Sort>(null), [summarySort, setSummarySort] = useState<Sort>(null);
   const [exporting, setExporting] = useState(false);
   const [snapshotAt, setSnapshotAt] = useState<Date | null>(null);
+  const [download, setDownload] = useState<{ url: string; filename: string; revision: number } | null>(null);
   const requestIdRef = useRef(0), exportRevision = useRef(0);
+  useEffect(() => () => { if (download) URL.revokeObjectURL(download.url); }, [download]);
   const load = useCallback(async (resetFilters = true) => {
     const requestId = ++requestIdRef.current; exportRevision.current++;
-    setLoading(true); setError(null); setReport(null); setSnapshotAt(null); if (resetFilters) setFilters(EMPTY_FILTERS);
+    setLoading(true); setError(null); setReport(null); setSnapshotAt(null); setDownload(null); if (resetFilters) setFilters(EMPTY_FILTERS);
     try { const data = await getDeliveryInvoiceManagement(activeBranchId, range); if (requestId !== requestIdRef.current) return; setReport(data); setSnapshotAt(new Date()); }
     catch (err) { if (requestId === requestIdRef.current) setError(err instanceof Error ? err.message : "Không tải được giao hàng."); }
     finally { if (requestId === requestIdRef.current) setLoading(false); }
@@ -79,8 +81,9 @@ export default function DeliveryInvoiceManagementReport() {
     try {
       await exportReportToExcel({ kind: "fnb-shipper", mode: full ? "full" : "view", range, branchName: branchLabel,
         description: "Kỳ theo ngày tạo đơn. Thanh toán là số hiện tại trên hóa đơn, không phải tiền nhân viên bàn giao. Đơn hủy và hóa đơn gắn nhiều đơn giao không cộng vào tổng tiền.",
-        sheets: full ? [summarySheet, detailSheet] : [tab === "staff" ? summarySheet : detailSheet], shouldSave: () => revision === exportRevision.current });
-      toast({ title: "Đã xuất báo cáo giao hàng", variant: "success" });
+        sheets: full ? [summarySheet, detailSheet] : [tab === "staff" ? summarySheet : detailSheet], shouldSave: () => revision === exportRevision.current,
+        onPrepared: (blob, filename) => { if (revision === exportRevision.current) setDownload({ url: URL.createObjectURL(blob), filename, revision }); } });
+      toast({ title: "Đã tạo file Excel", variant: "success" });
     } catch (err) { toast({ title: "Không xuất được báo cáo", description: err instanceof Error ? err.message : "", variant: "error" }); }
     finally { setExporting(false); }
   };
@@ -91,6 +94,10 @@ export default function DeliveryInvoiceManagementReport() {
         <span>{snapshotAt ? `Cập nhật: ${snapshotAt.toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}` : ""}</span>
         <Button variant="outline" size="sm" disabled={loading} onClick={() => void load(false)}><Icon name="refresh" />Tải lại</Button>
       </div>
+      {download && download.revision === exportRevision.current && !loading && !error && <div className="flex flex-wrap items-center gap-3 border-l-4 border-status-success bg-status-success/5 p-3 text-sm">
+        <a href={download.url} download={download.filename} className="inline-flex min-h-10 shrink-0 items-center gap-2 font-medium text-primary underline underline-offset-4"><Icon name="download" />Tải file Excel</a>
+        <span className="min-w-0 break-all text-muted-foreground">{download.filename}</span>
+      </div>}
       {error ? <LoadErrorState description={error} onRetry={() => void load()} /> : loading ? <p role="status">Đang tải giao hàng…</p> : <>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <KpiCard label="Đơn giao" value={formatNumber(totals.orders)} icon="local_shipping" bg="bg-primary/10" iconColor="text-primary" valueColor="text-primary" />

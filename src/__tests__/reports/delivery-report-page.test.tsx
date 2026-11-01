@@ -56,4 +56,19 @@ describe("delivery report filter and export safety", () => {
     fireEvent.click(screen.getByText("Export full")); await waitFor(() => expect(mocks.export).toHaveBeenCalled());
     expect(mocks.export.mock.calls[0][0].sheets[1].rows[0]).toMatchObject({ invoicePaid: 100, invoiceDebt: 0 });
   });
+  it("offers an explicit file link without claiming the browser saved it and removes stale links", async () => {
+    const create = vi.fn(() => "blob:delivery-test"), revoke = vi.fn();
+    vi.stubGlobal("URL", { createObjectURL: create, revokeObjectURL: revoke });
+    mocks.export.mockImplementation(async options => options.onPrepared(new Blob(["fake"]), "delivery-test.xlsx"));
+    const view = render(<Page />); await screen.findByText("Nhân viên thử");
+    fireEvent.click(screen.getByText("Export full"));
+    const link = await screen.findByRole("link", { name: /Tải file Excel/ });
+    expect(link).toHaveAttribute("href", "blob:delivery-test");
+    expect(link).toHaveAttribute("download", "delivery-test.xlsx");
+    expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Đã tạo file Excel" }));
+    fireEvent.change(screen.getByLabelText("Tìm đơn, hóa đơn, khách"), { target: { value: "new scope" } });
+    expect(screen.queryByRole("link", { name: /Tải file Excel/ })).not.toBeInTheDocument();
+    view.unmount(); expect(revoke).toHaveBeenCalledWith("blob:delivery-test");
+    vi.unstubAllGlobals();
+  });
 });
