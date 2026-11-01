@@ -676,7 +676,7 @@ export default function ThietLapGiaPage() {
         onClearAll={activeFilters.length > 1 ? clearFilters : undefined}
       />
 
-      <div className="min-h-0 flex-1 px-3 pb-3 pt-2">
+      <div className="flex min-h-0 flex-1 flex-col px-3 pb-3 pt-2">
         <DataTable
           columns={columns}
           data={pagedData}
