@@ -432,6 +432,8 @@ function formatCell(value: unknown, col: ExcelColumn): XLSXTypes.CellObject {
 export interface ExportOptions {
   /** Prevent a delayed download after the report scope changes. */
   shouldSave?: () => boolean;
+  /** Keep a prepared file available for an explicit user-initiated retry. */
+  onPrepared?: (blob: Blob, filename: string) => void;
   kind: ReportKind;
   /** view = 1 sheet mirror; full = multi-sheet */
   mode: "view" | "full";
@@ -507,6 +509,7 @@ export async function exportReportToExcel(
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
   if (options.shouldSave && !options.shouldSave()) throw new Error('Bộ lọc đã thay đổi. Xuất lại theo phạm vi mới.');
+  options.onPrepared?.(blob, filename);
   saveAs(blob, filename);
 }
 

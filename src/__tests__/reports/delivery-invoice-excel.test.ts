@@ -12,8 +12,10 @@ describe("delivery invoice workbook", () => {
     try {
       const columns = deliveryManagementColumns(allowed);
       const rows = deliveryInvoiceView([{ id: "test", branchId: "branch", branchName: "Quán thử", staffName: "Nhân viên thử", staffId: null, orderNumber: "DH-1", invoiceId: "invoice", invoiceCode: "HD-1", invoiceTotal: 100, invoicePaid: 60, invoiceDebt: 40, deliveryFee: 10, paymentMethod: "cash", invoiceStatus: "completed", deliveryStatus: "assigned", createdAt: "2026-11-01T01:00:00Z", assignedAt: null, completedAt: null, deliveryTier: null, durationSeconds: null } as DeliveryInvoiceRow]);
-      await exportReportToExcel({ kind: "fnb-shipper", mode: "full", branchName: "Quán thử", range: { from: "2026-11-01", to: "2026-11-01" }, sheets: [{ name: "Chi tiết", columns, rows }] });
+      const prepared = vi.fn();
+      await exportReportToExcel({ kind: "fnb-shipper", mode: "full", branchName: "Quán thử", range: { from: "2026-11-01", to: "2026-11-01" }, sheets: [{ name: "Chi tiết", columns, rows }], onPrepared: prepared });
       const blob = save.mock.calls.at(-1)![0];
+      expect(prepared).toHaveBeenCalledWith(blob, save.mock.calls.at(-1)![1]);
       const book = XLSX.read(new Uint8Array(await blob.arrayBuffer()), { type: "array" });
       const matrix = XLSX.utils.sheet_to_json<unknown[]>(book.Sheets["Chi tiết"], { header: 1, defval: "" });
       expect(matrix[0]).toEqual(columns.map(c => c.label));
