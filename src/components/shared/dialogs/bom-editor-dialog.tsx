@@ -56,6 +56,7 @@ import { Icon } from "@/components/ui/icon";
 import { getPreparedRecipeUnitCost, getPreparedRecipeEstimateUnitCost } from "@/lib/services/supabase/fnb-branch-cost";
 import { recipeComponentUnitCost, useFnbRecipeComponentCosts } from "@/lib/hooks/use-fnb-recipe-component-costs";
 import { RecipeCostLoadError } from "@/components/shared/recipe-cost-load-error";
+import { calculateRecipeDraftLineCost } from "@/lib/reports/recipe-cost-preview";
 
 interface BOMEditorDialogProps {
   open: boolean;
@@ -322,10 +323,10 @@ export function BOMEditorDialog({
   // Compute live preview cost (client-side)
   const previewTotal = items.reduce((sum, it) => {
     const qty = Number(it.quantity) || 0;
-    const factor = getDirectConversionFactor(it.stockUnit, it.unit, it.conversions) ?? 0;
     const waste = Number(it.wastePercent) || 0;
-    const effectiveQty = qty * factor * (1 + waste / 100);
-    return sum + effectiveQty * (previewUnitCost(it) ?? 0);
+    const cost = isFnbRecipe ? calculateRecipeDraftLineCost(qty, it.stockUnit, it.unit, it.conversions, previewUnitCost(it), waste)
+      : qty * (getDirectConversionFactor(it.stockUnit, it.unit, it.conversions) ?? 0) * (1 + waste / 100) * (previewUnitCost(it) ?? 0);
+    return sum + (cost ?? 0);
   }, 0);
 
   const addMaterial = useCallback(async () => {
@@ -740,7 +741,7 @@ export function BOMEditorDialog({
                       const waste = Number(it.wastePercent) || 0;
                       const factor = getDirectConversionFactor(it.stockUnit, it.unit, it.conversions) ?? 0;
                       const unitCost = previewUnitCost(it);
-                      const lineCost = qty * factor * (1 + waste / 100) * (unitCost ?? 0);
+                      const lineCost = isFnbRecipe ? calculateRecipeDraftLineCost(qty, it.stockUnit, it.unit, it.conversions, unitCost, waste) ?? 0 : qty * factor * (1 + waste / 100) * (unitCost ?? 0);
                       const stockQuantity = getRecipeStockQuantity(
                         qty,
                         it.stockUnit,

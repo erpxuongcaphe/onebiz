@@ -114,6 +114,7 @@ import {
 } from "@/lib/services/supabase/fnb-supply-catalog";
 import { getPreparedRecipeUnitCost, getPreparedRecipeEstimateUnitCost } from "@/lib/services/supabase/fnb-branch-cost";
 import { recipeComponentUnitCost, useFnbRecipeComponentCosts } from "@/lib/hooks/use-fnb-recipe-component-costs";
+import { calculateRecipeDraftLineCost } from "@/lib/reports/recipe-cost-preview";
 import { RecipeCostLoadError } from "@/components/shared/recipe-cost-load-error";
 import { invalidateMenuCache } from "@/lib/offline";
 import { useDurableFormDraft } from "@/lib/hooks/use-durable-form-draft";
@@ -713,11 +714,8 @@ export function CreateProductDialog({
         const unitCost = !usesFnbRecipeCosts ? item.costPrice : product?.isFnbStockItem
           ? recipeComponentUnitCost(fnbPreparedCostByProductId[product.id], fnbRecipeEstimates.get(product.id)) ?? 0
           : product ? getBomComponentUnitPrice(product, "fnb", fnbPreparedCostByProductId) : item.costPrice;
-        return sum + item.quantity * (getDirectConversionFactor(
-          item.stockUnit,
-          item.unit,
-          item.conversions,
-        ) ?? 0) * unitCost;
+        return sum + (usesFnbRecipeCosts ? calculateRecipeDraftLineCost(item.quantity, item.stockUnit, item.unit, item.conversions, unitCost) ?? 0
+          : item.quantity * (getDirectConversionFactor(item.stockUnit, item.unit, item.conversions) ?? 0) * unitCost);
       }, 0),
     [bomItems, fnbPreparedCostByProductId, fnbRecipeEstimates, materialOptions, usesFnbRecipeCosts],
   );
@@ -3917,8 +3915,8 @@ export function CreateProductDialog({
                           const componentUnitCost = componentProduct?.isFnbStockItem
                             ? recipeComponentUnitCost(fnbPreparedCostByProductId[componentProduct.id], fnbRecipeEstimates.get(componentProduct.id)) ?? 0
                             : componentProduct ? getBomComponentUnitPrice(componentProduct, "fnb", fnbPreparedCostByProductId) : it.costPrice;
-                          const lineCost = it.quantity * conversionFactor *
-                            (usesFnbRecipeCosts ? componentUnitCost : it.costPrice);
+                          const lineCost = usesFnbRecipeCosts ? calculateRecipeDraftLineCost(it.quantity, it.stockUnit, it.unit, it.conversions, componentUnitCost) ?? 0
+                            : it.quantity * conversionFactor * it.costPrice;
                           const stockQuantity = getRecipeQuantityInStockUnit(
                             it.quantity,
                             it.stockUnit,
