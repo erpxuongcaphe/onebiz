@@ -13,6 +13,13 @@ const names = [
   ["luong-tien", "Tổng hợp thu chi"],
 ];
 describe("Vietnamese business report names", () => {
+  it("uses Vietnamese delivery labels in the catalog, table and workbook", () => {
+    const page = readFileSync("src/app/(main)/phan-tich/fnb-shipper/page.tsx", "utf8");
+    expect(page).not.toContain("Avg thời gian");
+    expect(page).toContain("Thời gian giao TB (giây)");
+    expect(page).toContain('title="Tổng hợp giao hàng theo nhân viên"');
+    expect(getReportByPath("/phan-tich/fnb-shipper")?.description).not.toContain("shipper");
+  });
   it.each(names)("keeps catalog, page and workbook name aligned for %s", (path, title) => {
     expect(getReportByPath(`/phan-tich/${path}`)?.title).toBe(title);
     const page = readFileSync(`src/app/(main)/phan-tich/${path}/page.tsx`, "utf8");
