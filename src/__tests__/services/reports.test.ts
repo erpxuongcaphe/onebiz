@@ -155,6 +155,7 @@ function buildFinancialAnalysisDetailsRpc() {
   const receivables = customers.reduce((sum, row) => sum + Number(row.debt ?? 0), 0);
   return {
     data: {
+      source_revision: "financial_cost_grain_v3",
       granularity: "month",
       exclude_internal: false,
       cogs_complete: true,
@@ -176,8 +177,27 @@ function buildFinancialAnalysisDetailsRpc() {
       cogs_breakdown: Array.from(productTotals.entries())
         .map(([productName, row]) => ({
           product_name: productName,
+          product_key: productName,
+          variant_id: null,
+          variant_name: null,
+          unit: "Cai",
           quantity: row.quantity,
-          average_unit_cost: row.quantity ? row.totalCost / row.quantity : 0,
+          sold_qty: row.quantity,
+          returned_qty: 0,
+          known_sale_qty: row.quantity,
+          missing_sale_qty: 0,
+          known_return_qty: 0,
+          missing_return_qty: 0,
+          known_sale_cogs: row.totalCost,
+          known_return_cogs: 0,
+          sale_cogs: row.totalCost,
+          return_cogs: 0,
+          average_sale_cost: row.quantity ? row.totalCost / row.quantity : null,
+          average_known_sale_cost: row.quantity ? row.totalCost / row.quantity : null,
+          average_return_cost: null,
+          missing_sale_lines: 0,
+          missing_return_lines: 0,
+          average_unit_cost: row.quantity ? row.totalCost / row.quantity : null,
           total_cost: row.totalCost,
           pct_of_cogs: totalCogs ? row.totalCost / totalCogs * 100 : 0,
           cost_complete: true,
@@ -291,7 +311,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
           ? buildConsolidatedProfitAndLossRpc()
           : buildProfitAndLossRpc();
       }
-      if (fn === "get_financial_analysis_details_report_v2") return buildFinancialAnalysisDetailsRpc();
+      if (fn === "get_financial_analysis_details_report_v3") return buildFinancialAnalysisDetailsRpc();
       if (fn === "get_branch_profit_and_loss_report_v2") return buildBranchProfitAndLossRpc();
       return { data: null, error: { message: "RPC_NOT_MOCKED" } };
     }),

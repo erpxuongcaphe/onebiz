@@ -722,7 +722,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
       if (fn === "get_profit_and_loss_report_v2") {
         return simulateProfitAndLossRpc();
       }
-      if (fn === "get_financial_analysis_details_report_v2") {
+      if (fn === "get_financial_analysis_details_report_v3") {
         return {
           data: {
             granularity: "month",
@@ -731,6 +731,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
             missing_sales_cost_lines: 0,
             missing_return_cost_lines: 0,
             cogs_breakdown: [],
+            source_revision: "financial_cost_grain_v3",
             margin_trend: [],
             turnover: {
               turnover_ratio: 0.5,
