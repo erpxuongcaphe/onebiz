@@ -46,6 +46,7 @@ import {
 } from "@/lib/utils/excel-export";
 import { Icon } from "@/components/ui/icon";
 import { formatSelectedPeriodLabel } from "@/lib/utils/date-presets";
+import { operatingResultAvailable } from "@/lib/reports/operating-result-availability";
 import { buildSalesInvoiceDayLink, buildSalesReturnDayLink } from "@/lib/reports/sales-drilldown";
 import { getBranchPnLComparison, type BranchPnLRow } from "@/lib/services/supabase/reports";
 import { ManagementReview } from "@/components/shared/report/management-review";
@@ -179,7 +180,7 @@ export default function BusinessOverview() {
       { label: "Chi phí vận hành (đ)", key: "opEx", format: "number" as const, decimalPlaces: 2, width: 20 },
       { label: "Kết quả vận hành (đ)", key: "netProfit", format: "number" as const, decimalPlaces: 2, width: 20 },
       { label: "Thiếu giá vốn (dòng)", key: "missingCostLines", format: "number" as const, width: 20 },
-    ], rows: visibleBranches.map(row => ({ ...row, cogs: row.cogsComplete ? row.cogs : null, grossProfit: row.cogsComplete ? row.grossProfit : null, netProfit: row.cogsComplete ? row.netProfit : null })) }] : [])] : []), ...(canViewCash ? [{
+    ], rows: visibleBranches.map(row => ({ ...row, cogs: row.cogsComplete ? row.cogs : null, grossProfit: row.cogsComplete ? row.grossProfit : null, netProfit: operatingResultAvailable(row) ? row.netProfit : null })) }] : [])] : []), ...(canViewCash ? [{
       name: "Thu chi", titleRows: buildReportTitleRows({ title: "THU CHI TRONG KỲ · GỒM NỘI BỘ", range, branchName: branchLabel, generatedAt: new Date() }),
       columns: [{ label: "Chỉ tiêu", key: "metric", width: 36 }, { label: "Giá trị (đ)", key: "value", format: "number" as const, decimalPlaces: 2, width: 24 }],
       rows: cashError ? [{ metric: "Chưa tải được thu chi", value: null }] : [
@@ -209,7 +210,7 @@ export default function BusinessOverview() {
         ...(canViewProfit
           ? [{ metric: "Lãi gộp", value: kpis.financial.current.cogsComplete ? kpis.financial.current.grossProfit : null, prev: kpis.financial.previous.cogsComplete ? kpis.financial.previous.grossProfit : null }]
           : [{ metric: "Khách mới", value: kpis.newCustomers, prev: kpis.prevNewCustomers }]),
-        ...(canViewProfit ? [{ metric: "Kết quả vận hành", value: kpis.financial.current.cogsComplete ? kpis.profit : null, prev: kpis.financial.previous.cogsComplete ? kpis.prevProfit : null }] : []),
+        ...(canViewProfit ? [{ metric: "Kết quả vận hành", value: operatingResultAvailable(kpis.financial.current) ? kpis.profit : null, prev: operatingResultAvailable(kpis.financial.previous) ? kpis.prevProfit : null }] : []),
       ];
 
       const sheet: ExcelSheet = {
@@ -324,23 +325,23 @@ export default function BusinessOverview() {
           // ─ Chi phí + Lợi nhuận ─
           {
             metric: "Tổng chi phí",
-            current: kpis.financial.current.cogsComplete ? kpis.expense : null,
-            prev: kpis.financial.previous.cogsComplete ? kpis.prevExpense : null,
-            diff: kpis.financial.current.cogsComplete && kpis.financial.previous.cogsComplete ? kpis.expense - kpis.prevExpense : null,
-            pct: kpis.financial.current.cogsComplete && kpis.financial.previous.cogsComplete ? calcChange(kpis.expense, kpis.prevExpense) : "Chưa đủ giá vốn",
+            current: operatingResultAvailable(kpis.financial.current) ? kpis.expense : null,
+            prev: operatingResultAvailable(kpis.financial.previous) ? kpis.prevExpense : null,
+            diff: operatingResultAvailable(kpis.financial.current) && operatingResultAvailable(kpis.financial.previous) ? kpis.expense - kpis.prevExpense : null,
+            pct: operatingResultAvailable(kpis.financial.current) && operatingResultAvailable(kpis.financial.previous) ? calcChange(kpis.expense, kpis.prevExpense) : "Chưa đủ dữ liệu",
           },
           {
             metric: "Kết quả vận hành",
-            current: canViewProfit && kpis.financial.current.cogsComplete ? kpis.profit : null,
-            prev: canViewProfit && kpis.financial.previous.cogsComplete ? kpis.prevProfit : null,
-            diff: canViewProfit && kpis.financial.current.cogsComplete && kpis.financial.previous.cogsComplete ? kpis.profit - kpis.prevProfit : null,
-            pct: canViewProfit && kpis.financial.current.cogsComplete && kpis.financial.previous.cogsComplete ? calcChange(kpis.profit, kpis.prevProfit) : "Chưa đủ cơ sở",
+            current: canViewProfit && operatingResultAvailable(kpis.financial.current) ? kpis.profit : null,
+            prev: canViewProfit && operatingResultAvailable(kpis.financial.previous) ? kpis.prevProfit : null,
+            diff: canViewProfit && operatingResultAvailable(kpis.financial.current) && operatingResultAvailable(kpis.financial.previous) ? kpis.profit - kpis.prevProfit : null,
+            pct: canViewProfit && operatingResultAvailable(kpis.financial.current) && operatingResultAvailable(kpis.financial.previous) ? calcChange(kpis.profit, kpis.prevProfit) : "Chưa đủ cơ sở",
           },
           {
             metric: "Biên lợi nhuận (%)",
-            current: kpis.financial.current.cogsComplete ? kpis.profitMargin : null,
-            prev: kpis.financial.previous.cogsComplete ? kpis.prevProfitMargin : null,
-            diff: kpis.financial.current.cogsComplete && kpis.financial.previous.cogsComplete ? kpis.profitMargin - kpis.prevProfitMargin : null,
+            current: operatingResultAvailable(kpis.financial.current) ? kpis.profitMargin : null,
+            prev: operatingResultAvailable(kpis.financial.previous) ? kpis.prevProfitMargin : null,
+            diff: operatingResultAvailable(kpis.financial.current) && operatingResultAvailable(kpis.financial.previous) ? kpis.profitMargin - kpis.prevProfitMargin : null,
             pct: "",
           },
         ],
@@ -552,8 +553,8 @@ export default function BusinessOverview() {
           />}
           {canViewProfit && <KpiCard
             label="Kết quả vận hành"
-            value={kpis.financial.current.cogsComplete ? formatCurrency(kpis.profit) + "đ" : "Chưa đủ giá vốn"}
-            change={kpis.financial.current.cogsComplete && kpis.financial.previous.cogsComplete ? calcChange(kpis.profit, kpis.prevProfit) : undefined}
+            value={operatingResultAvailable(kpis.financial.current) ? formatCurrency(kpis.profit) + "đ" : "Chưa đủ dữ liệu"}
+            change={operatingResultAvailable(kpis.financial.current) && operatingResultAvailable(kpis.financial.previous) ? calcChange(kpis.profit, kpis.prevProfit) : undefined}
             subValue="Theo chi phí đã ghi nhận"
             positive={(kpis?.profit ?? 0) >= (kpis?.prevProfit ?? 0)}
             icon="trending_up"

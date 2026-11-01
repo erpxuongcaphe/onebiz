@@ -947,6 +947,7 @@ export default function BaoCaoTaiChinhPage() {
                     color: "text-status-success",
                     highlight: true,
                     dependsOnCogs: true,
+                    dependsOnExpense: true,
                   },
                   {
                     label: "Biên kết quả (%)",
@@ -954,6 +955,7 @@ export default function BaoCaoTaiChinhPage() {
                     prev: prev?.netMargin ?? 0,
                     isPercent: true,
                     dependsOnCogs: true,
+                    dependsOnExpense: true,
                   },
                 ].map((row) => {
                   const currentAvailable = (!row.dependsOnCogs || currentCogsComplete) && (!row.dependsOnExpense || cur?.operatingExpenseComplete !== false);
