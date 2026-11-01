@@ -14,15 +14,15 @@ const names = [
 ];
 describe("Vietnamese business report names", () => {
   it("uses Vietnamese delivery labels in the catalog, table and workbook", () => {
-    const page = readFileSync("src/app/(main)/phan-tich/fnb-shipper/page.tsx", "utf8");
+    const page = readFileSync("src/components/shared/report/delivery-invoice-management-report.tsx", "utf8");
     expect(page).not.toContain("Avg thời gian");
     expect(page).toContain("Thời gian giao TB (giây)");
-    expect(page).toContain('title="Tổng hợp giao hàng theo nhân viên"');
+    expect(page).toContain('"Tổng hợp giao hàng theo nhân viên"');
     expect(getReportByPath("/phan-tich/fnb-shipper")?.description).not.toContain("shipper");
   });
   it.each(names)("keeps catalog, page and workbook name aligned for %s", (path, title) => {
     expect(getReportByPath(`/phan-tich/${path}`)?.title).toBe(title);
-    const page = readFileSync(`src/app/(main)/phan-tich/${path}/page.tsx`, "utf8");
+    const page = readFileSync(path === "fnb-shipper" ? "src/components/shared/report/delivery-invoice-management-report.tsx" : `src/app/(main)/phan-tich/${path}/page.tsx`, "utf8");
     expect(page).toContain(`title="${title}"`);
     expect(readFileSync("src/lib/utils/excel-export.ts", "utf8")).toContain(`"${title}"`);
   });
