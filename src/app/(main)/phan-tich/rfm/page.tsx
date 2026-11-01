@@ -243,7 +243,7 @@ export default function RfmReportPage() {
     }
     try {
       const infoSheet = buildInfoSheet({
-        title: "BÁO CÁO PHÂN KHÚC GIÁ TRỊ KHÁCH HÀNG",
+        title: "PHÂN NHÓM KHÁCH HÀNG THEO LỊCH SỬ MUA",
         description:
           "Phân khúc theo lần mua gần nhất, tần suất mua và tổng chi tiêu",
         range,
@@ -344,7 +344,7 @@ export default function RfmReportPage() {
   return (
     <div className="p-3 md:p-5 space-y-4">
       <ReportPageHeader
-        title="Phân khúc giá trị khách hàng"
+        title="Phân nhóm khách hàng theo lịch sử mua"
         subtitle="Xếp nhóm theo lần mua gần nhất, tần suất mua và tổng chi tiêu"
         preset={preset}
         range={range}

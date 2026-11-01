@@ -176,8 +176,8 @@ const PROFIT_PERMISSIONS = [
 export const REPORT_CATALOG: ReportCatalogItem[] = [
   {
     href: "/phan-tich/hieu-qua-khach-hang",
-    title: "Hiệu quả khách hàng",
-    shortTitle: "Hiệu quả khách hàng",
+    title: "Doanh thu và lãi gộp theo khách hàng",
+    shortTitle: "Doanh thu và lãi gộp KH",
     description: "Doanh thu thuần, hàng trả, giá vốn lịch sử và lãi gộp từng khách; đối chiếu kỳ trước và mở xuống SKU.",
     category: "sales",
     icon: "groups",
@@ -187,8 +187,8 @@ export const REPORT_CATALOG: ReportCatalogItem[] = [
   },
   {
     href: "/phan-tich/sku-chi-tiet",
-    title: "Chi tiết bán hàng và lãi gộp SKU",
-    shortTitle: "Chi tiết SKU",
+    title: "Chi tiết bán hàng theo mặt hàng",
+    shortTitle: "Chi tiết mặt hàng",
     description: "Số lượng bán, trả, doanh thu thuần và giá vốn lịch sử theo tất cả hoặc từng khách hàng.",
     category: "sales",
     icon: "table_rows",
@@ -268,7 +268,7 @@ export const REPORT_CATALOG: ReportCatalogItem[] = [
   },
   {
     href: "/phan-tich/kenh-ban",
-    title: "Hiệu quả theo kênh bán",
+    title: "Kết quả bán hàng theo kênh",
     shortTitle: "Kênh bán",
     description: "So sánh doanh thu và đơn hàng giữa các kênh bán.",
     category: "sales",
@@ -298,8 +298,8 @@ export const REPORT_CATALOG: ReportCatalogItem[] = [
   },
   {
     href: "/phan-tich/platform-commission",
-    title: "Phí nền tảng giao hàng",
-    shortTitle: "Phí nền tảng",
+    title: "Phí bán hàng qua ứng dụng",
+    shortTitle: "Phí bán qua ứng dụng",
     description: "Tổng hợp phí và tỷ lệ chi phí theo nền tảng giao hàng.",
     category: "sales",
     icon: "percent",
@@ -318,7 +318,7 @@ export const REPORT_CATALOG: ReportCatalogItem[] = [
   },
   {
     href: "/phan-tich/khach-san-pham",
-    title: "Doanh số mặt hàng theo khách hàng",
+    title: "Chi tiết bán hàng theo khách hàng",
     shortTitle: "Khách và sản phẩm",
     description: "Xem từng khách đã mua sản phẩm nào, số lượng và doanh thu.",
     category: "customers",
@@ -338,8 +338,8 @@ export const REPORT_CATALOG: ReportCatalogItem[] = [
   },
   {
     href: "/phan-tich/rfm",
-    title: "Phân khúc giá trị khách hàng (RFM)",
-    shortTitle: "Phân khúc khách",
+    title: "Phân nhóm khách hàng theo lịch sử mua",
+    shortTitle: "Phân nhóm khách hàng",
     description: "Phân nhóm khách theo lần mua gần nhất, tần suất và giá trị.",
     category: "customers",
     icon: "stars",
@@ -358,7 +358,7 @@ export const REPORT_CATALOG: ReportCatalogItem[] = [
   },
   {
     href: "/phan-tich/hang-hoa",
-    title: "Hiệu quả bán và tồn kho hàng hóa",
+    title: "Bán hàng và tồn kho theo mặt hàng",
     shortTitle: "Hàng hóa",
     description: "Hiệu quả bán, số lượng và doanh thu theo sản phẩm.",
     category: "inventory",
@@ -482,8 +482,8 @@ export const REPORT_CATALOG: ReportCatalogItem[] = [
   },
   {
     href: "/phan-tich/luong-tien",
-    title: "Thu chi và dòng tiền theo chứng từ",
-    shortTitle: "Thu chi và dòng tiền",
+    title: "Tổng hợp thu chi",
+    shortTitle: "Tổng hợp thu chi",
     description: "Thu chi theo ngày chứng từ, dòng tiền lũy kế trong kỳ và phiếu gốc theo quyền Sổ quỹ.",
     category: "finance",
     icon: "swap_horiz",
@@ -522,8 +522,8 @@ export const REPORT_CATALOG: ReportCatalogItem[] = [
   },
   {
     href: "/phan-tich/fnb-shipper",
-    title: "Hiệu quả shipper F&B",
-    shortTitle: "Shipper F&B",
+    title: "Giao hàng theo nhân viên",
+    shortTitle: "Nhân viên giao hàng",
     description: "Theo dõi giao hàng và hiệu suất shipper của cửa hàng.",
     category: "operations",
     icon: "delivery_dining",

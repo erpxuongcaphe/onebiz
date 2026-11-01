@@ -139,7 +139,7 @@ export default function FnbShipperReportPage() {
   const handleExportView = useCallback(async () => {
     try {
       const title = buildReportTitleRows({
-        title: "BÁO CÁO SHIPPER FNB",
+        title: "GIAO HÀNG THEO NHÂN VIÊN",
         range,
         branchName: branchLabel,
         generatedAt: new Date(),
@@ -206,7 +206,7 @@ export default function FnbShipperReportPage() {
         })),
       );
       const titleRows = buildReportTitleRows({
-        title: "Báo cáo hiệu suất giao hàng FnB",
+        title: "Giao hàng theo nhân viên",
         range,
         branchName: branchLabel,
         generatedAt: new Date(),
@@ -272,7 +272,7 @@ export default function FnbShipperReportPage() {
         mode: "full",
         range,
         branchName: branchLabel,
-        reportTitle: "Báo cáo hiệu suất giao hàng FnB",
+        reportTitle: "Giao hàng theo nhân viên",
         description:
           "Tổng hợp hiệu suất từng nhân viên và chi tiết toàn bộ đơn giao trong phạm vi đã chọn.",
         sheets: [summarySheet, detailSheet],
@@ -297,7 +297,7 @@ export default function FnbShipperReportPage() {
 
   const reportHeader = (
     <ReportPageHeader
-      title="Hiệu suất giao hàng nội bộ"
+      title="Giao hàng theo nhân viên"
       subtitle="Nhân viên quán đi giao — đo số đơn, doanh thu, thời gian giao"
       preset={preset}
       range={range}

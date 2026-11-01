@@ -348,7 +348,7 @@ export default function PlatformCommissionReportPage() {
   return (
     <div className="p-3 md:p-5 space-y-4">
       <ReportPageHeader
-        title="Phí nền tảng giao hàng"
+        title="Phí bán hàng qua ứng dụng"
         subtitle="Doanh thu gộp, phí nền tảng và thực nhận theo từng đối tác"
         preset={preset}
         range={range}

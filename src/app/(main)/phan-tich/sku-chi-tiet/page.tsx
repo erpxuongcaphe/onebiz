@@ -207,7 +207,7 @@ export default function SkuFinancialPage() {
     finally { setExporting(false); }
   }
   return <div className="flex min-h-full flex-col">
-    <ReportPageHeader title="Hiệu quả mặt hàng" subtitle={comparisonLabel} preset={preset} range={range} onPresetChange={setPreset} onCustomRangeChange={setCustomRange}
+    <ReportPageHeader title="Chi tiết bán hàng theo mặt hàng" subtitle={comparisonLabel} preset={preset} range={range} onPresetChange={setPreset} onCustomRangeChange={setCustomRange}
       onExportView={() => exportRows("view")} onExportFull={() => exportRows("full")} exportDisabled={pending || exporting || Boolean(error) || metricFilterError(metricFilters) || !rows.length} />
     <div className="space-y-4 p-4 lg:p-6">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
