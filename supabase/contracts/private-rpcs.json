@@ -210,6 +210,19 @@
           { "name": "p_limit", "optional": true }
         ] }
       ]
+    },
+    {
+      "migration": "financial_cost_grain_v3_20261101",
+      "migrationSha256": "5d63ca8e7c7856f62f94b9958e0f5634cfed753452f2c43162a41d7d596b82c3",
+      "functions": [
+        { "name": "get_financial_analysis_details_report_v3", "params": [
+          { "name": "p_date_from", "optional": false },
+          { "name": "p_date_to", "optional": false },
+          { "name": "p_branch_id", "optional": true },
+          { "name": "p_exclude_internal", "optional": true },
+          { "name": "p_limit", "optional": true }
+        ] }
+      ]
     }
   ]
 }

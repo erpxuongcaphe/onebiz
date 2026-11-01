@@ -10,6 +10,7 @@ import { validateBranchProfitAndLossSource, validateProfitAndLossSource } from "
 import { financeReportRangeError } from "@/lib/reports/finance-report-input";
 import { toCreatedAtRangeWindow } from "@/lib/utils/list-date-preset-range";
 import { cashBookDate } from "@/lib/cash-time";
+import { parseFinancialCostBreakdown } from "@/lib/reports/financial-cost-breakdown";
 interface ReportPagedQuery<T> {
   range(
     from: number,
@@ -96,11 +97,15 @@ export interface CogsCostBasis {
 }
 
 export interface COGSItem {
+  rowKey?: string; unit?: string; soldQty?: number; returnedQty?: number;
+  salesCost?: number | null; returnsCost?: number | null;
+  knownSoldQty?: number; missingSoldQty?: number; knownReturnedQty?: number; missingReturnedQty?: number;
+  knownAverageCost?: number | null;
   productName: string;
   qtySold: number;
-  costPrice: number;
-  totalCost: number;
-  pctOfCogs: number;
+  costPrice: number | null;
+  totalCost: number | null;
+  pctOfCogs: number | null;
   costComplete: boolean;
   missingCostLines: number;
 }
@@ -394,7 +399,7 @@ export async function getFinancialAnalysisDetails(
 
   try {
     const { data, error } = await (supabase.rpc as any)(
-      "get_financial_analysis_details_report_v2",
+      "get_financial_analysis_details_report_v3",
       {
         p_date_from: range.start,
         p_date_to: range.end,
@@ -407,6 +412,7 @@ export async function getFinancialAnalysisDetails(
 
     const payload = data as Record<string, unknown> | null;
     if (!payload) throw new Error("Invalid financial analysis response");
+    if (payload.source_revision !== "financial_cost_grain_v3") throw new Error("Chưa nhận đúng nguồn phân tích giá vốn.");
 
     const number = (value: unknown) => {
       const parsed = Number(value ?? 0);
@@ -430,15 +436,7 @@ export async function getFinancialAnalysisDetails(
     const reconciliation = (payload.reconciliation ?? {}) as Record<string, unknown>;
 
     return {
-      cogsItems: cogsRows.map((row) => ({
-        productName: String(row.product_name ?? "Sản phẩm"),
-        qtySold: number(row.quantity),
-        costPrice: number(row.average_unit_cost),
-        totalCost: number(row.total_cost),
-        pctOfCogs: number(row.pct_of_cogs),
-        costComplete: row.cost_complete === true,
-        missingCostLines: number(row.missing_cost_lines),
-      })),
+      cogsItems: cogsRows.map(parseFinancialCostBreakdown),
       marginTrend: trendRows.map((row) => ({
         month: formatBucket(row.bucket_start),
         revenue: number(row.revenue),

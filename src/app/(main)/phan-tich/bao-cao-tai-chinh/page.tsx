@@ -22,6 +22,7 @@ import { managementComparisonRange, managementReportLink, reportChange } from "@
 import { useLiveDataRefresh } from "@/lib/hooks/use-live-data-refresh";
 import { formatCashBookDate } from "@/lib/cash-time";
 import { financialExportSheets } from "@/lib/reports/financial-export";
+import { FINANCIAL_COST_COLUMNS } from "@/lib/reports/financial-cost-breakdown";
 import { BRANCH_TYPE_LABELS } from "@/lib/branch-type-labels";
 import { BranchPerformanceTable } from "@/components/shared/report/branch-performance-table";
 import { EMPTY_BRANCH_FILTER, branchPerformanceRows, branchPerformanceSheet, type BranchPerformanceFilter } from "@/lib/reports/branch-performance";
@@ -146,12 +147,12 @@ function COGSTooltip({
   payload,
 }: {
   active?: boolean;
-  payload?: Array<{ name: string; value: number }>;
+  payload?: Array<{ name: string; value: number; payload?: COGSItem }>;
 }) {
   if (!active || !payload?.length) return null;
   return (
     <div className="rounded-lg border bg-background p-3 shadow-md">
-      <p className="text-xs text-muted-foreground mb-1">{payload[0].name}</p>
+      <p className="text-xs text-muted-foreground mb-1">{payload[0].payload?.productName ?? payload[0].name} · {payload[0].payload?.unit || "Chưa có ĐVT lịch sử"}</p>
       <p className="text-sm font-bold">
         {formatChartTooltipCurrency(payload[0].value)}
       </p>
@@ -429,14 +430,7 @@ export default function BaoCaoTaiChinhPage() {
           titleRows,
         ));
       }
-      viewSheets.push({ name: "Giá vốn đã lọc", columns: [
-        { label: "Mặt hàng", key: "productName", width: 36 },
-        { label: "SL bán ròng", key: "qtySold", width: 18, format: "number" },
-        { label: "Giá vốn bình quân", key: "costPrice", width: 20, format: "currency" },
-        { label: "Tổng giá vốn", key: "totalCost", width: 22, format: "currency" },
-        { label: "Tỷ trọng", key: "pctOfCogs", width: 16, format: "percent" },
-        { label: "Dòng thiếu căn cứ", key: "missingCostLines", width: 20, format: "number" },
-      ], rows: visibleCogs.map(row => ({ ...row, costPrice: row.costComplete ? row.costPrice : null, totalCost: row.costComplete ? row.totalCost : null, pctOfCogs: row.costComplete ? row.pctOfCogs : null })) });
+      viewSheets.push({ name: "Giá vốn đã lọc", columns: FINANCIAL_COST_COLUMNS, rows: visibleCogs.map(row => ({ ...row })) });
       await exportReportToExcel({
         kind: "bao-cao-tai-chinh",
         mode: "view",
@@ -541,22 +535,8 @@ export default function BaoCaoTaiChinhPage() {
       if (exportCogsItems.length > 0) {
         sheets.push({
           name: "3. Giá vốn theo SP",
-          columns: [
-            { label: "STT", key: "index", width: 7, format: "number" },
-            { label: "Sản phẩm", key: "product", width: 30 },
-            { label: "SL bán ròng", key: "quantity", width: 12, format: "number" },
-            { label: "Giá vốn/SP", key: "unitCost", width: 18, format: "currency" },
-            { label: "Tổng giá vốn", key: "totalCost", width: 18, format: "currency" },
-            { label: "Tỷ trọng giá vốn", key: "share", width: 12, format: "percent" },
-          ],
-          rows: exportCogsItems.map((item, index) => ({
-            index: index + 1,
-            product: item.productName,
-            quantity: item.qtySold,
-            unitCost: item.costComplete ? item.costPrice : null,
-            totalCost: item.costComplete ? item.totalCost : null,
-            share: item.costComplete ? item.pctOfCogs : null,
-          })),
+          columns: FINANCIAL_COST_COLUMNS,
+          rows: exportCogsItems.map(row => ({ ...row })),
         });
       }
 
@@ -1167,7 +1147,7 @@ export default function BaoCaoTaiChinhPage() {
                   initialDimension={{ width: 320, height: 224 }}
                 >
                   <BarChart
-                    data={cogsItems.filter((item) => item.costComplete).slice(0, 7)}
+                    data={cogsItems.filter((item) => item.costComplete).slice(0, 7).map(item => ({ ...item, chartLabel: `${item.productName} · ${item.unit || "Chưa có ĐVT"}` }))}
                     layout="vertical"
                     margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
                   >
@@ -1184,7 +1164,7 @@ export default function BaoCaoTaiChinhPage() {
                     />
                     <YAxis
                       type="category"
-                      dataKey="productName"
+                      dataKey="chartLabel"
                       tick={{ fontSize: 10 }}
                       tickLine={false}
                       axisLine={false}
@@ -1326,7 +1306,7 @@ export default function BaoCaoTaiChinhPage() {
             <div className="mb-3 flex flex-wrap gap-2">
               <input aria-label="Tìm mặt hàng giá vốn" placeholder="Tên mặt hàng" className="h-10 min-w-48 flex-1 rounded border bg-background px-3 text-sm" value={cogsSearch} onChange={event => { setCogsSearch(event.target.value); setCogsPage(0); }} />
               <select aria-label="Tình trạng giá vốn" className="h-10 rounded border bg-background px-3 text-sm" value={cogsCompleteness} onChange={event => { setCogsCompleteness(event.target.value as typeof cogsCompleteness); setCogsPage(0); }}><option value="all">Tất cả giá vốn</option><option value="complete">Đủ căn cứ</option><option value="missing">Thiếu căn cứ</option></select>
-              <select aria-label="Sắp xếp giá vốn" className="h-10 rounded border bg-background px-3 text-sm" value={cogsSort} onChange={event => { setCogsSort(event.target.value as CogsSort); setCogsPage(0); }}>{Object.entries({ productName: "Tên mặt hàng", qtySold: "SL bán ròng", costPrice: "Giá vốn bình quân", totalCost: "Tổng giá vốn", pctOfCogs: "Tỷ trọng", missingCostLines: "Dòng thiếu giá" }).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+              <select aria-label="Sắp xếp giá vốn" className="h-10 rounded border bg-background px-3 text-sm" value={cogsSort} onChange={event => { setCogsSort(event.target.value as CogsSort); setCogsPage(0); }}>{Object.entries({ productName: "Tên mặt hàng", unit: "ĐVT", soldQty: "SL bán", returnedQty: "SL trả", qtySold: "SL ròng", costPrice: "Đơn giá vốn bán BQ", salesCost: "Giá vốn hàng bán", returnsCost: "Giá vốn hàng trả", totalCost: "Giá vốn ròng", pctOfCogs: "Tỷ trọng", missingCostLines: "Dòng thiếu giá" }).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
               <select aria-label="Chiều sắp xếp giá vốn" className="h-10 rounded border bg-background px-3 text-sm" value={cogsDirection} onChange={event => { setCogsDirection(event.target.value as SortDirection); setCogsPage(0); }}><option value="desc">Giảm dần</option><option value="asc">Tăng dần</option></select>
             </div>
             <ReportTableFrame tablePreferenceKey="report.financial-results.materials">
@@ -1339,13 +1319,28 @@ export default function BaoCaoTaiChinhPage() {
                       Sản phẩm
                     </th>
                     <th className="text-right py-2 pr-4 font-medium">
+                      ĐVT
+                    </th>
+                    <th className="text-right py-2 pr-4 font-medium">
+                      SL bán
+                    </th>
+                    <th className="text-right py-2 pr-4 font-medium">
+                      SL trả
+                    </th>
+                    <th className="text-right py-2 pr-4 font-medium">
                       SL bán ròng
                     </th>
                     <th className="text-right py-2 pr-4 font-medium">
-                      Giá vốn bình quân
+                      Đơn giá vốn bán BQ
                     </th>
                     <th className="text-right py-2 pr-4 font-medium">
-                      Tổng giá vốn
+                      Giá vốn hàng bán
+                    </th>
+                    <th className="text-right py-2 pr-4 font-medium">
+                      Giá vốn hàng trả
+                    </th>
+                    <th className="text-right py-2 pr-4 font-medium">
+                      Giá vốn ròng
                     </th>
                     <th className="text-right py-2 font-medium">
                       Tỷ trọng giá vốn
@@ -1355,7 +1350,7 @@ export default function BaoCaoTaiChinhPage() {
                 <tbody>
                   {visibleCogs.slice(currentCogsPage * 50, (currentCogsPage + 1) * 50).map((item, i) => (
                     <tr
-                      key={item.productName}
+                      key={item.rowKey ?? item.productName}
                       className="border-b last:border-0"
                     >
                       <td className="py-3 pr-4 text-muted-foreground">
@@ -1365,10 +1360,26 @@ export default function BaoCaoTaiChinhPage() {
                         {item.productName}
                       </td>
                       <td className="py-3 pr-4 text-right">
+                        {item.unit || "—"}
+                      </td>
+                      <td className="py-3 pr-4 text-right">
+                        {item.soldQty == null ? "—" : formatNumber(item.soldQty)}
+                      </td>
+                      <td className="py-3 pr-4 text-right">
+                        {item.returnedQty == null ? "—" : formatNumber(item.returnedQty)}
+                      </td>
+                      <td className="py-3 pr-4 text-right">
                         {formatNumber(item.qtySold)}
                       </td>
                       <td className="py-3 pr-4 text-right">
-                        {item.costComplete ? formatCurrency(item.costPrice) : "—"}
+                        {item.costPrice == null ? "—" : formatCurrency(item.costPrice)}
+                        {(item.missingSoldQty ?? 0) > 0 && <span className="block text-xs text-muted-foreground">Thiếu giá: {formatNumber(item.missingSoldQty ?? 0)} {item.unit}</span>}
+                      </td>
+                      <td className="py-3 pr-4 text-right">
+                        {item.salesCost == null ? "—" : formatCurrency(item.salesCost)}
+                      </td>
+                      <td className="py-3 pr-4 text-right">
+                        {item.returnsCost == null ? "—" : formatCurrency(item.returnsCost)}
                       </td>
                       <td className="py-3 pr-4 text-right font-medium text-status-warning">
                         {item.costComplete
@@ -1377,13 +1388,13 @@ export default function BaoCaoTaiChinhPage() {
                       </td>
                       <td className="py-3 text-right">
                         <span className="inline-block bg-status-warning/10 text-status-warning px-2 py-0.5 rounded text-xs font-medium">
-                          {item.costComplete ? `${item.pctOfCogs}%` : "—"}
+                          {item.costComplete && item.pctOfCogs != null ? `${item.pctOfCogs}%` : "—"}
                         </span>
                       </td>
                     </tr>
                   ))}
                 </tbody>
-                <tfoot><tr className="border-t-2 bg-muted/40 font-semibold"><td colSpan={4} className="py-3">Tổng giá vốn của {visibleCogs.length} kết quả lọc</td><td className="py-3 text-right tabular-nums">{visibleCogs.every(row => row.costComplete) ? formatCurrency(visibleCogs.reduce((sum, row) => sum + row.totalCost, 0)) : "Chưa đủ dữ liệu"}</td><td /></tr></tfoot>
+                <tfoot><tr className="border-t-2 bg-muted/40 font-semibold"><td colSpan={9} className="py-3">Tổng giá vốn của {visibleCogs.length} kết quả lọc</td><td className="py-3 text-right tabular-nums">{visibleCogs.every(row => row.costComplete && row.totalCost != null) ? formatCurrency(visibleCogs.reduce((sum, row) => sum + (row.totalCost ?? 0), 0)) : "Chưa đủ dữ liệu"}</td><td /></tr></tfoot>
               </table>
               {cogsItems.length < cogsTotalCount && (
                 <div className="border-t border-border py-3 text-center">

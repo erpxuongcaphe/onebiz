@@ -47,7 +47,7 @@ export function cashReportRows(rows: CashBookEntry[], filters: CashTableFilter):
     });
 }
 
-export type CogsSort = "productName" | "qtySold" | "costPrice" | "totalCost" | "pctOfCogs" | "missingCostLines";
+export type CogsSort = "productName" | "unit" | "soldQty" | "returnedQty" | "salesCost" | "returnsCost" | "qtySold" | "costPrice" | "totalCost" | "pctOfCogs" | "missingCostLines";
 export function debtorReportRows(rows: TopDebtor[], search: string, sort: "name" | "debt", direction: SortDirection): TopDebtor[] {
   return rows.filter(row => row.name.toLocaleLowerCase("vi").includes(search.trim().toLocaleLowerCase("vi"))).sort((a, b) => {
     const difference = sort === "name" ? a.name.localeCompare(b.name, "vi") : a.debt - b.debt;
@@ -56,10 +56,12 @@ export function debtorReportRows(rows: TopDebtor[], search: string, sort: "name"
 }
 export function cogsReportRows(rows: COGSItem[], search: string, completeness: "all" | "complete" | "missing", sort: CogsSort, direction: SortDirection): COGSItem[] {
   const needle = search.trim().toLocaleLowerCase("vi");
-  return rows.filter(row => row.productName.toLocaleLowerCase("vi").includes(needle)
+  return rows.filter(row => `${row.productName} ${row.unit ?? ""}`.toLocaleLowerCase("vi").includes(needle)
     && (completeness === "all" || row.costComplete === (completeness === "complete"))).sort((a, b) => {
-    if (["costPrice", "totalCost", "pctOfCogs"].includes(sort) && a.costComplete !== b.costComplete) return a.costComplete ? -1 : 1;
-    const difference = sort === "productName" ? a.productName.localeCompare(b.productName, "vi") : a[sort] - b[sort];
+    if (["totalCost", "pctOfCogs"].includes(sort) && a.costComplete !== b.costComplete) return a.costComplete ? -1 : 1;
+    const left = a[sort], right = b[sort];
+    if (left == null || right == null) return left == null && right == null ? a.productName.localeCompare(b.productName, "vi") : left == null ? 1 : -1;
+    const difference = sort === "productName" || sort === "unit" ? String(left).localeCompare(String(right), "vi") : Number(left) - Number(right);
     return difference * (direction === "asc" ? 1 : -1) || a.productName.localeCompare(b.productName, "vi");
   });
 }
