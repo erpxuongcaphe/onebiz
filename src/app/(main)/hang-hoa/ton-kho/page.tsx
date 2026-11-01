@@ -35,7 +35,9 @@ import {
 } from "@/components/ui/dialog";
 import { useToast, useBranchFilter, useAuth } from "@/lib/contexts";
 import { formatCurrency, formatDate, formatStockQuantity } from "@/lib/format";
-import { exportToCsv } from "@/lib/utils/export";
+import { exportToCsv, exportToExcel } from "@/lib/utils/export";
+import { inventoryCatalogExport } from "@/lib/reports/inventory-catalog-export";
+import { getStockMovementUnitValue, getStockMovementTotalValue } from "@/lib/stock-movement-values";
 import {
   getBranches,
   getProductStockBreakdown,
@@ -55,8 +57,7 @@ import { Icon } from "@/components/ui/icon";
 import { OpeningStockDialog } from "@/components/shared/dialogs/opening-stock-dialog";
 import { OpeningStockHistoryDialog } from "@/components/shared/dialogs/opening-stock-history-dialog";
 import { downloadTemplate } from "@/lib/excel";
-import { initialStockExcelSchema, type InitialStockImportRow } from "@/lib/excel/schemas";
-import { exportToExcelFromSchema } from "@/lib/excel";
+import { initialStockExcelSchema } from "@/lib/excel/schemas";
 
 type ProductTypeFilter = "all" | "nvl" | "sku";
 
@@ -81,6 +82,7 @@ function StockRowDetail({
   const { toast } = useToast();
   const { hasPermission } = useAuth();
   const canAdjust = hasPermission("inventory.adjust");
+  const canViewCost = hasPermission("products.view_cost");
 
   const [branches, setBranches] = useState<
     Array<{
@@ -316,14 +318,14 @@ function StockRowDetail({
                           "—"
                         ),
                     },
-                    {
+                    ...(canViewCost ? [{
                       label: "Giá vốn",
-                      value: row.costPrice ? formatCurrency(row.costPrice) : "—",
+                      value: row.costPrice != null ? formatCurrency(row.costPrice) : "Chưa xác định",
                     },
                     {
                       label: "Giá trị tồn",
                       value: row.valuationComplete === false ? "Chưa đủ dữ liệu" : formatCurrency(row.stockValue),
-                    },
+                    }] : []),
                     { label: "Cập nhật", value: row.updatedAt ? formatDate(row.updatedAt) : "Chưa phát sinh" },
                   ]}
                 />
@@ -470,8 +472,8 @@ function StockRowDetail({
                           <th className="text-left p-2 font-medium">Loại</th>
                           <th className="text-right p-2 font-medium">Số lượng</th>
                           {/* Đợt 6 (19/07): giá ghi lúc bán/nhập (trigger). */}
-                          <th className="text-right p-2 font-medium">Đơn giá</th>
-                          <th className="text-right p-2 font-medium">Giá trị</th>
+                          {canViewCost && <th className="text-right p-2 font-medium">Đơn giá</th>}
+                          {canViewCost && <th className="text-right p-2 font-medium">Giá trị</th>}
                           {/* Đợt 4 (17/07): cột Tồn cuối kiểu KiotViet — tồn sau
                               mỗi lần nhập/xuất, cộng dồn từ đầu sổ. */}
                           <th className="text-right p-2 font-medium">Tồn cuối</th>
@@ -517,17 +519,16 @@ function StockRowDetail({
                               />
                             </td>
                             {/* Đợt 6: đơn giá (nhập→giá phiếu, xuất→giá vốn) + giá trị. */}
-                            {(() => {
-                              const up = m.type === "export"
-                                ? m.unitCost
-                                : (m.unitPrice ?? m.unitCost);
+                            {canViewCost && (() => {
+                              const up = getStockMovementUnitValue(m);
+                              const total = getStockMovementTotalValue(m);
                               return (
                                 <>
                                   <td className="p-2 text-right tabular-nums whitespace-nowrap">
                                     {up != null ? formatCurrency(up) : "—"}
                                   </td>
                                   <td className="p-2 text-right tabular-nums whitespace-nowrap font-medium">
-                                    {up != null ? formatCurrency(up * Math.abs(m.quantity)) : "—"}
+                                    {total != null ? formatCurrency(total) : "—"}
                                   </td>
                                 </>
                               );
@@ -662,8 +663,8 @@ function StockRowDetail({
               const newQty = Number(newQtyInput.replace(/,/g, "."));
               const delta = newQty - row.quantity;
               const isIncrease = delta > 0;
-              const oldValue = row.quantity * (row.costPrice ?? 0);
-              const newValue = newQty * (row.costPrice ?? 0);
+              const oldValue = row.valuationComplete !== false ? row.stockValue : null;
+              const newValue = row.valuationComplete !== false && row.costPrice != null ? newQty * row.costPrice : null;
               const unit = row.unit ?? "";
               return (
                 <>
@@ -690,13 +691,13 @@ function StockRowDetail({
                           </span>
                         </span>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">Giá trị tồn</span>
+                      {canViewCost && <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Giá trị tồn dự kiến</span>
                         <span className="font-semibold tabular-nums">
-                          {formatCurrency(oldValue)} →{" "}
-                          <span className="text-primary">{formatCurrency(newValue)}</span>
+                          {oldValue == null ? "Chưa xác định" : formatCurrency(oldValue)} →{" "}
+                          <span className="text-primary">{newValue == null ? "Chưa xác định" : formatCurrency(newValue)}</span>
                         </span>
-                      </div>
+                      </div>}
                     </div>
 
                     {/* Danh sách hậu quả */}
@@ -1153,17 +1154,8 @@ export default function TonKhoPage() {
               stockFilter,
               lowStockOnly: lowStockOnly === "low",
             });
-            const stockRows: InitialStockImportRow[] = all
-              .filter((r) => r.branchCode)
-              .map((r) => ({
-                productCode: r.productCode,
-                productName: r.productName,
-                branchCode: r.branchCode ?? "",
-                quantity: r.quantity,
-                costPrice: r.costPrice ?? 0,
-                note: `Xuất từ tồn kho hiện tại — giá trị ${r.stockValue}`,
-              }));
-            exportToExcelFromSchema(stockRows, initialStockExcelSchema);
+            const output = inventoryCatalogExport(all, canViewCost);
+            await exportToExcel(output.data, output.columns, "bao-cao-ton-kho", { financialTable: true });
           },
           csv: async () => {
             const all = await getInventoryCatalogRows({
@@ -1173,16 +1165,8 @@ export default function TonKhoPage() {
               stockFilter,
               lowStockOnly: lowStockOnly === "low",
             });
-            const cols = [
-              { header: "Mã hàng", key: "productCode", width: 15 },
-              { header: "Tên hàng", key: "productName", width: 30 },
-              { header: "Chi nhánh", key: "branchName", width: 20 },
-              { header: "Tồn kho", key: "quantity", width: 12, format: (v: number) => v },
-              { header: "Khả dụng", key: "available", width: 12, format: (v: number) => v },
-              { header: "Giá trị tồn", key: "stockValue", width: 15, format: (v: number) => v },
-            ];
-            exportToCsv(all.map(row => ({ ...row, stockValue: row.valuationComplete === false ? null : row.stockValue })),
-              canViewCost ? cols : cols.filter(column => column.key !== "stockValue"), "ton-kho");
+            const output = inventoryCatalogExport(all, canViewCost);
+            await exportToCsv(output.data, output.columns, "bao-cao-ton-kho");
           },
         }}
       />

@@ -455,7 +455,7 @@ export const REPORT_CATALOG: ReportCatalogItem[] = [
     category: "finance",
     icon: "account_balance_wallet",
     keywords: ["financial", "margin", "tỷ suất", "quản trị"],
-    permissions: PROFIT_PERMISSIONS,
+    permissions: [...PROFIT_PERMISSIONS, PERMISSIONS.REPORTS_VIEW_DETAIL],
     permissionMode: "all",
   },
   {
