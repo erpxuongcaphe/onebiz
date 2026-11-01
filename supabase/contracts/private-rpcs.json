@@ -223,6 +223,17 @@
           { "name": "p_limit", "optional": true }
         ] }
       ]
+    },
+    {
+      "migration": "delivery_invoice_management_v1",
+      "migrationSha256": "34b6422028c5851264151cc7ba494069d62ef9857593259ffddc734492277174",
+      "functions": [
+        { "name": "get_delivery_invoice_management_v1", "params": [
+          { "name": "p_branch_id", "optional": false },
+          { "name": "p_from", "optional": false },
+          { "name": "p_to", "optional": false }
+        ] }
+      ]
     }
   ]
 }

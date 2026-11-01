@@ -22,6 +22,7 @@ describe("delivery report filter and export safety", () => {
     expect(options.sheets).toHaveLength(2); expect(options.branchName).toBe("branch-a");
     expect(options.sheets[1].rows[0]).toMatchObject({ invoicePaid: 60, invoiceDebt: 40, branchName: "Quán thử" });
     expect(options.sheets[1].columns.map((c: { key: string }) => c.key)).toContain("invoicePaid");
+    for (const sheet of options.sheets) expect(sheet.titleRows.join(" ")).toContain("Thanh toán hiện tại trên hóa đơn");
   });
   it("does not export money columns when the source denies money permission", async () => {
     mocks.read.mockResolvedValue({ ...report, canViewMoney: false, items: [{ ...row, invoiceTotal: null, invoicePaid: null, invoiceDebt: null, deliveryFee: null, paymentMethod: null }] });
@@ -43,5 +44,16 @@ describe("delivery report filter and export safety", () => {
     const view = render(<Page />); mocks.branch = "branch-b"; view.rerender(<Page />);
     await screen.findByText("Nhân viên mới"); await act(async () => resolveOld(report));
     expect(screen.queryByText("Nhân viên thử")).not.toBeInTheDocument();
+  });
+  it("reloads invoice payment without dropping the selected search", async () => {
+    render(<Page />); await screen.findByText("Nhân viên thử");
+    fireEvent.change(screen.getByLabelText("Tìm đơn, hóa đơn, khách"), { target: { value: "khach thu" } });
+    mocks.read.mockResolvedValue({ ...report, items: [{ ...row, invoicePaid: 100, invoiceDebt: 0 }] });
+    fireEvent.click(screen.getByRole("button", { name: /Tải lại/ }));
+    await waitFor(() => expect(mocks.read).toHaveBeenCalledTimes(2));
+    await screen.findByText("Nhân viên thử");
+    expect(screen.getByLabelText("Tìm đơn, hóa đơn, khách")).toHaveValue("khach thu");
+    fireEvent.click(screen.getByText("Export full")); await waitFor(() => expect(mocks.export).toHaveBeenCalled());
+    expect(mocks.export.mock.calls[0][0].sheets[1].rows[0]).toMatchObject({ invoicePaid: 100, invoiceDebt: 0 });
   });
 });

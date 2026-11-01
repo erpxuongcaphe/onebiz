@@ -4,7 +4,7 @@ import { ReportPageHeader, ReportDataTable, type DataTableColumn } from "@/compo
 import { useBranchFilter, useToast } from "@/lib/contexts";
 import { useReportState } from "@/lib/hooks/use-report-state";
 import { getDeliveryInvoiceManagement, type DeliveryInvoiceReport } from "@/lib/services/supabase/delivery-invoice-management";
-import { deliveryInvoiceView, filterDeliveryRows, summarizeDeliveryRows, deliveryManagementColumns, DELIVERY_STATUS_LABELS, INVOICE_PAYMENT_LABELS, type DeliveryInvoiceView } from "@/lib/reports/delivery-invoice-view";
+import { deliveryInvoiceView, filterDeliveryRows, summarizeDeliveryRows, deliveryManagementColumns, deliverySortValue, sortDeliveryRows, DELIVERY_STATUS_LABELS, INVOICE_PAYMENT_LABELS, type DeliveryInvoiceView } from "@/lib/reports/delivery-invoice-view";
 import { sortedReportView } from "@/lib/reports/table-sort";
 import { exportReportToExcel, buildReportTitleRows, type ExcelSheet } from "@/lib/utils/excel-export";
 import { formatCurrency, formatNumber } from "@/lib/format";
@@ -12,6 +12,8 @@ import { LoadErrorState } from "@/components/shared/load-error-state";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { KpiCard } from "@/app/(main)/phan-tich/_components";
+import { Button } from "@/components/ui/button";
+import { Icon } from "@/components/ui/icon";
 
 type Sort = { id: string; direction: "asc" | "desc" } | null;
 const EMPTY_FILTERS = { search: "", staff: "", status: "", method: "" };
@@ -24,18 +26,19 @@ export default function DeliveryInvoiceManagementReport() {
   const [filters, setFilters] = useState(EMPTY_FILTERS), [tab, setTab] = useState("staff");
   const [sort, setSort] = useState<Sort>(null), [summarySort, setSummarySort] = useState<Sort>(null);
   const [exporting, setExporting] = useState(false);
+  const [snapshotAt, setSnapshotAt] = useState<Date | null>(null);
   const requestIdRef = useRef(0), exportRevision = useRef(0);
-  const load = useCallback(async () => {
+  const load = useCallback(async (resetFilters = true) => {
     const requestId = ++requestIdRef.current; exportRevision.current++;
-    setLoading(true); setError(null); setReport(null); setFilters(EMPTY_FILTERS);
-    try { const data = await getDeliveryInvoiceManagement(activeBranchId, range); if (requestId !== requestIdRef.current) return; setReport(data); }
+    setLoading(true); setError(null); setReport(null); setSnapshotAt(null); if (resetFilters) setFilters(EMPTY_FILTERS);
+    try { const data = await getDeliveryInvoiceManagement(activeBranchId, range); if (requestId !== requestIdRef.current) return; setReport(data); setSnapshotAt(new Date()); }
     catch (err) { if (requestId === requestIdRef.current) setError(err instanceof Error ? err.message : "Không tải được giao hàng."); }
     finally { if (requestId === requestIdRef.current) setLoading(false); }
   }, [activeBranchId, range]);
   useEffect(() => { if (isReady) void load(); return () => { requestIdRef.current++; exportRevision.current++; }; }, [isReady, load]);
   const allRows = useMemo(() => deliveryInvoiceView(report?.items ?? []), [report]);
   const filtered = useMemo(() => filterDeliveryRows(allRows, filters), [allRows, filters]);
-  const rows = useMemo(() => sortedReportView(filtered, sort), [filtered, sort]);
+  const rows = useMemo(() => sortDeliveryRows(filtered, sort), [filtered, sort]);
   const totals = summarizeDeliveryRows(filtered);
   const canViewMoney = report?.canViewMoney ?? false;
   const summary = useMemo(() => {
@@ -68,6 +71,9 @@ export default function DeliveryInvoiceManagementReport() {
     const revision = exportRevision.current; setExporting(true);
     const titleRows = buildReportTitleRows({ title: "Giao hàng theo nhân viên", range, branchName: branchLabel, generatedAt: new Date() });
     titleRows.push(`Nhân viên: ${filters.staff ? allRows.find(row => row.staffKey === filters.staff)?.staffName ?? "Chưa xác định" : "Tất cả"}; Trạng thái: ${DELIVERY_STATUS_LABELS[filters.status as keyof typeof DELIVERY_STATUS_LABELS] ?? "Tất cả"}; Thanh toán: ${(INVOICE_PAYMENT_LABELS[filters.method] ?? filters.method) || "Tất cả"}; Tìm kiếm: ${filters.search || "Không"}`);
+    titleRows.push(`Kỳ theo ngày tạo đơn. Dữ liệu cập nhật: ${snapshotAt?.toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) ?? "Chưa xác định"}.`);
+    titleRows.push("Thanh toán hiện tại trên hóa đơn; không phải tiền nhân viên bàn giao. Tổng tiền chỉ gồm phần xác định, không gồm đơn hủy hoặc hóa đơn gắn nhiều đơn giao.");
+    if (canViewMoney && totals.missingInvoice) titleRows.push(`${totals.missingInvoice} đơn cần kiểm tra hóa đơn; ô trống không có nghĩa là bằng 0.`);
     const summarySheet: ExcelSheet = { name: "1. Theo nhân viên", titleRows, columns: summaryColumns, rows: summaryRows, footer: { branchName: "TỔNG", ...totals }, tablePreferenceKey: "report.delivery-invoice.staff" };
     const detailSheet: ExcelSheet = { name: "2. Chi tiết đơn giao", titleRows, columns: detailColumns, rows, tablePreferenceKey: "report.delivery-invoice.orders" };
     try {
@@ -81,6 +87,10 @@ export default function DeliveryInvoiceManagementReport() {
   return <div className="flex h-[calc(100vh-4rem)] flex-col overflow-y-auto">
     <ReportPageHeader title="Giao hàng theo nhân viên" subtitle="Đơn giao và thanh toán trên hóa đơn" preset={preset} range={range} onPresetChange={setPreset} onCustomRangeChange={setCustomRange} onExportView={() => void exportFile(false)} onExportFull={() => void exportFile(true)} exportDisabled={loading || !!error || exporting || !rows.length} />
     <div className="space-y-4 p-4 md:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
+        <span>{snapshotAt ? `Cập nhật: ${snapshotAt.toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}` : ""}</span>
+        <Button variant="outline" size="sm" disabled={loading} onClick={() => void load(false)}><Icon name="refresh" />Tải lại</Button>
+      </div>
       {error ? <LoadErrorState description={error} onRetry={() => void load()} /> : loading ? <p role="status">Đang tải giao hàng…</p> : <>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <KpiCard label="Đơn giao" value={formatNumber(totals.orders)} icon="local_shipping" bg="bg-primary/10" iconColor="text-primary" valueColor="text-primary" />
@@ -98,7 +108,7 @@ export default function DeliveryInvoiceManagementReport() {
         <Tabs value={tab} onValueChange={value => { exportRevision.current++; setTab(value); }}><TabsList><TabsTrigger value="staff">Theo nhân viên</TabsTrigger><TabsTrigger value="orders">Chi tiết đơn</TabsTrigger></TabsList></Tabs>
         <h2 className="border-l-4 border-primary bg-primary/5 px-3 py-2 text-base font-semibold">{tab === "staff" ? "Tổng hợp giao hàng theo nhân viên" : "Chi tiết đơn giao"}</h2>
         {tab === "staff" ? <ReportDataTable columns={toWebColumns<typeof summaryRows[number]>(summaryColumns)} rows={summaryRows} getRowKey={row => row.id} tablePreferenceKey="report.delivery-invoice.staff" sortState={summarySort} onSortChange={value => { exportRevision.current++; setSummarySort(value); }} />
-          : <ReportDataTable columns={toWebColumns<DeliveryInvoiceView>(detailColumns)} rows={rows} getRowKey={row => row.id} tablePreferenceKey="report.delivery-invoice.orders" sortState={sort} onSortChange={value => { exportRevision.current++; setSort(value); }} />}
+          : <ReportDataTable columns={toWebColumns<DeliveryInvoiceView>(detailColumns).map(column => ({ ...column, sortValue: (row: DeliveryInvoiceView) => deliverySortValue(row, String(column.key)) as string | number | null }))} rows={rows} getRowKey={row => row.id} tablePreferenceKey="report.delivery-invoice.orders" sortState={sort} onSortChange={value => { exportRevision.current++; setSort(value); }} />}
       </>}
     </div>
   </div>;

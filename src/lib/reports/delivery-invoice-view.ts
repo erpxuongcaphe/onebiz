@@ -2,6 +2,7 @@ import type { DeliveryInvoiceRow } from "@/lib/services/supabase/delivery-invoic
 import { deliveryDateTime, DELIVERY_TIER_LABELS } from "./delivery-report-export";
 import { normalizeSearch } from "@/lib/smart-search";
 import type { ExcelSheet } from "@/lib/utils/excel-export";
+import { sortReportRows } from "./table-sort";
 export const DELIVERY_STATUS_LABELS = { cancelled: "Đã hủy", completed: "Đã giao", assigned: "Đang giao", unassigned: "Chưa nhận giao" };
 export const INVOICE_PAYMENT_LABELS: Record<string, string> = { cash: "Tiền mặt", transfer: "Chuyển khoản", card: "Thẻ", mixed: "Kết hợp", bank_transfer: "Chuyển khoản" };
 const INVOICE_STATUS_LABELS: Record<string, string> = { completed: "Hoàn tất", cancelled: "Đã hủy", draft: "Nháp", pending: "Chưa hoàn tất", posted: "Đã ghi sổ" };
@@ -25,10 +26,20 @@ export function filterDeliveryRows(rows: DeliveryInvoiceView[], filters: { searc
   return rows.filter(row => (!filters.staff || row.staffKey === filters.staff) && (!filters.status || row.deliveryStatus === filters.status) && (!filters.method || row.paymentMethod === filters.method) &&
     terms.every(term => normalizeSearch([row.orderNumber, row.invoiceCode, row.staffName, row.branchName, row.customerName].join(" ")).includes(term)));
 }
+export function deliverySortValue(row: DeliveryInvoiceView, key: string) {
+  const timestamps: Record<string, string | null> = { createdLabel: row.createdAt, assignedLabel: row.assignedAt, completedLabel: row.completedAt };
+  return key in timestamps ? timestamps[key] ? Date.parse(timestamps[key]!) : null : row[key as keyof DeliveryInvoiceView];
+}
+export function sortDeliveryRows(rows: DeliveryInvoiceView[], sort: { id: string; direction: "asc" | "desc" } | null) {
+  return sort ? sortReportRows(rows, row => deliverySortValue(row, sort.id), sort.direction) : rows;
+}
 export function summarizeDeliveryRows(rows: DeliveryInvoiceView[]) {
   const active = rows.filter(row => row.deliveryStatus !== "cancelled");
   const moneyRows = active.filter(row => !!row.invoiceId && !row.invoiceDuplicate);
-  const sum = (key: "invoiceTotal" | "invoicePaid" | "invoiceDebt") => moneyRows.reduce((total, row) => total + (row[key] ?? 0), 0);
+  const sum = (key: "invoiceTotal" | "invoicePaid" | "invoiceDebt") => {
+    const known = moneyRows.flatMap(row => row[key] === null || row[key] === undefined ? [] : [row[key]!]);
+    return known.length ? known.reduce((total, value) => total + value, 0) : null;
+  };
   const timed = active.filter(row => row.durationSeconds !== null && row.durationSeconds !== undefined);
   return { orders: rows.length, completed: active.filter(row => row.deliveryStatus === "completed").length,
     cancelled: rows.length - active.length, unassigned: active.filter(row => !row.staffId).length,
