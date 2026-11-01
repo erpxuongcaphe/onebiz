@@ -13,7 +13,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { KpiCard, ChartCard } from "../_components";
 import { ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
-import { useBranchFilter, useAuth, useToast } from "@/lib/contexts";
+import { useBranchFilter, useToast } from "@/lib/contexts";
 import {
   formatCurrency,
   formatNumber,
@@ -34,6 +34,7 @@ import {
 import { Icon } from "@/components/ui/icon";
 import { LoadErrorState } from "@/components/shared/load-error-state";
 import { cn } from "@/lib/utils";
+import { DELIVERY_DETAIL_COLUMNS, DELIVERY_TIER_LABELS as TIER_LABEL, deliveryDateTime, deliveryDetailRow } from "@/lib/reports/delivery-report-export";
 
 function formatDuration(seconds: number): string {
   if (seconds <= 0) return "—";
@@ -44,13 +45,6 @@ function formatDuration(seconds: number): string {
   const h = Math.floor(m / 60);
   return `${h}h ${m % 60}p`;
 }
-
-const TIER_LABEL: Record<string, string> = {
-  near: "Gần",
-  mid: "Vừa",
-  far: "Xa",
-  custom: "Tự nhập",
-};
 
 export default function FnbShipperReportPage() {
   const { activeBranchId, branchLabel, isReady } = useBranchFilter();
@@ -64,6 +58,7 @@ export default function FnbShipperReportPage() {
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
   const [drillOrders, setDrillOrders] = useState<ShipperOrderRow[]>([]);
   const [drillLoading, setDrillLoading] = useState(false);
+  const [drillError, setDrillError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
   const drillRequestIdRef = useRef(0);
 
@@ -72,18 +67,15 @@ export default function FnbShipperReportPage() {
     const requestId = ++requestIdRef.current;
     setLoading(true);
     setLoadError(null);
+    drillRequestIdRef.current += 1;
+    setSelectedStaffId(null);
+    setDrillOrders([]);
+    setDrillError(null);
+    setDrillLoading(false);
     try {
       const list = await getDeliveryStaffPerformance(activeBranchId, range);
       if (requestId !== requestIdRef.current) return;
       setShippers(list);
-      // Reset drill khi đổi filter
-      if (
-        selectedStaffId &&
-        !list.find((s) => s.staffId === selectedStaffId)
-      ) {
-        setSelectedStaffId(null);
-        setDrillOrders([]);
-      }
     } catch (err) {
       if (requestId !== requestIdRef.current) return;
       console.error("Failed to fetch shipper data:", err);
@@ -96,7 +88,6 @@ export default function FnbShipperReportPage() {
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeBranchId, range, toast]);
 
   useEffect(() => {
@@ -104,8 +95,8 @@ export default function FnbShipperReportPage() {
     void fetchData();
   }, [fetchData, isReady]);
 
-  const handleDrillStaff = async (staffId: string) => {
-    if (selectedStaffId === staffId) {
+  const handleDrillStaff = async (staffId: string, retry = false) => {
+    if (selectedStaffId === staffId && !retry) {
       drillRequestIdRef.current += 1;
       setSelectedStaffId(null);
       setDrillOrders([]);
@@ -113,6 +104,8 @@ export default function FnbShipperReportPage() {
     }
     const requestId = ++drillRequestIdRef.current;
     setSelectedStaffId(staffId);
+    setDrillOrders([]);
+    setDrillError(null);
     setDrillLoading(true);
     try {
       const orders = await getOrdersByDeliveryStaff(staffId, activeBranchId, range);
@@ -120,6 +113,7 @@ export default function FnbShipperReportPage() {
       setDrillOrders(orders);
     } catch (err) {
       if (requestId !== drillRequestIdRef.current) return;
+      setDrillError(err instanceof Error ? err.message : "Không tải được chi tiết đơn giao.");
       toast({
         title: "Lỗi tải danh sách đơn",
         description: err instanceof Error ? err.message : "",
@@ -137,6 +131,7 @@ export default function FnbShipperReportPage() {
   const activeShippers = shippers.length;
 
   const handleExportView = useCallback(async () => {
+    const requestId = requestIdRef.current;
     try {
       const title = buildReportTitleRows({
         title: "GIAO HÀNG THEO NHÂN VIÊN",
@@ -148,11 +143,11 @@ export default function FnbShipperReportPage() {
         name: "Nhân viên giao hàng",
         titleRows: title,
         columns: [
-          { label: "Hạng", key: "rank", width: 6 },
+          { label: "STT", key: "rank", width: 6 },
           { label: "Nhân viên giao", key: "staffName", width: 28 },
           { label: "Số đơn", key: "totalOrders", width: 10, format: "number" },
           { label: "Doanh thu HĐ (VND)", key: "totalRevenue", width: 18, format: "currency" },
-          { label: "Phí giao thu (VND)", key: "totalDeliveryFee", width: 18, format: "currency" },
+          { label: "Phí giao trên đơn (VND)", key: "totalDeliveryFee", width: 24, format: "currency" },
           { label: "Thời gian giao TB (giây)", key: "avgDeliverySeconds", width: 20, format: "number" },
           { label: "Đơn đã giao xong", key: "completedCount", width: 16, format: "number" },
         ],
@@ -162,7 +157,7 @@ export default function FnbShipperReportPage() {
           totalOrders: s.totalOrders,
           totalRevenue: s.totalRevenue,
           totalDeliveryFee: s.totalDeliveryFee,
-          avgDeliverySeconds: s.avgDeliverySeconds,
+          avgDeliverySeconds: s.avgDeliverySeconds > 0 ? s.avgDeliverySeconds : "",
           completedCount: s.completedCount,
         })),
         footer: {
@@ -181,6 +176,7 @@ export default function FnbShipperReportPage() {
         range,
         branchName: branchLabel,
         sheets: [sheet],
+        shouldSave: () => requestId === requestIdRef.current,
       });
       toast({ title: "Đã xuất Excel", variant: "success" });
     } catch (err) {
@@ -193,6 +189,7 @@ export default function FnbShipperReportPage() {
   }, [shippers, range, branchLabel, totalOrders, totalRevenue, totalDeliveryFee, toast]);
 
   const handleExportFull = useCallback(async () => {
+    const requestId = requestIdRef.current;
     setExporting(true);
     try {
       const orderGroups = await Promise.all(
@@ -205,6 +202,10 @@ export default function FnbShipperReportPage() {
           ),
         })),
       );
+      if (requestId !== requestIdRef.current) {
+        toast({ title: "Bộ lọc đã thay đổi", description: "Xuất lại báo cáo theo bộ lọc hiện tại.", variant: "error" });
+        return;
+      }
       const titleRows = buildReportTitleRows({
         title: "Giao hàng theo nhân viên",
         range,
@@ -215,11 +216,11 @@ export default function FnbShipperReportPage() {
         name: "1. Tổng hợp giao hàng",
         titleRows,
         columns: [
-          { label: "Hạng", key: "rank", width: 7, format: "number" },
+          { label: "STT", key: "rank", width: 7, format: "number" },
           { label: "Nhân viên giao", key: "staffName", width: 28 },
           { label: "Số đơn", key: "totalOrders", width: 12, format: "number" },
           { label: "Doanh thu HĐ", key: "totalRevenue", width: 18, format: "currency" },
-          { label: "Phí giao thu", key: "totalDeliveryFee", width: 18, format: "currency" },
+          { label: "Phí giao trên đơn (VND)", key: "totalDeliveryFee", width: 24, format: "currency" },
           { label: "Thời gian TB (giây)", key: "avgDeliverySeconds", width: 18, format: "number" },
           { label: "Đơn giao xong", key: "completedCount", width: 16, format: "number" },
         ],
@@ -229,41 +230,23 @@ export default function FnbShipperReportPage() {
           totalOrders: shipper.totalOrders,
           totalRevenue: shipper.totalRevenue,
           totalDeliveryFee: shipper.totalDeliveryFee,
-          avgDeliverySeconds: shipper.avgDeliverySeconds,
+          avgDeliverySeconds: shipper.avgDeliverySeconds > 0 ? shipper.avgDeliverySeconds : "",
           completedCount: shipper.completedCount,
         })),
+        footer: {
+          staffName: "TỔNG",
+          totalOrders: shippers.reduce((sum, s) => sum + s.totalOrders, 0),
+          totalRevenue: shippers.reduce((sum, s) => sum + s.totalRevenue, 0),
+          totalDeliveryFee: shippers.reduce((sum, s) => sum + s.totalDeliveryFee, 0),
+          completedCount: shippers.reduce((sum, s) => sum + s.completedCount, 0),
+        },
       };
       const detailSheet: ExcelSheet = {
         name: "2. Chi tiết đơn giao",
-        columns: [
-          { label: "Nhân viên giao", key: "staffName", width: 28 },
-          { label: "Mã đơn", key: "orderNumber", width: 16 },
-          { label: "Mã hóa đơn", key: "invoiceCode", width: 16 },
-          { label: "Khách hàng", key: "customerName", width: 28 },
-          { label: "Doanh thu", key: "total", width: 18, format: "currency" },
-          { label: "Phí giao", key: "deliveryFee", width: 16, format: "currency" },
-          { label: "Cự ly", key: "tier", width: 12 },
-          { label: "Giao lúc", key: "assignedAt", width: 20, format: "date" },
-          { label: "Hoàn tất lúc", key: "completedAt", width: 20, format: "date" },
-          { label: "Thời gian (giây)", key: "duration", width: 18, format: "number" },
-        ],
+        titleRows,
+        columns: DELIVERY_DETAIL_COLUMNS,
         rows: orderGroups.flatMap(({ shipper, orders }) =>
-          orders.map((order) => ({
-            staffName: shipper.staffName,
-            orderNumber: order.orderNumber,
-            invoiceCode: order.invoiceCode ?? "",
-            customerName: order.customerName,
-            total: order.total,
-            deliveryFee: order.deliveryFee,
-            tier: order.deliveryTier ? TIER_LABEL[order.deliveryTier] ?? order.deliveryTier : "",
-            assignedAt: order.assignedAt
-              ? new Date(order.assignedAt).toLocaleString("vi-VN")
-              : "",
-            completedAt: order.completedAt
-              ? new Date(order.completedAt).toLocaleString("vi-VN")
-              : "",
-            duration: order.durationSeconds ?? "",
-          })),
+          orders.map((order) => deliveryDetailRow(shipper.staffName, order)),
         ),
       };
 
@@ -274,8 +257,9 @@ export default function FnbShipperReportPage() {
         branchName: branchLabel,
         reportTitle: "Giao hàng theo nhân viên",
         description:
-          "Tổng hợp hiệu suất từng nhân viên và chi tiết toàn bộ đơn giao trong phạm vi đã chọn.",
+          "Tổng hợp và chi tiết đơn được phân công trong kỳ tạo đơn. Phí giao trên đơn không phải số tiền đã thu hoặc đã đối soát.",
         sheets: [summarySheet, detailSheet],
+        shouldSave: () => requestId === requestIdRef.current,
       });
       toast({ title: "Đã xuất báo cáo giao hàng đầy đủ", variant: "success" });
     } catch (error) {
@@ -305,7 +289,7 @@ export default function FnbShipperReportPage() {
       onCustomRangeChange={setCustomRange}
       onExportView={handleExportView}
       onExportFull={handleExportFull}
-      exportDisabled={loading || exporting || shippers.length === 0}
+      exportDisabled={loading || !!loadError || exporting || shippers.length === 0}
     />
   );
 
@@ -364,7 +348,7 @@ export default function FnbShipperReportPage() {
             valueColor="text-status-success"
           />
           <KpiCard
-            label="Phí giao thu hộ quán"
+            label="Phí giao trên đơn"
             value={formatCurrency(totalDeliveryFee)}
             icon="receipt_long"
             bg="bg-status-warning/10"
@@ -413,7 +397,7 @@ export default function FnbShipperReportPage() {
                     <th className="text-left py-2 pr-3 font-medium">Nhân viên</th>
                     <th className="text-right py-2 pr-3 font-medium">Số đơn</th>
                     <th className="text-right py-2 pr-3 font-medium">Doanh thu HĐ</th>
-                    <th className="text-right py-2 pr-3 font-medium">Phí giao thu</th>
+                    <th className="text-right py-2 pr-3 font-medium">Phí giao trên đơn</th>
                     <th className="text-right py-2 pr-3 font-medium">Thời gian giao TB</th>
                     <th className="text-right py-2 font-medium">Đã giao</th>
                   </tr>
@@ -524,6 +508,8 @@ export default function FnbShipperReportPage() {
                   className="size-6 animate-spin text-muted-foreground"
                 />
               </div>
+            ) : drillError ? (
+              <LoadErrorState title="Không tải được chi tiết đơn giao" description={drillError} onRetry={() => void handleDrillStaff(selectedStaffId, true)} />
             ) : drillOrders.length === 0 ? (
               <div className="py-8 text-center text-sm text-muted-foreground">
                 Nhân viên này chưa có đơn nào trong kỳ.
@@ -539,7 +525,10 @@ export default function FnbShipperReportPage() {
                       <th className="text-left py-2 pr-3 font-medium">Khách</th>
                       <th className="text-right py-2 pr-3 font-medium">Tổng HĐ</th>
                       <th className="text-right py-2 pr-3 font-medium">Phí giao</th>
-                      <th className="text-left py-2 pr-3 font-medium">Tier</th>
+                      <th className="text-left py-2 pr-3 font-medium">Cự ly</th>
+                      <th className="text-left py-2 pr-3 font-medium whitespace-nowrap">Tạo đơn lúc</th>
+                      <th className="text-left py-2 pr-3 font-medium whitespace-nowrap">Nhận giao lúc</th>
+                      <th className="text-left py-2 pr-3 font-medium whitespace-nowrap">Hoàn tất lúc</th>
                       <th className="text-right py-2 pr-3 font-medium">Thời gian giao</th>
                       <th className="text-left py-2 font-medium">Trạng thái</th>
                     </tr>
@@ -559,7 +548,7 @@ export default function FnbShipperReportPage() {
                             {o.customerName}
                           </td>
                           <td className="py-2 pr-3 text-right tabular-nums font-medium">
-                            {formatCurrency(o.total)}
+                            {o.invoiceId ? formatCurrency(o.total) : "—"}
                           </td>
                           <td className="py-2 pr-3 text-right tabular-nums text-status-warning">
                             {formatCurrency(o.deliveryFee)}
@@ -569,6 +558,9 @@ export default function FnbShipperReportPage() {
                               ? TIER_LABEL[o.deliveryTier] ?? o.deliveryTier
                               : "—"}
                           </td>
+                          <td className="py-2 pr-3 whitespace-nowrap">{deliveryDateTime(o.createdAt) || "—"}</td>
+                          <td className="py-2 pr-3 whitespace-nowrap">{deliveryDateTime(o.assignedAt) || "—"}</td>
+                          <td className="py-2 pr-3 whitespace-nowrap">{deliveryDateTime(o.completedAt) || "—"}</td>
                           <td className="py-2 pr-3 text-right tabular-nums text-muted-foreground">
                             {o.durationSeconds !== null
                               ? formatDuration(o.durationSeconds)
@@ -583,7 +575,7 @@ export default function FnbShipperReportPage() {
                             ) : (
                               <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                                 <Icon name="schedule" size={14} />
-                                Đang giao
+                                {o.assignedAt ? "Đang giao" : "Chưa ghi nhận nhận giao"}
                               </span>
                             )}
                           </td>
