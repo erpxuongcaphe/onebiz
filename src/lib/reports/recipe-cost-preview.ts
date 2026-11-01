@@ -1,4 +1,13 @@
 import Decimal from "decimal.js-light";
+import { getRecipeQuantityInStockUnit } from "@/lib/format-uom";
+import type { UOMConversion } from "@/lib/types";
+
+/** Match the persisted stock-unit quantity, not an unrounded conversion. */
+export function calculateRecipeDraftLineCost(quantity: number, stockUnit: string, inputUnit: string, conversions: UOMConversion[], unitCost: number | null, wastePercent = 0): number | null {
+  const normalized = getRecipeQuantityInStockUnit(quantity, stockUnit, inputUnit, conversions);
+  if (normalized === null || unitCost === null || !Number.isFinite(unitCost) || unitCost < 0 || !Number.isFinite(wastePercent) || wastePercent < 0) return null;
+  return new Decimal(normalized).times(unitCost).times(new Decimal(1).plus(new Decimal(wastePercent).div(100))).toNumber();
+}
 
 export interface PreviewRecipeNode {
   unitPrice: number | null;
