@@ -90,7 +90,8 @@ import {
   getBOMsByProduct,
   getProductById,
 } from "@/lib/services";
-import { getFnbPreparedBomEstimates } from "@/lib/services/supabase/bom";
+import { getFnbPreparedRecipeEstimates } from "@/lib/services/supabase/fnb-menu-estimates";
+import { preparedCostDisplay, preparedCostExportFields, type PreparedCostDisplay } from "@/lib/reports/prepared-cost-display";
 import { getFnbBranchComponentCosts } from "@/lib/services/supabase/fnb-branch-cost";
 import { getFnbMenuEstimates, isFnbMenuRecipe, sortByMenuEstimate, type FnbMenuEstimate } from "@/lib/services/supabase/fnb-menu-estimates";
 import { getPosStockSnapshot } from "@/lib/services/supabase/pos-stock";
@@ -113,7 +114,6 @@ import { MenuRecipeCost } from "@/components/shared/menu-recipe-cost";
 import { menuRecipeExportFields } from "@/lib/reports/menu-recipe-export";
 
 type ProductScope = "nvl" | "sku";
-type PreparedCostDisplay = { value: number; source: "batch" | "recipe" } | { source: "error" };
 
 function PreparedCost({ product, cost, loading, estimate }: {
   product: Product;
@@ -733,7 +733,17 @@ export default function HangHoaPage() {
       }
       sortedEstimates = await getFnbMenuEstimates(allRows, query.branchId).catch(() => new Map(allRows.filter(isFnbMenuRecipe)
         .map((product) => [product.id, { value: null, reason: "Không tải được giá BOM" }])));
-      result.data = sortByMenuEstimate(allRows, sortedEstimates, sorting[0].desc).slice(page * pageSize, (page + 1) * pageSize);
+      const preparedRows = allRows.filter(product => product.isFnbStockItem);
+      const [recipeValues, balances] = query.branchId && preparedRows.length ? await Promise.all([
+        getFnbPreparedRecipeEstimates(preparedRows, query.branchId),
+        getFnbBranchComponentCosts(query.branchId, preparedRows.map(product => product.id)),
+      ]) : [new Map<string, number>(), new Map()];
+      const preparedValues = new Map<string, number>();
+      for (const product of preparedRows) {
+        const cost = preparedCostDisplay(balances.get(product.id), recipeValues.get(product.id));
+        if (cost && cost.source !== "error") preparedValues.set(product.id, cost.value);
+      }
+      result.data = sortByMenuEstimate(allRows, sortedEstimates, sorting[0].desc, preparedValues).slice(page * pageSize, (page + 1) * pageSize);
       result.total = allRows.length;
     }
     if (requestId !== listRequestId.current) return;
@@ -792,20 +802,15 @@ export default function HangHoaPage() {
         if (!preparedIds.length) return;
         try {
           const [estimates, branchCosts] = await Promise.all([
-            getFnbPreparedBomEstimates(preparedIds, isFnbOutletView ? activeBranchId : undefined),
+            getFnbPreparedRecipeEstimates(result.data.filter(product => preparedIds.includes(product.id)), isFnbOutletView ? activeBranchId : undefined),
             isFnbOutletView && activeBranchId
               ? getFnbBranchComponentCosts(activeBranchId, preparedIds)
               : Promise.resolve(new Map()),
           ]);
           const next = new Map<string, PreparedCostDisplay>();
           for (const id of preparedIds) {
-            const branchCost = branchCosts.get(id);
-            if (branchCost && branchCost.costedQuantity > 0 &&
-              Math.abs(branchCost.costedQuantity - branchCost.physicalQuantity) <= 0.0001) {
-              next.set(id, { value: branchCost.unitCost, source: "batch" });
-            } else if (estimates.has(id)) {
-              next.set(id, { value: estimates.get(id)!, source: "recipe" });
-            }
+            const display = preparedCostDisplay(branchCosts.get(id), estimates.get(id));
+            if (display) next.set(id, display);
           }
           if (requestId === listRequestId.current) setPreparedCosts(next);
         } catch (error) {
@@ -1372,10 +1377,21 @@ export default function HangHoaPage() {
 
       if (type === "report") {
         const estimates = canViewCost ? await getFnbMenuEstimates(rows, duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId) : new Map<string, FnbMenuEstimate>();
+        const preparedRows = rows.filter(product => product.isFnbStockItem);
+        const preparedBranch = isFnbOutletView && !(duocXemToanChuoi && viewAllBranches) ? activeBranchId : undefined;
+        const [preparedEstimates, preparedBalances] = canViewCost && preparedBranch && preparedRows.length ? await Promise.all([
+          getFnbPreparedRecipeEstimates(preparedRows, preparedBranch),
+          getFnbBranchComponentCosts(preparedBranch, preparedRows.map(product => product.id)),
+        ]) : [new Map<string, number>(), new Map()];
+        const preparedValues = new Map<string, number>();
+        for (const product of preparedRows) {
+          const cost = preparedCostDisplay(preparedBalances.get(product.id), preparedEstimates.get(product.id));
+          if (cost && cost.source !== "error") preparedValues.set(product.id, cost.value);
+        }
         const reportRows = (sorting[0]?.id === "costPrice" && isFnbOutletView && scope === "sku"
-          ? sortByMenuEstimate(rows, estimates, sorting[0].desc) : rows).map((product) => ({
+          ? sortByMenuEstimate(rows, estimates, sorting[0].desc, preparedValues) : rows).map((product) => ({
             ...product,
-            ...(canViewCost && isFnbMenuRecipe(product) ? menuRecipeExportFields(estimates.get(product.id)) : {
+            ...(canViewCost && isFnbMenuRecipe(product) ? menuRecipeExportFields(estimates.get(product.id)) : canViewCost && product.isFnbStockItem && isFnbOutletView ? preparedCostExportFields(preparedCostDisplay(preparedBalances.get(product.id), preparedEstimates.get(product.id))) : {
               costPrice: canViewCost ? product.costPrice : null,
               costSource: canViewCost ? "Giá vốn lưu sẵn" : "",
               costStatus: "",

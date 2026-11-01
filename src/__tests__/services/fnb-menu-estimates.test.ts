@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Product } from "@/lib/types";
+import { getFnbPreparedRecipeEstimates } from "@/lib/services/supabase/fnb-menu-estimates";
 import { getFnbMenuEstimates, getMenuCostIssues, selectMenuRecipe, sumMenuRecipeEstimate, sumMenuRecipePreview, sortByMenuEstimate, type RecipeHeader } from "@/lib/services/supabase/fnb-menu-estimates";
 
 const mocks = vi.hoisted(() => ({
@@ -24,6 +25,47 @@ beforeEach(() => {
 });
 
 describe("live menu recipe estimates", () => {
+  it("sorts prepared goods by displayed branch cost instead of the shared catalog price", () => {
+    const prepared = { ...product, id: "prepared", code: "BTP", isFnbStockItem: true, costPrice: 999 };
+    const menu = { ...product, id: "menu", code: "MENU" };
+    const missing = { ...prepared, id: "missing", code: "UNKNOWN", costPrice: 0 };
+    const estimates = new Map([["menu", { value: 20 }]]);
+    expect(sortByMenuEstimate([missing, prepared, menu], estimates, false, new Map([["prepared", 10]])).map(row => row.id)).toEqual(["prepared", "menu", "missing"]);
+    expect(sortByMenuEstimate([missing, prepared, menu], estimates, true, new Map([["prepared", 10]])).map(row => row.id)).toEqual(["menu", "prepared", "missing"]);
+  });
+  it("normalizes prepared root output, refreshes prices and rejects unknown conversion without changing balances", async () => {
+    const root = { ...product, unit: "G", isFnbStockItem: true, bomCode: "ROOT" };
+    const recipe = { ...header("root-bom", "xtb", "ROOT"), yield_qty: 2, yield_unit: "Kg" };
+    const raw = { id: "raw", unit: "G", is_fnb_stock_item: false };
+    const rows = [{ bom_id: "root-bom", quantity: 1000, waste_percent: 10, products: raw }];
+    mocks.from.mockImplementation((table: string) => {
+      let filtered: unknown[] = table === "bom_scoped" ? [recipe] : rows;
+      const builder = { select: () => builder, eq: () => builder, order: () => builder,
+        in: (field: string, values: string[]) => { filtered = filtered.filter(row => values.includes(String((row as Record<string, unknown>)[field]))); return builder; },
+        range: () => builder, then: (resolve: (value: unknown) => unknown) => Promise.resolve({ data: filtered, error: null }).then(resolve) };
+      return builder;
+    });
+    const prices = new Map([["raw", balance("raw", 2)]]);
+    mocks.costs.mockResolvedValue(prices);
+    expect((await getFnbPreparedRecipeEstimates([root], "xtb")).has("tea")).toBe(false);
+    mocks.units.mockResolvedValue(new Map([["tea", [{ fromUnit: "Kg", toUnit: "G", factor: 1000, isActive: true }]]]));
+    expect((await getFnbPreparedRecipeEstimates([root], "xtb")).get("tea")).toBeCloseTo(1.1);
+    expect(mocks.variants).not.toHaveBeenCalled();
+    prices.set("raw", balance("raw", 4));
+    expect((await getFnbPreparedRecipeEstimates([root], "xtb")).get("tea")).toBeCloseTo(2.2);
+    expect(prices.get("raw")).toEqual(balance("raw", 4));
+    prices.set("raw", balance("raw", 0));
+    expect((await getFnbPreparedRecipeEstimates([root], "xtb")).get("tea")).toBe(0);
+    prices.clear();
+    expect((await getFnbPreparedRecipeEstimates([root], "xtb")).has("tea")).toBe(false);
+    recipe.branch_id = "other-branch";
+    prices.set("raw", balance("raw", 4));
+    expect((await getFnbPreparedRecipeEstimates([root], "xtb")).has("tea")).toBe(false);
+    const calls = mocks.from.mock.calls.length;
+    expect((await getFnbPreparedRecipeEstimates([root])).size).toBe(0);
+    expect(mocks.from.mock.calls.length).toBe(calls);
+  });
+
   it("loads nested branch recipes and refreshes leaf prices without requiring a prepared batch", async () => {
     const menuHeader: RecipeHeader = { ...header("drink-bom", null, "DRINK"), yield_qty: 1, yield_unit: "cái" };
     const preparedHeader = { ...header("prepared-bom", "xtb", "PREP"), product_id: "prepared", yield_qty: 200, yield_unit: "G" };
@@ -46,6 +88,13 @@ describe("live menu recipe estimates", () => {
     expect(first?.value).toBe(300);
     expect(mocks.costs).toHaveBeenCalledWith("xtb", ["prepared", "raw"]);
     expect(first?.reason).toBeUndefined();
+    const preparedRoot = { ...menu, unit: "G", isFnbStockItem: true };
+    menuHeader.yield_unit = "G";
+    menuHeader.yield_qty = 100;
+    expect((await getFnbPreparedRecipeEstimates([preparedRoot], "xtb")).get("tea")).toBe(3);
+    expect((await getFnbPreparedRecipeEstimates([preparedRoot])).size).toBe(0);
+    menuHeader.yield_qty = 1;
+    menuHeader.yield_unit = "cái";
     expect(first?.issues).toEqual([expect.objectContaining({ code: "BTP-TEST", reason: "negative_stock" })]);
     menuHeader.yield_qty = null;
     expect((await getFnbMenuEstimates([menu], "xtb")).get("tea")?.value).toBeNull();

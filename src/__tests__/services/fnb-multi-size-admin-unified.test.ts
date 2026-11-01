@@ -84,7 +84,8 @@ describe("quản trị FnB nhiều size dùng một nguồn dữ liệu", () => 
   it("món FnB một size lấy giá vốn nguyên liệu và BTP tại chi nhánh", () => {
     expect(source).toContain("const inlineFnbBomCost = useMemo(");
     expect(source).toContain("getBomComponentUnitPrice(material, \"fnb\", fnbPreparedCostByProductId)");
-    expect(source).toContain("fnbPreparedCostByProductId[product.id]?.unitCost");
+    expect(source).toContain("recipeComponentUnitCost(fnbPreparedCostByProductId[product.id], fnbRecipeEstimates.get(product.id))");
+    expect(source).toContain("useFnbRecipeComponentCosts(canViewCost && open && usesFnbRecipeCosts");
     expect(source).toContain("Chưa có giá vốn chi nhánh");
     expect(source).toContain("Dự toán theo giá vốn bình quân của chi nhánh đang chọn.");
   });

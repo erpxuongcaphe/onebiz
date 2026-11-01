@@ -107,8 +107,8 @@ export function isFnbMenuRecipe(product: Product) {
   return product.channel === "fnb" && !product.isFnbStockItem && product.hasBom;
 }
 
-export function sortByMenuEstimate(products: Product[], estimates: Map<string, FnbMenuEstimate>, descending: boolean) {
-  const value = (product: Product) => isFnbMenuRecipe(product) ? estimates.get(product.id)?.value ?? null : product.costPrice;
+export function sortByMenuEstimate(products: Product[], estimates: Map<string, FnbMenuEstimate>, descending: boolean, preparedValues?: Map<string, number>) {
+  const value = (product: Product) => isFnbMenuRecipe(product) ? estimates.get(product.id)?.value ?? null : product.isFnbStockItem && preparedValues ? preparedValues.get(product.id) ?? null : product.costPrice;
   return [...products].sort((a, b) => {
     const left = value(a), right = value(b);
     if (left == null || right == null) return left == null && right == null ? a.code.localeCompare(b.code) : left == null ? 1 : -1;
@@ -118,8 +118,22 @@ export function sortByMenuEstimate(products: Product[], estimates: Map<string, F
 
 /** Read-only current estimate, never an invoice cost or an inventory valuation. */
 export async function getFnbMenuEstimates(products: Product[], branchId?: string): Promise<Map<string, FnbMenuEstimate>> {
+  return getRecipeEstimates(products.filter(isFnbMenuRecipe), branchId, false);
+}
+
+/** Per stock unit, never a receipt valuation or an invoice cost. */
+export async function getFnbPreparedRecipeEstimates(products: Product[], branchId?: string): Promise<Map<string, number>> {
+  const estimates = await getFnbPreparedRecipeEstimateDetails(products, branchId);
+  return new Map([...estimates].flatMap(([id, estimate]) => estimate.value === null ? [] : [[id, estimate.value] as const]));
+}
+
+export async function getFnbPreparedRecipeEstimateDetails(products: Product[], branchId?: string): Promise<Map<string, FnbMenuEstimate>> {
+  if (!branchId) return new Map();
+  return getRecipeEstimates(products.filter(product => product.isFnbStockItem), branchId, true);
+}
+
+async function getRecipeEstimates(menu: Product[], branchId: string | undefined, stockOutput: boolean): Promise<Map<string, FnbMenuEstimate>> {
   const result = new Map<string, FnbMenuEstimate>();
-  const menu = products.filter(isFnbMenuRecipe);
   if (!menu.length) return result;
   const tenantId = await getCurrentTenantId();
   // Scoped views and existing RLS retain the same cost/tenant permissions as the editor.
@@ -128,7 +142,7 @@ export async function getFnbMenuEstimates(products: Product[], branchId?: string
   for (let start = 0; start < menu.length; start += 100) {
     const batch = menu.slice(start, start + 100);
     const ids = batch.map((product) => product.id);
-    const variants = await getVariantsByProductIds(ids);
+    const variants: Awaited<ReturnType<typeof getVariantsByProductIds>> = stockOutput ? new Map() : await getVariantsByProductIds(ids);
     const chosen = batch.map((product) => {
       const sizes = variants.get(product.id) ?? [];
       const size = sizes.find((variant) => variant.isDefault) ?? sizes[0];
@@ -234,7 +248,7 @@ export async function getFnbMenuEstimates(products: Product[], branchId?: string
       const recipeLines = header ? lines.filter((line) => line.bom_id === header.id) : [];
       const confirmed = header ? sumMenuRecipeEstimate(recipeLines, costs) : null;
       const root = `menu:${product.id}`;
-      if (header) graph.set(root, nodeForRecipe({ ...header, product_id: product.id }, product.unit ?? "", true));
+      if (header) graph.set(root, nodeForRecipe({ ...header, product_id: product.id }, product.unit ?? "", !stockOutput));
       const preview = header && branchId ? calculateRecipePreview(root, graph) : null;
       const value = preview?.value ?? null;
       result.set(product.id, {
