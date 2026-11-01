@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Product } from "@/lib/types";
 import { getFnbBranchComponentCosts, getPreparedRecipeEstimateUnitCost, type FnbBranchComponentCost } from "@/lib/services/supabase/fnb-branch-cost";
 import { getFnbPreparedRecipeEstimateDetails, type FnbMenuEstimate } from "@/lib/services/supabase/fnb-menu-estimates";
+const EMPTY_COSTS: Record<string, FnbBranchComponentCost> = {};
+const EMPTY_ESTIMATES = new Map<string, FnbMenuEstimate>();
 
 export function recipeComponentUnitCost(balance: FnbBranchComponentCost | undefined, estimate: FnbMenuEstimate | undefined): number | null {
   if (estimate && estimate.reason !== "Chưa có BOM phù hợp") return estimate.value;
@@ -32,7 +34,7 @@ export function useFnbRecipeComponentCosts(enabled: boolean, branchId: string | 
   const retry = useCallback(() => setAttempt(value => value + 1), []);
   const current = scope.enabled && result?.scope === scope;
   return {
-    costs: current ? result.costs : {}, estimates: current ? result.estimates : new Map<string, FnbMenuEstimate>(),
+    costs: current ? result.costs : EMPTY_COSTS, estimates: current ? result.estimates : EMPTY_ESTIMATES,
     loading: scope.enabled && !current, error: current && result.error, retry,
   };
 }

@@ -113,7 +113,7 @@ import {
   listFnbSupplyCatalogProductIds,
 } from "@/lib/services/supabase/fnb-supply-catalog";
 import { getPreparedRecipeUnitCost, getPreparedRecipeEstimateUnitCost } from "@/lib/services/supabase/fnb-branch-cost";
-import { useFnbBranchCosts } from "@/lib/hooks/use-fnb-branch-costs";
+import { recipeComponentUnitCost, useFnbRecipeComponentCosts } from "@/lib/hooks/use-fnb-recipe-component-costs";
 import { RecipeCostLoadError } from "@/components/shared/recipe-cost-load-error";
 import { invalidateMenuCache } from "@/lib/offline";
 import { useDurableFormDraft } from "@/lib/hooks/use-durable-form-draft";
@@ -617,8 +617,8 @@ export function CreateProductDialog({
   // Prepared stock remains off the F&B sales menu. Recipe cost previews always
   // use the recipe's branch, or the active branch for a shared recipe.
   const usesFnbRecipeCosts = channel === "fnb" || isFnbStockItem;
-  const { costs: fnbPreparedCostByProductId, loading: fnbPreparedCostLoading, error: fnbCostLoadError, retry: retryFnbCosts } =
-    useFnbBranchCosts(canViewCost && open && usesFnbRecipeCosts, recipeCostBranchId, materialOptions.map(material => material.id));
+  const { costs: fnbPreparedCostByProductId, estimates: fnbRecipeEstimates, loading: fnbPreparedCostLoading, error: fnbCostLoadError, retry: retryFnbCosts } =
+    useFnbRecipeComponentCosts(canViewCost && open && usesFnbRecipeCosts, recipeCostBranchId, [...bomItems.map(item => item.materialId), ...recipeRows.map(row => row.materialId)], materialOptions);
   const recipeCatalog = useRecipeMaterialCatalog(
     open && scope === "sku" && (
       (hasBom && (innerTab === "bom" || (usesFnbRecipeCosts && innerTab === "pricing"))) ||
@@ -664,11 +664,11 @@ export function CreateProductDialog({
         usesFnbRecipeCosts
           ? {
               ...material,
-              sellPrice: fnbPreparedCostByProductId[material.id]?.unitCost ?? 0,
+              sellPrice: recipeComponentUnitCost(fnbPreparedCostByProductId[material.id], fnbRecipeEstimates.get(material.id)) ?? 0,
             }
           : material,
       ),
-    [fnbPreparedCostByProductId, materialOptions, usesFnbRecipeCosts],
+    [fnbPreparedCostByProductId, fnbRecipeEstimates, materialOptions, usesFnbRecipeCosts],
   );
   const perSizeCostByKey = useMemo(
     () =>
@@ -702,7 +702,7 @@ export function CreateProductDialog({
   const selectedPreparedProducts = materialOptions.filter((product) =>
     (bomItems.some((item) => item.materialId === product.id) || recipeRows.some((row) => row.materialId === product.id)));
   const hasUnpricedPreparedComponent = selectedPreparedProducts.some((product) =>
-    getPreparedRecipeEstimateUnitCost(fnbPreparedCostByProductId[product.id]) === null);
+    recipeComponentUnitCost(fnbPreparedCostByProductId[product.id], fnbRecipeEstimates.get(product.id)) === null);
   const unreconciledPreparedNames = selectedPreparedProducts.filter((product) =>
     getPreparedRecipeEstimateUnitCost(fnbPreparedCostByProductId[product.id]) !== null &&
     getPreparedRecipeUnitCost(fnbPreparedCostByProductId[product.id]) === null).map((product) => product.name);
@@ -711,7 +711,7 @@ export function CreateProductDialog({
       bomItems.reduce((sum, item) => {
         const product = materialOptions.find((candidate) => candidate.id === item.materialId);
         const unitCost = !usesFnbRecipeCosts ? item.costPrice : product?.isFnbStockItem
-          ? fnbPreparedCostByProductId[product.id]?.unitCost ?? 0
+          ? recipeComponentUnitCost(fnbPreparedCostByProductId[product.id], fnbRecipeEstimates.get(product.id)) ?? 0
           : product ? getBomComponentUnitPrice(product, "fnb", fnbPreparedCostByProductId) : item.costPrice;
         return sum + item.quantity * (getDirectConversionFactor(
           item.stockUnit,
@@ -719,7 +719,7 @@ export function CreateProductDialog({
           item.conversions,
         ) ?? 0) * unitCost;
       }, 0),
-    [bomItems, fnbPreparedCostByProductId, materialOptions, usesFnbRecipeCosts],
+    [bomItems, fnbPreparedCostByProductId, fnbRecipeEstimates, materialOptions, usesFnbRecipeCosts],
   );
 
   function renderPerSizeCost(variant: InlineVariant) {
@@ -3915,7 +3915,7 @@ export function CreateProductDialog({
                             it.conversions,
                           ) ?? 0;
                           const componentUnitCost = componentProduct?.isFnbStockItem
-                            ? fnbPreparedCostByProductId[componentProduct.id]?.unitCost ?? 0
+                            ? recipeComponentUnitCost(fnbPreparedCostByProductId[componentProduct.id], fnbRecipeEstimates.get(componentProduct.id)) ?? 0
                             : componentProduct ? getBomComponentUnitPrice(componentProduct, "fnb", fnbPreparedCostByProductId) : it.costPrice;
                           const lineCost = it.quantity * conversionFactor *
                             (usesFnbRecipeCosts ? componentUnitCost : it.costPrice);
@@ -4049,7 +4049,7 @@ export function CreateProductDialog({
                                 {fnbBomCostPending
                                   ? <span className="text-muted-foreground">Đang tính...</span>
                                   : fnbCostLoadError ? <span className="text-destructive">Không tải được giá vốn</span>
-                                  : usesFnbRecipeCosts && getPreparedRecipeEstimateUnitCost(fnbPreparedCostByProductId[it.materialId]) === null
+                                  : usesFnbRecipeCosts && recipeComponentUnitCost(fnbPreparedCostByProductId[it.materialId], fnbRecipeEstimates.get(it.materialId)) === null
                                   ? <span className="text-status-warning">Chưa có giá vốn thực tế</span>
                                   : formatCurrency(lineCost)}
                               </td>}
@@ -4099,7 +4099,7 @@ export function CreateProductDialog({
 
               {canViewCost && usesFnbRecipeCosts && !fnbPreparedCostLoading && !fnbCostLoadError && unreconciledPreparedNames.length > 0 && (
                 <p role="status" className="rounded-md border border-amber-500/40 bg-amber-50 p-3 text-sm font-medium text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
-                  Tổng đang là dự toán theo đơn giá đã có. {unreconciledPreparedNames.join(", ")}: tồn đang âm hoặc lượng có giá vốn chưa đủ; cần đối soát hoặc hoàn tất mẻ. Chưa ghi nhận lại giá vốn thực tế.
+                  Dự toán theo công thức và đơn giá hiện có. Giá vốn tồn của {unreconciledPreparedNames.join(", ")} được ghi nhận riêng theo mẻ.
                 </p>
               )}
               {channel === "fnb" && bomItems.some((item) => item.modifierScaleTarget) && (
