@@ -92,6 +92,7 @@ import {
 } from "@/lib/services";
 import { getFnbPreparedRecipeEstimates } from "@/lib/services/supabase/fnb-menu-estimates";
 import { preparedCostDisplay, preparedCostExportFields, type PreparedCostDisplay } from "@/lib/reports/prepared-cost-display";
+import { catalogExportQuantity } from "@/lib/reports/catalog-export-quantity";
 import { getFnbBranchComponentCosts } from "@/lib/services/supabase/fnb-branch-cost";
 import { getFnbMenuEstimates, isFnbMenuRecipe, sortByMenuEstimate, type FnbMenuEstimate } from "@/lib/services/supabase/fnb-menu-estimates";
 import { getPosStockSnapshot } from "@/lib/services/supabase/pos-stock";
@@ -1324,6 +1325,7 @@ export default function HangHoaPage() {
     }
     setExporting(true);
     try {
+      const exportBranchId = duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId;
       const rows = await getProductsForExport({
         page: 0,
         pageSize: 200,
@@ -1331,7 +1333,7 @@ export default function HangHoaPage() {
         sortOrder: sorting[0] ? (sorting[0].desc ? "desc" : "asc") : "desc",
         search: debouncedSearch,
         searchField,
-        branchId: duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId,
+        branchId: exportBranchId,
         filters: listFilters,
       });
       if (rows.length === 0) {
@@ -1351,7 +1353,7 @@ export default function HangHoaPage() {
           const cur =
             byGroup.get(key) ?? { group: key, skuCount: 0, stock: 0, value: 0 };
           cur.skuCount += 1;
-          cur.stock += p.stock ?? 0;
+          cur.stock += catalogExportQuantity(p, exportBranchId);
           cur.value = cur.value === null || p.stockValue === null ? null
             : cur.value + (p.stockValue ?? (p.branchStock ?? p.stock ?? 0) * (p.costPrice ?? 0));
           byGroup.set(key, cur);
@@ -1391,6 +1393,7 @@ export default function HangHoaPage() {
         const reportRows = (sorting[0]?.id === "costPrice" && isFnbOutletView && scope === "sku"
           ? sortByMenuEstimate(rows, estimates, sorting[0].desc, preparedValues) : rows).map((product) => ({
             ...product,
+            stock: catalogExportQuantity(product, exportBranchId),
             ...(canViewCost && isFnbMenuRecipe(product) ? menuRecipeExportFields(estimates.get(product.id)) : canViewCost && product.isFnbStockItem && isFnbOutletView ? preparedCostExportFields(preparedCostDisplay(preparedBalances.get(product.id), preparedEstimates.get(product.id))) : {
               costPrice: canViewCost ? product.costPrice : null,
               costSource: canViewCost ? "Giá vốn lưu sẵn" : "",
@@ -1406,7 +1409,7 @@ export default function HangHoaPage() {
             { header: "Nhóm", key: "categoryName", width: 22 },
             { header: "ĐVT", key: "unit", width: 10 },
             ...(canViewCost ? [
-              { header: "Giá vốn / dự toán BOM", key: "costPrice" as const, width: 22 },
+              { header: "Giá vốn / dự toán BOM", key: "costPrice" as const, width: 22, precision: 4 },
               { header: "Nguồn giá", key: "costSource" as const, width: 26 },
               { header: "Trạng thái giá", key: "costStatus" as const, width: 28 },
               { header: "Thành phần cần đối soát", key: "costIssues" as const, width: 48 },
