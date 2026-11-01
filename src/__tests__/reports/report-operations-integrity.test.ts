@@ -12,7 +12,7 @@ const reportFiles = [
   "cogs-theo-bom",
   "doi-chieu-ca",
 ].map((name) =>
-  readFileSync(`src/app/(main)/phan-tich/${name}/page.tsx`, "utf8"),
+  readFileSync(name === "fnb-shipper" ? "src/components/shared/report/delivery-invoice-management-report.tsx" : `src/app/(main)/phan-tich/${name}/page.tsx`, "utf8"),
 );
 
 const [
@@ -52,7 +52,7 @@ describe("operations report integrity", () => {
       expect(source).toContain("requestIdRef");
       expect(source).toContain("requestId !== requestIdRef.current");
     }
-    expect(shipper).toContain("drillRequestIdRef");
+    expect(shipper).toContain("exportRevision");
   });
 
   it("shows the selected period on F&B and cross-channel charts", () => {

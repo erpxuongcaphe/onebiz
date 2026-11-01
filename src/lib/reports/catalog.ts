@@ -26,6 +26,7 @@ export interface ReportCatalogItem {
   keywords: string[];
   permissions: string[];
   permissionMode?: "any" | "all";
+  requiredPermissions?: string[];
 }
 
 export interface ReportWorkflow {
@@ -529,6 +530,7 @@ export const REPORT_CATALOG: ReportCatalogItem[] = [
     icon: "delivery_dining",
     keywords: ["giao hàng", "shipper", "delivery", "đơn giao"],
     permissions: FNB_PERMISSIONS,
+    requiredPermissions: ["reports.view_detail"],
   },
   {
     href: "/phan-tich/fnb-modifier",
@@ -590,6 +592,7 @@ export function canAccessReport(
   report: ReportCatalogItem,
   hasPermission: (permission: string) => boolean,
 ): boolean {
+  if (report.requiredPermissions?.some(permission => !hasPermission(permission))) return false;
   if (report.permissions.length === 0) return true;
   if (report.permissionMode === "all") {
     return report.permissions.every(hasPermission);

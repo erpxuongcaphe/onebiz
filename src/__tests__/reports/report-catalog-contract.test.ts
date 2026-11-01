@@ -17,6 +17,8 @@ describe("report catalog implementation contract", () => {
       const page = readFileSync(resolve(reportPagePath(report.href)), "utf8");
       const source = report.href === "/phan-tich/customer-cohort"
         ? page + readFileSync(resolve("src/components/reports/customer-cohort-evidence-panel.tsx"), "utf8")
+        : report.href === "/phan-tich/fnb-shipper"
+          ? page + readFileSync(resolve("src/components/shared/report/delivery-invoice-management-report.tsx"), "utf8")
         : page;
       if (report.href === "/phan-tich/customer-cohort") expect(page).toContain("<CustomerCohortEvidencePanel");
       const expectedKind =

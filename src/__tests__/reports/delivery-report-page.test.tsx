@@ -1,64 +1,59 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ReactNode } from "react";
-
-const mocks = vi.hoisted(() => ({
-  branch: "branch-a", summary: vi.fn(), detail: vi.fn(), export: vi.fn(), toast: vi.fn(),
-  range: { from: "2026-11-01", to: "2026-11-01" },
-}));
-vi.mock("@/lib/contexts", () => ({
-  useBranchFilter: () => ({ activeBranchId: mocks.branch, branchLabel: mocks.branch, isReady: true }),
-  useAuth: () => ({}), useToast: () => ({ toast: mocks.toast }),
-}));
+const mocks = vi.hoisted(() => ({ branch: "branch-a", read: vi.fn(), export: vi.fn(), toast: vi.fn(), range: { from: "2026-11-01", to: "2026-11-01" } }));
+vi.mock("@/lib/contexts", () => ({ useBranchFilter: () => ({ activeBranchId: mocks.branch, branchLabel: mocks.branch, isReady: true }), useToast: () => ({ toast: mocks.toast }) }));
 vi.mock("@/lib/hooks/use-report-state", () => ({ useReportState: () => ({ preset: "today", range: mocks.range, setPreset: vi.fn(), setCustomRange: vi.fn() }) }));
-vi.mock("@/lib/services", () => ({ getDeliveryStaffPerformance: mocks.summary, getOrdersByDeliveryStaff: mocks.detail }));
+vi.mock("@/lib/services/supabase/delivery-invoice-management", () => ({ getDeliveryInvoiceManagement: mocks.read }));
 vi.mock("@/lib/utils/excel-export", () => ({ exportReportToExcel: mocks.export, buildReportTitleRows: () => ["Report"] }));
+vi.mock("@/app/(main)/phan-tich/_components", () => ({ KpiCard: () => null }));
 vi.mock("@/components/shared/report", () => ({
   ReportPageHeader: ({ onExportFull, exportDisabled }: { onExportFull: () => void; exportDisabled: boolean }) => <button disabled={exportDisabled} onClick={onExportFull}>Export full</button>,
-  ReportTableFrame: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-}));
-vi.mock("@/app/(main)/phan-tich/_components", () => ({
-  KpiCard: () => null,
-  ChartCard: ({ title, children }: { title: string; children: ReactNode }) => <section><h2>{title}</h2>{children}</section>,
+  ReportDataTable: ({ columns, rows }: { columns: Array<{ label: string }>; rows: Array<{ id: string; staffName: string }> }) => <div>{columns.map(c => <span key={c.label}>{c.label}</span>)}{rows.map(row => <span key={row.id}>{row.staffName}</span>)}</div>,
 }));
 import Page from "@/app/(main)/phan-tich/fnb-shipper/page";
-
-const staff = { staffId: "staff-1", staffName: "Nhân viên thử", totalOrders: 1, totalRevenue: 100, totalDeliveryFee: 10, avgDeliverySeconds: 0, completedCount: 0 };
-const order = { kitchenOrderId: "order-1", orderNumber: "DH-test", invoiceId: "inv-1", invoiceCode: "HD-test", customerName: "Khách thử", total: 100, deliveryFee: 10, deliveryTier: "near", createdAt: "2026-11-01T01:00:00Z", assignedAt: null, completedAt: null, durationSeconds: null };
-function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(r => { resolve = r; }); return { promise, resolve }; }
-
+const row = { id: "order-1", branchId: "branch-a", branchName: "Quán thử", staffId: "staff-1", staffName: "Nhân viên thử", orderNumber: "DH-1", invoiceId: "invoice-1", invoiceCode: "HD-1", invoiceStatus: "completed", orderStatus: "completed", customerName: "Khách thử", paymentMethod: "cash", invoiceTotal: 100, invoicePaid: 60, invoiceDebt: 40, deliveryFee: 10, deliveryStatus: "assigned", deliveryTier: "near", createdAt: "2026-11-01T01:00:00Z", assignedAt: "2026-11-01T01:00:00Z", completedAt: null, durationSeconds: null };
+const report = { items: [row], total: 1, canViewMoney: true, dateBasis: "createdAt", paymentBasis: "invoice" };
 describe("delivery report filter and export safety", () => {
-  beforeEach(() => {
-    vi.clearAllMocks(); mocks.branch = "branch-a";
-    mocks.summary.mockResolvedValue([staff]); mocks.detail.mockResolvedValue([order]); mocks.export.mockResolvedValue(undefined);
-  });
-  it("clears selected detail when branch changes even if the same employee remains", async () => {
-    const view = render(<Page />);
-    fireEvent.click(await screen.findByText(staff.staffName));
-    await screen.findByText("DH-test");
-    mocks.branch = "branch-b"; view.rerender(<Page />);
-    await waitFor(() => expect(mocks.summary).toHaveBeenLastCalledWith("branch-b", mocks.range));
-    expect(screen.queryByText("DH-test")).not.toBeInTheDocument();
-  });
-  it("discards a full export if its branch changes while details are loading", async () => {
-    const pending = deferred<typeof order[]>(); mocks.detail.mockReturnValue(pending.promise);
-    const view = render(<Page />); await screen.findByText(staff.staffName);
-    fireEvent.click(screen.getByText("Export full"));
-    mocks.branch = "branch-b"; view.rerender(<Page />);
-    await waitFor(() => expect(mocks.summary).toHaveBeenLastCalledWith("branch-b", mocks.range));
-    await act(async () => pending.resolve([order]));
-    expect(mocks.export).not.toHaveBeenCalled();
-    expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Bộ lọc đã thay đổi" }));
-  });
-  it("exports both sheets with matching totals, full detail and selected scope", async () => {
-    render(<Page />); await screen.findByText(staff.staffName);
-    fireEvent.click(screen.getByText("Export full"));
+  beforeEach(() => { vi.clearAllMocks(); mocks.branch = "branch-a"; mocks.read.mockResolvedValue(report); mocks.export.mockResolvedValue(undefined); });
+  it("exports current branch data with full invoice payment columns", async () => {
+    render(<Page />); await screen.findByText("Nhân viên thử"); fireEvent.click(screen.getByText("Export full"));
     await waitFor(() => expect(mocks.export).toHaveBeenCalled());
     const options = mocks.export.mock.calls[0][0];
-    expect(options.branchName).toBe("branch-a"); expect(options.range).toEqual(mocks.range);
-    expect(options.sheets).toHaveLength(2);
-    expect(options.sheets[0].footer).toMatchObject({ totalOrders: 1, totalRevenue: 100, totalDeliveryFee: 10 });
-    expect(options.sheets[1].rows[0]).toMatchObject({ orderNumber: "DH-test", status: "Chưa ghi nhận nhận giao", duration: "" });
-    expect(options.sheets[1].columns).toHaveLength(12);
+    expect(options.sheets).toHaveLength(2); expect(options.branchName).toBe("branch-a");
+    expect(options.sheets[1].rows[0]).toMatchObject({ invoicePaid: 60, invoiceDebt: 40, branchName: "Quán thử" });
+    expect(options.sheets[1].columns.map((c: { key: string }) => c.key)).toContain("invoicePaid");
+    for (const sheet of options.sheets) expect(sheet.titleRows.join(" ")).toContain("Thanh toán hiện tại trên hóa đơn");
+  });
+  it("does not export money columns when the source denies money permission", async () => {
+    mocks.read.mockResolvedValue({ ...report, canViewMoney: false, items: [{ ...row, invoiceTotal: null, invoicePaid: null, invoiceDebt: null, deliveryFee: null, paymentMethod: null }] });
+    render(<Page />); await screen.findByText("Nhân viên thử"); fireEvent.click(screen.getByText("Export full"));
+    await waitFor(() => expect(mocks.export).toHaveBeenCalled());
+    for (const sheet of mocks.export.mock.calls[0][0].sheets) expect(sheet.columns.some((c: { key: string }) => ["invoiceTotal", "invoicePaid", "invoiceDebt", "deliveryFee"].includes(c.key))).toBe(false);
+  });
+  it("keeps the same search filter in summary, detail and workbook", async () => {
+    render(<Page />); await screen.findByText("Nhân viên thử");
+    fireEvent.change(screen.getByLabelText("Tìm đơn, hóa đơn, khách"), { target: { value: "khach thu" } });
+    fireEvent.click(screen.getByText("Export full")); await waitFor(() => expect(mocks.export).toHaveBeenCalled());
+    expect(mocks.export.mock.calls[0][0].sheets[1].rows).toHaveLength(1);
+    fireEvent.change(screen.getByLabelText("Tìm đơn, hóa đơn, khách"), { target: { value: "no match" } });
+    expect(screen.getByText("Export full")).toBeDisabled();
+  });
+  it("drops late responses after the branch changes", async () => {
+    let resolveOld!: (value: typeof report) => void;
+    mocks.read.mockImplementation((branch: string) => branch === "branch-a" ? new Promise(resolve => { resolveOld = resolve; }) : Promise.resolve({ ...report, items: [{ ...row, staffName: "Nhân viên mới", branchId: "branch-b" }] }));
+    const view = render(<Page />); mocks.branch = "branch-b"; view.rerender(<Page />);
+    await screen.findByText("Nhân viên mới"); await act(async () => resolveOld(report));
+    expect(screen.queryByText("Nhân viên thử")).not.toBeInTheDocument();
+  });
+  it("reloads invoice payment without dropping the selected search", async () => {
+    render(<Page />); await screen.findByText("Nhân viên thử");
+    fireEvent.change(screen.getByLabelText("Tìm đơn, hóa đơn, khách"), { target: { value: "khach thu" } });
+    mocks.read.mockResolvedValue({ ...report, items: [{ ...row, invoicePaid: 100, invoiceDebt: 0 }] });
+    fireEvent.click(screen.getByRole("button", { name: /Tải lại/ }));
+    await waitFor(() => expect(mocks.read).toHaveBeenCalledTimes(2));
+    await screen.findByText("Nhân viên thử");
+    expect(screen.getByLabelText("Tìm đơn, hóa đơn, khách")).toHaveValue("khach thu");
+    fireEvent.click(screen.getByText("Export full")); await waitFor(() => expect(mocks.export).toHaveBeenCalled());
+    expect(mocks.export.mock.calls[0][0].sheets[1].rows[0]).toMatchObject({ invoicePaid: 100, invoiceDebt: 0 });
   });
 });
