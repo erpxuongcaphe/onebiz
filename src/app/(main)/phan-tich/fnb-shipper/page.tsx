@@ -153,7 +153,7 @@ export default function FnbShipperReportPage() {
           { label: "Số đơn", key: "totalOrders", width: 10, format: "number" },
           { label: "Doanh thu HĐ (VND)", key: "totalRevenue", width: 18, format: "currency" },
           { label: "Phí giao thu (VND)", key: "totalDeliveryFee", width: 18, format: "currency" },
-          { label: "Avg thời gian (giây)", key: "avgDeliverySeconds", width: 16, format: "number" },
+          { label: "Thời gian giao TB (giây)", key: "avgDeliverySeconds", width: 20, format: "number" },
           { label: "Đơn đã giao xong", key: "completedCount", width: 16, format: "number" },
         ],
         rows: shippers.map((s, i) => ({
@@ -395,7 +395,7 @@ export default function FnbShipperReportPage() {
 
         {/* Bảng shipper */}
         <ChartCard
-          title="Bảng xếp hạng nhân viên giao hàng"
+          title="Tổng hợp giao hàng theo nhân viên"
           subtitle="Chọn một nhân viên để xem danh sách đơn"
         >
           {shippers.length === 0 ? (
@@ -414,7 +414,7 @@ export default function FnbShipperReportPage() {
                     <th className="text-right py-2 pr-3 font-medium">Số đơn</th>
                     <th className="text-right py-2 pr-3 font-medium">Doanh thu HĐ</th>
                     <th className="text-right py-2 pr-3 font-medium">Phí giao thu</th>
-                    <th className="text-right py-2 pr-3 font-medium">Avg thời gian</th>
+                    <th className="text-right py-2 pr-3 font-medium">Thời gian giao TB</th>
                     <th className="text-right py-2 font-medium">Đã giao</th>
                   </tr>
                 </thead>

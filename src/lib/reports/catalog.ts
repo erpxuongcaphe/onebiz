@@ -524,7 +524,7 @@ export const REPORT_CATALOG: ReportCatalogItem[] = [
     href: "/phan-tich/fnb-shipper",
     title: "Giao hàng theo nhân viên",
     shortTitle: "Nhân viên giao hàng",
-    description: "Theo dõi giao hàng và hiệu suất shipper của cửa hàng.",
+    description: "Tổng hợp số đơn, phí giao hàng và thời gian giao theo nhân viên.",
     category: "operations",
     icon: "delivery_dining",
     keywords: ["giao hàng", "shipper", "delivery", "đơn giao"],
