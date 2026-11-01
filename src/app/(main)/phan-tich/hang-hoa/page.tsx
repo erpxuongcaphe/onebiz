@@ -496,7 +496,7 @@ export default function HangHoaPage() {
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] overflow-y-auto">
       <ReportPageHeader
-        title="Hiệu quả bán và tồn kho hàng hóa"
+        title="Bán hàng và tồn kho theo mặt hàng"
         subtitle="Thống kê sản phẩm, tồn kho và xuất nhập"
         preset={preset}
         range={range}

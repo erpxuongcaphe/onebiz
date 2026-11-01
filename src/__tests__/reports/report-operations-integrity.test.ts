@@ -63,10 +63,10 @@ describe("operations report integrity", () => {
   });
 
   it("uses clear Vietnamese labels for operational reports", () => {
-    expect(platform).toContain('title="Phí nền tảng giao hàng"');
+    expect(platform).toContain('title="Phí bán hàng qua ứng dụng"');
     expect(platform).toContain('label="Phí trả nền tảng"');
     expect(serveTime).toContain('title="Thời gian phục vụ F&B"');
-    expect(shipper).toContain('title="Hiệu suất giao hàng nội bộ"');
+    expect(shipper).toContain('title="Giao hàng theo nhân viên"');
   });
 
   it("keeps all table-only operational reports protected", () => {

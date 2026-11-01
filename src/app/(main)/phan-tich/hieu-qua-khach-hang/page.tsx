@@ -130,22 +130,22 @@ export default function CustomerProfitabilityPage() {
     if (pending || error || exporting || metricFilterError(metrics)) return;
     setExporting(true);
     try {
-      const titles = buildReportTitleRows({ title: "HIỆU QUẢ KHÁCH HÀNG", range, branchName: branchLabel });
+      const titles = buildReportTitleRows({ title: "DOANH THU VÀ LÃI GỘP THEO KHÁCH HÀNG", range, branchName: branchLabel });
       titles.push(comparisonLabel, `Tìm: ${search || "Tất cả"}; Kiểm tra: ${CUSTOMER_REVIEW_LABELS[review]}; ${metricFilterLabel(metrics, CUSTOMER_METRIC_FIELDS)}`,
         `Sắp xếp: ${columns.find(column => column.key === sort.id)?.label} ${sort.direction === "asc" ? "tăng dần" : "giảm dần"}`,
         "Gồm nội bộ, chưa loại trừ hợp nhất. Sau chiết khấu, chưa gồm VAT/phí giao. Trả hàng theo ngày phiếu trả. Giá vốn lịch sử; ô trống không phải 0. Lãi gộp chưa trừ chi phí vận hành.");
-      await exportReportToExcel({ kind: "hieu-qua-khach-hang", mode, range, branchName: branchLabel, sheets: [{ name: "Hiệu quả khách hàng", titleRows: titles, autoFilter: true,
+      await exportReportToExcel({ kind: "hieu-qua-khach-hang", mode, range, branchName: branchLabel, sheets: [{ name: "Doanh thu và lãi gộp KH", titleRows: titles, autoFilter: true,
         tablePreferenceKey: mode === "view" ? KEY : undefined, columnGroups: CUSTOMER_COLUMN_GROUPS,
         columns: CUSTOMER_FINANCIAL_FIELDS.map(([key, label]) => ({ key, label, width: key === "name" ? 36 : 24, hideable: key !== "code", decimalPlaces: ["orders", "returns", "products", "missingCostLines", "previousMissingCostLines"].includes(key) ? 0 : 2, format: ["code", "name", "lastActivityAt"].includes(key) ? undefined : "number" as const })),
         rows: rows.map(row => ({ ...row, code: row.code || "Chưa gắn mã" })),
         footer: { code: "TỔNG", ...totals, previousRevenue: priorTotals.netRevenue, revenueDifference: totals.netRevenue - priorTotals.netRevenue, previousGrossProfit: priorTotals.grossProfit, grossProfitDifference: totals.grossProfit === null || priorTotals.grossProfit === null ? null : totals.grossProfit - priorTotals.grossProfit, previousMissingCostLines: priorTotals.missingCostLines },
       }, ...(!filtered ? [{ name: "Đối chiếu hóa đơn", titleRows: titles, columns: [{ key: "name", label: "Chỉ tiêu", width: 40 }, { key: "current", label: "Kỳ này", format: "number" as const, decimalPlaces: 2 }, { key: "previous", label: "Kỳ trước", format: "number" as const, decimalPlaces: 2 }], rows: reconciliationError ? [{ name: "Chưa đối chiếu được", current: null, previous: null }] : reconciliationRows }] : [])] });
-      toast({ title: "Đã xuất hiệu quả khách hàng", variant: "success" });
+      toast({ title: "Đã xuất báo cáo", variant: "success" });
     } catch (reason) { toast({ title: "Không xuất được Excel", description: reason instanceof Error ? reason.message : "Vui lòng thử lại", variant: "error" }); }
     finally { setExporting(false); }
   }
   return <div className="flex min-h-full flex-col">
-    <ReportPageHeader title="Hiệu quả khách hàng" subtitle={comparisonLabel} preset={preset} range={range} onPresetChange={setPreset} onCustomRangeChange={setCustomRange} onExportView={() => exportRows("view")} onExportFull={() => exportRows("full")} exportDisabled={pending || Boolean(error) || exporting || !rows.length || metricFilterError(metrics)} />
+    <ReportPageHeader title="Doanh thu và lãi gộp theo khách hàng" subtitle={comparisonLabel} preset={preset} range={range} onPresetChange={setPreset} onCustomRangeChange={setCustomRange} onExportView={() => exportRows("view")} onExportFull={() => exportRows("full")} exportDisabled={pending || Boolean(error) || exporting || !rows.length || metricFilterError(metrics)} />
     <div className="space-y-4 p-4 lg:p-6">
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <SummaryCard label="Tiền hàng bán" value={pending || error ? "—" : money(totals.salesAmount)} hint={pending || error ? "" : reportChange(totals.salesAmount, priorTotals.salesAmount)} />

@@ -797,7 +797,7 @@ export default function CustomerProductReportPage() {
     setExporting(true);
     try {
       const titleRows = buildReportTitleRows({
-        title: "BÁO CÁO KHÁCH HÀNG MUA SẢN PHẨM NÀO",
+        title: "CHI TIẾT BÁN HÀNG THEO KHÁCH HÀNG",
         range,
         branchName: branchLabel,
         generatedAt: new Date(),
@@ -1176,7 +1176,7 @@ export default function CustomerProductReportPage() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <ReportPageHeader
-        title="Doanh số mặt hàng theo khách hàng"
+        title="Chi tiết bán hàng theo khách hàng"
         subtitle="Doanh thu mặt hàng theo khách hàng, mặt hàng và nhóm hàng"
         preset={preset}
         range={range}

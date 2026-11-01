@@ -22,7 +22,7 @@ describe("report catalog", () => {
     expect(REPORT_CATALOG).toHaveLength(39);
     expect(new Set(paths).size).toBe(paths.length);
     expect(getReportByPath("/phan-tich/khach-san-pham")?.title).toBe(
-      "Doanh số mặt hàng theo khách hàng",
+      "Chi tiết bán hàng theo khách hàng",
     );
   });
 

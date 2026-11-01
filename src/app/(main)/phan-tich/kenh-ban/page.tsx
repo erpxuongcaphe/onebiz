@@ -224,7 +224,7 @@ export default function KenhBanPage() {
 
   const reportHeader = (
     <ReportPageHeader
-      title="Phân tích kênh bán"
+      title="Kết quả bán hàng theo kênh"
       subtitle="So sánh doanh số gộp theo kênh, chưa trừ trả hàng"
       preset={preset}
       range={range}
@@ -357,7 +357,7 @@ export default function KenhBanPage() {
 
           {/* Channel performance table */}
           <ChartCard
-          title="Hiệu suất theo kênh bán"
+          title="Bán hàng theo kênh"
           subtitle={selectedPeriodLabel}
         >
           {channelPerformance.length > 0 ? (
