@@ -54,7 +54,7 @@ import {
 import type { Product, UOMConversion } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 import { getPreparedRecipeUnitCost, getPreparedRecipeEstimateUnitCost } from "@/lib/services/supabase/fnb-branch-cost";
-import { useFnbBranchCosts } from "@/lib/hooks/use-fnb-branch-costs";
+import { recipeComponentUnitCost, useFnbRecipeComponentCosts } from "@/lib/hooks/use-fnb-recipe-component-costs";
 import { RecipeCostLoadError } from "@/components/shared/recipe-cost-load-error";
 
 interface BOMEditorDialogProps {
@@ -300,15 +300,18 @@ export function BOMEditorDialog({
     .filter((item) => !!item.materialId)
     .map((item) => item.materialId);
   const costBranchId = branchId ?? activeBranchId;
-  const { costs: preparedCosts, loading: costLoading, error: costLoadError, retry: retryCosts } =
-    useFnbBranchCosts(canViewCost && open && isFnbRecipe, costBranchId, preparedIds);
+  const { costs: preparedCosts, estimates: recipeEstimates, loading: costLoading, error: costLoadError, retry: retryCosts } =
+    useFnbRecipeComponentCosts(canViewCost && open && isFnbRecipe, costBranchId, preparedIds, nvlOptions);
 
   const previewUnitCost = (item: MaterialLine) => {
     if (!isFnbRecipe) return item.costPrice;
-    return getPreparedRecipeEstimateUnitCost(preparedCosts[item.materialId]);
+    return recipeComponentUnitCost(preparedCosts[item.materialId], recipeEstimates.get(item.materialId));
   };
-  const hasPendingPreparedCost = isFnbRecipe && preparedIds.some(
-    (id) => getPreparedRecipeEstimateUnitCost(preparedCosts[id]) === null,
+  const hasPendingPreparedCost = isFnbRecipe && items.some(item =>
+    recipeComponentUnitCost(preparedCosts[item.materialId], recipeEstimates.get(item.materialId)) === null ||
+    getDirectConversionFactor(item.stockUnit, item.unit, item.conversions) === null ||
+    !Number.isFinite(Number(item.quantity)) || Number(item.quantity) < 0 ||
+    !Number.isFinite(Number(item.wastePercent)) || Number(item.wastePercent) < 0,
   );
 
   const unreconciledPreparedNames = preparedIds.filter((id) =>
@@ -872,7 +875,7 @@ export function BOMEditorDialog({
                 {canViewCost && costLoadError && <RecipeCostLoadError onRetry={retryCosts} />}
                 {canViewCost && !costLoading && !costLoadError && unreconciledPreparedNames.length > 0 && (
                   <p role="status" className="border-t bg-amber-50 px-3 py-2 text-sm font-medium text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
-                    Dự toán theo đơn giá đã có. {unreconciledPreparedNames.join(", ")}: tồn đang âm hoặc lượng có giá vốn chưa đủ; cần đối soát hoặc hoàn tất mẻ. Chưa ghi nhận lại giá vốn thực tế.
+                    Dự toán theo công thức và đơn giá hiện có. Giá vốn tồn của {unreconciledPreparedNames.join(", ")} được ghi nhận riêng theo mẻ.
                   </p>
                 )}
                 {canViewCost && !costLoading && !costLoadError && hasPendingPreparedCost && (

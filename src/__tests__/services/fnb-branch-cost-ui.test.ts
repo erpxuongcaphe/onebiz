@@ -35,7 +35,8 @@ describe("F&B branch opening cost UI", () => {
   it("keeps dedicated F&B BOM preview separate from Retail cost and allows pre-batch setup", () => {
     expect(bomEditor).toContain('const isFnbRecipe = output?.channel === "fnb" || output?.isFnbStockItem === true;');
     expect(bomEditor).not.toContain("return material?.sellPrice ?? null;");
-    expect(bomEditor).toContain("return getPreparedRecipeEstimateUnitCost(preparedCosts[item.materialId]);");
+    expect(bomEditor).toContain("return recipeComponentUnitCost(preparedCosts[item.materialId], recipeEstimates.get(item.materialId));");
+    expect(bomEditor).toContain("useFnbRecipeComponentCosts(canViewCost && open && isFnbRecipe");
     expect(bomEditor).toContain("Vẫn lưu được công thức");
   });
 });
