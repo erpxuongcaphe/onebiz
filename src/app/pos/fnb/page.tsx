@@ -91,7 +91,7 @@ import {
 import {
   getEffectiveModifierGroupsForProduct,
   filterFnbRecipeSweetnessGroups,
-  listModifierOptions,
+  listModifierOptionsForGroups,
   type ModifierOption,
 } from "@/lib/services/supabase/modifier-groups";
 import type { DynamicModifierData } from "./components/fnb-item-dialog";
@@ -1269,13 +1269,12 @@ function FnbPosPageInner() {
           categoryId,
         );
         if (!branchId) throw new Error("Chưa chọn chi nhánh");
-        const groups = await filterFnbRecipeSweetnessGroups(productId, branchId, configuredGroups);
-        const optionsByGroup = new Map<string, ModifierOption[]>();
-        await Promise.all(
-          groups.map(async (g) => {
-            const opts = await listModifierOptions(g.id);
-            optionsByGroup.set(g.id, opts);
-          }),
+        const [groups, loadedOptions] = await Promise.all([
+          filterFnbRecipeSweetnessGroups(productId, branchId, configuredGroups),
+          listModifierOptionsForGroups(configuredGroups.map(group => group.id)),
+        ]);
+        const optionsByGroup = new Map<string, ModifierOption[]>(
+          groups.map(group => [group.id, loadedOptions.get(group.id) ?? []]),
         );
         const data: DynamicModifierData = { groups, optionsByGroup };
         modifierCacheRef.set(productId, { data, loadedAt: Date.now() });

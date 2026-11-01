@@ -305,6 +305,28 @@ export async function listModifierOptions(groupId: string): Promise<ModifierOpti
   return ((data ?? []) as RawOption[]).map((row) => mapOption(row));
 }
 
+/** Read all popup options in one tenant-scoped request, without per-group round trips. */
+export async function listModifierOptionsForGroups(groupIds: string[]): Promise<Map<string, ModifierOption[]>> {
+  const ids = [...new Set(groupIds)];
+  const result = new Map<string, ModifierOption[]>(ids.map(id => [id, []]));
+  if (!ids.length) return result;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client = getClient() as any;
+  const tenantId = await getCurrentTenantId();
+  const { data, error } = await client.from("modifier_options")
+    .select("*, modifier_groups!inner(tenant_id), products:products_scoped!modifier_options_linked_product_id_fkey(code, name)")
+    .in("group_id", ids)
+    .eq("modifier_groups.tenant_id", tenantId)
+    .eq("is_active", true)
+    .order("sort_order", { ascending: true })
+    .order("label", { ascending: true });
+  if (error) handleError(error, "listModifierOptionsForGroups");
+  for (const row of (data ?? []) as RawOption[]) {
+    result.get(row.group_id)?.push(mapOption(row));
+  }
+  return result;
+}
+
 export async function createModifierOption(
   groupId: string,
   input: ModifierOptionInput,
