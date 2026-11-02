@@ -93,6 +93,7 @@ import {
 import { getFnbPreparedRecipeEstimates } from "@/lib/services/supabase/fnb-menu-estimates";
 import { preparedCostDisplay, preparedCostExportFields, type PreparedCostDisplay } from "@/lib/reports/prepared-cost-display";
 import { catalogExportQuantity } from "@/lib/reports/catalog-export-quantity";
+import { useScopedFileDownload } from "@/lib/hooks/use-scoped-file-download";
 import { getFnbBranchComponentCosts } from "@/lib/services/supabase/fnb-branch-cost";
 import { getFnbMenuEstimates, isFnbMenuRecipe, sortByMenuEstimate, type FnbMenuEstimate } from "@/lib/services/supabase/fnb-menu-estimates";
 import { getPosStockSnapshot } from "@/lib/services/supabase/pos-stock";
@@ -683,6 +684,11 @@ export default function HangHoaPage() {
     createdDateRange,
     supplierFilter,
   ]);
+  const downloadScope = JSON.stringify([user?.id, activeBranchId, viewAllBranches, scope,
+    catalogProductType, catalogChannel, search, searchField, sorting, categoryFilter,
+    stockFilter, statusFilter, brandFilter, createdDatePreset, createdDateFrom,
+    createdDateTo, supplierFilter, canViewCost, duocXemToanChuoi, permissionsLoading]);
+  const catalogDownload = useScopedFileDownload(downloadScope);
 
   const fetchData = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
     if (permissionsLoading) return;
@@ -1324,6 +1330,11 @@ export default function HangHoaPage() {
       return;
     }
     setExporting(true);
+    const exportScope = downloadScope;
+    const downloadOptions = {
+      shouldSave: () => catalogDownload.isCurrent(exportScope),
+      onPrepared: (blob: Blob, filename: string) => catalogDownload.prepare(blob, filename, exportScope),
+    };
     try {
       const exportBranchId = duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId;
       const rows = await getProductsForExport({
@@ -1341,6 +1352,7 @@ export default function HangHoaPage() {
         return;
       }
       const scopeLabel = scope === "nvl" ? "nguyen-vat-lieu" : "hang-ban";
+      if (!catalogDownload.isCurrent(exportScope)) return;
 
       if (type === "summary") {
         // Gộp theo nhóm hàng: số mã · tổng tồn · tổng giá trị tồn.
@@ -1368,9 +1380,11 @@ export default function HangHoaPage() {
             { header: "Giá trị tồn", key: "value", width: 18 },
           ],
           `tong-hop-nhom-${scopeLabel}`,
+          downloadOptions,
         );
+        if (!catalogDownload.isCurrent(exportScope)) return;
         toast({
-          title: "Đã xuất tổng hợp",
+          title: "Đã tạo file Excel",
           description: `${summaryRows.length} nhóm · ${rows.length} mã hàng.`,
           variant: "success",
         });
@@ -1419,9 +1433,11 @@ export default function HangHoaPage() {
             { header: "Giá trị tồn", key: "stockValue", width: 16 },
           ],
           `bao-cao-${scopeLabel}`,
+          downloadOptions,
         );
+        if (!catalogDownload.isCurrent(exportScope)) return;
         toast({
-          title: "Đã xuất báo cáo",
+          title: "Đã tạo file Excel",
           description: `${rows.length} mã hàng.`,
           variant: "success",
         });
@@ -1429,6 +1445,7 @@ export default function HangHoaPage() {
       }
 
       // type === "import": theo schema nhập → sửa rồi upload lại không mất cột
+      if (!catalogDownload.isCurrent(exportScope)) return;
       const importRows: ProductImportRow[] = rows.map((p) => ({
         code: p.code,
         name: p.name,
@@ -2121,6 +2138,11 @@ export default function HangHoaPage() {
             },
           ]}
         />
+
+        {catalogDownload.file && <div className="mx-4 my-3 flex flex-wrap items-center gap-3 border-l-4 border-status-success bg-status-success/5 p-3 text-sm">
+          <a href={catalogDownload.file.url} download={catalogDownload.file.filename} className="inline-flex min-h-10 shrink-0 items-center gap-2 font-medium text-primary underline underline-offset-4"><Icon name="download" size={16} />Tải file Excel</a>
+          <span className="min-w-0 break-all text-muted-foreground">{catalogDownload.file.filename}</span>
+        </div>}
 
         {/* Branch-scope (CEO 13/07): xem toàn chuỗi → banner "về chi nhánh";
             xem theo CN → nhắc + nút "Xem toàn chuỗi" luôn hiện. */}
