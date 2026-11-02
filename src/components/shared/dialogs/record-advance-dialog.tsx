@@ -27,7 +27,7 @@ import {
   recordCustomerAdvance,
   recordSupplierAdvance,
 } from "@/lib/services/supabase/payments";
-import { getCustomers, getSuppliers } from "@/lib/services/supabase";
+import { getCustomerContacts, getSupplierContacts } from "@/lib/services/supabase/counterparty-contacts";
 import { MoneyAccountSelect } from "@/components/shared/money-account-select";
 import { NumericInput } from "@/components/ui/numeric-input";
 
@@ -93,7 +93,7 @@ export function RecordAdvanceDialog({
     );
     setPartySearch(partyName ?? "");
     setPartyOptions([]);
-  }, [open, partyId, partyName]);
+  }, [mode, open, partyId, partyName]);
 
   useEffect(() => {
     if (!open || selectedParty || partySearch.trim().length < 1) {
@@ -103,6 +103,7 @@ export function RecordAdvanceDialog({
     }
 
     let cancelled = false;
+    const controller = new AbortController();
     const timer = setTimeout(async () => {
       setSearchingParty(true);
       try {
@@ -110,13 +111,13 @@ export function RecordAdvanceDialog({
           page: 0,
           pageSize: 8,
           search: partySearch.trim(),
-          filters: {},
-          sortBy: "name",
+          sortBy: "name" as const,
           sortOrder: "asc" as const,
+          signal: controller.signal,
         };
         const result = isCustomer
-          ? await getCustomers(params)
-          : await getSuppliers(params);
+          ? await getCustomerContacts(params)
+          : await getSupplierContacts(params);
         if (!cancelled) {
           setPartyOptions(
             result.data.map((party) => ({
@@ -137,6 +138,7 @@ export function RecordAdvanceDialog({
     return () => {
       cancelled = true;
       clearTimeout(timer);
+      controller.abort();
     };
   }, [isCustomer, open, partySearch, selectedParty]);
 

@@ -73,8 +73,8 @@ describe("counterparty advance balances", () => {
   it("allows recording a deposit before any debt document exists", () => {
     expect(debtPage).toContain("Nhận tiền trước");
     expect(debtPage).toContain("Ứng trước NCC");
-    expect(advanceDialog).toContain("getCustomers");
-    expect(advanceDialog).toContain("getSuppliers");
+    expect(advanceDialog).toContain("getCustomerContacts");
+    expect(advanceDialog).toContain("getSupplierContacts");
     expect(advanceDialog).toContain("Hãy chọn khách hàng nhận tiền cọc");
     expect(advanceDialog).toContain(
       "Hãy chọn nhà cung cấp nhận tiền ứng trước",
