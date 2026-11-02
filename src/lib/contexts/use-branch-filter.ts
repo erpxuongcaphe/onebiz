@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth } from "./auth-context";
+import { useOptionalReportScope } from "./report-scope-context";
 
 /**
  * Convenience hook for pages that need branch filtering.
@@ -25,7 +26,16 @@ import { useAuth } from "./auth-context";
  * re-fire. Mỗi service chạy 2 lần ⇒ 14 invoices/dashboard mount.
  */
 export function useBranchFilter() {
+  const reportScope = useOptionalReportScope();
   const { activeBranchId, currentBranch, branches, switchBranch, tenant, isLoading } = useAuth();
+  if (reportScope) return {
+    activeBranchId: reportScope.activeBranchId,
+    currentBranch: reportScope.currentBranch,
+    branches: reportScope.branches,
+    branchLabel: reportScope.branchLabel,
+    switchBranch: reportScope.selectBranch,
+    isReady: reportScope.isReady,
+  };
   const branchLabel = activeBranchId
     ? currentBranch?.name ??
       branches.find((branch) => branch.id === activeBranchId)?.name ??

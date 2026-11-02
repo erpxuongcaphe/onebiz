@@ -27,7 +27,6 @@ import { ReportDateRangePicker } from "./report-date-range-picker";
 import { ChartTableSwitch, type ReportViewOptions } from "./chart-table-switch";
 import { useAuth } from "@/lib/contexts";
 import { PERMISSIONS } from "@/lib/permissions/constants";
-import { ReportScopeSelector } from "./report-scope-selector";
 
 interface ReportPageHeaderProps {
   title: string;
@@ -52,7 +51,7 @@ interface ReportPageHeaderProps {
   /** Ẩn date range picker — dùng cho báo cáo snapshot (aging, công nợ aging).
    *  Tránh user hiểu lầm chọn ngày nhưng số không đổi. CEO 16/05/2026. */
   hideDateRange?: boolean;
-  /** Hide only for pages whose rows are not branch-owned. */
+  /** @deprecated Branch scope is rendered once by ReportShell. */
   hideBranchScope?: boolean;
 }
 
@@ -71,7 +70,6 @@ export function ReportPageHeader({
   exportDisabled,
   actions,
   hideDateRange,
-  hideBranchScope,
 }: ReportPageHeaderProps) {
   const { hasPermission } = useAuth();
   const canExportView = hasPermission(PERMISSIONS.REPORTS_EXPORT);
@@ -94,7 +92,6 @@ export function ReportPageHeader({
           )}
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-2 xl:justify-end [&>*]:shrink-0">
-          {!hideBranchScope && <ReportScopeSelector />}
           {showSwitch && (
             <ChartTableSwitch
               value={viewMode}

@@ -33,7 +33,7 @@ const EditGuardContext = React.createContext<EditGuard | null>(null);
 export const useDialogEditGuard = () => React.useContext(EditGuardContext);
 
 export function GuardedDialogRoot({ open, defaultOpen, onOpenChange, children,
-  protectUnsavedChanges = true, hasUnsavedChanges = false, trackFormChanges = true, ...props }: Primitive.Root.Props & { protectUnsavedChanges?: boolean; hasUnsavedChanges?: boolean; trackFormChanges?: boolean }) {
+  protectUnsavedChanges = true, hasUnsavedChanges = false, trackFormChanges = true, dismissOnOutsidePress = false, ...props }: Primitive.Root.Props & { protectUnsavedChanges?: boolean; hasUnsavedChanges?: boolean; trackFormChanges?: boolean; dismissOnOutsidePress?: boolean }) {
   const [internalOpen, setInternalOpen] = React.useState(defaultOpen ?? false);
   const [pending, setPending] = React.useState<(() => void) | null>(null);
   const isOpen = open ?? internalOpen;
@@ -94,8 +94,8 @@ export function GuardedDialogRoot({ open, defaultOpen, onOpenChange, children,
   };
 
   return <EditGuardContext.Provider value={{ register, beforeInteraction, changed, captureClick }}>
-    <Primitive.Root {...props} open={isOpen} disablePointerDismissal onOpenChange={(next, details) => {
-      if (!next && details.reason === "outside-press") { details.cancel(); return; }
+    <Primitive.Root {...props} open={isOpen} disablePointerDismissal={!dismissOnOutsidePress} onOpenChange={(next, details) => {
+      if (!next && details.reason === "outside-press" && !dismissOnOutsidePress) { details.cancel(); return; }
       if (!next && dirty() && !approved.current) {
         details.cancel();
         requestClose(() => { setInternalOpen(false); onOpenChange?.(false, details); });

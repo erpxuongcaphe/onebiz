@@ -1,120 +1,26 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useAuth } from "@/lib/contexts";
+import { useAuth } from "@/lib/contexts/auth-context";
+import { useOptionalReportScope } from "@/lib/contexts/report-scope-context";
 import { PERMISSIONS } from "@/lib/permissions/constants";
 
-const BRANCH_PARAM = "branch";
+type ReportScopeOptions = { synchronizeUrl?: boolean };
+const noReportSelection = () => {};
 
-type ReportScopeOptions = {
-  synchronizeUrl?: boolean;
-};
-
-export function useReportScope(
-  { synchronizeUrl = true }: ReportScopeOptions = {},
-) {
-  const {
-    activeBranchId,
-    branches,
-    currentBranch,
-    hasPermission,
-    switchBranch,
-    tenant,
-    user,
-    isLoading,
-  } = useAuth();
-  const initializedRef = useRef(!synchronizeUrl);
-  const [isInitialized, setIsInitialized] = useState(!synchronizeUrl);
-
-  const canViewAll = hasPermission(PERMISSIONS.REPORTS_VIEW_ALL_BRANCHES);
-  const authReady = !!tenant && !isLoading && branches.length > 0;
-
-  const fallbackBranchId = useMemo(
-    () =>
-      branches.find((branch) => branch.id === user?.branchId)?.id ??
-      branches.find((branch) => branch.isDefault)?.id ??
-      branches[0]?.id,
-    [branches, user?.branchId],
-  );
-
-  useEffect(() => {
-    if (!synchronizeUrl || !authReady || initializedRef.current) return;
-
-    const params = new URLSearchParams(window.location.search);
-    const requestedBranch = params.get(BRANCH_PARAM);
-    const requestedIsAccessible = branches.some(
-      (branch) => branch.id === requestedBranch,
-    );
-
-    let nextBranchId: string | null | undefined;
-    if (requestedBranch === "all" && canViewAll) {
-      nextBranchId = null;
-    } else if (requestedBranch && requestedIsAccessible) {
-      nextBranchId = requestedBranch;
-    } else if (!canViewAll && !activeBranchId) {
-      nextBranchId = fallbackBranchId;
-    }
-
-    if (nextBranchId !== undefined && nextBranchId !== (activeBranchId ?? null)) {
-      switchBranch(nextBranchId);
-    }
-    initializedRef.current = true;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- URL/auth scope initializes once.
-    setIsInitialized(true);
-  }, [
-    activeBranchId,
-    branches,
-    canViewAll,
-    fallbackBranchId,
-    authReady,
-    switchBranch,
-    synchronizeUrl,
-  ]);
-
-  useEffect(() => {
-    if (
-      !synchronizeUrl ||
-      !authReady ||
-      !isInitialized ||
-      !initializedRef.current
-    ) {
-      return;
-    }
-    if (!canViewAll && !activeBranchId) return;
-
-    const url = new URL(window.location.href);
-    const nextValue = activeBranchId ?? "all";
-    if (url.searchParams.get(BRANCH_PARAM) === nextValue) return;
-
-    url.searchParams.set(BRANCH_PARAM, nextValue);
-    window.history.replaceState(window.history.state, "", url);
-  }, [
-    activeBranchId,
-    authReady,
-    canViewAll,
-    isInitialized,
-    synchronizeUrl,
-  ]);
-
-  const selectBranch = useCallback(
-    (branchId: string | null) => {
-      if (branchId === null) {
-        if (canViewAll) switchBranch(null);
-        return;
-      }
-      if (branches.some((branch) => branch.id === branchId)) {
-        switchBranch(branchId);
-      }
-    },
-    [branches, canViewAll, switchBranch],
-  );
-
+/** URL ownership belongs to the provider; all report selectors share its state. */
+export function useReportScope(options: ReportScopeOptions = {}) {
+  void options;
+  const scope = useOptionalReportScope();
+  const auth = useAuth();
+  if (scope) return scope;
+  // Dashboard callers outside reports retain Auth readiness, without interpreting
+  // report deep links or allowing a report selector to switch the operational site.
+  const branchName = auth.currentBranch?.name ?? "Toàn công ty";
   return {
-    activeBranchId,
-    branches,
-    branchName: currentBranch?.name ?? "Toàn công ty",
-    canViewAll,
-    isReady: authReady && isInitialized,
-    selectBranch,
+    activeBranchId: auth.activeBranchId, currentBranch: auth.currentBranch, branches: auth.branches,
+    branchName, branchLabel: auth.activeBranchId ? branchName : "Tất cả chi nhánh",
+    canViewAll: auth.hasPermission(PERMISSIONS.REPORTS_VIEW_ALL_BRANCHES),
+    isReady: !!auth.tenant && !auth.isLoading && auth.branches.length > 0,
+    selectBranch: noReportSelection, scopeKey: "outside-reports",
   };
 }
