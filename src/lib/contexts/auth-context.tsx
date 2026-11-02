@@ -704,6 +704,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (error) throw error;
       const sessionUser = data.session?.user;
       if (!sessionUser) {
+        loadedUserIdRef.current = null;
+        setAuthUser(null);
+        setUser(null);
+        setPermissions(new Set());
+        setTenant(null);
+        setBranches([]);
+        setCurrentBranch(null);
+        clearProfileCache();
         setIsLoading(false);
         router.replace("/dang-nhap");
         return;

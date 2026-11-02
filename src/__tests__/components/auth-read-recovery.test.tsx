@@ -23,6 +23,7 @@ const user={id:"user",email:"fixture@example.test",created_at:"2026-01-01"};
 const profile={id:"user",tenant_id:"tenant",branch_id:"branch",role:"staff",is_active:true,full_name:"Fixture",created_at:"2026-01-01"};
 const session={data:{session:{user}},error:null};
 function Probe(){const a=useAuth();return <><output aria-label="auth">{JSON.stringify({loading:a.isLoading,error:a.authDataError,allowed:a.hasPermission("pos_fnb.send_kitchen")})}</output><PermissionPage requires="pos_fnb.send_kitchen"><p>POS được phép</p></PermissionPage></>;}
+function ManualProbe(){const a=useAuth();return <><button onClick={()=>{void a.refreshProfile();}}>Refresh profile</button><output aria-label="identity">{a.user?.id??"none"}</output><Probe/></>;}
 const state=()=>JSON.parse(screen.getByLabelText("auth").textContent!);
 const flush=async()=>{await act(async()=>{for(let i=0;i<15;i++)await Promise.resolve();});};
 beforeEach(()=>{
@@ -34,6 +35,16 @@ beforeEach(()=>{
 });
 afterEach(()=>{cleanup();vi.useRealTimers();});
 describe("auth bootstrap failure is distinct from genuine permission denial",()=>{
+ it("clears the prior profile when manual recovery finds no current session",async()=>{
+  render(<AuthProvider><ManualProbe/></AuthProvider>);await flush();
+  expect(screen.getByText("POS được phép")).toBeInTheDocument();
+  mock.session.mockResolvedValue({data:{session:null},error:null});
+  fireEvent.click(screen.getByRole("button",{name:"Refresh profile"}));await flush();
+  expect(screen.getByLabelText("identity")).toHaveTextContent("none");
+  expect(state().allowed).toBe(false);
+  expect(mock.router.replace).toHaveBeenCalledWith("/dang-nhap");
+  expect(mock.signOut).not.toHaveBeenCalled();
+ });
  it("refreshes the current browser session rather than reusing a previous account",async()=>{
   mock.permissions.mockResolvedValue([]);
   render(<AuthProvider><Probe/></AuthProvider>);await flush();
