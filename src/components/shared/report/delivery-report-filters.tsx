@@ -112,17 +112,21 @@ export default function DeliveryReportFilters({ rows, canViewMoney, filters, onC
     <FilterPanel open={open} onOpenChange={setOpen} title="Bộ lọc giao hàng" activeCount={descriptions.length} onClearAll={clearAll}>
       <fieldset className="space-y-3"><legend className="mb-2 text-sm font-semibold">Giao hàng</legend>
         {select("branch", "Chi nhánh", rows.map(row => [row.branchId, row.branchName]))}
-        {select("tier", "Cự ly", [...Object.entries(DELIVERY_TIER_LABELS), ...rows.flatMap(row => row.deliveryTier ? [[row.deliveryTier, DELIVERY_TIER_LABELS[row.deliveryTier] ?? row.deliveryTier] as [string, string]] : [])])}
-        {select("assignedState", "Phân công", Object.entries(ASSIGNED_LABELS))}
+        <div className="grid grid-cols-2 gap-3">
+          {select("tier", "Cự ly", [...Object.entries(DELIVERY_TIER_LABELS), ...rows.flatMap(row => row.deliveryTier ? [[row.deliveryTier, DELIVERY_TIER_LABELS[row.deliveryTier] ?? row.deliveryTier] as [string, string]] : [])])}
+          {select("assignedState", "Phân công", Object.entries(ASSIGNED_LABELS))}
+        </div>
+      </fieldset>
+      <fieldset className="space-y-3 border-t pt-3"><legend className="mb-2 text-sm font-semibold">Hóa đơn</legend>
         {select("invoiceStatus", "Trạng thái HĐ", [...Object.entries(DELIVERY_INVOICE_STATUS_LABELS), ...rows.flatMap(row => row.invoiceStatus ? [[row.invoiceStatus, DELIVERY_INVOICE_STATUS_LABELS[row.invoiceStatus] ?? row.invoiceStatus] as [string, string]] : [])])}
         {select("evidence", "Liên kết HĐ", Object.entries(EVIDENCE_LABELS))}
         {canViewMoney && select("method", "Thanh toán trên HĐ", [...Object.entries(INVOICE_PAYMENT_LABELS).filter(([key]) => key !== "bank_transfer"), ...rows.flatMap(row => row.paymentMethod ? [[row.paymentMethod === "bank_transfer" ? "transfer" : row.paymentMethod, INVOICE_PAYMENT_LABELS[row.paymentMethod] ?? row.paymentMethod] as [string, string]] : [])])}
       </fieldset>
-      <fieldset className="space-y-3"><legend className="mb-2 text-sm font-semibold">Mốc giao hàng (VN)</legend>
-        {([["assignedFrom", "Nhận giao từ"], ["assignedTo", "Nhận giao đến"], ["completedFrom", "Hoàn tất từ"], ["completedTo", "Hoàn tất đến"]] as const).map(([key, label]) => <label key={key} className="block min-w-0 space-y-1 text-sm"><span>{label}</span><input type="date" className="h-11 w-full min-w-0 rounded-md border bg-background px-2" value={filters[key] ?? ""} onChange={event => update(key, event.target.value)} /></label>)}
+      <fieldset className="space-y-3 border-t pt-3"><legend className="mb-2 text-sm font-semibold">Mốc giao hàng (VN)</legend>
+        <div className="grid grid-cols-2 gap-3">{([["assignedFrom", "Nhận giao từ"], ["assignedTo", "Nhận giao đến"], ["completedFrom", "Hoàn tất từ"], ["completedTo", "Hoàn tất đến"]] as const).map(([key, label]) => <label key={key} className="block min-w-0 space-y-1 text-sm"><span>{label}</span><input type="date" className="h-11 w-full min-w-0 rounded-md border bg-background px-2" value={filters[key] ?? ""} onChange={event => update(key, event.target.value)} /></label>)}</div>
         {((filters.assignedFrom && filters.assignedTo && filters.assignedFrom > filters.assignedTo) || (filters.completedFrom && filters.completedTo && filters.completedFrom > filters.completedTo)) && <p role="alert" className="text-sm text-destructive">Ngày từ phải trước hoặc bằng ngày đến.</p>}
       </fieldset>
-      <div className="[&_.grid]:grid-cols-2 [&_select]:h-11 [&_input]:h-11 [&_button]:min-h-11 [&_button]:min-w-11"><MetricFilters fields={fields} value={visibleMetrics} onChange={updateMetrics} /></div>
+      <section aria-label={tab === "staff" ? "Chỉ tiêu theo nhân viên" : "Chỉ tiêu từng đơn"} className="space-y-2"><h3 className="text-sm font-semibold">{tab === "staff" ? "Chỉ tiêu theo nhân viên" : "Chỉ tiêu từng đơn"}</h3><div className="[&_.grid]:grid-cols-2 [&_select]:h-11 [&_input]:h-11 [&_button]:min-h-11 [&_button]:min-w-11"><MetricFilters fields={fields} value={visibleMetrics} onChange={updateMetrics} /></div></section>
     </FilterPanel>
   </div>;
 }
