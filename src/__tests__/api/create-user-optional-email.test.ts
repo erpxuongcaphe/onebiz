@@ -96,6 +96,7 @@ describe("POST /api/admin/create-user with optional contact email", () => {
     expect(response.status).toBe(200);
     expect(state.createUser).toHaveBeenCalledWith(
       expect.objectContaining({
+        app_metadata: { managed_tenant_id: "tenant-1", managed_role_id: null },
         email: expect.stringMatching(/^staff-[0-9a-f-]+@auth\.onebiz\.invalid$/),
         password: "password-123",
         email_confirm: true,

@@ -174,6 +174,9 @@ export async function POST(req: NextRequest) {
       email: authEmail,
       password,
       email_confirm: true, // skip email verification
+      // Only the Admin API can write app_metadata. The Auth trigger uses this
+      // trusted context; caller-supplied user_metadata never authorizes access.
+      app_metadata: { managed_tenant_id: tenantId, managed_role_id: scope.roleId ?? null },
       user_metadata: {
         full_name: fullName,
         phone: phone || null,
