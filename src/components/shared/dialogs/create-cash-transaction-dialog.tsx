@@ -28,13 +28,12 @@ import { useToast, useAuth } from "@/lib/contexts";
 import { getCashPerformers } from "@/lib/services/supabase/cash-timing";
 import {
   createCashTransaction,
-  getCustomers,
-  getSuppliers,
   getOpenInvoicesByCustomer,
   getOpenPurchasesBySupplier,
   recordInvoicePayment,
   recordPurchasePayment,
 } from "@/lib/services";
+import { CashDebtReadError, getCashDebtParties } from "@/lib/services/supabase/cash-debt-parties";
 import type {
   OpenInvoiceLine,
   OpenPurchaseLine,
@@ -101,6 +100,13 @@ export function CreateCashTransactionDialog({
   const [selectedRefId, setSelectedRefId] = useState<string>("");
   const [loadingParties, setLoadingParties] = useState(false);
   const [loadingRefs, setLoadingRefs] = useState(false);
+  const [partyError, setPartyError] = useState<string | null>(null);
+  const [referenceError, setReferenceError] = useState<string | null>(null);
+  const [partiesScope, setPartiesScope] = useState<string | null>(null);
+  const [referencesScope, setReferencesScope] = useState<string | null>(null);
+  const debtScope = `${currentBranch?.id ?? ""}:${category}`;
+  const referenceScope = `${debtScope}:${selectedPartyId}`;
+  const isDebtPayment = category === "customer_payment" || category === "supplier_payment";
 
   useEffect(() => {
     if (!open) return;
@@ -168,75 +174,72 @@ export function CreateCashTransactionDialog({
       setMethod(draft.method);
       setCategory(draft.category);
       setNote(draft.note);
-      setSelectedPartyId(draft.selectedPartyId);
-      setSelectedRefId(draft.selectedRefId);
+      setSelectedPartyId(draft.branchId === currentBranch?.id ? draft.selectedPartyId : "");
+      setSelectedRefId(draft.branchId === currentBranch?.id ? draft.selectedRefId : "");
       if (draft.branchId === currentBranch?.id) setPerformedBy(draft.performedBy ?? "");
     },
   });
 
   // Load party list khi user chọn category payment
   useEffect(() => {
-    if (!open) return;
-    if (category !== "customer_payment" && category !== "supplier_payment") {
-      setParties([]);
-      setSelectedPartyId("");
-      setRefDocs([]);
-      setSelectedRefId("");
-      return;
-    }
+    setParties([]);
+    setPartiesScope(null);
+    setPartyError(null);
+    setSelectedPartyId("");
+    setRefDocs([]);
+    setSelectedRefId("");
+    setLoadingParties(false);
+    if (isDebtPayment) setCounterparty("");
+    if (!open || !currentBranch?.id || !isDebtPayment) return;
     let cancelled = false;
+    const controller = new AbortController();
     setLoadingParties(true);
-    const fetcher =
-      category === "customer_payment"
-        ? getCustomers({ page: 0, pageSize: 1000, filters: { debt: "has_debt" } })
-        : getSuppliers({ page: 0, pageSize: 1000, filters: { debt: "has_debt" } });
-    fetcher
-      .then((res) => {
+    getCashDebtParties(category === "customer_payment" ? "customer" : "supplier", currentBranch.id, controller.signal)
+      .then((rows) => {
         if (cancelled) return;
-        setParties(
-          res.data
-            .filter((p) => (p.currentDebt ?? 0) > 0)
-            .map((p) => ({
-              id: p.id,
-              code: p.code,
-              name: p.name,
-              debt: p.currentDebt ?? 0,
-            })),
-        );
+        setParties(rows);
+        setPartiesScope(debtScope);
       })
-      .catch(() => !cancelled && setParties([]))
+      .catch((error: unknown) => {
+        if (!cancelled) setPartyError(error instanceof CashDebtReadError ? error.message : "Không tải được công nợ chi nhánh. Đóng phiếu và mở lại để thử lại.");
+      })
       .finally(() => !cancelled && setLoadingParties(false));
     return () => {
       cancelled = true;
+      controller.abort();
     };
-  }, [open, category]);
+  }, [open, category, currentBranch?.id, debtScope, isDebtPayment]);
 
   // Khi chọn party → load chứng từ còn nợ + auto-fill counterparty
   useEffect(() => {
-    if (!selectedPartyId) {
-      setRefDocs([]);
-      setSelectedRefId("");
-      return;
-    }
+    setRefDocs([]);
+    setSelectedRefId("");
+    setReferencesScope(null);
+    setReferenceError(null);
+    setLoadingRefs(false);
     const party = parties.find((p) => p.id === selectedPartyId);
-    if (party) setCounterparty(party.name);
+    if (!open || !currentBranch?.id || !isDebtPayment || !party || partiesScope !== debtScope) return;
+    setCounterparty(party.name);
     let cancelled = false;
     setLoadingRefs(true);
     const fetcher =
       category === "customer_payment"
-        ? getOpenInvoicesByCustomer(selectedPartyId)
-        : getOpenPurchasesBySupplier(selectedPartyId);
+        ? getOpenInvoicesByCustomer(selectedPartyId, currentBranch.id)
+        : getOpenPurchasesBySupplier(selectedPartyId, currentBranch.id);
     fetcher
       .then((rows) => {
         if (cancelled) return;
         setRefDocs(rows);
+        setReferencesScope(referenceScope);
       })
-      .catch(() => !cancelled && setRefDocs([]))
+      .catch(() => {
+        if (!cancelled) setReferenceError("Không tải được chứng từ còn nợ. Chọn lại đối tượng để thử lại.");
+      })
       .finally(() => !cancelled && setLoadingRefs(false));
     return () => {
       cancelled = true;
     };
-  }, [selectedPartyId, category, parties]);
+  }, [open, currentBranch?.id, selectedPartyId, category, parties, partiesScope, debtScope, referenceScope, isDebtPayment]);
 
   function handleTypeChange(newType: "receipt" | "payment") {
     setType(newType);
@@ -253,8 +256,12 @@ export function CreateCashTransactionDialog({
     if (!amount.trim() || isNaN(Number(amount)) || Number(amount) <= 0)
       newErrors.amount = "Số tiền không hợp lệ";
     if (category === "customer_payment" || category === "supplier_payment") {
-      if (!selectedPartyId) newErrors.reference = "Cần chọn đối tượng công nợ";
-      else if (!selectedRefId) newErrors.reference = "Cần chọn chứng từ còn nợ";
+      if (partiesScope !== debtScope || !parties.some((party) => party.id === selectedPartyId))
+        newErrors.reference = "Chọn đối tượng công nợ tại chi nhánh hiện tại.";
+      else if (referencesScope !== referenceScope || !refDocs.some((doc) => doc.id === selectedRefId))
+        newErrors.reference = "Cần chọn chứng từ còn nợ";
+      if ((category === "customer_payment" && type !== "receipt") || (category === "supplier_payment" && type !== "payment"))
+        newErrors.reference = "Khoản mục không phù hợp loại phiếu. Vui lòng chọn lại.";
     }
     const timeError=validateCashTime(cashTime.occurredLocal,cashTime.transactionDate,cashTime.timeReason);
     if(timeError) newErrors.time=timeError;
@@ -353,8 +360,8 @@ export function CreateCashTransactionDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <DialogBody>
-        <div className="grid gap-3 py-2">
+        <DialogBody className="min-w-0">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 py-2">
           <div className="space-y-2">
             <label className="text-sm font-medium">Chi nhánh <span className="text-destructive">*</span></label>
             <Input aria-label="Chi nhánh" value={currentBranch?.name ?? ""} readOnly aria-invalid={!!errors.branch} />
@@ -482,11 +489,13 @@ export function CreateCashTransactionDialog({
                   value={selectedPartyId}
                   onValueChange={(v) => setSelectedPartyId(v ?? "")}
                 >
-                  <SelectTrigger aria-label={category === "customer_payment" ? "Khách hàng" : "Nhà cung cấp"} className="w-full">
+                  <SelectTrigger aria-label={category === "customer_payment" ? "Khách hàng" : "Nhà cung cấp"} className="w-full" disabled={loadingParties || !!partyError || !currentBranch?.id}>
                     <SelectValue
                       placeholder={
                         loadingParties
                           ? "Đang tải..."
+                          : partyError
+                            ? "Chưa tải được công nợ"
                           : parties.length === 0
                             ? "Không có đối tượng nào nợ"
                             : `Chọn (${parties.length})`
@@ -504,6 +513,8 @@ export function CreateCashTransactionDialog({
                     ))}
                   </SelectContent>
                 </Select>
+                {partyError && <p role="alert" className="text-xs text-destructive">{partyError}</p>}
+                {errors.reference && <p role="alert" className="text-xs text-destructive">{errors.reference}</p>}
               </div>
 
               {selectedPartyId && (
@@ -515,11 +526,13 @@ export function CreateCashTransactionDialog({
                     value={selectedRefId}
                     onValueChange={(v) => setSelectedRefId(v ?? "")}
                   >
-                    <SelectTrigger aria-label={category === "customer_payment" ? "Hóa đơn" : "Phiếu nhập"} className="w-full">
+                    <SelectTrigger aria-label={category === "customer_payment" ? "Hóa đơn" : "Phiếu nhập"} className="w-full" disabled={loadingRefs || !!referenceError || referencesScope !== referenceScope}>
                       <SelectValue
                         placeholder={
                           loadingRefs
                             ? "Đang tải..."
+                            : referenceError
+                              ? "Chưa tải được chứng từ"
                             : refDocs.length === 0
                               ? "Không có chứng từ nợ"
                               : `Chọn (${refDocs.length})`
@@ -537,9 +550,7 @@ export function CreateCashTransactionDialog({
                       ))}
                     </SelectContent>
                   </Select>
-                  {errors.reference && (
-                    <p className="text-xs text-destructive">{errors.reference}</p>
-                  )}
+                  {referenceError && <p role="alert" className="text-xs text-destructive">{referenceError}</p>}
                   <p className="text-xs text-muted-foreground">
                     Bắt buộc chọn chứng từ để tiền và công nợ luôn được cập nhật cùng nhau.
                   </p>
@@ -568,7 +579,7 @@ export function CreateCashTransactionDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Hủy
           </Button>
-          <Button onClick={handleSave} disabled={saving}>
+          <Button onClick={handleSave} disabled={saving || (isDebtPayment && (loadingParties || loadingRefs || !!partyError || !!referenceError))}>
             {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
             Lưu
           </Button>

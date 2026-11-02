@@ -4,7 +4,7 @@ import type { SupplierListWorkspaceParams } from "./suppliers";
 import { normalizeCreatedAtRange } from "@/lib/utils/list-date-preset-range";
 import { parsePartyDirectoryPage, readPartyDirectoryPages, type PartyDirectoryKind } from "./party-directory-reader";
 
-interface ReadOptions { exportAll?: boolean; signal?: AbortSignal }
+interface ReadOptions { exportAll?: boolean; allPages?: boolean; signal?: AbortSignal }
 type DirectoryParams = { page: number; pageSize: number; branchId: string | null };
 type SortParams = { sortBy?: string; sortDesc?: boolean };
 type RpcArgs = Record<string, string | number | boolean | string[] | null>;
@@ -47,7 +47,7 @@ async function readDirectory(kind: PartyDirectoryKind, params: DirectoryParams, 
     if (error) handleError(error, rpcName);
     return data as unknown;
   };
-  if (options.exportAll) return readPartyDirectoryPages(kind, params.branchId, read, options.signal);
+  if (options.exportAll || options.allPages) return readPartyDirectoryPages(kind, params.branchId, read, options.signal);
   return parsePartyDirectoryPage(kind, await read(params), params);
 }
 

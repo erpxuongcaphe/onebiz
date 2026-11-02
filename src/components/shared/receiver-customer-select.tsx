@@ -2,45 +2,39 @@
 
 import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
-import { getCustomers } from "@/lib/services/supabase";
-import type { Customer } from "@/lib/types";
+import { getReceiverContacts, type ReceiverContact } from "@/lib/services/supabase/receiver-contacts";
 
 export function ReceiverCustomerSelect({
   onSelect,
   compact = false,
 }: {
-  onSelect: (customer: Customer) => void;
+  onSelect: (customer: ReceiverContact) => void;
   compact?: boolean;
 }) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<Customer[]>([]);
+  const [lookup, setLookup] = useState<{ query: string; rows: ReceiverContact[]; failed: boolean }>({ query: "", rows: [], failed: false });
   const [open, setOpen] = useState(false);
+  const results = lookup.query === query.trim() ? lookup.rows : [];
 
   useEffect(() => {
     if (!open || query.trim().length < 1) {
-      setResults([]);
       return;
     }
     let cancelled = false;
+    const controller = new AbortController();
     const timer = setTimeout(() => {
-      getCustomers({
-        page: 0,
-        pageSize: 8,
-        search: query.trim(),
-        filters: {},
-        sortBy: "name",
-        sortOrder: "asc",
-      })
+      getReceiverContacts(query.trim(), controller.signal)
         .then((result) => {
-          if (!cancelled) setResults(result.data);
+          if (!cancelled) setLookup({ query: query.trim(), rows: result, failed: false });
         })
         .catch(() => {
-          if (!cancelled) setResults([]);
+          if (!cancelled) setLookup({ query: query.trim(), rows: [], failed: true });
         });
     }, 200);
     return () => {
       cancelled = true;
       clearTimeout(timer);
+      controller.abort();
     };
   }, [open, query]);
 
@@ -60,7 +54,11 @@ export function ReceiverCustomerSelect({
       />
       {open && query.trim() && (
         <div className="absolute z-50 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border bg-popover shadow-lg">
-          {results.length === 0 ? (
+          {lookup.query !== query.trim() ? (
+            <div role="status" className="px-3 py-2 text-xs text-muted-foreground">Đang tìm...</div>
+          ) : lookup.failed ? (
+            <div role="alert" className="px-3 py-2 text-xs text-destructive">Không tải được người nhận. Vui lòng thử lại.</div>
+          ) : results.length === 0 ? (
             <div className="px-3 py-2 text-xs text-muted-foreground">Không tìm thấy</div>
           ) : (
             results.map((customer) => (
