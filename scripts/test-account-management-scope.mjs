@@ -54,7 +54,55 @@ insert into test_permissions values('${id(101)}','pos.view');
 // Use the actual legacy initializer, so the new reservation/FK/assignment path
 // is exercised with a newly-created Auth user that does not yet have a profile.
 await db.exec(await readFile(new URL('../supabase/migrations/00280_atomic_managed_user_initialize.sql',import.meta.url),'utf8'));
+// Reproduce PostgreSQL OID dependencies created BEFORE the permission rename.
+await db.exec(`
+grant usage on schema public to authenticated;
+grant select on profiles to authenticated;
+create table test_operational_read(id int,tenant_id uuid,branch_id uuid,unit_cost numeric);
+insert into test_operational_read values
+ (1,'${id(1)}','${id(10)}',125),(2,'${id(1)}','${id(11)}',250),
+ (3,'${id(2)}','${id(12)}',999),(4,'${id(1)}','${id(10)}',500);
+alter table test_operational_read enable row level security;
+grant select,insert,update on test_operational_read to authenticated;
+create policy operational_read on test_operational_read for select to authenticated
+ using(tenant_id=get_user_tenant_id() and branch_id=(select branch_id from profiles where id=auth.uid())
+ and user_has_permission(auth.uid(),'inventory.view'));
+create policy operational_restrict on test_operational_read as restrictive for select to authenticated using(id<>4);
+create policy operational_insert on test_operational_read for insert to authenticated
+ with check(tenant_id=get_user_tenant_id() and user_has_permission(auth.uid(),'inventory.adjust'));
+create policy operational_update on test_operational_read for update to authenticated
+ using(user_has_permission(auth.uid(),'inventory.adjust'))
+ with check(tenant_id=get_user_tenant_id() and user_has_permission(auth.uid(),'inventory.adjust'));
+create view test_variants_scoped with(security_barrier=true) as
+ select id,case when user_has_permission(auth.uid(),'products.view_cost') then unit_cost else 0 end as cost_price
+ from test_operational_read where tenant_id=get_user_tenant_id();
+create view test_invoker_scoped with(security_invoker=true,security_barrier=true) as
+ select * from test_operational_read where user_has_permission(auth.uid(),'inventory.view');
+grant select on test_variants_scoped,test_invoker_scoped to authenticated;
+insert into test_permissions values('${id(101)}','inventory.view');
+`);
 await db.exec(await readFile(new URL('../supabase/migrations/20261102044150_scoped_account_management.sql',import.meta.url),'utf8'));
+await db.exec(`select set_config('request.jwt.claim.sub','${id(101)}',false); set role authenticated;`);
+await assert.rejects(db.query('select * from test_variants_scoped'),/permission denied/); checks++;
+await assert.rejects(db.query('select * from test_operational_read'),/permission denied/); checks++;
+await db.exec('reset role');
+const viewBefore=(await db.query(`select oid,reloptions,relacl from pg_class where relname='test_variants_scoped'`)).rows[0];
+await db.exec(await readFile(new URL('../supabase/migrations/20261102233230_repair_account_permission_dependencies.sql',import.meta.url),'utf8'));
+await db.exec(`set role authenticated`);
+check((await db.query('select * from test_variants_scoped')).rows.every(r=>Number(r.cost_price)===0),true,'cashier variants load without revealing cost');
+check((await db.query('select * from test_operational_read')).rows.length,1,'tenant branch and restrictive policy preserved');
+check((await db.query(`select reloptions from pg_class where relname='test_invoker_scoped'`)).rows[0].reloptions.includes('security_invoker=true'),true,'security invoker option is retained');
+await assert.rejects(db.query(`insert into test_operational_read values(5,'${id(1)}','${id(10)}',1)`),/row-level security/); checks++;
+check((await db.query(`select has_function_privilege('authenticated','user_has_permission_before_account_hierarchy(uuid,text)','execute') as allowed`)).rows[0].allowed,false,'private helper remains private');
+await db.exec('reset role');
+await db.query(`insert into test_permissions values('${id(101)}','products.view_cost')`);
+await db.exec('set role authenticated');
+check(Number((await db.query('select cost_price from test_variants_scoped where id=1')).rows[0].cost_price),125,'permitted manager can still read cost');
+await db.exec('reset role');
+await db.query(`delete from test_permissions where user_id='${id(101)}' and code='products.view_cost'`);
+// Repair is repeatable, retains the same view identity/options/grants and no stale dependencies.
+await db.exec(await readFile(new URL('../supabase/migrations/20261102233230_repair_account_permission_dependencies.sql',import.meta.url),'utf8'));
+check(JSON.stringify((await db.query(`select oid,reloptions,relacl from pg_class where relname='test_variants_scoped'`)).rows[0]),JSON.stringify(viewBefore),'view OID options grants preserved on repeat');
 const actor = n => db.query(`select set_config('request.jwt.claim.sub',$1,false)`,[id(n)]);
 const allowed = async (target, action='edit', role=null, branches=null, position=null, department=null) =>
  (await db.query('select check_account_management_scope($1,$2,$3,$4,$5,$6) as ok',[target===null?null:id(target),action,role===null?null:id(role),branches?.map(id)??null,position,department])).rows[0].ok;
