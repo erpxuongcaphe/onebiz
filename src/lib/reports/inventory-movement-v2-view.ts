@@ -5,6 +5,13 @@ import { searchOptions } from "@/lib/search-options";
 import { formatDate } from "@/lib/format";
 
 const D = Decimal.clone({ precision: 256 });
+const integerFormatter = new Intl.NumberFormat("en-US");
+
+export function formatInventoryDecimal(value: string): string {
+  const decimal = new D(value);
+  const [integer, fraction] = decimal.abs().toFixed().split(".");
+  return `${decimal.isNegative() && !decimal.isZero() ? "-" : ""}${integerFormatter.format(BigInt(integer))}${fraction ? `.${fraction}` : ""}`;
+}
 
 export const INVENTORY_REVIEW_LABELS = {
   negative_stock: "Tồn âm",
@@ -122,8 +129,30 @@ export function inventoryMovementV2Columns(costVisible: boolean): ExcelSheet["co
 }
 
 export function inventoryMovementV2Sheet(rows: InventoryMovementV2ViewRow[], costVisible: boolean, name = "Chi tiết tồn kho"): ExcelSheet {
+  const textColumns: string[] = [];
+  const columns = inventoryMovementV2Columns(costVisible).map(column => {
+    if (!NUMERIC_KEYS.has(column.key)) return column;
+    let decimalPlaces = 4;
+    let exactText = false;
+    for (const row of rows) {
+      const value = row[column.key as keyof InventoryMovementV2ViewRow];
+      if (value === null || value === undefined || value === "") continue;
+      const decimal = new D(String(value));
+      const numeric = Number(value);
+      decimalPlaces = Math.max(decimalPlaces, decimal.decimalPlaces());
+      if (decimalPlaces > 8 || !Number.isFinite(numeric) || !decimal.eq(new D(String(numeric)))) exactText = true;
+    }
+    if (exactText) {
+      textColumns.push(column.label);
+      return { ...column, format: "text" as const, align: "right" as const, decimalPlaces: undefined };
+    }
+    // The shared number formatter caps at four places. Its currency path emits
+    // the same symbol-free numeric format and supports up to eight places.
+    return { ...column, decimalPlaces, format: column.format === "number" && decimalPlaces > 4 ? "currency" as const : column.format };
+  });
   return {
-    name, columns: inventoryMovementV2Columns(costVisible), rows,
+    name, columns, rows,
+    ...(textColumns.length ? { titleRows: [`Giữ số chính xác dạng văn bản: ${textColumns.join(", ")}.`] } : {}),
     tablePreferenceKey: "report.inventory-movement.v2",
     footer: { code: "TỔNG", name: `${rows.length} dòng chi nhánh/mặt hàng`, unitLabel: "Không cộng khác ĐVT" },
   };

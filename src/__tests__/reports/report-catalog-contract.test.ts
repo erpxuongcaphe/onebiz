@@ -19,16 +19,25 @@ describe("report catalog implementation contract", () => {
         ? page + readFileSync(resolve("src/components/reports/customer-cohort-evidence-panel.tsx"), "utf8")
         : report.href === "/phan-tich/fnb-shipper"
           ? page + readFileSync(resolve("src/components/shared/report/delivery-invoice-management-report.tsx"), "utf8")
+        : report.href === "/phan-tich/aging"
+          ? page + readFileSync(resolve("src/components/shared/report/inventory-movement-v2-report.tsx"), "utf8")
         : page;
       if (report.href === "/phan-tich/customer-cohort") expect(page).toContain("<CustomerCohortEvidencePanel");
       const expectedKind =
         report.href === "/phan-tich"
           ? "tong-quan"
           : report.href.replace("/phan-tich/", "");
-      expect(source, report.href).toContain("ReportPageHeader");
+      if (report.href === "/phan-tich/aging") {
+        expect(page).toContain("<InventoryMovementV2Report");
+        expect(source).toContain('aria-label="Tồn kho và luân chuyển"');
+        expect(source).toContain('aria-label="Kiểu hiển thị báo cáo"');
+        expect(source).toContain("canExportView=");
+        expect(source).toContain("canExportFull=");
+        expect(source).toContain("readScope=");
+      } else expect(source, report.href).toContain("ReportPageHeader");
       expect(source, report.href).toContain("useBranchFilter()");
       expect(source, report.href).toContain("exportReportToExcel");
-      expect(source, report.href).toContain("onExportFull=");
+      if (report.href !== "/phan-tich/aging") expect(source, report.href).toContain("onExportFull=");
       expect(source, report.href).toContain(`kind: "${expectedKind}"`);
       expect(source, report.href).not.toContain("Chi nh\u00e1nh \u0111ang ch\u1ecdn");
       expect(source, report.href).not.toContain("T\u00ednh n\u0103ng \u0111ang ph\u00e1t tri\u1ec3n");
@@ -38,13 +47,15 @@ describe("report catalog implementation contract", () => {
 
   it("gives every Recharts responsive container a stable initial size", () => {
     for (const report of REPORT_CATALOG) {
-      const source = readFileSync(resolve(reportPagePath(report.href)), "utf8");
+      const source = readFileSync(resolve(reportPagePath(report.href)), "utf8") +
+        (report.href === "/phan-tich/aging" ? readFileSync(resolve("src/components/shared/report/inventory-movement-v2-report.tsx"), "utf8") : "");
       const containers = source.match(/<ResponsiveContainer\b[^>]*>/g) ?? [];
 
       for (const container of containers) {
-        expect(container, report.href).toContain(
-          "initialDimension={{ width: 320, height: 224 }}",
-        );
+        const initialSize = container.match(/initialDimension=\{\{\s*width:\s*(\d+),\s*height:\s*(\d+)\s*\}\}/);
+        expect(initialSize, report.href).not.toBeNull();
+        expect(Number(initialSize?.[1]), report.href).toBeGreaterThan(0);
+        expect(Number(initialSize?.[2]), report.href).toBeGreaterThan(0);
       }
     }
   });

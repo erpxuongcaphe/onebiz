@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import * as XLSX from "xlsx-js-style";
 import { exportReportToExcel } from "@/lib/utils/excel-export";
 import type { InventoryMovementV2Report, InventoryMovementV2Row } from "@/lib/reports/inventory-movement-v2-contract";
-import { filterInventoryMovementV2, inventoryMovementV2Columns, inventoryMovementV2Sheet, inventoryMovementV2Totals, inventoryMovementV2View, sortInventoryMovementV2 } from "@/lib/reports/inventory-movement-v2-view";
+import { filterInventoryMovementV2, formatInventoryDecimal, inventoryMovementV2Columns, inventoryMovementV2Sheet, inventoryMovementV2Totals, inventoryMovementV2View, sortInventoryMovementV2 } from "@/lib/reports/inventory-movement-v2-view";
 
 function row(overrides: Partial<InventoryMovementV2Row> = {}): InventoryMovementV2Row {
   return {
@@ -23,6 +23,11 @@ const noFilters = { search: "", branch: "", unit: "", review: "", valuation: "" 
 vi.mock("file-saver", () => ({ saveAs: vi.fn() }));
 
 describe("inventory V2 build-only view and export", () => {
+  it("groups large values without losing decimal precision or negative fractions", () => {
+    expect(formatInventoryDecimal("55283909.7069")).toBe("55,283,909.7069");
+    expect(formatInventoryDecimal("-0.1234")).toBe("-0.1234");
+    expect(formatInventoryDecimal("2.000000000000000001")).toBe("2.000000000000000001");
+  });
   it("keeps decimal strings and distinguishes unloaded from absent conversions", () => {
     const data = report([row({ current_qty: "2.1234" })]);
     expect(inventoryMovementV2View(data)[0].conversionLabel).toBe("Chưa tải quy đổi");
@@ -87,5 +92,53 @@ describe("inventory V2 build-only view and export", () => {
     expect(cells.some(cell => cell.v === "Đơn giá theo nguồn")).toBe(costVisible);
     expect(cells.some(cell => cell.v === "Giá trị theo nguồn")).toBe(costVisible);
     if (costVisible) expect(cells.some(cell => cell.t === "n" && cell.v === 10)).toBe(true);
+  });
+  it("chooses precision per column without changing normal UI column definitions or input rows", () => {
+    const rows = inventoryMovementV2View(report([
+      row({ current_qty: "0.00001", reserved_qty: "0.12345678", available_qty: "12345678901234.1234" }),
+      row({ product_id: "b", current_qty: "2", reserved_qty: "0", available_qty: "3.0000" }),
+    ]));
+    const before = structuredClone(rows);
+    const sheet = inventoryMovementV2Sheet(rows, false);
+    expect(sheet.columns.find(c => c.key === "current_qty")).toMatchObject({ decimalPlaces: 5 });
+    expect(sheet.columns.find(c => c.key === "reserved_qty")).toMatchObject({ decimalPlaces: 8 });
+    expect(sheet.columns.find(c => c.key === "available_qty")).toMatchObject({ format: "text", align: "right" });
+    expect(sheet.columns.find(c => c.key === "movement_net")).toMatchObject({ format: "number", decimalPlaces: 4 });
+    expect(sheet.titleRows?.join(" ")).toContain("Khả dụng");
+    expect(inventoryMovementV2Columns(false).find(c => c.key === "current_qty")).toMatchObject({ format: "number", decimalPlaces: 4 });
+    expect(rows).toEqual(before);
+  });
+  it("roundtrips tiny numbers, exact text columns, long unit costs and null blanks through actual XLSX", async () => {
+    const rows = inventoryMovementV2View(report([
+      row({ code: "EXACT-A", current_qty: "0.00001", reserved_qty: "0.12345678", available_qty: "12345678901234.1234",
+        valuation: { basis: "branch_cost_ledger", source_complete: true, status: "supported", unit_cost: "3.333333333333333333", value: "0.000000001" } }),
+      row({ code: "EXACT-B", product_id: "b", available_qty: "2.0000",
+        valuation: { basis: "branch_cost_ledger", source_complete: false, status: "incomplete", unit_cost: null, value: null } }),
+    ], true));
+    const spec = inventoryMovementV2Sheet(rows, true);
+    expect(spec.columns.find(c => c.key === "unitCost")).toMatchObject({ format: "text", align: "right" });
+    expect(spec.columns.find(c => c.key === "stockValue")).toMatchObject({ format: "text" });
+    let blob: Blob | undefined;
+    await exportReportToExcel({ kind: "aging", mode: "full", range: { from: "2026-02-01", to: "2026-02-01" }, sheets: [spec], onPrepared: file => { blob = file; } });
+    const bytes = await new Promise<ArrayBuffer>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result as ArrayBuffer); reader.onerror = reject; reader.readAsArrayBuffer(blob!); });
+    const workbook = XLSX.read(bytes, { type: "array", cellNF: true, cellStyles: true });
+    const sheet = workbook.Sheets["Chi tiết tồn kho"];
+    const grid = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "" });
+    const headerIndex = grid.findIndex(r => r.includes("Tồn hiện tại"));
+    const header = grid[headerIndex];
+    const firstIndex = grid.findIndex(r => r.includes("EXACT-A"));
+    const secondIndex = grid.findIndex(r => r.includes("EXACT-B"));
+    const cell = (index: number, label: string) => sheet[XLSX.utils.encode_cell({ r: index, c: header.indexOf(label) })] as XLSX.CellObject;
+    expect(cell(firstIndex, "Tồn hiện tại")).toMatchObject({ t: "n", v: 0.00001 });
+    expect(XLSX.utils.format_cell(cell(firstIndex, "Tồn hiện tại"))).toBe("0.00001");
+    expect(cell(firstIndex, "Đang giữ")).toMatchObject({ t: "n", v: 0.12345678 });
+    expect(XLSX.utils.format_cell(cell(firstIndex, "Đang giữ"))).toBe("0.12345678");
+    expect(cell(firstIndex, "Khả dụng")).toMatchObject({ t: "s", v: "12345678901234.1234" });
+    expect(cell(secondIndex, "Khả dụng")).toMatchObject({ t: "s", v: "2.0000" });
+    expect(cell(firstIndex, "Đơn giá theo nguồn")).toMatchObject({ t: "s", v: "3.333333333333333333" });
+    expect(cell(firstIndex, "Giá trị theo nguồn")).toMatchObject({ t: "s", v: "0.000000001" });
+    expect(grid[secondIndex][header.indexOf("Đơn giá theo nguồn")]).toBe("");
+    expect(grid[secondIndex][header.indexOf("Giá trị theo nguồn")]).toBe("");
+    expect(grid.some(r => r.some(value => typeof value === "string" && value.includes("Giữ số chính xác dạng văn bản:")))).toBe(true);
   });
 });

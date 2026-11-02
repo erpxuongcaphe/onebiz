@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { InventoryMovementV2Report, InventoryMovementV2Row } from "@/lib/reports/inventory-movement-v2-contract";
 import { parseInventoryMovementV2 } from "@/lib/reports/inventory-movement-v2-contract";
+import * as inventoryView from "@/lib/reports/inventory-movement-v2-view";
 import type { ExportOptions } from "@/lib/utils/excel-export";
 const mocks = vi.hoisted(() => ({ export: vi.fn() }));
 vi.mock("@/lib/utils/excel-export", () => ({ exportReportToExcel: mocks.export }));
@@ -59,18 +60,31 @@ describe("inventory movement V2 build-only component", () => {
       static revokeObjectURL = vi.fn();
     });
   });
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+  it("keeps view and full export permissions independent", async () => {
+    const view = render(<InventoryMovementV2ReportComponent report={fixture()} canExportView canExportFull={false} />);
+    expect(screen.getByRole("button", { name: "Excel hiện tại" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Excel đầy đủ" })).not.toBeInTheDocument();
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Excel hiện tại" })));
+    expect(mocks.export.mock.calls[0][0].mode).toBe("view");
+    view.rerender(<InventoryMovementV2ReportComponent report={fixture()} canExportView={false} canExportFull />);
+    expect(screen.queryByRole("button", { name: "Excel hiện tại" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Excel đầy đủ" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Tải file Excel/ })).not.toBeInTheDocument();
+  });
   it("omits all cost controls and columns for quantity-only snapshots; export defaults off", () => {
     render(<InventoryMovementV2ReportComponent report={fixture()} />);
     expect(screen.queryByText("Đơn giá theo nguồn")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Cơ sở giá trị")).not.toBeInTheDocument();
-    expect(screen.queryByText("Phần sổ kho xác định")).not.toBeInTheDocument();
+    expect(screen.queryByText("Giá trị sổ kho đã xác định")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Excel đầy đủ" })).not.toBeInTheDocument();
     expect(screen.getByText("Không cộng số lượng khác ĐVT.")).toBeInTheDocument();
     expect(screen.getAllByText("Chưa đủ căn cứ")).toHaveLength(2);
   });
   it("separates ledger and reference values without certifying their combined total", () => {
     render(<InventoryMovementV2ReportComponent report={fixture(true)} />);
+    expect(screen.getByText("Giá trị sổ kho đã xác định")).toBeInTheDocument();
+    expect(screen.getByText("Giá trị tham chiếu", { selector: "dt" })).toBeInTheDocument();
     expect(screen.getByLabelText("Cơ sở giá trị")).toBeInTheDocument();
     expect(screen.getByText("8 VND")).toBeInTheDocument();
     expect(screen.getByText("12 VND")).toBeInTheDocument();
@@ -237,5 +251,91 @@ describe("inventory movement V2 build-only component", () => {
     view.rerender(<InventoryMovementV2ReportComponent report={{ ...report, generated_at: "2026-11-02T02:00:00Z" }} />);
     expect(screen.getByText("1–50 / 121 dòng")).toBeInTheDocument();
     expect(tableCodes()).toHaveLength(50);
+  });
+  it("switches between table and review counts while sharing filters and totals", () => {
+    render(<InventoryMovementV2ReportComponent report={fixture()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Biểu đồ" }));
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /Có luân chuyển gần đây: 2/ })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Đơn vị"), { target: { value: "G" } });
+    expect(screen.getByText("1 dòng · 1 mặt hàng")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /Có luân chuyển gần đây: 1/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Bảng số liệu" }));
+    expect(tableCodes()).toEqual(["TEST-A"]);
+    fireEvent.click(screen.getByRole("button", { name: "Biểu đồ" }));
+    fireEvent.change(screen.getByLabelText("Tìm mã, mặt hàng"), { target: { value: "not found" } });
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Không có mặt hàng khớp bộ lọc.");
+  });
+  it("renders precise review axis labels while retaining canonical full labels", () => {
+    render(<InventoryMovementV2ReportComponent report={fixture()} viewMode="chart" />);
+    for (const label of ["Giữ không hợp lệ", "Giữ khi hết tồn", "Lệch lịch sử", "Không xuất >60 ngày"]) {
+      expect(screen.getByText(label, { selector: "tspan" })).toBeInTheDocument();
+    }
+    expect(screen.getByRole("img", { name: /Giữ hàng không hợp lệ: 0; Có giữ hàng, chưa có tồn: 0; Lệch lịch sử kho: 0; Chưa xuất dùng trên 60 ngày: 0/ })).toBeInTheDocument();
+    const chartWidth = Number(document.querySelector("svg.recharts-surface")?.getAttribute("width"));
+    expect(chartWidth).toBeGreaterThan(0);
+    const labels = ["Tồn âm", "Giữ không hợp lệ", "Giữ khi hết tồn", "Lệch lịch sử", "Không xuất >60 ngày", "Thiếu lịch sử", "Luân chuyển"]
+      .map(label => screen.getByText(label, { selector: "tspan" }).closest("text")!);
+    expect(labels).toHaveLength(7);
+    for (const label of labels) {
+      const x = Number(label.getAttribute("x"));
+      expect(x).toBeGreaterThanOrEqual(0);
+      expect(x).toBeLessThanOrEqual(128);
+    }
+  });
+  it("exports chart View as count groups and Full as all filtered details plus groups", async () => {
+    render(<InventoryMovementV2ReportComponent report={largeFixture()} canExport viewMode="chart" />);
+    fireEvent.change(screen.getByLabelText("Chi nhánh"), { target: { value: otherBranch } });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Excel hiện tại" })));
+    const viewOptions = mocks.export.mock.calls.at(-1)![0] as ExportOptions;
+    expect(viewOptions.mode).toBe("view");
+    expect(viewOptions.sheets).toHaveLength(1);
+    expect(viewOptions.sheets[0].columns.map(column => column.key)).toEqual(["label", "count"]);
+    expect(viewOptions.sheets[0].rows).toHaveLength(7);
+    expect(viewOptions.sheets[0].rows.reduce((sum, row) => sum + Number(row.count), 0)).toBe(61);
+    expect(viewOptions.sheets[0].footer?.count).toBe(61);
+    expect(viewOptions.sheets[0].rows.find(row => row.label === "Có luân chuyển gần đây")?.count).toBe(61);
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Excel đầy đủ" })));
+    const fullOptions = mocks.export.mock.calls.at(-1)![0] as ExportOptions;
+    expect(fullOptions.mode).toBe("full");
+    expect(fullOptions.sheets).toHaveLength(2);
+    expect(fullOptions.sheets[0].rows).toHaveLength(61);
+    expect(fullOptions.sheets[0].rows.every(row => row.branch_name === "Chi nhánh B")).toBe(true);
+    expect(fullOptions.sheets[1].rows).toEqual(viewOptions.sheets[0].rows);
+    for (const sheet of fullOptions.sheets) expect(sheet.titleRows?.join(" ")).toContain("Thời điểm:");
+  });
+  it("preserves numeric-as-text precision and appends its provenance to overwritten sheet titles", async () => {
+    const report = fixture();
+    const sourceSheet = inventoryView.inventoryMovementV2Sheet(inventoryView.inventoryMovementV2View(report), false);
+    expect(sourceSheet.titleRows?.length).toBeGreaterThan(0);
+    render(<InventoryMovementV2ReportComponent report={report} canExportFull />);
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Excel đầy đủ" })));
+    const options = mocks.export.mock.calls.at(-1)![0] as ExportOptions;
+    expect(options.sheets[0].columns.find(column => column.key === "current_qty")?.format).toBe("text");
+    expect(options.sheets[0].rows[0].current_qty).toBe("2.000000000000000002");
+    expect(typeof options.sheets[0].rows[0].current_qty).toBe("string");
+    for (const title of sourceSheet.titleRows!) {
+      expect(options.sheets[0].titleRows).toContain(title);
+      expect(options.sheets[1].titleRows).toContain(title);
+    }
+    expect(options.sheets[0].titleRows).toContain("Một số cột số giữ dạng văn bản để bảo toàn độ chính xác.");
+    expect(options.sheets[1].titleRows).toContain("Một số cột số giữ dạng văn bản để bảo toàn độ chính xác.");
+  });
+  it.each(["viewMode", "readScope", "canExportView"] as const)("invalidates delayed chart exports after %s changes", async change => {
+    let options!: ExportOptions;
+    let finish!: () => void;
+    mocks.export.mockImplementation((value: ExportOptions) => { options = value; return new Promise<void>(resolve => { finish = resolve; }); });
+    const report = fixture();
+    const props = { report, viewMode: "chart" as const, readScope: "allowed-scope", canExportView: true };
+    const view = render(<InventoryMovementV2ReportComponent {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Excel hiện tại" }));
+    expect(options.shouldSave?.()).toBe(true);
+    const next = change === "viewMode" ? { ...props, viewMode: "table" as const }
+      : change === "readScope" ? { ...props, readScope: "new-permissions" } : { ...props, canExportView: false };
+    view.rerender(<InventoryMovementV2ReportComponent {...next} />);
+    expect(options.shouldSave?.()).toBe(false);
+    await act(async () => { options.onPrepared?.(new Blob(["obsolete"]), "obsolete.xlsx"); finish(); });
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
 });

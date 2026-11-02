@@ -8,7 +8,21 @@ import { exportReportToExcel } from "@/lib/utils/excel-export";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatDateInputValue } from "@/lib/format";
+import { formatInventoryDecimal } from "@/lib/reports/inventory-movement-v2-view";
+import { BarChart, Bar, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import type { ReportViewMode } from "@/lib/types/report";
+import type { ExcelSheet } from "@/lib/utils/excel-export";
+
+const REVIEW_CHART = {
+  negative_stock: { short: "Tồn âm", color: "#dc2626" },
+  invalid_reservation: { short: "Giữ không hợp lệ", color: "#d97706" },
+  reserved_without_stock: { short: "Giữ khi hết tồn", color: "#d97706" },
+  reconcile_history: { short: "Lệch lịch sử", color: "#d97706" },
+  review_no_outflow: { short: "Không xuất >60 ngày", color: "#d97706" },
+  insufficient_history: { short: "Thiếu lịch sử", color: "#d97706" },
+  recent_movement: { short: "Luân chuyển", color: "#0d9488" },
+};
 
 export interface InventoryMovementV2ReportProps {
   report: InventoryMovementV2Report | null;
@@ -17,6 +31,11 @@ export interface InventoryMovementV2ReportProps {
   error?: string | null;
   onReload?: () => void;
   canExport?: boolean;
+  canExportView?: boolean;
+  canExportFull?: boolean;
+  viewMode?: ReportViewMode;
+  onViewModeChange?: (mode: ReportViewMode) => void;
+  readScope?: string;
 }
 
 export default function InventoryMovementV2Report(props: InventoryMovementV2ReportProps) {
@@ -25,7 +44,9 @@ export default function InventoryMovementV2Report(props: InventoryMovementV2Repo
   return <SnapshotReport key={identity} {...props} />;
 }
 
-function SnapshotReport({ report, conversions, loading = false, error = null, onReload, canExport = false }: InventoryMovementV2ReportProps) {
+function SnapshotReport({ report, conversions, loading = false, error = null, onReload, canExport = false, canExportView = canExport, canExportFull = canExport, viewMode: controlledMode, onViewModeChange, readScope = "" }: InventoryMovementV2ReportProps) {
+  const [localMode, setLocalMode] = useState<ReportViewMode>("table");
+  const viewMode = controlledMode ?? localMode;
   const [filters, setFilters] = useState<InventoryMovementV2Filters>({ search: "", branch: "", unit: "", review: "", valuation: "" });
   const [sort, setSort] = useState<InventoryMovementV2Sort>(null);
   const [page, setPage] = useState(0);
@@ -41,7 +62,12 @@ function SnapshotReport({ report, conversions, loading = false, error = null, on
   const costVisible = report?.cost_visible === true;
   const columns = inventoryMovementV2Columns(costVisible);
   const totals = useMemo(() => inventoryMovementV2Totals(filtered), [filtered]);
-  const options = JSON.stringify([filters, sort, loading, error, canExport]);
+  const groups = useMemo(() => Object.entries(INVENTORY_REVIEW_LABELS).map(([key, label]) => ({
+    key, label, shortLabel: REVIEW_CHART[key as keyof typeof REVIEW_CHART].short,
+    color: REVIEW_CHART[key as keyof typeof REVIEW_CHART].color,
+    count: filtered.filter(row => row.review_status === key).length,
+  })), [filtered]);
+  const options = JSON.stringify([filters, sort, loading, error, canExportView, canExportFull, viewMode, readScope]);
   const revision = useRef({ options, value: 0 });
   if (revision.current.options !== options) revision.current = { options, value: revision.current.value + 1 };
   const scope = String(revision.current.value);
@@ -51,25 +77,34 @@ function SnapshotReport({ report, conversions, loading = false, error = null, on
     setPage(0); setExportError(""); setFilters(previous => ({ ...previous, [key]: value }));
   };
   const exportFile = async (mode: "view" | "full") => {
-    if (!canExport || disabled || !report) return;
+    if (!(mode === "full" ? canExportFull : canExportView) || disabled || !report) return;
     const expected = scope;
     setExporting(true); setExportError("");
     const sheet = inventoryMovementV2Sheet(rows, costVisible);
+    const sourceTitles = sheet.titleRows ?? [];
     // Project permitted columns only; quantity-only exports carry no hidden costs.
     sheet.rows = rows.map(row => Object.fromEntries(sheet.columns.map(column => [column.key, row[column.key as keyof typeof row]])));
     sheet.titleRows = ["TỒN KHO VÀ LUÂN CHUYỂN", `Thời điểm: ${formatDate(report.generated_at)} (VN, UTC+07:00)`,
       "Tồn hiện tại theo chi nhánh/mặt hàng; ĐVT và quy đổi hiện tại. Tuổi lớp hàng chưa được xác nhận.",
       "Không cộng số lượng khác ĐVT. Ô trống không phải 0.",
       `Chi nhánh: ${filters.branch ? rows[0]?.branch_name : "Tất cả trong phạm vi"}; ĐVT: ${filters.unit || "Tất cả"}; Tìm kiếm: ${filters.search || "Không"}`,
-      `Kiểm tra: ${INVENTORY_REVIEW_LABELS[filters.review as keyof typeof INVENTORY_REVIEW_LABELS] ?? "Tất cả"}; Sắp xếp: ${sort ? `${columns.find(column => column.key === sort.id)?.label} (${sort.direction === "asc" ? "tăng" : "giảm"})` : "Theo nguồn"}`];
+      `Kiểm tra: ${INVENTORY_REVIEW_LABELS[filters.review as keyof typeof INVENTORY_REVIEW_LABELS] ?? "Tất cả"}; Sắp xếp: ${sort ? `${columns.find(column => column.key === sort.id)?.label} (${sort.direction === "asc" ? "tăng" : "giảm"})` : "Theo nguồn"}`,
+      ...sourceTitles];
     if (costVisible) sheet.titleRows.push(`Giá trị tham chiếu không phải giá trị sổ kho. Cơ sở: ${INVENTORY_VALUE_LABELS[filters.valuation as keyof typeof INVENTORY_VALUE_LABELS] ?? "Tất cả"}.`);
+    const numericKeys = new Set(columns.filter(column => column.format === "number" || column.format === "currency").map(column => column.key));
+    if (sheet.columns.some(column => column.format === "text" && numericKeys.has(column.key))) {
+      sheet.titleRows.push("Một số cột số giữ dạng văn bản để bảo toàn độ chính xác.");
+    }
+    const groupSheet: ExcelSheet = { name: "Nhóm rà soát", titleRows: [...sheet.titleRows, "Đếm dòng chi nhánh/mặt hàng theo trạng thái rà soát."],
+      columns: [{ key: "label", label: "Trạng thái rà soát", width: 38 }, { key: "count", label: "Số dòng", width: 18, format: "number" }],
+      rows: groups.map(({ label, count }) => ({ label, count })), footer: { label: "TỔNG", count: totals.count } };
     try {
-      const day = report.generated_at.slice(0, 10);
+      const day = formatDateInputValue(report.generated_at);
       await exportReportToExcel({ kind: "aging", reportTitle: "Tồn kho và luân chuyển", mode,
         range: { from: day, to: day }, branchName: filters.branch ? rows[0]?.branch_name : "Các chi nhánh trong phạm vi",
         description: `Thời điểm tồn kho: ${report.generated_at}; không phải báo cáo tồn tại ngày lịch sử.`,
         guide: ["Chi tiết cùng bộ lọc và thứ tự trên bảng.", "Không cộng số lượng khác ĐVT; tuổi lớp hàng chưa được xác nhận.", ...(costVisible ? ["Giá trị sổ kho và tham chiếu được tách riêng; thiếu giá trị không phải 0."] : [])],
-        sheets: [sheet], shouldSave: () => download.isCurrent(expected),
+        sheets: mode === "full" ? [sheet, groupSheet] : [viewMode === "chart" ? groupSheet : sheet], shouldSave: () => download.isCurrent(expected),
         onPrepared: (blob, filename) => download.prepare(blob, filename, expected) });
     } catch {
       if (download.isCurrent(expected)) setExportError("Không tạo được file. Vui lòng thử lại.");
@@ -79,8 +114,9 @@ function SnapshotReport({ report, conversions, loading = false, error = null, on
   return <section className="min-w-0 space-y-4 p-4 md:p-6" aria-label="Tồn kho và luân chuyển">
     <header className="flex flex-wrap items-start justify-between gap-3 border-b pb-3">
       <div className="min-w-0"><h1 className="text-xl font-semibold text-primary">Tồn kho và luân chuyển</h1>{report && <p className="break-words text-sm text-muted-foreground">Thời điểm: {formatDate(report.generated_at)} (VN, UTC+07:00)</p>}</div>
-      <div className="flex flex-wrap gap-2">{onReload && <Button variant="outline" disabled={loading} onClick={onReload}><Icon name="refresh" />Tải lại</Button>}{canExport && <><Button variant="outline" disabled={disabled} onClick={() => void exportFile("view")}><Icon name="download" />Excel hiện tại</Button><Button variant="outline" disabled={disabled} onClick={() => void exportFile("full")}><Icon name="download" />Excel đầy đủ</Button></>}</div>
+      <div className="flex flex-wrap gap-2">{onReload && <Button variant="outline" disabled={loading} onClick={onReload}><Icon name="refresh" />Tải lại</Button>}{canExportView && <Button variant="outline" disabled={disabled} onClick={() => void exportFile("view")}><Icon name="download" />Excel hiện tại</Button>}{canExportFull && <Button variant="outline" disabled={disabled} onClick={() => void exportFile("full")}><Icon name="download" />Excel đầy đủ</Button>}</div>
     </header>
+    <div role="group" aria-label="Kiểu hiển thị báo cáo" className="flex gap-1">{(["chart", "table"] as const).map(mode => <Button key={mode} variant={viewMode === mode ? "default" : "outline"} className="h-10 w-10 p-0" title={mode === "chart" ? "Biểu đồ" : "Bảng số liệu"} aria-label={mode === "chart" ? "Biểu đồ" : "Bảng số liệu"} aria-pressed={viewMode === mode} onClick={() => { setPage(0); if (onViewModeChange) onViewModeChange(mode); else if (controlledMode === undefined) setLocalMode(mode); }}><Icon name={mode === "chart" ? "bar_chart" : "table_rows"} /></Button>)}</div>
     {loading ? <p role="status">Đang tải dữ liệu tồn kho...</p> : error ? <p role="alert">{error}</p> : !report ? <p role="status">Chưa có dữ liệu tồn kho.</p> : <>
       <p className="text-sm text-muted-foreground">Tồn hiện tại theo chi nhánh/mặt hàng. ĐVT và quy đổi hiện tại; tuổi lớp hàng chưa đủ căn cứ.</p>
       <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -91,19 +127,34 @@ function SnapshotReport({ report, conversions, loading = false, error = null, on
         {costVisible && select("valuation", "Cơ sở giá trị", Object.entries(INVENTORY_VALUE_LABELS))}
       </div>
       <div className="flex flex-wrap gap-x-6 gap-y-2 border-y py-3 text-sm"><span>{totals.count} dòng · {totals.products} mặt hàng</span><span className="border-l-2 border-amber-400 pl-2 text-amber-800 dark:text-amber-300">Tồn âm: {totals.negative}</span><span className="border-l-2 border-teal-500 pl-2 text-teal-800 dark:text-teal-300">Lệch lịch sử: {totals.reconcile}</span><span>Tuổi chưa xác nhận: {totals.unverified}</span></div>
-      {costVisible && <dl className="grid gap-3 border-l-2 border-teal-500 bg-teal-50/50 px-3 py-3 text-sm dark:bg-teal-950/20 sm:grid-cols-2"><div><dt>Phần sổ kho xác định</dt><dd className="font-medium tabular-nums">{totals.ledgerSubtotal} VND</dd></div><div><dt>Tham chiếu riêng</dt><dd className="tabular-nums">{totals.referenceSubtotal} VND</dd></div><div><dt>Tổng giá trị sổ kho</dt><dd className="font-medium">{totals.ledgerTotal === null ? "Chưa đủ căn cứ" : `${totals.ledgerTotal} VND`}</dd></div><div><dt>Dòng chưa đủ giá trị</dt><dd className="tabular-nums">{totals.incomplete}</dd></div></dl>}
+      {costVisible && <dl className="grid gap-3 border-l-2 border-teal-500 bg-teal-50/50 px-3 py-3 text-sm dark:bg-teal-950/20 sm:grid-cols-2"><div><dt>Giá trị sổ kho đã xác định</dt><dd className="font-medium tabular-nums">{formatInventoryDecimal(totals.ledgerSubtotal)} VND</dd></div><div><dt>Giá trị tham chiếu</dt><dd className="tabular-nums">{formatInventoryDecimal(totals.referenceSubtotal)} VND</dd></div><div><dt>Tổng giá trị sổ kho</dt><dd className="font-medium">{totals.ledgerTotal === null ? "Chưa đủ căn cứ" : `${formatInventoryDecimal(totals.ledgerTotal)} VND`}</dd></div><div><dt>Dòng chưa đủ giá trị</dt><dd className="tabular-nums">{totals.incomplete}</dd></div></dl>}
+      {viewMode === "chart" ? <section aria-label="Số dòng theo trạng thái rà soát" className="space-y-3 border-y py-4">
+        <h2 className="text-base font-semibold">Trạng thái rà soát · Số dòng</h2>
+        {rows.length ? <div className="h-80 min-w-0" role="img" aria-label={groups.map(group => `${group.label}: ${group.count}`).join("; ")}>
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} initialDimension={{ width: 320, height: 320 }}>
+            <BarChart data={groups} layout="vertical" margin={{ top: 8, right: 24, bottom: 8, left: 8 }}>
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+              <XAxis type="number" allowDecimals={false} domain={[0, "auto"]} fontSize={12} />
+              <YAxis type="category" dataKey="shortLabel" width={120} tickLine={false} fontSize={12} />
+              <Tooltip labelFormatter={(_, payload) => payload?.[0]?.payload?.label ?? ""} formatter={value => [value, "Số dòng"]} />
+              <Bar dataKey="count" maxBarSize={24} isAnimationActive={false}>{groups.map(group => <Cell key={group.key} fill={group.color} />)}</Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div> : <p role="status" className="flex h-80 items-center justify-center text-sm text-muted-foreground">Không có mặt hàng khớp bộ lọc.</p>}
+      </section> : <>
       <div className="h-[36rem] max-h-[65vh] max-w-full overflow-auto rounded-md border" tabIndex={0} aria-label="Bảng tồn kho">
         <table className="w-full border-collapse text-sm"><thead className="sticky top-0 z-10 bg-background"><tr className="border-b bg-muted/40">{columns.map(column => <th key={column.key} scope="col" className="whitespace-nowrap p-3 text-left" aria-sort={sort?.id === column.key ? sort.direction === "asc" ? "ascending" : "descending" : "none"}><button className="inline-flex min-h-10 items-center gap-1 text-left font-semibold" onClick={() => { setPage(0); setSort({ id: column.key, direction: sort?.id === column.key && sort.direction === "asc" ? "desc" : "asc" }); }}>{column.label}<Icon name="swap_vert" /></button></th>)}</tr></thead>
-          <tbody>{pageRows.map(row => <tr key={row.id} className="border-b last:border-0">{columns.map(column => { const value = row[column.key as keyof typeof row]; return <td key={column.key} className={`h-12 p-3 ${column.format ? "whitespace-nowrap text-right tabular-nums" : "min-w-32 max-w-80 break-words"}`}>{value === null || value === undefined || value === "" ? "—" : String(value)}</td>; })}</tr>)}{!rows.length && <tr><td colSpan={columns.length} className="p-6 text-center text-muted-foreground">Không có mặt hàng khớp bộ lọc.</td></tr>}</tbody>
+          <tbody>{pageRows.map(row => <tr key={row.id} className="border-b last:border-0">{columns.map(column => { const value = row[column.key as keyof typeof row]; return <td key={column.key} className={`h-12 p-3 ${column.format ? "whitespace-nowrap text-right tabular-nums" : "min-w-32 max-w-80 break-words"}`}>{value === null || value === undefined || value === "" ? "—" : column.format === "number" || column.format === "currency" ? formatInventoryDecimal(String(value)) : String(value)}</td>; })}</tr>)}{!rows.length && <tr><td colSpan={columns.length} className="p-6 text-center text-muted-foreground">Không có mặt hàng khớp bộ lọc.</td></tr>}</tbody>
         </table>
       </div>
       <nav aria-label="Phân trang tồn kho" className="flex min-h-12 flex-wrap items-center justify-between gap-3 text-sm">
         <label className="flex items-center gap-2"><span>Dòng mỗi trang</span><select className="h-10 w-20 rounded-md border bg-background px-2 tabular-nums" value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setPage(0); }}>{[50, 100, 200].map(size => <option key={size} value={size}>{size}</option>)}</select></label>
         <div className="flex flex-wrap items-center gap-2"><span role="status" className="min-w-36 text-right tabular-nums">{rows.length ? currentPage * pageSize + 1 : 0}–{Math.min((currentPage + 1) * pageSize, rows.length)} / {rows.length} dòng</span><Button variant="outline" className="h-10 w-10 shrink-0 p-0" aria-label="Trang trước" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}><Icon name="chevron_left" /></Button><span className="w-24 text-center tabular-nums">{currentPage + 1} / {pageCount}</span><Button variant="outline" className="h-10 w-10 shrink-0 p-0" aria-label="Trang sau" disabled={currentPage + 1 >= pageCount} onClick={() => setPage(currentPage + 1)}><Icon name="chevron_right" /></Button></div>
       </nav>
+      </>}
       <p className="text-sm text-muted-foreground">Không cộng số lượng khác ĐVT.</p>
     </>}
     {exportError && <p role="alert">{exportError}</p>}
-    {canExport && !loading && !error && download.file && <a className="inline-flex min-h-10 max-w-full items-center gap-2 break-all text-sm text-primary underline" href={download.file.url} download={download.file.filename}><Icon name="download" />Tải file Excel · {download.file.filename}</a>}
+    {(canExportView || canExportFull) && !loading && !error && download.file && <a className="inline-flex min-h-10 max-w-full items-center gap-2 break-all text-sm text-primary underline" href={download.file.url} download={download.file.filename}><Icon name="download" />Tải file Excel · {download.file.filename}</a>}
   </section>;
 }
