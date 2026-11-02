@@ -3,9 +3,24 @@ import { deliveryDateTime, DELIVERY_TIER_LABELS } from "./delivery-report-export
 import { normalizeSearch } from "@/lib/smart-search";
 import type { ExcelSheet } from "@/lib/utils/excel-export";
 import { sortReportRows } from "./table-sort";
+import { cashBookDate } from "@/lib/cash-time";
+import { matchesMetricFilters, type MetricFilter } from "./metric-filter";
 export const DELIVERY_STATUS_LABELS = { cancelled: "Đã hủy", completed: "Đã giao", assigned: "Đang giao", unassigned: "Chưa nhận giao" };
 export const INVOICE_PAYMENT_LABELS: Record<string, string> = { cash: "Tiền mặt", transfer: "Chuyển khoản", card: "Thẻ", mixed: "Kết hợp", bank_transfer: "Chuyển khoản" };
-const INVOICE_STATUS_LABELS: Record<string, string> = { completed: "Hoàn tất", cancelled: "Đã hủy", draft: "Nháp", pending: "Chưa hoàn tất", posted: "Đã ghi sổ" };
+export const DELIVERY_INVOICE_STATUS_LABELS: Record<string, string> = { completed: "Hoàn tất", cancelled: "Đã hủy", draft: "Nháp", pending: "Chưa hoàn tất", posted: "Đã ghi sổ" };
+export interface DeliveryFilters {
+  search: string; staff: string; status: string; method: string;
+  branch?: string; invoiceStatus?: string; tier?: string;
+  evidence?: string; assignedState?: string;
+  assignedFrom?: string; assignedTo?: string; completedFrom?: string; completedTo?: string;
+  metrics?: MetricFilter[];
+}
+export function createDeliveryFilters(): DeliveryFilters {
+  return { search: "", staff: "", status: "", method: "", branch: "", invoiceStatus: "", tier: "",
+    evidence: "", assignedState: "", assignedFrom: "", assignedTo: "", completedFrom: "", completedTo: "", metrics: [] };
+}
+const METRIC_KEYS = new Set(["durationSeconds", "invoiceTotal", "invoicePaid", "invoiceDebt", "deliveryFee"]);
+const EVIDENCE_LABELS: Record<string, string> = { linked: "Có hóa đơn phù hợp", missing: "Chưa có hóa đơn phù hợp", duplicate: "Hóa đơn gắn nhiều đơn giao" };
 export type DeliveryInvoiceView = ReturnType<typeof deliveryInvoiceView>[number];
 export function deliveryInvoiceView(items: DeliveryInvoiceRow[]) {
   const invoiceCounts = new Map<string, number>();
@@ -13,7 +28,7 @@ export function deliveryInvoiceView(items: DeliveryInvoiceRow[]) {
   return items.map(row => ({ ...row,
     staffKey: `${row.branchId}:${row.staffId ?? "unassigned"}`,
     deliveryStatusLabel: DELIVERY_STATUS_LABELS[row.deliveryStatus],
-    invoiceStatusLabel: row.invoiceStatus ? INVOICE_STATUS_LABELS[row.invoiceStatus] ?? row.invoiceStatus : "",
+    invoiceStatusLabel: row.invoiceStatus ? DELIVERY_INVOICE_STATUS_LABELS[row.invoiceStatus] ?? row.invoiceStatus : "",
     paymentMethodLabel: row.paymentMethod ? INVOICE_PAYMENT_LABELS[row.paymentMethod] ?? row.paymentMethod : "",
     tierLabel: row.deliveryTier ? DELIVERY_TIER_LABELS[row.deliveryTier] ?? row.deliveryTier : "",
     createdLabel: deliveryDateTime(row.createdAt), assignedLabel: deliveryDateTime(row.assignedAt), completedLabel: deliveryDateTime(row.completedAt),
@@ -21,10 +36,34 @@ export function deliveryInvoiceView(items: DeliveryInvoiceRow[]) {
     invoiceEvidence: !row.invoiceId ? "Chưa có hóa đơn phù hợp" : (invoiceCounts.get(row.invoiceId) ?? 0) > 1 ? "Hóa đơn gắn nhiều đơn giao" : "",
   }));
 }
-export function filterDeliveryRows(rows: DeliveryInvoiceView[], filters: { search: string; staff: string; status: string; method: string }) {
+export function filterDeliveryRows(rows: DeliveryInvoiceView[], filters: DeliveryFilters) {
+  const metrics = filters.metrics ?? [];
+  if (metrics.some(filter => !METRIC_KEYS.has(filter.key))) return [];
+  const validRange = (from?: string, to?: string) =>
+    (!from || (/^\d{4}-\d{2}-\d{2}$/.test(from) && cashBookDate(from) === from)) &&
+    (!to || (/^\d{4}-\d{2}-\d{2}$/.test(to) && cashBookDate(to) === to)) && (!from || !to || from <= to);
+  if (!validRange(filters.assignedFrom, filters.assignedTo) || !validRange(filters.completedFrom, filters.completedTo)) return [];
+  const inRange = (value: string | null, from?: string, to?: string) => {
+    if (!from && !to) return true;
+    const day = value ? cashBookDate(value) : "";
+    return !!day && (!from || day >= from) && (!to || day <= to);
+  };
   const terms = normalizeSearch(filters.search).split(/\s+/).filter(Boolean);
-  return rows.filter(row => (!filters.staff || row.staffKey === filters.staff) && (!filters.status || row.deliveryStatus === filters.status) && (!filters.method || row.paymentMethod === filters.method) &&
-    terms.every(term => normalizeSearch([row.orderNumber, row.invoiceCode, row.staffName, row.branchName, row.customerName].join(" ")).includes(term)));
+  // Duplicate evidence belongs to the full source, never recompute it after filtering.
+  return rows.filter(row => {
+    const evidence = !row.invoiceId ? "missing" : row.invoiceDuplicate ? "duplicate" : "linked";
+    const assignedState = row.staffId ? "assigned" : "unassigned";
+    return (!filters.staff || row.staffKey === filters.staff) && (!filters.status || row.deliveryStatus === filters.status) &&
+      (!filters.method || (row.paymentMethod === "bank_transfer" ? "transfer" : row.paymentMethod) === (filters.method === "bank_transfer" ? "transfer" : filters.method)) && (!filters.branch || row.branchId === filters.branch) &&
+      (!filters.invoiceStatus || row.invoiceStatus === filters.invoiceStatus) && (!filters.tier || row.deliveryTier === filters.tier) &&
+      (!filters.evidence || evidence === filters.evidence) && (!filters.assignedState || assignedState === filters.assignedState) &&
+      inRange(row.assignedAt, filters.assignedFrom, filters.assignedTo) && inRange(row.completedAt, filters.completedFrom, filters.completedTo) &&
+      matchesMetricFilters(row, metrics) && terms.every(term => normalizeSearch([
+        row.orderNumber, row.invoiceCode, row.staffName, row.branchName, row.customerName,
+        row.deliveryStatusLabel, row.invoiceStatusLabel, row.tierLabel, row.paymentMethodLabel,
+        row.invoiceEvidence, EVIDENCE_LABELS[evidence], assignedState === "assigned" ? "Đã nhận giao" : "Chưa nhận giao",
+      ].join(" ")).includes(term));
+  });
 }
 export function deliverySortValue(row: DeliveryInvoiceView, key: string) {
   const timestamps: Record<string, string | null> = { createdLabel: row.createdAt, assignedLabel: row.assignedAt, completedLabel: row.completedAt };
@@ -41,10 +80,11 @@ export function summarizeDeliveryRows(rows: DeliveryInvoiceView[]) {
     return known.length ? known.reduce((total, value) => total + value, 0) : null;
   };
   const timed = active.filter(row => row.durationSeconds !== null && row.durationSeconds !== undefined);
+  const knownFees = active.flatMap(row => row.deliveryFee === null || row.deliveryFee === undefined ? [] : [row.deliveryFee]);
   return { orders: rows.length, completed: active.filter(row => row.deliveryStatus === "completed").length,
     cancelled: rows.length - active.length, unassigned: active.filter(row => !row.staffId).length,
     invoiceTotal: sum("invoiceTotal"), invoicePaid: sum("invoicePaid"), invoiceDebt: sum("invoiceDebt"),
-    deliveryFee: active.reduce((sum, row) => sum + (row.deliveryFee ?? 0), 0), timedCount: timed.length,
+    deliveryFee: knownFees.length ? knownFees.reduce((sum, value) => sum + value, 0) : null, timedCount: timed.length,
     avgDeliverySeconds: timed.length ? Math.round(timed.reduce((sum, row) => sum + row.durationSeconds!, 0) / timed.length) : null,
     missingInvoice: active.filter(row => !row.invoiceId || row.invoiceDuplicate || row.invoiceTotal === null || row.invoicePaid === null || row.invoiceDebt === null).length };
 }

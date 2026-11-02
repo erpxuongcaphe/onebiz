@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ branch: "branch-a", read: vi.fn(), export: vi.fn(), toast: vi.fn(), range: { from: "2026-11-01", to: "2026-11-01" } }));
 vi.mock("@/lib/contexts", () => ({ useBranchFilter: () => ({ activeBranchId: mocks.branch, branchLabel: mocks.branch, isReady: true }), useToast: () => ({ toast: mocks.toast }) }));
 vi.mock("@/lib/hooks/use-report-state", () => ({ useReportState: () => ({ preset: "today", range: mocks.range, setPreset: vi.fn(), setCustomRange: vi.fn() }) }));
+vi.mock("@/lib/hooks/use-breakpoint", () => ({ useBreakpoint: () => true }));
 vi.mock("@/lib/services/supabase/delivery-invoice-management", () => ({ getDeliveryInvoiceManagement: mocks.read }));
 vi.mock("@/lib/utils/excel-export", () => ({ exportReportToExcel: mocks.export, buildReportTitleRows: () => ["Report"] }));
 vi.mock("@/app/(main)/phan-tich/_components", () => ({ KpiCard: () => null }));
@@ -55,6 +56,45 @@ describe("delivery report filter and export safety", () => {
     expect(screen.getByLabelText("Tìm đơn, hóa đơn, khách")).toHaveValue("khach thu");
     fireEvent.click(screen.getByText("Export full")); await waitFor(() => expect(mocks.export).toHaveBeenCalled());
     expect(mocks.export.mock.calls[0][0].sheets[1].rows[0]).toMatchObject({ invoicePaid: 100, invoiceDebt: 0 });
+  });
+  it("applies advanced filters to both sheets and records their meaning in Excel", async () => {
+    mocks.read.mockResolvedValue({ ...report, total: 2, items: [row, { ...row, id: "order-2", invoiceId: "invoice-2", deliveryTier: "far", invoiceStatus: "pending" }] });
+    render(<Page />); await screen.findByText("Nhân viên thử");
+    fireEvent.click(screen.getByRole("button", { name: "Bộ lọc" }));
+    fireEvent.change(screen.getByLabelText("Cự ly"), { target: { value: "near" } });
+    fireEvent.change(screen.getByLabelText("Trạng thái HĐ"), { target: { value: "completed" } });
+    fireEvent.change(screen.getByLabelText("Nhận giao từ"), { target: { value: "2026-11-01" } });
+    fireEvent.click(screen.getByRole("button", { name: "Xem kết quả" }));
+    fireEvent.click(screen.getByText("Export full")); await waitFor(() => expect(mocks.export).toHaveBeenCalled());
+    const sheets = mocks.export.mock.calls[0][0].sheets;
+    expect(sheets[0].rows[0].orders).toBe(1);
+    expect(sheets[1].rows.map((item: { id: string }) => item.id)).toEqual(["order-1"]);
+    expect(sheets[1].titleRows.join(" ")).toMatch(/Cự ly: Gần.*Trạng thái HĐ: Hoàn tất/);
+    expect(sheets[1].titleRows.join(" ")).toContain("Nhận giao từ: 01/11/2026");
+  });
+  it("keeps summary metric filters and detail exports on the same staff groups", async () => {
+    mocks.read.mockResolvedValue({ ...report, total: 3, items: [row, { ...row, id: "order-2", invoiceId: "invoice-2" }, { ...row, id: "order-3", invoiceId: "invoice-3", staffId: "staff-2", staffName: "Nhân viên khác" }] });
+    render(<Page />); await screen.findByText("Nhân viên thử");
+    fireEvent.click(screen.getByRole("button", { name: "Bộ lọc" }));
+    fireEvent.click(screen.getByText("Lọc chỉ tiêu")); fireEvent.click(screen.getByRole("button", { name: /Thêm điều kiện/ }));
+    fireEvent.change(screen.getByLabelText("Từ giá trị 1"), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Xem kết quả" }));
+    fireEvent.click(screen.getByText("Export full")); await waitFor(() => expect(mocks.export).toHaveBeenCalled());
+    const sheets = mocks.export.mock.calls[0][0].sheets;
+    expect(sheets[0].rows).toHaveLength(1); expect(sheets[0].rows[0].orders).toBe(2);
+    expect(sheets[1].rows.map((item: { id: string }) => item.id)).toEqual(["order-1", "order-2"]);
+    expect(sheets[0].footer.orders).toBe(2);
+  });
+  it("blocks invalid date ranges and clears all filters without changing the report period", async () => {
+    render(<Page />); await screen.findByText("Nhân viên thử");
+    fireEvent.click(screen.getByRole("button", { name: "Bộ lọc" }));
+    fireEvent.change(screen.getByLabelText("Nhận giao từ"), { target: { value: "2026-11-02" } });
+    fireEvent.change(screen.getByLabelText("Nhận giao đến"), { target: { value: "2026-11-01" } });
+    expect(screen.getByText("Export full")).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Xóa tất cả" }));
+    fireEvent.click(screen.getByRole("button", { name: "Xem kết quả" }));
+    expect(screen.getByText("Export full")).toBeEnabled();
+    expect(mocks.read).toHaveBeenCalledTimes(1);
   });
   it("offers an explicit file link without claiming the browser saved it and removes stale links", async () => {
     const create = vi.fn(() => "blob:delivery-test"), revoke = vi.fn();
