@@ -15,6 +15,12 @@ import Page from "@/app/(main)/phan-tich/fnb-shipper/page";
 const row = { id: "order-1", branchId: "branch-a", branchName: "Quán thử", staffId: "staff-1", staffName: "Nhân viên thử", orderNumber: "DH-1", invoiceId: "invoice-1", invoiceCode: "HD-1", invoiceStatus: "completed", orderStatus: "completed", customerName: "Khách thử", paymentMethod: "cash", invoiceTotal: 100, invoicePaid: 60, invoiceDebt: 40, deliveryFee: 10, deliveryStatus: "assigned", deliveryTier: "near", createdAt: "2026-11-01T01:00:00Z", assignedAt: "2026-11-01T01:00:00Z", completedAt: null, durationSeconds: null };
 const report = { items: [row], total: 1, canViewMoney: true, dateBasis: "createdAt", paymentBasis: "invoice" };
 describe("delivery report filter and export safety", () => {
+  it("does not render a second branch selector inside the real page filter panel", async () => {
+    render(<Page />); await screen.findByText("Nhân viên thử");
+    fireEvent.click(screen.getByRole("button", { name: "Bộ lọc" }));
+    expect(screen.queryByRole("combobox", { name: "Chi nhánh", exact: true })).not.toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Cự ly" })).toBeInTheDocument();
+  });
   beforeEach(() => { vi.clearAllMocks(); mocks.branch = "branch-a"; mocks.read.mockResolvedValue(report); mocks.export.mockResolvedValue(undefined); });
   it("exports current branch data with full invoice payment columns", async () => {
     render(<Page />); await screen.findByText("Nhân viên thử"); fireEvent.click(screen.getByText("Export full"));

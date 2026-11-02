@@ -131,7 +131,7 @@ export default function DeliveryInvoiceManagementReport() {
           <KpiCard label="Chưa phân công" value={formatNumber(totals.unassigned)} icon="person_search" bg="bg-status-warning/10" iconColor="text-status-warning" valueColor="text-status-warning" />
           <KpiCard label="Đã hủy" value={formatNumber(totals.cancelled)} icon="cancel" bg="bg-status-error/10" iconColor="text-status-error" valueColor="text-status-error" />
         </div>
-        <DeliveryReportFilters rows={allRows} canViewMoney={canViewMoney} filters={permittedFilters} onChange={value => { exportRevision.current++; setFilters(value); }} summaryMetrics={permittedMetrics} onSummaryMetricsChange={value => { exportRevision.current++; setSummaryMetrics(value); }} tab={tab} />
+        <DeliveryReportFilters rows={allRows} canViewMoney={canViewMoney} filters={permittedFilters} onChange={value => { exportRevision.current++; setFilters(value); }} summaryMetrics={permittedMetrics} onSummaryMetricsChange={value => { exportRevision.current++; setSummaryMetrics(value); }} tab={tab} hasScopeContext />
         {invalidFilters && <p role="alert" className="text-sm text-destructive">Khoảng lọc không hợp lệ. Giá trị từ phải nhỏ hơn hoặc bằng giá trị đến.</p>}
         {canViewMoney && totals.missingInvoice > 0 && <p role="status" className="border-l-4 border-status-warning bg-status-warning/10 p-3 text-sm">{totals.missingInvoice} đơn cần kiểm tra hóa đơn; tổng tiền chỉ gồm phần đã xác định, không gồm đơn hủy.</p>}
         <Tabs value={tab} onValueChange={value => { exportRevision.current++; setTab(value); }}><TabsList><TabsTrigger value="staff">Theo nhân viên</TabsTrigger><TabsTrigger value="orders">Chi tiết đơn</TabsTrigger></TabsList></Tabs>
