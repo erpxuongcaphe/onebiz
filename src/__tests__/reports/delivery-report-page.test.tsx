@@ -18,7 +18,7 @@ describe("delivery report filter and export safety", () => {
   it("does not render a second branch selector inside the real page filter panel", async () => {
     render(<Page />); await screen.findByText("Nhân viên thử");
     fireEvent.click(screen.getByRole("button", { name: "Bộ lọc" }));
-    expect(screen.queryByRole("combobox", { name: "Chi nhánh", exact: true })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Chi nhánh" })).not.toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Cự ly" })).toBeInTheDocument();
   });
   beforeEach(() => { vi.clearAllMocks(); mocks.branch = "branch-a"; mocks.read.mockResolvedValue(report); mocks.export.mockResolvedValue(undefined); });

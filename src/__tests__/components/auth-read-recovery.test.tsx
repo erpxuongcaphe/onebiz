@@ -34,6 +34,35 @@ beforeEach(()=>{
 });
 afterEach(()=>{cleanup();vi.useRealTimers();});
 describe("auth bootstrap failure is distinct from genuine permission denial",()=>{
+ it("refreshes the current browser session rather than reusing a previous account",async()=>{
+  mock.permissions.mockResolvedValue([]);
+  render(<AuthProvider><Probe/></AuthProvider>);await flush();
+  expect(screen.getByText("Không có quyền truy cập")).toBeInTheDocument();
+  const nextUser={...user,id:"next-user"};
+  mock.session.mockResolvedValue({data:{session:{user:nextUser}},error:null});
+  mock.bootstrap.mockResolvedValue({data:{version:1,profile:{...profile,id:"next-user"},tenant:{id:"tenant",name:"Tenant",settings:{}},branches:[{id:"branch",tenant_id:"tenant",is_active:true,is_default:true,name:"Branch"}],permissions:["pos_fnb.send_kitchen"],scope:[{branch_id:"branch"}]},error:null});
+  localStorage.setItem("fixture-draft","keep");
+  fireEvent.click(screen.getByRole("button",{name:"Kiểm tra lại quyền"}));await flush();
+  expect(mock.session).toHaveBeenCalledTimes(2);
+  expect(screen.getByText("POS được phép")).toBeInTheDocument();
+  expect(mock.signOut).not.toHaveBeenCalled();
+  expect(localStorage.getItem("fixture-draft")).toBe("keep");
+ });
+ it("ignores an old manual session result after a newer account event",async()=>{
+  mock.permissions.mockResolvedValue([]);
+  render(<AuthProvider><Probe/></AuthProvider>);await flush();
+  let finish!:(v:typeof session)=>void;
+  mock.session.mockReturnValueOnce(new Promise(resolve=>{finish=resolve;}));
+  fireEvent.click(screen.getByRole("button",{name:"Kiểm tra lại quyền"}));await flush();
+  const nextUser={...user,id:"next-user"};
+  mock.bootstrap.mockResolvedValue({data:{version:1,profile:{...profile,id:"next-user"},tenant:{id:"tenant",name:"Tenant",settings:{}},branches:[{id:"branch",tenant_id:"tenant",is_active:true,is_default:true,name:"Branch"}],permissions:[],scope:[{branch_id:"branch"}]},error:null});
+  act(()=>mock.callback?.("SIGNED_IN",{user:nextUser}));await flush();
+  mock.permissions.mockResolvedValue(["*"]);
+  await act(async()=>{finish(session);});await flush();
+  expect(screen.getByText("Không có quyền truy cập")).toBeInTheDocument();
+  expect(state().allowed).toBe(false);
+  expect(mock.permissions).toHaveBeenCalledTimes(1);
+ });
  it("restores an allowed POS from one bootstrap request with no legacy queries",async()=>{
   mock.bootstrap.mockResolvedValue({data:{version:1,profile,tenant:{id:"tenant",name:"Tenant",settings:{}},branches:[{id:"branch",tenant_id:"tenant",is_active:true,is_default:true,name:"Branch"}],permissions:["pos_fnb.send_kitchen"],scope:[{branch_id:"branch"}]},error:null});
   render(<AuthProvider><Probe/></AuthProvider>);await flush();
