@@ -82,7 +82,7 @@ function MoneyAccountWorkspace({ branchId, branchLabel, isReady }: {
 
   const loaded = result?.key === requestKey;
   const loading = Boolean(isReady && branchId && canRead && !loaded);
-  const usable = loaded && !result.error;
+  const usable = isReady && branchId !== null && canRead && loaded && !result.error;
   const rows = usable ? result.accounts : emptyRows;
   const filtered = queryLocalList(rows, {
     search, searchText: r => `${r.code} ${r.name} ${moneyAccountKinds[r.kind]} ${r.bank_name || ""} ${r.account_number || ""} ${r.account_holder || ""}`,
@@ -171,6 +171,6 @@ function MoneyAccountWorkspace({ branchId, branchLabel, isReady }: {
         {content}
       </>}</TabsContent>
     </Tabs>
-    {edit !== undefined && branchId && <MoneyAccountEditor key={edit?.id || "new"} account={edit} branchId={branchId} onClose={() => setEdit(undefined)} onSaved={() => { setEdit(undefined); setRevision(v => v + 1); }} />}
+    {edit !== undefined && branchId && isReady && canRead && canManage && <MoneyAccountEditor key={edit?.id || "new"} account={edit} branchId={branchId} onClose={() => setEdit(undefined)} onSaved={() => { setEdit(undefined); setRevision(v => v + 1); }} />}
   </div>;
 }

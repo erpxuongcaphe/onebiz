@@ -63,6 +63,12 @@ it('supports viewing without exposing account edit or create actions',async()=>{
  expect(screen.queryByRole('button',{name:'Sửa'})).not.toBeInTheDocument();expect(screen.queryByRole('button',{name:'Thêm tài khoản'})).not.toBeInTheDocument();
 });
 
+it('hides cached records, editor and export when view permission is removed',async()=>{
+ const view=render(<Page/>);const table=await screen.findByRole('table');fireEvent.click(within(table).getByRole('button',{name:'Sửa'}));expect(screen.getByRole('dialog')).toBeInTheDocument();
+ mocks.permission.mockImplementation((permission:string)=>permission!=='finance.view_cash_book');view.rerender(<Page/>);
+ expect(screen.queryByRole('dialog')).not.toBeInTheDocument();expect(screen.queryByText(account.name)).not.toBeInTheDocument();expect(screen.getByRole('button',{name:'Xuất Excel'})).toBeDisabled();
+});
+
 it('drops the previous branch data, pending requests and editor when branch changes',async()=>{
  const view=render(<Page/>);const table=await screen.findByRole('table');fireEvent.click(within(table).getByRole('button',{name:'Sửa'}));expect(screen.getByRole('dialog')).toBeInTheDocument();
  mocks.context={activeBranchId:'branch-b',branchLabel:'Second branch',isReady:true};mocks.list.mockResolvedValue([{...account,id:'b',branch_id:'branch-b',code:'SECOND',name:'Second account'}]);
