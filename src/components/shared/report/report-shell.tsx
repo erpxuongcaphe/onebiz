@@ -148,7 +148,7 @@ function ScopedReportShell({ children }: { children: React.ReactNode }) {
         {children}
       </div>
 
-      <Dialog open={pickerOpen} onOpenChange={setPickerVisibility}>
+      <Dialog open={pickerOpen} onOpenChange={setPickerVisibility} protectUnsavedChanges={false} dismissOnOutsidePress>
         <DialogContent className="grid max-h-[min(760px,calc(100vh-2rem))] w-[min(760px,calc(100vw-2rem))] max-w-none grid-rows-[auto,auto,minmax(0,1fr)] gap-3 p-4">
           <DialogHeader>
             <DialogTitle>Đổi báo cáo</DialogTitle>

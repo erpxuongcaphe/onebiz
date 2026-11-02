@@ -43,13 +43,17 @@ function ScopedReportState({ children, boundary, branches, initialBranchId, prof
   children: ReactNode; boundary: string; branches: Branch[];
   initialBranchId?: string; profileBranchId?: string | null; ready: boolean; canViewAll: boolean;
 }) {
-  const routerLocation = JSON.stringify([usePathname(), useSearchParams()?.get("branch") ?? null]);
+  const routerPath = usePathname();
+  const routerLocation = JSON.stringify([routerPath, useSearchParams()?.get("branch") ?? null]);
   const [browserReady, setBrowserReady] = useState(false);
+  const [committedLocation, setCommittedLocation] = useState<string | null>(null);
   const [historyRevision, setHistoryRevision] = useState(0);
   const [selection, setSelection] = useState<{ branch: string | null | undefined; revision: number }>({ branch: undefined, revision: 0 });
-  // Next subscribes to router/native history updates. Read the current browser
-  // URL on those renders too, so local selector writes cannot use stale params.
-  const location = typeof window === "undefined" ? routerLocation : locationIdentity();
+  // Next may render a destination before committing its browser URL. Its path
+  // wins during handoff; on the same path, native selector writes win over lagging params.
+  const browserLocation = typeof window === "undefined" ? null : locationIdentity();
+  const browserPath = browserLocation ? (JSON.parse(browserLocation) as [string, string | null])[0] : null;
+  const location = browserLocation && browserPath === routerPath ? browserLocation : routerLocation;
   useEffect(() => {
     let previous = location;
     const onPopState = () => {
@@ -77,7 +81,8 @@ function ScopedReportState({ children, boundary, branches, initialBranchId, prof
   const selected = requested === "all" && canViewAll ? null :
     requested && branches.some(branch => branch.id === requested) ? requested : inheritOperationalAll ? null : previous;
   const canonical = selected === null ? "all" : selected;
-  const isReady = browserReady && ready && inReports && canonical !== undefined && requested === canonical;
+  const isReady = browserReady && ready && inReports && canonical !== undefined && requested === canonical &&
+    committedLocation === location && browserLocation === location;
 
   useEffect(() => {
     if (!ready || !inReports || canonical === undefined || locationIdentity() !== location) return;
@@ -87,8 +92,11 @@ function ScopedReportState({ children, boundary, branches, initialBranchId, prof
       url.searchParams.set("branch", canonical);
       window.history.replaceState(window.history.state, "", url);
     }
+    // A post-commit acknowledgement also retries readiness when the destination
+    // already had the right branch and no selection update would otherwise occur.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Only acknowledge a browser location verified after commit.
+    setCommittedLocation(locationIdentity());
     if (urlChanged || selection.branch !== selected) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- Remember validated browser navigation only within this report session.
       setSelection(previous => ({ branch: selected, revision: previous.revision + (urlChanged ? 1 : 0) }));
     }
   }, [ready, inReports, canonical, requested, selected, location, selection.branch]);
