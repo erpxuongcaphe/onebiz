@@ -46,8 +46,8 @@ describe("report branch scope integration", () => {
     expect(selector).toContain("Toàn công ty");
     expect(selector).toContain("const branchItems = useMemo");
     expect(selector).toContain("const scopeItems = useMemo");
-    expect(selector).toContain("value={selectedValue}");
-    expect(selector).toContain("options={scopeItems}");
+    expect(selector).toContain('value={isReady ? selectedValue : ""}');
+    expect(selector).toContain("options={isReady ? scopeItems : []}");
     expect(selector).toContain("selectBranch(value === ALL_BRANCHES_VALUE ? null : value)");
     expect(selector).not.toContain("selectedBranchId");
     expect(selector).not.toContain("aria-pressed");
@@ -79,16 +79,27 @@ describe("report branch scope integration", () => {
 
   it("gates and remounts reports when branch scope changes", () => {
     const hook = source("src/lib/hooks/use-report-scope.ts");
+    const provider = source("src/lib/contexts/report-scope-context.tsx");
+    const branchFilter = source("src/lib/contexts/use-branch-filter.ts");
     const shell = source("src/components/shared/report/report-shell.tsx");
     const selector = source(
       "src/components/shared/report/report-scope-selector.tsx",
     );
 
-    expect(hook).toContain("const [isInitialized, setIsInitialized]");
-    expect(hook).toContain("initializedRef.current = true");
-    expect(hook).toContain("isReady: authReady && isInitialized");
+    expect(hook).toContain("useOptionalReportScope()");
+    expect(hook).not.toContain("switchBranch");
+    expect(provider).toContain("usePathname()");
+    expect(provider).toContain("useSearchParams()");
+    expect(provider).not.toContain("window.history.pushState =");
+    expect(provider).not.toContain("window.history.replaceState =");
+    expect(provider).toContain("requested === canonical");
+    expect(provider).not.toContain("localStorage");
+    expect(provider).not.toContain("switchBranch");
+    expect(branchFilter).toContain("switchBranch: reportScope.selectBranch");
+    expect(shell).toContain("<ReportScopeProvider>");
+    expect(shell).toContain("<ReportScopeSelector />");
+    expect(shell).toContain("scopeKey,");
     expect(shell).toContain("useReportScope()");
-    expect(hook).toContain("if (!synchronizeUrl || !authReady");
     expect(selector).toContain("useReportScope({ synchronizeUrl: false })");
     expect(shell).toContain("isLoading || !isScopeReady");
     expect(shell).toContain("key={reportStateKey}");

@@ -6,6 +6,7 @@ vi.mock("@/lib/hooks/use-breakpoint", () => ({ useBreakpoint: () => viewport.des
 import { FilterPanel } from "@/components/shared/filter-sidebar/filter-panel";
 import { FilterGroup } from "@/components/shared/filter-sidebar/filter-sidebar";
 import { DatePresetFilter, type DatePresetValue } from "@/components/shared/filter-sidebar/date-preset-filter";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 
 function Fixture() {
   const [open, setOpen] = useState(false);
@@ -23,6 +24,29 @@ function Fixture() {
 beforeEach(() => { viewport.desktop = true; });
 afterEach(cleanup);
 describe("filter panel UX contract", () => {
+  it("does not dismiss the panel when choosing from a nested portalled selector", async () => {
+    function Nested() {
+      const [open, setOpen] = useState(true), [selected, setSelected] = useState("");
+      return <FilterPanel open={open} onOpenChange={setOpen}><SearchableSelect aria-label="Nhóm hàng" placeholder="Chọn nhóm" value={selected} onValueChange={setSelected} options={[{value: "coffee", label: "Cà phê"}, {value: "tea", label: "Trà"}]} /></FilterPanel>;
+    }
+    render(<Nested />);
+    fireEvent.click(screen.getByRole("combobox", { name: "Nhóm hàng" }));
+    const option = await screen.findByRole("option", { name: "Cà phê" });
+    fireEvent.pointerDown(option); fireEvent.pointerUp(option); fireEvent.click(option);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Nhóm hàng" })).toHaveValue("Cà phê");
+  });
+  it.each([true, false])("outside click dismisses edited live filters and retains their values at desktop=%s", async desktop => {
+    viewport.desktop = desktop; render(<Fixture />);
+    fireEvent.click(screen.getByRole("button", { name: "Mở bộ lọc" }));
+    fireEvent.change(screen.getByLabelText("Mã chứng từ"), { target: { value: "TEST-OUTSIDE" } });
+    fireEvent.pointerDown(document.body); fireEvent.pointerUp(document.body); fireEvent.click(document.body);
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByLabelText("Kết quả")).toHaveTextContent("TEST-OUTSIDE:false");
+    expect(screen.queryByText("Có nội dung chưa lưu")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Mở bộ lọc" }));
+    expect(screen.getByLabelText("Mã chứng từ")).toHaveValue("TEST-OUTSIDE");
+  });
   it.each([true, false])("preserves live filtering, explicit close and reopening at desktop=%s", async desktop => {
     viewport.desktop = desktop; render(<Fixture />);
     fireEvent.click(screen.getByRole("button", { name: "Mở bộ lọc" }));

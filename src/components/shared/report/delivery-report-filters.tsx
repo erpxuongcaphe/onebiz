@@ -72,6 +72,7 @@ export interface DeliveryReportFiltersProps {
   summaryMetrics: MetricFilter[];
   onSummaryMetricsChange: (next: MetricFilter[]) => void;
   tab: string;
+  hasScopeContext?: boolean;
 }
 
 function optionsWithSelection(entries: [string, string][], selected: string | undefined) {
@@ -80,7 +81,7 @@ function optionsWithSelection(entries: [string, string][], selected: string | un
   return [...options.entries()];
 }
 
-export default function DeliveryReportFilters({ rows, canViewMoney, filters, onChange, summaryMetrics, onSummaryMetricsChange, tab }: DeliveryReportFiltersProps) {
+export default function DeliveryReportFilters({ rows, canViewMoney, filters, onChange, summaryMetrics, onSummaryMetricsChange, tab, hasScopeContext = false }: DeliveryReportFiltersProps) {
   const [open, setOpen] = useState(false);
   const descriptions = deliveryFilterDescriptions(filters, rows, canViewMoney, summaryMetrics);
   const update = (key: keyof DeliveryFilters, value: string) => onChange({ ...filters, [key]: value });
@@ -111,7 +112,7 @@ export default function DeliveryReportFilters({ rows, canViewMoney, filters, onC
     <FilterChips className="h-11 min-h-11 border-y px-0 [&_button]:min-h-11" filters={descriptions.map(description => ({ ...description, onClear: () => clear(description.key) }))} onClearAll={clearAll} />
     <FilterPanel open={open} onOpenChange={setOpen} title="Bộ lọc giao hàng" activeCount={descriptions.length} onClearAll={clearAll}>
       <fieldset className="space-y-3"><legend className="mb-2 text-sm font-semibold">Giao hàng</legend>
-        {select("branch", "Chi nhánh", rows.map(row => [row.branchId, row.branchName]))}
+        {!hasScopeContext && select("branch", "Chi nhánh", rows.map(row => [row.branchId, row.branchName]))}
         <div className="grid grid-cols-2 gap-3">
           {select("tier", "Cự ly", [...Object.entries(DELIVERY_TIER_LABELS), ...rows.flatMap(row => row.deliveryTier ? [[row.deliveryTier, DELIVERY_TIER_LABELS[row.deliveryTier] ?? row.deliveryTier] as [string, string]] : [])])}
           {select("assignedState", "Phân công", Object.entries(ASSIGNED_LABELS))}

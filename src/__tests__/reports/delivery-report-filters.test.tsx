@@ -16,13 +16,13 @@ const row: DeliveryInvoiceRow = { id: "order-a", orderNumber: "DH-TEST", branchI
 const rows = deliveryInvoiceView([row]);
 const metric = (key: string): MetricFilter => ({ key, state: "known", min: null, max: null });
 
-function Harness({ money = true, initial = createDeliveryFilters(), summary = [] as MetricFilter[], tab = "staff", source = rows }: {
-  money?: boolean; initial?: DeliveryFilters; summary?: MetricFilter[]; tab?: string; source?: typeof rows;
+function Harness({ money = true, initial = createDeliveryFilters(), summary = [] as MetricFilter[], tab = "staff", source = rows, hasScopeContext = false }: {
+  money?: boolean; initial?: DeliveryFilters; summary?: MetricFilter[]; tab?: string; source?: typeof rows; hasScopeContext?: boolean;
 }) {
   const [filters, setFilters] = useState(initial);
   const [metrics, setMetrics] = useState(summary);
   return <><DeliveryReportFilters rows={source} canViewMoney={money} filters={filters} onChange={setFilters}
-    summaryMetrics={metrics} onSummaryMetricsChange={setMetrics} tab={tab} />
+    summaryMetrics={metrics} onSummaryMetricsChange={setMetrics} tab={tab} hasScopeContext={hasScopeContext} />
     <output aria-label="Filter state">{JSON.stringify(filters)}</output><output aria-label="Summary state">{JSON.stringify(metrics)}</output></>;
 }
 const filterState = () => JSON.parse(screen.getByLabelText("Filter state").textContent!) as DeliveryFilters;
@@ -76,6 +76,14 @@ describe("delivery report filter UI", () => {
     view.rerender(<Harness source={[]} initial={{ ...createDeliveryFilters(), tier: "custom-tier" }} />);
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.getByLabelText("Cự ly")).toHaveValue("custom-tier");
+  });
+  it("omits the duplicate branch control inside scoped reports but keeps old branch chips clearable", () => {
+    render(<Harness hasScopeContext initial={{ ...createDeliveryFilters(), branch: "branch-a" }} />);
+    openPanel();
+    expect(within(screen.getByRole("dialog")).queryByLabelText("Chi nhánh")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Xem kết quả" }));
+    fireEvent.click(screen.getByRole("button", { name: "Xóa lọc Chi nhánh: Chi nhánh A" }));
+    expect(filterState().branch).toBe("");
   });
   it("includes unknown invoice status/tier from rows and edits date/evidence/assignment fields", () => {
     render(<Harness />); openPanel();
