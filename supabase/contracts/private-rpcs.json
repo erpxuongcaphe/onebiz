@@ -234,6 +234,15 @@
           { "name": "p_to", "optional": false }
         ] }
       ]
+    },
+    {
+      "migration": "inventory_movement_v2_read_model",
+      "migrationSha256": "7c0f3fba73e37bafc18ea98dbeb92109a556f78f208505782d9a880fbd3803e5",
+      "functions": [
+        { "name": "get_inventory_movement_report_v2", "params": [
+          { "name": "p_branch_id", "optional": true }
+        ] }
+      ]
     }
   ]
 }

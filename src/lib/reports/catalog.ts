@@ -409,13 +409,14 @@ export const REPORT_CATALOG: ReportCatalogItem[] = [
   },
   {
     href: "/phan-tich/aging",
-    title: "Luân chuyển tồn kho",
-    shortTitle: "Luân chuyển tồn kho",
+    title: "Tồn kho và luân chuyển",
+    shortTitle: "Tồn kho và luân chuyển",
     description: "Tồn hiện tại, lần nhập cuối và mặt hàng cần rà soát nhu cầu.",
     category: "inventory",
     icon: "hourglass_top",
     keywords: ["aging", "dead stock", "chậm bán", "tuổi tồn"],
-    permissions: [...ANALYTICS_PERMISSIONS, PERMISSIONS.REPORTS_VIEW_DETAIL, PERMISSIONS.PRODUCTS_VIEW_COST],
+    permissions: [...ANALYTICS_PERMISSIONS, PERMISSIONS.REPORTS_VIEW_DETAIL],
+    permissionMode: "all",
   },
   {
     href: "/phan-tich/ton-that",
