@@ -59,6 +59,8 @@ export interface AuditFilters {
 /* ------------------------------------------------------------------ */
 
 const ACTION_LABELS: Record<string, string> = {
+  money_account_saved: "Lưu quỹ / tài khoản tiền",
+  money_account_deleted: "Xóa quỹ / tài khoản tiền tạo nhầm",
   production_used_adjustment: "Điều chỉnh mẻ đã hoàn thành / sử dụng",
   fnb_cancel_request_reject: "Từ chối yêu cầu hủy F&B",
   employee_benefit_group_save: "Lưu nhóm ưu đãi nội bộ",
@@ -185,6 +187,7 @@ const ACTION_LABELS: Record<string, string> = {
 };
 
 const ENTITY_TYPE_LABELS: Record<string, string> = {
+  money_account: "Quỹ / tài khoản tiền",
   employee_benefit_group: "Nhóm ưu đãi nội bộ",
   approval: "Duyệt thao tác",
   invoice: "Hóa đơn",

@@ -1,0 +1,55 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+import { PGlite } from '@electric-sql/pglite';
+const db = new PGlite();
+let checks = 0;
+const id = n => `00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
+const query = async (sql, args=[]) => (await db.query(sql,args)).rows;
+async function rejected(fn, expected) {
+  await assert.rejects(fn, e => e.message.includes(expected)); checks++;
+}
+const payload = (code, extra={}) => ({branchId:id(3),code,name:'Test account',kind:'cash', openingDate:null,openingAmount:null,...extra});
+const save = async (account, p) => (await query('select save_money_account($1,$2,$3::jsonb,$4) result', [account?.id??null,account?.revision??null,JSON.stringify(p),'Test correction']))[0].result;
+const remove = a => query('select delete_money_account($1,$2,$3)',[a.id,a.revision,'Test unused setup deletion']);
+try {
+ const fixture=fs.readFileSync('supabase/tests/00552_party_money.setup.sql','utf8').split('\\ir ../migrations/00267')[0].replace(/^\\set.*$/gm,'');
+ await db.exec(fixture);
+ await db.exec(fs.readFileSync('supabase/migrations/00552_money_account_register.sql','utf8'));
+ await db.exec(fs.readFileSync('supabase/migrations/20261102045002_money_account_edit_delete.sql','utf8'));
+ await db.exec("select set_config('test.actor',test_id(1)::text,false)");
+ let a=await save(null,payload('TM-TONG-010'));
+ const updated=await save(a,payload('TM-TONG-01'));
+ assert.equal(updated.id,a.id); assert.equal(updated.code,'TM-TONG-01'); checks+=2;
+ await rejected(()=>save(a,payload('STALE')), 'MONEY_ACCOUNT_CHANGED_RELOAD');
+ a=updated;
+ const b=await save(null,payload('TM-OTHER-01'));
+ await rejected(()=>save(a,payload(b.code)), 'duplicate key');
+ await rejected(()=>save(a,payload('BAD CODE')), 'check constraint');
+ await rejected(()=>save(a,payload('MOVE',{branchId:id(4)})), 'MONEY_ACCOUNT_BRANCH_DENIED');
+ await rejected(()=>save(a,payload('TYPE',{kind:'clearing'})), 'MONEY_ACCOUNT_IDENTITY_IMMUTABLE');
+ await db.exec("select set_config('test.actor',test_id(98)::text,false)");
+ await rejected(()=>remove(a),'MONEY_ACCOUNT_NOT_FOUND');
+ await db.exec("select set_config('test.actor',test_id(1)::text,false); select set_config('test.denied','finance.void_transaction',false)");
+ await rejected(()=>remove(a),'MONEY_ACCOUNT_MANAGE_DENIED');
+ await db.exec("select set_config('test.denied','',false); select set_config('test.branch_denied','yes',false)");
+ await rejected(()=>remove(a),'MONEY_ACCOUNT_NOT_FOUND');
+ await db.exec("select set_config('test.branch_denied','',false)");
+ await rejected(()=>remove({...a,revision:0}),'MONEY_ACCOUNT_CHANGED_RELOAD');
+ await rejected(()=>query('select delete_money_account($1,$2,$3)',[a.id,a.revision,'']),'MONEY_ACCOUNT_REASON_REQUIRED');
+ let funded=await save(null,payload('FUNDED',{openingDate:'2026-01-01',openingAmount:100}));
+ await rejected(()=>remove(funded),'MONEY_ACCOUNT_HAS_OPENING_BALANCE');
+ await query("insert into cash_transactions(tenant_id,branch_id,payment_method,money_account_id,status) values($1,$2,'cash',$3,'cancelled')",[id(2),id(3),a.id]);
+ await rejected(()=>remove(a),'MONEY_ACCOUNT_IN_USE');
+ const renamed=await save(a,payload('TM-RENAMED-01'));
+ assert.equal((await query('select money_account_id from cash_transactions'))[0].money_account_id,renamed.id); checks++;
+ await db.exec('create table cod_test(id uuid, money_account_id uuid references money_accounts(id))');
+ await query('insert into cod_test values($1,$2)',[id(50),b.id]);
+ await rejected(()=>remove(b),'MONEY_ACCOUNT_IN_USE');
+ const unused=await save(null,payload('UNUSED'));
+ await remove(unused);
+ assert.equal((await query('select id from money_accounts where id=$1',[unused.id])).length,0); checks++;
+ assert.equal((await query("select old_data->>'code' code from audit_log where action='money_account_deleted'"))[0].code,'UNUSED'); checks++;
+ const acl=await query("select has_function_privilege('anon','public.delete_money_account(uuid,integer,text)','execute') anon,has_function_privilege('authenticated','public.delete_money_account(uuid,integer,text)','execute') authenticated");
+ assert.equal(acl[0].anon,false); assert.equal(acl[0].authenticated,true); checks+=2;
+ console.log(`PASS: ${checks} PostgreSQL checks: rename, UUID links, deletion, audit, permissions, revision and FK guards`);
+} finally { await db.close(); }

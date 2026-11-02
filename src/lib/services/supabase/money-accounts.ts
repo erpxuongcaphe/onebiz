@@ -84,6 +84,29 @@ export async function saveMoneyAccount(
       p_reason: reason,
     } as never,
   );
-  if (error) handleError(error, "saveMoneyAccount");
+  if (error) moneyAccountError(error, "saveMoneyAccount");
   return data as unknown as MoneyAccount;
+}
+
+function moneyAccountError(error: { code?: string; message: string }, context: string): never {
+  if (error.code === "23505") throw new Error("Mã tài khoản đã tồn tại. Anh/chị chọn mã khác.");
+  const messages: Record<string, string> = {
+    MONEY_ACCOUNT_IN_USE: "Tài khoản đã được dùng trên chứng từ, không thể xóa. Chọn Ngừng sử dụng để giữ lịch sử.",
+    MONEY_ACCOUNT_HAS_OPENING_BALANCE: "Tài khoản có số dư đầu kỳ khác 0, không thể xóa. Hãy kiểm tra số dư hoặc ngừng sử dụng.",
+    MONEY_ACCOUNT_CHANGED_RELOAD: "Tài khoản vừa được thay đổi. Đóng và tải lại trước khi thao tác.",
+    MONEY_ACCOUNT_REASON_REQUIRED: "Nhập lý do ít nhất 3 ký tự.",
+    MONEY_ACCOUNT_NOT_FOUND: "Không tìm thấy tài khoản hoặc bạn không có quyền truy cập.",
+    MONEY_ACCOUNT_MANAGE_DENIED: "Bạn chưa có quyền quản lý tài khoản tiền.",
+  };
+  if (messages[error.message]) throw new Error(messages[error.message]);
+  handleError(error, context);
+  throw new Error("Không hoàn tất thao tác tài khoản tiền.");
+}
+
+export async function deleteMoneyAccount(account: MoneyAccount, reason: string) {
+  const { data, error } = await getClient().rpc("delete_money_account" as never, {
+    p_id: account.id, p_expected_revision: account.revision, p_reason: reason.trim(),
+  } as never);
+  if (error) moneyAccountError(error, "deleteMoneyAccount");
+  return data as unknown as string;
 }
