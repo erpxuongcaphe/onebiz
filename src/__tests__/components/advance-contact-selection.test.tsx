@@ -8,7 +8,7 @@ vi.mock("@/lib/services/supabase/payments", () => ({ recordCustomerAdvance: api.
 vi.mock("@/lib/contexts", () => ({ useToast: () => ({ toast: api.toast }) }));
 vi.mock("@/components/ui/dialog", () => ({
   Dialog: ({ children, open }: { children: ReactNode; open: boolean }) => open ? <div>{children}</div> : null,
-  DialogContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  DialogContent: ({ children, className }: { children: ReactNode; className?: string }) => <div role="dialog" className={className}>{children}</div>,
   DialogHeader: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   DialogTitle: ({ children }: { children: ReactNode }) => <h2>{children}</h2>,
   DialogDescription: ({ children }: { children: ReactNode }) => <p>{children}</p>,
@@ -31,6 +31,15 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("advance contact selection", () => {
+  it("constrains the grid and wraps long selected names", () => {
+    const name = "Synthetic supplier with a deliberately long display name for narrow viewports";
+    render(<RecordAdvanceDialog open mode="supplier" partyId="party-test" partyName={name} branchId="branch-test" onOpenChange={vi.fn()} />);
+    expect(screen.getByRole("dialog").className).toContain("grid-cols-[minmax(0,1fr)]");
+    expect(screen.getByText(name).className).toContain("break-words");
+    expect(screen.getByText(name).className).not.toContain("truncate");
+    expect(api.supplierAdvance).not.toHaveBeenCalled();
+  });
+
   it.each(["customer", "supplier"] as const)("selects a %s contact and retains explicit payment details", async mode => {
     const onSuccess = vi.fn();
     render(<RecordAdvanceDialog open mode={mode} branchId="branch-test" onOpenChange={vi.fn()} onSuccess={onSuccess} />);
