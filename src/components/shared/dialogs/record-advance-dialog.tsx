@@ -200,7 +200,7 @@ export function RecordAdvanceDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md max-h-[90dvh] overflow-y-auto">
+      <DialogContent className="grid-cols-[minmax(0,1fr)] sm:max-w-md max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Icon
@@ -215,7 +215,7 @@ export function RecordAdvanceDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4 py-2">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 py-2">
           {errors.branch && (
             <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
               {errors.branch}
@@ -229,7 +229,7 @@ export function RecordAdvanceDialog({
             {selectedParty ? (
               <div className="flex min-h-10 items-center justify-between gap-3 rounded-md border bg-muted/30 px-3 py-2">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">
+                  <p className="break-words text-sm font-medium">
                     {selectedParty.name}
                   </p>
                   {selectedParty.code && (
@@ -243,6 +243,7 @@ export function RecordAdvanceDialog({
                     type="button"
                     variant="ghost"
                     size="sm"
+                    className="shrink-0"
                     onClick={() => {
                       setSelectedParty(null);
                       setPartySearch("");
