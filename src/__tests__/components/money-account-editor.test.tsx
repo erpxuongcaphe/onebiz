@@ -52,6 +52,11 @@ it('exports exactly the filtered metadata without reporting undefined balances a
  const [rows,columns]=mocks.export.mock.calls[0];expect(rows).toHaveLength(1);expect(rows[0].id).toBe('a');expect(columns.some((c:{key:string})=>c.key==='closing_balance')).toBe(false);
 });
 
+it('refreshes balances on explicit submit even when the selected period is unchanged',async()=>{
+ render(<Page/>);await screen.findByRole('table');fireEvent.click(screen.getByRole('tab',{name:'Số dư & thu chi'}));await screen.findByRole('table',{name:'Số dư và thu chi theo tài khoản'});
+ expect(mocks.get).toHaveBeenCalledTimes(1);fireEvent.click(screen.getByRole('button',{name:'Xem số dư'}));await vi.waitFor(()=>expect(mocks.get).toHaveBeenCalledTimes(2));
+});
+
 it('reports load failures and offers retry without pretending there are no accounts',async()=>{
  mocks.list.mockRejectedValueOnce(new Error('Tải thất bại'));
  render(<Page/>);expect(await screen.findByRole('alert')).toHaveTextContent('Tải thất bại');expect(screen.queryByText('Chưa có quỹ hoặc tài khoản tiền')).not.toBeInTheDocument();

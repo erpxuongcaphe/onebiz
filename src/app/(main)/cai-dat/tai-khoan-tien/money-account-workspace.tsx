@@ -157,7 +157,7 @@ function MoneyAccountWorkspace({ branchId, branchLabel, isReady }: {
       <TabsContent value="accounts" className="space-y-4">{view === "accounts" && content}</TabsContent>
       <TabsContent value="balances" className="space-y-4">{view === "balances" && <>
         <div className="rounded-lg border bg-card p-4 space-y-3"><div><h2 className="font-semibold">Số dư & thu chi theo kỳ</h2><p className="mt-1 text-sm text-muted-foreground">Đang xem: {formatShortDate(period.from)} – {formatShortDate(period.to)} · Đơn vị: đồng.</p></div>
-          <form className="flex flex-wrap items-end gap-3" onSubmit={event => { event.preventDefault(); if (!invalidDraft) setPeriod({ from: draftFrom, to: draftTo }); }}>
+          <form className="flex flex-wrap items-end gap-3" onSubmit={event => { event.preventDefault(); if (!invalidDraft) { setPeriod({ from: draftFrom, to: draftTo }); setRevision(value => value + 1); } }}>
             <label className="min-w-0 flex-1 basis-36 space-y-1.5 text-sm"><span>Từ ngày</span><Input type="date" value={draftFrom} onChange={event => setDraftFrom(event.target.value)} /></label>
             <label className="min-w-0 flex-1 basis-36 space-y-1.5 text-sm"><span>Đến ngày</span><Input type="date" value={draftTo} onChange={event => setDraftTo(event.target.value)} /></label>
             <Button type="submit" disabled={loading || invalidDraft || !branchId || !canRead}>Xem số dư</Button>
