@@ -1,0 +1,17 @@
+import React from 'react';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+const mocks=vi.hoisted(()=>({get:vi.fn(),save:vi.fn(),remove:vi.fn()}));
+vi.mock('@/lib/contexts',()=>({useBranchFilter:()=>({activeBranchId:'branch',branchLabel:'Test branch',isReady:true})}));
+vi.mock('@/lib/permissions/use-permission',()=>({usePermissions:()=>({hasPermission:()=>true})}));
+vi.mock('@/lib/services/supabase/money-accounts',()=>({getMoneyAccountWorkspace:mocks.get,saveMoneyAccount:mocks.save,deleteMoneyAccount:mocks.remove}));
+import Page from '@/app/(main)/cai-dat/tai-khoan-tien/page';
+import fs from 'node:fs';
+const account={id:'a',branch_id:'branch',code:'NH-MB-002',name:'Account label',kind:'bank',bank_name:'MB Bank',account_number:'123456',account_holder:'Account holder',revision:3,active:true,opening_date:null,opening_amount:null};
+beforeEach(()=>{vi.clearAllMocks();mocks.get.mockResolvedValue({accounts:[account],unassigned_count:0});mocks.save.mockResolvedValue(account);mocks.remove.mockResolvedValue('a');});
+afterEach(cleanup);
+async function open(){render(<Page/>);fireEvent.click(await screen.findByRole('button',{name:'Sửa'}));return within(screen.getByRole('dialog'));}
+it('exports the actual rendered editor for optional visual verification',async()=>{await open();if(process.env.MONEY_ACCOUNT_QA_HTML){document.querySelectorAll('input').forEach(input=>input.setAttribute('value',input.value));fs.writeFileSync(process.env.MONEY_ACCOUNT_QA_HTML,document.body.innerHTML);}expect(screen.getByRole('dialog')).toHaveTextContent('Số dư ban đầu (không bắt buộc)');});
+it('shows bank and holder in their own table columns',async()=>{render(<Page/>);const row=(await screen.findByText(account.code)).closest('tr')!;expect(within(row).getByText('MB Bank').closest('td')).not.toBe(within(row).getByText('Account label').closest('td'));expect(within(row).getByText('Account holder').closest('td')).not.toBe(within(row).getByText('Account label').closest('td'));});
+it('edits a typo without creating another account and leaves opening balance unset',async()=>{const dialog=await open();expect(dialog.getByLabelText('Mã')).toBeEnabled();fireEvent.change(dialog.getByLabelText('Mã'),{target:{value:'NH-MB-02'}});fireEvent.change(dialog.getByLabelText('Lý do khai báo / điều chỉnh'),{target:{value:'Sửa mã nhập nhầm'}});fireEvent.click(dialog.getByRole('button',{name:'Lưu'}));await vi.waitFor(()=>expect(mocks.save).toHaveBeenCalledWith(account,expect.objectContaining({code:'NH-MB-02',openingDate:null,openingAmount:null}),'Sửa mã nhập nhầm'));expect(mocks.remove).not.toHaveBeenCalled();});
+it('requires confirmation and a reason before deleting and surfaces a used-account guard',async()=>{mocks.remove.mockRejectedValue(new Error('Tài khoản đã có chứng từ'));const dialog=await open();fireEvent.click(dialog.getByRole('button',{name:'Xóa tài khoản tạo nhầm'}));expect(mocks.remove).not.toHaveBeenCalled();fireEvent.click(dialog.getByRole('button',{name:'Xác nhận xóa'}));expect(mocks.remove).not.toHaveBeenCalled();fireEvent.change(dialog.getByLabelText('Lý do khai báo / điều chỉnh'),{target:{value:'Tạo nhầm'}});fireEvent.click(dialog.getByRole('button',{name:'Xác nhận xóa'}));await vi.waitFor(()=>expect(mocks.remove).toHaveBeenCalledWith(account,'Tạo nhầm'));expect(await dialog.findByText('Tài khoản đã có chứng từ')).toBeInTheDocument();});

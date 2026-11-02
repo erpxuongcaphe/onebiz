@@ -5,6 +5,7 @@ import { usePermissions } from "@/lib/permissions/use-permission";
 import {
   getMoneyAccountWorkspace,
   saveMoneyAccount,
+  deleteMoneyAccount,
   type MoneyAccount,
 } from "@/lib/services/supabase/money-accounts";
 import { cashDateTimeInput } from "@/lib/cash-time";
@@ -205,25 +206,27 @@ export default function MoneyAccountsPage() {
             </p>
           )}
           <div className="overflow-auto max-h-[65dvh] rounded-md border">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[1700px] text-sm">
               <thead className="sticky top-0 bg-muted">
                 <tr>
                   {[
                     "Mã",
                     "Quỹ / tài khoản",
                     "Loại",
+                    "Ngân hàng / đơn vị",
                     "Số tài khoản",
+                    "Chủ tài khoản",
                     "Ngày số dư gốc",
                     "Đầu kỳ",
                     "Thu",
                     "Chi",
                     "Cuối kỳ",
                     "Trạng thái",
-                    "",
+                    "Thao tác",
                   ].map((h, i) => (
                     <th
                       key={`${h}-${i}`}
-                      className="whitespace-nowrap p-3 text-left"
+                      className={`whitespace-nowrap p-3 text-left ${h === "Thao tác" ? "sticky right-0 bg-muted" : ""}`}
                     >
                       {h}
                     </th>
@@ -238,14 +241,13 @@ export default function MoneyAccountsPage() {
                     </td>
                     <td className="p-3 min-w-48">
                       {r.name}
-                      <span className="block text-xs text-muted-foreground">
-                        {r.bank_name} {r.account_holder}
-                      </span>
                     </td>
                     <td className="p-3 whitespace-nowrap">{kinds[r.kind]}</td>
+                    <td className="p-3 min-w-48">{r.bank_name || "—"}</td>
                     <td className="p-3 whitespace-nowrap font-mono">
                       {r.account_number || "—"}
                     </td>
+                    <td className="p-3 min-w-48">{r.account_holder || "—"}</td>
                     <td className="p-3 whitespace-nowrap">
                       {r.opening_date || "Chưa khai báo"}
                     </td>
@@ -265,7 +267,7 @@ export default function MoneyAccountsPage() {
                     <td className="p-3 whitespace-nowrap">
                       {r.active ? "Đang dùng" : "Ngừng dùng"}
                     </td>
-                    <td className="p-3">
+                    <td className="sticky right-0 bg-background p-3">
                       {canManage && (
                         <Button
                           variant="outline"
@@ -336,7 +338,23 @@ function MoneyAccountEditor({
   const [active, setActive] = useState(account?.active ?? true);
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deleteRequested, setDeleteRequested] = useState(false);
   const [error, setError] = useState("");
+  const remove = async () => {
+    if (!account || saving) return;
+    if (reason.trim().length < 3) {
+      setError("Nhập lý do xóa ít nhất 3 ký tự.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      await deleteMoneyAccount(account, reason);
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Không xóa được tài khoản.");
+    } finally { setSaving(false); }
+  };
   const save = async () => {
     if (saving) return;
     if (
@@ -350,6 +368,10 @@ function MoneyAccountEditor({
       setError(
         "Điền mã, tên, lý do; tài khoản ngân hàng cần đủ ngân hàng, số và chủ tài khoản. Số dư đầu kỳ cần cả ngày và số tiền.",
       );
+      return;
+    }
+    if (!/^[A-Z0-9][A-Z0-9._-]{0,29}$/.test(code.trim().toUpperCase())) {
+      setError("Mã tối đa 30 ký tự, chỉ gồm chữ không dấu, số, dấu chấm, gạch ngang hoặc gạch dưới.");
       return;
     }
     setSaving(true);
@@ -385,20 +407,24 @@ function MoneyAccountEditor({
         if (!v && !saving) onClose();
       }}
     >
-      <DialogContent className="sm:max-w-xl max-h-[90dvh] overflow-y-auto">
+      <DialogContent className="sm:max-w-4xl max-h-[90dvh] overflow-y-auto p-5 sm:p-7">
         <DialogHeader>
           <DialogTitle>
             {account ? "Sửa quỹ / tài khoản" : "Thêm quỹ / tài khoản"}
           </DialogTitle>
         </DialogHeader>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <p className="text-sm text-muted-foreground">
+          Tách riêng tên gợi nhớ, ngân hàng, số tài khoản và chủ tài khoản để dễ đối chiếu.
+        </p>
+        <div className="grid gap-4 sm:grid-cols-2">
           <label className="space-y-1 text-sm">
             Mã
             <Input
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              disabled={saving || !!account}
+              disabled={saving}
               maxLength={30}
+              placeholder="Ví dụ: NH-MB-01"
             />
           </label>
           <label className="space-y-1 text-sm">
@@ -420,6 +446,7 @@ function MoneyAccountEditor({
             Tên quỹ / tài khoản
             <Input
               value={name}
+              placeholder="Ví dụ: MB nhận tiền bán hàng"
               onChange={(e) => setName(e.target.value)}
               disabled={saving}
             />
@@ -452,6 +479,12 @@ function MoneyAccountEditor({
               </label>
             </>
           )}
+          <div className="sm:col-span-2 border-t pt-4">
+            <h2 className="font-medium">Số dư ban đầu (không bắt buộc)</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Chỉ tạo thông tin tài khoản: để trống cả ngày và số tiền, bổ sung sau khi đối soát.
+            </p>
+          </div>
           <label className="space-y-1 text-sm">
             Ngày bắt đầu số dư
             <Input
@@ -496,11 +529,23 @@ function MoneyAccountEditor({
             {error}
           </p>
         )}
-        <DialogFooter>
+        {deleteRequested && account && (
+          <div role="alert" className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm space-y-2">
+            <p className="font-medium">Xóa tài khoản {account.code} — {account.name}?</p>
+            <p>Chỉ xóa tài khoản tạo nhầm chưa được dùng và không có số dư đầu kỳ khác 0. Tài khoản đã có chứng từ cần bỏ chọn Đang sử dụng để giữ lịch sử.</p>
+            <p>Nhập lý do ở ô phía trên, rồi bấm Xác nhận xóa.</p>
+            <div className="flex gap-2">
+              <Button variant="destructive" disabled={saving} onClick={remove}>Xác nhận xóa</Button>
+              <Button variant="outline" disabled={saving} onClick={() => setDeleteRequested(false)}>Giữ tài khoản</Button>
+            </div>
+          </div>
+        )}
+        <DialogFooter className="flex-wrap gap-2 border-t pt-4">
+          {account && !deleteRequested && <Button variant="outline" className="text-destructive sm:mr-auto" disabled={saving} onClick={() => setDeleteRequested(true)}>Xóa tài khoản tạo nhầm</Button>}
           <Button variant="outline" onClick={onClose} disabled={saving}>
             Đóng
           </Button>
-          <Button onClick={save} disabled={saving}>
+          <Button onClick={save} disabled={saving || deleteRequested}>
             <Icon name="save" size={16} />
             {saving ? "Đang lưu..." : "Lưu"}
           </Button>

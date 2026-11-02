@@ -773,6 +773,9 @@ jobs:
       - name: Run tests
         run: npm run test:run
 
+      - name: Verify money account corrections on isolated PostgreSQL
+        run: node scripts/fnb-db-test/run-money-account-edit.mjs
+
       - name: Verify USB worker lifecycle without a physical printer
         run: node --test scripts/test-usb-worker.mjs scripts/test-print-recovery.mjs scripts/test-print-polling.mjs scripts/test-print-durable.mjs
 
