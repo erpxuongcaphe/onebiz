@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { useEffect, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useSyncExternalStore, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Branch } from "@/lib/types/auth";
 
@@ -8,6 +8,7 @@ const state = vi.hoisted(() => ({
   activeBranchId: "a" as string | undefined, branches: [] as Branch[],
   permissions: new Set<string>(), isLoading: false, authDataError: null as string | null,
   effectiveAll: null as boolean | null,
+  routerUrl: null as string | null,
   switchBranch: vi.fn(), reads: vi.fn(),
 }));
 vi.mock("@/lib/contexts/auth-context", () => ({ useAuth: () => ({ ...state,
@@ -16,8 +17,8 @@ vi.mock("@/lib/contexts/auth-context", () => ({ useAuth: () => ({ ...state,
     ? state.effectiveAll : state.permissions.has(permission),
 }) }));
 vi.mock("next/navigation", () => ({
-  usePathname: () => { useSyncExternalStore(subscribeRouter, () => window.location.href); return window.location.pathname; },
-  useSearchParams: () => { useSyncExternalStore(subscribeRouter, () => window.location.href); return new URLSearchParams(window.location.search); },
+  usePathname: () => { useSyncExternalStore(subscribeRouter, () => window.location.href); return state.routerUrl ? new URL(state.routerUrl, window.location.origin).pathname : window.location.pathname; },
+  useSearchParams: () => { useSyncExternalStore(subscribeRouter, () => window.location.href); return new URLSearchParams(state.routerUrl ? new URL(state.routerUrl, window.location.origin).search : window.location.search); },
 }));
 function subscribeRouter(notify: () => void) {
   window.addEventListener("test:next-navigation", notify);
@@ -60,6 +61,7 @@ beforeEach(() => {
   state.permissions = new Set(["reports.analytics", "reports.view_detail"]);
   state.isLoading = false; state.authDataError = null;
   state.effectiveAll = null;
+  state.routerUrl = null;
   state.switchBranch.mockReset(); state.reads.mockReset();
   window.history.replaceState({}, "", "/phan-tich/aging?branch=a&view=table&from=2026-01-01#detail");
 });
@@ -305,5 +307,44 @@ describe("isolated report-only branch scope", () => {
     act(() => window.history.forward());
     await waitFor(() => expect(new URLSearchParams(window.location.search).get("from")).toBe("2026-02-01"));
     expect(screen.getByLabelText("report scope")).toHaveTextContent(scope!);
+  });
+  it.each([
+    { initial: "all", target: "/phan-tich/aging?preset=thisMonth&view=table#detail", expected: "all" },
+    { initial: "b", target: "/phan-tich/aging?preset=thisMonth&view=table#detail", expected: "b" },
+    { initial: "b", target: "/phan-tich/aging?branch=b&preset=thisMonth&view=table#detail", expected: "b" },
+    { initial: "all", target: "/phan-tich/aging?branch=b&preset=thisMonth&view=table#detail", expected: "b" },
+  ])("canonicalizes speculative Next handoff from $initial to $target before any destination read", ({ initial, target, expected }) => {
+    state.effectiveAll = true;
+    window.history.replaceState({ previous: true }, "", `/phan-tich/fnb-shipper?branch=${initial}`);
+    const storage = vi.spyOn(Storage.prototype, "setItem");
+    const reads: Array<{ branch: string | undefined; path: string; query: string | null }> = [];
+    const rendered: Array<{ ready: boolean; browserPath: string }> = [];
+    function CommitAndRead({ destination }: { destination: string | null }) {
+      const scope = useReportScope();
+      if (destination) rendered.push({ ready: scope.isReady, browserPath: window.location.pathname });
+      useLayoutEffect(() => {
+        if (destination) window.history.replaceState({ navigation: "committed" }, "", destination);
+      }, [destination]);
+      useEffect(() => {
+        if (scope.isReady) reads.push({ branch: scope.activeBranchId, path: window.location.pathname,
+          query: new URLSearchParams(window.location.search).get("branch") });
+      }, [scope.isReady, scope.activeBranchId, destination]);
+      return <Consumer selectorOnly />;
+    }
+    const view = render(<ReportScopeProvider><CommitAndRead destination={null} /></ReportScopeProvider>);
+    reads.length = 0;
+    // Router hooks expose the destination in render; window still has the old
+    // route until the layout effect, matching Next's speculative navigation order.
+    state.routerUrl = target;
+    view.rerender(<ReportScopeProvider><CommitAndRead destination={target} /></ReportScopeProvider>);
+    expect(rendered[0]).toEqual({ ready: false, browserPath: "/phan-tich/fnb-shipper" });
+    expect(reads).toEqual([{ branch: expected === "all" ? undefined : expected, path: "/phan-tich/aging", query: expected }]);
+    const url = new URL(window.location.href);
+    expect(url.searchParams.get("branch")).toBe(expected);
+    expect(url.searchParams.get("preset")).toBe("thisMonth");
+    expect(url.searchParams.get("view")).toBe("table"); expect(url.hash).toBe("#detail");
+    expect(window.history.state).toEqual({ navigation: "committed" });
+    expect(state.activeBranchId).toBe("a"); expect(state.switchBranch).not.toHaveBeenCalled();
+    expect(storage).not.toHaveBeenCalled();
   });
 });
