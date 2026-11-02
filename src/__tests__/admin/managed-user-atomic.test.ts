@@ -34,11 +34,9 @@ describe("atomic managed-user update", () => {
     expect(route).not.toContain('.from("user_branches").insert(');
   });
 
-  it("submits profile and password as separate operations with a truthful partial-failure message", () => {
-    expect(page).toContain("Đã lưu hồ sơ, chưa đổi mật khẩu");
-    const profileCall = page.indexOf("fullName: editForm.fullName.trim()");
-    const passwordCall = page.indexOf("newPassword: editForm.newPassword");
-    expect(profileCall).toBeGreaterThan(-1);
-    expect(passwordCall).toBeGreaterThan(profileCall);
+  it("keeps password reset in a separate action from editing profile access", () => {
+    expect(page).toContain("fullName: editForm.fullName.trim()");
+    expect(page).toContain("userId: passwordTarget.id, newPassword");
+    expect(page).not.toContain("editForm.newPassword");
   });
 });

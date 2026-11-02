@@ -54,6 +54,8 @@ import { PermissionPage } from "@/components/shared/permission-page";
 import { LocalListTools, useLocalList } from "@/components/shared/local-list-tools";
 
 export default function PermissionSettingsPageGuarded() {
+  const { user } = useAuth();
+  if (user && user.role !== "owner") return <div className="p-4 text-sm">Nhóm quyền dùng chung ảnh hưởng nhiều chi nhánh. Chỉ chủ doanh nghiệp được chỉnh sửa; quản lý hỗ trợ cấp dưới tại Cài đặt → Người dùng.</div>;
   return (
     <PermissionPage requires={PERMISSIONS.SYSTEM_MANAGE_ROLES}>
       <PermissionSettingsPage />

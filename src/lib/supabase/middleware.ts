@@ -259,6 +259,14 @@ function copySetCookies(from: NextResponse, to: NextResponse): void {
  * Gọi từ src/proxy.ts.
  */
 export async function updateSession(request: NextRequest) {
+  // Recovery uses an isolated in-memory session, even on a shared signed-in POS.
+  if (["/quen-mat-khau", "/dat-lai-mat-khau", "/dat-lai-mat-khau/tam-thoi"].includes(request.nextUrl.pathname)) {
+    const response = NextResponse.next({ request });
+    response.headers.set("Cache-Control", "no-store");
+    response.headers.set("Referrer-Policy", "no-referrer");
+    response.headers.set("X-Robots-Tag", "noindex, nofollow");
+    return response;
+  }
   // External AI links are authenticated by a short-lived, hashed capability
   // token inside their own route. Skip ERP session handling entirely.
   if (
@@ -360,6 +368,10 @@ export async function updateSession(request: NextRequest) {
   // avoids the Auth network roundtrip that getUser() performs on every page request.
   const { data: claimsData } = await supabase.auth.getClaims();
   const isAuthenticated = Boolean(claimsData?.claims.sub);
+  if (isAuthenticated && claimsData?.claims.app_metadata?.must_change_password === true) {
+    const url = request.nextUrl.clone(); url.pathname = "/dat-lai-mat-khau/tam-thoi"; url.search = "";
+    const response = NextResponse.redirect(url); copySetCookies(supabaseResponse, response); return response;
+  }
 
   // ── FnB subdomain routing ──
   if (isFnbSubdomain(request)) {

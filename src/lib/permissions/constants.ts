@@ -130,6 +130,7 @@ export const PERMISSIONS = {
 
   // System
   SYSTEM_MANAGE_USERS: "system.manage_users",
+  SYSTEM_RESET_USER_PASSWORD: "system.reset_user_password",
   SYSTEM_MANAGE_BRANCHES: "system.manage_branches",
   SYSTEM_MANAGE_ROLES: "system.manage_roles",
   SYSTEM_VIEW_AUDIT: "system.view_audit",
@@ -340,6 +341,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     group: "Hệ thống",
     permissions: [
       { code: PERMISSIONS.SYSTEM_MANAGE_USERS, label: "Quản lý người dùng" },
+      { code: PERMISSIONS.SYSTEM_RESET_USER_PASSWORD, label: "Đặt lại mật khẩu nhân viên trong phạm vi được giao" },
       { code: PERMISSIONS.SYSTEM_MANAGE_BRANCHES, label: "Quản lý chi nhánh" },
       { code: PERMISSIONS.SYSTEM_MANAGE_ROLES, label: "Quản lý vai trò" },
       { code: PERMISSIONS.SYSTEM_VIEW_AUDIT, label: "Xem lịch sử thao tác" },

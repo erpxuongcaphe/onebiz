@@ -24,19 +24,17 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { hasEffectivePermission } from "@/lib/permissions/server";
 import { validateManagedUserScope } from "@/lib/admin/managed-user-scope";
+import { canManageAccount } from "@/lib/admin/account-management-authorization";
+import { z } from "zod";
 
 export const runtime = "nodejs";
 
-interface UpdateUserBody {
-  userId: string;
-  fullName?: string;
-  phone?: string;
-  roleId?: string | null;
-  branchIds?: string[];
-  allBranches?: boolean;
-  newPassword?: string;
-  isActive?: boolean;
-}
+const updateUserBody = z.object({
+  userId: z.string().min(1).max(64), fullName: z.string().trim().min(1).max(160).optional(),
+  phone: z.string().max(32).optional(), roleId: z.string().min(1).max(64).nullable().optional(),
+  branchIds: z.array(z.string().min(1).max(64)).max(128).optional(), allBranches: z.boolean().optional(),
+  newPassword: z.string().min(8).max(128).optional(), isActive: z.boolean().optional(),
+});
 
 export async function POST(req: NextRequest) {
   try {
@@ -68,7 +66,7 @@ export async function POST(req: NextRequest) {
 
     const isOwner = callerProfile.role === "owner";
     if (!isOwner) {
-      const allowed = await hasEffectivePermission(sb, caller.id, ["system.manage_users"]);
+      const allowed = await hasEffectivePermission(sb, caller.id, ["system.manage_users", "system.reset_user_password"]);
       if (!allowed) {
         return NextResponse.json(
           { success: false, message: "Không đủ quyền sửa thông tin người dùng" },
@@ -78,12 +76,22 @@ export async function POST(req: NextRequest) {
     }
 
     const tenantId = callerProfile.tenant_id;
-    const body = (await req.json()) as UpdateUserBody;
-    if (!body.userId) {
+    const parsed = updateUserBody.safeParse(await req.json().catch(() => null));
+    if (!parsed.success) {
       return NextResponse.json(
-        { success: false, message: "Thiếu userId" },
+        { success: false, message: "Thông tin chưa hợp lệ. Mật khẩu cần 8–128 ký tự; kiểm tra tên và chi nhánh." },
         { status: 400 },
       );
+    }
+    const body = parsed.data;
+
+    const wantsPassword = typeof body.newPassword === "string" && body.newPassword.length > 0;
+    const wantsProfile = [body.fullName, body.phone, body.roleId, body.branchIds, body.allBranches, body.isActive]
+      .some(value => value !== undefined);
+    if ((wantsPassword && !await canManageAccount(sb, body.userId, "password"))
+      || (wantsProfile && !await canManageAccount(sb, body.userId, "edit", body.roleId ?? null,
+        body.allBranches ? [] : body.branchIds ?? null))) {
+      return NextResponse.json({ success: false, message: "Tài khoản hoặc quyền được chọn nằm ngoài phạm vi quản lý." }, { status: 403 });
     }
 
     const admin = getAdminClient();
@@ -180,9 +188,18 @@ export async function POST(req: NextRequest) {
     // Auth là hệ thống riêng với database. Giao diện gọi bước này riêng để
     // nếu đặt lại mật khẩu lỗi thì hồ sơ/quyền chi nhánh vẫn có thông báo đúng.
     if (body.newPassword) {
+      if (!await canManageAccount(sb, body.userId, "password")) {
+        return NextResponse.json({ success: false, message: "Phạm vi vừa thay đổi. Tải lại trước khi đặt mật khẩu." }, { status: 403 });
+      }
+      const { data: auditId, error: auditError } = await (admin.rpc as any)("begin_managed_password_reset", { p_actor: caller.id, p_target: body.userId });
+      if (auditError) return NextResponse.json({ success: false, message: "Chưa ghi được lịch sử đặt lại mật khẩu. Chưa thay đổi mật khẩu." }, { status: 503 });
+      const { data: targetAuth, error: targetAuthError } = await admin.auth.admin.getUserById(body.userId);
+      if (targetAuthError || !targetAuth.user) return NextResponse.json({ success: false, message: "Chưa xác nhận được tài khoản. Chưa thay đổi mật khẩu." }, { status: 503 });
       const { error } = await admin.auth.admin.updateUserById(body.userId, {
         password: body.newPassword,
+        app_metadata: { ...targetAuth.user.app_metadata, must_change_password: true },
       });
+      await (admin.rpc as any)("complete_managed_password_reset", { p_audit: auditId, p_success: !error });
       if (error) {
         return NextResponse.json(
           { success: false, message: `Không đặt lại được mật khẩu: ${error.message}` },

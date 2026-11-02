@@ -91,7 +91,7 @@ beforeEach(() => {
   state.permissionAllowed = true;
   state.targetTenantId = "tenant-1";
   state.profileUpdateEq.mockResolvedValue({ data: {}, error: null });
-  state.rpc.mockResolvedValue({ data: {}, error: null });
+  state.rpc.mockImplementation(async (name: string) => ({ data: name === "check_account_management_scope" ? true : {}, error: null }));
 });
 
 describe("POST /api/admin/update-user security", () => {
@@ -102,7 +102,7 @@ describe("POST /api/admin/update-user security", () => {
     const response = await POST(request({ isActive: false }));
 
     expect(response.status).toBe(403);
-    expect(state.rpc).not.toHaveBeenCalled();
+    expect(state.rpc).not.toHaveBeenCalledWith("update_managed_user_atomic", expect.anything());
   });
 
   it("blocks a target user from another tenant", async () => {
@@ -112,7 +112,7 @@ describe("POST /api/admin/update-user security", () => {
     const response = await POST(request({ isActive: false }));
 
     expect(response.status).toBe(403);
-    expect(state.rpc).not.toHaveBeenCalled();
+    expect(state.rpc).not.toHaveBeenCalledWith("update_managed_user_atomic", expect.anything());
   });
 
   it("updates a same-tenant user through the server route", async () => {

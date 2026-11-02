@@ -34,7 +34,8 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuth, useToast } from "@/lib/contexts";
 import { formatNumber } from "@/lib/format";
-import { getRoles, getTenantUsers } from "@/lib/services/supabase/roles";
+import { getRoles } from "@/lib/services/supabase/roles";
+import { getManagedAccounts } from "@/lib/services/supabase/account-management";
 import type { DbRole } from "@/lib/services/supabase/roles";
 import { PermissionPage } from "@/components/shared/permission-page";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -43,6 +44,7 @@ import { requestPosPinReset, getManagedPinStatuses } from "@/lib/services/supaba
 // CEO 23/05/2026 (Phase 2 UI): per-user permission override dialog
 import { PermissionOverrideDialog } from "@/components/shared/dialogs/permission-override-dialog";
 import { SystemRoleDialog } from "@/components/shared/dialogs/system-role-dialog";
+import { getAccountManagementContext, type AccountManagementContext } from "@/lib/services/supabase/account-management";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Icon } from "@/components/ui/icon";
@@ -90,7 +92,7 @@ async function updateManagedUser(payload: ManagedUserUpdate): Promise<void> {
 // (chỉ checkbox owner bị ẩn). PermissionPage block deny clean.
 export default function UsersPageGuarded() {
   return (
-    <PermissionPage requires={PERMISSIONS.SYSTEM_MANAGE_USERS}>
+    <PermissionPage requires={[PERMISSIONS.SYSTEM_MANAGE_USERS, PERMISSIONS.SYSTEM_RESET_USER_PASSWORD]}>
       <UsersPage />
     </PermissionPage>
   );
@@ -104,6 +106,11 @@ function UsersPage() {
   const isCurrentUserOwner = user?.role === "owner";
   const currentUserId = user?.id;
   const [systemRoleTarget, setSystemRoleTarget] = useState<UserRow | null>(null);
+  const [management, setManagement] = useState<AccountManagementContext | null>(null);
+  const [passwordTarget, setPasswordTarget] = useState<UserRow | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [passwordBusy, setPasswordBusy] = useState(false);
+  const [loadError, setLoadError] = useState("");
 
   const [pinStatuses, setPinStatuses] = useState<Record<string, { hasPin: boolean; resetRequired: boolean }> | null>(null);
   const [resettingPin, setResettingPin] = useState(false);
@@ -133,19 +140,10 @@ function UsersPage() {
     roleId: "",
     branchIds: [] as string[],
     allBranches: false,
-    newPassword: "",
   });
 
   const handleEditUser = async () => {
     if (!editTarget) return;
-    if (editForm.newPassword && editForm.newPassword.length < 8) {
-      toast({
-        title: "Mật khẩu mới quá ngắn",
-        description: "Tối thiểu 8 ký tự",
-        variant: "error",
-      });
-      return;
-    }
     if (!editForm.allBranches && editForm.branchIds.length === 0) {
       toast({
         title: "Thiếu chi nhánh",
@@ -167,28 +165,8 @@ function UsersPage() {
         } : {}),
       });
 
-      if (editForm.newPassword) {
-        try {
-          await updateManagedUser({
-            userId: editTarget.id,
-            newPassword: editForm.newPassword,
-          });
-        } catch (passwordError) {
-          toast({
-            title: "Đã lưu hồ sơ, chưa đổi mật khẩu",
-            description: (passwordError as Error).message,
-            variant: "error",
-            duration: 8000,
-          });
-          load();
-          return;
-        }
-      }
-
       toast({
-        title: editForm.newPassword
-          ? "Đã cập nhật hồ sơ và mật khẩu"
-          : "Đã cập nhật thông tin",
+        title: "Đã cập nhật thông tin",
         description: editTarget.fullName,
         variant: "success",
       });
@@ -213,6 +191,8 @@ function UsersPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [createBusy, setCreateBusy] = useState(false);
   const [createForm, setCreateForm] = useState({
+    positionId: "",
+    departmentId: "",
     email: "",
     password: "",
     fullName: "",
@@ -223,6 +203,8 @@ function UsersPage() {
   });
   const resetCreateForm = () =>
     setCreateForm({
+      positionId: "",
+      departmentId: "",
       email: "",
       password: "",
       fullName: "",
@@ -270,6 +252,8 @@ function UsersPage() {
           fullName: createForm.fullName.trim(),
           phone: phone || undefined,
           roleId: createForm.roleId || undefined,
+          positionId: createForm.positionId || undefined,
+          departmentId: createForm.departmentId || null,
           branchIds: createForm.allBranches ? [] : createForm.branchIds,
           allBranches: createForm.allBranches,
         }),
@@ -304,16 +288,21 @@ function UsersPage() {
     if (!tenantId) return;
     setLoading(true);
     try {
-      const [u, r, pins] = await Promise.all([
-        getTenantUsers(tenantId),
+      const [u, r, pins, context] = await Promise.all([
+        getManagedAccounts(),
         getRoles(tenantId),
         getManagedPinStatuses().catch(() => null),
+        getAccountManagementContext(),
       ]);
-      setUsers(u);
-      setRoles(r);
+      setUsers(context.owner ? u : u.filter(row => context.targets[row.id]?.edit || context.targets[row.id]?.password));
+      setManagement(context);
+      setLoadError("");
+      setRoles(context.owner || context.scope?.global_access ? r : r.filter(role => context.scope?.assignable_role_ids.includes(role.id)));
       setPinStatuses(pins ? Object.fromEntries(pins.map(p => [p.id, p])) : null);
     } catch {
-      // silent
+      setManagement(null);
+      setUsers([]);
+      setLoadError("Chưa tải được phạm vi quản lý tài khoản. Vui lòng thử lại.");
     } finally {
       setLoading(false);
     }
@@ -387,7 +376,7 @@ function UsersPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={() => setCreateOpen(true)}>
+          <Button disabled={!management?.canCreate} onClick={() => setCreateOpen(true)}>
             <Icon name="person_add" size={16} className="mr-1" />
             Tạo tài khoản mới
           </Button>
@@ -490,6 +479,7 @@ function UsersPage() {
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>Thao tác</DropdownMenuLabel>
                           <DropdownMenuItem
+                            disabled={!management?.targets[user.id]?.edit}
                             onSelect={() => {
                               setEditTarget(user);
                               setEditForm({
@@ -500,7 +490,6 @@ function UsersPage() {
                                 allBranches:
                                   user.role === "owner" ||
                                   (branches.length > 0 && branches.every((branch) => user.branchIds.includes(branch.id))),
-                                newPassword: "",
                               });
                               setEditOpen(true);
                             }}
@@ -509,7 +498,7 @@ function UsersPage() {
                             Chỉnh sửa thông tin
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            disabled={user.role === "owner" || user.id === currentUserId}
+                            disabled={!management?.targets[user.id]?.edit || user.role === "owner" || user.id === currentUserId}
                             onSelect={() => {
                               setSelectedUser(user);
                               setSelectedRoleId(user.roleId ?? "");
@@ -523,11 +512,17 @@ function UsersPage() {
                             <Icon name="admin_panel_settings" size={16} className="mr-2" />
                             Quyền quản trị & lịch sử
                           </DropdownMenuItem>}
+                          {isCurrentUserOwner && <DropdownMenuItem onSelect={() => { window.location.href = "/he-thong/co-cau"; }}>
+                            <Icon name="supervisor_account" size={16} className="mr-2" />Cơ cấu & phạm vi quản lý
+                          </DropdownMenuItem>}
+                          <DropdownMenuItem disabled={!management?.targets[user.id]?.password} onSelect={() => {
+                            setPasswordTarget(user); setNewPassword("");
+                          }}><Icon name="lock_reset" size={16} className="mr-2" />Đặt lại mật khẩu</DropdownMenuItem>
                           {/* CEO 23/05/2026 (Phase 2): override quyền per-user.
                               Cho phép cấp thêm hoặc khoá bớt permission riêng
                               cho user này (override role default). */}
                           <DropdownMenuItem
-                            disabled={user.role === "owner"}
+                            disabled={!isCurrentUserOwner || user.role === "owner"}
                             onSelect={() => {
                               setOverrideUser(user);
                               setOverrideOpen(true);
@@ -537,13 +532,13 @@ function UsersPage() {
                             Quyền tuỳ chỉnh
                           </DropdownMenuItem>
                           {/* Sprint B.4 (CEO 12/05): đặt PIN POS cho nhân viên */}
-                          <DropdownMenuItem onSelect={() => setSetPinUser(user)}>
+                          <DropdownMenuItem disabled={!management?.targets[user.id]?.edit} onSelect={() => setSetPinUser(user)}>
                             <Icon name="pin" size={16} className="mr-2 text-status-warning" />
                             Đặt lại PIN POS
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
-                            disabled={user.role === "owner" && user.isActive}
+                            disabled={!management?.targets[user.id]?.edit || (user.role === "owner" && user.isActive)}
                             onSelect={() => handleToggleActive(user)}
                             className={user.isActive ? "text-status-error" : "text-status-success"}
                           >
@@ -744,27 +739,7 @@ function UsersPage() {
             </div>
 
             <div className="space-y-1 border-t pt-3">
-              <Label htmlFor="edit-password" className="flex items-center gap-2">
-                <Icon name="lock_reset" size={14} />
-                Đặt lại mật khẩu
-                <span className="text-xs text-muted-foreground font-normal">
-                  (để trống nếu không đổi)
-                </span>
-              </Label>
-              <Input
-                id="edit-password"
-                type="text"
-                value={editForm.newPassword}
-                onChange={(e) =>
-                  setEditForm({ ...editForm, newPassword: e.target.value })
-                }
-                placeholder="Mật khẩu mới (≥ 8 ký tự)"
-              />
-              {editForm.newPassword && (
-                <p className="text-xs text-status-warning">
-                  ⚠️ Sau khi lưu, đưa mật khẩu mới cho nhân viên — họ phải đăng nhập lại.
-                </p>
-              )}
+              <p className="text-xs text-muted-foreground">Đổi mật khẩu bằng thao tác “Đặt lại mật khẩu” riêng trong menu tài khoản.</p>
             </div>
           </div>
           <DialogFooter>
@@ -844,6 +819,22 @@ function UsersPage() {
                 }
                 placeholder="Nguyễn Văn A"
               />
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="space-y-1 text-sm">Chức vụ trong cơ cấu
+                <select className="h-11 w-full rounded-md border bg-background px-2 text-base sm:text-sm" value={createForm.positionId}
+                  onChange={e => setCreateForm({ ...createForm, positionId: e.target.value })}>
+                  <option value="">{management?.owner ? "Chưa phân công" : "Chọn chức vụ cấp dưới"}</option>
+                  {management?.positions?.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </label>
+              <label className="space-y-1 text-sm">Bộ phận
+                <select className="h-11 w-full rounded-md border bg-background px-2 text-base sm:text-sm" value={createForm.departmentId}
+                  onChange={e => setCreateForm({ ...createForm, departmentId: e.target.value })}>
+                  <option value="">Chưa phân công</option>
+                  {management?.departments?.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+              </label>
             </div>
 
             <div className="space-y-1">
@@ -996,6 +987,23 @@ function UsersPage() {
         </DialogContent>
       </Dialog>
 
+      {loadError && <p role="alert" className="text-sm text-destructive">{loadError} <button className="underline" onClick={() => void load()}>Thử lại</button></p>}
+      <Dialog open={passwordTarget !== null} onOpenChange={open => { if (!open && !passwordBusy) setPasswordTarget(null); }}>
+        <DialogContent className="sm:max-w-sm"><DialogHeader><DialogTitle>Đặt lại mật khẩu · {passwordTarget?.fullName}</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">Giao mật khẩu tạm qua kênh riêng. Nhân viên sẽ được yêu cầu đổi khi đăng nhập. Không đổi PIN POS hoặc quyền truy cập.</p>
+          <Label htmlFor="managed-password">Mật khẩu tạm</Label>
+          <Input id="managed-password" type="password" autoComplete="new-password" minLength={8} maxLength={128} disabled={passwordBusy} value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Ít nhất 8 ký tự" />
+          <DialogFooter><Button variant="outline" disabled={passwordBusy} onClick={() => setPasswordTarget(null)}>Đóng</Button>
+            <Button disabled={passwordBusy || newPassword.length < 8} onClick={async () => {
+              if (!passwordTarget || passwordBusy) return;
+              setPasswordBusy(true);
+              try { await updateManagedUser({ userId: passwordTarget.id, newPassword }); setPasswordTarget(null); setNewPassword("");
+                toast({ title: "Đã đặt lại mật khẩu", variant: "success" }); }
+              catch (error) { toast({ title: "Chưa đổi được mật khẩu", description: error instanceof Error ? error.message : "Vui lòng thử lại", variant: "error" }); }
+              finally { setPasswordBusy(false); }
+            }}>{passwordBusy ? "Đang lưu…" : "Đổi mật khẩu"}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
       {/* CEO 23/05/2026 (Phase 2): Per-user permission override dialog */}
       <PermissionOverrideDialog
         open={overrideOpen}

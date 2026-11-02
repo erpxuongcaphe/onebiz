@@ -35,6 +35,7 @@ vi.mock("@/lib/supabase/server", () => ({
 
 vi.mock("@/lib/supabase/admin", () => ({
   getAdminClient: vi.fn(() => ({
+    rpc: vi.fn(async () => ({ error: null })),
     auth: {
       admin: {
         createUser: state.createUser,
@@ -84,7 +85,7 @@ beforeEach(() => {
   state.profileUpdateEq.mockResolvedValue({ data: {}, error: null });
   state.branchInsert.mockResolvedValue({ data: {}, error: null });
   state.branchRows = [{ id: "branch-1" }];
-  state.rpc.mockResolvedValue({ data: {}, error: null });
+  state.rpc.mockImplementation(async (name: string) => ({ data: name === "check_account_management_scope" ? true : {}, error: null }));
 });
 
 describe("POST /api/admin/create-user with optional contact email", () => {
@@ -95,6 +96,7 @@ describe("POST /api/admin/create-user with optional contact email", () => {
     expect(response.status).toBe(200);
     expect(state.createUser).toHaveBeenCalledWith(
       expect.objectContaining({
+        app_metadata: { managed_tenant_id: "tenant-1", managed_role_id: null },
         email: expect.stringMatching(/^staff-[0-9a-f-]+@auth\.onebiz\.invalid$/),
         password: "password-123",
         email_confirm: true,
@@ -160,7 +162,8 @@ describe("POST /api/admin/create-user with optional contact email", () => {
   });
 
   it("removes the Auth user when profile setup fails", async () => {
-    state.rpc.mockResolvedValue({ data: null, error: { message: "profile failed" } });
+    state.rpc.mockImplementation(async (name: string) => name === "check_account_management_scope"
+      ? { data: true, error: null } : { data: null, error: { message: "profile failed" } });
     const { POST } = await import("@/app/api/admin/create-user/route");
     const response = await POST(request({ phone: "0912345678" }));
 
