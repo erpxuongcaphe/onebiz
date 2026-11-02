@@ -32,7 +32,7 @@ export function FilterPanel({
   const desktop = useBreakpoint("md");
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange} protectUnsavedChanges={false}>
+    <Sheet open={open} onOpenChange={onOpenChange} protectUnsavedChanges={false} dismissOnOutsidePress>
       <SheetContent
         side={desktop ? "left" : "bottom"}
         showCloseButton={false}

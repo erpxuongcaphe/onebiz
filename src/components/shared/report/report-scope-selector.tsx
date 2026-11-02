@@ -41,13 +41,16 @@ export function ReportScopeSelector() {
   );
   const selectedValue = activeBranchId ?? (canViewAll ? ALL_BRANCHES_VALUE : "");
 
-  if (!isReady || branches.length === 0) return null;
-
   return (
-    <SearchableSelect
-      aria-label="Phạm vi báo cáo" value={selectedValue} options={scopeItems}
-      placeholder="Chọn chi nhánh" preserveOrder className="h-8 min-w-44 max-w-64 bg-background text-xs"
-      onValueChange={value=>{if(value)selectBranch(value === ALL_BRANCHES_VALUE ? null : value);}}
-    />
+    <div role="group" aria-label="Phạm vi báo cáo" className="grid w-full min-w-0 gap-1 sm:w-72 sm:shrink-0">
+      <span className="text-xs font-medium text-muted-foreground">Chi nhánh báo cáo</span>
+      <SearchableSelect
+        aria-label="Chi nhánh báo cáo" value={isReady ? selectedValue : ""} options={isReady ? scopeItems : []}
+        disabled={!isReady || branches.length === 0}
+        placeholder={!isReady ? "Đang tải chi nhánh..." : branches.length === 0 ? "Không có chi nhánh" : "Chọn chi nhánh"}
+        preserveOrder className="h-11 w-full min-w-0 max-w-none bg-background text-sm"
+        onValueChange={value=>{if(isReady && value && (value === ALL_BRANCHES_VALUE ? canViewAll : branches.some(branch => branch.id === value)))selectBranch(value === ALL_BRANCHES_VALUE ? null : value);}}
+      />
+    </div>
   );
 }

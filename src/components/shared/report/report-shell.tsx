@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import {
@@ -12,8 +12,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useAuth } from "@/lib/contexts";
+import { useAuth } from "@/lib/contexts/auth-context";
+import { ReportScopeProvider } from "@/lib/contexts/report-scope-context";
 import { useReportScope } from "@/lib/hooks/use-report-scope";
+import { ReportScopeSelector } from "./report-scope-selector";
 import {
   REPORT_CATALOG,
   REPORT_CATEGORIES,
@@ -25,9 +27,22 @@ import {
 import { rememberRecentReportPath } from "@/lib/reports/preferences";
 
 export function ReportShell({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={<ReportScopeLoading />}>
+    <ReportScopeProvider><ScopedReportShell>{children}</ScopedReportShell></ReportScopeProvider>
+  </Suspense>;
+}
+
+function ReportScopeLoading() {
+  return <div role="status" className="flex min-h-[320px] items-center justify-center text-muted-foreground">
+    <Icon name="progress_activity" size={28} className="animate-spin" />
+    <span className="ml-2 text-sm">Đang kiểm tra quyền báo cáo...</span>
+  </div>;
+}
+
+function ScopedReportShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { user, tenant, permissions, branches, activeBranchId, isLoading, hasPermission } = useAuth();
-  const { isReady: isScopeReady } = useReportScope();
+  const { user, tenant, permissions, branches, isLoading, hasPermission } = useAuth();
+  const { isReady: isScopeReady, activeBranchId, scopeKey } = useReportScope();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [query, setQuery] = useState("");
   const setPickerVisibility = (open: boolean) => {
@@ -40,6 +55,7 @@ export function ReportShell({ children }: { children: React.ReactNode }) {
     user?.id,
     tenant?.id,
     activeBranchId ?? "__all__",
+    scopeKey,
     [...(permissions ?? [])].sort(),
     (branches ?? []).map(branch => branch.id).sort(),
   ]);
@@ -65,12 +81,7 @@ export function ReportShell({ children }: { children: React.ReactNode }) {
   }, [canViewPage, currentReport]);
 
   if (isLoading || !isScopeReady) {
-    return (
-      <div className="flex min-h-[320px] items-center justify-center text-muted-foreground">
-        <Icon name="progress_activity" size={28} className="animate-spin" />
-        <span className="ml-2 text-sm">Đang kiểm tra quyền báo cáo...</span>
-      </div>
-    );
+    return <ReportScopeLoading />;
   }
 
   if (!canViewPage) {
@@ -124,6 +135,10 @@ export function ReportShell({ children }: { children: React.ReactNode }) {
         </button>
       </div>
 
+      <div className="flex min-h-12 shrink-0 flex-wrap items-center gap-2 border-b border-border px-4 py-2 lg:px-6" aria-label="Phạm vi chi nhánh báo cáo">
+        <ReportScopeSelector />
+      </div>
+
       {/* Cached report state must not cross account, permission or branch boundaries. */}
 
       <div
@@ -133,7 +148,7 @@ export function ReportShell({ children }: { children: React.ReactNode }) {
         {children}
       </div>
 
-      <Dialog open={pickerOpen} onOpenChange={setPickerVisibility}>
+      <Dialog open={pickerOpen} onOpenChange={setPickerVisibility} protectUnsavedChanges={false} dismissOnOutsidePress>
         <DialogContent className="grid max-h-[min(760px,calc(100vh-2rem))] w-[min(760px,calc(100vw-2rem))] max-w-none grid-rows-[auto,auto,minmax(0,1fr)] gap-3 p-4">
           <DialogHeader>
             <DialogTitle>Đổi báo cáo</DialogTitle>
