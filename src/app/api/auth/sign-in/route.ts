@@ -157,7 +157,7 @@ export async function POST(request: NextRequest) {
     email = foundEmail as string;
   }
 
-  const { error: authError } = await supabase.auth.signInWithPassword({
+  const { data: signedIn, error: authError } = await supabase.auth.signInWithPassword({
     email,
     password: rawPassword,
   });
@@ -167,13 +167,13 @@ export async function POST(request: NextRequest) {
   }
 
   if (wantsJson) {
-    const response = NextResponse.json({ ok: true });
+    const response = NextResponse.json({ ok: true, ...(signedIn?.user?.app_metadata?.must_change_password === true ? { nextPath: "/dat-lai-mat-khau/tam-thoi" } : {}) });
     applyAuthCookies(response, authCookies, cookieDomain);
     return response;
   }
 
   const redirectUrl = new URL(
-    getSafeRedirect(request.nextUrl.searchParams.get("redirect")),
+    signedIn?.user?.app_metadata?.must_change_password === true ? "/dat-lai-mat-khau/tam-thoi" : getSafeRedirect(request.nextUrl.searchParams.get("redirect")),
     request.url,
   );
   const response = NextResponse.redirect(redirectUrl, { status: 303 });

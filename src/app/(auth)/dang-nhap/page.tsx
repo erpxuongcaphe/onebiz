@@ -112,8 +112,9 @@ function LoginForm() {
         },
       );
       if (res.ok) {
+        const result = await res.json().catch(() => null);
         // Force full navigation để browser flush cookie trước khi load /
-        window.location.replace(redirect);
+        window.location.replace(result?.nextPath === "/dat-lai-mat-khau/tam-thoi" ? result.nextPath : redirect);
         return;
       }
       const data = (await res.json().catch(() => null)) as {

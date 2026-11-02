@@ -1,0 +1,191 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useAuth, useToast } from "@/lib/contexts";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Icon } from "@/components/ui/icon";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { getTenantUsers } from "@/lib/services/supabase/roles";
+import { getAccountHierarchy, previewAccountHierarchy, saveAccountHierarchy, type HierarchySnapshot, type HierarchyPreview } from "@/lib/services/supabase/account-management";
+import { EMPTY_ACCOUNT_HIERARCHY, isAccountDescendant, validateAccountHierarchy, type AccountHierarchy, type AccountPosition } from "@/lib/admin/account-hierarchy";
+import { describeHierarchyChanges, type HierarchyDocumentChange } from "@/lib/admin/account-hierarchy-diff";
+import { getAccountHierarchyHistory, getAccountHierarchyVersion, type HierarchyHistory } from "@/lib/services/supabase/account-management";
+import { useUnsavedWork } from "@/lib/hooks/use-unsaved-work";
+
+type UserRow = Awaited<ReturnType<typeof getTenantUsers>>[number];
+const selectClass = "h-11 w-full min-w-0 rounded-md border bg-background px-2 text-base sm:h-10 sm:text-sm";
+const reasonText: Record<string, string> = { ALLOWED: "Được phép", OUTSIDE_HIERARCHY_OR_UNIT: "Ngoài cấp dưới hoặc đơn vị", POSITION_NOT_ASSIGNED: "Chưa gán chức vụ", OWNER_PROTECTED: "Chủ doanh nghiệp được bảo vệ", ADMIN_PROTECTED: "Quản trị được bảo vệ", SELF_ACCESS_PROTECTED: "Không tự sửa quyền", PERMISSION_REVOKED: "Quyền đã bị thu hồi", AUTH_REQUIRED: "Tài khoản không hoạt động" };
+function orderedPositions(positions: AccountPosition[], parent: string | null = null, depth = 0): { position: AccountPosition; depth: number }[] {
+  if (depth > 128) return [];
+  return positions.filter(p => p.parentId === parent).flatMap(position => [{ position, depth }, ...orderedPositions(positions, position.id, depth + 1)]);
+}
+
+export default function AccountHierarchyPage() {
+  const { user, tenant, branches } = useAuth();
+  const { toast } = useToast();
+  const [snapshot, setSnapshot] = useState<HierarchySnapshot | null>(null);
+  const [original, setOriginal] = useState("");
+  const [users, setUsers] = useState<UserRow[]>([]);
+  const [tab, setTab] = useState<"structure" | "people" | "policy">("structure");
+  const [selected, setSelected] = useState("");
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState<HierarchyPreview | null>(null);
+  const [peopleSearch, setPeopleSearch] = useState("");
+  const [peopleBranch, setPeopleBranch] = useState("");
+  const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
+  const [department, setDepartment] = useState("");
+  const [assignmentMode, setAssignmentMode] = useState("replace");
+  const [managedBranches, setManagedBranches] = useState<string[]>([]);
+  const [globalConfirmation, setGlobalConfirmation] = useState("");
+  const [history, setHistory] = useState<HierarchyHistory[] | null>(null);
+  const [historyChanges, setHistoryChanges] = useState<HierarchyDocumentChange[] | null>(null);
+  const [historyBusy, setHistoryBusy] = useState(false);
+  const doc = snapshot?.document ?? EMPTY_ACCOUNT_HIERARCHY;
+  const dirty = snapshot !== null && JSON.stringify(doc) !== original;
+  useUnsavedWork(dirty || busy);
+  const position = doc.positions.find(p => p.id === selected);
+  const nameById = useMemo(() => new Map(users.map(u => [u.id, u.fullName])), [users]);
+  const branchNames = useMemo(() => new Map(branches.map(b => [b.id, b.name])), [branches]);
+  const documentChanges = describeHierarchyChanges(original ? JSON.parse(original) : EMPTY_ACCOUNT_HIERARCHY, doc, nameById, branchNames);
+  const rows = useMemo(() => orderedPositions(doc.positions), [doc.positions]);
+  const visibleUsers = users.filter(u => (!peopleBranch || u.branchIds.includes(peopleBranch)) && `${u.fullName} ${u.email} ${u.phone ?? ""}`.toLocaleLowerCase().includes(peopleSearch.toLocaleLowerCase()));
+
+  const load = useCallback(async () => {
+    if (!tenant?.id || user?.role !== "owner") return;
+    setBusy(true); setError("");
+    try {
+      const [value, people] = await Promise.all([getAccountHierarchy(), getTenantUsers(tenant.id)]);
+      setSnapshot(value); setOriginal(JSON.stringify(value.document)); setUsers(people);
+      setSelected(current => value.document.positions.some(p => p.id === current) ? current : value.document.positions[0]?.id ?? "");
+      setPreview(null); setSelectedUsers(new Set()); setHistory(null); setHistoryChanges(null);
+    } catch (failure) { setError(failure instanceof Error ? failure.message : "Chưa tải được cơ cấu."); }
+    finally { setBusy(false); }
+  }, [tenant?.id, user?.role]);
+  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    if (!dirty) return;
+    const prevent = (event: BeforeUnloadEvent) => { event.preventDefault(); };
+    window.addEventListener("beforeunload", prevent);
+    return () => window.removeEventListener("beforeunload", prevent);
+  }, [dirty]);
+
+  const change = (update: (value: AccountHierarchy) => AccountHierarchy) => {
+    setSnapshot(current => current && ({ ...current, document: update(current.document) }));
+    setPreview(null); setError("");
+  };
+  const updatePosition = (patch: Partial<AccountPosition>) => change(value => ({ ...value, positions: value.positions.map(p => p.id === selected ? { ...p, ...patch } : p) }));
+  const addPosition = () => {
+    const id = crypto.randomUUID();
+    change(value => ({ ...value, positions: [...value.positions, { id, name: "Chức vụ mới", parentId: selected || null, scope: "branch", depth: "all", permissions: { edit: false, password: false, create: false } }] }));
+    setSelected(id); setTab("structure"); setCollapsed(new Set());
+  };
+  const createSample = () => {
+    const ids = Array.from({ length: 7 }, () => crypto.randomUUID());
+    const names = ["Chủ doanh nghiệp", "Quản lý vận hành", "Cửa hàng trưởng", "Ca trưởng", "Nhân viên", "Kế toán", "Marketing"];
+    change(value => ({ ...value, positions: names.map((name, i) => ({ id: ids[i], name,
+      parentId: i === 0 ? null : i < 5 ? ids[i - 1] : ids[0], scope: "branch", depth: "all", permissions: { edit: false, password: false, create: false } })) }));
+    setSelected(ids[2]);
+  };
+  const requestPreview = async () => {
+    if (!snapshot || busy) return;
+    const validation = validateAccountHierarchy(doc);
+    if (validation) { setError(validation); return; }
+    setBusy(true); setError("");
+    try { setPreview(await previewAccountHierarchy(snapshot)); }
+    catch (failure) { setError(failure instanceof Error ? failure.message : "Chưa xem trước được thay đổi."); }
+    finally { setBusy(false); }
+  };
+
+  if (user && user.role !== "owner") return <div className="p-6 text-sm">Chỉ chủ doanh nghiệp được cấu hình cơ cấu. <Link href="/he-thong/users" className="text-primary underline">Về nhân viên</Link></div>;
+  const ancestors = position ? rows.filter(r => r.position.id === selected || isAccountDescendant(doc.positions, selected, r.position.id)) : [];
+  const subordinateNames = position ? doc.positions.filter(p => isAccountDescendant(doc.positions, p.id, position.id, position.depth === "direct")).map(p => p.name) : [];
+  const globalsChanged = JSON.stringify(doc.globalAdminIds) !== JSON.stringify(snapshot ? (JSON.parse(original || "{}") as AccountHierarchy).globalAdminIds : []);
+  return <main className="space-y-4 p-3 sm:p-5">
+    <header className="flex flex-wrap items-start justify-between gap-3">
+      <div><h1 className="text-xl font-semibold">Cơ cấu &amp; phân quyền</h1><p className="mt-1 text-sm text-muted-foreground">Xếp chức vụ một lần. Áp dụng theo chi nhánh và bộ phận.</p></div>
+      <div className="flex flex-wrap items-center gap-2"><Link href="/he-thong/users" className="px-2 py-2 text-sm text-primary">Nhân viên</Link>
+        <Button variant="outline" disabled={busy} onClick={() => { if (!dirty || window.confirm("Tải lại sẽ bỏ thay đổi chưa lưu. Tiếp tục?")) void load(); }}>Tải lại</Button>
+        <Button disabled={!snapshot || !dirty || busy} onClick={() => void requestPreview()}>{busy ? "Đang xử lý…" : "Xem trước thay đổi"}</Button></div>
+    </header>
+    {error && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</p>}
+    <nav aria-label="Cấu hình tổ chức" className="flex flex-wrap gap-1 border-b pb-2">{([['structure','Cơ cấu'],['people','Nhân sự'],['policy','Quyền & phạm vi']] as const).map(([id,label]) =>
+      <Button key={id} variant={tab === id ? "default" : "ghost"} aria-pressed={tab === id} onClick={() => setTab(id)}>{label}</Button>)}
+      {dirty && <span className="ml-auto self-center text-xs font-medium text-status-warning">Chưa lưu</span>}
+    </nav>
+    {!snapshot ? <p role="status" className="py-8 text-center text-sm text-muted-foreground">{busy ? "Đang tải cơ cấu…" : "Chưa có dữ liệu. Chọn Tải lại để thử."}</p> : <fieldset disabled={busy} className="min-w-0 space-y-4">
+      {doc.positions.length === 0 && <section className="rounded-lg border bg-card p-5 text-center"><h2 className="font-medium">Chưa có cơ cấu chức vụ</h2><p className="mx-auto my-2 max-w-lg text-sm text-muted-foreground">Tạo cây chức vụ trước, sau đó gán nhân viên hàng loạt. Mẫu tham khảo không tự gán người hoặc cấp quyền.</p><div className="flex flex-wrap justify-center gap-2"><Button variant="outline" onClick={createSample}>Dùng mẫu tham khảo</Button><Button onClick={addPosition}>Tạo chức vụ</Button></div></section>}
+      {tab !== "people" && doc.positions.length > 0 && <div className="grid items-start gap-4 md:grid-cols-[220px_minmax(0,1fr)] lg:grid-cols-[260px_minmax(0,1fr)]">
+        <aside className="hidden rounded-lg border bg-card p-3 md:block"><div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-semibold">Cây chức vụ</h2><Button variant="ghost" size="sm" onClick={addPosition} aria-label="Thêm chức vụ"><Icon name="add" size={18} /></Button></div>
+          <div className="space-y-1">{rows.filter(r => !rows.some(a => collapsed.has(a.position.id) && isAccountDescendant(doc.positions, r.position.id, a.position.id))).map(({ position: p, depth }) =>
+            <div key={p.id} className="flex min-w-0 items-center" style={{ marginLeft: Math.min(depth, 6) * 10 }}>
+              {doc.positions.some(c => c.parentId === p.id) && <button className="min-h-11 shrink-0 px-1 text-muted-foreground" aria-label={`${collapsed.has(p.id) ? "Mở" : "Thu"} ${p.name}`} aria-expanded={!collapsed.has(p.id)} onClick={() => setCollapsed(current => { const next = new Set(current); if (next.has(p.id)) next.delete(p.id); else next.add(p.id); return next; })}><Icon name={collapsed.has(p.id) ? "chevron_right" : "expand_more"} size={16} /></button>}
+              <button aria-pressed={p.id === selected} className={`min-h-11 min-w-0 flex-1 rounded-md px-2 py-2 text-left text-sm ${p.id === selected ? "bg-primary/10 font-semibold text-primary" : "hover:bg-muted"}`} onClick={() => setSelected(p.id)}>{p.name}</button>
+            </div>)}
+          </div><p className="mt-4 border-t pt-3 text-xs leading-relaxed text-muted-foreground">Cùng cấp không được quản lý nhau. Không tự cấp quyền bán hàng hoặc xem tài chính theo chức danh.</p>
+        </aside>
+        <section className="min-w-0 space-y-4 rounded-lg border bg-card p-4 sm:p-5">
+          <label className="block space-y-1 text-sm md:hidden">Chọn chức vụ<select className={selectClass} value={selected} onChange={e => setSelected(e.target.value)}>{rows.map(r => <option key={r.position.id} value={r.position.id}>{"— ".repeat(Math.min(r.depth, 5))}{r.position.name}</option>)}</select></label>
+          {position && <>
+            <div><p className="break-words text-xs text-muted-foreground">{ancestors.map(a => a.position.name).join(" › ")}</p><h2 className="mt-1 text-lg font-semibold">{position.name}</h2></div>
+            <section className="space-y-3 border-t pt-4"><h3 className="flex items-center gap-2 text-sm font-semibold"><span className="rounded bg-muted px-2 py-0.5 text-xs">1</span>Vị trí trong cơ cấu</h3><div className="grid gap-3 sm:grid-cols-2">
+              <label className="space-y-1 text-sm">Tên chức vụ<Input aria-label="Tên chức vụ" className="text-base sm:text-sm" value={position.name} maxLength={120} onChange={e => updatePosition({ name: e.target.value })} /></label>
+              <label className="space-y-1 text-sm">Trực thuộc<select className={selectClass} value={position.parentId ?? ""} onChange={e => updatePosition({ parentId: e.target.value || null })}><option value="">Cấp cao nhất</option>{rows.filter(r => r.position.id !== selected && !isAccountDescendant(doc.positions, r.position.id, selected)).map(r => <option key={r.position.id} value={r.position.id}>{r.position.name}</option>)}</select></label>
+            </div></section>
+            {tab === "policy" && <>
+              <section className="space-y-3 border-t pt-4"><div className="flex flex-wrap justify-between gap-2"><h3 className="text-sm font-semibold">2 · Phạm vi quản lý</h3><span className="rounded bg-status-success/10 px-2 py-1 text-xs text-status-success">Ở đâu?</span></div><div className="grid gap-3 sm:grid-cols-2">
+                <label className="space-y-1 text-sm">Đơn vị áp dụng<select className={selectClass} value={position.scope} onChange={e => updatePosition({ scope: e.target.value as AccountPosition['scope'] })}><option value="branch">Cùng chi nhánh được truy cập</option><option value="assigned">Nhóm chi nhánh được giao riêng</option><option value="department">Cùng bộ phận và bộ phận con</option></select></label>
+                <label className="space-y-1 text-sm">Cấp dưới được quản lý<select className={selectClass} value={position.depth} onChange={e => updatePosition({ depth: e.target.value as AccountPosition['depth'] })}><option value="all">Tất cả cấp dưới trong nhánh</option><option value="direct">Chỉ cấp dưới trực tiếp</option></select></label>
+              </div><p className="text-xs leading-relaxed text-muted-foreground">{position.scope === "assigned" ? "Chọn nhóm chi nhánh ở mục Nhân sự khi phân công người giữ chức vụ này." : position.scope === "department" ? "Bộ phận được chọn khi phân công nhân viên. Không mở quyền sang bộ phận ngang hàng." : "Phải bao phủ toàn bộ chi nhánh của tài khoản được sửa; có chung một chi nhánh chưa đủ."}</p></section>
+              <section className="space-y-2 border-t pt-4"><div className="flex flex-wrap justify-between gap-2"><h3 className="text-sm font-semibold">3 · Quyền thao tác tài khoản</h3><span className="rounded bg-status-warning/10 px-2 py-1 text-xs text-status-warning">Được làm gì?</span></div>{([['password','Đặt lại mật khẩu','Hỗ trợ nhân viên quên mật khẩu'],['edit','Sửa thông tin nhân viên','Thông tin và trạng thái trong phạm vi được giao'],['create','Tạo tài khoản cấp dưới','Chỉ tạo chức vụ thấp hơn và không cấp quyền vượt mức']] as const).map(([key,label,hint]) => <label key={key} className="flex min-h-14 items-center justify-between gap-3 border-b py-2 last:border-b-0"><span><span className="block text-sm font-medium">{label}</span><span className="block text-xs text-muted-foreground">{hint}</span></span><input type="checkbox" role="switch" className="size-5 shrink-0 accent-primary" checked={position.permissions[key]} onChange={e => updatePosition({ permissions: { ...position.permissions, [key]: e.target.checked } })} /></label>)}</section>
+              <div className="rounded-md border bg-muted/30 p-3 text-sm"><strong>Phạm vi hiệu lực</strong><p className="mt-1 text-sm">Cấp dưới: {subordinateNames.join(", ") || "Chưa có cấp dưới"}.</p><p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground"><Icon name="lock" size={15} />Luôn chặn cấp trên, ngang cấp và tài khoản quản trị được bảo vệ.</p></div>
+            </>}
+            {tab === "structure" && <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3"><Button variant="outline" onClick={() => setTab("policy")}>Quyền &amp; phạm vi</Button><Button variant="ghost" className="text-destructive" disabled={doc.positions.some(p => p.parentId === selected) || doc.assignments.some(a => a.positionId === selected)} onClick={() => { change(v => ({ ...v, positions: v.positions.filter(p => p.id !== selected) })); setSelected(doc.positions.find(p => p.id !== selected)?.id ?? ""); }}>Xóa chức vụ trống</Button><p className="basis-full text-xs text-muted-foreground">Muốn xóa chức vụ đang có người/cấp dưới: chuyển phân công và cấp dưới trước.</p></div>}
+          </>}
+        </section>
+      </div>}
+      {tab === "structure" && <details className="rounded-lg border bg-card p-4"><summary className="cursor-pointer text-sm font-semibold">Bộ phận · {doc.departments.length}</summary><div className="mt-3 space-y-3">{doc.departments.map(d => <div key={d.id} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]"><Input aria-label={`Tên bộ phận ${d.name}`} value={d.name} maxLength={120} onChange={e => change(v => ({ ...v, departments: v.departments.map(n => n.id === d.id ? { ...n, name: e.target.value } : n) }))} /><select aria-label={`Bộ phận cấp trên của ${d.name}`} className={selectClass} value={d.parentId ?? ""} onChange={e => change(v => ({ ...v, departments: v.departments.map(n => n.id === d.id ? { ...n, parentId: e.target.value || null } : n) }))}><option value="">Không có bộ phận cha</option>{doc.departments.filter(n => n.id !== d.id && !isAccountDescendant(doc.departments, n.id, d.id)).map(n => <option key={n.id} value={n.id}>{n.name}</option>)}</select><Button variant="ghost" disabled={doc.departments.some(n => n.parentId === d.id) || doc.assignments.some(a => a.departmentId === d.id)} onClick={() => change(v => ({ ...v, departments: v.departments.filter(n => n.id !== d.id) }))}>Xóa</Button></div>)}<Button variant="outline" onClick={() => change(v => ({ ...v, departments: [...v.departments, { id: crypto.randomUUID(), name: "Bộ phận mới", parentId: null }] }))}>Thêm bộ phận</Button></div></details>}
+      {tab === "people" && <section className="space-y-4 rounded-lg border bg-card p-4"><div className="grid gap-3 sm:grid-cols-2"><Input aria-label="Tìm nhân viên" placeholder="Tìm tên, email hoặc số điện thoại…" value={peopleSearch} onChange={e => setPeopleSearch(e.target.value)} /><select aria-label="Lọc nhân viên theo chi nhánh" className={selectClass} value={peopleBranch} onChange={e => setPeopleBranch(e.target.value)}><option value="">Tất cả chi nhánh</option>{branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></div>
+        <div className="flex flex-wrap items-center gap-3 text-sm"><label className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={visibleUsers.length > 0 && visibleUsers.every(u => selectedUsers.has(u.id))} onChange={e => setSelectedUsers(current => { const next = new Set(current); visibleUsers.forEach(u => { if (e.target.checked) next.add(u.id); else next.delete(u.id); }); return next; })} />Chọn các nhân viên đang lọc</label><span className="font-medium">Đã chọn {selectedUsers.size}</span>{selectedUsers.size > 0 && <button className="min-h-11 text-primary underline" onClick={() => setSelectedUsers(new Set())}>Bỏ chọn</button>}</div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><label className="space-y-1 text-sm">Chức vụ<select className={selectClass} value={selected} onChange={e => setSelected(e.target.value)}><option value="">Chọn chức vụ</option>{rows.map(r => <option key={r.position.id} value={r.position.id}>{r.position.name}</option>)}</select></label><label className="space-y-1 text-sm">Bộ phận<select className={selectClass} value={department} onChange={e => setDepartment(e.target.value)}><option value="">Chưa phân công</option>{doc.departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select></label><label className="space-y-1 text-sm">Cách gán<select className={selectClass} value={assignmentMode} onChange={e => setAssignmentMode(e.target.value)}><option value="replace">Thay phân công hiện tại</option><option value="append">Thêm chức vụ kiêm nhiệm</option></select></label><Button className="self-end" disabled={!selected || selectedUsers.size === 0} onClick={() => {
+          if (position?.scope === "department" && !department) { setError("Chọn bộ phận cho chức vụ quản lý theo bộ phận."); return; }
+          if (position?.scope === "assigned" && managedBranches.length === 0) { setError("Chọn nhóm chi nhánh được giao."); return; }
+          if ([...selectedUsers].some(id => position?.scope === "assigned" && managedBranches.some(b => !users.find(u => u.id === id)?.branchIds.includes(b)))) { setError("Nhóm chi nhánh quản lý phải nằm trong quyền truy cập của từng nhân viên được chọn."); return; }
+          change(value => ({ ...value, assignments: [...value.assignments.filter(a => assignmentMode === "replace" ? !selectedUsers.has(a.userId) : !(selectedUsers.has(a.userId) && a.positionId === selected && a.departmentId === (department || null))), ...[...selectedUsers].map(userId => ({ userId, positionId: selected, departmentId: department || null, managedBranchIds: position?.scope === "assigned" ? managedBranches : [] }))] }));
+          setSelectedUsers(new Set()); toast({ title: "Đã cập nhật bản nháp phân công", description: "Chưa áp dụng. Xem trước thay đổi để kiểm tra.", variant: "success" });
+        }}>Gán vào bản nháp</Button></div>
+        {position?.scope === "assigned" && <fieldset className="rounded-md border p-3"><legend className="px-1 text-sm">Nhóm chi nhánh được giao</legend><div className="flex flex-wrap gap-3">{branches.map(b => <label key={b.id} className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" checked={managedBranches.includes(b.id)} onChange={e => setManagedBranches(current => e.target.checked ? [...current, b.id] : current.filter(id => id !== b.id))} />{b.name}</label>)}</div></fieldset>}
+        <p className="text-xs text-muted-foreground">Gán chức vụ không đổi nhóm quyền bán hàng/kho hoặc chi nhánh được truy cập. Tài khoản kiêm nhiệm phải được bao phủ đầy đủ mới cho sửa toàn bộ tài khoản.</p>
+        <ul className="divide-y">{visibleUsers.map(u => <li key={u.id} className="flex flex-wrap items-start gap-2 py-3"><label className="flex min-h-11 min-w-0 flex-1 items-start gap-2"><input className="mt-1 size-4 shrink-0" type="checkbox" checked={selectedUsers.has(u.id)} onChange={e => setSelectedUsers(current => { const next = new Set(current); if (e.target.checked) next.add(u.id); else next.delete(u.id); return next; })} /><span className="min-w-0"><span className="block break-words text-sm font-medium">{u.fullName}{u.role === "owner" ? " · Chủ doanh nghiệp" : ""}</span><span className="block break-words text-xs text-muted-foreground">{doc.assignments.filter(a => a.userId === u.id).map(a => `${doc.positions.find(p => p.id === a.positionId)?.name ?? "?"}${a.departmentId ? ` · ${doc.departments.find(d => d.id === a.departmentId)?.name}` : ""}`).join(" / ") || "Chưa gán chức vụ"}</span></span></label><Button variant="ghost" size="sm" disabled={!doc.assignments.some(a => a.userId === u.id)} onClick={() => change(v => ({ ...v, assignments: v.assignments.filter(a => a.userId !== u.id) }))}>Bỏ phân công</Button></li>)}</ul>
+      </section>}
+      <details className="rounded-lg border bg-card p-4"><summary className="cursor-pointer text-sm font-semibold">Quản trị tài khoản toàn doanh nghiệp · Chỉ chủ doanh nghiệp cấp</summary><p className="my-3 text-xs text-muted-foreground">Đây là ngoại lệ nhạy cảm, độc lập với chức vụ. Không cấp quyền chủ doanh nghiệp, không sửa cơ cấu và không sửa quản trị ngang cấp.</p><div className="grid gap-1 sm:grid-cols-2">{users.filter(u => u.role !== "owner").map(u => <label key={u.id} className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" checked={doc.globalAdminIds.includes(u.id)} onChange={e => change(v => ({ ...v, globalAdminIds: e.target.checked ? [...v.globalAdminIds, u.id] : v.globalAdminIds.filter(id => id !== u.id) }))} />{u.fullName}</label>)}</div></details>
+      <p className="text-xs text-muted-foreground">Phiên bản {snapshot.version} · Thay đổi chỉ có hiệu lực sau khi xác nhận bản xem trước.</p>
+    </fieldset>}
+    <details className="rounded-lg border bg-card p-4" onToggle={event => {
+      if (!event.currentTarget.open || history !== null || historyBusy) return;
+      setHistoryBusy(true);
+      void getAccountHierarchyHistory().then(setHistory).catch(failure => setError(failure.message)).finally(() => setHistoryBusy(false));
+    }}><summary className="cursor-pointer text-sm font-semibold">Lịch sử thay đổi</summary><div className="mt-3 space-y-3">
+      {historyBusy && <p role="status" className="text-sm">Đang tải lịch sử…</p>}
+      {history?.length === 0 && <p className="text-sm text-muted-foreground">Chưa có thay đổi được lưu.</p>}
+      {history?.map(item => <div key={item.version} className="flex flex-wrap items-center justify-between gap-2 border-b py-2 text-sm"><span>Phiên bản {item.version} · {item.changed_by}<span className="block text-xs text-muted-foreground">{new Date(item.changed_at).toLocaleString("vi-VN")}</span></span><Button variant="outline" size="sm" disabled={historyBusy} onClick={async () => { setHistoryBusy(true); try { const value = await getAccountHierarchyVersion(item.version); setHistoryChanges(describeHierarchyChanges(value.before, value.after, nameById, branchNames)); } catch (failure) { setError(failure instanceof Error ? failure.message : "Chưa đọc được lịch sử."); } finally { setHistoryBusy(false); } }}>Xem thay đổi</Button></div>)}
+      {historyChanges && <ul className="divide-y rounded-md border px-3">{historyChanges.map((change, index) => <li key={index} className="space-y-1 py-3 text-sm"><strong>{change.kind}: {change.name}</strong><p className="break-words text-muted-foreground">Trước: {change.before}</p><p className="break-words">Sau: {change.after}</p></li>)}</ul>}
+    </div></details>
+    <Dialog open={preview !== null} onOpenChange={open => { if (!open && !busy) { setPreview(null); setGlobalConfirmation(""); } }}><DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-3xl"><DialogHeader><DialogTitle>Xem trước thay đổi phạm vi</DialogTitle></DialogHeader>
+      <div className="max-h-[60dvh] space-y-3 overflow-y-auto"><p className="text-sm">{preview?.changes.length ?? 0} thay đổi quyền thao tác tài khoản. Không thay nhóm quyền bán hàng, hóa đơn, tồn kho hoặc ca.</p>
+        <details open className="rounded-md border p-3"><summary className="cursor-pointer text-sm font-semibold">Cơ cấu &amp; phân công · {documentChanges.length} thay đổi</summary><ul className="mt-2 divide-y">{documentChanges.map((change, index) => <li key={index} className="space-y-1 py-3 text-sm"><strong>{change.kind}: {change.name}</strong><p className="break-words text-muted-foreground">Trước: {change.before}</p><p className="break-words">Sau: {change.after}</p></li>)}</ul></details>
+        {globalsChanged && <div className="space-y-2 rounded-md border border-status-warning/40 p-3"><p className="text-sm font-medium">Có thay đổi quản trị tài khoản toàn doanh nghiệp</p><p className="text-xs">Sau khi lưu: {doc.globalAdminIds.map(id => nameById.get(id) ?? id).join(", ") || "Không có ngoại lệ"}</p><label className="block text-xs">Nhập QUẢN TRỊ để xác nhận<Input value={globalConfirmation} onChange={e => setGlobalConfirmation(e.target.value)} /></label></div>}
+        {(preview?.changes.length ?? 0) === 0 && <p className="rounded-md bg-muted p-3 text-sm">Chưa có thay đổi quyền hiệu lực. Cơ cấu hoặc phân công vẫn được lưu nếu anh xác nhận.</p>}
+        <ul className="divide-y">{preview?.changes.map((c, i) => <li key={`${c.managerId}:${c.targetId}:${c.action}:${i}`} className="py-3 text-sm"><strong>{c.managerName}</strong> → {c.targetName}<span className="block text-xs text-muted-foreground">{c.action === "password" ? "Đặt lại mật khẩu" : "Sửa tài khoản"}: {reasonText[c.before] ?? c.before} → <span className={c.after === "ALLOWED" ? "font-medium text-status-success" : "font-medium text-foreground"}>{reasonText[c.after] ?? c.after}</span></span></li>)}</ul>
+      </div><DialogFooter><Button variant="outline" disabled={busy} onClick={() => setPreview(null)}>Quay lại chỉnh</Button><Button disabled={busy || (globalsChanged && globalConfirmation !== "QUẢN TRỊ")} onClick={async () => {
+        if (!snapshot || !preview || busy) return;
+        setBusy(true); setError("");
+        try { const version = await saveAccountHierarchy(snapshot, preview); setSnapshot({ ...snapshot, version }); setOriginal(JSON.stringify(doc)); setPreview(null); setGlobalConfirmation(""); setHistory(null); setHistoryChanges(null); toast({ title: "Đã lưu cơ cấu và phạm vi", variant: "success" }); }
+        catch (failure) { setPreview(null); setError(failure instanceof Error ? failure.message : "Chưa lưu được."); }
+        finally { setBusy(false); }
+      }}>{busy ? "Đang lưu…" : "Xác nhận áp dụng"}</Button></DialogFooter></DialogContent></Dialog>
+  </main>;
+}

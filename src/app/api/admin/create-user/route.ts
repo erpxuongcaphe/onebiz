@@ -33,6 +33,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { hasEffectivePermission } from "@/lib/permissions/server";
 import { validateManagedUserScope } from "@/lib/admin/managed-user-scope";
+import { canManageAccount } from "@/lib/admin/account-management-authorization";
 import {
   INTERNAL_AUTH_EMAIL_DOMAIN,
   isInternalAuthEmail,
@@ -43,6 +44,8 @@ import {
 export const runtime = "nodejs"; // service-role key chỉ dùng được trong Node runtime
 
 interface CreateUserBody {
+  positionId?: string;
+  departmentId?: string | null;
   email?: string;
   password: string;
   fullName: string;
@@ -163,6 +166,10 @@ export async function POST(req: NextRequest) {
       );
     }
     const authEmail = email || `staff-${randomUUID()}@${INTERNAL_AUTH_EMAIL_DOMAIN}`;
+    if (!await canManageAccount(sb, null, "create", scope.roleId ?? null,
+      body.allBranches ? [] : scope.branchIds, body.positionId ?? null, body.departmentId ?? null)) {
+      return NextResponse.json({ success: false, message: "Vai trò hoặc chi nhánh nằm ngoài phạm vi được giao." }, { status: 403 });
+    }
     const { data: created, error: createErr } = await admin.auth.admin.createUser({
       email: authEmail,
       password,
@@ -189,6 +196,12 @@ export async function POST(req: NextRequest) {
     }
 
     const newUserId = created.user.id;
+    const { error: reservationError } = await (admin.rpc as any)("reserve_account_creation",
+      { p_target: newUserId, p_actor: caller.id, p_position: body.positionId ?? null, p_department: body.departmentId ?? null });
+    if (reservationError) {
+      await admin.auth.admin.deleteUser(newUserId);
+      return NextResponse.json({ success: false, message: "Không xác nhận được quyền khởi tạo tài khoản. Vui lòng thử lại." }, { status: 500 });
+    }
 
     let branchIds = scope.branchIds;
     if (body.allBranches) {
