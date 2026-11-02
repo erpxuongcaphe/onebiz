@@ -694,14 +694,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // sync ngay không cần reload.
   const refreshProfile = useCallback(async () => {
     autoRecoveryRef.current = 0;
-    if (authUser) { await loadUserData(authUser); return; }
+    const request = ++profileRequestRef.current;
     setIsLoading(true);
     setAuthDataError(null);
     try {
+      // Another tab may have replaced the session since this profile was loaded.
       const { data, error } = await boundedAuthRead(supabase.auth.getSession());
+      if (request !== profileRequestRef.current) return;
       if (error) throw error;
       const sessionUser = data.session?.user;
       if (!sessionUser) {
+        loadedUserIdRef.current = null;
+        setAuthUser(null);
+        setUser(null);
+        setPermissions(new Set());
+        setTenant(null);
+        setBranches([]);
+        setCurrentBranch(null);
+        clearProfileCache();
         setIsLoading(false);
         router.replace("/dang-nhap");
         return;
@@ -710,10 +720,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loadedUserIdRef.current = sessionUser.id;
       await loadUserData(sessionUser);
     } catch {
+      if (request !== profileRequestRef.current) return;
       setAuthDataError("Chưa xác minh được phiên đăng nhập. Vui lòng thử lại.");
       setIsLoading(false);
     }
-  }, [authUser, loadUserData, router, supabase]);
+  }, [loadUserData, router, supabase]);
 
   // Retry failed bootstrap reads only; preserve session/draft storage and require real permissions.
   useEffect(() => {

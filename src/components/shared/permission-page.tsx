@@ -34,6 +34,34 @@ function PermissionLoading({retry}: {retry?: () => Promise<void>}) {
   );
 }
 
+function PermissionDenied({ retry }: { retry?: () => Promise<void> }) {
+  const [refreshing, setRefreshing] = useState(false);
+  const [retryFailed, setRetryFailed] = useState(false);
+  async function refreshPermissions() {
+    if (!retry || refreshing) return;
+    setRefreshing(true);
+    setRetryFailed(false);
+    try {
+      await retry();
+    } catch {
+      setRetryFailed(true);
+    } finally {
+      setRefreshing(false);
+    }
+  }
+  return (
+    <div role="alert" className="mx-auto flex min-h-64 max-w-lg flex-col items-center justify-center gap-3 px-5 py-8 text-center">
+      <Icon name="gpp_bad" size={40} className="text-muted-foreground" />
+      <p className="text-lg font-medium text-muted-foreground">Không có quyền truy cập</p>
+      <p className="text-sm text-muted-foreground">Bạn cần quyền để xem trang này. Liên hệ quản trị viên.</p>
+      {retry && <button type="button" disabled={refreshing} onClick={() => { void refreshPermissions(); }} className="min-h-11 rounded-md bg-primary px-5 py-2 text-sm font-semibold text-on-primary disabled:opacity-60">
+        {refreshing ? "Đang kiểm tra..." : "Kiểm tra lại quyền"}
+      </button>}
+      {retryFailed && <p className="text-sm text-destructive">Chưa kiểm tra được quyền. Vui lòng thử lại.</p>}
+    </div>
+  );
+}
+
 export function PermissionPage({ requires, children }: PermissionPageProps) {
   const { hasPermission, isLoading, loadError, retry } = usePermissions();
   const requiredPermissions = Array.isArray(requires) ? requires : [requires];
@@ -48,17 +76,7 @@ export function PermissionPage({ requires, children }: PermissionPageProps) {
     </div>
   );
   if (!isAllowed) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 gap-3">
-        <Icon name="gpp_bad" size={40} className="text-muted-foreground" />
-        <p className="text-lg font-medium text-muted-foreground">
-          Không có quyền truy cập
-        </p>
-        <p className="text-sm text-muted-foreground">
-          Bạn cần quyền để xem trang này. Liên hệ quản trị viên.
-        </p>
-      </div>
-    );
+    return <PermissionDenied retry={retry} />;
   }
 
   return <>{children}</>;
