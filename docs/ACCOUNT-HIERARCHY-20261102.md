@@ -35,3 +35,5 @@ Không polling hoặc theo dõi realtime bổ sung. Lịch sử chỉ tải khi 
 Trigger `handle_new_user` cũ còn đọc tenant/role/branch từ `raw_user_meta_data`. Đây là dữ liệu người dùng có thể tự sửa, không được dùng để cấp quyền. API tạo nhân viên bổ sung `app_metadata.managed_tenant_id` và `managed_role_id` sau khi kiểm tra phạm vi; trigger chỉ tin phần do server cấp, luôn khởi tạo nhân viên là `staff`. Việc bổ nhiệm owner vẫn qua luồng bảo vệ riêng.
 
 **Thứ tự riêng cho bản bổ sung:** phát hành API bổ sung app_metadata trước (tương thích trigger cũ), rồi áp dụng `20261102180654_trusted_account_bootstrap.sql`. Trigger từ chối lời mời dùng metadata cũ nếu không có ngữ cảnh server; giữ nguyên bootstrap tenant độc lập, không sửa profile/Auth user hiện có. Không áp dụng guard trước API để tránh chặn tạo nhân viên hợp lệ ở phiên bản đang chạy.
+
+Rà giao diện thật phát hiện ô chức vụ bị co khi thanh bên chiếm chiều ngang trên iPad. Bố cục bổ sung dùng container query theo vùng nội dung, chuyển sang bộ chọn chức vụ khi thiếu chỗ và giữ chữ nhập 16px; cây chỉ hiện khi đủ chiều ngang.
