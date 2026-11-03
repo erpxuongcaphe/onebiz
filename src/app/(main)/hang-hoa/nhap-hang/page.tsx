@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { purchaseReceivedValue } from "@/lib/purchase-line-money";
 import { ColumnDef,type SortingState } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -285,7 +286,7 @@ function PurchaseOrderDetail({
 
   const totalOrdered = items.reduce((s, i) => s + i.lineTotal, 0);
   const totalReceivedValue = items.reduce(
-    (s, i) => s + i.receivedQuantity * i.unitPrice,
+    (s, i) => s + purchaseReceivedValue(i.lineTotal, i.quantity, i.receivedQuantity),
     0,
   );
   const totalRemainingValue = Math.max(0, totalOrdered - totalReceivedValue);
@@ -434,6 +435,8 @@ function PurchaseOrderDetail({
                 ] : [
                   { label: "Tổng tiền hàng", value: formatCurrency(totalOrdered) },
                   { label: "Đã nhập", value: formatCurrency(totalReceivedValue) },
+                  { label: "Tổng cần trả NCC", value: formatCurrency(order.total) },
+                  { label: "Đã trả NCC", value: formatCurrency(order.paid) },
                   { label: "Còn phải trả", value: formatCurrency(order.amountOwed), className: "font-bold text-base" },
                 ]}
               />

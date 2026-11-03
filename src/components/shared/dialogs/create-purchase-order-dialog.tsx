@@ -38,7 +38,7 @@ import type { UOMConversion } from "@/lib/types";
 import { nextEntityCode } from "@/lib/services/supabase/stock-adjustments";
 import { Icon } from "@/components/ui/icon";
 import { useDurableFormDraft } from "@/lib/hooks/use-durable-form-draft";
-import { purchaseLineMoney } from "@/lib/purchase-line-money";
+import { purchaseLineMoney, roundPurchaseVnd } from "@/lib/purchase-line-money";
 
 
 interface EditingPO {
@@ -82,6 +82,9 @@ interface LineItem {
   /** Day 05/06/2026 (CEO): Chiết khấu từ NCC theo dòng — % hoặc số tiền/đơn vị */
   discount?: number;
   discountType?: "percent" | "amount";
+  recordedSubtotal?: number;
+  recordedTax?: number;
+  recordedDiscount?: number;
   /** Day 18/05/2026 (CEO): HSD nhập tại phiếu nhập */
   expiryDate?: string;
   lotNumber?: string;
@@ -140,21 +143,20 @@ function lineEffectivePrice(item: LineItem) {
 }
 
 /**
- * CEO 05/06/2026: làm tròn LÊN để khử thập phân. NCC quote 125833.33 ×
- * 12 ra 1,509,999.96 — chuyển khoản phải tròn, không trả 0.96đ.
- * Dùng phép tính thập phân để không đội thêm 1đ vì sai số nhị phân.
+ * New documents round to nearest whole VND. Locked historical lines use their
+ * recorded amounts; opening a paid receipt must never reprice it.
  */
 function lineSubtotal(item: LineItem) {
-  return purchaseLineMoney(item).subtotal;
+  return item.recordedSubtotal ?? purchaseLineMoney(item).subtotal;
 }
 
 /** Tổng số tiền chiết khấu của dòng (đã làm tròn). */
 function lineDiscountTotal(item: LineItem) {
-  return purchaseLineMoney(item).discount;
+  return item.recordedDiscount ?? purchaseLineMoney(item).discount;
 }
 
 function lineTax(item: LineItem) {
-  return purchaseLineMoney(item).tax;
+  return item.recordedTax ?? purchaseLineMoney(item).tax;
 }
 
 function lineTotal(item: LineItem) {
@@ -322,6 +324,11 @@ export function CreatePurchaseOrderDialog({
             conversions: await getUOMConversions(d.product_id).catch(() => []),
             quantity: transactionQty,
             price: Number(d.transaction_unit_price ?? d.unit_price ?? 0),
+            ...(isOrderedLocked ? {
+              recordedSubtotal: Number(d.total ?? 0),
+              recordedTax: Number(d.vat_amount ?? 0),
+              recordedDiscount: discTotal,
+            } : {}),
             vatRate: Number(d.vat_rate ?? 0),
             discount: discPerUnit > 0 ? discPerUnit : undefined,
             discountType: discPerUnit > 0 ? "amount" : undefined,
@@ -343,7 +350,7 @@ export function CreatePurchaseOrderDialog({
           setOrderDiscountType("amount");
         }
 
-        const baseTotal = getItemsSubtotal(mappedItems) + getItemsTax(mappedItems);
+        const baseTotal = rows.reduce((sum, row) => sum + Number(row.total ?? 0) + Number(row.vat_amount ?? 0), 0);
         // total lưu = baseTotal + chi phí mua − chiết khấu đơn ⇒ cộng lại orderDisc
         // để tách đúng "chi phí mua" khi reload (nếu không total sẽ lệch).
         const existingCost = Math.max(
@@ -519,7 +526,7 @@ export function CreatePurchaseOrderDialog({
 
   const taxAmount = useMemo(() => getItemsTax(items), [items]);
 
-  const purchaseCost = shippingFee + otherCost;
+  const purchaseCost = roundPurchaseVnd(shippingFee) + roundPurchaseVnd(otherCost);
   // Tổng đơn TRƯỚC chiết khấu cả đơn (dùng làm gốc tính %).
   const totalBeforeOrderDiscount = subtotal + taxAmount + purchaseCost;
   // CEO 14/07/2026: chiết khấu cả đơn — % thì tính trên tổng đơn, đ thì số tiền
@@ -1178,7 +1185,7 @@ export function CreatePurchaseOrderDialog({
                     value={paidAmount || ""}
                     onChange={(e) => {
                       const n = parseFloat(e.target.value);
-                      setPaidAmount(Number.isFinite(n) && n > 0 ? n : 0);
+                      setPaidAmount(Number.isFinite(n) && n > 0 ? roundPurchaseVnd(n) : 0);
                     }}
                     placeholder="Để trống = chưa trả"
                     className="h-10 w-full rounded-md border border-border bg-background px-3 text-right tabular-nums outline-none focus:ring-2 focus:ring-primary/30"

@@ -85,6 +85,7 @@ jobs:
           node scripts/retail-db-test/run-inventory-catalog-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
           node scripts/retail-db-test/run-stock-target-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
           node scripts/fnb-db-test/run-actual-receiving-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
+          node scripts/fnb-db-test/run-purchase-vnd-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
           FNB_PGLITE_DIR="$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js" node scripts/fnb-db-test/run-trading-status.cjs
           FNB_PGLITE_DIR="$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js" node scripts/fnb-db-test/run-negative-stock.cjs
           FNB_RECORD_ORDER_CLOSURE_SQL="$RUNNER_TEMP/order-closure-fixture.sql" FNB_PGLITE_DIR="$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js" node scripts/test-order-processing-closure.cjs
