@@ -1839,7 +1839,7 @@ export async function getCustomerSegments(
     () => {
       let query = supabase
         .from("invoices")
-        .select("customer_id, customers!inner(group_id)")
+        .select("customer_id, customers!inner(group_id, customer_groups!customers_group_id_fkey(name))")
         .eq("tenant_id", tenantId)
         .eq("status", "completed")
         .not("customer_id", "is", null);
@@ -1848,23 +1848,17 @@ export async function getCustomerSegments(
     },
     "[getCustomerSegments]",
   );
-  const groupLabels: Record<string, string> = {
-    vip: "VIP",
-    wholesale: "Khách sỉ",
-    retail: "Khách lẻ",
-    agent: "Đại lý",
-  };
   const customerGroups = new Map<string, string>();
   for (const invoice of invoices) {
     const customerId = String(invoice.customer_id ?? "");
-    const customer = invoice.customers as { group_id?: string | null } | null;
+    const customer = invoice.customers as { group_id?: string | null; customer_groups?: { name?: string | null } | null } | null;
     if (customerId && !customerGroups.has(customerId)) {
-      customerGroups.set(customerId, customer?.group_id ?? "retail");
+      customerGroups.set(customerId, customer?.customer_groups?.name?.trim()
+        || (customer?.group_id ? "Chưa xác định nhóm" : "Chưa phân nhóm"));
     }
   }
   const counts = new Map<string, number>();
-  for (const groupId of customerGroups.values()) {
-    const name = groupLabels[groupId] ?? "Khách lẻ";
+  for (const name of customerGroups.values()) {
     counts.set(name, (counts.get(name) ?? 0) + 1);
   }
   return Array.from(counts.entries()).map(([name, value]) => ({ name, value }));
