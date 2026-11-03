@@ -7,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogBody,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -163,7 +164,7 @@ export function CreateSupplierDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="flex max-h-[90dvh] flex-col overflow-hidden sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{isEditing ? "Sửa nhà cung cấp" : "Thêm nhà cung cấp mới"}</DialogTitle>
           <DialogDescription>
@@ -171,7 +172,7 @@ export function CreateSupplierDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4 py-2">
+        <DialogBody className="grid gap-4 py-2 pr-1">
           <div className="space-y-2">
             <label className="text-sm font-medium">Mã NCC</label>
             <Input value={code} onChange={(e) => setCode(e.target.value)} readOnly={isEditing} className={isEditing ? "bg-muted/50" : ""} />
@@ -323,7 +324,7 @@ export function CreateSupplierDialog({
               rows={2}
             />
           </div>
-        </div>
+        </DialogBody>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
