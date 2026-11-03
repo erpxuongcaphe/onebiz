@@ -1832,9 +1832,11 @@ export async function getNewCustomersMonthly(
 
 export async function getCustomerSegments(
   branchId?: string,
+  range?: { from: string; to: string },
 ): Promise<CustomerSegment[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
+  const resolved = range ? resolveRange(range, thisMonthRange()) : null;
   const invoices = await fetchAllPostgrestRows<Record<string, unknown>>(
     () => {
       let query = supabase
@@ -1844,6 +1846,7 @@ export async function getCustomerSegments(
         .eq("status", "completed")
         .not("customer_id", "is", null);
       if (branchId) query = query.eq("branch_id", branchId);
+      if (resolved) query = query.gte("ngay_chung_tu", resolved.start).lt("ngay_chung_tu", resolved.end);
       return query.order("customer_id", { ascending: true });
     },
     "[getCustomerSegments]",

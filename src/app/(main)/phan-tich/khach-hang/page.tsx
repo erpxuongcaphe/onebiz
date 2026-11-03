@@ -196,7 +196,7 @@ export default function KhachHangPage() {
       const [kpiData, monthly, segments, customers, debtors] = await Promise.all([
         getCustomerKpis(activeBranchId, range),
         getNewCustomersMonthly(6, activeBranchId),
-        getCustomerSegments(activeBranchId),
+        getCustomerSegments(activeBranchId, range),
         // P1-3B-R6 13/06/2026: truyền range để top 50 KH theo đúng kỳ (trước đây lifetime).
         getTopCustomersByRevenue(null, activeBranchId, range),
         getTopDebtors(null, activeBranchId),

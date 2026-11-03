@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-type Row = { customer_id: string | null; tenant_id: string; branch_id: string; status: string; customers: { group_id: string | null; customer_groups: { name: string | null } | null } };
+type Row = { customer_id: string | null; tenant_id: string; branch_id: string; status: string; ngay_chung_tu: string; customers: { group_id: string | null; customer_groups: { name: string | null } | null } };
 const state = vi.hoisted(() => ({ rows: [] as Row[], error: false,
   requests: [] as Array<{ select: string; filters: Array<[string, unknown]>; range: number[] }> }));
 vi.mock("@/lib/services/supabase/base", () => ({
@@ -9,14 +9,19 @@ vi.mock("@/lib/services/supabase/base", () => ({
   getClient: () => ({ from: (table: string) => {
     expect(table).toBe("invoices");
     const request = { select: "", filters: [] as Array<[string, unknown]>, range: [] as number[] };
+    let fromDate: string | undefined, toDate: string | undefined;
     const chain = {
       select: (value: string) => { request.select = value; return chain; },
       eq: (field: string, value: unknown) => { request.filters.push([field, value]); return chain; },
+      gte: (field: string, value: string) => { expect(field).toBe("ngay_chung_tu"); fromDate=value; return chain; },
+      lt: (field: string, value: string) => { expect(field).toBe("ngay_chung_tu"); toDate=value; return chain; },
       not: () => chain,
       order: () => chain,
       range: async (from: number, to: number) => {
         request.range = [from, to]; state.requests.push(request);
-        const rows = state.rows.filter(row => row.customer_id !== null && request.filters.every(([field, value]) => row[field as keyof Row] === value));
+        const rows = state.rows.filter(row => row.customer_id !== null && request.filters.every(([field, value]) => row[field as keyof Row] === value)
+          && (!fromDate || Date.parse(row.ngay_chung_tu)>=Date.parse(fromDate))
+          && (!toDate || Date.parse(row.ngay_chung_tu)<Date.parse(toDate)));
         return { data: rows.slice(from, to + 1), error: state.error ? new Error("SEGMENT_READ_DENIED") : null };
       },
     };
@@ -28,7 +33,7 @@ vi.mock("@/lib/services/supabase/reports", () => ({ getProfitAndLoss: vi.fn(), g
 import { getCustomerSegments } from "@/lib/services/supabase/analytics";
 
 function row(id: string, name: string | null, branch = "branch-a"): Row {
-  return { customer_id: id, tenant_id: "tenant-test", branch_id: branch, status: "completed",
+  return { customer_id: id, tenant_id: "tenant-test", branch_id: branch, status: "completed", ngay_chung_tu: "2026-10-01T00:00:00+07:00",
     customers: { group_id: name ? "00000000-0000-0000-0000-000000000050" : null,
       customer_groups: name === null ? null : { name } } };
 }
@@ -86,5 +91,16 @@ describe("customer report group labels", () => {
 
   it("returns no categories for an empty result", async () => {
     expect(await getCustomerSegments("branch-a")).toEqual([]);
+  });
+
+  it("uses the selected inclusive dates and excludes the next local midnight", async () => {
+    state.rows = [
+      { ...row("old", "Before"), ngay_chung_tu: "2026-09-30T23:59:59+07:00" },
+      row("first", "October"),
+      { ...row("last", "October"), ngay_chung_tu: "2026-10-31T23:59:59+07:00" },
+      { ...row("next", "November"), ngay_chung_tu: "2026-11-01T00:00:00+07:00" },
+    ];
+    expect(await getCustomerSegments("branch-a", { from: "2026-10-01", to: "2026-10-31" })).toEqual([{ name: "October", value: 2 }]);
+    expect(await getCustomerSegments("branch-a", { from: "2026-11-01", to: "2026-11-01" })).toEqual([{ name: "November", value: 1 }]);
   });
 });
