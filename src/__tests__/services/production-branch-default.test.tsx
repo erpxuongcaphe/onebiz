@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   available: 0,
   costedQuantity: null as number | null,
   physicalQuantity: null as number | null,
+  deficitQuantity: 0,
   prepared: true,
   stockUnit: "" as string,
   unit: "" as string,
@@ -42,7 +43,7 @@ vi.mock("@/lib/services/supabase/fnb-supply-catalog", () => ({
 vi.mock("@/lib/services/supabase/fnb-branch-cost", () => ({
   getFnbProductionStockHealth: async () => new Map(mocks.costedQuantity === null ? [] : [[
     "ingredient", { productId: "ingredient", costedQuantity: mocks.costedQuantity,
-      physicalQuantity: mocks.physicalQuantity ?? mocks.available, unitCost: 10000 },
+      physicalQuantity: mocks.physicalQuantity ?? mocks.available, deficitQuantity: mocks.deficitQuantity, unitCost: 10000 },
   ]]),
 }));
 vi.mock("@/components/ui/dialog", () => ({
@@ -88,6 +89,7 @@ describe("production branch selection", () => {
     mocks.available = 0;
     mocks.costedQuantity = null;
     mocks.physicalQuantity = null;
+    mocks.deficitQuantity = 0;
     mocks.prepared = true;
     mocks.stockUnit = "";
     mocks.unit = "";
@@ -113,8 +115,11 @@ describe("production branch selection", () => {
     await waitFor(() => expect(screen.getByRole("combobox")).toHaveValue(""));
   });
 
-  it("does not create an unfinished order when the selected branch lacks ingredients", async () => {
+  it("allows an F&B shortage only after confirming physical ingredients, and records that confirmation", async () => {
     mocks.activeBranchId = "xtb";
+    mocks.costedQuantity = 0;
+    mocks.createProductionOrder.mockResolvedValue({ id: "new-batch", code: "SX-TEST" });
+    mocks.completeProductionAtomic.mockResolvedValue("lot");
     mocks.boms = [{
       id: "bom", productId: "prepared", productCode: "SKU-BTP-TEST",
       productName: "Thạch thử", name: "Công thức thạch", isActive: true,
@@ -127,15 +132,36 @@ describe("production branch selection", () => {
     render(<CreateProductionOrderDialog open onOpenChange={vi.fn()} />);
     await waitFor(() => expect(screen.getByRole("combobox")).toHaveValue("xtb"));
     const finish = await selectPreparedProduct();
-    await waitFor(() => expect(screen.getByText(/Thiếu nguyên liệu tại chi nhánh này/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Tồn sổ thiếu nguyên liệu/)).toBeTruthy());
     expect(screen.queryByText(/Tồn và sổ giá vốn F&B tại chi nhánh chưa khớp/)).toBeNull();
     expect(finish).toBeDisabled();
     expect(mocks.createProductionOrder).not.toHaveBeenCalled();
 
-    mocks.available = 2;
-    mocks.costedQuantity = 2;
-    fireEvent.change(screen.getByLabelText("Số mẻ hoặc số lượng sản xuất"), { target: { value: "2" } });
-    await waitFor(() => expect(finish).toBeEnabled());
+    fireEvent.click(screen.getByRole("checkbox", { name: /Tôi xác nhận thực tế đủ/ }));
+    expect(finish).toBeEnabled();
+    fireEvent.click(finish);
+    await waitFor(() => expect(mocks.completeProductionAtomic).toHaveBeenCalledTimes(1));
+    expect(mocks.createProductionOrder.mock.calls[0][0].notes).toContain("Đã xác nhận thực tế đủ nguyên liệu");
+    expect(mocks.createProductionOrder.mock.calls[0][0].materials[0].plannedQty).toBe(1);
+  });
+
+  it("treats a recorded deficit as negative stock rather than a cost-ledger mismatch, and resets confirmation after edits", async () => {
+    mocks.activeBranchId = "xtb";
+    mocks.available = -531;
+    mocks.costedQuantity = 0;
+    mocks.deficitQuantity = 531;
+    mocks.boms = [{ id: "bom", productId: "prepared", productCode: "SKU-BTP-TEST", productName: "Mix thử", name: "Mix", isActive: true, yieldQty: 1060, yieldUnit: "G", items: [{ materialId: "ingredient", materialName: "Cà phê nước", quantity: 240, unit: "G" }] }];
+    render(<CreateProductionOrderDialog open onOpenChange={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("combobox")).toHaveValue("xtb"));
+    const finish = await selectPreparedProduct();
+    const confirmation = await screen.findByRole("checkbox", { name: /Tôi xác nhận thực tế đủ/ });
+    expect(screen.queryByText(/Tồn và sổ giá vốn F&B tại chi nhánh chưa khớp/)).toBeNull();
+    expect(screen.getByLabelText("Thực dùng Cà phê nước")).not.toHaveAttribute("aria-invalid", "true");
+    fireEvent.click(confirmation);
+    expect(finish).toBeEnabled();
+    fireEvent.change(screen.getByLabelText("Thực dùng Cà phê nước"), { target: { value: "241" } });
+    await waitFor(() => expect(confirmation).not.toBeChecked());
+    expect(finish).toBeDisabled();
     expect(mocks.createProductionOrder).not.toHaveBeenCalled();
   });
 
@@ -187,6 +213,19 @@ describe("production branch selection", () => {
     await waitFor(() => expect(screen.getByRole("combobox")).toHaveValue("warehouse"));
     const finish = await selectPreparedProduct();
     await waitFor(() => expect(finish).toBeEnabled());
+  });
+
+  it("keeps insufficient Retail production blocked without offering the F&B confirmation", async () => {
+    mocks.activeBranchId = "warehouse";
+    mocks.prepared = false;
+    mocks.available = 0;
+    mocks.boms = [{ id: "bom", productId: "prepared", productCode: "SKU-BTP-TEST", productName: "Sản phẩm thử", name: "Công thức thử", isActive: true, yieldQty: 1, yieldUnit: "G", items: [{ materialId: "ingredient", materialName: "Nguyên liệu thử", quantity: 1, unit: "G" }] }];
+    render(<CreateProductionOrderDialog open onOpenChange={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("combobox")).toHaveValue("warehouse"));
+    const finish = await selectPreparedProduct();
+    await screen.findByText(/Thiếu nguyên liệu tại chi nhánh này/);
+    expect(finish).toBeDisabled();
+    expect(screen.queryByRole("checkbox", { name: /Tôi xác nhận thực tế đủ/ })).toBeNull();
   });
 
   it.each([

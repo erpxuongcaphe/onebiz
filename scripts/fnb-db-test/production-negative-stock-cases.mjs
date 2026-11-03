@@ -1,0 +1,70 @@
+import fs from 'node:fs';
+export async function runNegativeProductionTests(db,assert,{branch,tenant,prepared,mix,actor}) {
+  await db.exec('create table branches(id uuid primary key,tenant_id uuid,cascade_mode text,is_active boolean default true); alter table products add column is_active boolean default true;');
+  await db.query("insert into branches values($1,$2,'outlet',true)",[branch,tenant]);
+  await db.exec('create function upsert_branch_stock(uuid,uuid,uuid,numeric) returns void language sql set search_path=public as $$insert into branch_stock(tenant_id,branch_id,product_id,quantity) values($1,$2,$3,$4) on conflict(tenant_id,branch_id,product_id) where variant_id is null do update set quantity=branch_stock.quantity+excluded.quantity$$;');
+  const source=fs.readFileSync('supabase/migrations/00390_fnb_branch_cost_ledger.sql','utf8');
+  const start=source.indexOf('create function public.create_production_order_atomic(p_input jsonb)');
+  await db.exec(source.slice(start,source.indexOf('$$;',start)+3).replace('public.create_production_order_atomic(', 'public._create_production_before_gram_00517('));
+  // Real cost wrapper, with a bounded document-writing fixture underneath.
+  await db.exec(`create function _create_production_order_auth_impl_00390(p jsonb) returns jsonb language plpgsql as $$
+    declare id uuid:=gen_random_uuid();m jsonb;begin
+      insert into production_orders(id,tenant_id,branch_id,product_id,code,created_by,status,planned_qty) values(id,(p->>'tenant')::uuid,(p->>'branch')::uuid,(p->>'output')::uuid,'SX-NEG',auth.uid(),'planned',1042);
+      for m in select * from jsonb_array_elements(p->'materials') loop insert into production_order_materials values(gen_random_uuid(),id,(m->>'product')::uuid,(m->>'quantity')::numeric,null,'G',99999);end loop;
+      return jsonb_build_object('id',id);end;$$;
+    create function get_fnb_production_stock_health_00476(uuid,uuid[]) returns table(product_id uuid,physical_quantity numeric,costed_quantity numeric) language sql set search_path=public as $$select p.id,coalesce(s.quantity,0),coalesce(b.costed_quantity,0) from products p left join branch_stock s on s.product_id=p.id and s.branch_id=$1 left join fnb_branch_product_cost_balances b on b.product_id=p.id and b.branch_id=$1 where p.id=any($2)$$;`);
+  const migration=fs.readFileSync('supabase/migrations/20261103124910_fnb_production_negative_stock.sql','utf8');
+  const fingerprint=()=>db.query('select (select jsonb_agg(to_jsonb(s)) from branch_stock s) stock,(select jsonb_agg(to_jsonb(b)) from fnb_branch_product_cost_balances b) costs,(select count(*) from stock_movements) movements');
+  const before=await fingerprint();await db.exec(migration);await db.exec(migration);
+  assert.deepEqual(await fingerprint(),before,'migration never changes existing data');
+  const qty=async id=>Number((await db.query('select quantity from branch_stock where product_id=$1',[id])).rows[0].quantity);
+  const unit=Number((await db.query('select unit_cost from fnb_branch_product_cost_balances where product_id=$1',[prepared])).rows[0].unit_cost);
+  await db.query('update branch_stock set quantity=-531 where product_id=$1',[prepared]);
+  await db.query('update products set stock=-531 where id=$1',[prepared]);
+  await db.query('update fnb_branch_product_cost_balances set costed_quantity=0,total_cost=0,deficit_quantity=531,opening_cost_confirmed=true where product_id=$1',[prepared]);
+  const prior=crypto.randomUUID(),event=crypto.randomUUID();
+  await db.query("insert into fnb_branch_product_cost_events(id,tenant_id,branch_id,product_id,direction,source_type,source_reference_type,source_reference_id,quantity,unit_cost,total_cost) values($1,$2,$3,$4,'out','bom_consume','bom_consume',$5,531,$6::numeric,531*$6::numeric)",[event,tenant,branch,prepared,prior,unit]);
+  await db.query('insert into fnb_sale_cost_shortfalls_00473(tenant_id,branch_id,product_id,cost_event_id,invoice_id,quantity,pending_quantity,estimated_unit_cost,cost_known) values($1,$2,$3,$4,$5,531,531,$6,true)',[tenant,branch,prepared,event,prior,unit]);
+  const create=async()=> (await db.query('select _create_production_before_gram_00517($1::jsonb) value',[JSON.stringify({tenant,branch,output:mix,materials:[{product:prepared,quantity:240}]})])).rows[0].value.id;
+  const order=await create(),outputBefore=await qty(mix);
+  await db.query('select complete_production_atomic($1,1042,$2,current_date,null)',[order,'NEGATIVE']);
+  assert.equal(await qty(prepared),-771);assert.equal(await qty(mix),outputBefore+1042);
+  const balance=(await db.query('select costed_quantity,deficit_quantity from fnb_branch_product_cost_balances where product_id=$1',[prepared])).rows[0];
+  assert.equal(Number(balance.deficit_quantity),771);assert.equal(Number(balance.costed_quantity)-Number(balance.deficit_quantity),-771);
+  const shortage=(await db.query('select s.* from fnb_sale_cost_shortfalls_00473 s join fnb_branch_product_cost_events e on e.id=s.cost_event_id where e.source_reference_id=$1',[order])).rows[0];
+  assert.equal(shortage.invoice_id,null);assert.equal(Number(shortage.pending_quantity),240);
+  const frozen=(await db.query('select cogs_amount from production_orders where id=$1',[order])).rows[0].cogs_amount;
+  assert.equal(Number(frozen),Math.round(240*unit*100)/100);
+  await assert.rejects(()=>db.query('select complete_production_atomic($1,1042,null,current_date,null)',[order]));
+  assert.equal(await qty(prepared),-771,'retry must never deduct twice');
+  const health=(await db.query('select * from get_fnb_production_stock_health_20261103($1,$2::uuid[])',[branch,[prepared]])).rows[0];
+  assert.equal(Number(health.deficit_quantity),771);
+  await db.query("update branches set cascade_mode='production' where id=$1",[branch]);
+  const counts=await db.query('select count(*) n from production_orders');
+  await assert.rejects(()=>create(),/FNB_BRANCH_COST_REQUIRED/);assert.deepEqual(await db.query('select count(*) n from production_orders'),counts);
+  await db.query("update branches set cascade_mode='outlet' where id=$1",[branch]);
+  await assert.rejects(()=>db.query("select _post_fnb_branch_cost_out_00390($1,$2,$3,1,'bom_consume','bom_consume',$4,null,null,$5)",[tenant,branch,prepared,crypto.randomUUID(),actor]),/FNB_BRANCH_COST_REQUIRED/);
+  await db.query('update branch_stock set quantity=quantity+1000 where product_id=$1',[prepared]);
+  await db.query('update products set stock=stock+1000 where id=$1',[prepared]);
+  await db.query("select _post_fnb_branch_cost_in_00390($1,$2,$3,1000,5,'production_complete','production_order',$4,null,null,$5)",[tenant,branch,prepared,crypto.randomUUID(),actor]);
+  const settled=(await db.query('select costed_quantity,deficit_quantity,total_cost from fnb_branch_product_cost_balances where product_id=$1',[prepared])).rows[0];
+  assert.equal(Number(settled.deficit_quantity),0);assert.equal(Number(settled.costed_quantity),229);assert.equal(Number(settled.total_cost),1145);
+  assert.equal(Number((await db.query('select pending_quantity from fnb_sale_cost_shortfalls_00473 where id=$1',[shortage.id])).rows[0].pending_quantity),0);
+  assert.equal((await db.query('select cogs_amount from production_orders where id=$1',[order])).rows[0].cogs_amount,frozen);
+  assert.ok((await db.query("select 1 from audit_log where action='fnb_stock_shortfall_settled' and entity_type='production_order' and entity_id=$1",[order])).rows.length);
+  await db.query('update branch_stock set quantity=quantity+1 where product_id=$1',[prepared]);
+  await assert.rejects(()=>create(),/FNB_BRANCH_COST_REQUIRED/);
+  // Missing zero-stock row must still post the first real negative issue.
+  await db.query('delete from branch_stock where product_id=$1',[prepared]);
+  await db.query('update products set stock=0 where id=$1',[prepared]);
+  await db.query('update fnb_branch_product_cost_balances set costed_quantity=0,total_cost=0 where product_id=$1',[prepared]);
+  const firstIssue=await create();
+  await db.query('select complete_production_atomic($1,10,$2,current_date,null)',[firstIssue,'FIRST-NEGATIVE']);
+  assert.equal(await qty(prepared),-240,'missing stock row is created and decremented');
+  const protectedOrder=await create();
+  await db.query("update profiles set role='staff' where id=$1",[actor]);
+  await db.exec('create or replace function user_has_permission(uuid,text) returns boolean language sql as $$select false$$;');
+  await assert.rejects(()=>db.query('select complete_production_atomic($1,10,null,current_date,null)',[protectedOrder]),/COMPLETE_PRODUCTION_ORDER_PERMISSION_REQUIRED/);
+  assert.equal(await qty(prepared),-240,'permission denial never posts inventory');
+  console.log('PASS: -531g minus 240g -> -771g, 1042g output; exact branch COGS; replay protection; production-linked deficit; receipt settlement; Retail/sales unchanged; unexplained mismatch blocked; migration replay preserves data.');
+}

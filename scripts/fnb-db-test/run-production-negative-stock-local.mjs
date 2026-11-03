@@ -1,0 +1,13 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { execFileSync } from 'node:child_process';
+const base=fs.readFileSync('scripts/fnb-db-test/run-actual-prepared-yield-local.mjs','utf8');
+const anchor="  console.log('PASS: under/over standard yield, independent raw consumption and cost, replay prevention, invalid yield rollback. Legacy full-chain assertions passed.');";
+const module=JSON.stringify(pathToFileURL(path.resolve('scripts/fnb-db-test/production-negative-stock-cases.mjs')).href);
+const generated=base.replace(anchor,'await (await import('+module+')).runNegativeProductionTests(db,assert,{branch,tenant,prepared,mix,actor});');
+if(generated===base)throw new Error('Fixture anchor changed');
+const file=path.resolve('.tmp/production-negative-fixture.mjs');
+fs.mkdirSync(path.dirname(file),{recursive:true});
+fs.writeFileSync(file,generated);
+execFileSync(process.execPath,[file,process.argv[2]],{stdio:'inherit'});

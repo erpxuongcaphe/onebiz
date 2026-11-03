@@ -40,13 +40,13 @@ export function getPreparedRecipeEstimateUnitCost(cost: Pick<FnbBranchComponentC
 export async function getFnbProductionStockHealth(branchId: string, productIds: string[]) {
   // Migration RPC precedes generated schema types.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (getClient() as any).rpc("get_fnb_production_stock_health_00476", {
+  const { data, error } = await (getClient() as any).rpc("get_fnb_production_stock_health_20261103", {
     p_branch_id: branchId, p_product_ids: Array.from(new Set(productIds)),
   });
   if (error) handleError(error, "getFnbProductionStockHealth");
-  return new Map<string, { physicalQuantity: number; costedQuantity: number }>(
-    (data ?? []).map((row: { product_id: string; physical_quantity: number; costed_quantity: number }) =>
-      [row.product_id, { physicalQuantity: Number(row.physical_quantity), costedQuantity: Number(row.costed_quantity) }]),
+  return new Map<string, { physicalQuantity: number; costedQuantity: number; deficitQuantity: number }>(
+    (data ?? []).map((row: { product_id: string; physical_quantity: number; costed_quantity: number; deficit_quantity: number }) =>
+      [row.product_id, { physicalQuantity: Number(row.physical_quantity), costedQuantity: Number(row.costed_quantity), deficitQuantity: Number(row.deficit_quantity ?? 0) }]),
   );
 }
 
