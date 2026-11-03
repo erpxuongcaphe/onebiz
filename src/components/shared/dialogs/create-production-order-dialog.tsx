@@ -81,6 +81,8 @@ export function CreateProductionOrderDialog({
   const [bomsOfProduct, setBomsOfProduct] = useState<BOM[]>([]);
   const [bomId, setBomId] = useState("");
   const [branchId, setBranchId] = useState("");
+  const [shortageConfirmationKey, setShortageConfirmationKey] = useState("");
+  useEffect(() => { setShortageConfirmationKey(""); }, [open]);
   const [plannedQty, setPlannedQty] = useState("1");
   const [batchCount, setBatchCount] = useState("1");
   const [weighedQty, setWeighedQty] = useState("");
@@ -315,9 +317,7 @@ export function CreateProductionOrderDialog({
               available,
               shortage: available < n.needed,
               costMismatch: Boolean(costs && (!cost ||
-                Math.abs(cost.costedQuantity - cost.physicalQuantity) > 0.0001 ||
-                cost.physicalQuantity + 0.0001 < n.needed ||
-                cost.costedQuantity + 0.0001 < n.needed)),
+                Math.abs(cost.costedQuantity - (cost.deficitQuantity ?? 0) - cost.physicalQuantity) > 0.0001)),
             };
           });
         } else {
@@ -357,9 +357,11 @@ export function CreateProductionOrderDialog({
   const hasShortage = materials.some((m) => m.shortage);
   const hasCostMismatch = materials.some((m) => m.costMismatch);
   const materialCheckKey = JSON.stringify([bomId, plannedQty, branchId, batchCount, materialActuals]);
+  const shortageKey = JSON.stringify([materialCheckKey, materials.map(m => [m.productId, m.available, m.needed])]);
+  const allowShortage = selectedBranchMode === "outlet";
   const canComplete = !computing && selectedBom?.id === bomId &&
     checkedMaterialKey === materialCheckKey && materials.length > 0 &&
-    !hasShortage && !hasCostMismatch;
+    (!hasShortage || (allowShortage && shortageConfirmationKey === shortageKey)) && !hasCostMismatch;
 
   const dateFieldsRef = useRef<HTMLFieldSetElement>(null);
 
@@ -403,7 +405,7 @@ export function CreateProductionOrderDialog({
         stockUnit: outputUnit,
         plannedStart: plannedStart || undefined,
         plannedEnd: plannedEnd || undefined,
-        notes: selectedBranchMode === "outlet" ? `${notes}\nSố mẻ nguyên liệu: ${batchCount}; dự kiến ${expectedOutput} ${outputUnit}; cân cả hộp ${weighedQty} ${actualWeighUnit}; vỏ ${tareQty} ${actualWeighUnit}; thực cân ${netWeight} ${actualWeighUnit}; ghi kho ${actualOutput} ${outputUnit}.`.trim() : notes || undefined,
+        notes: selectedBranchMode === "outlet" ? `${notes}\nSố mẻ nguyên liệu: ${batchCount}; dự kiến ${expectedOutput} ${outputUnit}; cân cả hộp ${weighedQty} ${actualWeighUnit}; vỏ ${tareQty} ${actualWeighUnit}; thực cân ${netWeight} ${actualWeighUnit}; ghi kho ${actualOutput} ${outputUnit}.${hasShortage ? `\nĐã xác nhận thực tế đủ nguyên liệu; tiếp tục khi tồn sổ thiếu: ${materials.filter(m => m.shortage).map(m => `${m.productCode || m.productName}: tồn ${m.available}, dùng ${m.needed} ${m.unit}`).join('; ')}.` : ''}`.trim() : notes || undefined,
         materials: materials.map((m) => ({
           productId: m.productId,
           plannedQty: m.needed,
@@ -729,7 +731,7 @@ export function CreateProductionOrderDialog({
                           <td className="block text-right sm:table-cell sm:p-2">
                             <span className="mb-1 block text-left text-xs text-muted-foreground sm:hidden">{selectedBranchMode === "outlet" ? "Thực dùng" : "Cần"}</span>
                             {selectedBranchMode === "outlet" ? <>
-                              <OperationalQuantityInput productId={m.productId} quantity={Number(materialActuals[m.productId] ?? m.needed)} unit={m.unit} conversions={conversionMap.get(m.productId)} max={m.available} label={`Thực dùng ${m.productName}`} onChange={(value,input) => {setMaterialActuals(previous => ({...previous,[m.productId]:String(value)}));setMaterialEntries(previous=>({...previous,[m.productId]:input}));}} />
+                              <OperationalQuantityInput productId={m.productId} quantity={Number(materialActuals[m.productId] ?? m.needed)} unit={m.unit} conversions={conversionMap.get(m.productId)} label={`Thực dùng ${m.productName}`} onChange={(value,input) => {setMaterialActuals(previous => ({...previous,[m.productId]:String(value)}));setMaterialEntries(previous=>({...previous,[m.productId]:input}));}} />
                               {Math.abs(m.needed-m.perBatch*Number(batchCount))>0.0001 && <p className="mt-1 text-xs text-status-warning">Khác công thức: <StockWithConversion quantity={m.perBatch*Number(batchCount)} unit={m.unit} conversions={conversionMap.get(m.productId)} /></p>}
                             </> : <StockWithConversion variant="cell" quantity={m.needed} unit={m.unit} conversions={conversionMap.get(m.productId)} />}
                           </td>
@@ -764,9 +766,12 @@ export function CreateProductionOrderDialog({
               )}
 
               {hasShortage && (
-                <div className="text-xs text-destructive flex items-center gap-2 bg-destructive/5 rounded p-2">
+                <div className="space-y-2 rounded border border-status-warning/30 bg-status-warning/5 p-3 text-sm" role="status">
+                  <p className="flex items-start gap-2 text-foreground">
                   <Icon name="warning" size={14} />
-                  Thiếu nguyên liệu tại chi nhánh này. Nhập đủ tồn rồi mới hoàn thành mẻ.
+                  {allowShortage ? "Tồn sổ thiếu nguyên liệu. Nếu thực tế còn đủ, anh/chị vẫn có thể hoàn thành mẻ; hệ thống tiếp tục trừ kho và ghi nhận phần âm để đối soát." : "Thiếu nguyên liệu tại chi nhánh này. Nhập đủ tồn rồi mới hoàn thành mẻ."}
+                  </p>
+                  {allowShortage && <label className="flex min-h-11 cursor-pointer items-center gap-2 font-medium"><input type="checkbox" className="size-4 shrink-0 accent-primary" checked={shortageConfirmationKey === shortageKey} onChange={event => setShortageConfirmationKey(event.target.checked ? shortageKey : "")} />Tôi xác nhận thực tế đủ nguyên liệu để sản xuất</label>}
                 </div>
               )}
               {hasCostMismatch && !hasShortage && (
