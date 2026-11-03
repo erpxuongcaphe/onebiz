@@ -17,6 +17,20 @@ beforeEach(()=>{vi.clearAllMocks();api.create.mockResolvedValue(identity);api.up
 afterEach(cleanup);
 
 describe("supplier save identity acknowledgement",()=>{
+  it("keeps the header and actions outside the form scroll region",()=>{
+    render(<CreateSupplierDialog open onOpenChange={vi.fn()}/>);
+    const dialog=screen.getByRole("dialog");
+    const body=dialog.querySelector('[data-slot="dialog-body"]');
+    const footer=dialog.querySelector('[data-slot="dialog-footer"]');
+    expect(dialog).toHaveClass("flex","flex-col","overflow-hidden","max-h-[90dvh]");
+    expect(body).toHaveClass("min-h-0","overflow-y-auto");
+    expect(body).toContainElement(screen.getByPlaceholderText("Nhập tên nhà cung cấp"));
+    expect(body).toContainElement(screen.getByPlaceholderText("Ghi chú thêm"));
+    expect(body).not.toContainElement(footer as HTMLElement);
+    expect(footer).toContainElement(screen.getByRole("button",{name:"Lưu"}));
+    expect(footer).toHaveClass("shrink-0");
+  });
+
   it("closes and refreshes after create without financial fields",async()=>{
     const onSuccess=vi.fn(),onOpenChange=vi.fn();
     render(<CreateSupplierDialog open onOpenChange={onOpenChange} onSuccess={onSuccess}/>);
