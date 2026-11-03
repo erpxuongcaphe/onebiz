@@ -251,6 +251,7 @@ export default function KhachHangPage() {
     await exportReportToExcel({
       kind: "khach-hang",
       mode: "view",
+      shouldSave: () => exportScope === exportScopeRef.current,
       range,
       branchName,
       sheets: [
@@ -456,6 +457,7 @@ export default function KhachHangPage() {
     await exportReportToExcel({
       kind: "khach-hang",
       mode: "full",
+      shouldSave: () => exportScope === exportScopeRef.current,
       range,
       branchName,
       tenantName,
