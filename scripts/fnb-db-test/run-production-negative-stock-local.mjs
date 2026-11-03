@@ -8,5 +8,6 @@ const module=JSON.stringify(pathToFileURL(path.resolve('scripts/fnb-db-test/prod
 const generated=base.replace(anchor,'await (await import('+module+')).runNegativeProductionTests(db,assert,{branch,tenant,prepared,mix,actor});');
 if(generated===base)throw new Error('Fixture anchor changed');
 const file=path.resolve('.tmp/production-negative-fixture.mjs');
+fs.mkdirSync(path.dirname(file),{recursive:true});
 fs.writeFileSync(file,generated);
 execFileSync(process.execPath,[file,process.argv[2]],{stdio:'inherit'});
