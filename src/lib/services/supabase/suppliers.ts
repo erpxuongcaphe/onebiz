@@ -25,6 +25,8 @@ import {
 type SupplierInsert = Database["public"]["Tables"]["suppliers"]["Insert"];
 type SupplierUpdate = Database["public"]["Tables"]["suppliers"]["Update"];
 
+export type SupplierWriteIdentity = Pick<Supplier, "id" | "code" | "name">;
+
 export interface SupplierListWorkspaceParams {
   page: number;
   pageSize: number;
@@ -268,7 +270,7 @@ export async function getSupplierById(id: string): Promise<Supplier | null> {
  */
 export async function createSupplier(
   supplier: Partial<Supplier>,
-): Promise<Supplier> {
+): Promise<SupplierWriteIdentity> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
@@ -308,7 +310,7 @@ export async function createSupplier(
       note: supplier.note || null,
       is_active: true,
     } as SupplierInsert)
-    .select()
+    .select("id, code, name, phone, email, tax_code")
     .single();
 
   if (error) handleError(error, "createSupplier");
@@ -326,7 +328,7 @@ export async function createSupplier(
     },
   });
 
-  return mapSupplier(data);
+  return { id: data.id, code: data.code, name: data.name };
 }
 
 /**
@@ -336,7 +338,7 @@ export async function createSupplier(
 export async function updateSupplier(
   id: string,
   updates: Partial<Supplier>,
-): Promise<Supplier> {
+): Promise<SupplierWriteIdentity> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
@@ -419,7 +421,7 @@ export async function updateSupplier(
     .update(payload)
     .eq("tenant_id", tenantId)
     .eq("id", id)
-    .select()
+    .select("id, code, name")
     .single();
 
   if (error) handleError(error, "updateSupplier");
@@ -432,7 +434,7 @@ export async function updateSupplier(
     newData: payload as Record<string, unknown>,
   });
 
-  return mapSupplier(data);
+  return { id: data.id, code: data.code, name: data.name };
 }
 
 /**

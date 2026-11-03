@@ -22,6 +22,8 @@ import {
 type CustomerInsert = Database["public"]["Tables"]["customers"]["Insert"];
 type CustomerUpdate = Database["public"]["Tables"]["customers"]["Update"];
 
+export type CustomerWriteIdentity = Pick<Customer, "id" | "code" | "name">;
+
 export interface CustomerListWorkspaceParams {
   page: number;
   pageSize: number;
@@ -528,7 +530,7 @@ async function assertCustomerIdentityEditable(id:string):Promise<void>{
  */
 export async function createCustomer(
   customer: Partial<Customer>,
-): Promise<Customer> {
+): Promise<CustomerWriteIdentity> {
   if (!customer.groupId) throw new Error("Vui lòng chọn nhóm khách hàng");
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
@@ -581,7 +583,7 @@ export async function createCustomer(
       is_active: true,
     } as CustomerInsert)
     .select(
-      "*, customer_groups!customers_group_id_fkey(name, discount_percent), loyalty_tiers(name, discount_percent)",
+      "id, code, name, phone, email, group_id, customer_type",
     )
     .single();
 
@@ -602,7 +604,7 @@ export async function createCustomer(
     },
   });
 
-  return mapCustomer(data);
+  return { id: data.id, code: data.code, name: data.name };
 }
 
 /** Resolves the tenant singleton atomically, independently of its display code. */
@@ -624,7 +626,7 @@ export async function getOrCreateWalkInCustomer(): Promise<Customer> {
 export async function updateCustomer(
   id: string,
   updates: Partial<Customer>,
-): Promise<Customer> {
+): Promise<CustomerWriteIdentity> {
   await assertCustomerIdentityEditable(id);
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
@@ -725,9 +727,7 @@ export async function updateCustomer(
     .update(payload)
     .eq("tenant_id", tenantId)
     .eq("id", id)
-    .select(
-      "*, customer_groups!customers_group_id_fkey(name, discount_percent), loyalty_tiers(name, discount_percent)",
-    )
+    .select("id, code, name")
     .single();
 
   if (error) handleError(error, "updateCustomer");
@@ -740,7 +740,7 @@ export async function updateCustomer(
     newData: payload as Record<string, unknown>,
   });
 
-  return mapCustomer(data);
+  return { id: data.id, code: data.code, name: data.name };
 }
 
 /** Kết quả của thao tác đổi riêng mã khách hàng. */
