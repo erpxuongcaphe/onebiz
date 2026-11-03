@@ -246,7 +246,7 @@
     },
     {
       "migration": "customer_report_balances_v1_candidate_20261103",
-      "migrationSha256": "6d7f074c929d6b9abf7c1a7e38c460d9ac2db257c9fd5394f40449cbd2859ffc",
+      "migrationSha256": "ffb8b8621a98f2dab0576dfcb4c4c871c89e21b450b091c52a575aba346b017b",
       "functions": [
         { "name": "get_customer_report_balances_v1", "params": [
           { "name": "p_branch_id", "optional": true },
