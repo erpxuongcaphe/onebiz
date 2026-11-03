@@ -1,8 +1,9 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { getInvoiceCancelImpact, toast } = vi.hoisted(() => ({
+const { getInvoiceCancelImpact, getPurchaseCancelImpact, toast } = vi.hoisted(() => ({
   getInvoiceCancelImpact: vi.fn(),
+  getPurchaseCancelImpact: vi.fn(),
   toast: vi.fn(),
 }));
 
@@ -21,7 +22,7 @@ vi.mock("@/lib/contexts", () => ({
 
 vi.mock("@/lib/services/supabase/cancel-impact", () => ({
   getInvoiceCancelImpact,
-  getPurchaseCancelImpact: vi.fn(),
+  getPurchaseCancelImpact,
 }));
 
 import { CancelImpactDialog } from "@/components/shared/dialogs/cancel-impact-dialog";
@@ -51,6 +52,7 @@ describe("CancelImpactDialog", () => {
   beforeEach(() => {
     getInvoiceCancelImpact.mockReset();
     getInvoiceCancelImpact.mockResolvedValue(completedInvoiceImpact);
+    getPurchaseCancelImpact.mockReset();
     toast.mockReset();
   });
 
@@ -111,6 +113,58 @@ describe("CancelImpactDialog", () => {
 
     fireEvent.click(confirm);
     await waitFor(() => expect(onConfirm).toHaveBeenCalledOnce());
+  });
+
+  it("shows document debt removal without inventing a zero remaining company balance", async () => {
+    getInvoiceCancelImpact.mockResolvedValue({ ...completedInvoiceImpact, debtAmount: 50, counterpartyDebtBefore: null });
+    render(<CancelImpactDialog target={{ type: "invoice", id: "invoice-debt", code: "TEST-DEBT" }} onClose={vi.fn()} onConfirm={vi.fn()} />);
+    expect(await screen.findByText("Xóa nợ 50")).toBeInTheDocument();
+    expect(screen.queryByText(/khách còn nợ/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/NCC còn nợ/)).not.toBeInTheDocument();
+    expect(screen.getByText("60")).toBeInTheDocument();
+    expect(screen.getByText("40")).toBeInTheDocument();
+  });
+
+  it("retains purchase stock warning and document debt without a company balance", async () => {
+    getPurchaseCancelImpact.mockResolvedValue({ ...completedInvoiceImpact,
+      docType: "purchase", debtAmount: 50, cashAmount: 70,
+      cashDirection: "collect_from_supplier", refundMethods: undefined,
+      negativeStock: [{ productName: "Synthetic product", available: 2, needed: 5, unit: "unit" }],
+    });
+    const onConfirm = vi.fn().mockResolvedValue(undefined);
+    render(<CancelImpactDialog target={{ type: "purchase", id: "purchase-test", code: "TEST-PO" }} onClose={vi.fn()} onConfirm={onConfirm} />);
+    expect(await screen.findByText("Xóa nợ 50")).toBeInTheDocument();
+    expect(screen.getByText("Tồn sẽ ÂM sau khi hoàn nhập")).toBeInTheDocument();
+    expect(screen.getByText(/Synthetic product: còn 2 unit, hoàn 5 unit/)).toBeInTheDocument();
+    expect(screen.queryByText(/NCC còn nợ/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Xác nhận hủy & hoàn tiền" }));
+    await waitFor(() => expect(onConfirm).toHaveBeenCalledWith({ refundMethod: "cash", allowNegativeStock: true, reason: "" }));
+  });
+
+  it("does not offer cancellation when preview access is denied", async () => {
+    getInvoiceCancelImpact.mockRejectedValue(new Error("Preview unavailable"));
+    const onClose = vi.fn();
+    const onConfirm = vi.fn();
+    render(<CancelImpactDialog target={{ type: "invoice", id: "denied", code: "TEST-DENIED" }} onClose={onClose} onConfirm={onConfirm} />);
+    await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+    expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Không tải được thông tin hủy", variant: "error" }));
+    expect(screen.getByRole("button", { name: "Xác nhận hủy" })).toBeDisabled();
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it("ignores a previous document preview after the target changes", async () => {
+    let finishFirst!: (value: typeof completedInvoiceImpact) => void;
+    getInvoiceCancelImpact.mockReturnValueOnce(new Promise(resolve => { finishFirst = resolve; }));
+    getInvoiceCancelImpact.mockResolvedValueOnce({ ...completedInvoiceImpact, total: 240, debtAmount: 25 });
+    const onConfirm = vi.fn();
+    const onClose = vi.fn();
+    const { rerender } = render(<CancelImpactDialog target={{ type: "invoice", id: "first", code: "FIRST" }} onClose={onClose} onConfirm={onConfirm} />);
+    rerender(<CancelImpactDialog target={{ type: "invoice", id: "second", code: "SECOND" }} onClose={onClose} onConfirm={onConfirm} />);
+    expect(await screen.findByText("Xóa nợ 25")).toBeInTheDocument();
+    finishFirst({ ...completedInvoiceImpact, debtAmount: 999 });
+    await waitFor(() => expect(screen.getByText("Xóa nợ 25")).toBeInTheDocument());
+    expect(screen.queryByText("Xóa nợ 999")).not.toBeInTheDocument();
+    expect(onConfirm).not.toHaveBeenCalled();
   });
 
   it.each([

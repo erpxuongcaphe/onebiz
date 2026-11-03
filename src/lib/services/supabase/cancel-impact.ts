@@ -47,6 +47,7 @@ export interface CancelImpact {
 
   // ─── Công nợ (sẽ xóa — chỉ điều chỉnh sổ, không cần làm tay) ───
   debtAmount: number;
+  /** Company-wide balance is intentionally not read by document cancellation previews. */
   counterpartyDebtBefore: number | null;
 
   // ─── Điểm tích lũy ───
@@ -74,7 +75,7 @@ export async function getInvoiceCancelImpact(
   const { data: inv, error } = await supabase
     .from("invoices")
     .select(
-      "id, code, status, total, paid, debt, payment_method, branch_id, customer_id, customer_name",
+      "id, code, status, total, paid, debt, payment_method, branch_id, customer_name",
     )
     .eq("tenant_id", ctx.tenantId)
     .eq("id", invoiceId)
@@ -111,13 +112,12 @@ export async function getInvoiceCancelImpact(
   }
 
   // ─── Completed: tính đủ tác động (chạy song song cho nhanh) ───
-  const [itemCount, branchName, loyalty, pendingShipping, custDebt, receipts] =
+  const [itemCount, branchName, loyalty, pendingShipping, receipts] =
     await Promise.all([
       countInvoiceItems(invoiceId, ctx.tenantId),
       resolveBranchName(inv.branch_id, ctx.tenantId),
       sumLoyaltyEarned(invoiceId, ctx.tenantId),
       countPendingShipping(invoiceId, ctx.tenantId),
-      inv.customer_id ? fetchCustomerDebt(inv.customer_id, ctx.tenantId) : Promise.resolve(null),
       readInvoiceReceipts(invoiceId, ctx.tenantId, inv.branch_id),
     ]);
 
@@ -134,7 +134,6 @@ export async function getInvoiceCancelImpact(
   }
   if (debt > 0) {
     base.debtAmount = debt;
-    base.counterpartyDebtBefore = custDebt;
   }
 
   return base;
@@ -217,17 +216,6 @@ async function countPendingShipping(invoiceId: string, tenantId: string): Promis
   }
 }
 
-async function fetchCustomerDebt(customerId: string, tenantId: string): Promise<number | null> {
-  const supabase = getClient();
-  const { data } = await supabase
-    .from("customers")
-    .select("debt")
-    .eq("tenant_id", tenantId)
-    .eq("id", customerId)
-    .maybeSingle();
-  return data ? Number(data.debt ?? 0) : null;
-}
-
 /* ================================================================== */
 /*  PHIẾU NHẬP — hủy = hoàn nhập (đảo tồn + đòi lại NCC + xóa nợ NCC)   */
 /* ================================================================== */
@@ -246,7 +234,7 @@ export async function getPurchaseCancelImpact(
 
   const { data: po, error } = await supabase
     .from("purchase_orders")
-    .select("id, code, status, total, paid, debt, branch_id, supplier_id, supplier_name")
+    .select("id, code, status, total, paid, debt, branch_id, supplier_name")
     .eq("tenant_id", ctx.tenantId)
     .eq("id", purchaseOrderId)
     .single();
@@ -283,10 +271,9 @@ export async function getPurchaseCancelImpact(
     return base;
   }
 
-  const [items, branchName, suppDebt] = await Promise.all([
+  const [items, branchName] = await Promise.all([
     fetchPurchaseItems(purchaseOrderId, ctx.tenantId),
     resolveBranchName(po.branch_id, ctx.tenantId),
-    po.supplier_id ? fetchSupplierDebt(po.supplier_id, ctx.tenantId) : Promise.resolve(null),
   ]);
 
   base.branchName = branchName;
@@ -317,7 +304,6 @@ export async function getPurchaseCancelImpact(
   }
   if (debt > 0) {
     base.debtAmount = debt;
-    base.counterpartyDebtBefore = suppDebt;
   }
 
   return base;
@@ -358,15 +344,4 @@ async function fetchProductStocks(
     for (const r of data ?? []) map.set(r.id as string, Number((r as { stock?: number }).stock ?? 0));
   }
   return map;
-}
-
-async function fetchSupplierDebt(supplierId: string, tenantId: string): Promise<number | null> {
-  const supabase = getClient();
-  const { data } = await supabase
-    .from("suppliers")
-    .select("debt")
-    .eq("tenant_id", tenantId)
-    .eq("id", supplierId)
-    .maybeSingle();
-  return data ? Number(data.debt ?? 0) : null;
 }
