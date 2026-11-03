@@ -243,6 +243,16 @@
           { "name": "p_branch_id", "optional": true }
         ] }
       ]
+    },
+    {
+      "migration": "customer_report_balances_v1_candidate_20261103",
+      "migrationSha256": "ffb8b8621a98f2dab0576dfcb4c4c871c89e21b450b091c52a575aba346b017b",
+      "functions": [
+        { "name": "get_customer_report_balances_v1", "params": [
+          { "name": "p_branch_id", "optional": true },
+          { "name": "p_for_export", "optional": true }
+        ] }
+      ]
     }
   ]
 }
