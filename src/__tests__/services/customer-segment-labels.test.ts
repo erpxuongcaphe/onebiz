@@ -30,7 +30,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
 }));
 vi.mock("@/lib/services/supabase/branch-stock", () => ({ getBranchStockAggregates: vi.fn(), getBranchStockRows: vi.fn() }));
 vi.mock("@/lib/services/supabase/reports", () => ({ getProfitAndLoss: vi.fn(), getConsolidatedPnL: vi.fn() }));
-import { getCustomerSegments } from "@/lib/services/supabase/analytics";
+import { getCustomerKpis, getCustomerSegments } from "@/lib/services/supabase/analytics";
 
 function row(id: string, name: string | null, branch = "branch-a"): Row {
   return { customer_id: id, tenant_id: "tenant-test", branch_id: branch, status: "completed", ngay_chung_tu: "2026-10-01T00:00:00+07:00",
@@ -40,6 +40,13 @@ function row(id: string, name: string | null, branch = "branch-a"): Row {
 beforeEach(() => { state.rows = []; state.requests = []; state.error = false; });
 
 describe("customer report group labels", () => {
+  it("can load activity KPIs without requesting legacy invoice debt", async () => {
+    state.rows = [row("c1", "Retail")];
+    const result = await getCustomerKpis("branch-a", { from: "2026-10-01", to: "2026-10-31" }, { includeLegacyDebt: false });
+    expect(state.requests[0].select).toBe("customer_id, ngay_chung_tu");
+    expect(result.totalCustomers).toBe(1);
+    expect(result.totalDebt).toBe(0);
+  });
   it("reads actual group names rather than matching UUIDs to fixed English IDs", async () => {
     state.rows = [row("c1", "Wholesale B2B"), row("c2", "Loyalty VIP")];
     expect(await getCustomerSegments("branch-a")).toEqual([

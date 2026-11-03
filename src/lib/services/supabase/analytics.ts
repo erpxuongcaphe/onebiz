@@ -1711,6 +1711,7 @@ export async function getChannelPerformance(
 export async function getCustomerKpis(
   branchId?: string,
   range?: { from: string; to: string },
+  options: { includeLegacyDebt?: boolean } = {},
 ): Promise<{
   totalCustomers: number;
   newThisMonth: number;
@@ -1729,7 +1730,7 @@ export async function getCustomerKpis(
       let query = (supabase as any)
         .from("invoices")
         // Mốc "lần mua đầu tiên của khách" tính theo NGÀY CHỨNG TỪ (ngay_chung_tu).
-        .select("customer_id, ngay_chung_tu, debt")
+        .select(options.includeLegacyDebt === false ? "customer_id, ngay_chung_tu" : "customer_id, ngay_chung_tu, debt")
         .eq("tenant_id", tenantId)
         .eq("status", "completed")
         .not("customer_id", "is", null)
@@ -1752,7 +1753,7 @@ export async function getCustomerKpis(
     if (createdAt >= current.start && createdAt < current.end) {
       currentPurchases.set(customerId, (currentPurchases.get(customerId) ?? 0) + 1);
     }
-    totalDebt += Number(invoice.debt ?? 0);
+    if (options.includeLegacyDebt !== false) totalDebt += Number(invoice.debt ?? 0);
   }
 
   const firstDates = Array.from(firstPurchase.values());

@@ -134,7 +134,8 @@ describe("report data integrity", () => {
   it("keeps customer and supplier exports complete and branch-scoped", () => {
     expect(customerPage).toContain("loadAllCustomersForExport");
     expect(customerPage).toContain("getTopCustomersByRevenue(null");
-    expect(customerPage).toContain("getTopDebtors(null, activeBranchId)");
+    expect(customerPage).toContain("getCustomerReportBalances({ branchId: activeBranchId ?? null, forExport: true })");
+    expect(customerPage).not.toContain("getTopDebtors(null, activeBranchId)");
     expect(supplierPage).toContain("getTopSuppliersByPurchase(null");
     expect(supplierPage).toContain("getSupplierSummary(null");
     expect(analytics).not.toContain("returnCount: 0");
@@ -179,11 +180,12 @@ describe("report data integrity", () => {
     expect(orderPage).toContain("subtitle={selectedPeriodLabel}");
   });
 
-  it("excludes unfinished invoices from branch customer debt and shares the snapshot with its KPI", () => {
+  it("uses the checked customer balance source for report debt instead of legacy invoice sums", () => {
     const debtorSource = analytics.split("export async function getTopDebtors(")[1].split("export async function getSupplierKpis(")[0];
     expect(debtorSource).toContain('.eq("status", "completed")');
-    expect(customerPage).toContain("const currentDebt = debtors.reduce((sum, row) => sum + row.debt, 0)");
-    expect(customerPage).toContain("totalDebt: currentDebt");
+    expect(customerPage).toContain("getCustomerReportBalances({ branchId: activeBranchId ?? null })");
+    expect(customerPage).toContain("formatCurrency(balances.totalReceivable)");
+    expect(customerPage).not.toContain("prevTotalDebt: currentDebt");
   });
 
   it("uses an explicit month selector for the cohort snapshot report", () => {

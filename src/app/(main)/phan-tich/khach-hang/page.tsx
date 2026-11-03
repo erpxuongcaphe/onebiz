@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { customerReportRows, debtorReportRows, type CustomerSort, type SortDirection } from "@/lib/reports/management-table-view";
+import { customerReportRows, type CustomerSort, type SortDirection } from "@/lib/reports/management-table-view";
+import { customerBalanceRows, customerBalanceSheet, type CustomerBalanceSort } from "@/lib/reports/customer-balance-view";
+import { getCustomerReportBalances, type CustomerReportBalances } from "@/lib/services/supabase/customer-report-balances";
 import {
   BarChart,
   Bar,
@@ -28,7 +30,6 @@ import {
   getNewCustomersMonthly,
   getCustomerSegments,
   getTopCustomersByRevenue,
-  getTopDebtors,
   getCustomers,
 } from "@/lib/services";
 import type {
@@ -163,13 +164,11 @@ export default function KhachHangPage() {
     newThisMonth: number;
     prevNewMonth: number;
     returningPct: number;
-    totalDebt: number;
-    prevTotalDebt: number;
   } | null>(null);
   const [newCustomersMonthly, setNewCustomersMonthly] = useState<ChartPoint[]>([]);
   const [customerSegments, setCustomerSegments] = useState<CustomerSegment[]>([]);
   const [topCustomers, setTopCustomers] = useState<TopCustomer[]>([]);
-  const [topDebtors, setTopDebtors] = useState<TopDebtor[]>([]);
+  const [balances, setBalances] = useState<CustomerReportBalances | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [customerSearch, setCustomerSearch] = useState("");
   const [customerGroup, setCustomerGroup] = useState("");
@@ -177,15 +176,21 @@ export default function KhachHangPage() {
   const [customerDirection, setCustomerDirection] = useState<SortDirection>("desc");
   const [customerPage, setCustomerPage] = useState(0);
   const [debtSearch, setDebtSearch] = useState("");
-  const [debtSort, setDebtSort] = useState<"name" | "debt">("debt");
+  const [debtSort, setDebtSort] = useState<CustomerBalanceSort>("receivable");
   const [debtDirection, setDebtDirection] = useState<SortDirection>("desc");
-  const visibleDebtors = useMemo(() => debtorReportRows(topDebtors, debtSearch, debtSort, debtDirection), [topDebtors, debtSearch, debtSort, debtDirection]);
+  const visibleBalances = useMemo(() => customerBalanceRows(balances, debtSearch, debtSort, debtDirection), [balances, debtSearch, debtSort, debtDirection]);
+  const topDebtors: TopDebtor[] = customerBalanceRows(balances, "", "receivable", "desc")
+    .filter(row => row.receivable > 0).map(row => ({ name: row.name, debt: row.receivable }));
   const visibleCustomers = useMemo(() => customerReportRows(topCustomers, customerSearch, customerSort, customerDirection, customerGroup), [topCustomers, customerSearch, customerSort, customerDirection, customerGroup]);
   const customerGroups = [...new Set([...topCustomers.map(row => row.groupName ?? "Chưa phân nhóm"), ...(customerGroup ? [customerGroup] : [])])].sort((a, b) => a.localeCompare(b, "vi"));
   const pageCount = Math.max(1, Math.ceil(visibleCustomers.length / 50));
   const currentPage = Math.min(customerPage, pageCount - 1);
   const pagedCustomers = visibleCustomers.slice(currentPage * 50, (currentPage + 1) * 50);
   const requestIdRef = useRef(0);
+  const scopeKey = JSON.stringify([activeBranchId ?? null, range.from, range.to]);
+  const exportScopeRef = useRef("");
+  exportScopeRef.current = JSON.stringify([scopeKey, customerSearch, customerGroup, customerSort, customerDirection, debtSearch, debtSort, debtDirection]);
+  const [loadedScope, setLoadedScope] = useState<string | null>(null);
   const tenantName = useAuth().tenant?.name;
 
   const fetchData = useCallback(async () => {
@@ -193,32 +198,32 @@ export default function KhachHangPage() {
     try {
       setLoading(true);
       setLoadError(null);
-      const [kpiData, monthly, segments, customers, debtors] = await Promise.all([
-        getCustomerKpis(activeBranchId, range),
+      const [kpiData, monthly, segments, customers, currentBalances] = await Promise.all([
+        getCustomerKpis(activeBranchId, range, { includeLegacyDebt: false }),
         getNewCustomersMonthly(6, activeBranchId),
         getCustomerSegments(activeBranchId, range),
         // P1-3B-R6 13/06/2026: truyền range để top 50 KH theo đúng kỳ (trước đây lifetime).
         getTopCustomersByRevenue(null, activeBranchId, range),
-        getTopDebtors(null, activeBranchId),
+        getCustomerReportBalances({ branchId: activeBranchId ?? null }),
       ]);
       if (requestId !== requestIdRef.current) return;
-      const currentDebt = debtors.reduce((sum, row) => sum + row.debt, 0);
-      setKpis({ ...kpiData, totalDebt: currentDebt, prevTotalDebt: currentDebt });
+      setKpis(kpiData);
       setNewCustomersMonthly(monthly);
       setCustomerSegments(segments);
       setTopCustomers(customers);
-      setTopDebtors(debtors);
+      setBalances(currentBalances);
+      setLoadedScope(scopeKey);
     } catch (err) {
       if (requestId !== requestIdRef.current) return;
       console.error("Failed to fetch customer analytics:", err);
       setLoadError(err instanceof Error ? err.message : "Không tải được báo cáo khách hàng.");
       setTopCustomers([]);
-      setTopDebtors([]);
+      setBalances(null);
       setKpis(null);
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [activeBranchId, range]);
+  }, [activeBranchId, range, scopeKey]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -232,6 +237,11 @@ export default function KhachHangPage() {
     if (!kpis || exporting) return;
     setExporting(true);
     try {
+    const exportScope = exportScopeRef.current;
+    const exportBalances = await getCustomerReportBalances({ branchId: activeBranchId ?? null, forExport: true });
+    if (exportScope !== exportScopeRef.current) throw new Error("Phạm vi đã đổi. Vui lòng xuất lại.");
+    setBalances(exportBalances);
+    const balanceSheet = customerBalanceSheet(exportBalances, debtSearch, debtSort, debtDirection);
     const titleRows = buildReportTitleRows({
       title: "Báo cáo khách hàng",
       range,
@@ -267,29 +277,32 @@ export default function KhachHangPage() {
           })),
           footer: { name: "Tổng kết quả lọc", orders: visibleCustomers.reduce((sum, c) => sum + c.orders, 0), revenue: visibleCustomers.reduce((sum, c) => sum + c.revenue, 0) },
         },
-        { name: "Công nợ đã lọc", columns: [{ label: "Khách hàng", key: "name", width: 30 }, { label: "Công nợ hiện tại", key: "debt", width: 22, format: "currency" }], rows: visibleDebtors.map(row => ({ ...row })), footer: { name: "Tổng kết quả lọc", debt: visibleDebtors.reduce((sum, row) => sum + row.debt, 0) } },
+        ...(balanceSheet ? [balanceSheet] : []),
       ],
     });
     } catch (error) {
       toast({ title: "Không xuất được báo cáo khách hàng", description: error instanceof Error ? error.message : "Vui lòng thử lại.", variant: "error" });
     } finally { setExporting(false); }
-  }, [kpis, visibleCustomers, visibleDebtors, range, branchName, exporting, toast]);
+  }, [kpis, visibleCustomers, activeBranchId, debtSearch, debtSort, debtDirection, range, branchName, exporting, toast]);
 
   const handleExportFull = useCallback(async () => {
     if (!kpis || exporting) return;
     setExporting(true);
     try {
 
-    const [allCustomers, allRevenueCustomers, allDebtors] = await Promise.all([
+    const exportScope = exportScopeRef.current;
+    const [allCustomers, allRevenueCustomers, exportBalances] = await Promise.all([
       loadAllCustomersForExport(),
       getTopCustomersByRevenue(null, activeBranchId, range),
-      getTopDebtors(null, activeBranchId),
+      getCustomerReportBalances({ branchId: activeBranchId ?? null, forExport: true }),
     ]);
+    if (exportScope !== exportScopeRef.current) throw new Error("Phạm vi đã đổi. Vui lòng xuất lại.");
+    setBalances(exportBalances);
     const scopedCustomerIds = new Set(
-      allRevenueCustomers.map((customer) => customer.customerId),
+      [...allRevenueCustomers.map((customer) => customer.customerId), ...exportBalances.rows.map(row => row.customerId)],
     );
     const filteredRevenueCustomers = customerReportRows(allRevenueCustomers, customerSearch, customerSort, customerDirection, customerGroup);
-    const filteredDebtors = debtorReportRows(allDebtors, debtSearch, debtSort, debtDirection);
+    const balanceSheet = customerBalanceSheet(exportBalances, debtSearch, debtSort, debtDirection);
     const customerList = allCustomers.filter(customer => (!activeBranchId || scopedCustomerIds.has(customer.id))
       && `${customer.name} ${customer.code}`.toLocaleLowerCase("vi").includes(customerSearch.trim().toLocaleLowerCase("vi"))
       && (!customerGroup || (customer.groupName ?? "Chưa phân nhóm") === customerGroup));
@@ -330,8 +343,6 @@ export default function KhachHangPage() {
         { label: "Giới tính", key: "gender", width: 10, align: "center" },
         { label: "Nhóm KH", key: "groupName", width: 16 },
         { label: "Hạng thành viên", key: "loyaltyTier", width: 14 },
-        { label: "Tổng mua (VND)", key: "totalSales", width: 18, format: "currency" },
-        { label: "Công nợ (VND)", key: "debt", width: 16, format: "currency" },
       ],
       rows: customerList.map((c, i) => ({
         stt: i + 1,
@@ -343,8 +354,6 @@ export default function KhachHangPage() {
         gender: c.gender === "male" ? "Nam" : c.gender === "female" ? "Nữ" : "",
         groupName: c.groupName ?? "",
         loyaltyTier: c.loyaltyTierName ?? "",
-        totalSales: c.totalSalesMinusReturns ?? c.totalSales,
-        debt: c.currentDebt,
       })),
       footer: {
         stt: "",
@@ -356,11 +365,6 @@ export default function KhachHangPage() {
         gender: "",
         groupName: "",
         loyaltyTier: "",
-        totalSales: customerList.reduce(
-          (s, c) => s + (c.totalSalesMinusReturns ?? c.totalSales),
-          0,
-        ),
-        debt: customerList.reduce((s, c) => s + c.currentDebt, 0),
       },
     };
 
@@ -428,30 +432,6 @@ export default function KhachHangPage() {
       },
     };
 
-    // Sheet 4: Top công nợ (KH còn nợ)
-    const debtSheet: ExcelSheet = {
-      name: "Top công nợ",
-      titleRows: buildReportTitleRows({
-        ...titleBase,
-        title: "DANH SÁCH KHÁCH HÀNG CÒN CÔNG NỢ",
-      }),
-      columns: [
-        { label: "STT", key: "stt", width: 6, align: "center" },
-        { label: "Tên khách hàng", key: "name", width: 30 },
-        { label: "Công nợ (VND)", key: "debt", width: 20, format: "currency" },
-      ],
-      rows: filteredDebtors.map((d, i) => ({
-        stt: i + 1,
-        name: d.name,
-        debt: d.debt,
-      })),
-      footer: {
-        stt: "",
-        name: "TỔNG CÔNG NỢ",
-        debt: filteredDebtors.reduce((s, d) => s + d.debt, 0),
-      },
-    };
-
     // Sheet 5: Khách mới theo tháng (6 tháng)
     const newCustSheet: ExcelSheet = {
       name: "Khách mới theo tháng",
@@ -484,7 +464,7 @@ export default function KhachHangPage() {
         customerDetailSheet,
         topRevSheet,
         segmentSheet,
-        debtSheet,
+        ...(balanceSheet ? [balanceSheet] : []),
         newCustSheet,
       ],
     });
@@ -522,11 +502,11 @@ export default function KhachHangPage() {
       onCustomRangeChange={setCustomRange}
       onExportView={handleExportView}
       onExportFull={handleExportFull}
-      exportDisabled={loading || exporting || !kpis}
+      exportDisabled={loading || loadedScope !== scopeKey || exporting || !kpis}
     />
   );
 
-  if (loading) {
+  if (loading || (loadedScope !== scopeKey && !loadError)) {
     return (
       <div className="flex flex-col h-[calc(100vh-4rem)]">
         {reportHeader}
@@ -583,8 +563,8 @@ export default function KhachHangPage() {
           />
           <KpiCard
             label="Nợ phải thu"
-            value={kpis ? formatCurrency(kpis.totalDebt) : formatCurrency(0)}
-            change="Số dư công nợ hiện tại"
+            value={balances?.canViewDebt ? formatCurrency(balances.totalReceivable) : "—"}
+            change={balances?.canViewDebt ? (balances.complete ? "Số dư hiện tại · Không bù trừ tiền ứng" : "Chưa đầy đủ dữ liệu số dư") : "Chưa được cấp quyền xem công nợ"}
             positive
             icon="credit_card"
             bg="bg-status-error/10"
@@ -727,15 +707,16 @@ export default function KhachHangPage() {
           {pageCount > 1 && <div className="mt-3 flex items-center justify-end gap-3 text-sm"><button type="button" disabled={currentPage === 0} className="disabled:opacity-40" onClick={() => setCustomerPage(currentPage - 1)}>Trước</button><span>{currentPage + 1}/{pageCount}</span><button type="button" disabled={currentPage + 1 === pageCount} className="disabled:opacity-40" onClick={() => setCustomerPage(currentPage + 1)}>Sau</button></div>}
         </ChartCard>
 
-        <ChartCard title="Chi tiết công nợ khách hàng" subtitle="Số dư tại thời điểm hiện tại · Không phải phát sinh trong kỳ">
-          <div className="mb-3 flex flex-wrap gap-2"><input aria-label="Tìm khách công nợ" placeholder="Tên khách hàng" className="h-10 min-w-48 flex-1 rounded border bg-background px-3 text-sm" value={debtSearch} onChange={event => setDebtSearch(event.target.value)} /><select aria-label="Sắp xếp công nợ khách" className="h-10 rounded border bg-background px-3 text-sm" value={debtSort} onChange={event => setDebtSort(event.target.value as typeof debtSort)}><option value="debt">Công nợ</option><option value="name">Tên khách hàng</option></select><select aria-label="Chiều sắp xếp công nợ khách" className="h-10 rounded border bg-background px-3 text-sm" value={debtDirection} onChange={event => setDebtDirection(event.target.value as SortDirection)}><option value="desc">Giảm dần</option><option value="asc">Tăng dần</option></select></div>
+        {balances?.canViewDebt && <ChartCard title="Số dư khách hàng" subtitle={`Hiện tại · ${new Date(balances.asOf).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })} · Không phải phát sinh trong kỳ`}>
+          {!balances.complete && <p role="alert" className="mb-3 text-sm text-status-warning">Chưa đầy đủ: có số dư thiếu chi nhánh hoặc chưa xác định khách hàng. Chưa dùng để chốt công nợ.</p>}
+          <div className="mb-3 flex flex-wrap gap-2"><input aria-label="Tìm khách công nợ" placeholder="Tên hoặc mã khách hàng" className="h-10 min-w-48 flex-1 rounded border bg-background px-3 text-sm" value={debtSearch} onChange={event => setDebtSearch(event.target.value)} /><select aria-label="Sắp xếp công nợ khách" className="h-10 rounded border bg-background px-3 text-sm" value={debtSort} onChange={event => setDebtSort(event.target.value as CustomerBalanceSort)}><option value="receivable">Nợ phải thu</option><option value="advance">Tiền ứng còn lại</option><option value="name">Tên khách hàng</option><option value="code">Mã khách</option></select><select aria-label="Chiều sắp xếp công nợ khách" className="h-10 rounded border bg-background px-3 text-sm" value={debtDirection} onChange={event => setDebtDirection(event.target.value as SortDirection)}><option value="desc">Giảm dần</option><option value="asc">Tăng dần</option></select></div>
           <ReportTableFrame tablePreferenceKey="report.customers.debt-detail">
-            <div className="max-h-96 overflow-auto"><table className="w-full min-w-[420px] text-sm"><thead><tr className="border-b text-left"><th className="py-2">Khách hàng</th><th className="py-2 text-right">Công nợ</th></tr></thead><tbody>{visibleDebtors.map((row, index) => <tr key={`${row.name}-${index}`} className="border-b"><td className="py-2">{row.name}</td><td className="py-2 text-right tabular-nums">{formatCurrency(row.debt)}</td></tr>)}</tbody><tfoot><tr className="border-t-2 font-semibold"><td className="py-3">Tổng {visibleDebtors.length} khách</td><td className="py-3 text-right tabular-nums">{formatCurrency(visibleDebtors.reduce((sum, row) => sum + row.debt, 0))}</td></tr></tfoot></table></div>
+            <div className="max-h-96 overflow-auto"><table className="w-full min-w-[640px] text-sm"><thead><tr className="border-b text-left"><th className="py-2">Mã khách</th><th className="py-2">Khách hàng</th><th className="py-2 text-right">Nợ phải thu</th><th className="py-2 text-right">Tiền ứng còn lại</th></tr></thead><tbody>{visibleBalances.map(row => <tr key={row.customerId} className="border-b"><td className="py-2">{row.code}</td><td className="py-2">{row.name}</td><td className="py-2 text-right tabular-nums">{formatCurrency(row.receivable)}</td><td className="py-2 text-right tabular-nums">{formatCurrency(row.advance)}</td></tr>)}</tbody><tfoot><tr className="border-t-2 font-semibold"><td colSpan={2} className="py-3">Tổng {visibleBalances.length} khách</td><td className="py-3 text-right tabular-nums">{formatCurrency(visibleBalances.reduce((sum, row) => sum + row.receivable, 0))}</td><td className="py-3 text-right tabular-nums">{formatCurrency(visibleBalances.reduce((sum, row) => sum + row.advance, 0))}</td></tr></tfoot></table></div>
           </ReportTableFrame>
-        </ChartCard>
+        </ChartCard>}
 
         {/* Customer debt ranking */}
-        {viewMode !== "table" && <ChartCard title="Xếp hạng công nợ khách hàng" subtitle="Top 5 khách hàng có công nợ cao nhất">
+        {balances?.canViewDebt && viewMode !== "table" && <ChartCard title="Xếp hạng công nợ khách hàng" subtitle="Top 5 khách hàng có nợ phải thu cao nhất">
           {topDebtors.length > 0 ? (
             <div className="h-64">
               <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
