@@ -113,7 +113,8 @@ export function KanbanBoard<T>({
     <div
       className={cn(
         "flex min-w-0 gap-3 overflow-x-auto pb-2 min-h-[360px]",
-        className
+        className,
+        "max-md:h-auto",
       )}
     >
       {columns.map((col) => {
@@ -165,7 +166,7 @@ export function KanbanBoard<T>({
             {col.summary && <div className="border-b px-3 py-2 text-xs text-muted-foreground tabular-nums">{col.summary}</div>}
 
             {/* Cards */}
-            <div className="min-h-0 flex-1 p-2 space-y-2 overflow-y-auto">
+            <div className="p-2 space-y-2 md:min-h-0 md:flex-1 md:overflow-y-auto">
               {col.items.length === 0 ? (
                 <div className="text-center text-xs text-muted-foreground py-6">
                   {emptyMessage}

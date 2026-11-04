@@ -40,7 +40,7 @@ export function ReportTableViewport({ children }: { children: ReactNode }) {
   return (
     <div className="relative min-w-0">
       <div ref={viewport} data-report-viewport role="region" aria-label="Bảng số liệu báo cáo" tabIndex={0}
-        className="max-h-[65dvh] min-w-0 overflow-auto overscroll-x-contain bg-surface-container-lowest outline-none focus-visible:ring-2 focus-visible:ring-ring print:max-h-none print:overflow-visible">
+        className="min-w-0 overflow-x-auto overscroll-x-contain bg-surface-container-lowest outline-none focus-visible:ring-2 focus-visible:ring-ring md:max-h-[65dvh] md:overflow-auto print:max-h-none print:overflow-visible">
         {children}
       </div>
       <div ref={scrollbar} role="region" aria-label="Cuộn ngang bảng báo cáo" tabIndex={width ? 0 : -1}

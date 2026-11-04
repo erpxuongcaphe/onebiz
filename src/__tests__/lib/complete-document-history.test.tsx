@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 const mocks=vi.hoisted(()=>({export:vi.fn(),allowed:true}));
 vi.mock("@/lib/permissions/use-permission",()=>({usePermissions:()=>({hasPermission:()=>mocks.allowed})}));
 vi.mock("@/lib/utils/export",()=>({exportToExcel:mocks.export}));
@@ -9,12 +9,13 @@ const columns=[{header:"Mã",accessor:"code" as const},{header:"Trạng thái",a
 beforeEach(()=>{cleanup();vi.clearAllMocks();mocks.allowed=true;mocks.export.mockResolvedValue(undefined);});
 describe("accessible complete document history",()=>{
   it("makes every page accessible and searches older cancelled records",()=>{
-    render(<DetailItemsTable pageSize={25} columns={columns} items={rows}/>);
-    expect(screen.getAllByRole("link")).toHaveLength(25);
+    const {container}=render(<DetailItemsTable pageSize={25} columns={columns} items={rows}/>);
+    expect(within(screen.getByRole("table")).getAllByRole("link")).toHaveLength(25);
+    expect(within(container.querySelector('.md\\:hidden') as HTMLElement).getAllByRole("link")).toHaveLength(25);
     fireEvent.click(screen.getByRole("button",{name:"Sau"}));
     expect(screen.getByText(/Trang 2\/3/)).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Tìm trong toàn bộ lịch sử chứng từ"),{target:{value:"HD000"}});
-    expect(screen.getByText("cancelled")).toBeInTheDocument();
+    expect(screen.getAllByText("cancelled")).toHaveLength(2);
     expect(screen.getByText(/1\/71 chứng từ/)).toBeInTheDocument();
   });
   it("exports all matching rows in selected order, not just the visible page",async()=>{
@@ -35,7 +36,8 @@ describe("accessible complete document history",()=>{
   it("filters dates and cancelled status across all history",async()=>{
     render(<DetailItemsTable pageSize={25} columns={columns} items={rows}/>);
     fireEvent.change(screen.getByLabelText("Trạng thái chứng từ lịch sử"),{target:{value:"cancelled"}});
-    expect(screen.getAllByRole("link")).toHaveLength(1);
+    expect(within(screen.getByRole("table")).getAllByRole("link")).toHaveLength(1);
+    expect(within(document.querySelector('.md\\:hidden') as HTMLElement).getAllByRole("link")).toHaveLength(1);
     fireEvent.change(screen.getByLabelText("Từ ngày"),{target:{value:"2026-11-01"}});
     fireEvent.change(screen.getByLabelText("Đến ngày"),{target:{value:"2026-10-01"}});
     expect(screen.getByRole("alert")).toHaveTextContent("Ngày bắt đầu");

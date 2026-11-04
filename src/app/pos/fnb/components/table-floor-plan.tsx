@@ -93,6 +93,7 @@ export function TableFloorPlan({
     try { if (viewKey) localStorage.setItem(viewKey, view); } catch { /* preference remains usable in this visit */ }
   };
   const [tableSearch, setTableSearch] = useState("");
+  const [listZone, setListZone] = useState("");
   const [offsiteArea, setOffsiteArea] = useState(false);
   const offsiteOrders = openOrders.filter(order => order.orderType !== "dine_in" && isUnpaidFnbOrder(order));
   const visibleOffsiteOrders = offsiteOrders.filter(order => matchesFnbBillCardSearch(tableSearch, order.orderNumber, order.customerName, order.note, order.orderType === "delivery" ? "Giao hàng" : "Mang về"));
@@ -134,7 +135,7 @@ export function TableFloorPlan({
     const timer = window.setInterval(refresh, 30000);
     return () => { window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", refresh); clearInterval(timer); };
   }, []);
-  useEffect(() => { setActiveZoneId(null); setZones([]); setActionTable(null); setTableSearch(""); setOffsiteArea(false); setStatusFilter("all"); }, [currentBranch?.id]);
+  useEffect(() => { setActiveZoneId(null); setZones([]); setActionTable(null); setTableSearch(""); setOffsiteArea(false); setStatusFilter("all"); setListZone(""); }, [currentBranch?.id]);
   useEffect(() => {
     if (!currentBranch?.id) return;
     let active = true;
@@ -231,17 +232,21 @@ export function TableFloorPlan({
   const useFallback = zones.length === 0;
 
   return (
-    <div className="flex flex-col h-full">
+    <div data-slot="pos-table-workspace" className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain md:h-full md:overflow-hidden">
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border bg-white dark:bg-card px-4 py-2">
-        <div><h2 className="text-base font-semibold text-primary">Bàn & đơn đang phục vụ</h2><p className="text-xs text-muted-foreground">Chọn bàn hoặc bill mang về để xem và thêm món.</p></div>
+        <div><h2 className="text-base font-semibold text-primary"><span className="md:hidden">Chọn bàn</span><span className="hidden md:inline">Bàn & đơn đang phục vụ</span></h2><p className="hidden text-xs text-muted-foreground md:block">Chọn bàn hoặc bill mang về để xem và thêm món.</p></div>
         <div className="flex gap-1" role="group" aria-label="Cách xem bàn">
-          <button type="button" aria-pressed={tableView === "plan"} onClick={() => { chooseTableView("plan"); setStatusFilter("all"); setTableSearch(""); }} className={cn("min-h-11 rounded-lg px-3 text-sm font-medium", tableView === "plan" ? "bg-primary/10 text-primary" : "hover:bg-muted")}>Sơ đồ</button>
+          <button type="button" aria-pressed={tableView === "plan"} onClick={() => { chooseTableView("plan"); setStatusFilter("all"); setListZone(""); setTableSearch(""); }} className={cn("min-h-11 rounded-lg px-3 text-sm font-medium", tableView === "plan" ? "bg-primary/10 text-primary" : "hover:bg-muted")}>Sơ đồ</button>
           <button type="button" aria-pressed={tableView === "list"} onClick={() => chooseTableView("list")} className={cn("min-h-11 rounded-lg px-3 text-sm font-medium", tableView === "list" ? "bg-primary/10 text-primary" : "hover:bg-muted")}>Danh sách</button>
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-2 shrink-0 border-b border-border bg-white dark:bg-card px-4 py-2"><input aria-label="Tìm bàn" placeholder="Tìm bàn, mã bill, khách hoặc ghi chú..." value={tableSearch} onChange={(event) => { setTableSearch(event.target.value); setTableView("list"); }} className="min-h-11 w-full rounded-lg border border-border bg-background px-3 text-sm sm:max-w-sm" /><button type="button" aria-pressed={offsiteArea} onClick={() => { setOffsiteArea(!offsiteArea); setTableSearch(""); }} className={cn("min-h-11 rounded-lg border px-3 text-sm font-semibold",offsiteArea ? "border-primary bg-primary text-primary-foreground" : "border-primary/25 text-primary hover:bg-primary/5")}>Mang về / Giao hàng ({offsiteOrders.length})</button></div>
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-white px-3 py-2 dark:bg-card md:px-4">
+        <input aria-label="Tìm bàn" placeholder="Tìm bàn, mã bill, khách hoặc ghi chú..." value={tableSearch} onChange={(event) => { setTableSearch(event.target.value); setTableView("list"); }} className="min-h-11 min-w-0 flex-1 rounded-lg border border-border bg-background px-3 text-sm md:w-full md:flex-none md:max-w-sm" />
+        <button type="button" aria-label={`Mang về / Giao hàng (${offsiteOrders.length})`} aria-pressed={offsiteArea} onClick={() => { setOffsiteArea(!offsiteArea); setTableSearch(""); }} className={cn("min-h-11 shrink-0 rounded-lg border px-3 text-sm font-semibold", offsiteArea ? "border-primary bg-primary text-primary-foreground" : "border-primary/25 text-primary hover:bg-primary/5")}><span className="md:hidden">Mang về ({offsiteOrders.length})</span><span className="hidden md:inline">Mang về / Giao hàng ({offsiteOrders.length})</span></button>
+      </div>
       {/* Legend */}
-      {!offsiteArea && <div className="flex items-center gap-2 px-4 py-1 border-b bg-card shrink-0 flex-wrap">
+      {!offsiteArea && <div className="hidden shrink-0 flex-wrap items-center gap-2 border-b bg-card px-4 py-1 md:flex">
+        {listZone && <button type="button" onClick={() => setListZone("")} className="min-h-10 rounded border px-2 text-sm">{listZone} ×</button>}
         <button type="button" aria-pressed={statusFilter === "all"} onClick={() => { setStatusFilter("all"); setTableView("list"); }}
           className={cn("min-h-10 rounded px-2 text-sm", statusFilter === "all" && "bg-primary/10 text-primary")}>Tất cả ({tables.length})</button>
         {(["available", "occupied", "reserved", "cleaning"] as TableStatus[]).map((s) => (
@@ -254,6 +259,17 @@ export function TableFloorPlan({
             </span>
           </button>
         ))}
+      </div>}
+
+      {!offsiteArea && <div className="grid shrink-0 grid-cols-2 gap-2 border-b bg-card px-3 py-2 md:hidden">
+        <select aria-label="Lọc khu vực bàn" value={listZone} onChange={event => { setListZone(event.target.value); setTableView("list"); }} className="min-h-11 min-w-0 rounded-lg border bg-background px-2 text-sm">
+          <option value="">Tất cả khu vực</option>
+          {Array.from(new Set(tables.map(table => table.zone).filter((zone): zone is string => Boolean(zone)))).map(zone => <option key={zone} value={zone}>{zone}</option>)}
+        </select>
+        <select aria-label="Lọc trạng thái bàn" value={statusFilter} onChange={event => { setStatusFilter(event.target.value as TableStatus | "all"); setTableView("list"); }} className="min-h-11 min-w-0 rounded-lg border bg-background px-2 text-sm">
+          <option value="all">Tất cả ({tables.length})</option>
+          {(["available", "occupied", "reserved", "cleaning"] as TableStatus[]).map(status => <option key={status} value={status}>{STATUS_CONFIG[status].label} ({counts[status]})</option>)}
+        </select>
       </div>}
 
       {/* Zone tabs (chỉ khi có zone) */}
@@ -280,8 +296,8 @@ export function TableFloorPlan({
       )}
 
       {/* Canvas hoặc Grid fallback */}
-      <div className="flex-1 overflow-auto p-2 sm:p-4">
-        {(offsiteArea || tableView === "list" || useFallback) && <section className="mb-4" aria-label="Khu mang về và giao hàng"><div className="mb-2 flex items-center justify-between gap-2"><h3 className="text-sm font-semibold text-primary">Mang về & giao hàng · {offsiteOrders.length} đơn</h3><span className="text-sm font-bold tabular-nums text-primary">{formatCurrency(offsiteOrders.reduce((sum,order) => sum + order.provisionalTotal,0))}đ</span></div>{ordersError && <div role="alert" className="mb-2 flex flex-wrap items-center gap-2 rounded border border-status-error/30 p-3 text-sm text-status-error"><span>{ordersError}</span><button type="button" className="min-h-11 px-3 font-semibold underline" onClick={onRefreshOrders}>Thử lại</button></div>}{ordersLoading && <p role="status" className="text-sm text-muted-foreground">Đang cập nhật bill…</p>}<div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">{visibleOffsiteOrders.map(order => <button type="button" key={order.id} aria-label={`${order.orderType === "delivery" ? "Giao hàng" : "Mang về"} · ${order.orderNumber} · Khách: ${order.customerName?.trim() || "Khách lẻ"}${order.note?.trim() ? ` · Ghi chú: ${order.note.trim()}` : ""}`} onClick={() => onOpenOrder?.(order)} className="min-h-24 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950 p-3 text-left hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><FnbBillCardHeading label={order.orderType === "delivery" ? "Giao hàng" : "Mang về"} customerName={order.customerName} note={order.note} /><span className="mt-1 block text-xs text-muted-foreground">{order.orderNumber}</span><span className="my-1 block text-base font-bold tabular-nums text-primary">{formatCurrency(order.provisionalTotal)}đ</span><span className="block text-xs text-muted-foreground">{order.itemCount} món</span><span className="block text-xs text-muted-foreground">{new Date(order.createdAt).toLocaleTimeString("vi-VN",{hour:"2-digit",minute:"2-digit"})} · Chưa thanh toán</span></button>)}</div>{!ordersLoading && !ordersError && !visibleOffsiteOrders.length && <p className="rounded border border-dashed p-3 text-sm text-muted-foreground">{tableSearch ? "Không có bill phù hợp." : "Chưa có bill mang về hoặc giao hàng đang mở."}</p>}</section>}
+      <div data-slot="pos-table-content" className="shrink-0 p-2 sm:p-4 md:min-h-0 md:flex-1 md:overflow-auto">
+        {(offsiteArea || tableView === "list" || useFallback) && <section className={cn("mb-4", !offsiteArea && "hidden md:block")} aria-label="Khu mang về và giao hàng"><div className="mb-2 flex items-center justify-between gap-2"><h3 className="text-sm font-semibold text-primary">Mang về & giao hàng · {offsiteOrders.length} đơn</h3><span className="text-sm font-bold tabular-nums text-primary">{formatCurrency(offsiteOrders.reduce((sum,order) => sum + order.provisionalTotal,0))}đ</span></div>{ordersError && <div role="alert" className="mb-2 flex flex-wrap items-center gap-2 rounded border border-status-error/30 p-3 text-sm text-status-error"><span>{ordersError}</span><button type="button" className="min-h-11 px-3 font-semibold underline" onClick={onRefreshOrders}>Thử lại</button></div>}{ordersLoading && <p role="status" className="text-sm text-muted-foreground">Đang cập nhật bill…</p>}<div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">{visibleOffsiteOrders.map(order => <button type="button" key={order.id} aria-label={`${order.orderType === "delivery" ? "Giao hàng" : "Mang về"} · ${order.orderNumber} · Khách: ${order.customerName?.trim() || "Khách lẻ"}${order.note?.trim() ? ` · Ghi chú: ${order.note.trim()}` : ""}`} onClick={() => onOpenOrder?.(order)} className="min-h-24 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950 p-3 text-left hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><FnbBillCardHeading label={order.orderType === "delivery" ? "Giao hàng" : "Mang về"} customerName={order.customerName} note={order.note} /><span className="mt-1 block text-xs text-muted-foreground">{order.orderNumber}</span><span className="my-1 block text-base font-bold tabular-nums text-primary">{formatCurrency(order.provisionalTotal)}đ</span><span className="block text-xs text-muted-foreground">{order.itemCount} món</span><span className="block text-xs text-muted-foreground">{new Date(order.createdAt).toLocaleTimeString("vi-VN",{hour:"2-digit",minute:"2-digit"})} · Chưa thanh toán</span></button>)}</div>{!ordersLoading && !ordersError && !visibleOffsiteOrders.length && <p className="rounded border border-dashed p-3 text-sm text-muted-foreground">{tableSearch ? "Không có bill phù hợp." : "Chưa có bill mang về hoặc giao hàng đang mở."}</p>}</section>}
         {!offsiteArea && (tableView === "plan" && !useFallback && activeZone ? (
           loadedZoneId !== activeZoneId ? (
             <div role="status" className="flex min-h-64 items-center justify-center gap-2 text-sm text-muted-foreground">
@@ -299,7 +315,7 @@ export function TableFloorPlan({
         ) : (
           <GridFallback
             tables={tables.filter((table) => tableView === "plan" ||
-              ((statusFilter === "all" || table.status === statusFilter) &&
+              ((!listZone || table.zone === listZone) && (statusFilter === "all" || table.status === statusFilter) &&
               matchesFnbBillCardSearch(tableSearch, String(table.tableNumber), table.name, table.zone, ...(tableBillDetails[table.id] ?? []).flatMap(bill => [bill.orderNumber, bill.customerName, bill.note]))))
               .sort((a, b) => a.tableNumber - b.tableNumber)}
             onSelectTable={(t) => {

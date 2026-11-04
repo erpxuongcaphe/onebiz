@@ -31,7 +31,7 @@ export function DataTablePagination({
   onPageSizeChange,
 }: DataTablePaginationProps) {
   return (
-    <div className="border-t bg-surface-container-lowest px-4 py-2 flex items-center justify-between gap-4 text-sm shrink-0 flex-wrap">
+    <div className="border-t bg-surface-container-lowest px-3 py-3 flex items-center justify-between gap-2 text-sm shrink-0 flex-wrap md:gap-4 md:px-4 md:py-2">
       {/* KiotViet style: "Hiển thị 15 dòng" */}
       <div className="flex items-center gap-2 text-muted-foreground">
         <span className="hidden sm:inline">Hiển thị</span>
@@ -51,7 +51,7 @@ export function DataTablePagination({
           </SelectContent>
         </Select>
         <span className="hidden sm:inline">dòng</span>
-        {!hideAggregateCounts && <span className="text-xs text-muted-foreground/60 ml-2">
+        {!hideAggregateCounts && <span className="hidden text-xs text-muted-foreground/60 ml-2 sm:inline">
           ({formatNumber(total)} bản ghi)
         </span>}
       </div>
@@ -61,7 +61,7 @@ export function DataTablePagination({
         <Button
           variant="outline"
           size="icon"
-          className="h-7 w-7"
+          className="hidden h-7 w-7 md:inline-flex"
           disabled={pageIndex === 0}
           onClick={() => onPageChange?.(0)}
           aria-label="Trang đầu"
@@ -71,7 +71,7 @@ export function DataTablePagination({
         <Button
           variant="outline"
           size="icon"
-          className="h-7 w-7"
+          className="h-10 w-10 md:h-7 md:w-7"
           disabled={pageIndex === 0}
           onClick={() => onPageChange?.(pageIndex - 1)}
           aria-label="Trang trước"
@@ -84,7 +84,7 @@ export function DataTablePagination({
         <Button
           variant="outline"
           size="icon"
-          className="h-7 w-7"
+          className="h-10 w-10 md:h-7 md:w-7"
           disabled={pageIndex >= pageCount - 1}
           onClick={() => onPageChange?.(pageIndex + 1)}
           aria-label="Trang sau"
@@ -94,7 +94,7 @@ export function DataTablePagination({
         <Button
           variant="outline"
           size="icon"
-          className="h-7 w-7"
+          className="hidden h-7 w-7 md:inline-flex"
           disabled={pageIndex >= pageCount - 1}
           hidden={hideAggregateCounts}
           onClick={() => onPageChange?.(pageCount - 1)}
