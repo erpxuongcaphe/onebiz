@@ -281,7 +281,7 @@ describe("atomic purchase-order save", () => {
   });
 
 
-  it("keeps whole-VND line rounding identical in the form and atomic RPC", () => {
+  it("uses nearest whole-VND totals in the new form while retaining the historical migration", () => {
     const items = [
       { quantity: 24, unitPrice: 5_125 },
       { quantity: 48, unitPrice: 7_708.33 },
@@ -292,10 +292,9 @@ describe("atomic purchase-order save", () => {
       0,
     );
 
-    expect(subtotal).toBe(1_369_001);
-    expect(subtotal - 1).toBe(1_369_000);
+    expect(subtotal).toBe(1_369_000);
     expect(dialog).toContain(
-      "return purchaseLineMoney(item).subtotal",
+      "item.recordedSubtotal ?? purchaseLineMoney(item).subtotal",
     );
     expect(
       roundingMigration.match(/:= ceil\(v_quantity \* v_unit_price\)/g),

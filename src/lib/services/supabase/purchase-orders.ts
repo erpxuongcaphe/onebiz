@@ -1,4 +1,5 @@
 import { expiryInputParts, expiryInputValue } from "@/lib/expiry-time";
+import { roundPurchaseVnd } from "@/lib/purchase-line-money";
 import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
 /**
  * Supabase service: Purchase Orders (Đặt hàng / Nhập hàng)
@@ -169,10 +170,10 @@ export async function savePurchaseOrderAtomic(
     p_branch_id: input.branchId,
     p_supplier_id: input.supplierId,
     p_note: input.note ?? null,
-    p_shipping_cost: Number(input.shippingCost ?? 0),
-    p_other_cost: Number(input.otherCost ?? 0),
-    p_order_discount: Number(input.orderDiscount ?? 0),
-    p_paid_amount: Number(input.paidAmount ?? 0),
+    p_shipping_cost: roundPurchaseVnd(Number(input.shippingCost ?? 0)),
+    p_other_cost: roundPurchaseVnd(Number(input.otherCost ?? 0)),
+    p_order_discount: roundPurchaseVnd(Number(input.orderDiscount ?? 0)),
+    p_paid_amount: roundPurchaseVnd(Number(input.paidAmount ?? 0)),
     p_payment_method: input.paymentMethod ?? "cash",
     p_mark_ordered: Boolean(input.markOrdered),
     p_receive_now: Boolean(input.receiveNow),
@@ -181,6 +182,7 @@ export async function savePurchaseOrderAtomic(
       unit: item.unit ?? null,
       quantity: Number(item.quantity),
       unit_price: Number(item.unitPrice),
+      money_rounding: "nearest_vnd_v1",
       discount: Number(item.discount ?? 0),
       vat_rate: Number(item.vatRate ?? 0),
       expiry_date: item.expiryDate ? expiryInputValue(expiryInputParts(item.expiryDate).day, expiryInputParts(item.expiryDate).time) : null,
@@ -397,7 +399,7 @@ export async function getPurchaseOrderItems(
   const { data, error } = await (supabase as any)
     .from("purchase_order_items")
     .select(
-      "id, product_id, product_name, quantity, received_quantity, unit_price, discount, vat_rate, unit, transaction_quantity, transaction_unit, transaction_unit_price, conversion_factor, expiry_date, expiry_at, lot_number, note, products:products_scoped(code)",
+      "id, product_id, product_name, quantity, received_quantity, unit_price, total, discount, vat_rate, unit, transaction_quantity, transaction_unit, transaction_unit_price, conversion_factor, expiry_date, expiry_at, lot_number, note, products:products_scoped(code)",
     )
     .eq("purchase_order_id", orderId)
     .order("id", { ascending: true });
@@ -411,6 +413,7 @@ export async function getPurchaseOrderItems(
     quantity: number | string;
     received_quantity: number | string;
     unit_price: number | string;
+    total: number | string;
     discount: number | string | null;
     vat_rate: number | string | null;
     unit: string | null;
@@ -443,7 +446,7 @@ export async function getPurchaseOrderItems(
       remaining: Math.max(0, Math.round((qty - received) * 10_000) / 10_000),
       unitPrice: price,
       conversionFactor: factor,
-      lineTotal: qty * price,
+      lineTotal: Number(row.total),
       expiryDate: row.expiry_at ?? row.expiry_date,
       lotNumber: row.lot_number,
       discount: Number(row.discount ?? 0),

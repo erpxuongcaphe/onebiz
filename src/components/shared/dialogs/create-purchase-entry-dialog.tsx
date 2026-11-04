@@ -1,4 +1,5 @@
 "use client";
+import { purchaseLineMoney, roundPurchaseVnd } from "@/lib/purchase-line-money";
 import { RemoveTransactionLineButton } from "@/components/shared/remove-transaction-line-button";
 import { useProductUom } from "@/lib/hooks/use-product-uom";
 import { scaleUnitPrice } from "@/lib/operational-uom";
@@ -70,11 +71,11 @@ interface SearchSupplier {
 }
 
 function lineSubtotal(item: LineItem) {
-  return item.quantity * item.price;
+  return purchaseLineMoney(item).subtotal;
 }
 
 function lineTax(item: LineItem) {
-  return Math.round((lineSubtotal(item) * item.vatRate) / 100);
+  return purchaseLineMoney(item).tax;
 }
 
 function lineTotal(item: LineItem) {
@@ -299,7 +300,7 @@ function CreateLegacyPurchaseEntryDialog({
   );
 
   const taxAmount = useMemo(() => getItemsTax(items), [items]);
-  const purchaseCost = shippingFee + otherCost;
+  const purchaseCost = roundPurchaseVnd(shippingFee) + roundPurchaseVnd(otherCost);
   const total = subtotal + taxAmount + purchaseCost;
 
   function validate(): boolean {
