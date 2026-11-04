@@ -658,7 +658,8 @@ export function DataTable<TData, TValue>({
     // chiếm 100% parent → sibling đẩy DataTable overflow → pagination ra
     // ngoài viewport.
     // Đổi sang flex-1 min-h-0 → DataTable fill RESIDUAL space → pagination
-    // luôn fit trong viewport.
+    // luôn fit trong viewport trên desktop. Mobile để danh sách và phân
+    // trang đi theo nội dung trong vùng cuộn chính của trang.
     <div data-slot="data-table" className="relative flex min-w-0 flex-col md:min-h-0 md:flex-1">
       {toolbarMetrics || toolbarActions ? (
         <>

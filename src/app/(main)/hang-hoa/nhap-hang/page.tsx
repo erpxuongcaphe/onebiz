@@ -13,7 +13,6 @@ import { getPurchaseOrderBoard } from "@/lib/services/supabase/purchase-orders";
 import { ListStrip } from "@/components/shared/list-strip";
 import { KanbanBoard, type KanbanColumn } from "@/components/shared/kanban-board";
 import { PipelineStatusBadge } from "@/components/shared/pipeline";
-import { Badge } from "@/components/ui/badge";
 import {
   FilterPanel,
   FilterGroup,
@@ -1232,7 +1231,7 @@ export default function NhapHangPage() {
           <div className="min-w-0 space-y-2">
             <div className="flex items-start justify-between gap-2">
               <span className="font-semibold text-primary">{order.code}</span>
-              <Badge variant="outline" className={STATUS_META[order.status]?.color}>{STATUS_META[order.status]?.label ?? order.status}</Badge>
+              <PipelineStatusBadge name={STATUS_META[order.status]?.label ?? order.status} color={STATUS_META[order.status]?.color} size="sm" />
             </div>
             <p className="break-words font-medium">{order.supplierName || "Chưa có nhà cung cấp"}</p>
             <p className="text-xs text-muted-foreground">{formatDate(order.date)}{order.orderCode ? ` · Đặt hàng: ${order.orderCode}` : ""}</p>
