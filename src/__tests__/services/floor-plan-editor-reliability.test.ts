@@ -50,7 +50,7 @@ describe("Sơ đồ bàn — hợp đồng vận hành editor", () => {
     expect(canvas).toContain('aria-label="Thu nhỏ sơ đồ"');
     expect(canvas).toContain('aria-label="Đặt sơ đồ vừa màn hình"');
     expect(canvas).toContain('aria-label="Phóng to sơ đồ"');
-    expect(posFloorPlan).toContain('className="flex-1 overflow-auto p-2 sm:p-4"');
+    expect(posFloorPlan).toContain('containerWidth={width}');
   });
 
   it("Cài đặt in ấn có lối vào trực tiếp từ menu Hệ thống", () => {

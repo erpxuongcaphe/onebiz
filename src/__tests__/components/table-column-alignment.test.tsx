@@ -54,7 +54,7 @@ describe("shared column alignment", () => {
   it("uses the same numeric policy in inline detail tables", () => {
     render(<DetailItemsTable columns={[{ header: "Tên", accessor: "name" }, { header: "SL", accessor: "quantity" }]} items={[{ name: "Món A", quantity: 0 }]} />);
     expect(screen.getByRole("columnheader", { name: "SL" })).toHaveClass("text-right");
-    expect(screen.getByText("0").closest("td")).toHaveClass("text-right", "tabular-nums");
+    expect(screen.getByRole("cell", {name:"0"})).toHaveClass("text-right", "tabular-nums");
     expect(screen.getByRole("columnheader", { name: "Tên" })).toHaveClass("text-left");
   });
 

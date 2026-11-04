@@ -9,9 +9,9 @@ interface ListPageLayoutProps {
 
 export function ListPageLayout({ sidebar, children }: ListPageLayoutProps) {
   return (
-    <div className="flex h-[calc(100vh-4rem)] min-h-0 flex-col md:flex-row max-md:h-[calc(100vh-4rem-3.5rem)] supports-[height:100dvh]:max-md:h-[calc(100dvh-4rem-3.5rem)]">
+    <div data-slot="list-page-layout" className="flex min-w-0 flex-col md:h-[calc(100vh-4rem)] md:min-h-0 md:flex-row">
       {sidebar}
-      <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden max-md:pb-[env(safe-area-inset-bottom)]">
+      <div className="flex min-w-0 flex-col max-md:pb-[env(safe-area-inset-bottom)] md:min-h-0 md:flex-1 md:overflow-hidden">
         {children}
       </div>
     </div>

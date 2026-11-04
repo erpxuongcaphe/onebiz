@@ -428,6 +428,18 @@ function PurchaseOrderDetail({
                   },
                 ]}
                 items={items as unknown as Record<string, unknown>[]}
+                mobileItem={(item: Record<string, unknown>) => (
+                  <div className="min-w-0 space-y-2">
+                    <p className="break-words font-semibold">{String(item.productName ?? "—")}</p>
+                    <p className="text-xs text-muted-foreground">{String(item.productCode ?? "—")}</p>
+                    <div className="flex flex-wrap justify-between gap-2 text-sm">
+                      <span>{formatNumber(Number(item.quantity ?? 0))} {String(item.unit ?? "")} × {formatCurrency(Number(item.unitPrice ?? 0))}</span>
+                      <strong className="text-primary tabular-nums">{formatCurrency(Number(item.lineTotal ?? 0))}</strong>
+                    </div>
+                    {order.status !== "cancelled" && <p className="text-xs text-muted-foreground">Đã nhập: {formatNumber(Number(item.receivedQuantity ?? 0))} / {formatNumber(Number(item.quantity ?? 0))} {String(item.unit ?? "")}</p>}
+                    {Boolean(item.note) && <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">{String(item.note)}</p>}
+                  </div>
+                )}
                 summary={order.status === "cancelled" ? [
                   { label: "Giá trị phiếu gốc", value: formatCurrency(totalOrdered) },
                   { label: "Còn phải trả", value: formatCurrency(order.amountOwed), className: "font-bold text-base" },
@@ -1215,6 +1227,21 @@ export default function NhapHangPage() {
       ) : (
       <DataTable
         columns={columns}
+        renderMobileRow={order => (
+          <div className="min-w-0 space-y-2">
+            <div className="flex items-start justify-between gap-2">
+              <span className="font-semibold text-primary">{order.code}</span>
+              <PipelineStatusBadge name={STATUS_META[order.status]?.label ?? order.status} color={STATUS_META[order.status]?.color} size="sm" />
+            </div>
+            <p className="break-words font-medium">{order.supplierName || "Chưa có nhà cung cấp"}</p>
+            <p className="text-xs text-muted-foreground">{formatDate(order.date)}{order.orderCode ? ` · Đặt hàng: ${order.orderCode}` : ""}</p>
+            <div className="flex items-end justify-between gap-3 border-t pt-2">
+              <span className="text-xs text-muted-foreground">Tổng cần trả NCC</span>
+              <strong className="text-base tabular-nums">{formatCurrency(order.total)}</strong>
+            </div>
+            {order.amountOwed > 0 && <p className="text-right text-xs text-status-warning">Còn phải trả: {formatCurrency(order.amountOwed)}</p>}
+          </div>
+        )}
         sorting={sorting}
         onSortingChange={next=>{setSorting(current=>(typeof next==='function'?next(current):next).slice(-1));setPage(0);}}
         sortableColumnIds={Object.keys(SUPPLIER_SORT_FIELDS)}
