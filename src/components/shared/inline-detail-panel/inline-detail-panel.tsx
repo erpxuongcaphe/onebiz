@@ -68,7 +68,7 @@ export function InlineDetailPanel({
             "flex items-center gap-2",
             actionLayout === "separate"
               ? "min-w-0 flex-wrap justify-end border-b border-outline-variant bg-surface px-3 py-2"
-              : "absolute right-3 top-3 z-10",
+              : "justify-end border-b px-3 py-2 md:absolute md:right-3 md:top-3 md:z-10 md:border-0 md:p-0",
           )}
         >
           {onEdit && (

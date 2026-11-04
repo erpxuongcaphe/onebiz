@@ -37,6 +37,7 @@ import { DataTablePagination } from "./pagination";
 import { Icon } from "@/components/ui/icon";
 import { ListStrip } from "@/components/shared/list-strip";
 import { EmptyState } from "@/components/shared/empty-state";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
 export type DataTableEmptyState = "no-data" | "no-results" | "no-scope";
 
@@ -283,9 +284,10 @@ function useBreakpointName():
   | "md"
   | "lg"
   | "xl"
-  | "2xl" {
-  const [bp, setBp] = useState<"xs" | "sm" | "md" | "lg" | "xl" | "2xl">(
-    "2xl",
+  | "2xl"
+  | null {
+  const [bp, setBp] = useState<"xs" | "sm" | "md" | "lg" | "xl" | "2xl" | null>(
+    null,
   );
   useEffect(() => {
     // Dùng matchMedia (KHÔNG phải window.innerWidth) để cùng thước đo với
@@ -397,8 +399,10 @@ export function DataTable<TData, TValue>({
   // qua column meta.hideBelow. Merge với user-set columnVisibility (user
   // override luôn ưu tiên).
   const currentBp = useBreakpointName();
+  const isMobile = currentBp === "xs" || currentBp === "sm";
+  const mobileDetailTrigger = useRef<HTMLButtonElement | null>(null);
   const breakpointHidden = useMemo(
-    () => computeBreakpointHidden(columns, currentBp),
+    () => computeBreakpointHidden(columns, currentBp ?? "2xl"),
     [columns, currentBp],
   );
   const mergedVisibility = useMemo(
@@ -655,7 +659,7 @@ export function DataTable<TData, TValue>({
     // ngoài viewport.
     // Đổi sang flex-1 min-h-0 → DataTable fill RESIDUAL space → pagination
     // luôn fit trong viewport.
-    <div className="relative flex flex-col flex-1 min-h-0">
+    <div data-slot="data-table" className="relative flex min-w-0 flex-col md:min-h-0 md:flex-1">
       {toolbarMetrics || toolbarActions ? (
         <>
           <ListStrip
@@ -885,7 +889,7 @@ export function DataTable<TData, TValue>({
                   </TableRow>
 
                   {/* Inline detail panel */}
-                  {renderDetail && expandedRowIdx === rowIndex && (
+                  {renderDetail && currentBp !== null && !isMobile && expandedRowIdx === rowIndex && (
                     <TableRow className="hover:bg-transparent">
                       <TableCell
                         colSpan={totalColSpan}
@@ -907,7 +911,7 @@ export function DataTable<TData, TValue>({
       </div>
 
       {/* Mobile card view */}
-      <div className="md:hidden flex-1 min-h-0 overflow-auto px-3 py-2">
+      <div data-slot="mobile-list" className="min-w-0 space-y-3 px-3 py-3 md:hidden">
         {loading ? (
           Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="bg-card rounded-lg border p-3 space-y-2">
@@ -929,13 +933,19 @@ export function DataTable<TData, TValue>({
             <Fragment key={row.id}>
               <div
                 className={cn(
-                  "bg-card border-b border-border px-3 py-2",
+                  "min-w-0 rounded-xl border border-border bg-card p-3",
                   (onRowClick || renderDetail) &&
                     "cursor-pointer active:bg-surface-container-low press-scale-sm",
                   expandedRowIdx === rowIndex &&
                     "ring-2 ring-primary bg-primary-fixed/40"
                 )}
-                onClick={() => handleRowClick(row.original, rowIndex)}
+                onClick={(event) => {
+                  // Base UI can forward a hidden input's click separately from
+                  // the checkbox root. Selecting a row must not open its detail.
+                  if ((event.target as HTMLElement).closest("button,a,input,select,textarea,[role=checkbox],[role=menuitem]")) return;
+                  mobileDetailTrigger.current = event.currentTarget.querySelector<HTMLButtonElement>("[data-mobile-detail-trigger]");
+                  handleRowClick(row.original, rowIndex);
+                }}
               >
                 {/* Mobile: selection checkbox + action menu in top row */}
                 {(selectable || rowActions) && (
@@ -1008,14 +1018,14 @@ export function DataTable<TData, TValue>({
                     return (
                       <div
                         key={cell.id}
-                        className="flex items-center justify-between text-sm"
+                        className="flex min-w-0 items-start justify-between gap-3 text-sm"
                       >
                         {headerText && (
-                          <span className="text-muted-foreground text-xs">
+                          <span className="shrink-0 text-muted-foreground text-xs">
                             {headerText}
                           </span>
                         )}
-                        <span className="font-medium">
+                        <span className="min-w-0 break-words text-right font-medium [&_*]:max-w-full">
                           {flexRender(
                             cell.column.columnDef.cell,
                             cell.getContext()
@@ -1025,18 +1035,46 @@ export function DataTable<TData, TValue>({
                     );
                   })}
                 </div>
+                {renderDetail && (
+                  <button
+                    type="button"
+                    data-mobile-detail-trigger
+                    aria-label={`Xem chi tiết dòng ${row.index + 1}`}
+                    className="mt-2 flex min-h-11 w-full items-center justify-end gap-1 border-t border-border pt-2 text-sm font-medium text-primary"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      mobileDetailTrigger.current = event.currentTarget;
+                      handleRowClick(row.original, rowIndex);
+                    }}
+                  >
+                    Xem chi tiết <Icon name="chevron_right" size={18} />
+                  </button>
+                )}
               </div>
-
-              {/* Mobile inline detail */}
-              {renderDetail && expandedRowIdx === rowIndex && (
-                <div className="min-w-0 bg-card border rounded-lg -mt-1 overflow-hidden">
-                  {renderDetail(row.original, () => setExpandedRowIdx(null))}
-                </div>
-              )}
             </Fragment>
           ))
         )}
       </div>
+
+      {isMobile && renderDetail && expandedRowIdx !== null && table.getRowModel().rows[expandedRowIdx] && (
+        <Dialog open trackFormChanges={false} onOpenChange={(open) => { if (!open) setExpandedRowIdx(null); }}>
+          <DialogContent
+            showCloseButton={false}
+            finalFocus={mobileDetailTrigger}
+            className="inset-0 top-0 left-0 flex h-dvh max-h-dvh w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 rounded-none p-0 sm:max-w-none data-open:animate-none data-closed:animate-none"
+          >
+            <div className="flex shrink-0 items-center gap-2 border-b bg-background px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
+              <button type="button" className="inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-primary hover:bg-muted" onClick={() => setExpandedRowIdx(null)}>
+                <Icon name="arrow_back" size={20} /> Danh sách
+              </button>
+              <DialogTitle className="min-w-0 flex-1 pr-0 text-right text-sm">Chi tiết</DialogTitle>
+            </div>
+            <div data-slot="mobile-detail-body" className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)]">
+              {renderDetail(table.getRowModel().rows[expandedRowIdx].original, () => setExpandedRowIdx(null))}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Pagination — KiotViet style: "Hiển thị X dòng" */}
       {total > 0 && (
@@ -1058,7 +1096,7 @@ export function DataTable<TData, TValue>({
         bulkActions.length > 0 && (
           <div
             className={cn(
-              "sticky bottom-0 z-20 w-full shrink-0 rounded-lg border border-primary/20",
+              "sticky bottom-0 max-md:bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-20 w-full shrink-0 rounded-lg border border-primary/20",
               "bg-card text-foreground shadow-md",
               "transform transition-all duration-300 ease-out",
               "animate-in slide-in-from-bottom-4 fade-in-0"

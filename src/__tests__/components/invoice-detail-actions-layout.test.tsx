@@ -53,9 +53,10 @@ describe("invoice detail action separation", () => {
     expect(screen.queryByRole("button",{name:"Xóa"})).toBeNull();
   });
 
-  it("keeps the previous layout as default for other pages", () => {
+  it("keeps desktop overlay actions while giving mobile actions their own row", () => {
     render(<InlineDetailPanel open onClose={vi.fn()}><p>Chi tiết</p></InlineDetailPanel>);
-    expect(screen.getByRole("group")).toHaveClass("absolute");
+    expect(screen.getByRole("group")).toHaveClass("md:absolute");
+    expect(screen.getByRole("group")).not.toHaveClass("absolute");
   });
 
   it("retains the payment tab when the same invoice detail remounts", () => {

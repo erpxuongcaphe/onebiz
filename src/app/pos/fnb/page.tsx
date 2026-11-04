@@ -3794,7 +3794,7 @@ function FnbPosPageInner() {
         )}
 
         {/* Left panel: menu grid OR floor plan */}
-        <div className={cn("flex min-w-0 flex-1 flex-col", pos.lineCount > 0 && !mobileCartOpen && "pb-[calc(6rem+env(safe-area-inset-bottom))] xl:pb-0")}>
+        <div className={cn("flex min-h-0 min-w-0 flex-1 flex-col", pos.lineCount > 0 && !mobileCartOpen && "pb-[calc(6rem+env(safe-area-inset-bottom))] xl:pb-0")}>
           {showFloorPlan ? (
             <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Icon name="progress_activity" size={24} className="animate-spin text-muted-foreground" /></div>}>
               <TableFloorPlan

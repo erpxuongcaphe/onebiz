@@ -125,8 +125,24 @@ export function DetailItemsTable<T>({
         {exportError && <p role="alert" className="w-full text-sm text-destructive">{exportError}</p>}
       </div>}
       {optionalColumns&&<details className="hidden border-b px-3 py-2 text-xs md:block"><summary className="w-fit cursor-pointer">Cột chi tiết món</summary><div className="flex flex-wrap gap-3 pt-2">{optionalColumns.map(header=><label key={header} className="flex min-h-9 items-center gap-2"><input type="checkbox" checked={!hiddenColumns.includes(header)} onChange={e=>setHiddenColumns(v=>e.target.checked?v.filter(x=>x!==header):[...v,header])}/>{header}</label>)}</div></details>}
-      {mobileItem&&<div className="divide-y md:hidden">{visible.map((item,index)=><div key={index} className="p-3">{mobileItem(item)}</div>)}</div>}
-      <div className={cn("max-h-[480px] overflow-auto",mobileItem&&"hidden md:block")}>
+      <div className="divide-y md:hidden">
+        {visible.map((item, index) => (
+          <div key={index} className="min-w-0 space-y-2 p-3">
+            {mobileItem ? mobileItem(item) : effectiveColumns.map((column, columnIndex) => {
+              const value = typeof column.accessor === "function" ? column.accessor(item) : item[column.accessor] as ReactNode;
+              const record = item as Record<string, unknown>;
+              const href = pageSize && columnIndex === 0 && record.id
+                ? `${"supplierReturn" in record ? "/hang-hoa/tra-hang-nhap" : "amountOwed" in record ? "/hang-hoa/nhap-hang" : "invoiceCode" in record ? "/don-hang/tra-hang" : "/don-hang/hoa-don"}?focus=${encodeURIComponent(String(record.id))}` : null;
+              return <div key={columnIndex} className="flex min-w-0 items-start justify-between gap-3 text-sm">
+                <span className="shrink-0 text-xs text-muted-foreground">{column.header}</span>
+                <span className="min-w-0 break-words text-right font-medium [&_*]:max-w-full">{href ? <a className="text-primary underline" href={href} target="_blank" rel="noopener noreferrer">{value}</a> : value}</span>
+              </div>;
+            })}
+          </div>
+        ))}
+        {visible.length === 0 && <p className="p-4 text-center text-muted-foreground">Không có dữ liệu</p>}
+      </div>
+      <div className="hidden max-h-[480px] overflow-auto md:block">
       <table className="w-full text-sm">
         <thead className="sticky top-0 z-10 bg-muted">
           <tr className="bg-muted/50">
