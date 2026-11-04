@@ -1,6 +1,7 @@
 "use client";
 import { billAuditHref } from "@/lib/operation-history-entry";
 import { useDeliveryStaff } from "./hooks/use-delivery-staff";
+import { useFnbCustomerPicker } from "./hooks/use-fnb-customer-picker";
 import { useFnbDialogPrice } from "./hooks/use-fnb-dialog-price";
 import { useFnbTabReconciliation } from "@/lib/hooks/use-fnb-tab-reconciliation";
 
@@ -285,7 +286,7 @@ function FnbPosPageInner() {
   const [closeShiftDialogOpen, setCloseShiftDialogOpen] = useState(false);
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [menuSearch, setMenuSearch] = useState("");
-  const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
+  const { open: customerPickerOpen, openPicker: openCustomerPicker, closePicker: closeCustomerPicker, handleShortcut: handleCustomerShortcut } = useFnbCustomerPicker();
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [productDisplayMode, setProductDisplayMode] = useState<"compact" | "photos">("compact");
   const [menuOrderOpen, setMenuOrderOpen] = useState(false);
@@ -1809,7 +1810,7 @@ function FnbPosPageInner() {
     if (!initialTab || initialTab.lines.length === 0) return null;
     let tab = initialTab;
     if (requireTable()) return null;
-    if (needsCustomerSelection(tab)) { setCustomerPickerOpen(true); toast({title:"Chọn khách cho đơn",description:"Chọn Khách lẻ hoặc khách có tên trước khi gửi bếp.",variant:"info"}); return null; }
+    if (needsCustomerSelection(tab)) { openCustomerPicker("send-kitchen"); toast({title:"Chọn khách cho đơn",description:"Chọn Khách lẻ hoặc khách có tên trước khi gửi bếp.",variant:"info"}); return null; }
     if (fnbKitchenSubmitLockRef.current) {
       toast({
         title: "Đang gửi bếp...",
@@ -2103,7 +2104,7 @@ function FnbPosPageInner() {
       fnbKitchenSubmitLockRef.current = false;
       setKitchenSubmitting(false);
     }
-  }, [pos, tenantId, branchId, userId, toast, settings, user, networkStatus.isOnline, requireTable, currentDeliveryPolicy, fnbBenefitDisplay.total]);
+  }, [pos, tenantId, branchId, userId, toast, settings, user, networkStatus.isOnline, requireTable, currentDeliveryPolicy, fnbBenefitDisplay.total, openCustomerPicker]);
 
   // ── Voucher / Coupon apply ──
   // Kết quả này là xem trước; máy chủ tính lại và ghi số tiền thật lúc thanh toán.
@@ -2907,7 +2908,7 @@ function FnbPosPageInner() {
     });
     switch (quyetDinh) {
       case "mo_thanh_toan":
-        if (needsCustomerSelection(tab)) { setCustomerPickerOpen(true); toast({title:"Chọn khách trước khi thu tiền",description:"Đơn chưa lưu lựa chọn khách. Chọn Khách lẻ hoặc khách có tên, rồi mở lại thanh toán.",variant:"info"}); return false; }
+        if (needsCustomerSelection(tab)) { openCustomerPicker("payment"); toast({title:"Chọn khách trước khi thu tiền",description:"Đơn chưa lưu lựa chọn khách. Chọn Khách lẻ hoặc khách có tên, rồi mở lại thanh toán.",variant:"info"}); return false; }
         setPaymentOpen(true);
         return true;
       case "cho_kiem_tra_ca":
@@ -2947,7 +2948,7 @@ function FnbPosPageInner() {
       case "khong_lam_gi":
         return false;
     }
-  }, [canCheckout, pos.activeTab, pos.lineCount, networkStatus.isOnline, shiftState.status, toast, hydrateKitchenOrderIntoTab, requireTable]);
+  }, [canCheckout, pos.activeTab, pos.lineCount, networkStatus.isOnline, shiftState.status, toast, hydrateKitchenOrderIntoTab, requireTable, openCustomerPicker]);
 
   const handleOpenShift = useCallback(
     async (startingCash: number) => {
@@ -3272,12 +3273,12 @@ function FnbPosPageInner() {
       }
       if (liveBranchRef.current !== selectedBranch) return;
       pos.updateTabMeta(tab.id, { customerId: customer?.id, customerName: customer?.name ?? "Khách lẻ", customerConfirmationRequired: false });
-      setCustomerPickerOpen(false);
+      closeCustomerPicker("selected");
       if (tab.kitchenOrderId) void openOrders.refresh();
     } catch (error) {
       toast({ title: "Chưa lưu được khách", description: error instanceof Error ? error.message : "Thử lại khi có mạng.", variant: "error" });
     } finally { customerSelectionLock.current = false; }
-  }, [pos, branchId, networkStatus.isOnline, openOrders, toast]);
+  }, [pos, branchId, networkStatus.isOnline, openOrders, toast, closeCustomerPicker]);
 
   // CEO 13/05: BẤT KỲ giảm giá MANUAL nào → OTP duyệt từ manager.
   // Xoá discount (undefined hoặc value=0) → skip OTP, apply trực tiếp.
@@ -3461,6 +3462,7 @@ function FnbPosPageInner() {
   // ── Keyboard shortcuts (F3/F4/F9/F10/Ctrl+Tab) ──
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (handleCustomerShortcut(e)) return;
       const tag = (e.target as HTMLElement)?.tagName;
       const inInput = tag === "INPUT" || tag === "TEXTAREA";
       // Dialogs own their keyboard flow. Do not switch the underlying bill or
@@ -3503,11 +3505,6 @@ function FnbPosPageInner() {
         setSearchModalOpen(true);
         return;
       }
-      if (e.key === "F4") {
-        e.preventDefault();
-        setCustomerPickerOpen(true);
-        return;
-      }
       // POS-FIX-B5: F9/F10 luôn fire kể cả khi cursor ở input (note/coupon/
       // search). Trước đây check `data-allow-hotkeys` nhưng KHÔNG component
       // nào set → barista gõ note "ít đá" rồi F10 bị chặn, phải blur trước.
@@ -3531,7 +3528,7 @@ function FnbPosPageInner() {
         e.preventDefault();
         if (keyboardHelpOpen) setKeyboardHelpOpen(false);
         else if (searchModalOpen) setSearchModalOpen(false);
-        else if (customerPickerOpen) setCustomerPickerOpen(false);
+        else if (customerPickerOpen) closeCustomerPicker();
         else if (paymentOpen) setPaymentOpen(false);
         else if (splitBillOpen) setSplitBillOpen(false);
         else if (mobileCartOpen) setMobileCartOpen(false);
@@ -3545,6 +3542,7 @@ function FnbPosPageInner() {
     pos, searchModalOpen, customerPickerOpen, paymentOpen,
     splitBillOpen, showFloorPlan, mobileCartOpen, keyboardHelpOpen,
     handleSendToKitchen, requestPayment, handleSwitchOrderTab, handleCreateOrderTab, handleCloseOrderTab,
+    handleCustomerShortcut, closeCustomerPicker,
   ]);
 
   // Sprint LOAD-1 (CEO 08/05): Phân biệt 3 state để loading UX đẹp hơn.
@@ -3905,7 +3903,7 @@ function FnbPosPageInner() {
           canCheckout={canCheckout}
           onSplitBill={canSplitBill && networkStatus.isOnline ? handleOpenSplitBill : undefined}
           onChangeOrderType={handleOrderTypeChange}
-          onCustomerClick={() => setCustomerPickerOpen(true)}
+          onCustomerClick={() => openCustomerPicker("customer-button")}
           onDiscountChange={handleManualDiscount}
           onPrintPreBill={handlePrintPreBill}
           onVoidKitchenOrder={networkStatus.isOnline ? () => setCancelSentMode("whole") : undefined}
@@ -4001,7 +3999,7 @@ function FnbPosPageInner() {
             initialCustomerName={pos.activeTab?.customerName}
             customerLocked={Boolean(pos.activeTab?.customerId)}
             customerConfirmationRequired={needsCustomerSelection(pos.activeTab)}
-            onSelectCustomer={() => { setPaymentOpen(false); setCustomerPickerOpen(true); }}
+            onSelectCustomer={() => { setPaymentOpen(false); openCustomerPicker("payment-customer"); }}
             onConfirm={handlePayment}
           />
         </Suspense>
@@ -4069,7 +4067,7 @@ function FnbPosPageInner() {
             branchId={branchId}
             open={customerPickerOpen}
             onSelect={handleCustomerSelect}
-            onClose={() => setCustomerPickerOpen(false)}
+            onClose={() => closeCustomerPicker()}
           />
         </Suspense>
       )}
@@ -4129,7 +4127,7 @@ function FnbPosPageInner() {
               canCheckout={canCheckout}
               onSplitBill={canSplitBill && networkStatus.isOnline ? handleOpenSplitBill : undefined}
               onChangeOrderType={handleOrderTypeChange}
-              onCustomerClick={() => setCustomerPickerOpen(true)}
+              onCustomerClick={() => openCustomerPicker("customer-button")}
               onDiscountChange={handleManualDiscount}
               onPrintPreBill={handlePrintPreBill}
               onVoidKitchenOrder={networkStatus.isOnline ? () => setCancelSentMode("whole") : undefined}

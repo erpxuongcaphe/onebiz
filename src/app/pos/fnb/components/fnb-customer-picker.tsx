@@ -4,7 +4,7 @@ import { getFnbBuyerContacts, type FnbBuyerKind, type PosCustomerIdentity } from
 import { useDebounce } from "@/lib/utils/use-debounce";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 
 interface FnbCustomerPickerProps {
   open: boolean; branchId: string;
@@ -51,7 +51,7 @@ export function FnbCustomerPicker({open,branchId,onSelect,onClose}: FnbCustomerP
             disabled={choosing} onClick={()=>switchKind(value)} onKeyDown={event=>{if(['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){event.preventDefault();switchKind(event.key==='Home'?'customer':event.key==='End'?'employee':kind==='customer'?'employee':'customer');}}}
             className={cn("flex min-h-11 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-2 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-primary sm:px-3",kind===value?"bg-background text-primary shadow-sm dark:text-blue-300":"text-muted-foreground hover:text-foreground")}><Icon name={icon} size={16}/>{label}</button>)}
         </div>
-        <button type="button" aria-label="Đóng chọn người mua" disabled={choosing} onClick={onClose} className="flex size-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary"><Icon name="close" size={18}/></button>
+        <DialogClose aria-label="Đóng chọn người mua" disabled={choosing} className="flex size-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary"><Icon name="close" size={18}/></DialogClose>
       </div>
       <div className="flex shrink-0 items-center gap-2 border-b px-4">
         <Icon name="search" size={18} className="shrink-0 text-muted-foreground"/>
