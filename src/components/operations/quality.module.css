@@ -5,6 +5,31 @@
   letter-spacing: 0;
 }
 .root [hidden] { display:none !important; }
+.listBar { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-block:14px; padding-block:12px; border-block:1px solid #dce2eb; }
+.listSearch { display:flex; align-items:center; gap:8px; flex:1 1 240px; max-width:360px; min-width:0; color:#52627a; }
+.listSearch input { width:100%; }
+.quickStates { display:flex; flex-wrap:wrap; gap:4px; padding:3px; background:#eef2f8; border-radius:6px; }
+.root .quickStates button { border-color:transparent; background:transparent; }
+.root .quickStates button[aria-pressed="true"] { background:#fff; color:#2148a5; border-color:#d5dff2; font-weight:650; }
+.root[data-hub-view="work"] .actions button[aria-pressed="true"] { background:#e8f1ff; border-color:#93b5ef; color:#1649a1; }
+.root[data-hub-view="work"] .table th,
+.root[data-hub-view="issues"] .table th,
+.root[data-hub-view="qc"] .table th { white-space:normal; }
+.reportMetrics.metrics { gap:12px; background:none; border:0; }
+.reportMetrics.metrics > div { background:#fff; border:1px solid #dce3ec; border-radius:8px; padding:16px; }
+.periodReadiness { padding-block:14px; margin-block:12px; border-block:1px solid #dce2eb; }
+.periodReadiness h3 { margin:0; font-size:17px; }
+.periodReadiness p { color:#53627a; overflow-wrap:anywhere; }
+.periodChecks { list-style:none; display:flex; flex-wrap:wrap; gap:12px 22px; padding:0; }
+.periodChecks li { display:flex; align-items:center; gap:8px; color:#334761; }
+@media(max-width:640px) {
+  .listSearch { max-width:none; flex-basis:100%; }
+  .root .quickStates button { min-height:44px; }
+  .periodChecks { display:grid; }
+  .reportMetrics.metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .reportMetrics.metrics > div { padding:12px; }
+  .reportMetrics.metrics strong { font-size:18px; }
+}
 .setupNav { display:flex; gap:6px; flex-wrap:wrap; border-bottom:1px solid #dce2eb; padding:10px 0; margin-bottom:16px; }
 .setupNav button[aria-current="step"],.quickDates button[aria-pressed="true"] { background:#e8f1ff; color:#1649a1; border-color:#93b5ef; font-weight:600; }
 .setupStatus { display:flex; gap:8px 20px; flex-wrap:wrap; font-size:13px; color:#526172; padding-block:8px; }
