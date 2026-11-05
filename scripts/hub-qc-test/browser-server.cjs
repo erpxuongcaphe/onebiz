@@ -12,6 +12,7 @@ const ids = {
   branch: "20000000-0000-4000-8000-000000000001",
   owner: "30000000-0000-4000-8000-000000000001",
   manager: "30000000-0000-4000-8000-000000000002",
+  manager2: "30000000-0000-4000-8000-000000000003",
   qc: "30000000-0000-4000-8000-000000000004",
   operator: "30000000-0000-4000-8000-000000000005",
   accounting: "30000000-0000-4000-8000-000000000007",
@@ -37,7 +38,23 @@ const ids = {
     }
   }
   await db.query("update ops_q_grants set active=true");
+  if(process.env.HUB_UX_ACCEPTANCE==='1'){
+    for(const file of ['20261022110000_operations_library_updates.sql','20261026110000_operations_library_assignments.sql']){
+      const filename=path.join(root,'supabase/migrations',file);
+      if(!fs.existsSync(filename))throw Error(`Missing acceptance migration ${file}`);
+      await db.exec(fs.readFileSync(filename,'utf8'));
+    }
+    await db.query("select set_config('test.actor',$1,false)",[ids.owner]);
+    const day=(await db.query("select (now() at time zone 'Asia/Ho_Chi_Minh')::date::text as current_day")).rows[0].current_day;
+    const source=require(root+'/src/lib/operations/ceo-workbook.json');
+    const library=(action,payload)=>db.query('select ops_working_library_execute_v2($1,$2,gen_random_uuid()) value',[action,JSON.stringify(payload)]);
+    const saved=(await library('save',{id:null,version:null,title:'Bộ tiêu chí nghiệm thu cô lập',rows:source.rows.map(row=>({...row,critical:false,accountingRequired:false})),notes:'Chỉ kiểm thử local',sourceKey:null,reason:'Tạo dữ liệu kiểm thử cô lập'})).rows[0].value;
+    await library('apply',{id:saved.id,version:1,assignments:[{branchId:ids.branch,assigneeIds:[ids.manager,ids.manager2],effectiveFrom:day,dueTime:'23:59',weeklyDay:1}]});
+    await db.query('select ops_generate_internal($1,$2)',[ids.branch,day]);
+    console.log('UX_ACCEPTANCE seeded 34 source criteria through real library functions');
+  }
   let actor = ids.owner;
+  let queue=Promise.resolve();
   const req = createRequire(root + "/package.json");
   const { createServer } = await import(
     pathToFileURL(req.resolve("vite")).href
@@ -110,8 +127,13 @@ const ids = {
               });
               res.end(JSON.stringify(data));
             };
+            let release;
+            const previous=queue;
+            queue=new Promise(resolve=>{release=resolve;});
+            await previous;
             try {
               if (url.pathname === "/__test__/actor") {
+                if(req.method==='GET')return reply({actor:Object.keys(ids).find(key=>ids[key]===actor)});
                 const nextActor = JSON.parse(body).actor;
                 if (!ids[nextActor]) throw Error("Unknown fixture actor");
                 actor = ids[nextActor];
@@ -207,9 +229,9 @@ const ids = {
                 e.message,
                 e.where ?? "",
               );
-              return reply({ error: e.message }, 400);
+              return reply({ error: e.message },e.message.includes('OPS_FORBIDDEN')?403:e.message.includes('OPS_UNAUTHENTICATED')?401:400);
             } finally {
-              await db.exec("reset role");
+              try{await db.exec("reset role");}finally{release();}
             }
           });
         },

@@ -10,6 +10,7 @@ const branch='11111111-1111-4111-8111-111111111111';
 const workspace={userId:'owner',isCeo:true,branches:[{id:branch,name:'Quán thử',capabilities:['approve_policy']}],people:[],members:[],standards:[],runs:[],todos:[]} as unknown as Workspace;
 const data={can:{manage:true,work:false,qc:false,correct:false,accounting:false,close:true},rows:[],total:0,offset:0,limit:50,groups:[],catalog:[],rules:[],assignments:[],grants:[],departments:[],periods:[],score:{official:false,score:null,completedAudits:0},accounting:[]} as unknown as QualityData;
 const fetchMock=vi.fn();
+beforeEach(()=>window.history.replaceState(null,'','/hub'));
 beforeEach(()=>{vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(new Date('2026-10-22T03:00:00Z'));vi.stubGlobal('matchMedia',vi.fn(()=>({matches:false,addEventListener:vi.fn(),removeEventListener:vi.fn()})));vi.stubGlobal('fetch',fetchMock);fetchMock.mockImplementation(async(url:string)=>({ok:true,json:async()=>url==='/api/operations/library'?{libraries:[],applications:[]}:data}));});
 afterEach(()=>{cleanup();vi.useRealTimers();vi.unstubAllGlobals();vi.resetAllMocks();});
 function show(view:'work'|'settings'|'issues'|'qc'='work',options:Partial<React.ComponentProps<typeof QualityWorkspace>>={}){
@@ -46,8 +47,9 @@ describe('CEO and manager Hub journey',()=>{
   fetchMock.mockResolvedValue({ok:true,json:async()=>({...data,total:1,rows:[{id:'run',title:'Nguyên liệu',code:'WS-00000000000000000000000000000000-0019',frequency:'daily',manager_ids:[],quality:'unknown',state:'pending',original_due_at:'2026-10-22T16:59:00Z',criteria:[{id:'criterion',title:'Bao bì chưa mở không bị rách'}],checks:[]}]})});
   show();await screen.findAllByText('19. Nguyên liệu');
   expect(screen.queryByRole('button',{name:'Ghi kết quả'})).toBeNull();
-  fireEvent.click(screen.getAllByText('Yêu cầu cần đạt')[0]);
-  expect(screen.getAllByText('Bao bì chưa mở không bị rách').length).toBeGreaterThan(0);
+  fireEvent.click(screen.getAllByRole('button',{name:'Xem chi tiết'})[0]);
+  expect(await screen.findByRole('dialog')).toHaveTextContent('Bao bì chưa mở không bị rách');
+  fireEvent.click(screen.getByRole('button',{name:'Đóng chi tiết'}));
   expect(screen.getByText('1 lượt thực hiện · trang 1')).toBeInTheDocument();
  });
  it('organizes setup into one visible destination at a time',async()=>{
@@ -64,18 +66,17 @@ describe('CEO and manager Hub journey',()=>{
   expect(await screen.findByRole('button',{name:'Chính sách mới'})).toBeInTheDocument();
   await waitFor(()=>expect(fetchMock.mock.calls.every(([,init])=>!init?.method)).toBe(true));
  });
- it('places the work group before work and explains why an owner cannot record manager results',async()=>{
+ it('keeps the original group under work in a compact five-column table without owner write access',async()=>{
   fetchMock.mockResolvedValue({ok:true,json:async()=>({...data,total:1,groups:[{id:'space',title:'Không gian và trải nghiệm'}],rows:[{id:'run',title:'Khu vực pha chế',code:'WS-0001',category:'group:space',frequency:'daily',manager_ids:[],quality:'unknown',state:'pending',original_due_at:'2026-10-22T16:59:00Z',criteria:[],checks:[]}]})});
   show();
-  const heading=await screen.findByRole('columnheader',{name:'Nhóm công việc'});
-  expect(heading.nextElementSibling).toHaveTextContent('Công việc');
+  await screen.findByRole('columnheader',{name:'Công việc'});
   const table=screen.getByRole('table');
   const row=within(table).getByText('1. Khu vực pha chế').closest('tr')!;
   const cells=within(row).getAllByRole('cell');
   expect(cells[0]).toHaveTextContent('Không gian và trải nghiệm');
-  expect(cells[1]).not.toHaveTextContent('Không gian và trải nghiệm');
-  expect(cells[6]).toHaveTextContent('Chỉ xem');
-  expect(screen.getAllByText('Nhóm công việc').length).toBeGreaterThan(1);
+  expect(cells).toHaveLength(5);
+  expect(screen.getByText(/Bạn đang xem kết quả của chi nhánh/)).toBeInTheDocument();
+  expect(screen.queryByRole('button',{name:'Ghi kết quả'})).toBeNull();
  });
  it('shows recording only for the assigned manager on desktop and mobile',async()=>{
   const row={id:'run',title:'Khu vực pha chế',frequency:'daily',manager_ids:['manager'],quality:'unknown',state:'pending',original_due_at:'2026-10-22T16:59:00Z',criteria:[],checks:[]};
@@ -85,7 +86,7 @@ describe('CEO and manager Hub journey',()=>{
   expect(screen.getAllByRole('button',{name:'Ghi kết quả'})).toHaveLength(2);
   view.unmount();
   show('work',{workspace:{...workspace,userId:'other-manager',isCeo:false}});
-  expect((await screen.findAllByText('Không được phân công việc này')).length).toBe(2);
+  await screen.findAllByRole('button',{name:'Xem chi tiết'});
   expect(screen.queryByRole('button',{name:'Ghi kết quả'})).toBeNull();
  });
  it('removes only the repeated assignment list and keeps its branch-work navigation',async()=>{

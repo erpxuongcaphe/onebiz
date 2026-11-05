@@ -16,6 +16,7 @@ export function QualityReport({
   busy,
   onEdit,
   onSave,
+  section="all",
 }: {
   data: QualityWorkspace;
   workspace: Workspace;
@@ -27,6 +28,7 @@ export function QualityReport({
     action: QualityAction,
     payload: Record<string, unknown>,
   ) => Promise<boolean>;
+  section?: string;
 }) {
   const name = (id: string) =>
     workspace.people.find((p) => p.id === id)?.name ?? "Người dùng OneBiz";
@@ -50,7 +52,7 @@ export function QualityReport({
   }[];
   return (
     <>
-      <section className={s.section}>
+      <section className={s.section} hidden={section!=="all"&&section!=="business"}>
         <h3>Thưởng kinh doanh riêng</h3>
         {data.business?.ready ? (
           <div className={s.grid}>
@@ -95,7 +97,7 @@ export function QualityReport({
           </p>
         ))}
       </section>
-      {data.settlement && (
+      {data.settlement && (section === "all" || section === "summary") && (
         <section className={s.section}>
           <h3>Kỳ đã chốt · phiên bản {data.settlement.revision}</h3>
           <p>
@@ -132,7 +134,7 @@ export function QualityReport({
           </div>
         </section>
       )}
-      <section className={s.section}>
+      <section className={s.section} hidden={section!=="all"&&section!=="ledger"}>
         <h3>Sổ điểm QC · khoản gốc và điều chỉnh</h3>
         <div className={s.tableScroll}>
           <table className={s.table}>
@@ -188,7 +190,7 @@ export function QualityReport({
           <p className={s.muted}>Chưa có khoản điểm trong kỳ.</p>
         )}
       </section>
-      <section className={s.section}>
+      <section className={s.section} hidden={section!=="all"&&section!=="accounting"}>
         <div className={s.heading}>
           <h3>Số liệu hao hụt từ kế toán</h3>
           {data.can.accounting && (

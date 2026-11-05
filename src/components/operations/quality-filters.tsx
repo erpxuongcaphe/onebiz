@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/icon";
 import s from "./quality.module.css";
 
-const query = "(max-width: 640px)";
+const query = "(max-width: 1000px)";
 function subscribe(listener: () => void) {
   const media = window.matchMedia(query);
   media.addEventListener("change", listener);

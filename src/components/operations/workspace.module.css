@@ -128,11 +128,34 @@
   font-weight: 650;
 }
 .content {
+  container-type: inline-size;
   min-width: 0;
   padding: 20px 24px 36px;
   max-width: 1600px;
   width: 100%;
   margin-inline: auto;
+}
+.contextLine { margin: -6px 0 12px; color:#53627a; font-size:13px; overflow-wrap:anywhere; }
+.mobileModules,.root .periodToggle { display:none; }
+@media(max-width:1000px){
+  .layout{grid-template-columns:minmax(0,1fr);}
+  .nav{display:flex;gap:4px;overflow-x:auto;padding:6px 12px;border-right:0;border-bottom:1px solid #dce2eb;}
+  .nav button{flex:1 0 auto;width:auto;min-height:44px;margin:0;justify-content:center;}
+  .content{padding:16px;}
+  .header{flex-wrap:wrap;gap:8px;padding:10px 12px;}
+}
+@media(max-width:640px){
+  .header .moduleNav{display:none;}
+  .mobileModules{display:block;position:relative;margin-left:auto;}
+  .mobileModules summary{cursor:pointer;min-height:44px;display:flex;align-items:center;padding:8px;}
+  .mobileModules nav{position:absolute;right:0;background:white;border:1px solid #dce2eb;padding:12px;z-index:25;}
+  .root .periodToggle{display:inline-flex;min-height:44px;}
+  .root .scope[data-expanded="false"] .monthScope{display:none;}
+  .root .scope .monthScope{grid-column:1/-1;width:100%;}
+  .nav{position:static;gap:4px;}
+  .nav button{font-size:13px;padding:7px 9px;}
+  .nav button>span:first-child{display:none;}
+  .content{padding:12px;}
 }
 .title {
   display: flex;
@@ -868,3 +891,19 @@
 .standardDetails dt{color:#637083;font-size:13px}.standardDetails dd{margin:4px 0 0;font-weight:600;overflow-wrap:anywhere}
 .standardCriterion{padding:12px 0;border-top:1px solid #dbe2eb}.standardCriterion h4{margin:0 0 6px}.standardCriterion p{margin:4px 0;overflow-wrap:anywhere}
 @media(max-width:600px){.standardDetails{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:1000px){.layout{grid-template-columns:minmax(0,1fr);}.nav{display:flex;overflow-x:auto;border-right:0;}.nav button{width:auto;flex:1 0 auto;min-height:44px;}}
+@media(max-width:640px){
+  .header{gap:6px;padding:6px 12px;}
+  .root .scope{display:grid;grid-template-columns:44px minmax(0,1fr) auto 44px;gap:6px;flex-basis:100%;}
+  .root .scope > select{grid-column:2;grid-row:1;}
+  .root .scope > :first-child{grid-column:1;grid-row:1;}
+  .root .scope > .periodToggle{grid-column:3;grid-row:1;display:inline-flex;}
+  .root .scope > button:last-child{grid-column:4;grid-row:1;}
+  .root .scope > .monthScope{grid-column:1/-1;grid-row:2;}
+  .nav{position:static;padding:6px;gap:4px;}
+  .nav button{flex:1 0 auto;flex-direction:row;font-size:13px;padding:7px 8px;}
+  .nav button>span:first-child{display:none;}
+  .title{margin-bottom:8px;}.contextLine{margin:0 0 8px;}
+}
+.mobileNavigation{display:none;}
+@media(max-width:640px){.layout>.nav{display:none;}.mobileNavigation{display:block;background:white;border-bottom:1px solid #dce2eb;padding:6px 12px;}.root .mobileNavigation select{width:100%;min-height:44px;color:#174bc4;font-weight:600;}}
