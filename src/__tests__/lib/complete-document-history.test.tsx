@@ -44,3 +44,26 @@ describe("accessible complete document history",()=>{
     expect(screen.getByRole("button",{name:"Xuất Excel"})).toBeDisabled();
   });
 });
+
+it("searches item rows across fields, keeps the full total and clears the filter", () => {
+  const items = [
+    { productName: "Trà Ô Long", productCode: "SKU-TRA-007", unit: "Ly", note: "Mang về" },
+    { productName: "Trà Đào", productCode: "SKU-TRA-008", unit: "Ly", note: "Dùng tại chỗ" },
+  ];
+  render(<DetailItemsTable items={items} columns={[{ header: "Tên hàng", accessor: "productName" }]}
+    searchFields={row => row === items[0] ? ["Ngọt 80%"] : []}
+    summary={[{ label: "Tổng hóa đơn", value: "70.000đ" }]} />);
+  const input = screen.getByRole("searchbox");
+  const table = within(screen.getByRole("table"));
+  fireEvent.change(input, { target: { value: "skutra007 80 mang ve o long" } });
+  expect(table.getByText("Trà Ô Long")).toBeInTheDocument();
+  expect(table.queryByText("Trà Đào")).toBeNull();
+  expect(screen.getByRole("status")).toHaveTextContent("1/2 dòng");
+  expect(screen.getByText("70.000đ")).toBeInTheDocument();
+  fireEvent.change(input, { target: { value: "logn mang ve" } });
+  expect(screen.getByRole("status")).toHaveTextContent("Kết quả gần đúng");
+  fireEvent.change(input, { target: { value: "SKU-TRA-009" } });
+  expect(table.getByText("Không tìm thấy dòng phù hợp")).toBeInTheDocument();
+  fireEvent.change(input, { target: { value: "" } });
+  expect(table.getByText("Trà Đào")).toBeInTheDocument();
+});

@@ -34,13 +34,22 @@ describe("mobile list detail", () => {
     expect(mobile.getByRole("checkbox", { name: "Chọn dòng 1" })).toBeChecked();
   });
 
-  it("retains inline detail on desktop without mounting a hidden mobile copy", async () => {
+  it("opens a single desktop dialog and preserves the list position", async () => {
     viewport(1440);
-    render(<DataTable columns={[{ accessorKey: "code", header: "Mã" }]} data={[{ code: "PN001" }]} selectable={false} renderDetail={(_row, close) => <Detail close={close} />} />);
-    fireEvent.click(screen.getAllByText("PN001")[0]);
-    expect(await screen.findByText("Phiếu PN001")).toBeInTheDocument();
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    const { container } = render(<DataTable columns={[{ accessorKey: "code", header: "Mã" }]} data={[{ code: "PN001" }]} selectable={false} getDetailTitle={row => row.code} renderDetail={(_row, close) => <Detail close={close} />} />);
+    const row = screen.getAllByText("PN001")[0].closest("tr")!;
+    const list = container.querySelector('[class*="md:block"][class*="overflow-auto"]')!;
+    list.scrollTop = 180;
+    fireEvent.keyDown(row, { key: "Enter" });
+    const dialog = await screen.findByRole("dialog", { name: "PN001" });
+    const body = within(dialog).getByRole("region", { name: "Nội dung chi tiết" });
+    expect(body).toHaveTextContent("Phiếu PN001");
+    expect(body).not.toContainElement(within(dialog).getByRole("button", { name: "Đóng", exact: true }));
     expect(mounted).toHaveBeenCalledTimes(1);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Đóng", exact: true }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(list.scrollTop).toBe(180);
+    await waitFor(() => expect(row).toHaveFocus());
   });
 
   it("does not load desktop detail first when a mobile deep link starts expanded", async () => {
@@ -56,3 +65,4 @@ describe("mobile list detail", () => {
     expect(cards.textContent).toContain("Lon");
   });
 });
+

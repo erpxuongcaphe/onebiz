@@ -20,6 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -119,7 +120,7 @@ interface DataTableProps<TData, TValue> {
   /** Chỉ số đặt ở trái dải công cụ gọn; khi có sẽ thay hàng "Hiển thị cột" riêng. */
   toolbarMetrics?: ReactNode;
   compactMobileToolbar?: boolean;
-  fitDetailToViewport?: boolean;
+  getDetailTitle?: (row: TData) => string;
   renderMobileRow?: (row:TData)=>ReactNode;
   /** Nút lọc hoặc công cụ của trang, đặt trước menu hiển thị cột. */
   toolbarActions?: ReactNode;
@@ -127,7 +128,7 @@ interface DataTableProps<TData, TValue> {
   toolbarFooter?: ReactNode;
   /** Mật độ desktop; mobile giữ nguyên vùng chạm và bố cục thẻ. */
   density?: "comfortable" | "compact";
-  /** Inline detail panel — render function receives the row data */
+  /** Detail dialog — render function receives the row data */
   renderDetail?: (row: TData, onClose: () => void) => ReactNode;
   /** Currently expanded row index (controlled) */
   expandedRow?: number | null;
@@ -363,7 +364,7 @@ export function DataTable<TData, TValue>({
   columnToggleToolbar = true,
   toolbarMetrics,
   compactMobileToolbar=false,
-  fitDetailToViewport=false,
+  getDetailTitle,
   renderMobileRow,
   toolbarActions,
   toolbarFooter,
@@ -400,7 +401,8 @@ export function DataTable<TData, TValue>({
   // override luôn ưu tiên).
   const currentBp = useBreakpointName();
   const isMobile = currentBp === "xs" || currentBp === "sm";
-  const mobileDetailTrigger = useRef<HTMLButtonElement | null>(null);
+  const detailTrigger = useRef<HTMLElement | null>(null);
+  const detailBody = useRef<HTMLDivElement>(null);
   const breakpointHidden = useMemo(
     () => computeBreakpointHidden(columns, currentBp ?? "2xl"),
     [columns, currentBp],
@@ -632,18 +634,7 @@ export function DataTable<TData, TValue>({
       </DropdownMenu>
     ) : null;
 
-  const detailViewport=useRef<HTMLDivElement>(null);
-  const [detailWidth,setDetailWidth]=useState<number|undefined>();
-  useEffect(()=>{
-    if(!fitDetailToViewport||!detailViewport.current)return;
-    const element=detailViewport.current;
-    const measure=()=>setDetailWidth(element.clientWidth>2?element.clientWidth-2:undefined);
-    measure();
-    const observer=typeof ResizeObserver!=="undefined"?new ResizeObserver(measure):undefined;
-    observer?.observe(element);
-    if(!observer)window.addEventListener("resize",measure);
-    return()=>{observer?.disconnect();if(!observer)window.removeEventListener("resize",measure);};
-  },[fitDetailToViewport]);
+  const detailRow = expandedRowIdx === null ? undefined : table.getRowModel().rows[expandedRowIdx];
 
   const handleRowClick = (row: TData, index: number) => {
     if (renderDetail) {
@@ -749,7 +740,7 @@ export function DataTable<TData, TValue>({
       {/* Desktop table — min-h-0 critical: cho flex-1 shrink đúng trong
           flex-col parent → pagination footer luôn hiện. overflow-auto cho
           cả ngang lẫn dọc khi columns vượt viewport. */}
-      <div ref={detailViewport} className="hidden md:block flex-1 min-h-0 overflow-auto">
+      <div className="hidden md:block flex-1 min-h-0 overflow-auto">
         {/* CEO 27/05/2026: containerClassName="overflow-visible" để wrapper
             của <Table> KHÔNG tạo scroll context riêng. OUTER div này
             (overflow-auto, height-constrained qua flex-1 min-h-0) handle CẢ
@@ -864,7 +855,17 @@ export function DataTable<TData, TValue>({
                       expandedRowIdx === rowIndex &&
                         "bg-primary-fixed/60 border-l-2 border-l-primary"
                     )}
-                    onClick={() => handleRowClick(row.original, rowIndex)}
+                    tabIndex={renderDetail ? 0 : undefined}
+                    onClick={(event) => {
+                      if (renderDetail) detailTrigger.current = event.currentTarget;
+                      handleRowClick(row.original, rowIndex);
+                    }}
+                    onKeyDown={renderDetail ? (event) => {
+                      if (event.target !== event.currentTarget || (event.key !== "Enter" && event.key !== " ")) return;
+                      event.preventDefault();
+                      detailTrigger.current = event.currentTarget;
+                      handleRowClick(row.original, rowIndex);
+                    } : undefined}
                   >
                     {row.getVisibleCells().map((cell) => {
                       const pinned = isPinnedColumn(cell.column.id);
@@ -889,21 +890,6 @@ export function DataTable<TData, TValue>({
                     })}
                   </TableRow>
 
-                  {/* Inline detail panel */}
-                  {renderDetail && currentBp !== null && !isMobile && expandedRowIdx === rowIndex && (
-                    <TableRow className="hover:bg-transparent">
-                      <TableCell
-                        colSpan={totalColSpan}
-                        className="p-0 border-l-2 border-l-primary"
-                      >
-                        <div data-slot="detail-viewport" style={fitDetailToViewport&&detailWidth?{width:detailWidth,maxWidth:"100%"}:undefined}>
-                        {renderDetail(row.original, () =>
-                          setExpandedRowIdx(null)
-                        )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )}
                 </Fragment>
               ))
             )}
@@ -944,7 +930,7 @@ export function DataTable<TData, TValue>({
                   // Base UI can forward a hidden input's click separately from
                   // the checkbox root. Selecting a row must not open its detail.
                   if ((event.target as HTMLElement).closest("button,a,input,select,textarea,[role=checkbox],[role=menuitem]")) return;
-                  mobileDetailTrigger.current = event.currentTarget.querySelector<HTMLButtonElement>("[data-mobile-detail-trigger]");
+                  detailTrigger.current = event.currentTarget.querySelector<HTMLButtonElement>("[data-mobile-detail-trigger]");
                   handleRowClick(row.original, rowIndex);
                 }}
               >
@@ -1044,7 +1030,7 @@ export function DataTable<TData, TValue>({
                     className="mt-2 flex min-h-11 w-full items-center justify-end gap-1 border-t border-border pt-2 text-sm font-medium text-primary"
                     onClick={(event) => {
                       event.stopPropagation();
-                      mobileDetailTrigger.current = event.currentTarget;
+                      detailTrigger.current = event.currentTarget;
                       handleRowClick(row.original, rowIndex);
                     }}
                   >
@@ -1057,21 +1043,46 @@ export function DataTable<TData, TValue>({
         )}
       </div>
 
-      {isMobile && renderDetail && expandedRowIdx !== null && table.getRowModel().rows[expandedRowIdx] && (
+      {currentBp !== null && renderDetail && detailRow && (
         <Dialog open trackFormChanges={false} onOpenChange={(open) => { if (!open) setExpandedRowIdx(null); }}>
           <DialogContent
             showCloseButton={false}
-            finalFocus={mobileDetailTrigger}
-            className="inset-0 top-0 left-0 flex h-dvh max-h-dvh w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 rounded-none p-0 sm:max-w-none data-open:animate-none data-closed:animate-none"
+            finalFocus={detailTrigger}
+            initialFocus={isMobile ? undefined : detailBody}
+            className={cn(
+              "flex flex-col gap-0 overflow-hidden p-0",
+              isMobile
+                ? "inset-0 top-0 left-0 h-dvh max-h-dvh w-full max-w-none translate-x-0 translate-y-0 rounded-none sm:max-w-none data-open:animate-none data-closed:animate-none"
+                : "max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] sm:max-w-7xl",
+            )}
           >
-            <div className="flex shrink-0 items-center gap-2 border-b bg-background px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
-              <button type="button" className="inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-primary hover:bg-muted" onClick={() => setExpandedRowIdx(null)}>
-                <Icon name="arrow_back" size={20} /> Danh sách
-              </button>
-              <DialogTitle className="min-w-0 flex-1 pr-0 text-right text-sm">Chi tiết</DialogTitle>
+            <div className="flex shrink-0 items-center gap-3 border-b bg-background px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
+              {isMobile && (
+                <button type="button" className="inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-primary hover:bg-muted" onClick={() => setExpandedRowIdx(null)}>
+                  <Icon name="arrow_back" size={20} /> Danh sách
+                </button>
+              )}
+              <DialogTitle className={cn("min-w-0 flex-1 truncate pr-0 text-sm", isMobile && "text-right")}>
+                {isMobile ? "Chi tiết" : getDetailTitle?.(detailRow.original) ?? "Chi tiết"}
+              </DialogTitle>
+              {!isMobile && (
+                <Button type="button" variant="ghost" size="sm" onClick={() => setExpandedRowIdx(null)}>
+                  <Icon name="close" size={18} /> Đóng
+                </Button>
+              )}
             </div>
-            <div data-slot="mobile-detail-body" className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)]">
-              {renderDetail(table.getRowModel().rows[expandedRowIdx].original, () => setExpandedRowIdx(null))}
+            <div
+              ref={detailBody}
+              tabIndex={isMobile ? undefined : 0}
+              role="region"
+              aria-label="Nội dung chi tiết"
+              data-slot={isMobile ? "mobile-detail-body" : "desktop-detail-body"}
+              className={cn(
+                "min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain",
+                isMobile ? "pb-[env(safe-area-inset-bottom)]" : "[&_[data-slot=detail-items-scroll]]:max-h-none",
+              )}
+            >
+              {renderDetail(detailRow.original, () => setExpandedRowIdx(null))}
             </div>
           </DialogContent>
         </Dialog>

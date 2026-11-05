@@ -4,6 +4,8 @@ import { ReactNode, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { resolveTableColumnAlignment, tableColumnAlignmentClass } from "@/lib/table-column-alignment";
 import { Button } from "@/components/ui/button";
+import { Icon } from "@/components/ui/icon";
+import { normalizeSearch, oneEditApart } from "@/lib/smart-search";
 import { Input } from "@/components/ui/input";
 import { usePermissions } from "@/lib/permissions/use-permission";
 import { PERMISSIONS } from "@/lib/permissions/constants";
@@ -40,6 +42,7 @@ interface DetailItemsTableProps<T> {
   pageSize?: number;
   mobileItem?: (item:T)=>ReactNode;
   optionalColumns?: string[];
+  searchFields?: (item: T) => readonly string[];
 }
 
 export function DetailItemsTable<T>({
@@ -50,6 +53,7 @@ export function DetailItemsTable<T>({
   pageSize,
   mobileItem,
   optionalColumns,
+  searchFields,
 }: DetailItemsTableProps<T>) {
   const [page, setPage] = useState(0);
   const [hiddenColumns,setHiddenColumns]=useState<string[]>([]);
@@ -62,9 +66,9 @@ export function DetailItemsTable<T>({
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
   const invalidDates = Boolean(dateFrom && dateTo && dateFrom > dateTo);
-  const filtered = useMemo(() => {
+  const query = normalizeSearch(search);
+  const scoped = useMemo(() => {
     if (!pageSize) return items;
-    const needle = search.trim().toLocaleLowerCase("vi-VN");
     const [key, direction] = sort.split(":");
     const value = (item: T) => {
       const row = item as Record<string, unknown>;
@@ -76,17 +80,47 @@ export function DetailItemsTable<T>({
       const row = item as Record<string, unknown>;
       const rawDate = String(row.date ?? "");
       const day = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : Number.isNaN(Date.parse(rawDate)) ? "" : new Date(rawDate).toLocaleDateString("en-CA", {timeZone:"Asia/Ho_Chi_Minh"});
-      return (!dateFrom || day >= dateFrom) && (!dateTo || day <= dateTo) && (!status || row.status === status) &&
-        (!needle || Object.values(row).some(v => (typeof v === "string" || typeof v === "number") && String(v).toLocaleLowerCase("vi-VN").includes(needle)));
+      return (!dateFrom || day >= dateFrom) && (!dateTo || day <= dateTo) && (!status || row.status === status);
     }).sort((a, b) => {
       const av = value(a), bv = value(b);
       const result = typeof av === "number" && typeof bv === "number" ? av - bv : String(av).localeCompare(String(bv), "vi", { numeric: true });
       const tie = String((a as Record<string, unknown>).id ?? "").localeCompare(String((b as Record<string, unknown>).id ?? ""));
       return (result || tie) * (direction === "asc" ? 1 : -1);
     });
-  }, [items, search, sort, pageSize, dateFrom, dateTo, status]);
+  }, [items, sort, pageSize, dateFrom, dateTo, status]);
+  const { rows: filtered, approximate } = useMemo(() => {
+    if (!query) return { rows: scoped, approximate: false };
+    // Keep a typed identifier together so its parts cannot match unrelated fields.
+    const terms = search.trim().split(/\s+/).map(normalizeSearch).filter(Boolean);
+    const exact: T[] = [];
+    const near: T[] = [];
+    for (const item of scoped) {
+      const row = item as Record<string, unknown>;
+      const name = normalizeSearch(String(row.productName ?? row.name ?? ""));
+      const fields = [
+        row.productCode, row.code, row.invoiceCode, row.productName, row.name,
+        row.unit, row.note, row.variantLabel, row.quantity, row.unitPrice, row.total,
+        ...columns.map(({ accessor }) => typeof accessor === "function" ? accessor(item) : item[accessor]),
+        ...(pageSize ? Object.values(row) : []),
+        ...(searchFields?.(item) ?? []),
+      ].flatMap(value => {
+        if (typeof value !== "string" && typeof value !== "number") return [];
+        const normalized = normalizeSearch(String(value));
+        return typeof value === "string" && /^[a-z][a-z0-9-]*\d[a-z0-9-]*$/i.test(value)
+          ? [normalized, normalized.replace(/ /g, "")]
+          : [normalized];
+      });
+      const missing = terms.filter(term => !fields.some(field => field.includes(term)));
+      if (!missing.length) exact.push(item);
+      else if (missing.length === 1 && /^[a-z]{4,}$/i.test(missing[0]) &&
+        name.split(" ").some(word => word.length >= 4 && oneEditApart(word, missing[0]))) {
+        near.push(item);
+      }
+    }
+    return exact.length ? { rows: exact, approximate: false } : { rows: near, approximate: near.length > 0 };
+  }, [scoped, query, search, columns, pageSize, searchFields]);
   const currentPage = pageSize ? Math.min(page, Math.max(0, Math.ceil(filtered.length / pageSize) - 1)) : 0;
-  const visible = pageSize ? filtered.slice(currentPage * pageSize, (currentPage + 1) * pageSize) : items;
+  const visible = pageSize ? filtered.slice(currentPage * pageSize, (currentPage + 1) * pageSize) : filtered;
   const download = async () => {
     if (invalidDates || exporting) return;
     setExporting(true); setExportError("");
@@ -107,10 +141,26 @@ export function DetailItemsTable<T>({
     col.align ? [] : items.map(item => typeof col.accessor === "function" ? col.accessor(item) : item[col.accessor]),
   )), [effectiveColumns, items]);
 
+  const searchInput = (
+    <div className="relative w-full sm:w-80">
+      <Icon name="search" size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+      <Input type="search"
+        aria-label={pageSize ? "Tìm trong toàn bộ lịch sử chứng từ" : "Tìm trong danh sách chi tiết"}
+        placeholder={pageSize ? "Mã chứng từ, ngày, trạng thái..." : "Tên, mã hàng, đơn vị, ghi chú..."}
+        value={search} onChange={e => { setSearch(e.target.value); setPage(0); }} className="pl-9" />
+    </div>
+  );
+  const emptyMessage = query ? "Không tìm thấy dòng phù hợp" : "Không có dữ liệu";
   return (
     <div className={cn("min-w-0 border rounded-lg overflow-hidden", className)}>
+      {!pageSize && items.length > 0 && <div className="flex flex-wrap items-center gap-2 border-b px-3 py-2">
+        {searchInput}
+        {query && <span role="status" className="text-xs text-muted-foreground">
+          {filtered.length}/{items.length} dòng{approximate ? " · Kết quả gần đúng" : ""}
+        </span>}
+      </div>}
       {pageSize && <div className="flex flex-wrap gap-2 p-3 border-b">
-        <Input aria-label="Tìm trong toàn bộ lịch sử chứng từ" placeholder="Mã chứng từ, ngày, trạng thái..." value={search} onChange={e => {setSearch(e.target.value); setPage(0);}} className="min-w-0 w-full sm:w-64" />
+        {searchInput}
         <label className="text-xs">Từ ngày<Input type="date" value={dateFrom} onChange={e => {setDateFrom(e.target.value);setPage(0);}} /></label>
         <label className="text-xs">Đến ngày<Input type="date" value={dateTo} onChange={e => {setDateTo(e.target.value);setPage(0);}} /></label>
         <select aria-label="Trạng thái chứng từ lịch sử" className="h-9 rounded-md border bg-background px-2 text-sm" value={status} onChange={e => {setStatus(e.target.value);setPage(0);}}><option value="">Tất cả trạng thái</option>{[...new Set(items.map(item => String((item as Record<string, unknown>).status ?? "")))].filter(Boolean).sort().map(s => <option key={s} value={s}>{s === "cancelled" ? "Đã hủy" : s === "completed" ? "Hoàn thành" : s === "partial" ? "Một phần" : s === "draft" ? "Nháp" : s === "ordered" ? "Đã đặt" : s === "confirmed" ? "Đã xác nhận" : s}</option>)}</select>
@@ -140,9 +190,9 @@ export function DetailItemsTable<T>({
             })}
           </div>
         ))}
-        {visible.length === 0 && <p className="p-4 text-center text-muted-foreground">Không có dữ liệu</p>}
+        {visible.length === 0 && <p className="p-4 text-center text-muted-foreground">{emptyMessage}</p>}
       </div>
-      <div className="hidden max-h-[480px] overflow-auto md:block">
+      <div data-slot="detail-items-scroll" className="hidden max-h-[480px] overflow-auto md:block">
       <table className="w-full text-sm">
         <thead className="sticky top-0 z-10 bg-muted">
           <tr className="bg-muted/50">
@@ -193,7 +243,7 @@ export function DetailItemsTable<T>({
                 colSpan={effectiveColumns.length}
                 className="px-3 py-6 text-center text-muted-foreground"
               >
-                Không có dữ liệu
+                {emptyMessage}
               </td>
             </tr>
           )}
@@ -206,7 +256,7 @@ export function DetailItemsTable<T>({
       </div>}
 
       {/* Summary section */}
-      {summary && summary.length > 0 && !search && !dateFrom && !dateTo && !status && (
+      {summary && summary.length > 0 && (!pageSize || (!query && !dateFrom && !dateTo && !status)) && (
         <div className="border-t bg-muted/20 px-3 py-2 space-y-1">
           {summary.map((row, idx) => (
             <div
