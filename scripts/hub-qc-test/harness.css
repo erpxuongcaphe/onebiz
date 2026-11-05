@@ -2,10 +2,11 @@ body {
   margin: 0;
   font-family: Arial, sans-serif;
 }
+.acceptance-role{display:flex;align-items:center;gap:16px;flex-wrap:wrap;background:#e6f4ed;color:#153a2d;padding:8px 12px;font:13px Arial,sans-serif}
+.acceptance-role select{margin-left:8px;min-height:36px;border:1px solid #b8cfc3;background:white}
 .material-symbols-outlined {
   width: 1.2em;
   height: 1.2em;
   overflow: hidden;
-  color: transparent;
 }
-/* The fixture is fully offline; the real app loads its existing Material font. */
+/* Only the app's public icon font is external; all business APIs stay local. */

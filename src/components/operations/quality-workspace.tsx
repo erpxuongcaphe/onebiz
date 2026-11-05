@@ -35,10 +35,15 @@ import { requestPageLeave } from "@/lib/hooks/use-unsaved-work";
 import { Icon } from "@/components/ui/icon";
 import { QualityEditorDialog, type QualityEditor } from "./quality-editor";
 import { Field, SelectField, vnToday } from "./quality-fields";
+import { scoringPeriodDates } from "@/lib/operations/quality-periods";
 import { CatalogImport } from "./quality-settings";
 import { QualityBusinessSetup } from "./quality-business-setup";
 import { QualityFilters } from "./quality-filters";
 import { QualityOverview, type QualityFocus, type QualityDestination } from "./quality-overview";
+import { readHubFilters, writeHubFilters, writeHubLocation } from "@/lib/operations/hub-location";
+import { workProgress } from "@/lib/operations/work-presentation";
+import { ScheduleDateInput } from "./schedule-input";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { QualityReport } from "./quality-report";
 import { SetupNavigation, type SetupSection } from "./setup-navigation";
 import { compareCriteriaBySource, criterionGroup, criterionTitle } from "@/lib/operations/criterion-presentation";
@@ -155,6 +160,11 @@ export function QualityWorkspace({
 }) {
   const period = assessmentPeriod || calendarPeriod;
   const view = initialView;
+  const [saved] = useState(()=>{
+    if(typeof window === "undefined")return {} as Record<string,string>;
+    const destination=view === "issues"?"todo":view === "report"?"kpi":view;
+    return new URLSearchParams(window.location.search).get("view")===destination?readHubFilters(window.location.search):{};
+  });
   const [branch, setBranch] = useState(initialBranch);
   const [storedData, setData] = useState<
     (QualityData & { scopeKey: string }) | null
@@ -166,28 +176,40 @@ export function QualityWorkspace({
   const [busy, setBusy] = useState(false);
   const [editor, setEditor] = useState<QualityEditor | null>(null);
   const [selectedAudit, setSelectedAudit] = useState<QualityAudit | null>(null);
-  const [workMode, setWorkMode] = useState("scheduled");
-  const [setupSection, setSetupSection] = useState<SetupSection>(workspace.isCeo ? "library" : "branch");
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [state, setState] = useState(focus?.state ?? "");
-  const [category, setCategory] = useState("");
-  const [priority, setPriority] = useState("");
-  const [assignee, setAssignee] = useState("");
-  const [operator, setOperator] = useState("");
-  const [department, setDepartment] = useState("");
-  const [frequency, setFrequency] = useState("");
-  const [result, setResult] = useState(focus?.result ?? "");
-  const [mine, setMine] = useState(false);
-  const [overdue, setOverdue] = useState(focus?.overdue ?? false);
-  const [offset, setOffset] = useState(0);
+  const [workMode, setWorkMode] = useState(saved.mode ?? "scheduled");
+  const [setupSection, setSetupSection] = useState<SetupSection>(()=>{
+    const section=typeof window === "undefined"?null:new URLSearchParams(window.location.search).get("setup");
+    return (["library","branch","people","qc","reward","history"].includes(section??"")&&(workspace.isCeo||section!=="library")?section:workspace.isCeo?"library":"branch") as SetupSection;
+  });
+  const [search, setSearch] = useState(focus?.search ?? saved.search ?? "");
+  const [debouncedSearch, setDebouncedSearch] = useState(focus?.search ?? saved.search ?? "");
+  const [state, setState] = useState(focus?.state ?? saved.state ?? "");
+  const [category, setCategory] = useState(saved.category ?? "");
+  const [priority, setPriority] = useState(saved.priority ?? "");
+  const [assignee, setAssignee] = useState(saved.assignee ?? "");
+  const [operator, setOperator] = useState(saved.operator ?? "");
+  const [department, setDepartment] = useState(saved.department ?? "");
+  const [frequency, setFrequency] = useState(saved.frequency ?? "");
+  const [result, setResult] = useState(focus?.result ?? saved.result ?? "");
+  const [mine, setMine] = useState(saved.mine === "true");
+  const [overdue, setOverdue] = useState(focus?.overdue ?? saved.overdue === "true");
+  const [offset, setOffset] = useState(Number(saved.offset ?? 0));
+  const [openedRun, setOpenedRun] = useState<string|null>(()=>focus?.taskId ?? (typeof window === "undefined"?null:new URLSearchParams(window.location.search).get("task")));
+  const [reportSection,setReportSection]=useState(()=>{
+    const section=typeof window === "undefined"?null:new URLSearchParams(window.location.search).get("section");
+    return ["summary","business","ledger","accounting"].includes(section??"")?section!:"summary";
+  });
   const [dates, setDates] = useState(() => ({
     ...initialFilters("todo"),
-    preset: (initialView === "work" && !focus && calendarPeriod === vnToday().slice(0,7) ? "today" : initialView === "issues" && !focus?.periodOnly
+    preset: (focus?.preset ?? (focus?.periodOnly?"period":saved.preset ?? (initialView === "work" && !focus && calendarPeriod === vnToday().slice(0,7) ? "today" : initialView === "issues" && !focus?.periodOnly
       ? "all"
-      : "period") as keyof typeof datePresets,
-    dateField: initialView === "qc" ? "created" : "due",
+      : "period"))) as keyof typeof datePresets,
+    from:saved.from ?? "",to:saved.to ?? "",
+    dateField: saved.dateField ?? (initialView === "qc" ? "created" : "due"),
   }));
+  useEffect(()=>{ if(["work","issues","qc"].includes(view)&&new URLSearchParams(window.location.search).get("view")===(view === "issues"?"todo":view))writeHubFilters({search,state,category,priority,assignee,operator,department,frequency,result,mine,overdue,offset,mode:workMode,preset:dates.preset,from:dates.from,to:dates.to,dateField:dates.dateField}); },[view,search,state,category,priority,assignee,operator,department,frequency,result,mine,overdue,offset,workMode,dates]);
+  useEffect(()=>{if(view === "settings")writeHubLocation({setup:setupSection});},[view,setupSection]);
+  useEffect(()=>{if(view === "report")writeHubLocation({section:reportSection});},[view,reportSection]);
   const [revision, setRevision] = useState(0);
   const active = useRef<AbortController | null>(null);
   const lock = useRef(false);
@@ -283,6 +305,9 @@ export function QualityWorkspace({
     filterError = e instanceof Error ? e.message : "Khoảng ngày không hợp lệ.";
   }
   const data = storedData?.scopeKey === params ? storedData : null;
+  const groupCache=useRef<{branch:string;groups:QualityData["groups"]}>({branch,groups:[]});
+  useEffect(()=>{if(data?.groups)groupCache.current={branch,groups:data.groups};},[branch,data]);
+  const filterGroups=data?.groups ?? (groupCache.current.branch===branch?groupCache.current.groups:[]);
   useEffect(() => {
     if (
       data?.audit &&
@@ -378,6 +403,9 @@ export function QualityWorkspace({
     setEditor(e);
   };
   const q = data?.score;
+  let settlementEnd="";
+  try{settlementEnd=scoringPeriodDates(period,data?.periods).to;}catch{/* Custom periods must be resolved within the authorized response. */}
+  const settlementPeriodEnded=!!settlementEnd&&vnToday()>settlementEnd;
   const selectedRows = data?.rows ?? [];
   const runs = (view === "work" && workMode === "scheduled" ? [...selectedRows] : []) as unknown as (Run & {
     category: keyof typeof categories;
@@ -391,6 +419,8 @@ export function QualityWorkspace({
       result: string;
       actor_id: string;
       created_at: string;
+      note?: string;
+      observations?: Run["observations"];
     }[];
   })[];
   runs.sort((a,b)=>Date.parse(a.current_due_at??a.original_due_at)-Date.parse(b.current_due_at??b.original_due_at)
@@ -399,6 +429,17 @@ export function QualityWorkspace({
   const issues = selectedRows as unknown as QualityIssue[];
   const audits = selectedRows as unknown as QualityAudit[];
   const lines = selectedRows as unknown as QualityLine[];
+  const detailRun=runs.find(run=>run.id===openedRun);
+  let rangeLabel="";
+  let outsideReferenceMonth=false;
+  if(["work","issues","qc"].includes(view)){
+    try {
+      const range=dates.preset === "period" && period.startsWith("custom:")?null:filterDates(dates,calendarPeriod);
+      rangeLabel=range?.from&&range.to?range.from===range.to?formatShortDate(range.from):`${formatShortDate(range.from)} – ${formatShortDate(range.to)}`:dates.preset === "all"?"Tất cả thời gian trong phạm vi được phép":"Kỳ đánh giá đang chọn";
+      outsideReferenceMonth=!!range?.from&&(range.from.slice(0,7)!==calendarPeriod||range.to?.slice(0,7)!==calendarPeriod);
+    } catch {rangeLabel="Chọn đủ khoảng ngày hợp lệ";}
+  }
+  const closeDetail=()=>{setOpenedRun(null);writeHubLocation({task:null});};
   function issueActions(i: QualityIssue) {
     const responsible = data?.can.work && i.assignee_id === workspace.userId;
     const processing =
@@ -459,6 +500,7 @@ export function QualityWorkspace({
           {setup && (
             <button onClick={onLegacySettings}>Về thiết lập Hub hiện có</button>
           )}
+          <button type="button" onClick={()=>setRevision(value=>value+1)}>Thử tải lại dữ liệu trang</button>
         </div>
       )}
       {notice && (
@@ -477,14 +519,14 @@ export function QualityWorkspace({
               <div>
                 <span>QC chính thức</span>
                 <strong>
-                  {q?.score === null ? "—" : formatNumber(q?.score)}
+                  {!q?.official || q.score == null ? "—" : formatNumber(q.score)}
                 </strong>
                 <small>{q?.completedAudits ?? 0} đợt hoàn tất</small>
               </div>
               <div>
                 <span>Điểm trừ / cộng</span>
                 <strong>
-                  {formatNumber(q?.deductions)} / +{formatNumber(q?.bonus)}
+                  {q?.official ? `${formatNumber(q.deductions)} / +${formatNumber(q.bonus)}` : "Chưa có kết quả"}
                 </strong>
               </div>
               <div>
@@ -498,7 +540,7 @@ export function QualityWorkspace({
               </div>
               <div>
                 <span>Vi phạm loại thưởng</span>
-                <strong>{q?.critical ? "Có" : "Không"}</strong>
+                <strong>{q?.official ? q.critical ? "Có" : "Không" : "Chưa xác định"}</strong>
                 <small>
                   {q?.official
                     ? "Theo sổ điểm QC"
@@ -508,7 +550,7 @@ export function QualityWorkspace({
             </div>
           )}
           <div className={s.heading}>
-            <h2>
+            <h2 className={s.secondaryTitle}>
               {selectedAudit
                 ? selectedAudit.title
                 : views.find((v) => v.key === view)?.label}
@@ -538,6 +580,7 @@ export function QualityWorkspace({
                   <button
                     onClick={() => {
                       setSelectedAudit(null);
+                      writeHubLocation({audit:null},true);
                       setOffset(0);
                     }}
                   >
@@ -570,13 +613,13 @@ export function QualityWorkspace({
               )}
               {view === "report" && data.can.close && !data.settlement && (
                 <button
-                  disabled={!q?.rewardReady || busy}
+                  disabled={!q?.rewardReady || !settlementPeriodEnded || busy}
                   onClick={() => edit({ kind: "settle" })}
                 >
                   Chốt kỳ
                 </button>
               )}
-              <button
+              {!onNavigate&&<button
                 aria-label="Tải lại danh sách"
                 title="Tải lại"
                 disabled={loading || busy}
@@ -585,13 +628,14 @@ export function QualityWorkspace({
                 }
               >
                 <Icon name="refresh" size={18} />
-              </button>
+              </button>}
             </div>
           </div>
+          {view === "report" && !data.settlement && <section className={s.scopeNotice} aria-label="Điều kiện chốt kỳ"><strong>{q?.rewardReady&&settlementPeriodEnded?"Đủ điều kiện để người có quyền xem trước chốt kỳ":"Chưa đủ điều kiện chốt kỳ"}</strong>{!settlementPeriodEnded&&<p>{settlementEnd?`Kỳ kết thúc ngày ${formatShortDate(settlementEnd)}. Chỉ chốt sau khi kỳ kết thúc.`:"Chưa xác định ngày kết thúc kỳ trong phạm vi được phép."}</p>}{q?.reasons?.map(reason=><p key={reason}>{reason}</p>)}{!data.can.close&&<p>Tài khoản này chỉ xem kết quả, không có quyền chốt kỳ.</p>}{onNavigate&&<button type="button" onClick={()=>onNavigate("settings")}>Xem thiết lập điểm và thưởng</button>}</section>}
         </>
       )}
-      {data && view === "overview" && onNavigate && <QualityOverview data={data} onNavigate={onNavigate}/>}
-      {data && view === "work" && !data.can.work && <p className={s.scopeNotice}>Bạn đang xem kết quả của chi nhánh. Chỉ quản lý được phân công và có quyền ghi kết quả mới có thể tự kiểm tra.</p>}
+      {data && view === "overview" && onNavigate && <QualityOverview data={data} branch={branch} period={calendarPeriod} people={workspace.people} onNavigate={onNavigate}/>}
+      {data && view === "work" && !data.can.work && <details className={s.scopeNotice}><summary>Chỉ xem kết quả</summary><p>Bạn đang xem kết quả của chi nhánh. Chỉ quản lý được phân công và có quyền ghi kết quả mới có thể tự kiểm tra.</p></details>}
       {data && view === "issues" && !data.can.work && <p className={s.scopeNotice}>Bạn đang xem To-do trong phạm vi được phép. Quyền tạo To-do và xử lý công việc được thiết lập tại Người và quyền.</p>}
       {data && view === "qc" && !data.can.qc && <p className={s.scopeNotice}>Bạn có thể xem các đợt QC. Để tạo và ghi kết quả, cần được phân công quyền QC độc lập tại chi nhánh; quyền quản trị không tự thay thế quyền QC.</p>}
       {["work", "issues", "qc"].includes(view) && (
@@ -599,7 +643,7 @@ export function QualityWorkspace({
         {view === "work" && <div className={s.actions} role="group" aria-label="Loại tự kiểm tra"><button aria-pressed={workMode === "scheduled"} onClick={() => {setWorkMode("scheduled");reset();setDates(value=>({...value,dateField:"due"}));}}>Theo lịch</button><button aria-pressed={workMode === "adhoc"} onClick={() => {setWorkMode("adhoc");reset();setDates(value=>({...value,dateField:"created"}));}}>Phát sinh ngoài lịch</button></div>}
         {view === "work" && workMode === "scheduled" && <div className={s.quickDates} role="group" aria-label="Xem công việc theo thời gian">
           {([['today','Hôm nay'],['this_week','Tuần này'],['period','Trong kỳ']] as const).map(([preset,label]) => <button key={preset} type="button" aria-pressed={dates.preset === preset && !overdue} onClick={() => { setDates(previous => ({...previous,preset,dateField:'due'})); setOverdue(false); setOffset(0); }}>{label}</button>)}
-          <button type="button" aria-pressed={overdue && dates.preset === 'all'} onClick={() => {setDates(previous => ({...previous,preset:'all',dateField:'due'}));setOverdue(true);setOffset(0);}}>Việc trễ hạn</button>
+          <button type="button" aria-pressed={overdue && dates.preset === 'all'} onClick={() => {setDates(previous => ({...previous,preset:'all',dateField:'due'}));setOverdue(true);setOffset(0);}}>Quá hạn</button>
         </div>}
         <QualityFilters activeCount={[state, category, priority, assignee, operator, department, frequency, result, mine, overdue, dates.preset !== "all", search.trim()].filter(Boolean).length}>
           <div className={s.filterGrid}>
@@ -653,7 +697,7 @@ export function QualityWorkspace({
                 }}
               />
             )}
-            {view === "work" && workMode === "scheduled" && <SelectField label="Nhóm công việc" options={data?.groups?.some(group=>group.active)?Object.fromEntries(data.groups.filter(group => group.active).map(group => [`group:${group.id}`,group.title])):categories} value={category} onChange={next => {setCategory(next);setOffset(0);}}/>}
+            {view === "work" && workMode === "scheduled" && <SelectField label="Nhóm công việc" options={filterGroups?.some(group=>group.active)?Object.fromEntries(filterGroups.filter(group => group.active).map(group => [`group:${group.id}`,group.title])):{}} value={category} onChange={next => {setCategory(next);setOffset(0);}}/>}
             <SelectField
               label="Khoảng thời gian"
               allowEmpty={false}
@@ -671,12 +715,11 @@ export function QualityWorkspace({
               <>
                 <Field label="Từ ngày">
                   {(id) => (
-                    <input
+                    <ScheduleDateInput
                       id={id}
-                      type="date"
                       value={dates.from}
-                      onChange={(e) => {
-                        setDates((d) => ({ ...d, from: e.target.value }));
+                      onValueChange={(value) => {
+                        setDates((d) => ({ ...d, from: value }));
                         setOffset(0);
                       }}
                     />
@@ -684,12 +727,11 @@ export function QualityWorkspace({
                 </Field>
                 <Field label="Đến hết ngày">
                   {(id) => (
-                    <input
+                    <ScheduleDateInput
                       id={id}
-                      type="date"
                       value={dates.to}
-                      onChange={(e) => {
-                        setDates((d) => ({ ...d, to: e.target.value }));
+                      onValueChange={(value) => {
+                        setDates((d) => ({ ...d, to: value }));
                         setOffset(0);
                       }}
                     />
@@ -822,6 +864,7 @@ export function QualityWorkspace({
             <button onClick={reset}>Bỏ bộ lọc</button>
           </div>
         </QualityFilters>
+        <p className={s.activeScope} role="status"><strong>Đang xem: {rangeLabel}</strong>{outsideReferenceMonth && <span> · Khoảng lọc riêng; tháng ở đầu trang là kỳ tham chiếu.</span>}<span> · {dates.dateField === "due"?"Theo ngày đến hạn":dates.dateField === "checked"?"Theo ngày kiểm tra":dates.dateField === "completed"?"Theo ngày hoàn tất":"Theo ngày tạo"}</span>{category&&<span> · Nhóm: {filterGroups?.find(group=>`group:${group.id}`===category)?.title ?? categories[category as keyof typeof categories] ?? "Đã chọn"}</span>}{result&&<span> · {statusNames[result]}</span>}{search&&<span> · Tìm: “{search}”</span>}</p>
         </>
       )}
       {filterError && (
@@ -836,27 +879,23 @@ export function QualityWorkspace({
           {view === "work" && workMode !== "adhoc" && (
             <Table
               heads={[
-                "Nhóm công việc",
                 "Công việc",
-                "Tần suất / đến hạn",
-                "Người được phân công",
-                "Kết quả hiện tại",
-                "Lần kiểm tra",
+                "Người phụ trách",
+                "Đến hạn / tiến độ",
+                "Kết quả",
                 "Thao tác",
               ]}
               rows={runs.map((r) => (
                 <tr key={r.id}>
-                  <td className={s.groupCell}>{criterionGroup(r,data.groups ?? [])}</td>
                   <td>
                     <strong>{criterionTitle(r)}</strong>
-                    <details className={s.requirement}><summary>Yêu cầu cần đạt</summary>{r.criteria.map(criterion => <p key={criterion.id}>{criterion.title}</p>)}</details>
+                    <p className={s.muted}>{criterionGroup(r,data.groups ?? [])} · {freq[r.frequency]}</p>
                   </td>
+                  <td>{r.manager_ids.length === 1 ? name(r.manager_ids[0]) : `${r.manager_ids.length} người cùng phụ trách`}<details className={s.requirement}><summary>Xem người phụ trách</summary>{r.manager_ids.map(id=><p key={id}>{name(id)}</p>)}</details></td>
                   <td>
-                    {freq[r.frequency]}
-                    <p>{formatDate(r.current_due_at ?? r.original_due_at)}</p>
-                    {r.current_due_at && <small>Hạn gốc: {formatDate(r.original_due_at)}</small>}
+                    <time>{formatDate(r.current_due_at ?? r.original_due_at)}</time>
+                    <p className={`${s.badge} ${s[workProgress(r).tone]}`}>{workProgress(r).label}</p>
                   </td>
-                  <td>{r.manager_ids.map(name).join(", ")}</td>
                   <td>
                     <Badge value={r.quality} />
                     {r.had_failure && (
@@ -864,43 +903,32 @@ export function QualityWorkspace({
                     )}
                   </td>
                   <td>
-                    {r.checks.length
-                      ? `${name(r.checks[0].actor_id)} · ${formatDate(r.checks[0].created_at)}`
-                      : "Chưa kiểm tra"}
-                  </td>
-                  <td>
-                    {workspace.isCeo && r.state === "pending" && r.quality === "unknown" && !r.checks.length && <ScheduleReview mode="move" run={r} branch={branch} busy={busy} onSaved={() => setRevision(v => v + 1)}/>}
+                    <button type="button" onClick={()=>{setOpenedRun(r.id);writeHubLocation({task:r.id},true);}}>Xem chi tiết</button>
                     {data.can.work &&
                       r.manager_ids.includes(workspace.userId) && (
                         <button onClick={() => edit({ kind: "check", run: r })}>
                           <Icon name="check_circle" size={16}/> Ghi kết quả
                         </button>
                       )}
-                    {!(data.can.work && r.manager_ids.includes(workspace.userId)) && <span className={s.muted}>{!data.can.work ? "Chỉ xem · cần quyền quản lý để ghi kết quả" : "Không được phân công việc này"}</span>}
                   </td>
                 </tr>
               ))}
               mobile={runs.map((r) => (
                 <article className={s.mobileItem} key={r.id}>
-                  <p className={s.groupLabel}><span>Nhóm công việc</span>{criterionGroup(r,data.groups ?? [])}</p>
                   <h3>{criterionTitle(r)}</h3>
-                  <details className={s.requirement}><summary>Yêu cầu cần đạt</summary>{r.criteria.map(criterion => <p key={criterion.id}>{criterion.title}</p>)}</details>
+                  <p className={s.muted}>{criterionGroup(r,data.groups ?? [])}</p>
                   <Badge value={r.quality} />
                   <p>
                     {freq[r.frequency]} · {formatDate(r.current_due_at ?? r.original_due_at)}
                   </p>
-                  {r.current_due_at && <p>Hạn gốc: {formatDate(r.original_due_at)}</p>}
-                  {workspace.isCeo && r.state === "pending" && r.quality === "unknown" && !r.checks.length && <ScheduleReview mode="move" run={r} branch={branch} busy={busy} onSaved={() => setRevision(v => v + 1)}/>}
-                  <p className={s.muted}>
-                    {r.manager_ids.map(name).join(", ")}
-                  </p>
+                  <p className={s[workProgress(r).tone]}>{workProgress(r).label}</p>
+                  <button type="button" onClick={()=>{setOpenedRun(r.id);writeHubLocation({task:r.id},true);}}>Xem chi tiết</button>
                   {data.can.work &&
                     r.manager_ids.includes(workspace.userId) && (
                       <button onClick={() => edit({ kind: "check", run: r })}>
                         <Icon name="check_circle" size={16}/> Ghi kết quả
                       </button>
                     )}
-                  {!(data.can.work && r.manager_ids.includes(workspace.userId)) && <p className={s.muted}>{!data.can.work ? "Chỉ xem · cần quyền quản lý để ghi kết quả" : "Không được phân công việc này"}</p>}
                   </article>
               ))}
             />
@@ -992,6 +1020,7 @@ export function QualityWorkspace({
                     <button
                       onClick={() => {
                         setSelectedAudit(a);
+                        writeHubLocation({audit:a.id},true);
                         setOffset(0);
                         setState("");
                       }}
@@ -1011,6 +1040,7 @@ export function QualityWorkspace({
                   <button
                     onClick={() => {
                       setSelectedAudit(a);
+                      writeHubLocation({audit:a.id},true);
                       setOffset(0);
                       setState("");
                     }}
@@ -1076,9 +1106,10 @@ export function QualityWorkspace({
                   <Badge value={l.result} />
                   <CorrectionHistory line={l} people={workspace.people} />
                   <p>
-                    {l.item_snapshot.score_type === "bonus" ? "Cộng" : "Trừ"}{" "}
-                    {formatNumber(l.item_snapshot.weight)} điểm
+                    Trọng số: {l.item_snapshot.score_type === "bonus" ? "cộng" : "trừ"}{" "}
+                    {formatNumber(l.item_snapshot.weight)} điểm {l.item_snapshot.score_type === "bonus" ? "khi đạt" : "khi không đạt"}
                   </p>
+                  {(l.evidence||l.note)&&<p>Minh chứng / ghi chú: {l.evidence||l.note}</p>}
                   {(data.audit ?? selectedAudit).state === "draft" &&
                     data.can.qc &&
                     selectedAudit.auditor_id === workspace.userId && (
@@ -1104,15 +1135,13 @@ export function QualityWorkspace({
           {["work", "issues", "qc", "report"].includes(view) && (
             <>
               {!selectedRows.length && view !== "report" && (
-                <p className={s.empty}>
-                  Chưa có hồ sơ phù hợp bộ lọc trong phạm vi được phép.
-                </p>
+                <section className={s.empty} aria-label="Không có kết quả"><strong>{search.trim()?`Không tìm thấy kết quả cho “${search.trim()}”`:state||category||priority||frequency||assignee||result||mine||overdue?"Không có kết quả khớp bộ lọc":"Chưa có hồ sơ trong khoảng thời gian này"}</strong><p>Chỉ hiển thị dữ liệu trong phạm vi tài khoản được phép xem.</p>{search.trim()?<button onClick={()=>{setSearch("");setOffset(0);}}>Xóa tìm kiếm</button>:<button onClick={reset}>Đặt lại bộ lọc</button>}{view === "work"&&onNavigate&&<button type="button" onClick={()=>onNavigate("settings")}>Xem công việc và phân công</button>}</section>
               )}
-              <div className={s.pagination}>
+              {data.total>0&&(view!=="report"||reportSection==="ledger")&&<div className={s.pagination}>
                 <span>
                   {formatNumber(data.total)} {view === "work" && workMode !== "adhoc" ? "lượt thực hiện" : "hồ sơ"} · trang {offset / 50 + 1}
                 </span>
-                <button
+                {data.total>50&&<><button
                   disabled={offset === 0}
                   onClick={() => setOffset((o) => Math.max(0, o - 50))}
                 >
@@ -1124,12 +1153,13 @@ export function QualityWorkspace({
                 >
                   Sau
                 </button>
-              </div>
+                </>}
+              </div>}
             </>
           )}
           {view === "settings" && (
             <>
-              <SetupNavigation value={setupSection} onChange={setSetupSection} data={data} isCeo={workspace.isCeo && data.can.manage}/>
+              <SetupNavigation value={setupSection} onChange={setSetupSection} data={data} settlementPeriodEnded={settlementPeriodEnded} isCeo={workspace.isCeo && data.can.manage}/>
               {setupSection === "library" && workspace.isCeo && data.can.manage && <WorkingLibrary workspace={workspace} onApplied={() => { if (onConfigurationRefresh) onConfigurationRefresh(); else setRevision((current) => current + 1); }}/>}
               {setupSection === "branch" && configuration && <section className={s.section}><h3>Công việc đang áp dụng tại chi nhánh</h3>{typeof configuration === "function" ? configuration(data,"standards",data.can.manage ? familyId => edit({ kind: "assignment", familyId }) : undefined) : configuration}</section>}
               {setupSection === "history" && <section className={s.section}><OperationsHistoryPanel branch={branch} period={period}/></section>}
@@ -1286,12 +1316,14 @@ export function QualityWorkspace({
               </section>
             </>
           )}
-          {view === "report" && (
+          {view === "report" && <nav className={s.setupNav} aria-label="Nội dung KPI và thưởng">{[["summary","Kết quả kỳ"],["business","Doanh thu & chỉ tiêu"],["ledger","Sổ điểm QC"],["accounting","Hao hụt"]].map(([key,label])=><button key={key} type="button" aria-pressed={reportSection===key} onClick={()=>setReportSection(key)}>{label}</button>)}</nav>}
+          {view === "report" && reportSection === "business" && (
             <QualityBusinessSetup data={data} period={period} busy={busy} onSave={send} commandError={error} branch={workspace.branches.find(item=>item.id===branch)}/>
           )}
           {view === "report" && (
             <QualityReport
               data={data}
+              section={reportSection}
               workspace={workspace}
               branch={branch}
               period={period}
@@ -1302,6 +1334,15 @@ export function QualityWorkspace({
           )}
         </>
       )}
+      {detailRun&&data&&<Dialog open onOpenChange={open=>{if(!open)closeDetail();}}><DialogContent className={`${s.dialog} ${s.detailDialog} translate-x-0 translate-y-0`} showCloseButton={false}>
+        <header className={s.dialogHeader}><DialogTitle>{criterionTitle(detailRun)}</DialogTitle><p>{criterionGroup(detailRun,data.groups ?? [])} · {freq[detailRun.frequency]}</p></header>
+        <div className={s.dialogBody}><section><h3>Tiêu chuẩn cần đạt</h3>{detailRun.criteria.map(criterion=><p key={criterion.id}>{criterion.title}</p>)}</section>
+          <section className={s.section}><h3>Kết quả và tiến độ</h3><Badge value={detailRun.quality}/><p>{workProgress(detailRun).label}</p><p>Đến hạn: {formatDate(detailRun.current_due_at??detailRun.original_due_at)}</p>{detailRun.current_due_at&&<p>Hạn gốc: {formatDate(detailRun.original_due_at)}</p>}</section>
+          <section className={s.section}><h3>Người phụ trách</h3>{detailRun.manager_ids.map(id=><p key={id}>{name(id)}</p>)}</section>
+          <section className={s.section}><h3>Lịch sử kiểm tra</h3>{detailRun.checks.length?detailRun.checks.map(check=><article key={check.id}><Badge value={check.result}/><p>{name(check.actor_id)} · {formatDate(check.created_at)}</p>{check.note&&<p>Ghi chú: {check.note}</p>}{check.observations?.map((observation,index)=><p key={`${observation.criterionId}:${observation.slot}:${index}`}>{detailRun.criteria.find(criterion=>criterion.id===observation.criterionId)?.title??"Kết quả ghi nhận"}: {formatNumber(observation.value)}{observation.evidence&&<> · Minh chứng: {observation.evidence}</>}</p>)}</article>):<p>Chưa có lần kiểm tra. Không đồng nghĩa công việc đã không đạt.</p>}{detailRun.had_failure&&<p>Đã có lịch sử không đạt; kết quả trước đây được giữ nguyên.</p>}</section>
+          {workspace.isCeo&&detailRun.state === "pending"&&detailRun.quality === "unknown"&&!detailRun.checks.length&&<details className={s.section}><summary>Thao tác khác</summary><ScheduleReview mode="move" run={detailRun} branch={branch} busy={busy} onSaved={()=>setRevision(value=>value+1)}/></details>}
+        </div><footer className={s.dialogFooter}><button type="button" onClick={closeDetail}>Đóng chi tiết</button>{data.can.work&&detailRun.manager_ids.includes(workspace.userId)&&<button type="button" className={s.primary} onClick={()=>{closeDetail();edit({kind:"check",run:detailRun});}}>Ghi kết quả</button>}</footer>
+      </DialogContent></Dialog>}
       {editor && data && (
         <UserBranchContext.Provider value={branch}><QualityEditorDialog
           key={JSON.stringify(editor)}

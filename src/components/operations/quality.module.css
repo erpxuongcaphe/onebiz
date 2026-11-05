@@ -209,7 +209,7 @@
 .table {
   border-collapse: collapse;
   width: 100%;
-  font-size: 13px;
+  font-size: 14px;
 }
 .table th {
   text-align: left;
@@ -415,6 +415,24 @@
 .issueBand { border-left-color: #c2410c !important; }
 .qualityBand { border-left-color: #1d4ed8 !important; }
 .businessBand { border-left-color: #0e7490 !important; }
+.overview > .complianceBand,.overview > .issueBand,.overview > .qualityBand,.overview > .businessBand { border-left-color:#c5cfdd !important; }
+.secondaryTitle { position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%); }
+.activeScope { padding:8px 0 12px;color:#43536a;font-size:13px;overflow-wrap:anywhere; }
+.prioritySection { margin-bottom:20px;padding:16px 0;border-block:1px solid #dce2eb; }
+.priorityRow { display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid #e3e8f0; }
+.priorityRow > div { min-width:0;overflow-wrap:anywhere; }
+.priorityRow p { font-size:13px;color:#53627a; }
+.resultHeading { margin:18px 0 12px !important; }
+.readiness { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:10px 0; }
+.root .readiness button { display:flex;flex-direction:column;align-items:flex-start;text-align:left; }
+.readiness span { font-size:13px;color:#53627a; }
+.detailDialog { left:auto !important;right:0 !important;top:0 !important;width:min(720px,100vw) !important;height:100dvh !important;max-height:100dvh !important;transform:none !important;translate:none !important;border-radius:0 !important; }
+@container (max-width:800px){
+  .tableScroll.responsive{display:none;}
+  .mobileList{display:grid;gap:10px;}
+  .mobileItem{background:#fff;border:1px solid #dce2eb;border-radius:6px;padding:12px;min-width:0;}
+}
+@media(max-width:800px){.tableScroll.responsive{display:none;}.mobileList{display:grid;gap:10px;}.readiness{grid-template-columns:1fr;}.priorityRow{align-items:flex-start;}.priorityRow button{flex:none;}}
 @media (max-width: 640px) { .overview { grid-template-columns: 1fr; } }
 .timeline article {
   margin-bottom: 14px;
@@ -508,6 +526,6 @@
     min-height: 44px;
   }
   .root button {
-    min-height: 42px;
+    min-height: 44px;
   }
 }

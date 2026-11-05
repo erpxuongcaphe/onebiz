@@ -61,7 +61,7 @@ import { MeasurementPicker } from "./measurement-picker";
 import { OperationsMktLinks } from "./mkt-links";
 import { QualityWorkspace } from "./quality-workspace";
 import type { QualityFocus, QualityDestination } from "./quality-overview";
-import { qualityPeriodKey } from "@/lib/operations/quality-periods";
+import { readHubLocation, writeHubLocation } from "@/lib/operations/hub-location";
 import { UserPicker } from "./user-picker";
 import { ScheduleDateInput, ScheduleTimeInput } from "./schedule-input";
 import { RecurrenceFields } from "./recurrence-fields";
@@ -190,15 +190,20 @@ const blankCriterion = (): Criterion => ({
 export default function OperationsWorkspace() {
   const [tab, setTab] = useState<Tab>("work");
   const [legacy, setLegacy] = useState(false);
+  const [scopeExpanded,setScopeExpanded]=useState(false);
   const [branch, setBranch] = useState("");
   const [period, setPeriod] = useState("");
   const [assessmentPeriod, setAssessmentPeriod] = useState("");
   const [qualityFocus, setQualityFocus] = useState<QualityFocus | undefined>();
   const [qualityNavigation, setQualityNavigation] = useState(0);
+  const [locationReady, setLocationReady] = useState(false);
   const navigateQuality = (destination: QualityDestination, focus?: QualityFocus) => requestPageLeave(() => {
+    const next = destination === "issues" ? "todo" : destination === "report" ? "kpi" : destination;
+    writeHubLocation({view:next}, true, true);
     setQualityFocus(focus);
     setQualityNavigation((value) => value + 1);
     setTab(destination === "issues" ? "todo" : destination === "report" ? "kpi" : destination);
+    window.scrollTo({top:0,behavior:"instant"});
   });
   const [data, setData] = useState<Workspace | null>(null);
   const [error, setError] = useState("");
@@ -224,24 +229,18 @@ export default function OperationsWorkspace() {
     null,
   );
   useEffect(() => {
-    setPeriod(today().slice(0, 7));
-    const params = new URLSearchParams(window.location.search);
-    const selected = params.get("branch");
-    if (selected && /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(selected))
-      setBranch(selected);
-    if (params.get("view") === "todo") {
-      setTab("todo");
-      setSearch((params.get("search") ?? "").slice(0, 200));
-    }
-    if (params.get("view") === "qc") {
-      setTab("qc");
-      const selectedPeriod = qualityPeriodKey.safeParse(params.get("period"));
-      if (selectedPeriod.success) {
-        if (selectedPeriod.data.startsWith("custom:")) setAssessmentPeriod(selectedPeriod.data);
-        else setPeriod(selectedPeriod.data);
-      }
-    }
+    const restore = () => {
+      const context = readHubLocation(window.location.search,today().slice(0,7));
+      setPeriod(context.period); setBranch(context.branch); setTab(context.view);
+      setAssessmentPeriod(context.assessment); setQualityFocus(undefined);
+      setQualityNavigation(value=>value+1); setLocationReady(true);
+    };
+    restore(); window.addEventListener("popstate",restore);
+    return()=>window.removeEventListener("popstate",restore);
   }, []);
+  useEffect(()=>{
+    if(locationReady&&period)writeHubLocation({view:tab,branch,period,assessment:assessmentPeriod});
+  },[locationReady,tab,branch,period,assessmentPeriod]);
   const load = useCallback(async () => {
     if (!period) return;
     const request = ++generation.current;
@@ -254,6 +253,15 @@ export default function OperationsWorkspace() {
       );
       const result = await response.json();
       if (request !== generation.current) return;
+      if(response.status===403&&branch){
+        setData(null);
+        setNotice("Chi nhánh trong đường dẫn không còn phù hợp với quyền hiện tại. Hub đang mở lại phạm vi được phép xem.");
+        writeHubLocation({branch:null},false,true);
+        setQualityFocus(undefined);
+        setQualityNavigation(value=>value+1);
+        setBranch("");
+        return;
+      }
       if (!response.ok) throw new Error(result.error);
       setData(result);
       if (!branch && result.branches.length) setBranch(result.branches[0].id);
@@ -464,14 +472,15 @@ export default function OperationsWorkspace() {
           ONEBIZ<span>.</span>
           <small>Hub</small>
         </Link>
-        <nav>
+        <nav className={styles.moduleNav}>
           <Link href="/hub" aria-current="page">
             Vận hành
           </Link>
           <Link href="/mkt">MKT</Link>
           <Link href="https://onebiz.com.vn/">ERP</Link>
         </nav>
-        <div className={styles.scope}>
+        <details className={styles.mobileModules}><summary>Phân hệ</summary><nav><Link href="/mkt">MKT</Link><Link href="https://onebiz.com.vn/">ERP</Link></nav></details>
+        <div className={styles.scope} data-expanded={scopeExpanded}>
           <OperationsInbox />
           <select
             aria-label="Chi nhánh"
@@ -480,7 +489,7 @@ export default function OperationsWorkspace() {
             disabled={!!data && !data.branches.length}
             onChange={(e) => {
               const next = e.target.value;
-              requestPageLeave(() => { setEditor(null); setBranch(next); setAssessmentPeriod(""); });
+              requestPageLeave(() => { writeHubLocation({branch:next,assessment:null},true,true);setEditor(null); setBranch(next); setAssessmentPeriod(""); });
             }}
           >
             {data && !data.branches.length && <option value="">Theo công việc được phân công</option>}
@@ -490,23 +499,28 @@ export default function OperationsWorkspace() {
               </option>
             ))}
           </select>
+          <button type="button" className={styles.periodToggle} aria-expanded={scopeExpanded} onClick={()=>setScopeExpanded(value=>!value)}><Icon name="date_range" size={18}/><span>{period.slice(5)}/{period.slice(0,4)}</span></button>
           <MonthScope
             value={period}
             onChange={(next) => {
-              requestPageLeave(() => { setEditor(null); setPeriod(next); setAssessmentPeriod(""); });
+              requestPageLeave(() => { writeHubLocation({period:next,assessment:null},true,true);setEditor(null); setPeriod(next); setAssessmentPeriod("");setQualityNavigation(v=>v+1); });
             }}
           />
           <button
             type="button"
-            title="Tải lại"
-            aria-label="Tải lại"
+            title="Tải lại dữ liệu trang"
+            aria-label="Tải lại dữ liệu trang"
             disabled={loading || busy}
-            onClick={() => requestPageLeave(() => load())}
+            onClick={() => requestPageLeave(() => {setQualityNavigation(value=>value+1);void load();})}
           >
             <Icon name="refresh" size={17} />
           </button>
         </div>
       </header>
+      <div className={styles.mobileNavigation}><select aria-label="Khu vực Hub" value={tab} onChange={event=>{
+        const key=event.target.value as Tab;
+        requestPageLeave(()=>{writeHubLocation({view:key},true,true);setTab(key);setSearch("");setQualityFocus(undefined);window.scrollTo({top:0,behavior:"instant"});});
+      }}>{tabs.filter(item=>(legacy?item.key!=="qc":item.key!=="review")&&(!data||data.isCeo||data.branches.length>0||item.key==="todo")).map(item=><option key={item.key} value={item.key}>{item.label}</option>)}</select></div>
       <div className={styles.layout}>
         <aside className={styles.nav}>
           {tabs.filter(item => (legacy ? item.key !== "qc" : item.key !== "review") && (!data || data.isCeo || data.branches.length > 0 || item.key === "todo")).map(({ key, label, icon }) => (
@@ -515,7 +529,7 @@ export default function OperationsWorkspace() {
               key={key}
               aria-current={tab === key ? "page" : undefined}
               onClick={() => {
-                const finish = () => { setTab(key); setSearch(""); setQualityFocus(undefined); };
+                const finish = () => { if(key!==tab)writeHubLocation({view:key},true,true);setTab(key); setSearch(""); setQualityFocus(undefined);window.scrollTo({top:0,behavior:"instant"}); };
                 if (key === tab) finish(); else requestPageLeave(finish);
               }}
             >
@@ -534,6 +548,7 @@ export default function OperationsWorkspace() {
               </span>
             ) : null}
           </div>
+          {data&&<p className={styles.contextLine}>{data.branches.find(item=>item.id===branch)?.name ?? "Theo phân công được phép"} · Tháng {period.slice(5)}/{period.slice(0,4)}</p>}
           {error && (
             <div role="alert" className={styles.error}>
               {error}

@@ -194,7 +194,7 @@ export function WorkingLibrary({ workspace, onApplied }: { workspace:Workspace; 
   }
   const shown=libraries.filter(l=>(includeArchived||!l.archived)&&`${l.title} ${l.rows.map(r=>r.group).join(' ')}`.toLocaleLowerCase().includes(listFilter.toLocaleLowerCase()));
   const sourceLibrary=libraries.find(l=>l.source_key==='ceo-working-20261014');
-  return <section aria-label="Bộ tiêu chí chung" className={s.section}>
+  return <section aria-label="Bộ tiêu chí chung" className={`${s.section} ${w.libraryList}`}>
     <div className={w.heading}><div><h3>Bộ tiêu chí chung</h3><p>Lưu nội dung một lần. Áp dụng và phân công riêng cho từng chi nhánh.</p></div><div className={s.actions}>
       {!sourceLibrary&&<button type="button" disabled={loading} onClick={()=>edit(null,true)}><Icon name="upload" size={16}/>Nạp 34 tiêu chí CEO</button>}
       <button type="button" disabled={loading} onClick={()=>edit(null)}><Icon name="add" size={16}/>Thêm bộ tiêu chí</button>

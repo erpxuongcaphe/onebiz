@@ -58,6 +58,18 @@
 .assignmentRows { border-top:1px solid #dce2eb; }
 .assignmentRow { display:flex; align-items:flex-start; gap:10px; padding:12px 0; border-bottom:1px solid #dce2eb; }
 .assignmentRow > div { min-width:0; overflow-wrap:anywhere; }
+.libraryList { min-width:0; }
+@media(max-width:800px){
+  .libraryList .table{overflow:visible;}
+  .libraryList .table table{min-width:0;}
+  .libraryList .table thead{display:none;}
+  .libraryList .table tbody,.libraryList .table tr,.libraryList .table td{display:block;width:100%;}
+  .libraryList .table tr{border:1px solid #dce2eb;border-radius:6px;margin-bottom:12px;padding:12px;background:white;}
+  .libraryList .table td{padding:6px 0;border:0;}
+  .libraryList .table td:nth-child(2)::before{content:"Nội dung: ";color:#53627a;}
+  .libraryList .table td:nth-child(3)::before{content:"Đã áp dụng: ";color:#53627a;}
+  .libraryList .table td:last-child{border-top:1px solid #dce2eb;margin-top:8px;padding-top:12px;}
+}
 .assignmentRow small { display:block; color:#526172; margin-top:4px; }
 .notes { white-space:pre-wrap; }
 .columnHeading,.criterion > summary { display:grid; grid-template-columns:minmax(180px,1fr) minmax(220px,2fr) minmax(130px,.65fr); gap:16px; }
