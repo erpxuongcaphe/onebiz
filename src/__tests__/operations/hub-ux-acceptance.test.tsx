@@ -20,6 +20,27 @@ beforeEach(()=>{
 afterEach(()=>{cleanup();vi.useRealTimers();vi.unstubAllGlobals();vi.resetAllMocks();});
 function show(view:'work'|'qc'|'report'|'issues'='work',extra:Partial<React.ComponentProps<typeof QualityWorkspace>>={}){return render(<QualityWorkspace workspace={workspace} branch={branch} period="2026-10" initialView={view} onLegacySettings={vi.fn()} {...extra}/>);}
 describe('Hub UX source requirements',()=>{
+ it.each([
+  {view:'work',group:'Lọc nhanh kết quả',label:'Không đạt',param:'result',value:'unmet'},
+  {view:'issues',group:'Lọc nhanh trạng thái',label:'Chờ nghiệm thu',param:'state',value:'pending_review'},
+  {view:'qc',group:'Lọc nhanh trạng thái',label:'Đang chấm',param:'state',value:'draft'},
+ ] as const)('applies $view quick filters through the authorized API',async({view,group,label,param,value})=>{
+  show(view);
+  const button=within(await screen.findByRole('group',{name:group})).getByRole('button',{name:label});
+  fireEvent.click(button);
+  expect(button).toHaveAttribute('aria-pressed','true');
+  await waitFor(()=>expect(new URL(fetchMock.mock.calls.at(-1)![0],'http://test').searchParams.get(param)).toBe(value));
+  expect(fetchMock.mock.calls.every(([,init])=>!init?.method)).toBe(true);
+ });
+ it('links QC and KPI without exposing any closing action to a viewer',async()=>{
+  const onNavigate=vi.fn();
+  fetchMock.mockResolvedValue({ok:true,json:async()=>({...data,can:{...data.can,close:false}})});
+  show('report',{onNavigate});
+  const readiness=await screen.findByRole('region',{name:'Điều kiện chốt kỳ'});
+  fireEvent.click(within(readiness).getByRole('button',{name:'Xem đợt QC'}));
+  expect(onNavigate).toHaveBeenCalledWith('qc',{periodOnly:true});
+  expect(screen.queryByRole('button',{name:'Chốt kỳ'})).toBeNull();
+ });
  it('recovers a forbidden URL branch through the authorized workspace without granting access',async()=>{
   const forbidden='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
   window.history.replaceState(null,'',`/hub?view=work&branch=${forbidden}&period=2026-11`);

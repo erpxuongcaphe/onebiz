@@ -42,11 +42,13 @@ module.exports = async function complete(db) {
   const today=(await one("select (now() at time zone 'Asia/Ho_Chi_Minh')::date::text d")).d;
   const standard=crypto.randomUUID(),family=crypto.randomUUID();
   const criteria=[{id:'test',title:'Check fixture',kind:'boolean',operator:'eq',threshold:1,samples:1,critical:false,evidenceRequired:false}];
-  await db.query("insert into ops_standards(id,tenant_id,branch_id,family_id,revision,title,scope,assignee_id,frequency,due_time,effective_from,criteria,status,created_by) values($1,$2,$3,$4,1,'Ad hoc fixture','branch',$5,'daily','23:59',$6,$7,'approved',$8)",[standard,tenant,branch,family,manager,today,JSON.stringify(criteria),owner]);
+  // The fixture must be approved before its first due time, even when CI runs near midnight.
+  await db.query("insert into ops_standards(id,tenant_id,branch_id,family_id,revision,title,scope,assignee_id,frequency,due_time,effective_from,criteria,status,created_by,created_at) values($1,$2,$3,$4,1,'Ad hoc fixture','branch',$5,'daily','23:59',$6,$7,'approved',$8,now()-interval '1 day')",[standard,tenant,branch,family,manager,today,JSON.stringify(criteria),owner]);
   await call('assignment',{familyId:family,managerIds:[manager]});
   await db.query('select ops_generate_internal($1,$2)',[branch,today]);
-  await db.query("update ops_runs set original_due_at=now()-interval '2 hours',quality='met',met_at=now()-interval '1 hour' where branch_id=$1 and standard_id=$2",[branch,standard]);
-  const lateOverview=(await one('select ops_quality_read($1,$2,$3,$4) value',[branch,today.slice(0,7),'overview','{}'])).value;
+  const lateRun = await db.query("update ops_runs set original_due_at=now()-interval '2 hours',quality='met',met_at=now()-interval '1 hour' where branch_id=$1 and standard_id=$2 returning to_char(original_due_at at time zone 'Asia/Ho_Chi_Minh','YYYY-MM') as period",[branch,standard]);
+  assert.equal(lateRun.rows.length,1,'Late completion fixture must generate exactly one run');
+  const lateOverview=(await one('select ops_quality_read($1,$2,$3,$4) value',[branch,lateRun.rows[0].period,'overview','{}'])).value;
   ok(lateOverview.compliance.late===1 && lateOverview.compliance.met===0,'A late completion never inflates on-time management compliance');
   await call('catalog',{standardId:standard,code:'COMPLETE-QC',category:'group:'+group.id,scoreType:'deduct',weight:5,effectiveFrom:today,accountingRequired:false});
   await call('group',{id:group.id,title:'Renamed for future use',active:true,version:2});
