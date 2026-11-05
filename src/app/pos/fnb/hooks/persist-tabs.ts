@@ -39,7 +39,7 @@ export async function loadPersistedTabs(
     const record = await getMeta<PersistedTabsRecord>(getFnbTabsStorageKey(branchId));
     if (!record) return null;
     if (!record.tabs || record.tabs.length === 0) return null;
-    if (Date.now() - record.savedAt > STALE_MS && !record.tabs.some(tab => tab.lines?.length > 0)) return null;
+    if (Date.now() - record.savedAt > STALE_MS && !record.tabs.some(tab => tab.lines?.length > 0 || tab.orderNoteDraftBase !== undefined)) return null;
     return { tabs: record.tabs, activeTabId: record.activeTabId };
   } catch (err) {
     console.warn("[FnB] loadPersistedTabs failed:", err);

@@ -107,6 +107,7 @@ export interface UseFnbPosStateReturn {
         | "label"
         | "orderType"
         | "orderNote"
+        | "orderNoteServerAt"
         | "deliveryPlatform"
         | "deliveryFee"
         | "platformCommissionPercent"
@@ -154,6 +155,7 @@ export interface UseFnbPosStateReturn {
   // Sprint POS-FNB-EXT-1 (CEO 08/05): order metadata
   /** Set ghi chú toàn đơn (orderNote). Khác line.note (ghi chú từng món). */
   setOrderNote: (tabId: string, note: string) => void;
+  acknowledgeOrderNote: (tabId: string, orderId: string, savedNote: string, submittedDraft?: string, savedAt?: string) => void;
   /** Set sàn giao hàng + auto-fill commission % nếu user chưa override. */
   setDeliveryPlatform: (
     tabId: string,
@@ -197,7 +199,7 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
   });
   const [activeTabId, setActiveTabId] = useState<string>(tabs[0].id);
   // Sent lines are already on the server. Only warn for dishes not sent yet.
-  useUnsavedWork(tabs.some(tab => tab.lines.length > 0));
+  useUnsavedWork(tabs.some(tab => tab.lines.length > 0 || tab.orderNoteDraftBase !== undefined));
 
   const [hydratedBranch, setHydratedBranch] = useState<string>();
   const restoreState = useRef<{ branch?: string; ready: boolean; error?: string }>({ ready: false });
@@ -370,6 +372,7 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
           | "label"
           | "orderType"
           | "orderNote"
+          | "orderNoteServerAt"
           | "deliveryPlatform"
           | "deliveryFee"
           | "platformCommissionPercent"
@@ -382,7 +385,23 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
     ) => {
       tabsMutationVersionRef.current += 1;
       setTabs((prev) =>
-        prev.map((t) => (t.id === tabId ? { ...t, ...meta } : t))
+        prev.map((t) => {
+          if (t.id !== tabId) return t;
+          const next = { ...t, ...meta };
+          // Live reads may update dishes/customer/fees, but never replace a
+          // note that this device has not yet saved. A different order is a new scope.
+          if (next.kitchenOrderId === t.kitchenOrderId) {
+            if (t.orderNoteDraftBase !== undefined || (meta.orderNoteServerAt && t.orderNoteServerAt &&
+              Date.parse(meta.orderNoteServerAt) < Date.parse(t.orderNoteServerAt))) {
+              next.orderNote = t.orderNote;
+              next.orderNoteServerAt = t.orderNoteServerAt;
+            }
+          } else {
+            next.orderNoteDraftBase = undefined;
+            next.orderNoteServerAt = meta.orderNoteServerAt;
+          }
+          return next;
+        })
       );
     },
     []
@@ -620,8 +639,22 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
   const setOrderNote = useCallback((tabId: string, note: string) => {
     tabsMutationVersionRef.current += 1;
     setTabs((prev) =>
-      prev.map((t) => (t.id === tabId ? { ...t, orderNote: note } : t)),
+      prev.map((t) => {
+        if (t.id !== tabId || (t.orderNote ?? "") === note) return t;
+        const base = t.orderNoteDraftBase ?? t.orderNote ?? "";
+        return { ...t, orderNote: note, orderNoteDraftBase: t.kitchenOrderId ? base : undefined };
+      }),
     );
+  }, []);
+
+  const acknowledgeOrderNote = useCallback((tabId: string, orderId: string, savedNote: string, submittedDraft = savedNote, savedAt?: string) => {
+    tabsMutationVersionRef.current += 1;
+    setTabs(prev => prev.map(tab => {
+      if (tab.id !== tabId || tab.kitchenOrderId !== orderId) return tab;
+      const unchanged = (tab.orderNote ?? "") === submittedDraft;
+      return { ...tab, orderNote: unchanged ? savedNote : tab.orderNote,
+        orderNoteDraftBase: unchanged ? undefined : savedNote, orderNoteServerAt: savedAt ?? tab.orderNoteServerAt };
+    }));
   }, []);
 
   const setDeliveryPlatform = useCallback(
@@ -749,6 +782,7 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
     attachDiscountAudit,
     orderDiscountAmount,
     setOrderNote,
+    acknowledgeOrderNote,
     setDeliveryPlatform,
     setDeliveryFee,
     setPlatformCommissionPercent,

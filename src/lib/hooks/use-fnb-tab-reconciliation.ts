@@ -6,7 +6,7 @@ import { isUnpaidFnbOrder, type FnbOpenOrder } from "@/lib/fnb-open-orders";
 import type { KitchenOrder } from "@/lib/types/fnb";
 
 export function useFnbTabReconciliation({ tabs, branchId, orders, updatedAt, blocked, onClosed }: {
-  tabs: readonly { id: string; kitchenOrderId?: string }[];
+  tabs: readonly { id: string; kitchenOrderId?: string; orderNoteDraftBase?: string }[];
   branchId?: string | null;
   orders: FnbOpenOrder[];
   updatedAt: Date | null;
@@ -19,7 +19,7 @@ export function useFnbTabReconciliation({ tabs, branchId, orders, updatedAt, blo
     const candidates = new Map<string, string[]>();
     for (const tab of tabs) {
       const orderId = tab.kitchenOrderId;
-      if (!orderId || orderId.startsWith("local_") || openIds.has(orderId)) continue;
+      if (!orderId || tab.orderNoteDraftBase !== undefined || orderId.startsWith("local_") || openIds.has(orderId)) continue;
       candidates.set(orderId, [...(candidates.get(orderId) ?? []), tab.id]);
     }
     let cancelled = false;

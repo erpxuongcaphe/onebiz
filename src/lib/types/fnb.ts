@@ -242,6 +242,10 @@ export interface FnbTabSnapshot {
    * Pass vào sendToKitchen + in ra phiếu bếp dòng "📝 Ghi chú: ...".
    */
   orderNote?: string;
+  /** Last server note while a local note edit awaits acknowledgement. Persist with the tab. */
+  orderNoteDraftBase?: string;
+  /** Reject live snapshots older than the last acknowledged note. */
+  orderNoteServerAt?: string;
   /**
    * Sàn giao hàng (chỉ áp dụng khi orderType === "delivery").
    * Default "direct" = quán tự giao.
