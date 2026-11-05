@@ -3482,6 +3482,7 @@
   "fnb_select_order_customer_v1",
   "fnb_send_to_kitchen_atomic",
   "fnb_send_to_kitchen_atomic_v2",
+  "fnb_save_order_note_v1",
   "fnb_send_to_kitchen_with_customer_v1",
   "fnb_set_delivery_pricing_v2",
   "fnb_table_config_atomic",

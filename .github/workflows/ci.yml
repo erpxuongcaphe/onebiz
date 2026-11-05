@@ -776,6 +776,8 @@ jobs:
 
       - name: Run tests
         run: npm run test:run
+      - name: Verify sent F&B order notes on isolated PostgreSQL
+        run: node scripts/fnb-db-test/run-sent-order-note.mjs
 
       - name: Verify money account corrections on isolated PostgreSQL
         run: node scripts/fnb-db-test/run-money-account-edit.mjs

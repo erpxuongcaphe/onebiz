@@ -66,6 +66,10 @@ interface FnbCartProps {
   onPrintPreBill?: () => void;
   /** Sprint POS-FNB-EXT-1: ghi chú toàn đơn. */
   onOrderNoteChange?: (note: string) => void;
+  onOrderNoteSave?: () => void;
+  onOrderNoteResolve?: (serverNote?: string, keepDraft?: boolean) => void;
+  orderNoteSaveStatus?: { kind: "saving" | "error"; message?: string; remoteNote?: string };
+  orderNoteOffline?: boolean;
   /** Sprint POS-FNB-EXT-1: delivery platform setters (chỉ dùng khi orderType="delivery"). */
   onDeliveryPlatformChange?: (
     platform: import("@/lib/types/fnb").DeliveryPlatform,
@@ -209,6 +213,10 @@ export function FnbCart({
   freeItems,
   mobile,
   onOrderNoteChange,
+  onOrderNoteSave,
+  onOrderNoteResolve,
+  orderNoteSaveStatus,
+  orderNoteOffline,
   onDeliveryPlatformChange,
   onDeliveryFeeChange,
   onPlatformCommissionChange,
@@ -351,18 +359,40 @@ export function FnbCart({
               </button>
               <HelpTip>
                 Ghi chú cho TOÀN BILL — vd &quot;Khách kiêng đường&quot;, &quot;Đơn VIP&quot;,
-                &quot;Không nhận giấy&quot;. In ra phiếu bếp dòng riêng. Khác ghi chú
-                từng món (mở dialog món để nhập).
+                &quot;Không nhận giấy&quot;. Ghi chú sau khi gửi bếp được lưu vào đơn,
+                không in lại phiếu cũ. Ghi chú từng món nhập trong màn sửa món.
               </HelpTip>
             </div>
             {noteExpanded && (
-              <Textarea
+              <><Textarea
+                aria-label="Ghi chú toàn đơn"
                 value={activeTab?.orderNote ?? ""}
                 onChange={(e) => onOrderNoteChange(e.target.value)}
+                disabled={kitchenSubmitting}
                 placeholder="VD: Khách kiêng đường hết bill, đơn ưu tiên VIP..."
                 className="mt-1 text-xs min-h-[60px] resize-y"
                 maxLength={300}
               />
+              {activeTab?.kitchenOrderId && <div className="mt-1 text-xs text-muted-foreground">
+                {activeTab.orderNoteDraftBase !== undefined ? <>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span role="status" className={orderNoteSaveStatus?.kind === "error" ? "text-status-error" : ""}>
+                      {orderNoteSaveStatus?.kind === "saving" ? "Đang lưu…" : orderNoteOffline ? "Chờ kết nối · giữ ghi chú trên máy" : orderNoteSaveStatus?.message ?? "Chờ lưu ghi chú…"}
+                    </span>
+                    {!orderNoteOffline && orderNoteSaveStatus?.kind !== "saving" && orderNoteSaveStatus?.remoteNote === undefined &&
+                      <button type="button" className="min-h-8 font-semibold text-primary" onClick={onOrderNoteSave}>{orderNoteSaveStatus?.kind === "error" ? "Thử lại" : "Lưu ngay"}</button>}
+                    {(orderNoteOffline || orderNoteSaveStatus?.kind === "error") && orderNoteSaveStatus?.remoteNote === undefined && orderNoteSaveStatus?.kind !== "saving" &&
+                      <button type="button" className="min-h-8 font-semibold" onClick={() => onOrderNoteResolve?.()}>Bỏ thay đổi</button>}
+                  </div>
+                  {orderNoteSaveStatus?.remoteNote !== undefined && <div className="mt-1 rounded-md border border-border p-2">
+                    <p className="whitespace-pre-wrap break-words">Bản trên máy chủ: {orderNoteSaveStatus.remoteNote || "(trống)"}</p>
+                    <div className="flex flex-wrap gap-x-3">
+                      <button type="button" className="min-h-8 font-semibold text-primary" onClick={() => onOrderNoteResolve?.(orderNoteSaveStatus.remoteNote)}>Dùng bản máy chủ</button>
+                      <button type="button" className="min-h-8 font-semibold text-primary" onClick={() => onOrderNoteResolve?.(orderNoteSaveStatus.remoteNote, true)}>Lưu bản đang nhập</button>
+                    </div>
+                  </div>}
+                </> : <span role="status">{activeTab.kitchenOrderId.startsWith("local_") ? "Đã lưu trên máy" : "Đã lưu"}</span>}
+              </div>}</>
             )}
           </div>
         )}
