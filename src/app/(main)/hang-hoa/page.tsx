@@ -2174,7 +2174,7 @@ export default function HangHoaPage() {
           <RecipeCostLoadError onRetry={() => { void fetchData(); }} />}
         <DataTable
           compactMobileToolbar
-          fitDetailToViewport
+          getDetailTitle={product => "Sản phẩm " + product.code}
           renderMobileRow={product=>{
             const available=branchStockView&&product.hasBom&&!product.isFnbStockItem?bomAvailability.get(product.id):undefined;
             const quantity=branchStockView?(product.branchStock??0):product.stock;

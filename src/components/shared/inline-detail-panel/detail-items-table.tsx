@@ -142,7 +142,7 @@ export function DetailItemsTable<T>({
         ))}
         {visible.length === 0 && <p className="p-4 text-center text-muted-foreground">Không có dữ liệu</p>}
       </div>
-      <div className="hidden max-h-[480px] overflow-auto md:block">
+      <div data-slot="detail-items-scroll" className="hidden max-h-[480px] overflow-auto md:block">
       <table className="w-full text-sm">
         <thead className="sticky top-0 z-10 bg-muted">
           <tr className="bg-muted/50">

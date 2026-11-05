@@ -1113,7 +1113,7 @@ export default function HoaDonPage() {
         <DataTable
           key={isFnbBranch ? "fnb-invoices" : "erp-invoices"}
           compactMobileToolbar
-          fitDetailToViewport
+          getDetailTitle={invoice => "Hóa đơn " + invoice.code}
           renderMobileRow={invoice=><div className="min-w-0 space-y-1"><InvoiceMobileRow invoice={invoice} statusLabel={retailDocumentStatusLabel(invoice)}/>{invoice.sourceOrderCode&&<p className="text-xs text-muted-foreground">Đặt hàng: {invoice.sourceOrderCode}</p>}</div>}
 
           defaultColumnVisibility={isFnbBranch ? {star: false, returnCode: false, customerCode: false, discount: false, debt: false} : {paid: false, invoiceStatus: false}}
