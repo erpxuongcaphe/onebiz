@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useLiveDataRefresh } from "@/lib/hooks/use-live-data-refresh";
 import { managementReportLink } from "@/lib/reports/management-review";
 import { financialExportSheets } from "@/lib/reports/financial-export";
+import { TransactionsDialog, type TransactionsSelection } from "./transactions-dialog";
 import {
   Bar,
   BarChart,
@@ -502,6 +503,7 @@ export default function CustomerProductReportPage() {
     null,
   );
   const [productSearch, setProductSearch] = useState("");
+  const [transactions, setTransactions] = useState<TransactionsSelection | null>(null);
   const deferredProductSearch = useDebounce(productSearch, 300);
   const [productSort, setProductSort] = useState<ProductSort>("revenue_desc");
   const [productPage, setProductPage] = useState(0);
@@ -1173,8 +1175,24 @@ export default function CustomerProductReportPage() {
     }
   }, [activeBranchId, branchLabel, range, report, toast, reportPending, error, reportScope, deferredSearch, sort]);
 
+  function openTransactions(product?: { productId: string; productName: string; unit: string }) {
+    if (!selectedCustomer) return;
+    setTransactions({
+      filter: {
+        customerId: selectedCustomer.customerId,
+        branchId: activeBranchId ?? undefined,
+        range: { ...range },
+        search: deferredProductSearch,
+        product,
+      },
+      customerName: selectedCustomer.customerName,
+      branchName: branchLabel,
+    });
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {transactions && <TransactionsDialog selection={transactions} close={() => setTransactions(null)} />}
       <ReportPageHeader
         title="Chi tiết bán hàng theo khách hàng"
         subtitle="Doanh thu mặt hàng theo khách hàng, mặt hàng và nhóm hàng"
@@ -1784,7 +1802,12 @@ export default function CustomerProductReportPage() {
                         {formatNumber(detail?.total ?? 0)} mã hàng · {formatCurrency(detail?.revenue ?? 0)} ₫
                       </p>
                     </div>
-                    {detailLoading && <Icon name="progress_activity" size={18} className="animate-spin text-muted-foreground" />}
+                    <div className="flex items-center gap-2">
+                      {detailLoading && <Icon name="progress_activity" size={18} className="animate-spin text-muted-foreground" />}
+                      <Button size="sm" variant="outline" disabled={!selectedCustomer || detailLoading || productSearch !== deferredProductSearch} onClick={() => openTransactions()}>
+                        Chi tiết giao dịch
+                      </Button>
+                    </div>
                   </div>
                   <div className="max-h-[650px] overflow-auto">
                     <table
@@ -1829,7 +1852,11 @@ export default function CustomerProductReportPage() {
                       <tbody>
                         {(detail?.rows ?? []).map((row, index) => (
                           <tr key={row.productId} className={cn("border-b border-border/60 hover:bg-surface-container-low", index % 2 === 1 && "bg-surface-container-low/30")}>
-                            <td className="sticky left-0 z-10 bg-inherit px-3 py-2.5 font-medium text-foreground">{row.productName}</td>
+                            <td className="sticky left-0 z-10 bg-inherit px-3 py-2.5 font-medium text-foreground">
+                              <button type="button" className="text-left text-primary hover:underline" disabled={detailLoading || productSearch !== deferredProductSearch} onClick={() => openTransactions(row)}>
+                                {row.productName}
+                              </button>
+                            </td>
                             {productColumns.includes("code") && (
                               <td className="px-3 py-2.5 text-muted-foreground">{row.productCode}</td>
                             )}

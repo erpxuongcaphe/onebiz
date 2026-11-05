@@ -127,6 +127,8 @@ export interface ExcelColumn {
   format?: "number" | "currency" | "percent" | "date" | "text";
   /** Optional display precision for quantities/unit values; source numbers stay intact. */
   decimalPlaces?: number;
+  /** Custom Excel format for numeric columns that must retain source precision. */
+  numberFormat?: string;
   /** Alignment: "left" | "center" | "right". Default theo format. */
   align?: "left" | "center" | "right";
 }
@@ -394,7 +396,7 @@ function formatCell(value: unknown, col: ExcelColumn): XLSXTypes.CellObject {
     return {
       v: Number.isFinite(n) ? n : 0,
       t: "n",
-      z: digits ? `#,##0.${"#".repeat(digits)}` : "#,##0",
+      z: col.numberFormat ?? (digits ? `#,##0.${"#".repeat(digits)}` : "#,##0"),
       s: STYLE_DATA_NUMBER,
     };
   }
@@ -411,6 +413,9 @@ function formatCell(value: unknown, col: ExcelColumn): XLSXTypes.CellObject {
   }
 
   if (format === "date") {
+    if (value instanceof Date && Number.isFinite(value.getTime())) {
+      return { v: value, t: "d", z: "dd/mm/yyyy", s: STYLE_DATA_CENTER };
+    }
     return { v: String(value), t: "s", s: STYLE_DATA_CENTER };
   }
 

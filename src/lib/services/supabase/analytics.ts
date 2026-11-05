@@ -2061,6 +2061,60 @@ function callReportingRpc(
   return rpc.call(client, name, args);
 }
 
+export interface CustomerProductTransaction {
+  id: string;
+  invoice_id: string;
+  sold_at: string;
+  invoice_code: string;
+  order_code: string | null;
+  branch_name: string | null;
+  product_code: string;
+  product_name: string;
+  unit: string;
+  quantity: number;
+  unit_price: number;
+  discount: number;
+  total: number;
+}
+
+export interface CustomerProductTransactionsPage {
+  rows: CustomerProductTransaction[];
+  total: number;
+  revenue: number;
+}
+
+export interface CustomerProductTransactionsFilter {
+  branchId?: string;
+  range: { from: string; to: string };
+  customerId: string;
+  search?: string;
+  product?: { productId: string; productName: string; unit: string };
+}
+
+export async function getCustomerProductTransactions(
+  filter: CustomerProductTransactionsFilter,
+  offset = 0,
+  forExport = false,
+): Promise<CustomerProductTransactionsPage> {
+  const range = resolveRange(filter.range, thisMonthRange());
+  const { data, error } = await callReportingRpc("get_customer_product_transactions", {
+    p_date_from: range.start,
+    p_date_to: range.end,
+    p_customer_id: filter.customerId,
+    p_branch_id: filter.branchId ?? null,
+    p_search: filter.search?.trim() || null,
+    p_product_id: filter.product?.productId || null,
+    p_product_name: filter.product?.productName ?? null,
+    p_unit: filter.product?.unit ?? null,
+    p_offset: offset,
+    p_limit: forExport ? 500 : 50,
+    p_export: forExport,
+  });
+  if (error) handleError(error, "getCustomerProductTransactions");
+  if (!data) throw new Error("Không nhận được dữ liệu chi tiết giao dịch.");
+  return data as CustomerProductTransactionsPage;
+}
+
 export async function getCustomerProductReport(params: {
   branchId?: string;
   range: { from: string; to: string };
