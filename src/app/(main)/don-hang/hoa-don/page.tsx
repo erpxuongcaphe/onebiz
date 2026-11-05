@@ -3,6 +3,7 @@ import {getFnbInvoiceExportDetails,fnbInvoiceItemExportColumns} from "@/lib/serv
 import {InvoiceMobileRow} from "@/components/shared/invoice-mobile-row";
 import {InvoiceDisplayMenu} from "@/components/shared/invoice-display-menu";
 import {useInvoiceDisplay,type InvoiceDisplay} from "@/lib/hooks/use-invoice-display";
+import {readFnbInvoiceOptions,readFnbInvoiceSize} from "@/lib/utils/fnb-invoice-options";
 import {fnbItemColumns,FnbInvoiceMobileItem} from "@/components/shared/fnb-invoice-items";
 import {InvoiceItemName} from "@/components/shared/invoice-item-name";
 import {FnbInvoiceChoiceFilter} from "@/components/shared/fnb-invoice-choice-filter";
@@ -401,6 +402,11 @@ function InvoiceDetail({
                       },
                     ]}
                     mobileItem={invoice.source==="fnb" ? (item:Record<string,unknown>)=><FnbInvoiceMobileItem item={item} display={display}/> : undefined}
+                    searchFields={item => {
+                      const { temperature, sweetness, ice, other } = readFnbInvoiceOptions(item.fnbOptions);
+                      const size = readFnbInvoiceSize(String(item.productName ?? ""), item.variantLabel as string | undefined);
+                      return [size, temperature, sweetness, ice, other].filter((value): value is string => Boolean(value));
+                    }}
                     items={items as unknown as Record<string, unknown>[]}
                     summary={[
                       {
