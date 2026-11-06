@@ -270,6 +270,7 @@ export async function getSupplierById(id: string): Promise<Supplier | null> {
  */
 export async function createSupplier(
   supplier: Partial<Supplier>,
+  groupId?: string,
 ): Promise<SupplierWriteIdentity> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
@@ -289,7 +290,8 @@ export async function createSupplier(
     .from("suppliers")
     .insert({
       tenant_id: tenantId,
-      code: supplier.code!,
+      code: groupId ? "" : supplier.code!,
+      ...(groupId ? { group_id: groupId } : {}),
       name: supplier.name!,
       phone: supplier.phone || null,
       email: supplier.email || null,
