@@ -53,6 +53,7 @@ export function handleError(error: { message: string; code?: string }, context: 
     DELIVERY_DESTINATION_INVALID: "Nhập tên người nhận, địa chỉ và số điện thoại hợp lệ trước khi lưu.",
     DELIVERY_STAFF_NOT_AVAILABLE_FOR_BRANCH: "Nhân viên không còn hoạt động hoặc không thuộc chi nhánh này. Chọn nhân viên khác.",
     INTERNAL_SALE_RETAIL_SKU_REQUIRED: "Đơn nội bộ chỉ nhận SKU hàng hóa đang hoạt động, không nhận mã NVL hoặc món F&B bán trực tiếp. Kiểm tra lại mã hàng; đơn chưa được ghi nhận.",
+    INTERNAL_SALE_ALREADY_RECEIVED: "Chi nhánh nhận đã ghi nhận hàng. Hóa đơn nội bộ này không thể hủy.",
     INTERNAL_SALE_BRANCH_DENIED: "Tài khoản chưa có quyền hủy hóa đơn nội bộ cho cặp kho này. Cần quyền ở cả hai kho hoặc quyền hủy được cấp riêng theo kho xuất.",
     INTERNAL_RECEIPT_FINANCE_SOURCE_LOCKED: "Khoản chi phí này phát sinh từ nhận hàng nội bộ. Thanh toán theo đơn nội bộ; muốn sửa hoặc hủy ghi nhận, xử lý tại phiếu nhận gốc.",
     GRAM_FORM_REFRESH_REQUIRED: "Đơn vị kho của BTP đã chuyển sang gram. Tải lại dữ liệu và kiểm tra số cân trước khi lưu; thao tác này chưa ghi nhận kho.",

@@ -123,6 +123,24 @@ try {
   const ws=(await db.query(`select get_internal_receiving_workspace('${context.dest}') r`)).rows[0].r;
   assert.equal(Number(ws.find(o=>o.id===sale.internal_sale_id).items[0].received),8);
   assert.ok(!JSON.stringify(ws).includes('unit_price')); assert.ok(!JSON.stringify(ws).includes('unitCost'));
+  await db.exec('begin');
+  await db.exec(fs.readFileSync('supabase/migrations/20261106114051_block_internal_void_after_receipt.sql','utf8'));
+  const cancelWithReceiptGuard = id => db.query('select cancel_internal_sale_atomic($1,$2)',[id,'Test receipt cancellation guard']);
+  await db.exec('savepoint received');
+  await assert.rejects(cancelWithReceiptGuard(sale.internal_sale_id),/INTERNAL_SALE_ALREADY_RECEIVED/);
+  await db.exec('rollback to savepoint received');
+  assert.equal(await stock(),initial+8);
+  assert.equal(await ledger(),initialCost+8);
+  assert.equal((await db.query('select status from invoices where id=$1',[sale.invoice_id])).rows[0].status,'completed');
+  const unreceived = await createSale();
+  await db.query("update internal_sales set receipt_mode='legacy' where id=$1",[unreceived.internal_sale_id]);
+  await db.exec('savepoint legacy');
+  await assert.rejects(cancelWithReceiptGuard(unreceived.internal_sale_id),/INTERNAL_SALE_ALREADY_RECEIVED/);
+  await db.exec('rollback to savepoint legacy');
+  await db.query("update internal_sales set receipt_mode='actual' where id=$1",[unreceived.internal_sale_id]);
+  assert.equal((await cancelWithReceiptGuard(unreceived.internal_sale_id)).rows[0].cancel_internal_sale_atomic.status,'cancelled');
+  await db.exec('rollback');
+  console.log('PASS: cancellation blocks partial and legacy receipts while permitting a genuinely unreceived order.');
   // Correct 8 to 7: subtract only one from physical stock and its ORIGINAL receipt cost.
   const corrected=(await receive(7,'93000000-0000-0000-0000-000000000003',first.receiptId,1,'Actual count correction')).rows[0].r;
   assert.equal(corrected.revision,2); assert.equal(await stock(),initial+7); assert.equal(await ledger(),initialCost+7);
