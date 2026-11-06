@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -21,6 +21,8 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/lib/contexts";
 import { createSupplier, getCategoriesByScope, updateSupplier } from "@/lib/services";
+import { getSupplierGroupLabel } from "@/lib/services/supabase/suppliers";
+import { useListWorkspaceQuery } from "@/lib/hooks/use-list-workspace-query";
 import type { ProductCategory, Supplier } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 import { VN_PROVINCES, DEFAULT_COUNTRY } from "@/lib/data/vn-provinces";
@@ -39,6 +41,9 @@ export function CreateSupplierDialog({
   initialData,
 }: CreateSupplierDialogProps) {
   const isEditing = !!initialData;
+  const supplierId = initialData?.id;
+  const loadSavedGroup = useCallback(() => supplierId ? getSupplierGroupLabel(supplierId) : Promise.resolve(null), [supplierId]);
+  const savedGroup = useListWorkspaceQuery(loadSavedGroup, open && isEditing, supplierId ?? "");
   const { toast } = useToast();
   const [code, setCode] = useState("");
   const [groupId, setGroupId] = useState("");
@@ -217,6 +222,13 @@ export function CreateSupplierDialog({
             <Input aria-label="Mã NCC" value={isEditing ? code : selectedGroup ? `NCC-${selectedGroup.code}-…` : ""}
               placeholder="Tự cấp khi lưu" readOnly className="bg-muted/50" />
           </div>
+          {isEditing && (
+            <div className="space-y-2">
+              <label htmlFor="supplier-edit-group" className="text-sm font-medium">Nhóm nhà cung cấp</label>
+              <Input id="supplier-edit-group" readOnly className="bg-muted/50"
+                value={savedGroup.loading ? "Đang tải…" : savedGroup.error ? "Chưa tải được nhóm" : savedGroup.data ?? "Chưa phân nhóm"} />
+            </div>
+          )}
 
           <div className="space-y-2">
             <label className="text-sm font-medium">
