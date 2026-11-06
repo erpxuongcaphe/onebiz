@@ -4,6 +4,9 @@ import {cleanup,fireEvent,render,screen,waitFor} from "@testing-library/react";
 const api=vi.hoisted(()=>({create:vi.fn(),update:vi.fn(),toast:vi.fn()}));
 vi.mock("@/lib/services",()=>({createSupplier:api.create,updateSupplier:api.update,getCategoriesByScope:async()=>[{id:"group-bbi",code:"BBI",name:"Bao bì"}]}));
 vi.mock("@/lib/contexts",()=>({useToast:()=>({toast:api.toast})}));
+vi.mock("@/lib/services/supabase/suppliers",()=>({
+  getSupplierGroupLabel: async () => "Bao bì (BBI)",
+}));
 
 import {CreateSupplierDialog} from "@/components/shared/dialogs/create-supplier-dialog";
 
@@ -47,6 +50,8 @@ describe("supplier save identity acknowledgement",()=>{
   it("keeps the update callback contract with an identity-only response",async()=>{
     const onSuccess=vi.fn(),onOpenChange=vi.fn();
     render(<CreateSupplierDialog open initialData={initial} onOpenChange={onOpenChange} onSuccess={onSuccess}/>);
+    await waitFor(()=>expect(screen.getByLabelText("Nhóm nhà cung cấp")).toHaveValue("Bao bì (BBI)"));
+    expect(screen.getByLabelText("Nhóm nhà cung cấp")).toHaveAttribute("readonly");
     fireEvent.change(screen.getByPlaceholderText("Nhập tên nhà cung cấp"),{target:{value:"Updated supplier"}});
     fireEvent.click(screen.getByRole("button",{name:"Cập nhật"}));
     await waitFor(()=>expect(onSuccess).toHaveBeenCalledWith());
