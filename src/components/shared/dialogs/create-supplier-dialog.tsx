@@ -20,8 +20,8 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { useToast } from "@/lib/contexts";
-import { createSupplier, updateSupplier } from "@/lib/services";
-import type { Supplier } from "@/lib/types";
+import { createSupplier, getCategoriesByScope, updateSupplier } from "@/lib/services";
+import type { ProductCategory, Supplier } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 import { VN_PROVINCES, DEFAULT_COUNTRY } from "@/lib/data/vn-provinces";
 
@@ -30,11 +30,6 @@ interface CreateSupplierDialogProps {
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
   initialData?: Omit<Supplier, "currentDebt" | "totalPurchases">;
-}
-
-function generateSupplierCode() {
-  const num = Math.floor(Math.random() * 99999) + 1;
-  return `NCC${String(num).padStart(5, "0")}`;
 }
 
 export function CreateSupplierDialog({
@@ -46,6 +41,10 @@ export function CreateSupplierDialog({
   const isEditing = !!initialData;
   const { toast } = useToast();
   const [code, setCode] = useState("");
+  const [groupId, setGroupId] = useState("");
+  const [groups, setGroups] = useState<ProductCategory[]>([]);
+  const [groupStatus, setGroupStatus] = useState<"loading" | "ready" | "error">("loading");
+  const selectedGroup = groups.find((group) => group.id === groupId);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -79,7 +78,8 @@ export function CreateSupplierDialog({
         setTaxCode(initialData.taxCode || "");
         setNote(initialData.note || "");
       } else {
-        setCode(generateSupplierCode());
+        setCode("");
+        setGroupId("");
         setName("");
         setPhone("");
         setEmail("");
@@ -97,9 +97,26 @@ export function CreateSupplierDialog({
     }
   }, [open, initialData]);
 
+  useEffect(() => {
+    if (!open || isEditing) return;
+    let cancelled = false;
+    setGroupStatus("loading");
+    getCategoriesByScope("supplier").then((categories) => {
+      if (cancelled) return;
+      setGroups(categories.filter(({ code }) => code && code !== "NB" && /^[A-Z][A-Z0-9]{1,7}$/.test(code)));
+      setGroupStatus("ready");
+    }).catch(() => {
+      if (!cancelled) setGroupStatus("error");
+    });
+    return () => { cancelled = true; };
+  }, [open, isEditing]);
+
   function validate(): boolean {
     const newErrors: Record<string, string> = {};
     if (!name.trim()) newErrors.name = "Tên nhà cung cấp là bắt buộc";
+    if (!isEditing && (groupStatus !== "ready" || !selectedGroup)) {
+      newErrors.group = "Vui lòng chọn nhóm nhà cung cấp";
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   }
@@ -129,8 +146,7 @@ export function CreateSupplierDialog({
           variant: "success",
         });
       } else {
-        await createSupplier({
-          code,
+        const created = await createSupplier({
           name,
           phone: phone || undefined,
           email: email || undefined,
@@ -142,11 +158,11 @@ export function CreateSupplierDialog({
           country: country || undefined,
           taxCode: taxCode || undefined,
           note: note || undefined,
-        });
+        }, groupId);
         onOpenChange(false);
         toast({
           title: "Tạo nhà cung cấp thành công",
-          description: `Đã thêm nhà cung cấp ${name} (${code})`,
+          description: `Đã thêm nhà cung cấp ${name} (${created.code})`,
           variant: "success",
         });
       }
@@ -173,9 +189,33 @@ export function CreateSupplierDialog({
         </DialogHeader>
 
         <DialogBody className="grid gap-4 py-2 pr-1">
+          {!isEditing && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium" id="supplier-create-group-label">
+                Nhóm nhà cung cấp <span className="text-destructive">*</span>
+              </label>
+              <Select value={groupId || null} onValueChange={(value) => setGroupId(value ?? "")}
+                disabled={groupStatus !== "ready" || !groups.length || saving}>
+                <SelectTrigger aria-labelledby="supplier-create-group-label" className="w-full">
+                  <SelectValue placeholder={groupStatus === "loading" ? "Đang tải nhóm..." : "Chọn nhóm nhà cung cấp"}>
+                    {selectedGroup ? `${selectedGroup.name} (${selectedGroup.code})` : undefined}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {groups.map((group) => (
+                    <SelectItem key={group.id} value={group.id}>{group.name} ({group.code})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {groupStatus === "error" && <p role="alert" className="text-sm text-destructive">Chưa tải được nhóm. Mở lại form để thử lại.</p>}
+              {groupStatus === "ready" && !groups.length && <p className="text-sm text-muted-foreground">Chưa thiết lập nhóm nhà cung cấp.</p>}
+              {errors.group && <p className="text-sm text-destructive">{errors.group}</p>}
+            </div>
+          )}
           <div className="space-y-2">
             <label className="text-sm font-medium">Mã NCC</label>
-            <Input value={code} onChange={(e) => setCode(e.target.value)} readOnly={isEditing} className={isEditing ? "bg-muted/50" : ""} />
+            <Input aria-label="Mã NCC" value={isEditing ? code : selectedGroup ? `NCC-${selectedGroup.code}-…` : ""}
+              placeholder="Tự cấp khi lưu" readOnly className="bg-muted/50" />
           </div>
 
           <div className="space-y-2">
