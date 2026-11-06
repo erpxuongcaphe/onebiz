@@ -10,6 +10,7 @@ import { DataTable } from "@/components/shared/data-table";
 import { ListMetric } from "@/components/shared/list-metric";
 import { ListWorkspaceError } from "@/components/shared/list-workspace-error";
 import { getScopedSupplierDirectory } from "@/lib/services/supabase/party-directory-workspace";
+import { getSupplierGroupLabel } from "@/lib/services/supabase/suppliers";
 import { getScopedPartyHistory } from "@/lib/services/supabase/party-history-workspace";
 import { partyHistoryModel, type PartyHistoryDocument } from "@/lib/services/supabase/party-history-reader";
 import { supplierDirectoryModel, supplierEditProfile, directoryScopeLabel, type DirectorySupplier as Supplier } from "@/lib/services/supabase/party-directory-model";
@@ -95,6 +96,8 @@ function SupplierDetail({
   const { activeBranchId } = useBranchFilter();
   const { hasPermission, user, tenant } = useAuth();
   const statusMeta = getPurchaseOrderStatusMeta();
+  const groupLoader = useCallback(() => getSupplierGroupLabel(supplier.id), [supplier.id]);
+  const supplierGroup = useListWorkspaceQuery(groupLoader, true, `${tenant?.id ?? ""}:${user?.id ?? ""}`);
   const historyLoader = useCallback(() => {
     void historyRevision; void supplier.currentDebt;
     return getScopedPartyHistory("supplier", supplier.id, activeBranchId ?? null);
@@ -137,6 +140,7 @@ function SupplierDetail({
           fields={[
             { label: "Mã NCC", value: supplier.code },
             { label: "Tên NCC", value: supplier.name },
+            { label: "Nhóm NCC", value: supplierGroup.loading ? "Đang tải…" : supplierGroup.error ? "Chưa tải được nhóm" : supplierGroup.data ?? "Chưa phân nhóm" },
             { label: "Điện thoại", value: supplier.phone },
             { label: "Email", value: supplier.email || "" },
             {
@@ -360,12 +364,12 @@ function SupplierDetail({
       onClose={onClose}
       onEdit={onEdit}
       onDelete={onDelete}
+      actionLayout="separate"
     >
       <div className="p-4 space-y-4">
         <DetailHeader
           title={supplier.name}
           code={supplier.code}
-          subtitle={supplier.phone}
           meta={<span>Ngày tạo: {formatDate(supplier.createdAt)}</span>}
         />
         <DetailTabs tabs={tabs.filter(tab => (!["purchase_history", "return_history"].includes(tab.id) || canViewActivity) &&
