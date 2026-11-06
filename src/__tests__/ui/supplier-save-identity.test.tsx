@@ -2,16 +2,12 @@ import {afterEach,beforeEach,describe,expect,it,vi} from "vitest";
 import {cleanup,fireEvent,render,screen,waitFor} from "@testing-library/react";
 
 const api=vi.hoisted(()=>({create:vi.fn(),update:vi.fn(),toast:vi.fn()}));
-vi.mock("@/lib/services",()=>({createSupplier:api.create,updateSupplier:api.update}));
+vi.mock("@/lib/services",()=>({createSupplier:api.create,updateSupplier:api.update,getCategoriesByScope:async()=>[{id:"group-bbi",code:"BBI",name:"Bao bì"}]}));
 vi.mock("@/lib/contexts",()=>({useToast:()=>({toast:api.toast})}));
-vi.mock("@/components/ui/select",()=>({
-  Select:({value,items=[],onValueChange}:{value:string;items?:Array<{value:string;label:string}>;onValueChange:(value:string)=>void})=><select value={value} onChange={event=>onValueChange(event.target.value)}>{items.map(item=><option key={item.value} value={item.value}>{item.label}</option>)}</select>,
-  SelectTrigger:()=>null,SelectValue:()=>null,SelectContent:()=>null,SelectItem:()=>null,
-}));
 
 import {CreateSupplierDialog} from "@/components/shared/dialogs/create-supplier-dialog";
 
-const identity={id:"supplier-test",code:"TEST-001",name:"Synthetic supplier"};
+const identity={id:"supplier-test",code:"NCC-BBI-004",name:"Synthetic supplier"};
 const initial={...identity,phone:"0000000000",createdAt:"2026-01-01"};
 beforeEach(()=>{vi.clearAllMocks();api.create.mockResolvedValue(identity);api.update.mockResolvedValue(identity);});
 afterEach(cleanup);
@@ -34,12 +30,18 @@ describe("supplier save identity acknowledgement",()=>{
   it("closes and refreshes after create without financial fields",async()=>{
     const onSuccess=vi.fn(),onOpenChange=vi.fn();
     render(<CreateSupplierDialog open onOpenChange={onOpenChange} onSuccess={onSuccess}/>);
+    const group = await screen.findByRole("combobox", {name:/Nhóm nhà cung cấp/});
+    await waitFor(()=>expect(group).toBeEnabled());
+    fireEvent.keyDown(group,{key:"ArrowDown"});
+    fireEvent.click(await screen.findByRole("option",{name:/Bao bì/}));
+    expect(screen.getByLabelText("Mã NCC")).toHaveValue("NCC-BBI-…");
+    expect(api.create).not.toHaveBeenCalled();
     fireEvent.change(screen.getByPlaceholderText("Nhập tên nhà cung cấp"),{target:{value:identity.name}});
     fireEvent.click(screen.getByRole("button",{name:"Lưu"}));
     await waitFor(()=>expect(onSuccess).toHaveBeenCalledWith());
     expect(onOpenChange).toHaveBeenCalledWith(false);
-    expect(api.create).toHaveBeenCalledWith(expect.objectContaining({name:identity.name,code:expect.stringMatching(/^NCC\d{5}$/)}));
-    expect(api.toast).toHaveBeenCalledWith(expect.objectContaining({variant:"success"}));
+    expect(api.create).toHaveBeenCalledWith(expect.objectContaining({name:identity.name}),"group-bbi");
+    expect(api.toast).toHaveBeenCalledWith(expect.objectContaining({variant:"success",description:expect.stringContaining(identity.code)}));
   });
 
   it("keeps the update callback contract with an identity-only response",async()=>{
