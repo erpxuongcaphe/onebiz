@@ -167,5 +167,16 @@ try {
  assert.deepEqual(await snapshot(),afterHandoff,'same acknowledged checkout replays without duplicate export/import');
  console.log('PASS: stale/missing/foreign-session draft revisions reject atomically; acknowledged revision completes paired internal documents and replays once.');
 
+ await db.exec(`alter table invoice_items add column if not exists note text;
+ alter function public.checkout_internal_pos_v2(jsonb) rename to _checkout_internal_pos_before_fnb_bridge_20261023;
+ create function public.checkout_internal_pos_v2(jsonb) returns jsonb language sql as
+ 'select public._checkout_internal_pos_before_fnb_bridge_20261023($1)';`);
+ await db.exec(fs.readFileSync('supabase/migrations/20261106091640_internal_pos_invoice_item_notes.sql','utf8'));
+ const withNote={...payload,items:[{...payload.items[0],note:'3 củ bự'}],
+  sessionId:'91000000-0000-0000-0000-000000000013'};
+ const noteInvoice=(await db.query(call(withNote))).rows[0].result;
+ assert.equal((await db.query('select note from invoice_items where invoice_id=$1',[noteInvoice.invoice_id])).rows[0].note,'3 củ bự');
+ assert.equal((await db.query(call(withNote))).rows[0].result.invoice_id,noteInvoice.invoice_id);
+ console.log('PASS: internal POS persists the original item note for printing and safely replays checkout.');
 } catch(error) { console.error(error.message,error.where??''); process.exitCode=1; }
 finally {await db.close();fs.rmSync(dir,{recursive:true,force:true});}

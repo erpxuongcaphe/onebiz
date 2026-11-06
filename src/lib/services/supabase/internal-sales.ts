@@ -50,7 +50,7 @@ export interface InternalSaleResult {
 export async function checkoutInternalPos(input: {
   branchId: string; customerId: string; items: Array<{
     productId: string; productCode: string; productName: string; unit: string;
-    quantity: number; unitPrice: number; vatRate: number; variantId?: string; discount: number;
+    quantity: number; unitPrice: number; vatRate: number; variantId?: string; discount: number; note?: string;
   }>;
   payments: Array<{ method: "cash" | "transfer" | "card"; amount: number }>; expectedTotal: number;
   orderDiscount: number; orderVatRate: number; shippingFee: number; amountTendered: number;
