@@ -76,6 +76,18 @@ try {
  await db.exec(fs.readFileSync('supabase/migrations/00471_internal_sale_paired_reversal.sql','utf8'));
  await assert.rejects(db.query(`update invoices set status='cancelled' where id='${upgraded.invoice_id}'`),/USE_PAIRED_REVERSAL/);
  await assert.rejects(db.query(`insert into sales_returns(invoice_id,status) values('${upgraded.invoice_id}','completed')`),/USE_PAIRED_REVERSAL/);
+ const branchAccess=(await db.query("select pg_get_functiondef('public.user_has_branch_access(uuid,uuid)'::regprocedure) definition")).rows[0].definition;
+ await db.exec(`create table public.tenants(id uuid primary key);
+ insert into tenants values ('${context.tenant_id}');
+ create or replace function public.user_has_branch_access(uuid,uuid) returns boolean
+ language sql as 'select $2 = ''${payload.branchId}''::uuid';`);
+ await db.exec(fs.readFileSync('supabase/migrations/20261106103254_internal_sale_source_void_scope.sql','utf8'));
+ const cancelPaired=reason=>db.query('select cancel_internal_sale_atomic($1,$2) result',[upgraded.internal_sale_id,reason]);
+ await assert.rejects(cancelPaired('Test without delegation'),/INTERNAL_SALE_BRANCH_DENIED/);
+ await db.query('insert into internal_sale_source_void_grants(tenant_id,user_id,source_branch_id) values ($1,$2,$3)',[context.tenant_id,context.actor,context.dest]);
+ await assert.rejects(cancelPaired('Test wrong source grant'),/INTERNAL_SALE_BRANCH_DENIED/);
+ await db.query('insert into internal_sale_source_void_grants(tenant_id,user_id,source_branch_id) values ($1,$2,$3)',[context.tenant_id,context.actor,payload.branchId]);
+ await assert.rejects(cancelPaired('x'),/INTERNAL_SALE_CANCEL_REASON_REQUIRED/);
  const cancelled=(await db.query(`select cancel_internal_sale_atomic('${upgraded.internal_sale_id}','Kiểm thử đảo cặp chứng từ') result`)).rows[0].result;
  assert.equal(cancelled.status,'cancelled'); assert.equal(Number(cancelled.reversed_cash),5000);
  await assert.rejects(db.query(call(payload)),/SESSION_ALREADY_CLOSED/);
@@ -89,6 +101,7 @@ try {
  const reversalCount=Number((await db.query(`select count(*) n from stock_movements where reference_type='internal_sale_cancel'`)).rows[0].n);
  await db.query(`select cancel_internal_sale_atomic('${upgraded.internal_sale_id}','Kiểm thử gọi lại')`);
  assert.equal(Number((await db.query(`select count(*) n from stock_movements where reference_type='internal_sale_cancel'`)).rows[0].n),reversalCount);
+ await db.exec(branchAccess);
  const fractional={...payload,items:[{productId:context.product,unit:context.unit,quantity:.1234,unitPrice:100,vatRate:0,discount:0}],
   orderDiscount:0,shippingFee:0,expectedTotal:12,payments:[{method:'card',amount:12}],amountTendered:12,sessionId:'91000000-0000-0000-0000-000000000006'};
  const fractionalResult=(await db.query(call(fractional))).rows[0].result;
