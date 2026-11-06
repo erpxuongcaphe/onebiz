@@ -261,6 +261,20 @@ export async function getSupplierById(id: string): Promise<Supplier | null> {
   return data ? mapSupplier(data) : null;
 }
 
+export async function getSupplierGroupLabel(id: string): Promise<string | null> {
+  const tenantId = await getCurrentTenantId();
+  const { data, error } = await getClient()
+    .from("suppliers")
+    .select("group_code, categories!suppliers_group_id_fkey(name, code)")
+    .eq("tenant_id", tenantId)
+    .eq("id", id)
+    .maybeSingle()
+    .overrideTypes<{ group_code: string | null; categories: { name: string; code: string | null } | null }, { merge: false }>();
+  if (error) handleError(error, "getSupplierGroupLabel");
+  const category = data?.categories;
+  return category?.name ? `${category.name} (${category.code ?? data?.group_code ?? "—"})` : data?.group_code ?? null;
+}
+
 // --- Write Operations ---
 
 /**
