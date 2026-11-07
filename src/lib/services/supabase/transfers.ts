@@ -23,6 +23,7 @@ import {
   getPaginationRange,
   handleError,
 } from "./base";
+import { readHistoryPages } from "./read-history-pages";
 import { isRpcUnavailable } from "./rpc-utils";
 import { applyCreatedAtRangeFilter, normalizeCreatedAtRange } from "@/lib/utils/list-date-preset-range";
 
@@ -291,12 +292,10 @@ export async function getStockTransfersForExport(
   params: Omit<QueryParams, "page" | "pageSize">,
 ): Promise<StockTransferExportRow[]> {
   const supabase = getClient();
-  const headers: StockTransfer[] = [];
-  const batchSize = 200;
-
-  for (let page = 0; ; page += 1) {
+  const headers = await readHistoryPages<StockTransfer>(async (offset, batchSize) => {
+    if (offset % batchSize !== 0) throw new Error("Chưa tải đủ phiếu chuyển kho. Vui lòng xuất lại.");
     const result = await getStockTransferListWorkspace({
-      page,
+      page: offset / batchSize,
       pageSize: batchSize,
       search: params.search,
       searchField: params.searchField,
@@ -314,20 +313,26 @@ export async function getStockTransfersForExport(
       itemCountMax: Number(params.filters?.itemCountMax),
       branchId: params.branchId,
     });
-    headers.push(...result.data);
-    if (headers.length >= result.total || result.data.length < batchSize) break;
-  }
+    return { data: result.data, count: result.total, error: null };
+  });
   if (headers.length === 0) return [];
 
   const transferIds = headers.map((header) => header.id);
   const itemRows: Array<Record<string, unknown>> = [];
   for (let offset = 0; offset < transferIds.length; offset += 200) {
-    const { data, error } = await supabase
-      .from("stock_transfer_items")
-      .select("transfer_id, product_code, product_name, unit, quantity")
-      .in("transfer_id", transferIds.slice(offset, offset + 200));
-    if (error) handleError(error, "getStockTransfersForExport.items");
-    itemRows.push(...((data ?? []) as Array<Record<string, unknown>>));
+    const batch = transferIds.slice(offset, offset + 200);
+    const items = await readHistoryPages<{ id: string; transfer_id: string } & Record<string, unknown>>(async (start, size) => {
+      const { data, error, count } = await supabase
+        .from("stock_transfer_items")
+        .select("id, transfer_id, product_code, product_name, unit, quantity", { count: "exact" })
+        .in("transfer_id", batch)
+        .order("id")
+        .range(start, start + size - 1);
+      if (!error && count === null) throw new Error("Không xác nhận được số dòng hàng chuyển kho.");
+      return { data: data ?? [], error, count };
+    });
+    if (items.some(item => !batch.includes(item.transfer_id))) throw new Error("Dòng hàng không thuộc phiếu chuyển kho đang xuất.");
+    itemRows.push(...items);
   }
 
   const itemsByTransfer = new Map<string, Array<Record<string, unknown>>>();
