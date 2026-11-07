@@ -144,9 +144,9 @@ export default function OperationalSalesOverview() {
           <details className="p-3 text-xs sm:px-5">
             <summary className="cursor-pointer font-medium">Đối chiếu bán hàng và thu tiền</summary>
             <dl className="mt-3 space-y-2">
-              {[["Tiền đã thu", data.received], ["Tiền đã hoàn", -data.refunded], ["Thu tiền trừ doanh số", data.collected - data.sales]].map(([label, value]) => <div key={String(label)} className="flex justify-between gap-3"><dt>{label}</dt><dd className="tabular-nums">{formatCurrency(Number(value))}</dd></div>)}
+              {[["Tiền đã thu", data.received], ["Tiền đã hoàn", -data.refunded], ["Chênh lệch thực thu và doanh số", data.collected - data.sales]].map(([label, value]) => <div key={String(label)} className="flex justify-between gap-3"><dt>{label}</dt><dd className="shrink-0 text-right tabular-nums">{formatCurrency(Number(value))}</dd></div>)}
             </dl>
-            <p className="mt-3 leading-relaxed text-muted-foreground">Doanh số theo ngày hóa đơn và hàng trả, gồm thuế/phí giao nếu có. Tiền theo ngày ghi sổ, có thể gồm thu nợ cũ hoặc hoàn hóa đơn kỳ trước. Không phải lợi nhuận.</p>
+            <p className="mt-3 leading-relaxed text-muted-foreground">Doanh số theo ngày hóa đơn và hàng trả, gồm thuế/phí giao nếu có. Thực thu sau hoàn theo ngày ghi sổ, nên có thể gồm thu nợ hoặc hoàn tiền của đơn kỳ trước.</p>
           </details>
         </section>
         <p className="text-right text-xs text-muted-foreground">Cập nhật {daily.at}</p>

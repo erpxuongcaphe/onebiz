@@ -1,7 +1,8 @@
 import {beforeEach,describe,expect,it,vi} from 'vitest';
-import {fireEvent,render,screen,waitFor} from '@testing-library/react';
+import {act,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import type {ReactNode} from 'react';
-const mocks = vi.hoisted(() => ({workspace:vi.fn(),all:vi.fn(),categories:vi.fn()}));
+const mocks = vi.hoisted(() => ({workspace:vi.fn(),all:vi.fn(),categories:vi.fn(),excel:vi.fn()}));
+vi.mock('@/lib/utils/export', () => ({exportToExcel:mocks.excel}));
 vi.mock('@/lib/contexts',() => ({useAuth:() => ({activeBranchId:'xtb',branches:[{id:'xtb',name:'XTB - Thu ngân'}],hasPermission:() => true,isLoading:false})}));
 vi.mock('@/components/shared/report',() => ({ReportTableFrame:({children}:{children:ReactNode}) => <div>{children}</div>}));
 vi.mock('@/components/shared/page-header',() => ({PageHeader:({title}:{title:string}) => <h1>{title}</h1>}));
@@ -24,6 +25,31 @@ beforeEach(() => {
   mocks.all.mockResolvedValue([row]);
 });
 describe('management finance reporting workspace',() => {
+  it('discards an in-flight Excel result when the branch changes',async()=>{
+    let finish!: (rows: typeof row[]) => void;
+    mocks.all.mockReturnValueOnce(new Promise<typeof row[]>(resolve => {finish = resolve;}));
+    render(<Page/>);
+    await screen.findByRole('button',{name:'CP001'});
+    fireEvent.click(screen.getByRole('button',{name:'Xuất Excel'}));
+    expect(mocks.all).toHaveBeenCalledWith(expect.objectContaining({branchId:'xtb'}));
+    fireEvent.change(screen.getByLabelText('Chi nhánh ghi nhận'),{target:{value:'all'}});
+    await act(async()=>finish([row]));
+    expect(mocks.excel).not.toHaveBeenCalled();
+    await waitFor(()=>expect(screen.getByRole('button',{name:'Xuất Excel'})).toBeEnabled());
+  });
+
+  it('rechecks the scope immediately before saving the workbook',async()=>{
+    render(<Page/>);
+    await screen.findByRole('button',{name:'CP001'});
+    fireEvent.click(screen.getByRole('button',{name:'Xuất Excel'}));
+    await waitFor(()=>expect(mocks.excel).toHaveBeenCalledTimes(1));
+    const {shouldSave} = mocks.excel.mock.calls[0][3];
+    expect(shouldSave()).toBe(true);
+    fireEvent.click(screen.getByRole('tab',{name:'Thu nhập khác'}));
+    expect(shouldSave()).toBe(false);
+    await screen.findByRole('button',{name:'CP001'});
+  });
+
   it('applies the linked historical recognition period before the first data request',async()=>{
     window.history.replaceState({},'','/?branch=xtb&from=2026-08-01&to=2026-08-31&preset=custom');
     render(<Page/>);

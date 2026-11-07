@@ -7,7 +7,7 @@
  *   - Phân tích tuổi nợ (Aging Report) — Sprint 7
  */
 
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useState, useCallback, useMemo, useRef } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
@@ -23,8 +23,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useBranchFilter, useToast } from "@/lib/contexts";
 import { formatCurrency } from "@/lib/format";
-import { exportToCsv } from "@/lib/utils/export";
-import { exportToExcelFromSchema } from "@/lib/excel";
+import { exportToExcel } from "@/lib/utils/export";
 import type { DebtOpeningImportRow } from "@/lib/excel/schemas";
 import {
   getDebtWorkspace,
@@ -98,10 +97,27 @@ export default function CongNoPage() {
   const [minimumDebt, setMinimumDebt] = useState("");
   const [maximumDebt, setMaximumDebt] = useState("");
 
-  const [workspace, setWorkspace] = useState<DebtWorkspace | null>(null);
+  const [loaded, setWorkspace] = useState<{ branchId: typeof activeBranchId; data: DebtWorkspace } | null>(null);
+  const workspace = isReady && loaded?.branchId === activeBranchId ? loaded?.data : null;
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
+  const exportToken = useRef<object | null>(null);
+  useLayoutEffect(() => {
+    exportToken.current = workspace && !loading ? {} : null;
+    return () => { exportToken.current = null; };
+  }, [workspace, loading, mode, search, agingBucketFilter, minimumDebt, maximumDebt]);
+
+  async function downloadCurrentDebt(rows: DebtPartyRow[], columns: Parameters<typeof exportToExcel>[1], filename: string) {
+    const token = exportToken.current;
+    if (!token) return;
+    const shouldSave = () => exportToken.current === token;
+    try {
+      await exportToExcel(rows, columns, filename, { financialTable: true, shouldSave });
+    } catch {
+      if (shouldSave()) toast({ title: "Không xuất được công nợ", variant: "error" });
+    }
+  }
 
   // Import opening debt
   const [importOpen, setImportOpen] = useState(false);
@@ -149,7 +165,7 @@ export default function CongNoPage() {
         getDebtWorkspace(activeBranchId),
       );
       if (requestId !== requestIdRef.current) return;
-      setWorkspace(nextWorkspace);
+      setWorkspace({ branchId: activeBranchId, data: nextWorkspace });
     } catch (err) {
       if (requestId !== requestIdRef.current) return;
       const message =
@@ -635,9 +651,11 @@ export default function CongNoPage() {
           },
         ]}
         onExport={
-          mode !== "aging"
+          workspace && !loading && mode !== "aging"
             ? {
-                excel: () => {
+                items: [{ label: "Xuất theo mẫu công nợ đầu kỳ", onClick: async () => {
+                  const token = exportToken.current;
+                  if (!token) return;
                   // Xuất theo schema "Công nợ đầu kỳ" → import lại không mất field
                   const today = new Date();
                   const rows: DebtOpeningImportRow[] =
@@ -660,9 +678,14 @@ export default function CongNoPage() {
                             openingDebt: s.debt,
                             openingDate: today,
                           }));
-                  exportToExcelFromSchema(rows, debtOpeningExcelSchema);
-                },
-                csv: () => {
+                  try {
+                    const { exportToExcelFromSchema } = await import("@/lib/excel/template-builder");
+                    if (exportToken.current === token) exportToExcelFromSchema(rows, debtOpeningExcelSchema);
+                  } catch {
+                    if (exportToken.current === token) toast({ title: "Không xuất được mẫu công nợ đầu kỳ", variant: "error" });
+                  }
+                } }],
+                excel: () => {
                   if (mode === "customer") {
                     const cols = [
                       { header: "Mã KH", key: "code", width: 15 },
@@ -693,7 +716,7 @@ export default function CongNoPage() {
                         format: (v: number) => v,
                       },
                     ];
-                    exportToCsv(receivableDebtors, cols, "cong-no-khach-hang");
+                    downloadCurrentDebt(receivableDebtors, cols, "cong-no-khach-hang");
                   } else {
                     const cols = [
                       { header: "Mã NCC", key: "code", width: 15 },
@@ -723,7 +746,7 @@ export default function CongNoPage() {
                         format: (v: number) => v,
                       },
                     ];
-                    exportToCsv(payableDebtors, cols, "cong-no-nha-cung-cap");
+                    downloadCurrentDebt(payableDebtors, cols, "cong-no-nha-cung-cap");
                   }
                 },
               }
@@ -996,7 +1019,7 @@ export default function CongNoPage() {
                     variant="outline"
                     className="gap-1.5"
                     onClick={() =>
-                      exportToCsv(
+                      downloadCurrentDebt(
                         receivableDebtors,
                         [
                           { header: "Mã KH", key: "code", width: 14 },
@@ -1086,7 +1109,7 @@ export default function CongNoPage() {
                     variant="outline"
                     className="gap-1.5"
                     onClick={() =>
-                      exportToCsv(
+                      downloadCurrentDebt(
                         payableDebtors,
                         [
                           { header: "Mã NCC", key: "code", width: 14 },

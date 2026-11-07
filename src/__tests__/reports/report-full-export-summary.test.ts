@@ -52,7 +52,8 @@ describe("full export KPI summaries", () => {
     );
 
     expect(finance).toContain("cashFlowSheet");
-    expect(finance).toContain("Dòng tiền ròng");
+    expect(finance).toContain('label: "Dòng tiền thuần", key: "net"');
+    expect(finance).toContain(">Dòng tiền thuần</th>");
     expect(finance).not.toContain("getMonthlyProfit(");
     expect(cashFlow).toContain("Thu chi theo khoản mục");
     expect(cashFlow).toContain("categoryRows");

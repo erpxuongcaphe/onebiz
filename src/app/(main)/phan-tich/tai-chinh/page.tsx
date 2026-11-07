@@ -427,7 +427,7 @@ export default function TaiChinhPage() {
           { label: "Tháng", key: "month", width: 16 },
           { label: "Thu vào (VND)", key: "receipt", width: 20, format: "currency" },
           { label: "Chi ra (VND)", key: "payment", width: 20, format: "currency" },
-          { label: "Dòng tiền ròng", key: "net", width: 20, format: "currency" },
+          { label: "Dòng tiền thuần", key: "net", width: 20, format: "currency" },
         ],
         rows: cashFlowData.map((row) => ({
           month: row.month,
@@ -839,7 +839,7 @@ export default function TaiChinhPage() {
                     <th className="text-left py-2 pr-4 font-medium">Tháng</th>
                     <th className="text-right py-2 pr-4 font-medium">Thu</th>
                     <th className="text-right py-2 pr-4 font-medium">Chi</th>
-                    <th className="text-right py-2 font-medium">Dòng tiền ròng</th>
+                    <th className="text-right py-2 font-medium">Dòng tiền thuần</th>
                   </tr>
                 </thead>
                 <tbody>

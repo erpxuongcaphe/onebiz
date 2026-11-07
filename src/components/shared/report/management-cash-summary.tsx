@@ -28,7 +28,7 @@ export function ManagementCashSummary({ rows, error, branchId, range }: {
           {[
             { label: "Tổng thu", value: totals.receipts },
             { label: "Tổng chi", value: totals.payments },
-            { label: "Thu − chi", value: totals.net },
+            { label: "Dòng tiền thuần", value: totals.net },
           ].map(item => <div key={item.label} className="min-w-0"><dt className="text-xs text-muted-foreground">{item.label}</dt><dd className="mt-1 break-words text-lg font-semibold tabular-nums">{formatCurrency(item.value)}đ</dd></div>)}
         </dl>
       )}

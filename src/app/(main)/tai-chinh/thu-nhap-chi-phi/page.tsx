@@ -1,6 +1,6 @@
 "use client";
 
-import {useCallback, useEffect, useRef, useState} from 'react';
+import {useCallback, useEffect, useLayoutEffect, useRef, useState} from 'react';
 import Link from 'next/link';
 import {useAuth} from '@/lib/contexts';
 import {Button} from '@/components/ui/button';
@@ -74,6 +74,12 @@ export default function ManagementFinancePage() {
   const scoped = {...filters, branchId: activeBranchId};
   const reportPeriod = new URLSearchParams({preset:'custom',from:filters.from,to:filters.to,view:'table',branch:activeBranchId??'all'}).toString();
   const rangeError = financeReportRangeError(filters.from, filters.to);
+  const exportScope = JSON.stringify([activeBranchId, filters, view, revision]);
+  const exportToken = useRef<object | null>(null);
+  useLayoutEffect(() => {
+    exportToken.current = !isLoading && canRead && canExport && !rangeError ? {} : null;
+    return () => {exportToken.current = null;};
+  }, [isLoading, canRead, canExport, rangeError, exportScope]);
 
   useEffect(() => {
     if (isLoading || !canRead || rangeError) {setData(null); setLoading(false); return;}
@@ -116,14 +122,17 @@ export default function ManagementFinancePage() {
   }
 
   async function download() {
-    if (!canExport || exporting || rangeError || loading || categoryLoading || error) return;
+    const token = exportToken.current;
+    if (!token || exporting || loading || categoryLoading || !data || error) return;
+    const shouldSave = () => exportToken.current === token;
     setExporting(true); setError('');
     try {
       const rows = await getAllFinanceRows(scoped);
+      if (!shouldSave()) return;
       if (view === 'months') {
         const matrix = financeCategoryMonths(rows, filters.from, filters.to, activeBranchId);
         await exportToExcel(matrix.rows.map(r => ({code:r.code,name:r.name,kind:r.kind === 'income' ? 'Thu nhập' : r.kind === 'expense' ? 'Chi phí' : 'Ngoài kết quả kinh doanh',total:r.total,...Object.fromEntries(matrix.months.map(m => [m,r.values[m] ?? 0]))})),
-          [{header:'Mã khoản mục',key:'code'},{header:'Khoản mục',key:'name'},{header:'Loại',key:'kind'},...matrix.months.map(m => ({header:m,key:m})),{header:'Tổng ghi nhận',key:'total'}],`ghi-nhan-theo-thang-${filters.from}-${filters.to}`);
+          [{header:'Mã khoản mục',key:'code'},{header:'Khoản mục',key:'name'},{header:'Loại',key:'kind'},...matrix.months.map(m => ({header:m,key:m})),{header:'Tổng ghi nhận',key:'total'}],`ghi-nhan-theo-thang-${filters.from}-${filters.to}`,{shouldSave});
         return;
       }
       if (view === 'categories') {
@@ -132,7 +141,7 @@ export default function ManagementFinancePage() {
           {header:'Số khoản',key:'count'},{header:'Ghi nhận trong bộ lọc',key:'amount'},
           {header:'Tổng khoản gốc',key:'totalSource'},{header:'Đã thanh toán toàn khoản đến cuối kỳ',key:'settled'},
           {header:'Còn phải thu / chi toàn khoản',key:'outstanding'},
-        ],`ghi-nhan-theo-khoan-muc-${filters.from}-${filters.to}`);
+        ],`ghi-nhan-theo-khoan-muc-${filters.from}-${filters.to}`,{shouldSave});
         return;
       }
       await exportToExcel(rows.map(r => ({code: r.code, date: r.business_date, category: `${r.category_code} · ${r.category_name}`,
@@ -145,8 +154,8 @@ export default function ManagementFinancePage() {
           {header: 'Đã thanh toán toàn khoản đến cuối kỳ', key: 'settled'}, {header: 'Trạng thái', key: 'status'},
           {header:'Đơn nội bộ',key:'sourceOrder'},{header:'Mã hàng',key:'sku'},{header:'Mặt hàng',key:'product'},{header:'Số lượng',key:'quantity',precision:4},{header:'ĐVT',key:'unit'},{header:'Đơn giá',key:'unitPrice',precision:8},{header:'Nội dung',key:'note'},
           {header: 'Phân bổ', key: 'allocations'}, {header: 'Phiếu thu/chi', key: 'cash'}, {header: 'Người tạo', key: 'creator'}],
-        `thu-nhap-chi-phi-${filters.from}-${filters.to}`,{financialTable:true});
-    } catch (e) {setError(e instanceof Error ? e.message : 'Không xuất được báo cáo.');}
+        `thu-nhap-chi-phi-${filters.from}-${filters.to}`,{financialTable:true,shouldSave});
+    } catch (e) {if (shouldSave()) setError(e instanceof Error ? e.message : 'Không xuất được báo cáo.');}
     finally {setExporting(false);}
   }
 
