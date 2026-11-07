@@ -20,9 +20,10 @@ describe("inventory management active catalog", () => {
     const result = await getInventoryCatalogPage({ branchId: "warehouse", search: " coldbrew " });
     expect(result.rows[0]).toMatchObject({ id: "catalog:warehouse:cold", productCode: "SKU-COLD",
       quantity: 0, reserved: 0, available: 0, stockValue: 0, valuationComplete: true, updatedAt: "" });
-    expect(api.rpc).toHaveBeenCalledExactlyOnceWith("get_inventory_catalog_00573", {
+    expect(api.rpc).toHaveBeenCalledExactlyOnceWith("get_inventory_catalog_filtered", {
       p_branch_id: "warehouse", p_product_type: null, p_search: "coldbrew", p_stock_filter: "all",
       p_low_stock_only: false, p_offset: 0, p_limit: 20,
+      p_category_id: null, p_available_filter: "all", p_reserved_only: false, p_above_max_only: false,
     });
   });
   it.each(["positive", "zero", "negative"] as const)("passes %s filter before pagination and retains server totals", async (stockFilter) => {
@@ -42,11 +43,11 @@ describe("inventory management active catalog", () => {
     const first = Array.from({ length: 200 }, (_, i) => ({ ...row, id: String(i) }));
     api.rpc.mockResolvedValueOnce({ data: payload(first, 201), error: null })
       .mockResolvedValueOnce({ data: payload([{ ...row, id: "last" }], 201), error: null });
-    const rows = await getInventoryCatalogRows({ branchId: "warehouse", search: "coldbrew", stockFilter: "zero", lowStockOnly: true });
+    const rows = await getInventoryCatalogRows({ branchId: "warehouse", search: "coldbrew", stockFilter: "zero", lowStockOnly: true, categoryId: "group", availableFilter: "nonpositive", reservedOnly: true, aboveMaxOnly: true });
     expect(rows).toHaveLength(201);
     expect(rows.at(-1)?.id).toBe("last");
     for (const [, request] of api.rpc.mock.calls) expect(request).toMatchObject({ p_branch_id: "warehouse",
-      p_search: "coldbrew", p_stock_filter: "zero", p_low_stock_only: true, p_limit: 200 });
+      p_search: "coldbrew", p_stock_filter: "zero", p_low_stock_only: true, p_limit: 200, p_category_id: "group", p_available_filter: "nonpositive", p_reserved_only: true, p_above_max_only: true });
     expect(api.rpc.mock.calls.map(([, request]) => request.p_offset)).toEqual([0, 200]);
   });
   it("rejects an incomplete export instead of returning the available rows", async () => {

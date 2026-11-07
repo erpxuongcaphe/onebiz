@@ -33,6 +33,7 @@ export interface BranchStockRow {
   productId: string;
   productCode: string;
   productName: string;
+  categoryName?: string;
   productType?: "nvl" | "sku";
   unit?: string;
   variantId?: string;

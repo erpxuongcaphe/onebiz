@@ -2,7 +2,8 @@
 
 // Tồn kho — xem tồn kho per chi nhánh, lọc theo NVL/SKU, sắp xếp & tổng giá trị tồn
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useBreakpoint } from "@/lib/hooks/use-breakpoint";
 import { useDebounce } from "@/lib/utils/use-debounce";
 import { useRevalidateOnFocus } from "@/lib/hooks/use-revalidate-on-focus";
 import { ColumnDef } from "@tanstack/react-table";
@@ -48,9 +49,10 @@ import {
   isInventoryLocked,
   setInventoryLocked,
 } from "@/lib/services";
-import { getInventoryCatalogPage, getInventoryCatalogRows, type InventoryStockFilter } from "@/lib/services/supabase/inventory-catalog";
+import { getInventoryCatalogPage, getInventoryCatalogRows, type InventoryAvailableFilter, type InventoryStockFilter } from "@/lib/services/supabase/inventory-catalog";
 import type { BranchStockRow, BranchDetail } from "@/lib/services/supabase";
-import type { StockMovement, UOMConversion } from "@/lib/types";
+import { getAllCategories } from "@/lib/services/supabase/categories";
+import type { ProductCategory, StockMovement, UOMConversion } from "@/lib/types";
 import { StockWithConversion } from "@/components/shared/stock-with-conversion";
 import { StockDocumentLink } from "@/components/shared/stock-document-link";
 import { Icon } from "@/components/ui/icon";
@@ -749,6 +751,7 @@ function StockRowDetail({
 }
 
 export default function TonKhoPage() {
+  const desktopColumns = useBreakpoint("md");
   const { toast } = useToast();
   const { activeBranchId } = useBranchFilter();
   const [rows, setRows] = useState<BranchStockRow[]>([]);
@@ -785,7 +788,26 @@ export default function TonKhoPage() {
   }, [activeBranchId]);
   const [typeFilter, setTypeFilter] = useState<ProductTypeFilter>("all");
   const [stockFilter, setStockFilter] = useState<InventoryStockFilter>("all");
-  const [lowStockOnly, setLowStockOnly] = useState<string>("all"); // all | low
+  const [stockThreshold, setStockThreshold] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [categories, setCategories] = useState<ProductCategory[]>([]);
+  const [categoriesError, setCategoriesError] = useState(false);
+  const [availableFilter, setAvailableFilter] = useState<InventoryAvailableFilter>("all");
+  const [reservedOnly, setReservedOnly] = useState(false);
+
+  useEffect(() => {
+    const category = new URLSearchParams(window.location.search).get("nhom");
+    if (category && /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i.test(category)) setCategoryFilter(category);
+  }, []);
+
+  const loadCategories = useCallback(() => {
+    setCategoriesError(false);
+    getAllCategories()
+      .then((groups) => setCategories(groups.filter((group) => group.scope === "nvl" || group.scope === "sku")))
+      .catch(() => setCategoriesError(true));
+  }, []);
+
+  useEffect(loadCategories, [loadCategories]);
   const [filterOpen, setFilterOpen] = useState(false);
 
   const [importOpen, setImportOpen] = useState(false);
@@ -837,14 +859,18 @@ export default function TonKhoPage() {
     }
   };
 
-  const exportFilters = {
+  const filters = useMemo(() => ({
     branchId: branchFilter !== "all" ? branchFilter : undefined,
     productType: typeFilter !== "all" ? typeFilter : undefined,
     search: debouncedSearch || undefined,
     stockFilter,
-    lowStockOnly: lowStockOnly === "low",
-  };
-  const exportKey = JSON.stringify([exportFilters, search, canViewCost]);
+    lowStockOnly: stockThreshold === "low",
+    aboveMaxOnly: stockThreshold === "high",
+    categoryId: categoryFilter === "all" ? undefined : categoryFilter,
+    availableFilter,
+    reservedOnly,
+  }), [branchFilter, typeFilter, debouncedSearch, stockFilter, stockThreshold, categoryFilter, availableFilter, reservedOnly]);
+  const exportKey = JSON.stringify([filters, search, canViewCost]);
   const activeExportKey = useRef(exportKey);
   activeExportKey.current = exportKey;
   const exporting = useRef(false);
@@ -857,7 +883,7 @@ export default function TonKhoPage() {
     exporting.current = true;
     const shouldSave = () => activeExportKey.current === exportKey;
     try {
-      const rows = await getInventoryCatalogRows(exportFilters);
+      const rows = await getInventoryCatalogRows(filters);
       if (!shouldSave()) return;
       const output = inventoryCatalogExport(rows, canViewCost);
       if (type === "excel") await exportToExcel(output.data, output.columns, "bao-cao-ton-kho", { financialTable: true, shouldSave });
@@ -877,13 +903,6 @@ export default function TonKhoPage() {
     const reqId = ++reqIdRef.current;
     if (!background) setLoading(true);
     try {
-      const filters = {
-        branchId: branchFilter !== "all" ? branchFilter : undefined,
-        productType: typeFilter !== "all" ? typeFilter : undefined,
-        search: debouncedSearch || undefined,
-        stockFilter,
-        lowStockOnly: lowStockOnly === "low",
-      };
       // One read snapshot for catalog rows, filters, pagination and totals.
       const pageResult = await getInventoryCatalogPage({
         ...filters, offset: page * pageSize, limit: pageSize,
@@ -908,7 +927,7 @@ export default function TonKhoPage() {
     } finally {
       if (reqId === reqIdRef.current) setLoading(false);
     }
-  }, [branchFilter, typeFilter, debouncedSearch, stockFilter, lowStockOnly, page, pageSize, toast]);
+  }, [filters, page, pageSize, toast]);
 
   useEffect(() => {
     getBranches()
@@ -928,7 +947,7 @@ export default function TonKhoPage() {
   useEffect(() => {
     setPage(0);
     setExpandedRow(null);
-  }, [debouncedSearch, branchFilter, typeFilter, stockFilter, lowStockOnly]);
+  }, [filters]);
 
   // Day 19/05/2026 (CEO Smart Hybrid Phase 2): batch load UOM conversions
   // cho các productId hiện ra trong page → hiển thị quy đổi cột "Tồn".
@@ -997,6 +1016,12 @@ export default function TonKhoPage() {
           </Badge>
         );
       },
+    },
+    {
+      accessorKey: "categoryName",
+      header: "Nhóm hàng",
+      size: 150,
+      cell: ({ row }) => row.original.categoryName ?? "—",
     },
     {
       accessorKey: "branchName",
@@ -1070,6 +1095,18 @@ export default function TonKhoPage() {
           : "—",
     },
     {
+      accessorKey: "maxStock",
+      header: "Tồn tối đa",
+      size: 100,
+      cell: ({ row }) => row.original.maxStock == null ? "—" : formatStockQuantity(row.original.maxStock),
+    },
+    {
+      accessorKey: "costPrice",
+      header: "Đơn giá vốn tồn",
+      size: 135,
+      cell: ({ row }) => row.original.costPrice == null ? "—" : formatCurrency(row.original.costPrice),
+    },
+    {
       accessorKey: "stockValue",
       header: "Giá trị tồn",
       size: 140,
@@ -1117,19 +1154,36 @@ export default function TonKhoPage() {
       onClear: () => setStockFilter("all"),
     });
   }
-  if (lowStockOnly !== "all") {
+  if (categoryFilter !== "all") activeFilters.push({
+    key: "category", label: "Nhóm hàng",
+    value: categories.find(group => group.id === categoryFilter)?.name ?? "Nhóm đã chọn",
+    onClear: () => setCategoryFilter("all"),
+  });
+  if (availableFilter !== "all") activeFilters.push({
+    key: "available", label: "Khả dụng",
+    value: availableFilter === "positive" ? "Còn khả dụng" : "Hết hoặc âm",
+    onClear: () => setAvailableFilter("all"),
+  });
+  if (reservedOnly) activeFilters.push({
+    key: "reserved", label: "Đang giữ", value: "Có số lượng đang giữ",
+    onClear: () => setReservedOnly(false),
+  });
+  if (stockThreshold !== "all") {
     activeFilters.push({
       key: "low",
       label: "Định mức",
-      value: "Dưới định mức",
-      onClear: () => setLowStockOnly("all"),
+      value: stockThreshold === "low" ? "Dưới định mức" : "Vượt tồn tối đa",
+      onClear: () => setStockThreshold("all"),
     });
   }
   const handleClearAllFilters = () => {
     setBranchFilter("all");
     setTypeFilter("all");
-    setLowStockOnly("all");
+    setStockThreshold("all");
     setStockFilter("all");
+    setCategoryFilter("all");
+    setAvailableFilter("all");
+    setReservedOnly(false);
   };
 
   return (
@@ -1200,7 +1254,7 @@ export default function TonKhoPage() {
       )}
 
       <DataTable
-        columns={canViewCost ? columns : columns.filter(column => !("accessorKey" in column) || column.accessorKey !== "stockValue")}
+        columns={canViewCost ? columns : columns.filter(column => !("accessorKey" in column) || !["stockValue", "costPrice"].includes(String(column.accessorKey)))}
         data={rows}
         loading={loading}
         density="compact"
@@ -1221,7 +1275,7 @@ export default function TonKhoPage() {
             aria-label="Mở bộ lọc tồn kho"
           >
             <Icon name="filter_alt" size={15} />
-            <span className="hidden sm:inline">Bộ lọc</span>
+            <span className="whitespace-nowrap">Bộ lọc</span>
             {activeFilters.length > 0 && (
               <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">
                 {activeFilters.length}
@@ -1243,14 +1297,46 @@ export default function TonKhoPage() {
           setPageSize(size);
           setPage(0);
         }}
-        columnToggle
+        columnToggle={desktopColumns}
         // CEO 28/05/2026: "Đang giữ" (reserved) + "Tồn tối thiểu" ít dùng →
         // ẩn mặc định, user bật qua "Hiển thị cột" khi cần.
-        defaultColumnVisibility={{ reserved: false, minStock: false }}
+        defaultColumnVisibility={{ reserved: false, minStock: false, maxStock: false, costPrice: false }}
         summaryRow={{
           quantity: "Nhiều đơn vị · xem từng hàng",
           stockValue: valuationComplete ? formatCurrency(totalValue) : "Chưa đủ dữ liệu",
         }}
+        renderMobileRow={(row) => (
+          <div className="space-y-2">
+            <div className="break-words font-semibold">{row.productName}</div>
+            <div className="flex flex-wrap gap-x-2 gap-y-1 break-words text-xs text-muted-foreground">
+              <span className="font-medium text-primary">{row.productCode}</span>
+              {row.variantName && <span>{row.variantName}</span>}
+              {row.productType && <span>{row.productType.toUpperCase()}</span>}
+              {row.categoryName && <span>{row.categoryName}</span>}
+            </div>
+            <p className="break-words text-xs text-muted-foreground">{row.branchName}</p>
+            <dl className="grid grid-cols-2 gap-2 rounded-md bg-muted/40 px-2 py-1.5 text-sm">
+              <div className="min-w-0">
+                <dt className="text-xs text-muted-foreground">Tồn kho</dt>
+                <dd><StockWithConversion quantity={row.quantity} unit={row.unit ?? ""} conversions={conversionsMap.get(row.productId) ?? null} variant="cell" /></dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-xs text-muted-foreground">Khả dụng</dt>
+                <dd><StockWithConversion quantity={row.available} unit={row.unit ?? ""} conversions={conversionsMap.get(row.productId) ?? null} variant="cell" /></dd>
+              </div>
+            </dl>
+            <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              {(reservedOnly || row.reserved !== 0) && <span>Đang giữ <b className="text-foreground">{formatStockQuantity(row.reserved)}</b></span>}
+              {row.minStock != null && row.minStock > 0 && <span>Tối thiểu <b className="text-foreground">{formatStockQuantity(row.minStock)}</b></span>}
+              {row.maxStock != null && row.maxStock > 0 && <span>Tối đa <b className="text-foreground">{formatStockQuantity(row.maxStock)}</b></span>}
+            </div>
+            <div className="flex flex-wrap justify-between gap-1 text-xs text-muted-foreground">
+              {canViewCost && <span>Giá trị tồn <b className="text-foreground">{row.valuationComplete === false ? "Chưa đủ dữ liệu" : formatCurrency(row.stockValue)}</b></span>}
+              {canViewCost && row.costPrice != null && <span>Đơn giá vốn <b className="text-foreground">{formatCurrency(row.costPrice)}</b></span>}
+              <span>{row.updatedAt ? formatDate(row.updatedAt) : "Chưa phát sinh"}</span>
+            </div>
+          </div>
+        )}
         getRowId={(r) => r.id}
         expandedRow={expandedRow}
         onExpandedRowChange={setExpandedRow}
@@ -1295,6 +1381,20 @@ export default function TonKhoPage() {
             placeholder="Tất cả"
           />
         </FilterGroup>
+        <FilterGroup label="Nhóm hàng">
+          <SelectFilter
+            options={[
+              { label: "Tất cả nhóm", value: "all" },
+              ...categories.map(group => ({ label: group.name + (group.scope === "nvl" ? " · NVL" : " · SKU"), value: group.id })),
+              ...(categoryFilter !== "all" && !categories.some(group => group.id === categoryFilter)
+                ? [{ label: "Nhóm đã chọn", value: categoryFilter }] : []),
+            ]}
+            value={categoryFilter}
+            onChange={setCategoryFilter}
+            placeholder="Tất cả nhóm"
+          />
+          {categoriesError && <button type="button" className="text-sm text-primary underline" onClick={loadCategories}>Tải lại nhóm hàng</button>}
+        </FilterGroup>
         <FilterGroup label="Tồn kho">
           <SelectFilter
             options={[
@@ -1308,14 +1408,28 @@ export default function TonKhoPage() {
             placeholder="Tất cả"
           />
         </FilterGroup>
+        <FilterGroup label="Khả dụng">
+          <SelectFilter options={[
+            { label: "Tất cả", value: "all" },
+            { label: "Còn khả dụng", value: "positive" },
+            { label: "Hết hoặc âm khả dụng", value: "nonpositive" },
+          ]} value={availableFilter} onChange={value => setAvailableFilter(value as InventoryAvailableFilter)} />
+        </FilterGroup>
+        <FilterGroup label="Đang giữ">
+          <SelectFilter options={[
+            { label: "Tất cả", value: "all" },
+            { label: "Có số lượng đang giữ", value: "reserved" },
+          ]} value={reservedOnly ? "reserved" : "all"} onChange={value => setReservedOnly(value === "reserved")} />
+        </FilterGroup>
         <FilterGroup label="Định mức">
           <SelectFilter
             options={[
               { label: "Tất cả", value: "all" },
               { label: "Dưới định mức", value: "low" },
+              { label: "Vượt tồn tối đa", value: "high" },
             ]}
-            value={lowStockOnly}
-            onChange={setLowStockOnly}
+            value={stockThreshold}
+            onChange={setStockThreshold}
             placeholder="Tất cả"
           />
         </FilterGroup>
