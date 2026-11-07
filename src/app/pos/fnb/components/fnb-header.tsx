@@ -21,6 +21,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import counterVisual from "../../counter-visual.module.css";
 import type { FnbTabSnapshot } from "@/lib/types/fnb";
 import type { Shift } from "@/lib/types/shift";
 import { PosBranchSelector } from "@/components/shared/pos-branch-selector";
@@ -78,7 +79,7 @@ export function FnbHeader({
         iPad landscape (1024px) trước đây bị wrap 2 hàng vì branch chip + search +
         view-toggle quá rộng. Giờ chỉ no-wrap ở lg+ (1024+) cho desktop thật, tablet
         landscape vẫn flex-wrap (chấp nhận 1-2 hàng) nhưng có space breathing room. */}
-    <header className="min-h-14 bg-white dark:bg-card text-foreground flex flex-wrap lg:flex-nowrap items-center px-2 sm:px-3 gap-2 py-1 lg:h-14 lg:py-0 shrink-0 border-b border-outline-variant/30">
+    <header className={cn("min-h-14 bg-white dark:bg-card text-foreground flex flex-wrap lg:flex-nowrap items-center px-2 sm:px-3 gap-2 py-1 lg:h-14 lg:py-0 shrink-0 border-b border-outline-variant/30", counterVisual.toolbar)}>
       {/* ☰ Sidenav trigger */}
       {onMenuClick && (
         <button

@@ -11,6 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import counterVisual from "../../counter-visual.module.css";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import type {
   FnbTabSnapshot,
@@ -888,7 +889,7 @@ export function FnbCart({
           if (!isPlatformOrder) {
             // Đơn tại quán / takeaway / direct: hiển thị như cũ
             return (
-              <div className="flex items-end justify-between pt-1.5 [@media(max-height:720px)]:pt-2">
+              <div className={cn("flex items-end justify-between pt-1.5 [@media(max-height:720px)]:pt-2", counterVisual.counterTotal)}>
                 <span className="text-sm font-semibold text-foreground pb-0.5">
                   Khách cần trả
                 </span>
@@ -924,7 +925,7 @@ export function FnbCart({
               </div>
 
               {/* Quán thực thu — net (số chính, to nhất) */}
-              <div className="flex items-end justify-between pt-1">
+              <div className={cn("flex items-end justify-between pt-1", counterVisual.counterTotal)}>
                 <span className="text-sm font-semibold text-foreground pb-0.5">
                   💰 Quán thực thu
                 </span>
@@ -940,6 +941,7 @@ export function FnbCart({
         {/* Primary actions row — printing stays beside checkout without adding a row. */}
         <div className={cn(
           "sticky bottom-0 grid gap-2 bg-white dark:bg-card pt-1",
+          counterVisual.actionBar,
           onPrintPreBill
             ? "grid-cols-[minmax(0,0.9fr)_minmax(0,0.85fr)_minmax(0,1.25fr)]"
             : "grid-cols-[minmax(0,2fr)_minmax(0,3fr)]"
@@ -950,6 +952,7 @@ export function FnbCart({
             disabled={unsentLineCount === 0 || kitchenSubmitting}
             className={cn(
               "min-w-0 h-12 rounded-md font-semibold text-sm flex flex-col items-center justify-center gap-0.5 transition-all press-scale-sm",
+              counterVisual.kitchenAction,
               activeTab?.kitchenOrderId
                 ? "bg-status-info/15 text-status-info hover:bg-status-info/25 disabled:opacity-40 disabled:pointer-events-none"
                 : "bg-surface-container-high text-on-surface hover:bg-surface-container disabled:opacity-40 disabled:pointer-events-none"

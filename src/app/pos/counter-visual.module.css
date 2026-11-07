@@ -1,0 +1,39 @@
+.toolbar {
+  box-shadow: inset 0 -2px 0 rgb(28 52 85 / 16%);
+}
+
+.counterTotal {
+  background-color: var(--primary-subtle);
+  border-radius: 6px;
+  box-shadow: inset 3px 0 0 var(--primary);
+  column-gap: 0.5rem;
+  padding-inline: 0.65rem;
+}
+
+.actionBar {
+  box-shadow: 0 -3px 10px rgb(27 47 71 / 8%);
+}
+
+.kitchenAction:not(:disabled) {
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.lane {
+  box-shadow: 0 2px 5px rgb(27 47 71 / 9%);
+}
+
+.laneHeader {
+  background-color: var(--surface-container-low);
+}
+
+.laneAccent {
+  box-shadow: inset 0 -2px 0 currentColor;
+}
+
+@media (forced-colors: active) {
+  .counterTotal,
+  .kitchenAction:not(:disabled) {
+    outline: 1px solid CanvasText;
+    outline-offset: -1px;
+  }
+}

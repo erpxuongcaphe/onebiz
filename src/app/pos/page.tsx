@@ -69,6 +69,7 @@ import {
 import { useToast } from "@/lib/contexts";
 import { formatCurrency, formatNumber, formatDecimal, parseNumberInput, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import counterVisual from "./counter-visual.module.css";
 import { printReceiptDirect, type ReceiptData } from "@/components/shared/print-receipt";
 import { printShiftReport } from "@/lib/print-shift-report";
 // CEO 03/07: POS in hóa đơn THEO MẪU chi nhánh (giống trang Hóa đơn admin).
@@ -3054,7 +3055,7 @@ function PosPageInner() {
             Tăng từ h-10 (40px) → h-12 (48px) đạt chuẩn touch Apple HIG
             44px cho iPad 13".
             CEO 06/06 chốt giữ bg-primary (xanh) — đẹp hơn slate-900. ═══════════ */}
-      <header className="h-12 bg-primary text-primary-foreground flex items-center px-3 shrink-0 gap-2">
+      <header className={cn("h-12 bg-primary text-primary-foreground flex items-center px-3 shrink-0 gap-2", counterVisual.toolbar)}>
         {/* CEO 04/06/2026: từ POS quay về trang chủ mở tab mới. */}
         <a
           href="/"
@@ -3780,7 +3781,7 @@ function PosPageInner() {
 
             {/* Total — Stitch font-heading extrabold primary
                 P0-1 fix 12/06/2026: state.total đã fold orderVatAmount → hết duplicate render. */}
-            <div className="flex justify-between items-baseline pt-2 border-t border-outline-variant/20">
+            <div className={cn("flex justify-between items-baseline pt-2 border-t border-outline-variant/20", counterVisual.counterTotal)}>
               <span className="text-sm font-semibold text-foreground">Khách cần trả</span>
               <span className="font-heading text-2xl font-extrabold text-primary tabular-nums leading-none">
                 {formatCurrency(state.total)} ₫
@@ -4006,6 +4007,7 @@ function PosPageInner() {
               [1fr_2fr]: Nháp ~33% + Thanh toán ~66% — đủ 1 hàng. */}
           <div className={cn(
             "px-3 py-3 border-t border-outline-variant/20 shrink-0 bg-surface-container-lowest",
+            counterVisual.actionBar,
             state.sellingMode === "fast"
               ? "flex flex-col gap-2"
               : "grid grid-cols-[1fr_2fr] gap-2"

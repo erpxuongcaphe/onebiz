@@ -17,6 +17,7 @@
 import { useState, useEffect, useCallback, useRef, useId, useMemo } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import counterVisual from "../../counter-visual.module.css";
 import { useAuth, useToast } from "@/lib/contexts";
 import { useSettings } from "@/lib/contexts/settings-context";
 import { PosBranchSelector } from "@/components/shared/pos-branch-selector";
@@ -971,7 +972,7 @@ function KdsPageInner() {
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-background text-foreground">
-      <header className="shrink-0 border-b border-border bg-card/95 px-4 py-3 shadow-none md:px-6">
+      <header className={cn("shrink-0 border-b border-border bg-card/95 px-4 py-3 md:px-6", counterVisual.toolbar)}>
         <div className="flex flex-wrap items-center gap-3">
           {/* Left: title + status */}
           <div className="flex min-w-0 items-center gap-3">
@@ -1325,9 +1326,9 @@ function KdsLane({
   onMarkAllReady: (orderId: string) => void;
 }) {
   return (
-    <section className="flex min-h-[320px] flex-col overflow-hidden rounded-lg border border-border bg-surface-container-lowest shadow-none">
-      <header className="flex shrink-0 items-center gap-2 border-b border-border bg-card px-2.5 py-2">
-        <div className={cn("flex size-8 shrink-0 items-center justify-center rounded-lg border", accentClass)}>
+    <section className={cn("flex min-h-[320px] flex-col overflow-hidden rounded-lg border border-border bg-surface-container-lowest", counterVisual.lane)}>
+      <header className={cn("flex shrink-0 items-center gap-2 border-b border-border px-2.5 py-2", counterVisual.laneHeader)}>
+        <div className={cn("flex size-8 shrink-0 items-center justify-center rounded-lg border", accentClass, counterVisual.laneAccent)}>
           <Icon name={icon} size={17} />
         </div>
         <div className="min-w-0 flex-1">
