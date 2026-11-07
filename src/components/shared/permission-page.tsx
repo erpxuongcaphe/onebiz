@@ -34,7 +34,7 @@ function PermissionLoading({retry}: {retry?: () => Promise<void>}) {
   );
 }
 
-function PermissionDenied({ retry }: { retry?: () => Promise<void> }) {
+function PermissionDenied({ retry, sessionMissing, accountName }: { retry?: () => Promise<void>; sessionMissing?: boolean; accountName?: string }) {
   const [refreshing, setRefreshing] = useState(false);
   const [retryFailed, setRetryFailed] = useState(false);
   async function refreshPermissions() {
@@ -52,10 +52,11 @@ function PermissionDenied({ retry }: { retry?: () => Promise<void> }) {
   return (
     <div role="alert" className="mx-auto flex min-h-64 max-w-lg flex-col items-center justify-center gap-3 px-5 py-8 text-center">
       <Icon name="gpp_bad" size={40} className="text-muted-foreground" />
-      <p className="text-lg font-medium text-muted-foreground">Không có quyền truy cập</p>
-      <p className="text-sm text-muted-foreground">Bạn cần quyền để xem trang này. Liên hệ quản trị viên.</p>
+      <p className="text-lg font-medium text-muted-foreground">{sessionMissing ? "Cần đăng nhập lại" : "Không có quyền truy cập"}</p>
+      <p className="text-sm text-muted-foreground">{sessionMissing ? "Phiên đăng nhập không còn trên thiết bị này." : "Bạn cần quyền để xem trang này. Liên hệ quản trị viên."}</p>
+      {!sessionMissing && accountName && <p className="text-sm font-medium">{accountName}</p>}
       {retry && <button type="button" disabled={refreshing} onClick={() => { void refreshPermissions(); }} className="min-h-11 rounded-md bg-primary px-5 py-2 text-sm font-semibold text-on-primary disabled:opacity-60">
-        {refreshing ? "Đang kiểm tra..." : "Kiểm tra lại quyền"}
+        {refreshing ? "Đang kiểm tra..." : sessionMissing ? "Đăng nhập lại" : "Kiểm tra lại quyền"}
       </button>}
       {retryFailed && <p className="text-sm text-destructive">Chưa kiểm tra được quyền. Vui lòng thử lại.</p>}
     </div>
@@ -63,7 +64,7 @@ function PermissionDenied({ retry }: { retry?: () => Promise<void> }) {
 }
 
 export function PermissionPage({ requires, children }: PermissionPageProps) {
-  const { hasPermission, isLoading, loadError, retry } = usePermissions();
+  const { hasPermission, isLoading, loadError, retry, sessionMissing, accountName } = usePermissions();
   const requiredPermissions = Array.isArray(requires) ? requires : [requires];
   const isAllowed = requiredPermissions.some(permission => hasPermission(permission));
   if (isLoading) return <PermissionLoading retry={retry} />;
@@ -76,7 +77,7 @@ export function PermissionPage({ requires, children }: PermissionPageProps) {
     </div>
   );
   if (!isAllowed) {
-    return <PermissionDenied retry={retry} />;
+    return <PermissionDenied retry={retry} sessionMissing={sessionMissing} accountName={accountName} />;
   }
 
   return <>{children}</>;
