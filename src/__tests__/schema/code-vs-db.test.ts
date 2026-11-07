@@ -76,7 +76,7 @@ const RPC_CHO_MIGRATION = new Map<string, string>([
     .map(({name}): [string, string] => [name, bundle.migration])),
   ["clone_bom_for_branch_atomic", "202610230001_atomic_branch_bom_clone.sql"],
   ["get_operational_sales_dashboard", "202610200007_operational_sales_dashboard.sql"],
-  ["get_inventory_catalog_00573", "20261029171144_inventory_active_catalog_read.sql"],
+  ["get_inventory_catalog_filtered", "20261107072251_inventory_catalog_filters.sql"],
   // 00390 đã chạy trên Production; snapshot không thể làm mới tại workspace này
   // vì không có service-role credential. Xóa các dòng này ngay lần dump schema kế tiếp.
 ]);

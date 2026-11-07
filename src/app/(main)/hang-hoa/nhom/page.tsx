@@ -166,18 +166,18 @@ function CategoryProductsPanel({
 
   return (
     <div className="px-4 py-3 space-y-2 bg-muted/20">
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
         <span>Có {items.length} sản phẩm trong nhóm</span>
         <a
-          href="/hang-hoa"
+          href={channel === "fnb" ? "/hang-hoa" : `/hang-hoa/ton-kho?nhom=${encodeURIComponent(categoryId)}`}
           className="text-primary hover:underline inline-flex items-center gap-1"
         >
-          Xem trong Hàng hoá
+          {channel === "fnb" ? "Xem trong Hàng hoá" : "Xem trong Tồn kho"}
           <Icon name="arrow_outward" size={14} />
         </a>
       </div>
-      <div className="rounded-lg border bg-background overflow-hidden">
-        <div className="grid grid-cols-[140px_1fr_90px_70px] gap-2 px-3 py-2 bg-muted/40 text-xs font-medium text-muted-foreground">
+      <div className="@container rounded-lg border bg-background overflow-hidden">
+        <div className="hidden @md:grid grid-cols-[minmax(100px,auto)_minmax(0,1fr)_70px_55px] gap-2 px-3 py-2 bg-muted/40 text-xs font-medium text-muted-foreground">
           <span>Mã</span>
           <span>Tên</span>
           <span className="text-right">Tồn</span>
@@ -187,12 +187,12 @@ function CategoryProductsPanel({
           {items.map((p) => (
             <li
               key={p.id}
-              className="grid grid-cols-[140px_1fr_90px_70px] gap-2 px-3 py-2 text-sm items-center"
+              className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-x-2 gap-y-0.5 px-3 py-2 text-sm items-center @md:grid-cols-[minmax(100px,auto)_minmax(0,1fr)_70px_55px]"
             >
-              <span className="font-mono text-xs text-primary">{p.code}</span>
-              <span className="truncate">{p.name}</span>
+              <span className="row-start-2 break-words font-mono text-xs text-primary @md:row-start-auto">{p.code}</span>
+              <span className="col-span-3 row-start-1 break-words font-medium @md:col-span-1 @md:row-start-auto">{p.name}</span>
               <span
-                className={`text-right font-mono ${
+                className={`row-start-2 text-right font-mono @md:row-start-auto ${
                   p.stock === 0
                     ? "text-destructive"
                     : p.stock <= 5
@@ -202,7 +202,7 @@ function CategoryProductsPanel({
               >
                 {formatNumber(p.stock)}
               </span>
-              <span className="text-xs text-muted-foreground">
+              <span className="row-start-2 text-xs text-muted-foreground @md:row-start-auto">
                 {p.unit ?? "—"}
               </span>
             </li>

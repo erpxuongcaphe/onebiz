@@ -63,12 +63,26 @@ try {
  const helperSource=readFileSync('supabase/migrations/202610240200_warehouse_catalog_search.sql','utf8');
  await db.exec(helperSource.slice(helperSource.indexOf('create or replace function public.catalog_search_normalize'),helperSource.indexOf('revoke all on function public.catalog_search_normalize')));
  await db.exec(readFileSync('supabase/migrations/20261029171144_inventory_active_catalog_read.sql','utf8'));
+ await db.exec(`
+  alter table public.products add column category_id uuid;
+  create table public.categories(id uuid primary key,tenant_id uuid,name text);
+  grant select on public.categories to authenticated;
+  create or replace view public.products_scoped as select * from public.products where tenant_id=public.get_user_tenant_id();
+ `);
+ await db.query("insert into categories values ($1,$2,'Coffee'),($3,$4,'Foreign group')",[uuid(501),uuid(10),uuid(502),uuid(20)]);
+ await db.query('update products set category_id=$1, max_stock=6 where id=$2',[uuid(501),uuid(203)]);
+ await db.query('update products set category_id=$1 where id=$2',[uuid(502),uuid(209)]);
+ await db.exec(readFileSync('supabase/migrations/20261107072251_inventory_catalog_filters.sql','utf8'));
  await db.query("select set_config('request.jwt.claim.sub',$1,false)",[uuid(1)]);
  await db.exec('set role authenticated');
- async function catalog({branch=null,type=null,search=null,filter='all',low=false,offset=0,limit=1000}={}) {
-  return (await db.query('select public.get_inventory_catalog_00573($1::uuid,$2,$3,$4,$5,$6,$7) result',[branch,type,search,filter,low,offset,limit])).rows[0].result;
+ async function catalog({branch=null,type=null,search=null,filter='all',low=false,offset=0,limit=1000,category=null,available='all',reserved=false,above=false}={}) {
+  return (await db.query('select public.get_inventory_catalog_filtered($1::uuid,$2,$3,$4,$5,$6,$7,$8::uuid,$9,$10,$11) result',[branch,type,search,filter,low,offset,limit,category,available,reserved,above])).rows[0].result;
  }
  const all=await catalog();
+ const group=await catalog({category:uuid(501),available:'positive',reserved:true,above:true,limit:1});
+ check(group.total===1&&group.total_value===70&&group.rows[0].category_name==='Coffee','new filters compose before totals and pagination');
+ check((await catalog({category:uuid(502)})).total===0,'foreign groups return no rows');
+ check((await catalog({available:'nonpositive'})).rows.every(row=>row.available<=0),'zero and negative availability filter');
  check(all.rows.some(r=>r.product_code==='NVL-COLD'&&r.quantity===0&&!r.has_stock_record),'active NVL with no stock must appear');
  check(all.rows.some(r=>r.product_code==='SKU-COLD'&&r.quantity===0&&!r.has_stock_record),'active SKU with no stock must appear');
  check(all.rows.filter(r=>r.product_code==='NVL-COLD').length===1,'no duplicate synthetic row');
