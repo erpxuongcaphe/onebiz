@@ -682,6 +682,36 @@ export default function NhapHangPage() {
   ];
 
   /* ---- Fetch data ---- */
+  const purchaseListQuery = useMemo(() => {
+    const presetRange = receivingPresetRange(datePreset, day);
+    const from = datePreset === "custom" ? dateFrom : presetRange.from;
+    const to = datePreset === "custom" ? dateTo : presetRange.to;
+    return {
+      search, searchField, branchId: duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId,
+      sortBy: SUPPLIER_SORT_FIELDS[sorting[0]?.id ?? "date"],
+      sortOrder: sorting[0]?.desc === false ? "asc" as const : "desc" as const,
+      filters: {
+        ...(selectedStatuses.length > 0 && { status: selectedStatuses }),
+        ...(creatorFilter && { createdBy: creatorFilter }),
+        ...(importerFilter && { importedBy: importerFilter }),
+        ...(costReturnFilter !== "all" && { costReturn: costReturnFilter }),
+        ...(from && { dateFrom: from }),
+        ...(to && { dateTo: to }),
+      },
+    };
+  }, [datePreset, day, dateFrom, dateTo, search, searchField, duocXemToanChuoi, viewAllBranches,
+    activeBranchId, sorting, selectedStatuses, creatorFilter, importerFilter, costReturnFilter]);
+  const canExportScope = !permissionsLoading && branchesReady && requestedBranch !== undefined
+    && memory.ready && !branchDenied && (!!activeBranchId || duocXemToanChuoi);
+  const exportScope = JSON.stringify([canExportScope, purchaseListQuery]);
+  const currentExportScope = useRef(exportScope);
+  currentExportScope.current = exportScope;
+  const exportInFlight = useRef(false);
+  useEffect(() => {
+    currentExportScope.current = exportScope;
+    return () => { currentExportScope.current = ""; };
+  }, [exportScope]);
+
   const fetchData = useCallback(async () => {
     const request = ++fetchRequest.current;
     if (permissionsLoading || !branchesReady || requestedBranch===undefined || !memory.ready) return;
@@ -700,19 +730,7 @@ export default function NhapHangPage() {
     // Không có try/finally thì truy vấn lỗi là cờ loading không bao giờ tắt →
     // trang treo mãi ở vòng xoay, người dùng không biết vì sao.
     try {
-    const presetRange = receivingPresetRange(datePreset,day);
-    const effectiveDateFrom = datePreset === "custom" ? dateFrom : presetRange.from;
-    const effectiveDateTo = datePreset === "custom" ? dateTo : presetRange.to;
-    const commonFilters = {
-      ...(selectedStatuses.length > 0 && { status: selectedStatuses }),
-      ...(creatorFilter && { createdBy: creatorFilter }),
-      ...(importerFilter && { importedBy: importerFilter }),
-      ...(costReturnFilter !== "all" && { costReturn: costReturnFilter }),
-      ...(effectiveDateFrom && { dateFrom: effectiveDateFrom }),
-      ...(effectiveDateTo && { dateTo: effectiveDateTo }),
-    };
-    const branchScope = duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId;
-    const query = { search, searchField, branchId: branchScope, filters: commonFilters,sortBy:SUPPLIER_SORT_FIELDS[sorting[0]?.id??'date'],sortOrder:sorting[0]?.desc===false?'asc' as const:'desc' as const };
+    const query = purchaseListQuery;
     const boardRows = viewMode === "kanban" ? await getPurchaseOrderBoard(query) : null;
     const result = boardRows ? { data: boardRows, total: boardRows.length } : await getPurchaseOrders({ page, pageSize, ...query });
     if (request !== fetchRequest.current) return;
@@ -725,10 +743,8 @@ export default function NhapHangPage() {
       const all = await getPurchaseOrders({
         page: 0,
         pageSize: 1,
-        search,
-        searchField,
+        ...query,
         branchId: undefined,
-        filters: commonFilters,
       });
       if (request !== fetchRequest.current) return;
       setOtherBranchCount(all.total);
@@ -746,7 +762,7 @@ export default function NhapHangPage() {
     } finally {
       if (request === fetchRequest.current) setLoading(false);
     }
-  }, [viewMode, page, pageSize, search, searchField, selectedStatuses, creatorFilter, importerFilter, costReturnFilter, activeBranchId, datePreset, dateFrom, dateTo, viewAllBranches, toast, duocXemToanChuoi, permissionsLoading,branchesReady,requestedBranch,branchDenied,memory.ready,sorting,day]);
+  }, [viewMode, page, pageSize, purchaseListQuery, activeBranchId, viewAllBranches, toast, duocXemToanChuoi, permissionsLoading,branchesReady,requestedBranch,branchDenied,memory.ready]);
 
   useEffect(() => {
     fetchData();
@@ -764,7 +780,17 @@ export default function NhapHangPage() {
   const totalAmountOwed = data.reduce((sum, o) => sum + o.amountOwed, 0);
 
   /* ---- Export — Day 3 16/05/2026: focused per-module pattern ---- */
-  const handleExport = (type: "excel" | "csv") => {
+  const handleExport = async (type: "excel" | "csv") => {
+    if (!canExportScope || loading || exportInFlight.current) return;
+    exportInFlight.current = true;
+    const shouldSave = () => currentExportScope.current === exportScope;
+    try {
+    const data = await getPurchaseOrderBoard(purchaseListQuery);
+    if (!shouldSave()) return;
+    if (!data.length) {
+      toast({ title: "Không có phiếu nhập theo bộ lọc", variant: "info" });
+      return;
+    }
     if (type === "csv") {
       const exportColumns = [
         { header: "Mã nhập hàng", key: "code", width: 15 },
@@ -782,14 +808,15 @@ export default function NhapHangPage() {
           format: (v: PurchaseOrderStatus) => STATUS_META[v]?.label ?? v,
         },
       ];
-      exportToCsv(data, exportColumns, "danh-sach-nhap-hang");
+      await exportToCsv(data, exportColumns, "danh-sach-nhap-hang", { shouldSave });
       return;
     }
 
     // ---- Excel: Info + Chi tiết + Theo NCC + Theo trạng thái ----
-    const today = new Date().toISOString().slice(0, 10);
-    const dateFromIso = dateFrom || today;
-    const dateToIso = dateTo || today;
+    const dates = data.map(row => new Date(Date.parse(row.date) + 7 * 3600000).toISOString().slice(0, 10)).sort();
+    const dateFromIso = purchaseListQuery.filters.dateFrom || dates[0];
+    const dateToIso = purchaseListQuery.filters.dateTo || dates[dates.length - 1];
+    const exportBranchName = purchaseListQuery.branchId ? currentBranch?.name ?? "Chi nhánh đang chọn" : "Các chi nhánh được phép";
 
     const detailRows = data.map((o) => ({
       code: o.code,
@@ -914,33 +941,37 @@ export default function NhapHangPage() {
       title: "BÁO CÁO NHẬP HÀNG",
       description: "Danh sách đơn nhập + tổng theo NCC + theo trạng thái",
       range: { from: dateFromIso, to: dateToIso },
-      branchName: activeBranchId ? "Chi nhánh đang chọn" : "Tất cả chi nhánh",
+      branchName: exportBranchName,
       tenantName: "OneBiz",
       generatedAt: new Date(),
       disclaimer:
         "Báo cáo quản trị nội bộ — không thay thế Báo cáo Tài chính theo TT200/133.",
     });
 
-    try {
-      exportReportToExcel({
+      await exportReportToExcel({
         kind: "dat-hang",
         mode: "full",
         range: { from: dateFromIso, to: dateToIso },
-        branchName: activeBranchId ? "Chi nhánh đang chọn" : undefined,
+        branchName: exportBranchName,
         tenantName: "OneBiz",
         sheets: [infoSheet, detailSheet, supplierSheet, statusSheet],
+        shouldSave,
       });
+      if (!shouldSave()) return;
       toast({
         title: "Đã xuất Excel đơn nhập",
         description: `4 sheet: Info + Chi tiết (${detailRows.length}) + Theo NCC (${supplierRows.length}) + Theo trạng thái (${statusRows.length})`,
         variant: "success",
       });
     } catch (err) {
+      if (!shouldSave()) return;
       toast({
         title: "Lỗi xuất Excel",
         description: err instanceof Error ? err.message : "Vui lòng thử lại",
         variant: "error",
       });
+    } finally {
+      exportInFlight.current = false;
     }
   };
 
@@ -1254,7 +1285,7 @@ export default function NhapHangPage() {
         density="compact"
         columnToggle
         toolbarMetrics={<><ListMetric icon={<Icon name="receipt_long" size={15} />} label="Kết quả" value={total.toString()} hint="Tổng số phiếu theo bộ lọc" /><ListMetric icon={<Icon name="hourglass_bottom" size={15} />} label="Đang nhận trang này" value={kpiPartial.toString()} hint="Chỉ tính các dòng đang hiển thị" tone={kpiPartial > 0 ? "danger" : "default"} /><ListMetric icon={<Icon name="check_circle" size={15} />} label="Hoàn tất trang này" value={kpiCompleted.toString()} hint="Chỉ tính các dòng đang hiển thị" /><ListMetric icon={<Icon name="payments" size={15} />} label="Công nợ trang này" value={formatCurrency(kpiTotalOwed)} hint={`Giá trị trang này: ${formatCurrency(kpiTotalAmount)}`} tone={kpiTotalOwed > 0 ? "danger" : "default"} /></>}
-        toolbarActions={<><Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)}><Icon name="calendar_today" size={15} /><span className="hidden sm:inline">{datePresetLabel}</span></Button><Button type="button" variant="outline" size="sm" className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)}><Icon name="filter_alt" size={15} /><span className="hidden sm:inline">Bộ lọc</span>{filterChips.length > 0 && <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">{filterChips.length}</span>}</Button></>}
+        toolbarActions={<><Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)} aria-label={`Lọc theo thời gian: ${datePresetLabel}`}><Icon name="calendar_today" size={15} /><span className="hidden sm:inline">{datePresetLabel}</span></Button><Button type="button" variant="outline" size="sm" className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)} aria-label="Mở bộ lọc nhập hàng"><Icon name="filter_alt" size={15} /><span className="hidden sm:inline">Bộ lọc</span>{filterChips.length > 0 && <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">{filterChips.length}</span>}</Button></>}
         toolbarFooter={<FilterChips filters={filterChips} onClearAll={filterChips.length > 1 ? clearListFilters : undefined} />}
         emptyState={emptyState}
         emptyTitle={emptyState === "no-results" ? "Không tìm thấy phiếu nhập" : "Chưa có phiếu nhập"}

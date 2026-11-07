@@ -2153,8 +2153,8 @@ export default function HangHoaPage() {
               onBackToBranch={() => setViewAllBranches(false)}
             />
           ) : (
-            <div className="flex items-center justify-end gap-2 mb-2 text-sm">
-              <span className="text-muted-foreground">
+            <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-0.5 border-b px-3 py-1 text-xs sm:justify-end">
+              <span className="min-w-0 break-words text-muted-foreground">
                 Tồn hiển thị theo:{" "}
                 <b className="text-on-surface">
                   {currentBranch?.name ?? "chi nhánh đang chọn"}
@@ -2163,7 +2163,7 @@ export default function HangHoaPage() {
               <button
                 type="button"
                 onClick={() => setViewAllBranches(true)}
-                className="text-primary hover:underline font-medium"
+                className="inline-flex min-h-8 shrink-0 items-center font-medium text-primary hover:underline pointer-coarse:min-h-11"
               >
                 Xem toàn chuỗi
               </button>
@@ -2237,6 +2237,7 @@ export default function HangHoaPage() {
                 size="sm"
                 className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11"
                 onClick={() => setFilterOpen(true)}
+                aria-label={`Lọc theo thời gian tạo: ${createdDateLabel}`}
               >
                 <Icon name="calendar_today" size={15} />
                 <span className="hidden sm:inline">{createdDateLabel}</span>

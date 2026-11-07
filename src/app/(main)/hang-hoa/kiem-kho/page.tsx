@@ -43,6 +43,8 @@ import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
 import { buildInventoryCheckPrintData } from "@/lib/print-templates";
 import { Icon } from "@/components/ui/icon";
 import { UnitSnapshotHistory } from "@/components/shared/unit-snapshot-history";
+import { getStockReportUnits, stockUnitReferenceKey } from "@/lib/services/supabase/report-stock-units";
+import type { StockReportUnits } from "@/lib/reports/stock-unit-context";
 
 /* ------------------------------------------------------------------ */
 /*  Status config                                                      */
@@ -85,14 +87,26 @@ function VarianceTab({ checkId }: { checkId: string }) {
   const [rows, setRows] = useState<InventoryCheckItemRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [unitContext, setUnitContext] = useState<Map<string, StockReportUnits> | null>(null);
+  const [unitError, setUnitError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
+    setUnitContext(null);
+    setUnitError(false);
     getInventoryCheckItems(checkId)
       .then((data) => {
-        if (!cancelled) setRows(data);
+        if (cancelled) return;
+        setRows(data);
+        void getStockReportUnits(data.map(row => ({
+          referenceId: checkId, productId: row.productId, actualQuantity: row.actualStock,
+        }))).then(units => {
+          if (!cancelled) setUnitContext(units);
+        }).catch(() => {
+          if (!cancelled) setUnitError(true);
+        });
       })
       .catch((err) => {
         if (!cancelled)
@@ -214,6 +228,8 @@ function VarianceTab({ checkId }: { checkId: string }) {
           </thead>
           <tbody>
             {rows.map((r) => {
+              const units = unitContext?.get(stockUnitReferenceKey(checkId, r.productId));
+              const unit = units?.recordedUnit ?? r.unit;
               const isZero = r.difference === 0;
               const sign = r.difference > 0 ? "+" : "";
               const diffColor =
@@ -236,14 +252,21 @@ function VarianceTab({ checkId }: { checkId: string }) {
                         {r.productCode}
                       </div>
                     )}
+                    <div className="text-xs text-muted-foreground">
+                      {unitError ? "Không tải được thông tin quy đổi" : !unitContext ? "Đang tải ĐVT quy đổi…" : <>
+                        <div>Lúc kiểm: {units?.recordedConversion ?? (units?.recordedUnit ? "Không dùng quy đổi phụ" : "Chưa lưu ĐVT lúc kiểm")}</div>
+                        {units?.recordedCount && <div>Đã đếm: {units.recordedCount}</div>}
+                        <div>Danh mục hiện tại: {units?.currentConversion ?? "Chưa có dữ liệu"}</div>
+                      </>}
+                    </div>
                   </td>
                   <td className="text-right px-3 py-2 font-mono text-muted-foreground">
                     {formatNumber(r.systemStock)}
-                    {r.unit ? ` ${r.unit}` : ""}
+                    {unit ? ` ${unit}` : ""}
                   </td>
                   <td className="text-right px-3 py-2 font-mono font-medium">
                     {formatNumber(r.actualStock)}
-                    {r.unit ? ` ${r.unit}` : ""}
+                    {unit ? ` ${unit}` : ""}
                   </td>
                   <td className={`text-right px-3 py-2 font-mono font-bold ${diffColor}`}>
                     {sign}
@@ -607,8 +630,13 @@ export default function KiemKhoPage() {
       { header: "Ghi chú", key: "note", width: 30 },
     ];
     const range = computeListPresetRange(datePreset);
-    const rows = await getInventoryChecksForExport({ search, searchField, statuses: selectedStatuses, dateFrom: datePreset === "custom" ? dateFrom : range.from, dateTo: datePreset === "custom" ? dateTo : range.to, createdBy: creatorFilter, branchId: duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId });
-    if (type === "excel") exportToExcel(rows, exportColumns, "phieu-kiem-kho"); else exportToCsv(rows, exportColumns, "phieu-kiem-kho");
+    try {
+      const rows = await getInventoryChecksForExport({ search, searchField, statuses: selectedStatuses, dateFrom: datePreset === "custom" ? dateFrom : range.from, dateTo: datePreset === "custom" ? dateTo : range.to, createdBy: creatorFilter, branchId: duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId });
+      if (type === "excel") await exportToExcel(rows, exportColumns, "phieu-kiem-kho");
+      else await exportToCsv(rows, exportColumns, "phieu-kiem-kho");
+    } catch (error) {
+      toast({ title: "Không xuất được phiếu kiểm kho", description: error instanceof Error ? error.message : undefined, variant: "error" });
+    }
   };
 
   /* ---- Apply inventory check (G7) ---- */
@@ -718,7 +746,7 @@ export default function KiemKhoPage() {
         density="compact"
         columnToggle
         toolbarMetrics={<><ListMetric icon={<Icon name="inventory_2" size={15} />} label="Kết quả" value={total.toString()} hint="Toàn bộ kết quả lọc" /><ListMetric icon={<Icon name="pending_actions" size={15} />} label="Đang xử lý" value={summary.processingCount.toString()} hint="Toàn bộ kết quả lọc" tone={summary.processingCount > 0 ? "danger" : "default"} /><ListMetric icon={<Icon name="check_circle" size={15} />} label="Đã cân bằng" value={summary.balancedCount.toString()} hint={`${summary.cancelledCount} phiếu đã hủy`} /><ListMetric icon={<Icon name={summary.netVariance >= 0 ? "trending_up" : "trending_down"} size={15} />} label="Chênh lệch ròng" value={formatCurrency(summary.netVariance)} hint="Toàn bộ kết quả lọc" tone={summary.netVariance < 0 ? "danger" : "default"} /></>}
-        toolbarActions={<><Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)}><Icon name="calendar_today" size={15} /><span className="hidden sm:inline">{datePresetLabel}</span></Button><Button type="button" variant="outline" size="sm" className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)}><Icon name="filter_alt" size={15} /><span className="hidden sm:inline">Bộ lọc</span>{filterChips.length > 0 && <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">{filterChips.length}</span>}</Button></>}
+        toolbarActions={<><Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)} aria-label={`Lọc theo thời gian: ${datePresetLabel}`}><Icon name="calendar_today" size={15} /><span className="hidden sm:inline">{datePresetLabel}</span></Button><Button type="button" variant="outline" size="sm" className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)} aria-label="Mở bộ lọc kiểm kho"><Icon name="filter_alt" size={15} /><span className="hidden sm:inline">Bộ lọc</span>{filterChips.length > 0 && <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">{filterChips.length}</span>}</Button></>}
         toolbarFooter={<FilterChips filters={filterChips} onClearAll={filterChips.length > 1 ? clearListFilters : undefined} />}
         emptyState={emptyState}
         emptyTitle={

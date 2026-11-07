@@ -4,6 +4,12 @@ import { describe, expect, it } from "vitest";
 const page = readFileSync("src/app/(main)/hang-hoa/page.tsx", "utf8");
 
 describe("bố cục danh sách Hàng hóa", () => {
+  it("cho phạm vi tồn xuống dòng và đặt tên nút lọc ngày trên mobile", () => {
+    expect(page).toContain("flex min-w-0 flex-wrap items-center justify-between");
+    expect(page).toContain("min-w-0 break-words text-muted-foreground");
+    expect(page).toContain('aria-label={`Lọc theo thời gian tạo: ${createdDateLabel}`}');
+  });
+
   it("không dùng sidebar lọc cố định và bật tiêu đề gọn", () => {
     expect(page).toContain("<ListPageLayout sidebar={null}>");
     expect(page).toContain('title="Hàng hóa"');

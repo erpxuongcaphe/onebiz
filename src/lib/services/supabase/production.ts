@@ -10,6 +10,7 @@ import type {
 } from "@/lib/types";
 import { formatDateInputValue } from "@/lib/format";
 import { normalizeCreatedAtRange } from "@/lib/utils/list-date-preset-range";
+import { readHistoryPages } from "./read-history-pages";
 
 const supabase = getClient();
 
@@ -69,7 +70,11 @@ export async function getProductionOrderListWorkspace(params:ProductionOrderList
   }};
 }
 export async function getProductionOrdersForExport(params:Omit<ProductionOrderListWorkspaceParams,"page"|"pageSize">):Promise<ProductionOrder[]>{
-  const rows:ProductionOrder[]=[];for(let page=0;;page+=1){const result=await getProductionOrderListWorkspace({...params,page,pageSize:200});rows.push(...result.data);if(rows.length>=result.total||result.data.length===0)return rows;}
+  return readHistoryPages<ProductionOrder>(async (offset, pageSize) => {
+    if (offset % pageSize !== 0) throw new Error("Chưa tải đủ lệnh sản xuất. Vui lòng xuất lại.");
+    const result = await getProductionOrderListWorkspace({ ...params, page: offset / pageSize, pageSize });
+    return { data: result.data, count: result.total, error: null };
+  });
 }
 
 export async function getProductionOrderById(id: string) {

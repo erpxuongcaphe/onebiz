@@ -579,10 +579,24 @@ export async function getInventoryCheckListWorkspace(params: InventoryCheckListW
 }
 export async function getInventoryChecksForExport(params: Omit<InventoryCheckListWorkspaceParams, "page" | "pageSize">): Promise<InventoryCheck[]> {
   const rows: InventoryCheck[] = [];
+  const ids = new Set<string>();
+  const pageSize = 200;
+  let expected: number | undefined;
   for (let page = 0; ; page += 1) {
-    const result = await getInventoryCheckListWorkspace({ ...params, page, pageSize: 200 });
-    rows.push(...result.data);
-    if (rows.length >= result.total || result.data.length === 0) return rows;
+    const result = await getInventoryCheckListWorkspace({ ...params, page, pageSize });
+    if (!Number.isSafeInteger(result.total) || result.total < 0 || (expected !== undefined && expected !== result.total)) {
+      throw new Error("Số phiếu kiểm kho đã thay đổi. Vui lòng xuất lại.");
+    }
+    expected ??= result.total;
+    if (result.data.length !== Math.min(pageSize, expected - rows.length)) {
+      throw new Error("Chưa tải đủ phiếu kiểm kho. Vui lòng xuất lại.");
+    }
+    for (const row of result.data) {
+      if (!row.id || ids.has(row.id)) throw new Error("Dữ liệu kiểm kho đã thay đổi. Vui lòng xuất lại.");
+      ids.add(row.id);
+      rows.push(row);
+    }
+    if (rows.length === expected) return rows;
   }
 }
 

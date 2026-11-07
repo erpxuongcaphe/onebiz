@@ -803,6 +803,7 @@ export default function NhaCungCapPage() {
                 size="sm"
                 className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11"
                 onClick={() => setFilterOpen(true)}
+                aria-label={`Lọc theo thời gian: ${datePresetLabel}`}
               >
                 <Icon name="calendar_today" size={15} />
                 <span className="hidden sm:inline">{datePresetLabel}</span>
@@ -813,6 +814,7 @@ export default function NhaCungCapPage() {
                 size="sm"
                 className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11"
                 onClick={() => setFilterOpen(true)}
+                aria-label="Mở bộ lọc nhà cung cấp"
               >
                 <Icon name="filter_alt" size={15} />
                 <span className="hidden sm:inline">Bộ lọc</span>
