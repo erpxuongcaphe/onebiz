@@ -62,6 +62,7 @@ export async function getNotifications(params?: {
   onlyUnread?: boolean;
   types?: NotificationKind[];
   limit?: number;
+  throwOnError?: boolean;
 }): Promise<NotificationRow[]> {
   const supabase = getClient();
   const ctx = await getCurrentContext();
@@ -84,6 +85,7 @@ export async function getNotifications(params?: {
 
   const { data, error } = await query;
   if (error) {
+    if (params?.throwOnError) throw new Error(error.message);
     console.warn("[getNotifications]", error.message);
     return [];
   }

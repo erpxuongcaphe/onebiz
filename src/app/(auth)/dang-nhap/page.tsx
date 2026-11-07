@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useRef, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -10,10 +10,10 @@ import { Icon } from "@/components/ui/icon";
 
 const CURRENT_YEAR = new Date().getFullYear();
 const OPERATION_AREAS = [
-  { icon: "inventory_2", label: "Inventory", value: "Stock" },
-  { icon: "point_of_sale", label: "Retail POS", value: "Sales" },
-  { icon: "restaurant", label: "FnB POS", value: "Service" },
-  { icon: "analytics", label: "Reports", value: "Insights" },
+  { icon: "inventory_2", label: "Kho", value: "Quản lý tồn" },
+  { icon: "point_of_sale", label: "POS bán lẻ", value: "Bán hàng" },
+  { icon: "restaurant", label: "POS F&B", value: "Phục vụ" },
+  { icon: "analytics", label: "Báo cáo", value: "Quản trị" },
 ];
 
 export default function LoginPage() {
@@ -43,6 +43,7 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const submitting = useRef(false);
   const redirect = getSafeRedirect(searchParams.get("redirect"));
   const serverError = searchParams.get("error") ?? "";
 
@@ -98,6 +99,8 @@ function LoginForm() {
    */
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (submitting.current) return;
+    submitting.current = true;
     setError("");
     setLoading(true);
     try {
@@ -128,6 +131,7 @@ function LoginForm() {
         "Mất kết nối. Kiểm tra mạng và thử lại.",
       );
     } finally {
+      submitting.current = false;
       setLoading(false);
     }
   }
@@ -153,13 +157,13 @@ function LoginForm() {
           <div className="max-w-xl">
             <p className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/15 bg-card/75 px-3 py-1 text-xs font-semibold text-primary shadow-sm backdrop-blur">
               <Icon name="verified_user" size={14} />
-              Business workspace
+              Quản trị doanh nghiệp
             </p>
             <h1 className="font-heading text-4xl font-bold leading-tight tracking-normal text-foreground xl:text-5xl">
-              OneBiz. Work smarter.
+              OneBiz
             </h1>
             <p className="mt-4 max-w-lg text-base leading-7 text-muted-foreground">
-              Sales, inventory, FnB and reports in one place.
+              Bán hàng, kho, F&B và báo cáo
             </p>
 
             <div className="mt-8 grid max-w-lg grid-cols-2 gap-3">
@@ -183,7 +187,7 @@ function LoginForm() {
           </div>
 
           <p className="text-xs text-muted-foreground">
-            ONEBIZ. ERP Suite · {CURRENT_YEAR}
+            OneBiz · {CURRENT_YEAR}
           </p>
         </div>
 
@@ -197,17 +201,15 @@ function LoginForm() {
                 <LogoWordmark height={34} />
               </div>
               <h2 className="font-heading text-2xl font-bold text-foreground">
-                Welcome back
+                Đăng nhập
               </h2>
-              <p className="mx-auto mt-2 max-w-xs text-sm leading-6 text-muted-foreground">
-                Sign in to continue.
-              </p>
             </div>
 
             <form
               action={`/api/auth/sign-in?redirect=${encodeURIComponent(redirect)}`}
               method="post"
               onSubmit={handleSubmit}
+              aria-busy={loading}
               className="space-y-4"
             >
               {(error || serverError) && (
@@ -221,7 +223,7 @@ function LoginForm() {
 
               <div className="space-y-2">
                 <label className="text-sm font-semibold" htmlFor="identifier">
-                  Email or phone
+                  Email hoặc số điện thoại
                 </label>
                 <div className="relative">
                   <Icon
@@ -246,7 +248,7 @@ function LoginForm() {
 
               <div className="space-y-2">
                 <label className="text-sm font-semibold" htmlFor="password">
-                  Password
+                  Mật khẩu
                 </label>
                 <div className="relative">
                   <Icon
@@ -270,7 +272,7 @@ function LoginForm() {
                     href="/quen-mat-khau"
                     className="text-sm font-medium text-primary hover:text-primary-hover hover:underline"
                   >
-                    Forgot password?
+                    Quên mật khẩu?
                   </Link>
                 </div>
               </div>
@@ -284,18 +286,18 @@ function LoginForm() {
                 {loading ? (
                   <>
                     <Icon name="progress_activity" size={18} className="animate-spin" />
-                    Signing in
+                    Đang đăng nhập…
                   </>
                 ) : (
                   <>
-                    Sign in
+                    Đăng nhập
                     <Icon name="arrow_forward" size={18} />
                   </>
                 )}
               </Button>
 
               <div className="rounded-lg bg-surface-container-low px-4 py-3 text-center text-sm text-muted-foreground">
-                Need an account? Contact your admin.
+                Chưa có tài khoản? Liên hệ quản trị viên.
               </div>
             </form>
           </section>

@@ -11,37 +11,26 @@ import { useSettings, useToast } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
 import { useUnsavedSnapshot } from "@/lib/hooks/use-unsaved-work";
 
+function UnavailableSetting({ label }: { label: string }) {
+  return <div className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm">
+    <span>{label}</span>
+    <span className="text-xs text-muted-foreground">Chưa hỗ trợ cài đặt</span>
+  </div>;
+}
 
 export default function NotificationSettingsPage() {
   const { settings, updateSettings } = useSettings();
   const { toast } = useToast();
 
-  // Mapped from settings context
-  const [newOrder, setNewOrder] = useState(settings.notification.orderNew);
-  const [completedOrder, setCompletedOrder] = useState(settings.notification.orderCompleted);
-  const [lowStock, setLowStock] = useState(settings.notification.stockLow);
-  const [paymentSuccess, setPaymentSuccess] = useState(settings.notification.paymentReceived);
-  const [channelEmail, setChannelEmail] = useState(settings.notification.emailNotify);
-
-  // Local-only state (no mapping in settings context yet)
-  const [cancelledOrder, setCancelledOrder] = useState(true);
-  const [outOfStock, setOutOfStock] = useState(true);
-  const [newImport, setNewImport] = useState(false);
-  const [overdueDebt, setOverdueDebt] = useState(true);
-  const [channelSms, setChannelSms] = useState(false);
-  const [channelPush, setChannelPush] = useState(true);
-
-  const editSnapshot = { newOrder, completedOrder, lowStock, paymentSuccess, channelEmail, cancelledOrder, outOfStock, newImport, overdueDebt, channelSms, channelPush };
-  const markSaved = useUnsavedSnapshot(editSnapshot);
+  const [draft, setDraft] = useState<Partial<typeof settings.notification>>({});
+  const editSnapshot = { ...settings.notification, ...draft };
+  const edit = (key: keyof typeof settings.notification, checked: boolean) =>
+    setDraft(previous => ({ ...previous, [key]: checked }));
+  const markSaved = useUnsavedSnapshot(draft);
   function handleSave() {
-    updateSettings("notification", {
-      orderNew: newOrder,
-      orderCompleted: completedOrder,
-      stockLow: lowStock,
-      paymentReceived: paymentSuccess,
-      emailNotify: channelEmail,
-    });
-    markSaved(editSnapshot);
+    updateSettings("notification", editSnapshot);
+    setDraft({});
+    markSaved({});
     toast({
       title: "Đã lưu",
       description: "Cài đặt thông báo đã được cập nhật thành công.",
@@ -64,23 +53,18 @@ export default function NotificationSettingsPage() {
         <CardContent>
           <div className="divide-y">
             <Toggle
-              checked={newOrder}
-              onCheckedChange={setNewOrder}
+              checked={editSnapshot.orderNew}
+              onCheckedChange={checked => edit("orderNew", checked)}
               label="Đơn mới"
               description="Thông báo khi có đơn hàng mới"
             />
             <Toggle
-              checked={completedOrder}
-              onCheckedChange={setCompletedOrder}
+              checked={editSnapshot.orderCompleted}
+              onCheckedChange={checked => edit("orderCompleted", checked)}
               label="Đơn hoàn thành"
               description="Thông báo khi đơn hàng hoàn thành"
             />
-            <Toggle
-              checked={cancelledOrder}
-              onCheckedChange={setCancelledOrder}
-              label="Đơn bị hủy"
-              description="Thông báo khi đơn hàng bị hủy"
-            />
+            <UnavailableSetting label="Đơn bị hủy" />
           </div>
         </CardContent>
       </Card>
@@ -91,24 +75,14 @@ export default function NotificationSettingsPage() {
         </CardHeader>
         <CardContent>
           <div className="divide-y">
+            <UnavailableSetting label="Hết hàng" />
             <Toggle
-              checked={outOfStock}
-              onCheckedChange={setOutOfStock}
-              label="Hết hàng"
-              description="Thông báo khi sản phẩm hết hàng"
-            />
-            <Toggle
-              checked={lowStock}
-              onCheckedChange={setLowStock}
+              checked={editSnapshot.stockLow}
+              onCheckedChange={checked => edit("stockLow", checked)}
               label="Sắp hết hàng"
               description="Thông báo khi tồn kho dưới mức tối thiểu"
             />
-            <Toggle
-              checked={newImport}
-              onCheckedChange={setNewImport}
-              label="Nhập hàng mới"
-              description="Thông báo khi có đơn nhập hàng mới"
-            />
+            <UnavailableSetting label="Nhập hàng mới" />
           </div>
         </CardContent>
       </Card>
@@ -120,17 +94,12 @@ export default function NotificationSettingsPage() {
         <CardContent>
           <div className="divide-y">
             <Toggle
-              checked={paymentSuccess}
-              onCheckedChange={setPaymentSuccess}
+              checked={editSnapshot.paymentReceived}
+              onCheckedChange={checked => edit("paymentReceived", checked)}
               label="Thanh toán thành công"
               description="Thông báo khi nhận được thanh toán"
             />
-            <Toggle
-              checked={overdueDebt}
-              onCheckedChange={setOverdueDebt}
-              label="Công nợ quá hạn"
-              description="Thông báo khi có công nợ quá hạn thanh toán"
-            />
+            <UnavailableSetting label="Công nợ quá hạn" />
           </div>
         </CardContent>
       </Card>
@@ -141,43 +110,23 @@ export default function NotificationSettingsPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {[
-              {
-                label: "Email",
-                description: "Nhận thông báo qua email",
-                checked: channelEmail,
-                onChange: setChannelEmail,
-              },
-              {
-                label: "SMS",
-                description: "Nhận thông báo qua tin nhắn SMS",
-                checked: channelSms,
-                onChange: setChannelSms,
-              },
-              {
-                label: "Push notification",
-                description: "Nhận thông báo đẩy trên trình duyệt",
-                checked: channelPush,
-                onChange: setChannelPush,
-              },
-            ].map((channel) => (
               <label
-                key={channel.label}
                 className="flex items-start gap-3 cursor-pointer"
               >
                 <Checkbox
-                  checked={channel.checked}
-                  onCheckedChange={(val) => channel.onChange(val === true)}
+                  checked={editSnapshot.emailNotify}
+                  onCheckedChange={val => edit("emailNotify", val === true)}
                   className="mt-0.5"
                 />
                 <div>
-                  <div className="text-sm font-medium">{channel.label}</div>
+                  <div className="text-sm font-medium">Email</div>
                   <div className="text-xs text-muted-foreground">
-                    {channel.description}
+                    Nhận thông báo qua email
                   </div>
                 </div>
               </label>
-            ))}
+            <UnavailableSetting label="SMS" />
+            <UnavailableSetting label="Thông báo đẩy" />
           </div>
         </CardContent>
       </Card>

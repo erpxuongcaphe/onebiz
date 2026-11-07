@@ -12,12 +12,13 @@
  * trigger). Hiện DB rỗng → page hiển thị empty state đúng đắn.
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useLayoutEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useFnbSubdomain } from "@/lib/hooks/use-fnb-subdomain";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/lib/contexts";
@@ -169,24 +170,42 @@ export default function ThongBaoPage() {
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("all");
+  const [loadFailed, setLoadFailed] = useState(false);
+  const currentTab = useRef<string | null>(null);
+  const request = useRef(0);
+
+  useLayoutEffect(() => {
+    currentTab.current = activeTab;
+    return () => {
+      currentTab.current = null;
+      request.current++;
+    };
+  }, [activeTab]);
 
   const load = useCallback(async () => {
+    if (currentTab.current !== activeTab) return;
+    const id = ++request.current;
     setLoading(true);
+    setLoadFailed(false);
+    setNotifications([]);
     try {
       const types = tabFilterMap[activeTab] ?? undefined;
       const rows = await getNotifications({
         onlyUnread: activeTab === "unread",
         types: types ?? undefined,
+        throwOnError: true,
       });
-      setNotifications(rows);
+      if (id === request.current) setNotifications(rows);
     } catch (err) {
+      if (id !== request.current) return;
+      setLoadFailed(true);
       toast({
         title: "Lỗi tải thông báo",
         description: err instanceof Error ? err.message : "Vui lòng thử lại",
         variant: "error",
       });
     } finally {
-      setLoading(false);
+      if (id === request.current) setLoading(false);
     }
   }, [activeTab, toast]);
 
@@ -266,7 +285,7 @@ export default function ThongBaoPage() {
 
       <div className="flex-1 overflow-auto p-4">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-4">
+          <TabsList className="mb-4 h-auto max-w-full flex-wrap justify-start">
             <TabsTrigger value="all">Tất cả</TabsTrigger>
             <TabsTrigger value="unread">
               Chưa đọc
@@ -287,13 +306,18 @@ export default function ThongBaoPage() {
           <TabsContent value={activeTab}>
             <Card>
               {loading ? (
-                <div className="p-8 text-center text-muted-foreground text-sm">
+                <div role="status" className="p-8 text-center text-muted-foreground text-sm">
                   <Icon
                     name="progress_activity"
                     size={20}
                     className="animate-spin mr-2 inline-block align-middle"
                   />
                   Đang tải...
+                </div>
+              ) : loadFailed ? (
+                <div className="space-y-3 p-8 text-center">
+                  <p role="alert" className="text-sm">Không tải được thông báo.</p>
+                  <Button variant="outline" onClick={() => { void load(); }}>Thử lại</Button>
                 </div>
               ) : notifications.length === 0 ? (
                 <div className="p-12 text-center text-muted-foreground">
