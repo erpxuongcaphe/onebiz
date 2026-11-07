@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useBranchFilter } from "@/lib/contexts";
 import { usePermissions } from "@/lib/permissions/use-permission";
+import { readCashBranchPeriod } from "@/lib/reports/cash-book-drilldown";
 import { getMoneyAccounts, getMoneyAccountWorkspace, type MoneyAccount } from "@/lib/services/supabase/money-accounts";
 import { cashDateTimeInput } from "@/lib/cash-time";
 import { formatShortDate } from "@/lib/format";
@@ -40,18 +41,29 @@ const balanceColumns = [
 
 export default function MoneyAccountsPage() {
   const { activeBranchId, branchLabel, isReady } = useBranchFilter();
-  return <MoneyAccountWorkspace key={activeBranchId || "no-branch"} branchId={activeBranchId || null} branchLabel={branchLabel} isReady={isReady} />;
+  const { hasPermission, isLoading } = usePermissions();
+  const [scope, setScope] = useState<ReturnType<typeof readCashBranchPeriod> | "invalid" | undefined>(undefined);
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    setScope(query.get("drilldown") === "cash-flow" ? readCashBranchPeriod(query) ?? "invalid" : null);
+  }, []);
+  if (scope === undefined || scope && (!isReady || isLoading)) return <p role="status" className="p-4">Đang tải tài khoản tiền...</p>;
+  if (scope === "invalid" || scope && (scope.branch !== activeBranchId || !hasPermission("finance.view_cash_book"))) {
+    return <p role="alert" className="p-4">Không mở được số dư theo phạm vi báo cáo. Quay lại Tổng hợp thu chi để xem đối chiếu.</p>;
+  }
+  return <MoneyAccountWorkspace key={activeBranchId || "no-branch"} branchId={activeBranchId || null} branchLabel={branchLabel} isReady={isReady} initialPeriod={scope ?? undefined} />;
 }
 
-function MoneyAccountWorkspace({ branchId, branchLabel, isReady }: {
+function MoneyAccountWorkspace({ branchId, branchLabel, isReady, initialPeriod }: {
   branchId: string | null; branchLabel: string; isReady: boolean;
+  initialPeriod?: { from: string; to: string };
 }) {
   const { hasPermission } = usePermissions();
   const canRead = hasPermission("finance.view_cash_book");
   const canManage = hasPermission("finance.create_transaction") && hasPermission("finance.void_transaction");
   const today = cashDateTimeInput().slice(0, 10);
-  const [view, setView] = useState<"accounts" | "balances">("accounts");
-  const [period, setPeriod] = useState({ from: `${today.slice(0, 7)}-01`, to: today });
+  const [view, setView] = useState<"accounts" | "balances">(initialPeriod ? "balances" : "accounts");
+  const [period, setPeriod] = useState(initialPeriod ?? { from: `${today.slice(0, 7)}-01`, to: today });
   const [draftFrom, setDraftFrom] = useState(period.from);
   const [draftTo, setDraftTo] = useState(period.to);
   const [revision, setRevision] = useState(0);

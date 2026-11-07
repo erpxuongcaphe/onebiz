@@ -1,11 +1,12 @@
 "use client";
 import { cashBookDate, formatCashBookDate, formatCashTime } from "@/lib/cash-time";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useLayoutEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useRevalidateOnFocus } from "@/lib/hooks/use-revalidate-on-focus";
 import { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
+import { readCashBookDrilldown } from "@/lib/reports/cash-book-drilldown";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
 import { ListMetric } from "@/components/shared/list-metric";
@@ -222,6 +223,21 @@ function TransactionDetail({
 
 // === Page Component ===
 export default function SoQuyPage() {
+  const [scope, setScope] = useState<ReturnType<typeof readCashBookDrilldown> | "invalid" | undefined>(undefined);
+  const { activeBranchId, isReady } = useBranchFilter();
+  const { hasAny, isLoading } = usePermissions();
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    setScope(query.get("drilldown") === "cash-flow" ? readCashBookDrilldown(query) ?? "invalid" : null);
+  }, []);
+  if (scope === undefined || scope && (!isReady || isLoading)) return <p role="status" className="p-4">Đang tải sổ quỹ...</p>;
+  if (scope === "invalid" || scope && (scope.branch !== activeBranchId || !hasAny(["finance.view_cash_book"]))) {
+    return <p role="alert" className="p-4">Không mở được tập phiếu theo phạm vi báo cáo. Quay lại Tổng hợp thu chi để xem chi tiết.</p>;
+  }
+  return <CashBookPage drilldown={scope} />;
+}
+
+function CashBookPage({ drilldown }: { drilldown: ReturnType<typeof readCashBookDrilldown> }) {
   const { toast } = useToast();
   const {
     activeBranchId,
@@ -264,17 +280,17 @@ export default function SoQuyPage() {
 
   // Filters
   const [fundType, setFundType] = useState("all");
-  const [datePreset, setDatePreset] = useState<DatePresetValue>("this_month");
-  const [dateFrom, setDateFrom] = useState(INITIAL_CASH_BOOK_RANGE.from ?? "");
-  const [dateTo, setDateTo] = useState(INITIAL_CASH_BOOK_RANGE.to ?? "");
+  const [datePreset, setDatePreset] = useState<DatePresetValue>(drilldown ? "custom" : "this_month");
+  const [dateFrom, setDateFrom] = useState(drilldown?.from ?? INITIAL_CASH_BOOK_RANGE.from ?? "");
+  const [dateTo, setDateTo] = useState(drilldown?.to ?? INITIAL_CASH_BOOK_RANGE.to ?? "");
   const [amountMin, setAmountMin] = useState("");
   const [amountMax, setAmountMax] = useState("");
-  const [selectedDocTypes, setSelectedDocTypes] = useState<string[]>([
+  const [selectedDocTypes, setSelectedDocTypes] = useState<string[]>(drilldown ? [drilldown.type] : [
     "receipt",
     "payment",
   ]);
   const [thuChiCategory, setThuChiCategory] = useState("all");
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(drilldown ? ["completed"] : [
     "completed",
     "draft",
   ]);
@@ -337,6 +353,15 @@ export default function SoQuyPage() {
     ],
   );
 
+  const exportScope = useRef<object | null>(null);
+  useLayoutEffect(() => {
+    exportScope.current = branchScopeReady && !permissionsLoading && (activeBranchId || duocXemToanChuoi) ? {} : null;
+    return () => { exportScope.current = null; };
+  }, [activeBranchId, branchScopeReady, buildWorkspaceParams, duocXemToanChuoi, permissionsLoading]);
+
+  const listRequest = useRef(0);
+  useLayoutEffect(() => () => { listRequest.current++; }, [page, pageSize]);
+
   const fetchData = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
     if (!branchScopeReady || permissionsLoading) return;
     if (!activeBranchId && !duocXemToanChuoi) {
@@ -346,12 +371,16 @@ export default function SoQuyPage() {
       return;
     }
     if (!background) setLoading(true);
+    const scope = exportScope.current;
+    const id = ++listRequest.current;
+    const isCurrent = () => exportScope.current === scope && listRequest.current === id;
     try {
       const result = await getCashBookListWorkspace({
         ...buildWorkspaceParams(),
         page,
         pageSize,
       });
+      if (!isCurrent()) return;
       setData(result.data);
       setTotal(result.total);
       setSummary(result.summary);
@@ -363,6 +392,7 @@ export default function SoQuyPage() {
         })),
       );
     } catch (error) {
+      if (!isCurrent()) return;
       setData([]);
       setTotal(0);
       toast({
@@ -371,7 +401,7 @@ export default function SoQuyPage() {
         variant: "error",
       });
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
   }, [
     activeBranchId,
@@ -427,13 +457,16 @@ export default function SoQuyPage() {
   //   - Sheet 3: Tổng kết theo nhóm bút toán
   //   - Có signature block (Người lập / Kế toán / Giám đốc)
   const handleExport = async (type: "excel" | "csv") => {
-    if (exporting) return;
+    const scope = exportScope.current;
+    if (exporting || loading || !scope) return;
+    const shouldSave = () => exportScope.current === scope;
     setExporting(true);
     let exportData: CashBookEntry[];
     try {
       exportData = await getAllCashBookEntries(buildWorkspaceParams());
+      if (!shouldSave()) { setExporting(false); return; }
     } catch (error) {
-      toast({
+      if (shouldSave()) toast({
         title: "Lỗi tải dữ liệu xuất file",
         description: error instanceof Error ? error.message : "Vui lòng thử lại",
         variant: "error",
@@ -442,7 +475,7 @@ export default function SoQuyPage() {
       return;
     }
     if (type === "excel") {
-      const range = presetToRange(datePreset);
+      const range = { from: dateFrom, to: dateTo };
       const isoToYmd = (iso: string | undefined): string => {
         if (!iso) return formatDateInputValue(new Date());
         return iso.slice(0, 10);
@@ -638,14 +671,15 @@ export default function SoQuyPage() {
           branchName: branchLabel,
           tenantName: "OneBiz",
           sheets: [infoSheet, detailSheet, dailySheet, groupSheet],
+          shouldSave,
         });
-        toast({
+        if (shouldSave()) toast({
           title: "Đã xuất Excel sổ quỹ",
           description: `4 sheet: Info + Chi tiết (${detailRows.length}) + Theo ngày (${dailyRows.length}) + Theo nhóm (${groupRows.length})`,
           variant: "success",
         });
       } catch (err) {
-        toast({
+        if (shouldSave()) toast({
           title: "Lỗi xuất Excel",
           description: err instanceof Error ? err.message : "Vui lòng thử lại",
           variant: "error",
@@ -655,10 +689,10 @@ export default function SoQuyPage() {
       return;
     }
     try {
-      await exportToCsv(exportData, cashBookExportColumns, "so-quy");
-      toast({title:"Đã xuất CSV sổ quỹ",description:`${exportData.length} bút toán theo bộ lọc`,variant:"success"});
+      await exportToCsv(exportData, cashBookExportColumns, "so-quy", { shouldSave });
+      if (shouldSave()) toast({title:"Đã xuất CSV sổ quỹ",description:`${exportData.length} bút toán theo bộ lọc`,variant:"success"});
     } catch (error) {
-      toast({title:"Lỗi xuất CSV",description:error instanceof Error ? error.message : "Vui lòng thử lại",variant:"error"});
+      if (shouldSave()) toast({title:"Lỗi xuất CSV",description:error instanceof Error ? error.message : "Vui lòng thử lại",variant:"error"});
     } finally {setExporting(false);}
   };
 
