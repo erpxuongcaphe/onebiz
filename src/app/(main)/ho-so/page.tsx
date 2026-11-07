@@ -364,6 +364,7 @@ export default function HoSoPage() {
                 <Input
                   id="full-name"
                   value={fullName}
+                  disabled={savingProfile}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="Nguyễn Văn A"
                 />
@@ -392,6 +393,7 @@ export default function HoSoPage() {
                   type="tel"
                   inputMode="tel"
                   value={phone}
+                  disabled={savingProfile}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="0912345678"
                 />
