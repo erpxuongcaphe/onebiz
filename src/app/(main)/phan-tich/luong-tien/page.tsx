@@ -155,10 +155,10 @@ export default function LuongTienPage() {
   const categoryColumns: DataTableColumn<typeof categoryRows[number]>[] = [{ key: "category", label: "Khoản mục", sticky: true, hideable: false }, { key: "categoryCode", label: "Mã khoản mục" }, { key: "activityLabel", label: "Hoạt động" }, { key: "recognitionLabel", label: "Nhóm ghi nhận" }, ...[{ key: "count", label: "Số phiếu" }, { key: "receipt", label: "Thu" }, { key: "payment", label: "Chi" }, { key: "net", label: "Dòng tiền thuần" }].map(field => ({ ...field, align: "right" as const, cell: (row: typeof categoryRows[number]) => field.key === "count" ? formatNumber(row.count) : money(row[field.key as "net"]) }))];
   const invalid = metricFilterError(filter.metrics) || metricFilterError(accountMetrics);
   const handleExport = async (mode: "view" | "full") => {
-    if (unavailable || refreshing || exporting || invalid || !data) return;
+    if (unavailable || exporting || invalid || !data) return;
     setExporting(true);
     try {
-      const titleRows = [...buildReportTitleRows({ title: "TỔNG HỢP THU CHI", range, branchName: branchLabel, tenantName: tenant?.name }), BASIS,
+      const titleRows = [...buildReportTitleRows({ title: "TỔNG HỢP THU CHI", range, branchName: branchLabel, tenantName: tenant?.name }), BASIS, `Dữ liệu cập nhật: ${formatCashTime(data.updatedAt)}`,
         `Tìm: ${filter.search || "Tất cả"}; tài khoản: ${filter.account === "unassigned" ? "Chưa gắn tài khoản" : data.accounts.find(account => account.id === filter.account)?.name ?? (filter.account || "Tất cả")}; khoản mục: ${filter.category || "Tất cả"}; phương thức: ${allRows.find(row => row.paymentMethod === filter.method)?.methodLabel ?? "Tất cả"}`,
         `Hoạt động: ${CASH_FLOW_LABELS[filter.activity as keyof typeof CASH_FLOW_LABELS] ?? "Tất cả"}; ${CASH_REVIEW_LABELS[filter.review]}; ${metricFilterLabel(filter.metrics, CASH_METRICS)}`,
         `Sắp xếp chứng từ: ${CASH_FIELDS.find(field => field.key === sort.id)?.label} ${sort.direction === "asc" ? "tăng dần" : "giảm dần"}; lọc tài khoản: ${accountSearch || "Tất cả"}; ${metricFilterLabel(accountMetrics, ACCOUNT_METRICS)}`];
@@ -192,7 +192,7 @@ export default function LuongTienPage() {
       </section>;
 
   return <div className={`${styles.report} min-w-0 space-y-4 p-3 md:p-5`}>
-    <ReportPageHeader title="Tổng hợp thu chi" preset={preset} range={range} onPresetChange={setPreset} onCustomRangeChange={setCustomRange} viewMode={viewMode} onViewModeChange={setViewMode} onExportView={() => handleExport("view")} onExportFull={() => handleExport("full")} exportDisabled={unavailable || refreshing || exporting || invalid} actions={<button type="button" aria-label="Làm mới dòng tiền" title="Làm mới dòng tiền" disabled={refreshing || pending} onClick={refresh} className="flex size-9 items-center justify-center rounded border bg-background disabled:opacity-40"><Icon name="refresh" size={18} className={refreshing ? "animate-spin" : ""} /></button>} />
+    <ReportPageHeader title="Tổng hợp thu chi" preset={preset} range={range} onPresetChange={setPreset} onCustomRangeChange={setCustomRange} viewMode={viewMode} onViewModeChange={setViewMode} onExportView={() => handleExport("view")} onExportFull={() => handleExport("full")} exportDisabled={unavailable || exporting || invalid} actions={<button type="button" aria-label="Làm mới dòng tiền" title="Làm mới dòng tiền" disabled={refreshing || pending} onClick={refresh} className="flex size-9 items-center justify-center rounded border bg-background disabled:opacity-40"><Icon name="refresh" size={18} className={refreshing ? "animate-spin" : ""} /></button>} />
     {pending ? <p role="status" className="py-12 text-center">Đang tải dòng tiền...</p> : loadError ? <div role="alert" className="border-y border-destructive/40 py-6 text-destructive"><p>{loadError}</p><button type="button" className="mt-2 min-h-10 underline" onClick={refresh}>Tải lại</button></div> : <>
       <Tabs value={currentPanel} onValueChange={value => {
         if (value === "summary" || value === "accounts" || value === "ledger") setPanel(value);
