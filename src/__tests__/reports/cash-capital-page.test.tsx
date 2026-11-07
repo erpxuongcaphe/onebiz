@@ -17,12 +17,21 @@ import Page from "@/app/(main)/phan-tich/luong-tien/page";
 const entry = (id: string, type: "receipt" | "payment", amount: number) => ({ id, code: id, type, amount, date: "2026-10-05", status: "completed", category: "customer_advance", branchId: "b", moneyAccountId: "cash", counterparty: "Khách", note: "Nội dung rõ", createdBy: "user" });
 const register = { accounts: [{ id: "cash", branch_id: "b", branchName: "Branch", code: "TM", name: "Quỹ", kind: "cash", opening_balance: 50, receipts: 300, payments: 25, closing_balance: 325 }], failures: [], unassignedCount: 0 };
 beforeEach(() => {
-  window.history.replaceState(null, "", "/"); state.branch = "b"; state.from = "2026-10-01"; state.to = "2026-10-18"; state.canView = true;
+  window.history.replaceState(null, "", "/?cashLayout=stacked"); state.branch = "b"; state.from = "2026-10-01"; state.to = "2026-10-18"; state.canView = true;
   state.entries.mockReset().mockResolvedValue([entry("PT1", "receipt", 100), entry("PT2", "receipt", 200), entry("PC1", "payment", 25)]);
   state.links.mockReset().mockResolvedValue([]); state.accounts.mockReset().mockResolvedValue(register); state.excel.mockReset().mockResolvedValue(undefined); state.toast.mockReset(); state.fallback.mockReset().mockResolvedValue([]);
 });
 afterEach(cleanup);
 describe("cash capital report workflow", () => {
+  it("opens the separated report by default and keeps vouchers on their own tab", async () => {
+    window.history.replaceState(null, "", "/");
+    render(<Page />);
+    expect(await screen.findByRole("tab", { name: "Phân tích phát sinh" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByText("PT1", { exact: true })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Chứng từ dòng tiền" }));
+    expect(await screen.findByText("PT1", { exact: true })).toBeInTheDocument();
+  });
+
   it("exports the same filtered and sorted cash in separate receipt/payment sheets, with every full column", async () => {
     render(<Page />); await screen.findByText("PT1", { exact: true });
     fireEvent.click(screen.getByRole("button", { name: "Sort amount" }));
@@ -50,9 +59,12 @@ describe("cash capital report workflow", () => {
     expect(sheets.find((sheet: { name: string }) => sheet.name === "Thu chi theo tháng").footer.net).toBe(100);
     expect(sheets.find((sheet: { name: string }) => sheet.name === "Quỹ và tài khoản").rows[0].closing_balance).toBe(325);
   });
-  it.each(["branch", "period"])("never displays or exports old data while changing %s", async change => {
+  it.each(["branch", "expanded period", "narrowed period"])("never displays or exports old data while changing %s", async change => {
     const view = render(<Page />); await screen.findByText("PT1", { exact: true }); state.entries.mockImplementation(() => new Promise(() => {}));
-    if (change === "branch") state.branch = "other"; else state.from = "2026-09-01"; view.rerender(<Page />);
+    if (change === "branch") state.branch = "other";
+    else if (change === "expanded period") state.from = "2026-09-01";
+    else state.to = "2026-10-04";
+    view.rerender(<Page />);
     expect(screen.queryByText("PT1", { exact: true })).not.toBeInTheDocument(); expect(screen.getByRole("button", { name: "Xuất đầy đủ" })).toBeDisabled();
   });
   it("does not turn a failed cash source into a healthy zero", async () => {
