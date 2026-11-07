@@ -20,6 +20,8 @@ export interface PermissionsAPI {
   permissions: Set<string>;
   /** True while permissions are loading */
   isLoading: boolean;
+  sessionMissing?: boolean;
+  accountName?: string;
   loadError?: string | null;
   retry?: () => Promise<void>;
 }
@@ -42,5 +44,5 @@ export function usePermissions(): PermissionsAPI {
   const hasAll = (codes: (PermissionCode | string)[]): boolean =>
     codes.every((c) => hasPermission(c));
 
-  return { hasPermission, hasAny, hasAll, permissions, isLoading, loadError: authDataError, retry: refreshProfile };
+  return { hasPermission, hasAny, hasAll, permissions, isLoading, sessionMissing: user === null, accountName: user?.fullName, loadError: authDataError, retry: refreshProfile };
 }
