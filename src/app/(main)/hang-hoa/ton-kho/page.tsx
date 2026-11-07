@@ -837,6 +837,42 @@ export default function TonKhoPage() {
     }
   };
 
+  const exportFilters = {
+    branchId: branchFilter !== "all" ? branchFilter : undefined,
+    productType: typeFilter !== "all" ? typeFilter : undefined,
+    search: debouncedSearch || undefined,
+    stockFilter,
+    lowStockOnly: lowStockOnly === "low",
+  };
+  const exportKey = JSON.stringify([exportFilters, search, canViewCost]);
+  const activeExportKey = useRef(exportKey);
+  activeExportKey.current = exportKey;
+  const exporting = useRef(false);
+  useEffect(() => {
+    activeExportKey.current = exportKey;
+    return () => { activeExportKey.current = ""; };
+  }, [exportKey]);
+  async function exportInventory(type: "excel" | "csv") {
+    if (exporting.current || loading || search !== debouncedSearch) return;
+    exporting.current = true;
+    const shouldSave = () => activeExportKey.current === exportKey;
+    try {
+      const rows = await getInventoryCatalogRows(exportFilters);
+      if (!shouldSave()) return;
+      const output = inventoryCatalogExport(rows, canViewCost);
+      if (type === "excel") await exportToExcel(output.data, output.columns, "bao-cao-ton-kho", { financialTable: true, shouldSave });
+      else await exportToCsv(output.data, output.columns, "bao-cao-ton-kho", { shouldSave });
+    } catch (error) {
+      if (shouldSave()) toast({
+        title: "Không xuất được tồn kho",
+        description: error instanceof Error ? error.message : "Vui lòng thử lại",
+        variant: "error",
+      });
+    } finally {
+      exporting.current = false;
+    }
+  }
+
   const fetchData = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
     const reqId = ++reqIdRef.current;
     if (!background) setLoading(true);
@@ -1145,29 +1181,8 @@ export default function TonKhoPage() {
             : []),
         ]}
         onExport={{
-          excel: async () => {
-            // Fetch full dataset (no pagination) for export
-            const all = await getInventoryCatalogRows({
-              branchId: branchFilter !== "all" ? branchFilter : undefined,
-              productType: typeFilter !== "all" ? typeFilter : undefined,
-              search: search || undefined,
-              stockFilter,
-              lowStockOnly: lowStockOnly === "low",
-            });
-            const output = inventoryCatalogExport(all, canViewCost);
-            await exportToExcel(output.data, output.columns, "bao-cao-ton-kho", { financialTable: true });
-          },
-          csv: async () => {
-            const all = await getInventoryCatalogRows({
-              branchId: branchFilter !== "all" ? branchFilter : undefined,
-              productType: typeFilter !== "all" ? typeFilter : undefined,
-              search: search || undefined,
-              stockFilter,
-              lowStockOnly: lowStockOnly === "low",
-            });
-            const output = inventoryCatalogExport(all, canViewCost);
-            await exportToCsv(output.data, output.columns, "bao-cao-ton-kho");
-          },
+          excel: () => void exportInventory("excel"),
+          csv: () => void exportInventory("csv"),
         }}
       />
 
@@ -1203,6 +1218,7 @@ export default function TonKhoPage() {
             size="sm"
             className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11"
             onClick={() => setFilterOpen(true)}
+            aria-label="Mở bộ lọc tồn kho"
           >
             <Icon name="filter_alt" size={15} />
             <span className="hidden sm:inline">Bộ lọc</span>

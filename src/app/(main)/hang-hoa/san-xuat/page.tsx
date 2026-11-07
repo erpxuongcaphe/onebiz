@@ -89,11 +89,13 @@ const STATUS_META: Record<
 
 function ProductionOrderDetail({
   orderId,
+  canViewCost,
   onClose,
   onDelete,
   onEdit,
 }: {
   orderId: string;
+  canViewCost: boolean;
   onClose: () => void;
   onDelete?: () => void;
   onEdit?: () => void;
@@ -190,12 +192,12 @@ function ProductionOrderDetail({
                       label: "Số lô",
                       value: order.lotNumber ?? "—",
                     },
-                    {
+                    ...(canViewCost ? [{
                       label: "Tổng giá vốn NVL",
-                      value: order.cogsAmount
+                      value: order.cogsAmount != null
                         ? formatCurrency(order.cogsAmount)
                         : "—",
-                    },
+                    }] : []),
                     {
                       label: "Ghi chú",
                       value: order.notes ?? "—",
@@ -222,7 +224,7 @@ function ProductionOrderDetail({
                           <th className="text-left p-2 font-medium">NVL</th>
                           <th className="text-right p-2 font-medium">Kế hoạch</th>
                           <th className="text-right p-2 font-medium">Thực tế</th>
-                          <th className="text-right p-2 font-medium">Giá vốn/ĐV</th>
+                          {canViewCost && <th className="text-right p-2 font-medium">Giá vốn/ĐV</th>}
                         </tr>
                       </thead>
                       <tbody>
@@ -240,9 +242,9 @@ function ProductionOrderDetail({
                             <td className="p-2 text-right">
                               <StockWithConversion variant="cell" quantity={m.actualQty || 0} unit={m.unit} conversions={units.map.get(m.productId)} />
                             </td>
-                            <td className="p-2 text-right tabular-nums">
+                            {canViewCost && <td className="p-2 text-right tabular-nums">
                               {m.unitCost != null ? formatCurrency(m.unitCost) : "—"}
-                            </td>
+                            </td>}
                           </tr>
                         ))}
                       </tbody>
@@ -269,6 +271,7 @@ export default function SanXuatPage() {
   const { toast } = useToast();
   const { activeBranchId, currentBranch } = useBranchFilter();
   const { hasAny, isLoading: permissionsLoading } = usePermissions();
+  const canViewCost = !permissionsLoading && hasAny(["products.view_cost"]);
   const txPerms = useTxRowPermissions("production");
   const canCorrectCompleted = hasAny(["production.correct_order"]);
   const [data, setData] = useState<ProductionOrder[]>([]);
@@ -428,13 +431,17 @@ export default function SanXuatPage() {
       { header: "ĐVT kho", key: "stockUnit", width: 14 },
       { header: "SL thực tế quy đổi hiện tại", key: "convertedCompletedQty", width: 25 },
       { header: "ĐVT quy đổi", key: "convertedUnit", width: 15 },
-      { header: "Giá vốn", key: "cogsAmount", width: 16 },
+      ...(canViewCost ? [{ header: "Giá vốn", key: "cogsAmount", width: 16 }] : []),
       { header: "Trạng thái", key: "status", width: 18, format: (value: ProductionOrderStatus) => STATUS_META[value]?.label ?? value },
       { header: "Ngày tạo", key: "createdAt", width: 18, format: (value: string) => formatDate(value) },
       { header: "Ghi chú", key: "notes", width: 28 },
     ];
-    if (type === "excel") exportToExcel(exportRows, exportColumns, "lenh-san-xuat"); else exportToCsv(exportRows, exportColumns, "lenh-san-xuat");
+    if (type === "excel") await exportToExcel(exportRows, exportColumns, "lenh-san-xuat");
+    else await exportToCsv(exportRows, exportColumns, "lenh-san-xuat");
   };
+  function showExportError(error: unknown) {
+    toast({ title: "Không xuất được lệnh sản xuất", description: error instanceof Error ? error.message : undefined, variant: "error" });
+  }
 
   const today = cashBookDate(new Date().toISOString());
   const isOverdue = (order: ProductionOrder) => !["completed", "cancelled"].includes(order.status) && !!order.plannedEnd && (expiryInputParts(order.plannedEnd).time ? isExpiryPast(order.plannedEnd) : cashBookDate(order.plannedEnd) < today);
@@ -561,7 +568,10 @@ export default function SanXuatPage() {
           searchFields={SEARCH_FIELDS}
           searchField={searchField}
           onSearchFieldChange={setSearchField}
-          onExport={{ excel: () => handleExport("excel"), csv: () => handleExport("csv") }}
+          onExport={{
+            excel: () => void handleExport("excel").catch(showExportError),
+            csv: () => void handleExport("csv").catch(showExportError),
+          }}
           density="compact"
           actions={[
             {
@@ -591,7 +601,7 @@ export default function SanXuatPage() {
               <ListMetric label="Tổng lệnh SX" value={formatNumber(total)} hint="Toàn bộ kết quả lọc" icon={<Icon name="factory" size={15} />} />
               <ListMetric label="Đang sản xuất" value={formatNumber(summary.inProgressCount)} tone={summary.inProgressCount > 0 ? "primary" : "default"} icon={<Icon name="precision_manufacturing" size={15} />} />
               <ListMetric label="Hoàn thành hôm nay" value={formatNumber(summary.completedTodayCount)} hint={`${summary.cancelledCount} lệnh đã hủy`} icon={<Icon name="check_circle" size={15} />} />
-              <ListMetric label="Tổng giá vốn SX" value={formatCurrency(summary.totalCogs)} hint="Toàn bộ kết quả lọc" icon={<Icon name="payments" size={15} />} />
+              {canViewCost && <ListMetric label="Tổng giá vốn SX" value={formatCurrency(summary.totalCogs)} hint="Toàn bộ kết quả lọc" icon={<Icon name="payments" size={15} />} />}
             </>
           }
           tools={
@@ -640,7 +650,7 @@ export default function SanXuatPage() {
               <div><h2 className="font-semibold">Tiến độ sản xuất</h2><p className="text-xs text-muted-foreground">Toàn bộ lệnh theo bộ lọc. Chọn thẻ để xem chi tiết; hoàn thành cần xác nhận lượng thực dùng và thực nhận.</p></div>
               <select aria-label="Sắp xếp lệnh trên bảng" className="h-9 rounded-md border bg-background px-2 text-sm" value={boardSort} onChange={event => setBoardSort(event.target.value)}><option value="due">Ưu tiên quá hạn / đến hạn</option><option value="oldest">Cũ nhất trước</option><option value="newest">Mới nhất trước</option></select>
             </div>
-            {loading ? <p role="status" className="py-8 text-center text-sm text-muted-foreground">Đang tải bảng tiến độ…</p> : boardOrder ? <ProductionOrderDetail orderId={boardOrder.id} onClose={() => setBoardOrderId(null)} onEdit={boardOrder.status !== "cancelled" && (boardOrder.status === "completed" ? canCorrectCompleted : txPerms.canEdit) ? () => setCorrectingItem({order:boardOrder,cancel:false}) : undefined} onDelete={boardOrder.status !== "cancelled" && txPerms.canCancel ? () => boardOrder.status === "completed" ? setCorrectingItem({order:boardOrder,cancel:true}) : setCancellingItem(boardOrder) : undefined} /> : <KanbanBoard
+            {loading ? <p role="status" className="py-8 text-center text-sm text-muted-foreground">Đang tải bảng tiến độ…</p> : boardOrder ? <ProductionOrderDetail orderId={boardOrder.id} canViewCost={canViewCost} onClose={() => setBoardOrderId(null)} onEdit={boardOrder.status !== "cancelled" && (boardOrder.status === "completed" ? canCorrectCompleted : txPerms.canEdit) ? () => setCorrectingItem({order:boardOrder,cancel:false}) : undefined} onDelete={boardOrder.status !== "cancelled" && txPerms.canCancel ? () => boardOrder.status === "completed" ? setCorrectingItem({order:boardOrder,cancel:true}) : setCancellingItem(boardOrder) : undefined} /> : <KanbanBoard
             className="h-[calc(100dvh-22rem)]"
             columns={kanbanColumns}
               getItemId={(o) => o.id}
@@ -710,6 +720,7 @@ export default function SanXuatPage() {
             onExpandedRowChange={setExpandedRow}
             renderDetail={(item, onClose) => (
               <ProductionOrderDetail
+                canViewCost={canViewCost}
                 orderId={item.id}
                 onClose={onClose}
                 onEdit={item.status !== "cancelled" && (item.status === "completed" ? canCorrectCompleted : txPerms.canEdit) ? ()=>setCorrectingItem({order:item,cancel:false}):undefined}

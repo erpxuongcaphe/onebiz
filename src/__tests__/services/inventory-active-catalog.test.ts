@@ -39,15 +39,20 @@ describe("inventory management active catalog", () => {
     expect(result.rows[0].costPrice).toBeUndefined();
   });
   it("exports every row using the same search and filters as the table", async () => {
-    const first = Array.from({ length: 1000 }, (_, i) => ({ ...row, id: String(i) }));
-    api.rpc.mockResolvedValueOnce({ data: payload(first, 1001), error: null })
-      .mockResolvedValueOnce({ data: payload([{ ...row, id: "last" }], 1001), error: null });
+    const first = Array.from({ length: 200 }, (_, i) => ({ ...row, id: String(i) }));
+    api.rpc.mockResolvedValueOnce({ data: payload(first, 201), error: null })
+      .mockResolvedValueOnce({ data: payload([{ ...row, id: "last" }], 201), error: null });
     const rows = await getInventoryCatalogRows({ branchId: "warehouse", search: "coldbrew", stockFilter: "zero", lowStockOnly: true });
-    expect(rows).toHaveLength(1001);
+    expect(rows).toHaveLength(201);
     expect(rows.at(-1)?.id).toBe("last");
     for (const [, request] of api.rpc.mock.calls) expect(request).toMatchObject({ p_branch_id: "warehouse",
-      p_search: "coldbrew", p_stock_filter: "zero", p_low_stock_only: true, p_limit: 1000 });
-    expect(api.rpc.mock.calls.map(([, request]) => request.p_offset)).toEqual([0, 1000]);
+      p_search: "coldbrew", p_stock_filter: "zero", p_low_stock_only: true, p_limit: 200 });
+    expect(api.rpc.mock.calls.map(([, request]) => request.p_offset)).toEqual([0, 200]);
+  });
+  it("rejects an incomplete export instead of returning the available rows", async () => {
+    api.rpc.mockResolvedValueOnce({ data: payload([row], 2), error: null })
+      .mockResolvedValueOnce({ data: payload([], 2), error: null });
+    await expect(getInventoryCatalogRows({ branchId: "warehouse" })).rejects.toThrow("Chưa tải đủ");
   });
   it("reports a missing backend or denied scope instead of silently hiding active products", async () => {
     api.rpc.mockResolvedValue({ data: null, error: { message: "INVENTORY_CATALOG_BRANCH_DENIED" } });

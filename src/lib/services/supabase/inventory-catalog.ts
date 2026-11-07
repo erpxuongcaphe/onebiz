@@ -1,5 +1,6 @@
 import type { BranchStockRow } from "./branch-stock";
 import { getClient, handleError } from "./base";
+import { readHistoryPages } from "./read-history-pages";
 
 export type InventoryStockFilter = "all" | "positive" | "zero" | "negative";
 export interface InventoryCatalogFilters {
@@ -72,12 +73,8 @@ export async function getInventoryCatalogPage(
 
 /** Exports use the exact same filters, ordering and logical rows as the table. */
 export async function getInventoryCatalogRows(filters: InventoryCatalogFilters): Promise<BranchStockRow[]> {
-  const rows: BranchStockRow[] = [];
-  const limit = 1000;
-  for (let offset = 0; ; offset += limit) {
+  return readHistoryPages<BranchStockRow>(async (offset, limit) => {
     const page = await getInventoryCatalogPage({ ...filters, offset, limit });
-    rows.push(...page.rows);
-    if (page.rows.length < limit || offset + page.rows.length >= page.total) break;
-  }
-  return rows;
+    return { data: page.rows, count: page.total, error: null };
+  });
 }

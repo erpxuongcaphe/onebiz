@@ -44,9 +44,9 @@ describe("mobile list detail", () => {
     const dialog = await screen.findByRole("dialog", { name: "PN001" });
     const body = within(dialog).getByRole("region", { name: "Nội dung chi tiết" });
     expect(body).toHaveTextContent("Phiếu PN001");
-    expect(body).not.toContainElement(within(dialog).getByRole("button", { name: "Đóng", exact: true }));
+    expect(body).not.toContainElement(within(dialog).getByRole("button", { name: "Đóng" }));
     expect(mounted).toHaveBeenCalledTimes(1);
-    fireEvent.click(within(dialog).getByRole("button", { name: "Đóng", exact: true }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Đóng" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(list.scrollTop).toBe(180);
     await waitFor(() => expect(row).toHaveFocus());
