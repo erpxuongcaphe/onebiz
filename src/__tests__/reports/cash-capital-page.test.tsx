@@ -85,6 +85,16 @@ describe("cash capital report workflow", () => {
     state.excel.mockRejectedValueOnce(new Error("Download failed")); await act(async () => screen.getByRole("button", { name: "Xuất đầy đủ" }).click());
     expect(state.toast).toHaveBeenCalledWith(expect.objectContaining({ variant: "error" })); expect(state.toast).not.toHaveBeenCalledWith(expect.objectContaining({ variant: "success" }));
   });
+  it("exports the displayed snapshot during a same-scope background refresh", async () => {
+    render(<Page />); await screen.findByText("PT1", { exact: true });
+    state.entries.mockImplementationOnce(() => new Promise(() => {}));
+    await act(async () => state.refresh?.());
+    expect(screen.getByRole("button", { name: "Xuất đầy đủ" })).toBeEnabled();
+    await act(async () => screen.getByRole("button", { name: "Xuất đầy đủ" }).click());
+    const sheets = state.excel.mock.calls[0][0].sheets;
+    expect(sheets.find((sheet: { name: string }) => sheet.name === "Phiếu thu").rows.map((row: { code: string }) => row.code)).toEqual(["PT1", "PT2"]);
+    expect(sheets[0].titleRows.some((row: string) => row.startsWith("Dữ liệu cập nhật: "))).toBe(true);
+  });
   it("exports only the selected analysis in view mode and all analyses in full mode", async () => {
     render(<Page />); await screen.findByText("PT1", { exact: true }); fireEvent.click(screen.getByRole("tab", { name: "Khoản mục" }));
     await act(async () => screen.getByRole("button", { name: "Xuất hiện tại" }).click());
