@@ -186,7 +186,7 @@ export default function BusinessOverview() {
       rows: cashError ? [{ metric: "Chưa tải được thu chi", value: null }] : [
         { metric: "Tổng thu", value: cashTotals.receipts },
         { metric: "Tổng chi", value: cashTotals.payments },
-        { metric: "Thu − chi (không phải số dư)", value: cashTotals.net },
+        { metric: "Dòng tiền thuần (không phải số dư quỹ)", value: cashTotals.net },
       ],
     }] : [])].map(sheet => sheet === debtSheet ? sheet : ({ ...sheet, titleRows: [...(sheet.titleRows ?? []), comparisonLabel] }));
   }, [canViewProfit, canViewCash, canViewDebt, kpis, activeBranchId, branchError, visibleBranches, range, branchLabel, cashRows, cashError, debtWorkspace, debtError, comparisonLabel]);

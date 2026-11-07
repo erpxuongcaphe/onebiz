@@ -219,6 +219,11 @@ export default function BaoCaoTaiChinhPage() {
   const [cogsCompleteness, setCogsCompleteness] = useState<"all" | "complete" | "missing">("all");
   const [cogsSort, setCogsSort] = useState<CogsSort>("totalCost");
   const [cogsDirection, setCogsDirection] = useState<SortDirection>("desc");
+  const exportFiltersRef = useRef<object | null>(null);
+  useLayoutEffect(() => {
+    exportFiltersRef.current = {};
+    return () => { exportFiltersRef.current = null; };
+  }, [branchFilter, branchSort, cogsSearch, cogsCompleteness, cogsSort, cogsDirection]);
   const [cogsPage, setCogsPage] = useState(0);
   const visibleCogs = useMemo(() => cogsReportRows(cogsItems, cogsSearch, cogsCompleteness, cogsSort, cogsDirection), [cogsItems, cogsSearch, cogsCompleteness, cogsSort, cogsDirection]);
   const cogsPageCount = Math.max(1, Math.ceil(visibleCogs.length / 50));
@@ -371,6 +376,7 @@ export default function BaoCaoTaiChinhPage() {
       return;
     }
     const exportRequestId = requestIdRef.current;
+    const exportFilters = exportFiltersRef.current;
     setExporting(true);
     try {
       const branchName =
@@ -437,7 +443,7 @@ export default function BaoCaoTaiChinhPage() {
         range,
         branchName,
         sheets: financialExportSheets(viewSheets, titleRows),
-        shouldSave: () => scopeRef.current === scopeKey && requestIdRef.current === exportRequestId,
+        shouldSave: () => scopeRef.current === scopeKey && requestIdRef.current === exportRequestId && exportFiltersRef.current === exportFilters,
       });
       toast({ title: "Đã xuất báo cáo P&L", variant: "success" });
     } catch (err) {
@@ -463,6 +469,8 @@ export default function BaoCaoTaiChinhPage() {
 
     setExporting(true);
     const exportRequestId = requestIdRef.current;
+    const exportFilters = exportFiltersRef.current;
+    const shouldSave = () => scopeRef.current === scopeKey && requestIdRef.current === exportRequestId && exportFiltersRef.current === exportFilters;
     try {
       const exportDetails = await getFinancialAnalysisDetails(
         activeBranchId,
@@ -470,7 +478,7 @@ export default function BaoCaoTaiChinhPage() {
         !activeBranchId && ceoView,
         50_000,
       );
-      if (scopeRef.current !== scopeKey || requestIdRef.current !== exportRequestId) throw new Error("Báo cáo đã cập nhật. Vui lòng xuất lại.");
+      if (!shouldSave()) throw new Error("Báo cáo đã cập nhật. Vui lòng xuất lại.");
       if (exportDetails.cogsItems.length < exportDetails.cogsTotalCount) {
         throw new Error("Chưa tải đủ toàn bộ sản phẩm để xuất file.");
       }
@@ -603,7 +611,7 @@ export default function BaoCaoTaiChinhPage() {
           costBasisNote,
         ],
         sheets: financialExportSheets(sheets, titleRows),
-        shouldSave: () => scopeRef.current === scopeKey && requestIdRef.current === exportRequestId,
+        shouldSave,
       });
 
       toast({

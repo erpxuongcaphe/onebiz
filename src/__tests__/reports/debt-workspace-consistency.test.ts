@@ -39,8 +39,10 @@ describe("branch-scoped debt workspace", () => {
     expect(debtPage).toContain("workspace?.totals.customerDebtTotal");
     expect(debtPage).toContain("workspace?.receivables");
     expect(debtPage).toContain("workspace?.payables");
-    expect(debtPage).toContain("exportToCsv(receivableDebtors");
-    expect(debtPage).toContain("exportToCsv(payableDebtors");
+    expect(debtPage).toContain("downloadCurrentDebt(receivableDebtors");
+    expect(debtPage).toContain("downloadCurrentDebt(payableDebtors");
+    expect(debtPage).toContain('label: "Xuất theo mẫu công nợ đầu kỳ"');
+    expect(debtPage).not.toContain("exportToCsv");
     expect(debtPage).not.toContain("getCustomers(");
     expect(debtPage).not.toContain("getSuppliers(");
     expect(debtPage).not.toContain("getDebtTotals(");

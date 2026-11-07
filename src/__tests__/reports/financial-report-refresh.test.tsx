@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 
@@ -126,6 +126,21 @@ describe("financial report scope and refresh", () => {
     view.rerender(<FinancialReport />);
     expect(file.shouldSave()).toBe(false);
     view.unmount();
+    expect(file.shouldSave()).toBe(false);
+  });
+
+  it("invalidates a prepared workbook when the visible cost filter changes", async () => {
+    state.details.mockResolvedValue({
+      cogsItems: [{ productId: "fixture-item", productName: "Cà phê", unit: "Ly", qtySold: 1, totalCost: 5 }],
+      cogsTotalCount: 1, marginTrend: [], reconciliation: { invoiceCount: 0, returnCount: 0 },
+      granularity: "day", turnover: {}, dso: {},
+    });
+    render(<FinancialReport />);
+    const search = await screen.findByRole("textbox", { name: "Tìm mặt hàng giá vốn" });
+    await act(async () => screen.getByRole("button", { name: "Xuất bảng" }).click());
+    const file = state.exportExcel.mock.calls[0][0];
+    expect(file.shouldSave()).toBe(true);
+    fireEvent.change(search, { target: { value: "trà" } });
     expect(file.shouldSave()).toBe(false);
   });
 
