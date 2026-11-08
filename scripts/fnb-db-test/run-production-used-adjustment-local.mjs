@@ -16,6 +16,7 @@ const setup=`
  await db.exec(fs.readFileSync('supabase/migrations/202610230002_production_correction_lot_scope.sql','utf8'));
  await db.exec(fs.readFileSync('supabase/migrations/202610230003_production_used_adjustment.sql','utf8'));
  await db.exec(fs.readFileSync('supabase/migrations/202610230003_production_used_adjustment.sql','utf8'));
+ await db.exec(fs.readFileSync('supabase/migrations/20261108114733_production_adjustment_error_details.sql','utf8'));
 `;
 const checks=`
 {
@@ -107,9 +108,24 @@ const checks=`
  await assert.rejects(()=>preview(900,input(9999)),/PRODUCTION_CORRECTION_STOCK_REQUIRED/);
  await assert.rejects(()=>preview(900,JSON.stringify([{productId:raw,quantity:1,unit:'G',expectedFactor:1}])),/UOM_CONVERSION_CHANGED/);
  await db.exec(\`update product_lots set current_qty=current_qty-1 where id='\${own}'\`);
- await assert.rejects(()=>preview(900,input(.21)),/PRODUCTION_CORRECTION_LOT_RECONCILIATION_REQUIRED/);
+ await assert.rejects(()=>preview(900,input(.21)), error => {
+  assert.match(error.message,/PRODUCTION_CORRECTION_LOT_RECONCILIATION_REQUIRED/);
+  const detail=JSON.parse(error.detail);
+  assert.equal(detail.kind,'allocation');
+  assert.notEqual(detail.used,detail.allocated);
+  return true;
+ });
  // New correction-to-zero must still permit cancellation of an unused batch.
  await db.exec(\`update product_lots set current_qty=current_qty+1 where id='\${own}'\`);
+ await db.query('update branch_stock set quantity=quantity-5 where product_id=$1',[prepared]);
+ await assert.rejects(()=>preview(), error => {
+  assert.match(error.message,/PRODUCTION_CORRECTION_LOT_RECONCILIATION_REQUIRED/);
+  const detail=JSON.parse(error.detail);
+  assert.equal(detail.kind,'stock');
+  assert.equal(detail.lots-detail.stock,5);
+  return true;
+ });
+ await db.query('update branch_stock set quantity=quantity+5 where product_id=$1',[prepared]);
  const zeroStamp=String((await db.query('select updated_at::text value from production_orders where id=$1',[nested])).rows[0].value);
  const zeroInputs=JSON.stringify([{productId:prepared,quantity:40,unit:'G',expectedFactor:1},{productId:raw,quantity:0,unit:'Tui',expectedFactor:1}]);
  const zeroPlan=(await db.query('select preview_production_used_adjustment($1,$2,90,$3,$4) result',[nested,zeroStamp,zeroInputs,'Wrong ingredient'])).rows[0].result;
