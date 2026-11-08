@@ -79,7 +79,7 @@ export function CorrectProductionOrderDialog({ order, cancel = false, onClose, o
       <DialogHeader className="shrink-0"><DialogTitle>{cancel?"Hủy lệnh":completedAdjustment?"Điều chỉnh mẻ":"Sửa lệnh"} {order.code}</DialogTitle>
         <DialogDescription>{cancel?"Hoàn lại nguyên liệu, thu hồi thành phẩm và giữ lịch sử chứng từ.":completedAdjustment?"Áp dụng cả mẻ đã sử dụng. Điều chỉnh phần chênh lệch kho và giá vốn, giữ nguyên bill đã bán.":"Nhập lượng thực dùng và thành phẩm thực nhận. Kho cập nhật theo phần chênh lệch."}</DialogDescription></DialogHeader>
       <div className="min-h-0 space-y-4 overflow-y-auto py-2">
-        {(error||units.error)&&<p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error||units.error}</p>}
+        {(error||units.error)&&<p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive whitespace-pre-line">{error||units.error}</p>}
         {loading?<p>Đang tải lệnh…</p>:!detail?<Button variant="outline" onClick={()=>setReload(v=>v+1)}>Thử lại</Button>:preview?<>
           <ProductionAdjustmentSummary preview={preview} />
           <p className="rounded-lg border p-3 text-sm"><strong>Lý do:</strong> {previewInput.current?.reason}</p>

@@ -767,7 +767,7 @@ const PRODUCTION_ADJUSTMENT_ERRORS: Record<string,string> = {
   PRODUCTION_ADJUSTMENT_BELOW_USED: "Lượng thành phẩm đúng nhỏ hơn lượng đã dùng của mẻ. Cần đối soát mẻ và các lần xuất; chưa điều chỉnh kho.",
   PRODUCTION_ADJUSTMENT_PREVIEW_STALE: "Kho, lô hoặc giá vốn vừa thay đổi. Bấm Xem trước lại để kiểm tra số mới trước khi xác nhận.",
   PRODUCTION_CORRECTION_STALE: "Mẻ vừa được cập nhật. Đóng rồi mở lại để lấy số mới; chưa ghi điều chỉnh này.",
-  PRODUCTION_CORRECTION_LOT_RECONCILIATION_REQUIRED: "Sổ lô và lượng đã xuất chưa khớp tồn kho. Cần đối soát trước khi điều chỉnh; kho chưa thay đổi.",
+  PRODUCTION_CORRECTION_LOT_RECONCILIATION_REQUIRED: "Chưa xem trước được vì dữ liệu lô và tồn kho chưa khớp. Nhờ người phụ trách kho đối chiếu lô và sổ kho của mặt hàng trước khi thử lại. Kho chưa thay đổi.",
   PRODUCTION_CORRECTION_STOCK_REQUIRED: "Không đủ tồn để điều chỉnh lượng thành phẩm hoặc nguyên liệu. Chưa thay đổi kho.",
   PRODUCTION_CORRECTION_COST_REQUIRED: "Tồn và sổ giá vốn chưa đủ căn cứ hoặc chưa khớp. Cần đối soát trước khi điều chỉnh.",
   PRODUCTION_CORRECTION_PERMISSION_REQUIRED: "Tài khoản cần quyền Xem sản xuất và Sửa/điều chỉnh mẻ đã hoàn thành tại chi nhánh này.",
@@ -779,16 +779,45 @@ const PRODUCTION_ADJUSTMENT_ERRORS: Record<string,string> = {
   UOM_CONVERSION_CHANGED: "Quy đổi đơn vị vừa thay đổi. Mở lại mẻ để kiểm tra số mới.",
   PRODUCTION_CORRECTION_QUANTITY_INVALID: "Số lượng chưa hợp lệ. Thành phẩm phải lớn hơn 0; nguyên liệu không được âm.",
 };
+function productionAdjustmentError(error: {code: string; message: string; details?: string | null}): Error {
+  if (["PGRST202", "42883"].includes(error.code)) {
+    return new Error("Chức năng điều chỉnh mẻ chưa sẵn sàng trên máy chủ. Chưa thay đổi kho. Thử lại sau khi phát hành hoàn tất.");
+  }
+  if (["55P03", "40P01", "57014"].includes(error.code)) {
+    return new Error("Kho đang có thao tác khác. Đợi vài giây rồi thử lại. Kho chưa thay đổi.");
+  }
+  const message = PRODUCTION_ADJUSTMENT_ERRORS[error.message] ?? error.message;
+  if (error.message !== "PRODUCTION_CORRECTION_LOT_RECONCILIATION_REQUIRED" || !error.details) return new Error(message);
+
+  try {
+    const detail = JSON.parse(error.details);
+    if (!detail || typeof detail.unit !== "string") return new Error(message);
+    const unit = detail.unit.toLowerCase() === "g" ? "g" : detail.unit;
+    const amount = (value: unknown) => typeof value === "number" && Number.isFinite(value)
+      ? `${new Intl.NumberFormat("vi-VN", {maximumFractionDigits: 4}).format(value)} ${unit}` : "chưa ghi nhận";
+    if (detail.kind === "stock" && typeof detail.product === "string") {
+      const difference = typeof detail.stock === "number" && typeof detail.lots === "number"
+        ? ` Lệch ${amount(Math.abs(detail.stock - detail.lots))}.` : "";
+      return new Error(`${detail.product} tại chi nhánh này đang lệch sổ kho và sổ lô.\nTồn kho ${amount(detail.stock)} · Cộng các lô ${amount(detail.lots)}.${difference}\nNhờ người phụ trách kho đối chiếu các lượt nhập, xuất của mặt hàng rồi mở lại mẻ. Kho chưa thay đổi.`);
+    }
+    if (detail.kind === "allocation" && typeof detail.lot === "string") {
+      return new Error(`Lô ${detail.lot} có số đã dùng và số xuất theo chứng từ chưa khớp.\nĐã dùng theo lô ${amount(detail.used)} · Đã xuất theo chứng từ ${amount(detail.allocated)}.\nNhờ người phụ trách kho kiểm tra các lượt xuất của lô. Kho chưa thay đổi.`);
+    }
+    if (detail.kind === "batch_lot") {
+      const batch = typeof detail.lot === "string" ? `Lô ${detail.lot}` : "Lô thành phẩm";
+      return new Error(`${batch} chưa khớp với hồ sơ mẻ.\nMẻ đã ghi ${amount(detail.completed)} · Lô nhập ${amount(detail.initial)} · Còn lại ${amount(detail.remaining)}.\nNhờ người phụ trách kho kiểm tra lô của mẻ. Kho chưa thay đổi.`);
+    }
+  } catch {
+    // Older servers may provide unstructured error details.
+  }
+  return new Error(message);
+}
 export async function previewProductionUsedAdjustment(input: ProductionAdjustmentInput): Promise<ProductionAdjustmentPreview> {
   const {data,error} = await (supabase.rpc as any)("preview_production_used_adjustment", {
     p_order_id:input.orderId,p_expected_updated_at:input.expectedUpdatedAt,p_output_quantity:input.outputQuantity,
     p_materials:input.materials,p_reason:input.reason.trim(),
   });
-  if(error) {
-    if (["PGRST202","42883"].includes(error.code)) throw new Error("Chức năng điều chỉnh mẻ chưa sẵn sàng trên máy chủ. Chưa thay đổi kho; thử lại sau khi phát hành hoàn tất.");
-    if (["55P03","40P01","57014"].includes(error.code)) throw new Error("Kho đang có thao tác khác. Đợi vài giây rồi thử lại; hệ thống không ghi điều chỉnh dở dang.");
-    throw new Error(PRODUCTION_ADJUSTMENT_ERRORS[error.message] ?? error.message);
-  }
+  if (error) throw productionAdjustmentError(error);
   if(!data?.token) throw new Error("Chưa nhận được bản xem trước hợp lệ. Chưa điều chỉnh kho.");
   return data as ProductionAdjustmentPreview;
 }
@@ -797,11 +826,7 @@ export async function applyProductionUsedAdjustment(input: ProductionAdjustmentI
     p_order_id:input.orderId,p_expected_updated_at:input.expectedUpdatedAt,p_output_quantity:input.outputQuantity,
     p_materials:input.materials,p_reason:input.reason.trim(),p_request_id:input.requestId,p_preview_token:input.previewToken,
   });
-  if(error) {
-    if (["PGRST202","42883"].includes(error.code)) throw new Error("Chức năng điều chỉnh mẻ chưa sẵn sàng trên máy chủ. Chưa thay đổi kho; thử lại sau khi phát hành hoàn tất.");
-    if (["55P03","40P01","57014"].includes(error.code)) throw new Error("Kho đang có thao tác khác. Đợi vài giây rồi thử lại; hệ thống không ghi điều chỉnh dở dang.");
-    throw new Error(PRODUCTION_ADJUSTMENT_ERRORS[error.message] ?? error.message);
-  }
+  if (error) throw productionAdjustmentError(error);
   if (!data?.id) throw new Error("Chưa xác nhận được kết quả lưu. Thử lại cùng lần xác nhận để hệ thống kiểm tra, không tạo điều chỉnh mới.");
   return data as {id:string;orderId:string;preview:ProductionAdjustmentPreview};
 }
