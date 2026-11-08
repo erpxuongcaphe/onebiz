@@ -73,6 +73,11 @@ export const PERMISSIONS = {
 
   // Finance
   FINANCE_VIEW_CASH_BOOK: "finance.view_cash_book",
+  FINANCE_VIEW_CASH_JOURNAL_COMPANY: "finance.view_cash_journal_company",
+  FINANCE_VIEW_CASH_JOURNAL_SELF_SPEND: "finance.view_cash_journal_self_spend",
+  FINANCE_EXPORT_CASH_JOURNAL: "finance.export_cash_journal",
+  FINANCE_SUBMIT_CASH_SPEND_REVIEW: "finance.submit_cash_spend_review",
+  FINANCE_APPROVE_CASH_SPEND_REVIEW: "finance.approve_cash_spend_review",
   FINANCE_CREATE_TRANSACTION: "finance.create_transaction",
   FINANCE_VIEW_REPORTS: "finance.view_reports",
   FINANCE_VOID_TRANSACTION: "finance.void_transaction",
@@ -267,6 +272,11 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     group: "Tài chính",
     permissions: [
       { code: PERMISSIONS.FINANCE_VIEW_CASH_BOOK, label: "Xem sổ quỹ" },
+      { code: PERMISSIONS.FINANCE_VIEW_CASH_JOURNAL_COMPANY, label: "Xem nhật ký thu chi toàn công ty" },
+      { code: PERMISSIONS.FINANCE_VIEW_CASH_JOURNAL_SELF_SPEND, label: "Xem khoản chi nhánh tự chi" },
+      { code: PERMISSIONS.FINANCE_EXPORT_CASH_JOURNAL, label: "Xuất Excel nhật ký thu chi" },
+      { code: PERMISSIONS.FINANCE_SUBMIT_CASH_SPEND_REVIEW, label: "Gửi xác nhận đơn vị thực chi" },
+      { code: PERMISSIONS.FINANCE_APPROVE_CASH_SPEND_REVIEW, label: "Duyệt đơn vị thực chi" },
       { code: PERMISSIONS.FINANCE_CREATE_TRANSACTION, label: "Tạo phiếu thu/chi" },
       { code: PERMISSIONS.FINANCE_VIEW_REPORTS, label: "Xem báo cáo" },
       { code: PERMISSIONS.FINANCE_VOID_TRANSACTION, label: "Hủy giao dịch" },

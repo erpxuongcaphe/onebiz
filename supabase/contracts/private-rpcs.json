@@ -253,6 +253,46 @@
           { "name": "p_for_export", "optional": true }
         ] }
       ]
+    },
+    {
+      "migration": "b1_d4_cash_journal_and_spend_review",
+      "migrationSha256": "f6f657ecc478424ca38eb4b62e05ee8bb38d7dfb1220d554fb5a2079f2f25f03",
+      "functions": [
+        { "name": "cash_journal_list_v1", "params": [
+          { "name": "p_from", "optional": false },
+          { "name": "p_to", "optional": false },
+          { "name": "p_branch", "optional": true },
+          { "name": "p_kind", "optional": true },
+          { "name": "p_account", "optional": true },
+          { "name": "p_search", "optional": true },
+          { "name": "p_sort", "optional": true },
+          { "name": "p_desc", "optional": true },
+          { "name": "p_page", "optional": true },
+          { "name": "p_export", "optional": true },
+          { "name": "p_category", "optional": true }
+        ] },
+        { "name": "cash_spend_review_read", "params": [
+          { "name": "p_cash", "optional": true }
+        ] },
+        { "name": "cash_spend_review_submit", "params": [
+          { "name": "p_cash", "optional": false },
+          { "name": "p_payer", "optional": false },
+          { "name": "p_reviewer", "optional": false },
+          { "name": "p_evidence", "optional": false },
+          { "name": "p_file_name", "optional": false },
+          { "name": "p_file_type", "optional": false },
+          { "name": "p_file", "optional": false }
+        ] },
+        { "name": "cash_spend_review_decide", "params": [
+          { "name": "p_review", "optional": false },
+          { "name": "p_decision", "optional": false },
+          { "name": "p_note", "optional": true },
+          { "name": "p_evidence_checked", "optional": true }
+        ] },
+        { "name": "cash_spend_review_file", "params": [
+          { "name": "p_review", "optional": false }
+        ] }
+      ]
     }
   ]
 }
