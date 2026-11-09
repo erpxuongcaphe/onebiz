@@ -1,21 +1,51 @@
 -- Scope partial deliveries to branch requests linked to a warehouse sales order.
 begin;
 
+create table public.warehouse_order_quantity_adjustments (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid not null references public.invoices(id),
+  draft_id uuid not null,
+  product_id uuid not null,
+  variant_id uuid,
+  unit_key text not null,
+  quantity numeric not null check (quantity > 0),
+  confirmed_by uuid not null,
+  confirmed_at timestamptz not null default now()
+);
+create index warehouse_order_quantity_adjustments_order_idx
+  on public.warehouse_order_quantity_adjustments(order_id);
+alter table public.warehouse_order_quantity_adjustments enable row level security;
+revoke all on public.warehouse_order_quantity_adjustments from public, anon, authenticated;
+grant select on public.warehouse_order_quantity_adjustments to authenticated;
+create policy warehouse_order_adjustments_read on public.warehouse_order_quantity_adjustments
+  for select to authenticated using (exists (
+    select 1 from public.invoices i where i.id=order_id
+      and i.tenant_id=public.get_user_tenant_id()
+      and public.user_has_branch_access(auth.uid(),i.branch_id)
+      and public.user_has_permission(auth.uid(),'orders.view')
+  ));
+
 create function public.warehouse_order_open_quantities(p_order_id uuid, p_exclude_invoice_id uuid default null)
 returns table(product_id uuid, variant_id uuid, unit_key text, remaining numeric)
 language sql stable set search_path = '' as $$
-  select ii.product_id, ii.variant_id, lower(btrim(ii.unit)),
-         sum(case when i.id = p_order_id then ii.quantity else -ii.quantity end)
-  from public.invoices parent
-  join public.invoices i on i.tenant_id = parent.tenant_id and i.branch_id = parent.branch_id
-    and (i.id = parent.id or (
-      i.source_order_id = parent.id and i.source = 'internal' and i.status = 'completed'
-      and i.deleted_at is null and i.voided_at is null and i.cancelled_at is null
-      and i.id is distinct from p_exclude_invoice_id
-    ))
-  join public.invoice_items ii on ii.invoice_id = i.id
-  where parent.id = p_order_id
-  group by ii.product_id, ii.variant_id, lower(btrim(ii.unit));
+  select q.product_id,q.variant_id,q.unit_key,sum(q.quantity)
+  from (
+    select ii.product_id,ii.variant_id,lower(btrim(ii.unit)) as unit_key,
+           case when i.id=p_order_id then ii.quantity else -ii.quantity end as quantity
+    from public.invoices parent
+    join public.invoices i on i.tenant_id=parent.tenant_id and i.branch_id=parent.branch_id
+      and (i.id=parent.id or (
+        i.source_order_id=parent.id and i.source='internal' and i.status='completed'
+        and i.deleted_at is null and i.voided_at is null and i.cancelled_at is null
+        and i.id is distinct from p_exclude_invoice_id
+      ))
+    join public.invoice_items ii on ii.invoice_id=i.id
+    where parent.id=p_order_id
+    union all
+    select a.product_id,a.variant_id,a.unit_key,a.quantity
+    from public.warehouse_order_quantity_adjustments a where a.order_id=p_order_id
+  ) q
+  group by q.product_id,q.variant_id,q.unit_key;
 $$;
 revoke all on function public.warehouse_order_open_quantities(uuid, uuid) from public, anon, authenticated;
 
@@ -29,16 +59,17 @@ declare
 begin
   -- Allocate remaining stock units across repeated lines in a stable order.
   with lines as (
-    select ii.*, greatest(0, least(ii.quantity, coalesce(q.remaining,0) -
-      coalesce(sum(ii.quantity) over (
-        partition by ii.product_id, ii.variant_id, lower(btrim(ii.unit))
-        order by ii.id rows between unbounded preceding and 1 preceding
-      ),0))) as keep
+    select ii.*, greatest(0, least(
+      case when lead(ii.id) over item_lines is null then coalesce(q.remaining,0) else ii.quantity end,
+      coalesce(q.remaining,0) - coalesce(sum(ii.quantity) over
+        (item_lines rows between unbounded preceding and 1 preceding),0)
+    )) as keep
     from public.invoice_items ii
     left join public.warehouse_order_open_quantities(p_order_id) q
       on q.product_id=ii.product_id and q.variant_id is not distinct from ii.variant_id
       and q.unit_key=lower(btrim(ii.unit))
     where ii.invoice_id=p_order_id
+    window item_lines as (partition by ii.product_id,ii.variant_id,lower(btrim(ii.unit)) order by ii.id)
   )
   insert into public.invoice_items (
     invoice_id, product_id, product_name, quantity, unit, unit_price, unit_cost,
@@ -62,6 +93,68 @@ begin
   return v_count;
 end $$;
 revoke all on function public.fill_warehouse_delivery_draft(uuid, uuid) from public, anon, authenticated;
+
+create function public.confirm_warehouse_order_weighed_quantity(
+  p_order_id uuid, p_draft_id uuid, p_expected_updated_at timestamptz
+) returns integer language plpgsql security definer set search_path = '' as $$
+declare
+  v_actor uuid := auth.uid();
+  v_tenant uuid := public.get_user_tenant_id();
+  v_draft public.invoices%rowtype;
+  v_parent public.invoices%rowtype;
+  v_count integer;
+begin
+  if v_actor is null or v_tenant is null
+    or not coalesce(public.user_has_permission(v_actor,'orders.create'),false) then
+    raise exception 'Bạn cần quyền xử lý đơn đặt hàng để xác nhận lượng cân.' using errcode='42501';
+  end if;
+  -- Same lock order as the internal POS checkout.
+  select * into v_draft from public.invoices where id=p_draft_id and tenant_id=v_tenant
+    and source_order_id=p_order_id and status='draft' and deleted_at is null
+    and voided_at is null and cancelled_at is null for update;
+  if not found or v_draft.updated_at is distinct from p_expected_updated_at then
+    raise exception 'Nháp đã thay đổi. Tải lại đơn gốc để kiểm tra lượng cân.' using errcode='22023';
+  end if;
+  select i.* into v_parent from public.invoices i
+    join public.fnb_purchase_sales_order_links l on l.sales_order_id=i.id and l.tenant_id=i.tenant_id
+    where i.id=p_order_id and i.tenant_id=v_tenant and i.branch_id=v_draft.branch_id
+      and i.source='order' and i.status='draft' and i.deleted_at is null
+    for no key update of i;
+  if not found or not coalesce(public.user_has_branch_access(v_actor,v_parent.branch_id),false) then
+    raise exception 'Không có quyền xác nhận ở chi nhánh này.' using errcode='42501';
+  end if;
+  if v_parent.fulfilled_by_id is not null or exists (
+    select 1 from public.sales_order_processing_closures where order_id=p_order_id and closed_at is not null
+  ) then
+    raise exception 'Đơn gốc đã đóng xử lý.' using errcode='22023';
+  end if;
+  -- A weighing correction can only add quantity to an existing ordered item.
+  if exists (
+    select 1 from public.invoice_items d where d.invoice_id=p_draft_id and not exists (
+      select 1 from public.invoice_items p where p.invoice_id=p_order_id
+        and p.product_id=d.product_id and p.variant_id is not distinct from d.variant_id
+        and lower(btrim(p.unit))=lower(btrim(d.unit))
+    )
+  ) then
+    raise exception 'Nháp có mặt hàng ngoài đơn gốc. Kiểm tra lại nháp trước khi xác nhận.' using errcode='22023';
+  end if;
+  with draft as (
+    select product_id,variant_id,lower(btrim(unit)) unit_key,sum(quantity) quantity
+    from public.invoice_items where invoice_id=p_draft_id group by 1,2,3
+  )
+  insert into public.warehouse_order_quantity_adjustments (
+    order_id,draft_id,product_id,variant_id,unit_key,quantity,confirmed_by
+  )
+  select p_order_id,p_draft_id,d.product_id,d.variant_id,d.unit_key,
+    d.quantity-greatest(0,coalesce(q.remaining,0)),v_actor
+  from draft d left join public.warehouse_order_open_quantities(p_order_id) q
+    on q.product_id=d.product_id and q.variant_id is not distinct from d.variant_id and q.unit_key=d.unit_key
+  where d.quantity>greatest(0,coalesce(q.remaining,0));
+  get diagnostics v_count=row_count;
+  return v_count;
+end $$;
+revoke all on function public.confirm_warehouse_order_weighed_quantity(uuid,uuid,timestamptz) from public, anon;
+grant execute on function public.confirm_warehouse_order_weighed_quantity(uuid,uuid,timestamptz) to authenticated;
 
 do $$
 declare v_def text; v_anchor text;
@@ -125,7 +218,7 @@ begin
       group by ii.product_id,ii.variant_id,lower(btrim(ii.unit)),q.remaining
       having sum(ii.quantity)>coalesce(q.remaining,0)
     ) then
-      raise exception 'Đợt giao vượt số lượng còn thiếu. Kiểm tra lại đơn gốc.' using errcode='22023';
+      raise exception 'Đợt giao vượt số lượng còn thiếu. Mở đơn gốc để xác nhận lượng cân vượt.' using errcode='22023';
     end if;
     if exists (select 1 from public.warehouse_order_open_quantities(v_parent.id)
       where remaining>0) then return new; end if;

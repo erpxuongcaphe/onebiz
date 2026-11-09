@@ -83,6 +83,7 @@ export {
   tinhDoiChieuDatBan,
   markOrderProcessed,
   closeSalesOrderProcessing,
+  confirmWarehouseOrderWeighedQuantity,
   reopenSalesOrderProcessing,
   donConDungDuoc,
   // Ba mức xử lý đơn đặt hàng (CEO 21/08)

@@ -17,9 +17,11 @@ const createChildSaleFromOrder = vi.fn();
 const getOrderReconciliation = vi.fn();
 const markOrderProcessed = vi.fn();
 const toastOnDinh = vi.fn();
+const confirmWarehouseOrderWeighedQuantity = vi.fn();
 
 vi.mock("@/lib/services/supabase", () => ({
   createChildSaleFromOrder: (...a: unknown[]) => createChildSaleFromOrder(...a),
+  confirmWarehouseOrderWeighedQuantity: (...a: unknown[]) => confirmWarehouseOrderWeighedQuantity(...a),
   getOrderReconciliation: (...a: unknown[]) => getOrderReconciliation(...a),
   markOrderProcessed: (...a: unknown[]) => markOrderProcessed(...a),
   // Hàm thuần — dùng bản THẬT, không giả, để test không xanh nhờ mock dễ tính.
@@ -250,4 +252,52 @@ describe("SQL 00332 + 00333 — bất biến (kèm phạm vi chi nhánh)", () =>
     expect(hauKiem).toContain("user_has_branch_access");
     expect(hauKiem).toContain("pg_get_functiondef");
   });
+});
+
+describe("Giao từng phần từ đơn kho tổng", () => {
+  it("hiện phần thiếu và tạo đợt giao tiếp trên đúng đơn gốc", async () => {
+    const issued = { ...donCon("issued", "HD-UAT", "completed"), source: "internal" };
+    getOrderReconciliation.mockResolvedValue({
+      warehouseDelivery: true,
+      children: [issued],
+      rows: [dong("Dưa hấu", 3, 2.2), dong("Chanh", 10, 0)],
+    });
+    createChildSaleFromOrder.mockResolvedValue({ childId: "draft", childCode: "NH-UAT" });
+    render(<ChildSalesBlock orderId="dh-goc" />);
+    expect(await screen.findByText("Còn thiếu")).toBeTruthy();
+    expect(screen.getByText("2 mặt hàng còn thiếu")).toBeTruthy();
+    expect(screen.getByRole("columnheader", { name: "Đã xuất giao" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Hoàn tất xử lý" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Giao phần còn thiếu" }));
+    await waitFor(() => expect(createChildSaleFromOrder).toHaveBeenCalledWith("dh-goc"));
+  });
+
+  it("mở nháp đang có thay vì tạo thêm đợt giao", async () => {
+    getOrderReconciliation.mockResolvedValue({
+      warehouseDelivery: true,
+      children: [donCon("draft", "NH-UAT", "draft")],
+      rows: [dong("Dưa hấu", 3, 2.2)],
+    });
+    render(<ChildSalesBlock orderId="dh-goc" />);
+    expect(await screen.findByRole("link", { name: "Mở hóa đơn NH-UAT" }))
+      .toHaveAttribute("href", "/pos?draftId=draft");
+    expect(screen.getByRole("button", { name: "Giao phần còn thiếu" })).toBeDisabled();
+  });
+});
+
+
+
+it("xác nhận phần cân vượt theo đúng mã nháp và phiên bản đã xem", async () => {
+  getOrderReconciliation.mockResolvedValue({
+    warehouseDelivery: true, children: [donCon("draft", "NH-UAT", "draft")],
+    rows: [dong("Gu Việt", 10, 0)],
+    weighedDraft: { id: "draft", updatedAt: "2026-11-09T04:00:00Z", excess: [dong("Gu Việt", 10, 10.36)] },
+  });
+  confirmWarehouseOrderWeighedQuantity.mockResolvedValue(1);
+  render(<ChildSalesBlock orderId="dh-goc" />);
+  fireEvent.click(await screen.findByRole("button", { name: "Xác nhận lượng cân vượt" }));
+  expect(screen.getByText("Cập nhật lượng đặt theo cân thực tế?")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Xác nhận", exact: true }));
+  await waitFor(() => expect(confirmWarehouseOrderWeighedQuantity)
+    .toHaveBeenCalledWith("dh-goc", "draft", "2026-11-09T04:00:00Z"));
 });

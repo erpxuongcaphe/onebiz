@@ -25,6 +25,7 @@ import { useToast } from "@/lib/contexts";
 import { ConfirmDialog } from "@/components/shared/dialogs/confirm-dialog";
 import {
   createChildSaleFromOrder,
+  confirmWarehouseOrderWeighedQuantity,
   getOrderReconciliation,
   markOrderProcessed,
   reopenSalesOrderProcessing,
@@ -63,6 +64,9 @@ export function ChildSalesBlock({
   const [children, setChildren] = useState<ChildSaleInfo[]>([]);
   const [rows, setRows] = useState<OrderReconRow[]>([]);
   const [warehouseDelivery, setWarehouseDelivery] = useState(false);
+  const [weighedDraft, setWeighedDraft] = useState<{ id: string; updatedAt: string; excess: OrderReconRow[] }>();
+  const [confirmWeighing, setConfirmWeighing] = useState(false);
+  const [savingWeighing, setSavingWeighing] = useState(false);
   const [batTinhNang, setBatTinhNang] = useState(true);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -83,6 +87,7 @@ export function ChildSalesBlock({
       setChildren(kq.children);
       setRows(kq.rows);
       setWarehouseDelivery(Boolean(kq.warehouseDelivery));
+      setWeighedDraft(kq.weighedDraft);
     } catch (err) {
       setLoadError(
         err instanceof Error ? err.message : "Không tải được danh sách đơn bán.",
@@ -184,6 +189,22 @@ export function ChildSalesBlock({
     }
   }, [orderId, processingClosedAt, taiDoiChieu, toast, onDataChanged]);
 
+  async function confirmWeighedQuantity() {
+    if (!weighedDraft || savingWeighing) return;
+    setSavingWeighing(true);
+    try {
+      await confirmWarehouseOrderWeighedQuantity(orderId, weighedDraft.id, weighedDraft.updatedAt);
+      toast({ variant: "success", title: "Đã cập nhật lượng đặt theo cân thực tế" });
+      onDataChanged?.();
+    } catch (err) {
+      toast({ variant: "error", title: "Chưa xác nhận được lượng cân", description: err instanceof Error ? err.message : "Lỗi" });
+    } finally {
+      setConfirmWeighing(false);
+      setSavingWeighing(false);
+      await taiDoiChieu();
+    }
+  }
+
   // Máy chủ chưa bật 00331 → không vẽ gì, giữ màn cũ nguyên vẹn.
   if (!batTinhNang) return null;
 
@@ -250,6 +271,20 @@ export function ChildSalesBlock({
 
       {warehouseDelivery && hasDraft && (
         <p className="text-xs text-muted-foreground">Đã có đợt giao nháp. Bấm mã nháp bên dưới để mở trong POS.</p>
+      )}
+      {warehouseDelivery && !deliveryClosed && !loading && !loadError && Boolean(weighedDraft?.excess.length) && (
+        <div className="rounded-md border border-status-warning/40 p-3 space-y-2">
+          <p className="text-sm font-medium">Nháp có lượng cân vượt số còn lại</p>
+          <ul className="text-sm">
+            {weighedDraft?.excess.map((row) => (
+              <li key={[row.productId, row.variantId, row.unit].join(":")}>
+                {row.productName} · +{formatNumber(row.delta)} {row.unit}
+              </li>
+            ))}
+          </ul>
+          <Button type="button" size="sm" variant="outline" disabled={savingWeighing}
+            onClick={() => setConfirmWeighing(true)}>Xác nhận lượng cân vượt</Button>
+        </div>
       )}
       {processingClosedAt && <p className="text-xs text-status-success">
         Đã xử lý · {processingClosedReason} · {new Date(processingClosedAt).toLocaleString("vi-VN")}
@@ -368,6 +403,16 @@ export function ChildSalesBlock({
         </>
       )}
 
+      <ConfirmDialog
+        open={confirmWeighing}
+        onOpenChange={setConfirmWeighing}
+        title="Cập nhật lượng đặt theo cân thực tế?"
+        description={weighedDraft?.excess.map((row) =>
+          row.productName + " +" + formatNumber(row.delta) + " " + row.unit).join(", ") ?? ""}
+        confirmLabel="Xác nhận"
+        cancelLabel="Xem lại"
+        onConfirm={() => void confirmWeighedQuantity()}
+      />
       <ConfirmDialog
         open={confirmHoanTat}
         onOpenChange={setConfirmHoanTat}
