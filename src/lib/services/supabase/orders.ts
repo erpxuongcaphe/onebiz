@@ -1344,7 +1344,6 @@ export interface ChildSaleInfo {
   voidedAt: string | null;
   cancelledAt: string | null;
   source?: string;
-  updatedAt?: string;
 }
 
 /** Đơn con có thực sự dùng được để "Hoàn tất xử lý" đơn gốc hay không. */
@@ -1512,7 +1511,7 @@ export async function listChildSales(
     // 00335: mỗi đơn bán con có NGÀY HOÁ ĐƠN riêng — hiện theo ngày chứng từ
     // (đã bán = ngày phát hành; còn nháp = ngày tạo). Khác với danh sách ĐƠN
     // ĐẶT HÀNG bên trên vẫn giữ created_at = ngày đặt.
-    .select("id, code, status, total, paid, ngay_chung_tu, voided_at, cancelled_at, source, updated_at")
+    .select("id, code, status, total, paid, ngay_chung_tu, voided_at, cancelled_at, source")
     .eq("tenant_id", tenantId)
     .eq("source_order_id", orderId)
     .is("deleted_at", null)
@@ -1532,7 +1531,6 @@ export async function listChildSales(
     voidedAt: row.voided_at ? String(row.voided_at) : null,
     cancelledAt: row.cancelled_at ? String(row.cancelled_at) : null,
     source: row.source ?? undefined,
-    updatedAt: row.updated_at ?? undefined,
   }));
 }
 
@@ -1612,7 +1610,7 @@ export async function getOrderReconciliation(orderId: string): Promise<{
   children: ChildSaleInfo[];
   rows: OrderReconRow[];
   warehouseDelivery?: boolean;
-  weighedDraft?: { id: string; updatedAt: string; excess: OrderReconRow[] };
+  draftingRows?: OrderReconRow[];
 } | null> {
   const children = await listChildSales(orderId);
   if (children === null) return null;
@@ -1659,31 +1657,29 @@ export async function getOrderReconciliation(orderId: string): Promise<{
     quantity: Number(r.quantity ?? 0),
   });
   const ordered: ReconItemInput[] = (hangDat ?? []).map(doi);
-  const pending = warehouseDelivery ? children.find((c) => c.status === "draft" && !c.cancelledAt && !c.voidedAt) : undefined;
+  const shipped = hangBan.map(doi);
+  const draftIds = warehouseDelivery ? children.filter((c) => c.status === "draft" && !c.cancelledAt && !c.voidedAt).map((c) => c.id) : [];
   if (warehouseDelivery) {
     const { data: adjustments, error } = await (supabase as any)
       .from("warehouse_order_quantity_adjustments")
-      .select("product_id, variant_id, unit_key, quantity")
+      .select("product_id, variant_id, unit_key, quantity, invoice_id")
       .eq("order_id", orderId);
     if (error && error.code !== "42P01" && error.code !== "PGRST205") handleError(error, "getOrderReconciliation.adjustments");
     for (const adjustment of adjustments ?? []) {
-      const line = ordered.find((item) => item.productId === adjustment.product_id &&
+      if (!idsCompleted.includes(adjustment.invoice_id)) continue;
+      const line = [...ordered, ...shipped].find((item) => item.productId === adjustment.product_id &&
         item.variantId === adjustment.variant_id && item.unit?.trim().toLowerCase() === adjustment.unit_key);
       if (line) ordered.push({ ...line, quantity: Number(adjustment.quantity) });
     }
   }
-  const rows = tinhDoiChieuDatBan(ordered, hangBan.map(doi), warehouseDelivery);
-  if (!pending?.updatedAt) return { children, warehouseDelivery, rows };
+  const rows = tinhDoiChieuDatBan(ordered, shipped, warehouseDelivery);
+  if (draftIds.length === 0) return { children, warehouseDelivery, rows };
   const { data: draftItems, error: draftError } = await (supabase as any)
     .from("invoice_items_scoped")
     .select("product_id, variant_id, product_name, unit, quantity")
-    .eq("invoice_id", pending.id);
+    .in("invoice_id", draftIds);
   if (draftError) handleError(draftError, "getOrderReconciliation.draft");
-  const openItems = rows.filter((row) => row.qtyOrdered > 0).map((row) => ({
-    ...row, quantity: Math.max(0, -row.delta),
-  }));
-  const excess = tinhDoiChieuDatBan(openItems, (draftItems ?? []).map(doi), true).filter((row) => row.delta > 0);
-  return { children, warehouseDelivery, rows, weighedDraft: { id: pending.id, updatedAt: pending.updatedAt, excess } };
+  return { children, warehouseDelivery, rows, draftingRows: tinhDoiChieuDatBan([], (draftItems ?? []).map(doi), true) };
 }
 
 /**
@@ -1710,14 +1706,6 @@ export async function markOrderProcessed(
     }
     handleError(error, "markOrderProcessed");
   }
-}
-
-export async function confirmWarehouseOrderWeighedQuantity(orderId: string, draftId: string, updatedAt: string): Promise<number> {
-  const { data, error } = await (getClient() as any).rpc("confirm_warehouse_order_weighed_quantity", {
-    p_order_id: orderId, p_draft_id: draftId, p_expected_updated_at: updatedAt,
-  });
-  if (error) handleError(error, "confirmWarehouseOrderWeighedQuantity");
-  return Number(data);
 }
 
 /** Close the work item without inventing an invoice link or posting money/stock. */

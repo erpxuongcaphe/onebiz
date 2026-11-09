@@ -4,7 +4,7 @@ begin;
 create table public.warehouse_order_quantity_adjustments (
   id uuid primary key default gen_random_uuid(),
   order_id uuid not null references public.invoices(id),
-  draft_id uuid not null,
+  invoice_id uuid not null references public.invoices(id),
   product_id uuid not null,
   variant_id uuid,
   unit_key text not null,
@@ -43,7 +43,10 @@ language sql stable set search_path = '' as $$
     where parent.id=p_order_id
     union all
     select a.product_id,a.variant_id,a.unit_key,a.quantity
-    from public.warehouse_order_quantity_adjustments a where a.order_id=p_order_id
+    from public.warehouse_order_quantity_adjustments a
+    join public.invoices issued on issued.id=a.invoice_id and issued.status='completed'
+      and issued.voided_at is null and issued.cancelled_at is null and issued.deleted_at is null
+    where a.order_id=p_order_id and a.invoice_id is distinct from p_exclude_invoice_id
   ) q
   group by q.product_id,q.variant_id,q.unit_key;
 $$;
@@ -94,76 +97,67 @@ begin
 end $$;
 revoke all on function public.fill_warehouse_delivery_draft(uuid, uuid) from public, anon, authenticated;
 
-create function public.confirm_warehouse_order_weighed_quantity(
-  p_order_id uuid, p_draft_id uuid, p_expected_updated_at timestamptz
-) returns integer language plpgsql security definer set search_path = '' as $$
+create function public.confirm_warehouse_delivery_on_issue(
+  p_order_id uuid, p_invoice_id uuid, p_session_id uuid
+) returns void language plpgsql set search_path = '' as $$
 declare
+  v_changes jsonb;
+  v_token text;
   v_actor uuid := auth.uid();
-  v_tenant uuid := public.get_user_tenant_id();
-  v_draft public.invoices%rowtype;
-  v_parent public.invoices%rowtype;
-  v_count integer;
 begin
-  if v_actor is null or v_tenant is null
-    or not coalesce(public.user_has_permission(v_actor,'orders.create'),false) then
-    raise exception 'Bạn cần quyền xử lý đơn đặt hàng để xác nhận lượng cân.' using errcode='42501';
-  end if;
-  -- Same lock order as the internal POS checkout.
-  select * into v_draft from public.invoices where id=p_draft_id and tenant_id=v_tenant
-    and source_order_id=p_order_id and status='draft' and deleted_at is null
-    and voided_at is null and cancelled_at is null for update;
-  if not found or v_draft.updated_at is distinct from p_expected_updated_at then
-    raise exception 'Nháp đã thay đổi. Tải lại đơn gốc để kiểm tra lượng cân.' using errcode='22023';
-  end if;
-  select i.* into v_parent from public.invoices i
-    join public.fnb_purchase_sales_order_links l on l.sales_order_id=i.id and l.tenant_id=i.tenant_id
-    where i.id=p_order_id and i.tenant_id=v_tenant and i.branch_id=v_draft.branch_id
-      and i.source='order' and i.status='draft' and i.deleted_at is null
-    for no key update of i;
-  if not found or not coalesce(public.user_has_branch_access(v_actor,v_parent.branch_id),false) then
-    raise exception 'Không có quyền xác nhận ở chi nhánh này.' using errcode='42501';
-  end if;
-  if v_parent.fulfilled_by_id is not null or exists (
-    select 1 from public.sales_order_processing_closures where order_id=p_order_id and closed_at is not null
-  ) then
-    raise exception 'Đơn gốc đã đóng xử lý.' using errcode='22023';
-  end if;
-  -- A weighing correction can only add quantity to an existing ordered item.
-  if exists (
-    select 1 from public.invoice_items d where d.invoice_id=p_draft_id and not exists (
-      select 1 from public.invoice_items p where p.invoice_id=p_order_id
-        and p.product_id=d.product_id and p.variant_id is not distinct from d.variant_id
-        and lower(btrim(p.unit))=lower(btrim(d.unit))
-    )
-  ) then
-    raise exception 'Nháp có mặt hàng ngoài đơn gốc. Kiểm tra lại nháp trước khi xác nhận.' using errcode='22023';
-  end if;
-  with draft as (
-    select product_id,variant_id,lower(btrim(unit)) unit_key,sum(quantity) quantity
-    from public.invoice_items where invoice_id=p_draft_id group by 1,2,3
+  with planned as (
+    select * from public.warehouse_order_open_quantities(p_order_id,p_invoice_id)
+  ), shipped as (
+    select product_id,variant_id,lower(btrim(unit)) unit_key,sum(quantity) quantity,
+      min(product_name) product_name,min(unit) unit
+    from public.invoice_items where invoice_id=p_invoice_id group by 1,2,3
+  ), compared as (
+    select coalesce(s.product_id,p.product_id) product_id,
+      coalesce(s.variant_id,p.variant_id) variant_id,coalesce(s.unit_key,p.unit_key) unit_key,
+      coalesce(s.product_name, original.product_name, p.product_id::text) product_name,
+      coalesce(s.unit,original.unit,p.unit_key) unit,
+      greatest(0,coalesce(p.remaining,0)) remaining,coalesce(s.quantity,0) quantity
+    from planned p full join shipped s on s.product_id=p.product_id
+      and coalesce(s.variant_id::text,'')=coalesce(p.variant_id::text,'') and s.unit_key=p.unit_key
+    left join lateral (
+      select ii.product_name,ii.unit from public.invoice_items ii
+      where ii.invoice_id=p_order_id and ii.product_id=p.product_id
+        and ii.variant_id is not distinct from p.variant_id and lower(btrim(ii.unit))=p.unit_key
+      order by ii.id limit 1
+    ) original on true
   )
+  select jsonb_agg(to_jsonb(c) order by c.product_id,c.variant_id,c.unit_key) into v_changes
+  from compared c where c.quantity<>c.remaining;
+  if v_changes is null then return; end if;
+  v_token := md5(jsonb_build_array(p_order_id,p_session_id,v_actor,v_changes)::text);
+  if p_session_id is null or v_actor is null
+    or v_token is distinct from current_setting('onebiz.warehouse_delivery_confirmation',true) then
+    raise exception 'WAREHOUSE_DELIVERY_CONFIRMATION_REQUIRED'
+      using errcode='P0001', detail=jsonb_build_object('token',v_token,'changes',v_changes)::text;
+  end if;
+
   insert into public.warehouse_order_quantity_adjustments (
-    order_id,draft_id,product_id,variant_id,unit_key,quantity,confirmed_by
+    order_id,invoice_id,product_id,variant_id,unit_key,quantity,confirmed_by
   )
-  select p_order_id,p_draft_id,d.product_id,d.variant_id,d.unit_key,
-    d.quantity-greatest(0,coalesce(q.remaining,0)),v_actor
-  from draft d left join public.warehouse_order_open_quantities(p_order_id) q
-    on q.product_id=d.product_id and q.variant_id is not distinct from d.variant_id and q.unit_key=d.unit_key
-  where d.quantity>greatest(0,coalesce(q.remaining,0));
-  get diagnostics v_count=row_count;
-  return v_count;
+  select p_order_id,p_invoice_id,c.product_id,c.variant_id,c.unit_key,c.quantity-c.remaining,v_actor
+  from jsonb_to_recordset(v_changes) c(product_id uuid,variant_id uuid,unit_key text,quantity numeric,remaining numeric)
+  where c.quantity>c.remaining;
+
+  insert into public.audit_log(tenant_id,user_id,action,entity_type,entity_id,new_data)
+  select i.tenant_id,v_actor,'warehouse_delivery_difference_confirmed','sales_order',p_order_id,
+    jsonb_build_object('invoice_id',p_invoice_id,'changes',v_changes)
+  from public.invoices i where i.id=p_order_id;
 end $$;
-revoke all on function public.confirm_warehouse_order_weighed_quantity(uuid,uuid,timestamptz) from public, anon;
-grant execute on function public.confirm_warehouse_order_weighed_quantity(uuid,uuid,timestamptz) to authenticated;
+revoke all on function public.confirm_warehouse_delivery_on_issue(uuid,uuid,uuid) from public, anon, authenticated;
+
 
 do $$
 declare v_def text; v_anchor text;
 begin
   select pg_get_functiondef('public.create_child_sale_from_order(uuid)'::regprocedure) into v_def;
   v_def := replace(v_def, 'v_item_count int;', 'v_item_count int; v_warehouse boolean;');
-  v_def := replace(v_def, 'for share;', 'for no key update;');
   v_anchor := 'v_child_code := public.next_code';
-  if position(v_anchor in v_def)=0 or position('for no key update;' in v_def)=0 then
+  if position(v_anchor in v_def)=0 or position('for share;' in v_def)=0 then
     raise exception 'Unexpected child draft function';
   end if;
   v_def := replace(v_def,v_anchor,$patch$
@@ -174,11 +168,6 @@ begin
       where order_id=p_order_id and closed_at is not null)
        or exists (select 1 from public.invoices where id=p_order_id and fulfilled_by_id is not null) then
       raise exception 'Đơn đã đóng xử lý. Mở lại đơn gốc trước khi giao bù.' using errcode='22023';
-    end if;
-    if exists (select 1 from public.invoices where source_order_id=p_order_id
-      and tenant_id=v_tenant_id and status='draft' and deleted_at is null
-      and voided_at is null and cancelled_at is null) then
-      raise exception 'Đơn gốc đã có đợt giao nháp. Mở lại đợt đang có trong POS.' using errcode='22023';
     end if;
   end if;
   v_child_code := public.next_code$patch$);
@@ -209,20 +198,25 @@ begin
     if not exists (select 1 from public.invoice_items where invoice_id=new.id) then
       raise exception 'Đợt giao chưa có mặt hàng.' using errcode='22023';
     end if;
-    if exists (
-      select 1 from public.invoice_items ii
-      left join public.warehouse_order_open_quantities(v_parent.id,new.id) q
-        on q.product_id=ii.product_id and q.variant_id is not distinct from ii.variant_id
-        and q.unit_key=lower(btrim(ii.unit))
-      where ii.invoice_id=new.id
-      group by ii.product_id,ii.variant_id,lower(btrim(ii.unit)),q.remaining
-      having sum(ii.quantity)>coalesce(q.remaining,0)
-    ) then
-      raise exception 'Đợt giao vượt số lượng còn thiếu. Mở đơn gốc để xác nhận lượng cân vượt.' using errcode='22023';
-    end if;
+    perform public.confirm_warehouse_delivery_on_issue(v_parent.id,new.id,new.client_session_id);
     if exists (select 1 from public.warehouse_order_open_quantities(v_parent.id)
       where remaining>0) then return new; end if;
   end if;$patch$);
+  execute v_def;
+
+  select pg_get_functiondef('public.checkout_internal_pos_v2(jsonb)'::regprocedure) into v_def;
+  v_anchor := 'payload jsonb:=p_checkout;';
+  if position(v_anchor in v_def)=0 or position('result:=public._checkout_internal_pos_before_fnb_bridge_20261023(payload);' in v_def)=0 then
+    raise exception 'Unexpected internal checkout function';
+  end if;
+  -- Keep the original payload fingerprint for retries after a successful checkout.
+  v_def := replace(v_def,v_anchor,$patch$payload jsonb:=p_checkout - 'warehouseDeliveryConfirmation';
+    v_confirmation text:=p_checkout->>'warehouseDeliveryConfirmation';$patch$);
+  v_def := replace(v_def,'md5(p_checkout::text)', 'md5((p_checkout - ''warehouseDeliveryConfirmation'')::text)');
+  v_def := replace(v_def,$patch$jsonb_set(p_checkout,'{customerId}'$patch$,$patch$jsonb_set(p_checkout - 'warehouseDeliveryConfirmation','{customerId}'$patch$);
+  v_def := replace(v_def,'result:=public._checkout_internal_pos_before_fnb_bridge_20261023(payload);',$patch$
+  perform set_config('onebiz.warehouse_delivery_confirmation',coalesce(v_confirmation,''),true);
+  result:=public._checkout_internal_pos_before_fnb_bridge_20261023(payload);$patch$);
   execute v_def;
 
   select pg_get_functiondef('public.duplicate_invoice_to_order_atomic(uuid,uuid)'::regprocedure) into v_def;
