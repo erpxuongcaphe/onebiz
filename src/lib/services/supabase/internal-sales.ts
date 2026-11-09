@@ -47,6 +47,12 @@ export interface InternalSaleResult {
 }
 
 /** POS checkout keeps source/destination documents and stock atomic. */
+export class WarehouseDeliveryConfirmationRequired extends Error {
+  constructor(readonly token: string, readonly changes: { product_name: string; unit: string; remaining: number; quantity: number }[]) {
+    super("Số lượng còn phải xuất vừa thay đổi. Kiểm tra lại trước khi xác nhận.");
+  }
+}
+
 export async function checkoutInternalPos(input: {
   branchId: string; customerId: string; items: Array<{
     productId: string; productCode: string; productName: string; unit: string;
@@ -57,8 +63,14 @@ export async function checkoutInternalPos(input: {
   discountOtpId: string | null;
   sessionId: string; draftId: string | null; revision: number | null;
   shiftId: string; note: string;
+  warehouseDeliveryConfirmation?: string;
 }): Promise<{ invoiceId: string; code: string; total: number }> {
   const { data, error } = await (getClient().rpc as any)("checkout_internal_pos_v2", { p_checkout: input });
+  if (error?.message === "WAREHOUSE_DELIVERY_CONFIRMATION_REQUIRED") {
+    let detail: { token?: string; changes?: WarehouseDeliveryConfirmationRequired["changes"] } | undefined;
+    try { detail = JSON.parse(error.details ?? ""); } catch { /* fall through to normal RPC error */ }
+    if (detail?.token && detail.changes?.length) throw new WarehouseDeliveryConfirmationRequired(detail.token, detail.changes);
+  }
   if (error) handleError(error, "checkoutInternalPos");
   if (!data?.invoice_id) throw new Error("Máy chủ chưa xác nhận đơn nội bộ");
   return { invoiceId: data.invoice_id, code: data.code, total: Number(data.total) };

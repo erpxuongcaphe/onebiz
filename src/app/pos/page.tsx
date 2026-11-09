@@ -57,7 +57,7 @@ import { useRetailCustomerSelection, hasSelectedRetailCustomer, RETAIL_CUSTOMER_
 import { useAutoSaveDraft, loadLocalCart } from "./hooks/use-auto-save-draft";
 import { RecoveryDialog } from "./components/recovery-dialog";
 import { getClient } from "@/lib/services/supabase/base";
-import { checkoutInternalPos } from "@/lib/services/supabase/internal-sales";
+import { checkoutInternalPos, WarehouseDeliveryConfirmationRequired } from "@/lib/services/supabase/internal-sales";
 import { getPosStockSnapshot } from "@/lib/services/supabase/pos-stock";
 import { findPosStockShortages } from "./lib/stock-freshness";
 import { notifyPosStockChanged } from "./lib/stock-events";
@@ -2147,18 +2147,31 @@ function PosPageInner() {
       submitLockRef.current = true;
       setSubmitting("complete");
       try {
-        const result = await hasUnsavedCart.withCheckoutDraft((draft) => checkoutInternalPos({
-          branchId: currentBranch!.id, customerId: internalCustomer.id,
-          items: state.lines.map(line => ({ ...line, discount: line.discount.mode === "percent"
-            ? Math.round(Math.round(line.quantity * line.unitPrice) * line.discount.value / 100) : line.discount.value })),
-          payments: internalPayments as Array<{ method: "cash" | "transfer" | "card"; amount: number }>,
-          orderDiscount: state.orderDiscountAmount, orderVatRate: state.orderVatRate, shippingFee: state.shippingFee,
-          amountTendered: state.paymentMethod === "mixed" ? internalPayments.reduce((sum,p) => sum+p.amount,0) : state.paid,
-          discountOtpId: state.discountAuditCtx?.otpId ?? null,
-          expectedTotal: state.total, sessionId: clientSessionId,
-          draftId: draft.invoiceId, revision: draft.revision,
-          shiftId: checkoutShift.id, note: state.note,
-        }));
+        const result = await hasUnsavedCart.withCheckoutDraft(async (draft) => {
+          const payload: Parameters<typeof checkoutInternalPos>[0] = {
+            branchId: currentBranch!.id, customerId: internalCustomer.id,
+            items: state.lines.map(line => ({ ...line, discount: line.discount.mode === "percent"
+              ? Math.round(Math.round(line.quantity * line.unitPrice) * line.discount.value / 100) : line.discount.value })),
+            payments: internalPayments as Array<{ method: "cash" | "transfer" | "card"; amount: number }>,
+            orderDiscount: state.orderDiscountAmount, orderVatRate: state.orderVatRate, shippingFee: state.shippingFee,
+            amountTendered: state.paymentMethod === "mixed" ? internalPayments.reduce((sum,p) => sum+p.amount,0) : state.paid,
+            discountOtpId: state.discountAuditCtx?.otpId ?? null,
+            expectedTotal: state.total, sessionId: clientSessionId,
+            draftId: draft.invoiceId, revision: draft.revision,
+            shiftId: checkoutShift.id, note: state.note,
+          };
+          try {
+            return await checkoutInternalPos(payload);
+          } catch (error) {
+            if (!(error instanceof WarehouseDeliveryConfirmationRequired)) throw error;
+            const summary = error.changes.map((line) =>
+              line.product_name + ": còn " + formatNumber(line.remaining) + ", xuất " + formatNumber(line.quantity) + " " + line.unit,
+            ).join("\n");
+            if (!window.confirm("Xác nhận xuất giao khác lượng còn lại?\n\n" + summary)) return null;
+            return checkoutInternalPos({ ...payload, warehouseDeliveryConfirmation: error.token });
+          }
+        });
+        if (!result) return;
         notifyPosStockChanged(currentBranch!.id);
         notifyPosStockChanged(state.customer.branchId);
         state.clearCart();

@@ -62,6 +62,8 @@ export function ChildSalesBlock({
   const { toast } = useToast();
   const [children, setChildren] = useState<ChildSaleInfo[]>([]);
   const [rows, setRows] = useState<OrderReconRow[]>([]);
+  const [warehouseDelivery, setWarehouseDelivery] = useState(false);
+  const [draftingRows, setDraftingRows] = useState<OrderReconRow[]>([]);
   const [batTinhNang, setBatTinhNang] = useState(true);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -81,6 +83,8 @@ export function ChildSalesBlock({
       setBatTinhNang(true);
       setChildren(kq.children);
       setRows(kq.rows);
+      setWarehouseDelivery(Boolean(kq.warehouseDelivery));
+      setDraftingRows(kq.draftingRows ?? []);
     } catch (err) {
       setLoadError(
         err instanceof Error ? err.message : "Không tải được danh sách đơn bán.",
@@ -101,7 +105,7 @@ export function ChildSalesBlock({
       toast({
         variant: "success",
         title: `Đã tạo đơn bán ${child.childCode}`,
-        description: "Mở POS → Xử lý đặt hàng để tiếp tục, hoặc tạo thêm đơn khác.",
+        description: warehouseDelivery ? "Mở đợt giao nháp trong POS để chọn lượng giao lần này." : "Mở POS → Xử lý đặt hàng để tiếp tục, hoặc tạo thêm đơn khác.",
       });
       await taiDoiChieu();
       onDataChanged?.();
@@ -114,7 +118,7 @@ export function ChildSalesBlock({
     } finally {
       setDangTao(false);
     }
-  }, [orderId, taiDoiChieu, toast, onDataChanged]);
+  }, [orderId, taiDoiChieu, toast, onDataChanged, warehouseDelivery]);
 
   // Hoàn tất: CHỈ gắn vào đơn con đã thanh toán và chưa bị huỷ/void.
   //
@@ -186,17 +190,21 @@ export function ChildSalesBlock({
   if (!batTinhNang) return null;
 
   const coDieuChinh = rows.some((r) => r.delta !== 0);
+  const remainingLines = rows.filter((r) => r.delta < 0).length;
+  const hasDraft = children.some((c) => c.status === "draft" && !c.cancelledAt && !c.voidedAt);
+  const deliveryClosed = Boolean(fulfilledById || processingClosedAt);
+  const canStartDelivery = !loading && !loadError && !deliveryClosed && remainingLines > 0;
 
   return (
     <div className="rounded-lg border p-4 space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="font-semibold flex items-center gap-2">
           <Icon name="receipt_long" size={18} />
-          Đơn bán từ đơn này
+          {warehouseDelivery ? "Các đợt giao từ đơn gốc" : "Đơn bán từ đơn này"}
           <Badge variant="secondary">{children.length}</Badge>
-          {coDieuChinh ? (
+          {(warehouseDelivery ? remainingLines > 0 : coDieuChinh) ? (
             <Badge variant="outline" className="border-status-warning/30 bg-status-warning/10 text-status-warning">
-              Có điều chỉnh
+              {warehouseDelivery ? `${remainingLines} mặt hàng còn thiếu` : "Có điều chỉnh"}
             </Badge>
           ) : null}
         </h3>
@@ -206,10 +214,10 @@ export function ChildSalesBlock({
             variant="outline"
             size="sm"
             onClick={() => void taoThemDonBan()}
-            disabled={dangTao}
+            disabled={dangTao || (warehouseDelivery && !canStartDelivery)}
           >
             <Icon name="add" size={15} className="mr-1" />
-            {dangTao ? "Đang tạo..." : "Tạo thêm đơn bán"}
+            {dangTao ? "Đang tạo..." : warehouseDelivery ? "Giao phần còn thiếu" : "Tạo thêm đơn bán"}
           </Button>
           {fulfilledById || processingClosedAt ? (
             <Button
@@ -221,7 +229,7 @@ export function ChildSalesBlock({
               <Icon name="lock_open" size={15} className="mr-1" />
               Mở lại xử lý
             </Button>
-          ) : (
+          ) : !warehouseDelivery ? (
             <Button
               type="button"
               size="sm"
@@ -238,10 +246,13 @@ export function ChildSalesBlock({
               <Icon name="task_alt" size={15} className="mr-1" />
               Hoàn tất xử lý
             </Button>
-          )}
+          ) : null}
         </div>
       </div>
 
+      {warehouseDelivery && hasDraft && (
+        <p className="text-xs text-muted-foreground">Bấm mã nháp để mở trong POS. Lượng đang soạn chỉ dùng để đối chiếu.</p>
+      )}
       {processingClosedAt && <p className="text-xs text-status-success">
         Đã xử lý · {processingClosedReason} · {new Date(processingClosedAt).toLocaleString("vi-VN")}
       </p>}
@@ -272,8 +283,9 @@ export function ChildSalesBlock({
         <>
           {children.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Chưa có đơn bán nào. Bấm &quot;Tạo thêm đơn bán&quot;, hoặc vào POS →
-              &quot;Xử lý đặt hàng&quot; chọn đơn này.
+              {warehouseDelivery
+                ? "Chưa có đợt giao. Chọn Giao phần còn thiếu để chuẩn bị hàng xuất."
+                : "Chưa có đơn bán nào. Chọn Tạo thêm đơn bán, hoặc mở Xử lý đặt hàng trong POS."}
             </p>
           ) : (
             <div className="space-y-1.5">
@@ -291,7 +303,7 @@ export function ChildSalesBlock({
                   >
                     {c.code ? (
                       <Link
-                        href={buildInvoiceListDeepLink(c.code)}
+                        href={warehouseDelivery && c.status === "draft" ? `/pos?draftId=${encodeURIComponent(c.id)}` : buildInvoiceListDeepLink(c.code)}
                         className="font-medium text-primary underline-offset-2 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         aria-label={`Mở hóa đơn ${c.code}`}
                       >
@@ -301,7 +313,7 @@ export function ChildSalesBlock({
                       <span className="font-medium">—</span>
                     )}
                     <span className={cn("rounded-full px-2 py-0.5 text-xs", nhan.cls)}>
-                      {nhan.label}
+                      {warehouseDelivery && donConDungDuoc(c) && c.source === "internal" ? "Đã xuất giao" : nhan.label}
                     </span>
                     <span className="ml-auto tabular-nums">
                       {formatCurrency(c.total)}
@@ -319,28 +331,29 @@ export function ChildSalesBlock({
                   <tr className="border-b text-left text-xs text-muted-foreground">
                     <th className="py-1.5 pr-2 font-medium">Mặt hàng</th>
                     <th className="py-1.5 px-2 text-right font-medium">Đặt</th>
-                    <th className="py-1.5 px-2 text-right font-medium">Đã bán</th>
-                    <th className="py-1.5 pl-2 text-right font-medium">Chênh lệch</th>
+                    <th className="py-1.5 px-2 text-right font-medium">{warehouseDelivery ? "Đã xuất giao" : "Đã bán"}</th>
+                    {warehouseDelivery && <th className="py-1.5 px-2 text-right font-medium">Đang soạn</th>}
+                    <th className="py-1.5 pl-2 text-right font-medium">{warehouseDelivery ? "Còn phải xuất" : "Chênh lệch"}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((r) => (
-                    <tr key={`${r.productId}-${r.variantId ?? ""}`} className="border-b border-outline-variant/20">
+                    <tr key={`${r.productId}-${r.variantId ?? ""}-${r.unit}`} className="border-b border-outline-variant/20">
                       <td className="py-1.5 pr-2">{r.productName}</td>
                       <td className="py-1.5 px-2 text-right tabular-nums">
-                        {formatNumber(r.qtyOrdered)}
+                        {formatNumber(r.qtyOrdered)} {warehouseDelivery ? r.unit : ""}
                       </td>
                       <td className="py-1.5 px-2 text-right tabular-nums">
                         {formatNumber(r.qtySold)}
                       </td>
+                      {warehouseDelivery && <td className="py-1.5 px-2 text-right tabular-nums">{formatNumber(draftingRows.find((draft) => draft.productId === r.productId && draft.variantId === r.variantId && draft.unit.trim().toLowerCase() === r.unit.trim().toLowerCase())?.qtySold ?? 0)}</td>}
                       <td
                         className={cn(
                           "py-1.5 pl-2 text-right tabular-nums",
-                          r.delta > 0 && "text-status-warning font-medium",
-                          r.delta < 0 && "text-muted-foreground",
+                          (warehouseDelivery ? r.delta < 0 : r.delta > 0) && "text-status-warning font-medium",
                         )}
                       >
-                        {r.delta > 0 ? `+${formatNumber(r.delta)}` : formatNumber(r.delta)}
+                        {warehouseDelivery ? formatNumber(Math.max(0, -r.delta)) : r.delta > 0 ? `+${formatNumber(r.delta)}` : formatNumber(r.delta)}
                       </td>
                     </tr>
                   ))}
@@ -349,7 +362,7 @@ export function ChildSalesBlock({
             </div>
           )}
 
-          {coDieuChinh && (
+          {coDieuChinh && !warehouseDelivery && (
             <p className="rounded-md bg-status-warning/10 px-3 py-2 text-xs text-status-warning">
               Số lượng thực bán khác đơn đặt ban đầu — đây có thể là thay đổi
               của khách, chỉ để đối chiếu; không chặn lưu, thanh toán hay chốt

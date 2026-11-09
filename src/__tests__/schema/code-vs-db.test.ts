@@ -91,6 +91,8 @@ const COT_CHO_MIGRATION = new Map<string, string>([
   ["shifts.transfer_difference", "202610220002_fnb_shift_totals_reconciliation.sql"],
 ]);
 const BANG_CHO_MIGRATION = new Map<string, string>([
+  ["fnb_purchase_sales_order_links", "202610230100_fnb_purchase_sales_order_bridge.sql"],
+  ["warehouse_order_quantity_adjustments", "20261109110000_warehouse_order_partial_delivery.sql"],
 ]);
 
 /** Bỏ ghi chú, giữ nguyên độ dài để số dòng không lệch. */

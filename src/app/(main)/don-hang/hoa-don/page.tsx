@@ -1421,7 +1421,7 @@ export default function HoaDonPage() {
               // POS Retail với data pre-loaded → cashier sửa + thanh toán.
               // Trước đây chỉ tạo draft trên server → user không biết tìm
               // ở đâu. Giờ ?draftId=xxx → POS auto-load.
-              onDuplicate: async () => {
+              onDuplicate: row.source === "internal" && row.sourceOrderId ? undefined : async () => {
                 if (duplicating) return;
                 setDuplicating(true);
                 try {

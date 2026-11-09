@@ -251,3 +251,34 @@ describe("SQL 00332 + 00333 — bất biến (kèm phạm vi chi nhánh)", () =>
     expect(hauKiem).toContain("pg_get_functiondef");
   });
 });
+
+describe("Giao từng phần từ đơn kho tổng", () => {
+  it("hiện phần thiếu và tạo đợt giao tiếp trên đúng đơn gốc", async () => {
+    const issued = { ...donCon("issued", "HD-UAT", "completed"), source: "internal" };
+    getOrderReconciliation.mockResolvedValue({
+      warehouseDelivery: true,
+      children: [issued],
+      rows: [dong("Dưa hấu", 3, 2.2), dong("Chanh", 10, 0)],
+    });
+    createChildSaleFromOrder.mockResolvedValue({ childId: "draft", childCode: "NH-UAT" });
+    render(<ChildSalesBlock orderId="dh-goc" />);
+    expect(await screen.findByText("Còn phải xuất")).toBeTruthy();
+    expect(screen.getByText("2 mặt hàng còn thiếu")).toBeTruthy();
+    expect(screen.getByRole("columnheader", { name: "Đã xuất giao" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Hoàn tất xử lý" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Giao phần còn thiếu" }));
+    await waitFor(() => expect(createChildSaleFromOrder).toHaveBeenCalledWith("dh-goc"));
+  });
+
+  it("mở nháp đang có và vẫn tạo được đợt khác", async () => {
+    getOrderReconciliation.mockResolvedValue({
+      warehouseDelivery: true,
+      children: [donCon("draft", "NH-UAT", "draft")],
+      rows: [dong("Dưa hấu", 3, 2.2)],
+    });
+    render(<ChildSalesBlock orderId="dh-goc" />);
+    expect(await screen.findByRole("link", { name: "Mở hóa đơn NH-UAT" }))
+      .toHaveAttribute("href", "/pos?draftId=draft");
+    expect(screen.getByRole("button", { name: "Giao phần còn thiếu" })).toBeEnabled();
+  });
+});

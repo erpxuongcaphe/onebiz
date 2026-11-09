@@ -1343,6 +1343,7 @@ export interface ChildSaleInfo {
    */
   voidedAt: string | null;
   cancelledAt: string | null;
+  source?: string;
 }
 
 /** Đơn con có thực sự dùng được để "Hoàn tất xử lý" đơn gốc hay không. */
@@ -1510,7 +1511,7 @@ export async function listChildSales(
     // 00335: mỗi đơn bán con có NGÀY HOÁ ĐƠN riêng — hiện theo ngày chứng từ
     // (đã bán = ngày phát hành; còn nháp = ngày tạo). Khác với danh sách ĐƠN
     // ĐẶT HÀNG bên trên vẫn giữ created_at = ngày đặt.
-    .select("id, code, status, total, paid, ngay_chung_tu, voided_at, cancelled_at")
+    .select("id, code, status, total, paid, ngay_chung_tu, voided_at, cancelled_at, source")
     .eq("tenant_id", tenantId)
     .eq("source_order_id", orderId)
     .is("deleted_at", null)
@@ -1529,6 +1530,7 @@ export async function listChildSales(
     createdAt: String(row.ngay_chung_tu ?? ""),
     voidedAt: row.voided_at ? String(row.voided_at) : null,
     cancelledAt: row.cancelled_at ? String(row.cancelled_at) : null,
+    source: row.source ?? undefined,
   }));
 }
 
@@ -1561,8 +1563,9 @@ interface ReconItemInput {
 export function tinhDoiChieuDatBan(
   hangDat: ReconItemInput[],
   hangBanCompleted: ReconItemInput[],
+  matchUnit = false,
 ): OrderReconRow[] {
-  const khoa = (i: ReconItemInput) => `${i.productId}::${i.variantId ?? ""}`;
+  const khoa = (i: ReconItemInput) => `${i.productId}::${i.variantId ?? ""}::${matchUnit ? i.unit?.trim().toLowerCase() ?? "" : ""}`;
   const bang = new Map<string, OrderReconRow>();
   for (const item of hangDat) {
     const k = khoa(item);
@@ -1593,7 +1596,8 @@ export function tinhDoiChieuDatBan(
     bang.set(k, dong);
   }
   for (const dong of bang.values()) {
-    dong.delta = dong.qtySold - dong.qtyOrdered;
+    const difference = dong.qtySold - dong.qtyOrdered;
+    dong.delta = matchUnit ? Number(difference.toFixed(4)) : difference;
   }
   return Array.from(bang.values());
 }
@@ -1605,11 +1609,20 @@ export function tinhDoiChieuDatBan(
 export async function getOrderReconciliation(orderId: string): Promise<{
   children: ChildSaleInfo[];
   rows: OrderReconRow[];
+  warehouseDelivery?: boolean;
+  draftingRows?: OrderReconRow[];
 } | null> {
   const children = await listChildSales(orderId);
   if (children === null) return null;
 
   const supabase = getClient();
+  const { data: warehouseLink, error: warehouseError } = await (supabase as any)
+    .from("fnb_purchase_sales_order_links")
+    .select("sales_order_id")
+    .eq("sales_order_id", orderId)
+    .maybeSingle();
+  if (warehouseError) handleError(warehouseError, "getOrderReconciliation.warehouse");
+  const warehouseDelivery = Boolean(warehouseLink);
   // Mặt hàng đơn gốc.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: hangDat, error: loiDat } = await (supabase as any)
@@ -1620,7 +1633,8 @@ export async function getOrderReconciliation(orderId: string): Promise<{
 
   // Mặt hàng các đơn con ĐÃ THANH TOÁN — nháp/đã huỷ không tính là "đã bán".
   const idsCompleted = children
-    .filter((c) => c.status === "completed")
+    .filter((c) => c.status === "completed" && !c.voidedAt && !c.cancelledAt &&
+      (!warehouseDelivery || c.source === "internal"))
     .map((c) => c.id);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let hangBan: any[] = [];
@@ -1642,10 +1656,30 @@ export async function getOrderReconciliation(orderId: string): Promise<{
     unit: r.unit ?? "",
     quantity: Number(r.quantity ?? 0),
   });
-  return {
-    children,
-    rows: tinhDoiChieuDatBan((hangDat ?? []).map(doi), hangBan.map(doi)),
-  };
+  const ordered: ReconItemInput[] = (hangDat ?? []).map(doi);
+  const shipped = hangBan.map(doi);
+  const draftIds = warehouseDelivery ? children.filter((c) => c.status === "draft" && !c.cancelledAt && !c.voidedAt).map((c) => c.id) : [];
+  if (warehouseDelivery) {
+    const { data: adjustments, error } = await (supabase as any)
+      .from("warehouse_order_quantity_adjustments")
+      .select("product_id, variant_id, unit_key, quantity, invoice_id")
+      .eq("order_id", orderId);
+    if (error && error.code !== "42P01" && error.code !== "PGRST205") handleError(error, "getOrderReconciliation.adjustments");
+    for (const adjustment of adjustments ?? []) {
+      if (!idsCompleted.includes(adjustment.invoice_id)) continue;
+      const line = [...ordered, ...shipped].find((item) => item.productId === adjustment.product_id &&
+        item.variantId === adjustment.variant_id && item.unit?.trim().toLowerCase() === adjustment.unit_key);
+      if (line) ordered.push({ ...line, quantity: Number(adjustment.quantity) });
+    }
+  }
+  const rows = tinhDoiChieuDatBan(ordered, shipped, warehouseDelivery);
+  if (draftIds.length === 0) return { children, warehouseDelivery, rows };
+  const { data: draftItems, error: draftError } = await (supabase as any)
+    .from("invoice_items_scoped")
+    .select("product_id, variant_id, product_name, unit, quantity")
+    .in("invoice_id", draftIds);
+  if (draftError) handleError(draftError, "getOrderReconciliation.draft");
+  return { children, warehouseDelivery, rows, draftingRows: tinhDoiChieuDatBan([], (draftItems ?? []).map(doi), true) };
 }
 
 /**
