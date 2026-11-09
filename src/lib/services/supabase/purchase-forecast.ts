@@ -259,12 +259,14 @@ export async function getPurchaseForecast(
   // ── 2) Đơn đặt hàng đang mở ──
   let orderQ = supabase
     .from("invoices")
-    .select("id, code, order_code, branch_id, branches!invoices_branch_id_fkey(name)", {count:"exact"})
+    .select("id, code, order_code, branch_id, branches!invoices_branch_id_fkey(name), active_processing:sales_order_processing_closures!sales_order_processing_closures_order_id_fkey(closed_at)", {count:"exact"})
     .eq("tenant_id", tenantId)
     .eq("source", "order")
     .is("deleted_at", null)
     // "Hoàn tất xử lý" là xác nhận không cần dùng đơn này để dự kiến mua nữa.
     .is("fulfilled_by_id", null)
+    .not("active_processing.closed_at", "is", null)
+    .is("active_processing", null)
     .in("status", OPEN_ORDER_STATUSES as unknown as string[]);
   orderQ = applyCreatedAtRangeFilter(orderQ, filters);
   if (branchId) orderQ = orderQ.eq("branch_id", branchId);

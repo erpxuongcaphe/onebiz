@@ -2,9 +2,18 @@ import {beforeEach,describe,it,expect,vi} from 'vitest';
 const f=vi.hoisted(()=>({tables:{} as Record<string,Record<string,unknown>[]>,fail:'',calls:[] as {table:string;filters:unknown[][];offset:number}[]}));
 vi.mock('@/lib/services/supabase/base',()=>({getCurrentTenantId:async()=> 'tenant',getClient:()=>({rpc:async()=>({data:[],error:null}),from:(table:string)=>{
  const state={table,filters:[] as unknown[][],offset:0,size:200};
- const q={select(){return q;},eq(k:string,v:unknown){state.filters.push(['eq',k,v]);return q;},in(k:string,v:unknown[]){state.filters.push(['in',k,v]);return q;},is(k:string,v:unknown){state.filters.push(['is',k,v]);return q;},gte(){return q;},lt(){return q;},order(){return q;},range(a:number,b:number){state.offset=a;state.size=b-a+1;return q;},then(resolve:(v:unknown)=>unknown){
+ const q={select(){return q;},eq(k:string,v:unknown){state.filters.push(['eq',k,v]);return q;},in(k:string,v:unknown[]){state.filters.push(['in',k,v]);return q;},is(k:string,v:unknown){state.filters.push(['is',k,v]);return q;},not(k:string,operator:string,v:unknown){state.filters.push([`not.${operator}`,k,v]);return q;},gte(){return q;},lt(){return q;},order(){return q;},range(a:number,b:number){state.offset=a;state.size=b-a+1;return q;},then(resolve:(v:unknown)=>unknown){
   f.calls.push({...state,filters:[...state.filters]});
-  const rows=(f.tables[table]??[]).filter(r=>state.filters.every(([op,k,v])=>op==='in'?(v as unknown[]).includes(r[String(k)]):op==='is'?(r[String(k)]??null)===v:r[String(k)]===v));
+  const onlyActiveClosures = state.filters.some(([op,k,v])=>op==='not.is' && k==='active_processing.closed_at' && v===null);
+  const rows=(f.tables[table]??[]).filter(r=>state.filters.every(([op,k,v])=>{
+   if (k==='active_processing.closed_at') return true;
+   if (k==='active_processing' && onlyActiveClosures) {
+    return ((r.active_processing as {closed_at?:string|null}|null)?.closed_at ?? null)===v;
+   }
+   if (op==='in') return (v as unknown[]).includes(r[String(k)]);
+   if (op==='is') return (r[String(k)]??null)===v;
+   return r[String(k)]===v;
+  }));
   return Promise.resolve({data:rows.slice(state.offset,state.offset+state.size),count:rows.length,error:f.fail===table?{message:'Synthetic read failed'}:null}).then(resolve);
  }};return q;}})}));
 import {getPurchaseForecast} from '@/lib/services/supabase/purchase-forecast';
@@ -20,6 +29,19 @@ describe('forecast complete reads',()=>{
   f.tables.invoices=[order('a'),order('b','other'),{id:'c',tenant_id:'tenant',source:'pos',source_order_id:'a',status:'completed',deleted_at:null,voided_at:null,cancelled_at:null}];
   f.tables.invoice_items_scoped=[line('ia','a',10),line('ib','b',50),line('ic','c',3)];
   const r=await getPurchaseForecast({customerId:'nb'},'w');expect(r.orderCount).toBe(1);expect(r.skuRows[0]).toMatchObject({orderedQuantity:10,issuedQuantity:3,remainingQuantity:7});
+ });
+ it('excludes processed orders and counts only the undelivered quantity of a reopened order',async()=>{
+  f.tables.invoices=[
+   {...order('DH000157'),active_processing:{closed_at:'2026-11-09T04:18:21Z'}},
+   {...order('DH000159'),active_processing:{closed_at:'2026-11-09T04:19:06Z'}},
+   {...order('reopened'),active_processing:{closed_at:null}},
+   {id:'issued',tenant_id:'tenant',source_order_id:'reopened',status:'completed'},
+  ];
+  f.tables.invoice_items_scoped=[line('a','DH000157',48),line('b','DH000159',48),line('c','reopened',10),line('d','issued',3)];
+  const r=await getPurchaseForecast({},'w');
+  expect(r.orderCount).toBe(1);
+  expect(r.skuRows[0]).toMatchObject({orderedQuantity:10,issuedQuantity:3,remainingQuantity:7});
+  expect(r.materials[0].required).toBe(7);
  });
  it('filters groups and includes internal customers without using the normal customer-list exclusion',async()=>{
   f.tables.customers=[{id:'nb',tenant_id:'tenant',group_id:'g',is_internal:true}];f.tables.invoices=[order('a'),order('b','other')];f.tables.invoice_items_scoped=[line('ia','a'),line('ib','b',20)];
