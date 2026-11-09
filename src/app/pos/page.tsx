@@ -5406,6 +5406,7 @@ function ProcessOrderModal({
   );
 
   const [page, setPage] = useState(0);
+  const [showProcessing, setShowProcessing] = useState(false);
   const [totalOrders, setTotalOrders] = useState(0);
   const { hasPermission } = useAuth();
   const canCloseProcessing = hasPermission("orders.create");
@@ -5417,6 +5418,7 @@ function ProcessOrderModal({
 
   useEffect(() => {
     setPage(0);
+    setShowProcessing(false);
   }, [open, branchId]);
 
   useEffect(() => {
@@ -5438,7 +5440,7 @@ function ProcessOrderModal({
         searchField,
         branchId,
         filters: {
-          fulfillmentState: "pending",
+          ...(showProcessing ? { fulfillmentState: "processing" } : { fulfillmentState: "pending" }),
           status: ["draft", "confirmed", "delivering"],
         },
       })
@@ -5469,7 +5471,7 @@ function ProcessOrderModal({
       cancelled = true;
       clearTimeout(t);
     };
-  }, [open, search, searchField, branchId, page, toast, refreshKey]);
+  }, [open, search, searchField, branchId, page, toast, refreshKey, showProcessing]);
 
   useEffect(() => { setClosingOrder(null); }, [open, branchId]);
 
@@ -5509,6 +5511,17 @@ function ProcessOrderModal({
             Các đơn còn cần xử lý. Đơn đã xử lý được tra cứu tại Đơn đặt hàng.
           </p>
         </DialogHeader>
+
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Trạng thái xử lý đơn">
+          <Button type="button" size="sm" variant={showProcessing ? "outline" : "secondary"}
+            aria-pressed={!showProcessing} onClick={() => { setShowProcessing(false); setPage(0); }}>
+            Chờ xử lý
+          </Button>
+          <Button type="button" size="sm" variant={showProcessing ? "secondary" : "outline"}
+            aria-pressed={showProcessing} onClick={() => { setShowProcessing(true); setPage(0); }}>
+            Đang xử lý
+          </Button>
+        </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[180px]">
@@ -5555,7 +5568,7 @@ function ProcessOrderModal({
                 ? "Chọn chi nhánh để xử lý đặt hàng"
                 : search
                   ? "Không tìm thấy đơn phù hợp"
-                  : "Chưa có đơn đặt hàng nào"}
+                  : showProcessing ? "Chưa có đơn đang xử lý" : "Chưa có đơn chờ xử lý"}
             </div>
           ) : (
             orders.map((o) => (
