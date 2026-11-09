@@ -69,6 +69,7 @@ with required(relation_name, operation) as (
     ('fnb_delivery_fee_tiers', 'update'),
     ('fnb_product_branch_menu_policies', 'select'),
     ('fnb_product_branch_menu_scopes', 'select'),
+    ('fnb_purchase_sales_order_links', 'select'),
     ('fnb_sale_cost_shortfalls_00473', 'select'),
     ('fnb_supply_branch_scopes', 'select'),
     ('fnb_supply_catalog', 'select'),
@@ -212,7 +213,8 @@ with required(relation_name, operation) as (
     ('user_permission_overrides', 'delete'),
     ('user_permission_overrides', 'insert'),
     ('user_permission_overrides', 'select'),
-    ('user_permission_overrides', 'update')
+    ('user_permission_overrides', 'update'),
+    ('warehouse_order_quantity_adjustments', 'select')
 ),
 checked as (
   select
