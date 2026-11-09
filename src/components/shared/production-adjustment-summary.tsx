@@ -21,7 +21,7 @@ export function ProductionAdjustmentSummary({preview:p}:{preview:ProductionAdjus
     <div className="space-y-2"><h3 className="font-semibold">Nguyên liệu — chỉ ghi phần chênh lệch</h3>
       {p.materials.map(m=><div key={m.productId} className="grid gap-1 rounded-lg border p-3 sm:grid-cols-[minmax(0,1fr)_auto]">
         <div><strong>{m.productName}</strong><div>Thực dùng: {formatNumber(m.before)} → {formatNumber(m.after)} {m.unit}</div></div>
-        <div className="sm:text-right"><strong>Kho {signed(m.stockDelta)} {m.unit}</strong><div>Tồn: {formatNumber(m.stockBefore)} → {formatNumber(m.stockAfter)}</div><div>Giá trị kho {signed(m.costDelta,true)}</div></div>
+        <div className="sm:text-right">{m.stockDelta === 0 ? <strong>Giữ nguyên</strong> : <><strong>Kho {signed(m.stockDelta)} {m.unit}</strong><div>Tồn: {formatNumber(m.stockBefore)} → {formatNumber(m.stockAfter)}</div><div>Giá trị kho {signed(m.costDelta,true)}</div></>}</div>
       </div>)}
     </div>
     <div className="grid gap-2 rounded-lg border bg-muted/20 p-3 sm:grid-cols-3">

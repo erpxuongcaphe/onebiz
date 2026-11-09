@@ -19,6 +19,7 @@ const setup=`
  await db.exec(fs.readFileSync('supabase/migrations/20261108114733_production_adjustment_error_details.sql','utf8'));
  await db.exec(fs.readFileSync('supabase/migrations/20261109022247_production_output_only_lot_gap.sql','utf8'));
  await db.exec(fs.readFileSync('supabase/migrations/20261109022855_production_output_correction_branch_balance.sql','utf8'));
+ await db.exec(fs.readFileSync('supabase/migrations/20261109030410_production_adjustment_unchanged_materials.sql','utf8'));
 `;
 const checks=`
 {
@@ -75,6 +76,28 @@ const checks=`
  assert.equal(Number((await db.query('select current_qty from product_lots where id=$1',[own])).rows[0].current_qty),400);
  await db.exec('rollback');
  await db.query('delete from product_lots where id=$1',[separateLot]);
+ // The same equivalent amount in grams must not consult an untouched ingredient's live balance.
+ const equivalent=JSON.stringify([{productId:raw,quantity:100,unit:'G',expectedFactor:.002}]);
+ await db.exec('begin');
+ const unchanged=await preview(800,equivalent);
+ await db.query('update branch_stock set quantity=-1 where product_id=$1',[raw]);
+ await db.query('update products set stock=-1 where id=$1',[raw]);
+ await db.query('delete from fnb_branch_product_cost_balances where product_id=$1',[raw]);
+ assert.equal((await preview(800,equivalent)).token,unchanged.token);
+ const ingredientMovements=(await db.query('select count(*) n from stock_movements where product_id=$1',[raw])).rows[0].n;
+ await apply(unchanged,version,crypto.randomUUID(),equivalent);
+ assert.equal(await qty(raw),-1);
+ assert.equal((await db.query('select count(*) n from stock_movements where product_id=$1',[raw])).rows[0].n,ingredientMovements);
+ await db.exec('rollback');
+ await db.exec('begin');
+ await db.exec('savepoint material_check');
+ await db.query('update branch_stock set quantity=-1 where product_id=$1',[raw]);
+ await assert.rejects(()=>preview(800,input(.21)),/PRODUCTION_CORRECTION_STOCK_REQUIRED/);
+ await db.exec('rollback to savepoint material_check');
+ await db.query("update product_lots set current_qty=(select quantity from branch_stock where product_id=$1) where product_id=$1 and lot_number='RAW-RECEIPT'",[raw]);
+ await db.query('delete from fnb_branch_product_cost_balances where product_id=$1',[raw]);
+ await assert.rejects(()=>preview(800,input(.21)),/PRODUCTION_CORRECTION_COST_REQUIRED/);
+ await db.exec('rollback');
  let plan=await preview();
  assert.equal(plan.usedQuantity,400);assert.equal(plan.remainingAfter,400);assert.equal(plan.stockDelta,-200);
  assert.deepEqual(await physical(),before,'preview is read-only');assert.equal((await db.query('select count(*) n from audit_log')).rows[0].n,beforeAudit);
