@@ -1840,6 +1840,7 @@ function PosPageInner() {
           draftCode = "";
         }
       }
+      const warehousePreBill = currentBranch?.branchType === "warehouse";
       const receipt: ReceiptData = {
         invoiceCode: draftCode,
         date: new Date().toISOString(),
@@ -1847,6 +1848,7 @@ function PosPageInner() {
         items: state.lines.map((l) => ({
           name: l.productName,
           quantity: l.quantity,
+          unit: warehousePreBill ? l.unit : undefined,
           unitPrice: l.unitPrice,
           discount:
             l.discount.mode === "percent"
@@ -1909,21 +1911,18 @@ function PosPageInner() {
               note: state.note || undefined,
               createdBy: user?.fullName ?? "",
             };
-            const preLines = toPrintLines(
-              state.lines.map((l) => ({
-                name: l.productName,
-                quantity: l.quantity,
-                unitPrice: l.unitPrice,
-                total: state.computeLineTotal(l),
-                note: l.note, // 00208: ghi chú món trên phiếu tạm tính
-              })),
-            );
+            const preLines = toPrintLines(receipt.items);
             const base = buildInvoicePrintData(
               preInvoice,
               businessInfoRef.current ?? undefined,
               preLines,
             );
             const doc = applyTemplateToDocData(base, resolved);
+            if (warehousePreBill && doc.itemColumns && !doc.itemColumns.includes("ĐVT")) {
+              doc.itemColumns = doc.itemColumns.flatMap((column) =>
+                column === "Tên hàng" ? [column, "ĐVT"] : [column],
+              );
+            }
             doc.documentType = "PHIẾU TẠM TÍNH"; // ép lại — không để mẫu đè thành tiêu đề hóa đơn
             printDocument(doc, { paperSize: resolved.paperSize });
             printedViaTemplate = true;

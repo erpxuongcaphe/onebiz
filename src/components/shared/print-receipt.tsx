@@ -14,6 +14,7 @@ export interface ReceiptData {
   items: {
     name: string;
     quantity: number;
+    unit?: string;
     unitPrice: number;
     discount: number;
     total: number;
@@ -254,13 +255,15 @@ export function printReceiptDirect(data: ReceiptData, width: "58mm" | "80mm" = "
         ? "Chuyen khoan"
         : "The";
 
+  const hasUnits = data.isPreBill && data.items.some((item) => item.unit);
   const itemsHtml = data.items
     .map(
       (item) => `
       <div class="item-name">${item.name}</div>
       ${item.note ? `<div class="item-detail">↳ ${item.note}</div>` : ""}
-      <div class="item-detail row">
+      <div class="item-detail ${hasUnits ? "unit-row" : "row"}">
         <span>${formatNumber(item.quantity)} x ${formatCurrency(item.unitPrice)}</span>
+        ${hasUnits ? `<span>${(item.unit ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</span>` : ""}
         <span>${formatCurrency(item.total)}</span>
       </div>
       ${item.discount > 0 ? `<div class="item-detail row"><span>Giam gia</span><span>-${formatCurrency(item.discount)}</span></div>` : ""}
@@ -276,6 +279,8 @@ body{font-family:'Courier New',monospace;font-size:12px;width:${widthPx};margin:
 .center{text-align:center}.bold{font-weight:bold}
 .line{border-top:1px dashed #000;margin:6px 0}
 .row{display:flex;justify-content:space-between;padding:1px 0}
+.unit-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(3em,auto) minmax(5em,auto);gap:4px;padding-top:1px}
+.unit-row>:nth-child(2){text-align:center}.unit-row>:last-child{text-align:right}
 .item-name{font-size:11px}.item-detail{font-size:11px;padding-left:12px;color:#555}
 .total-row{font-size:14px;font-weight:bold}
 .store-name{font-size:16px;font-weight:bold}
@@ -294,6 +299,7 @@ ${data.isPreBill ? `<div class="center" style="padding:4px;border:2px dashed #00
 <div class="row"><span>Khach hang:</span><span>${data.customerName}</span></div>
 ${data.cashierName ? `<div class="row"><span>Thu ngan:</span><span>${data.cashierName}</span></div>` : ""}
 <div class="line"></div>
+${hasUnits ? '<div class="item-detail unit-row bold"><span>SL × Đơn giá</span><span>ĐVT</span><span>Thành tiền</span></div>' : ""}
 ${itemsHtml}
 <div class="line"></div>
 <div class="row"><span>Tong tien hang</span><span>${formatCurrency(data.subtotal)}</span></div>

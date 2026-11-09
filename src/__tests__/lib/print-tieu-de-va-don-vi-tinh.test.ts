@@ -1,5 +1,32 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { printReceiptDirect } from "@/components/shared/print-receipt";
 import { generateDocumentHtml, type DocumentPrintData } from "@/lib/print-document";
+
+const { sendPrintJob } = vi.hoisted(() => ({ sendPrintJob: vi.fn() }));
+vi.mock("@/lib/printer/print-job", () => ({
+  getPrintSettings: () => ({ openCashDrawer: false }),
+  sendPrintJob,
+}));
+
+it.each(["58mm", "80mm"] as const)("in tạm tính dự phòng khổ %s có cột ĐVT", (paperSize) => {
+  printReceiptDirect({
+    invoiceCode: "",
+    date: "2026-11-09",
+    customerName: "Xưởng Bửu Hòa",
+    items: [{ name: "Bò húc", quantity: 2, unit: "Thùng", unitPrice: 300000, discount: 0, total: 600000 }],
+    subtotal: 600000,
+    total: 600000,
+    discountAmount: 0,
+    paid: 0,
+    change: 0,
+    paymentMethod: "cash",
+    isPreBill: true,
+  }, paperSize);
+  expect(sendPrintJob).toHaveBeenLastCalledWith(expect.objectContaining({
+    paperSize,
+    html: expect.stringMatching(/<span>ĐVT<\/span>[\s\S]*<span>Thùng<\/span>/),
+  }));
+});
 
 /**
  * CEO 20/08/2026 — trình bày chứng từ in:
