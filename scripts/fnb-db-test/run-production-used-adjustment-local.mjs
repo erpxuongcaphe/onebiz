@@ -17,6 +17,8 @@ const setup=`
  await db.exec(fs.readFileSync('supabase/migrations/202610230003_production_used_adjustment.sql','utf8'));
  await db.exec(fs.readFileSync('supabase/migrations/202610230003_production_used_adjustment.sql','utf8'));
  await db.exec(fs.readFileSync('supabase/migrations/20261108114733_production_adjustment_error_details.sql','utf8'));
+ await db.exec(fs.readFileSync('supabase/migrations/20261109022247_production_output_only_lot_gap.sql','utf8'));
+ await db.exec(fs.readFileSync('supabase/migrations/20261109022855_production_output_correction_branch_balance.sql','utf8'));
 `;
 const checks=`
 {
@@ -55,6 +57,24 @@ const checks=`
  await assert.rejects(()=>preview(),/PRODUCTION_CORRECTION_PERMISSION_REQUIRED/,'cancel does not grant correction');
  await assert.rejects(()=>db.query('select correct_production_order_quantities($1,$2,$3,0,$4,$5,true)',[usedOrder,version,crypto.randomUUID(),'[]','Cancel used lot']),/PRODUCTION_CORRECTION_OUTPUT_USED/,'cancel permission still enforces physical lot safety');
  await db.exec(\`create or replace function user_has_permission(uuid,text) returns boolean language sql stable as $$select true$$;\`);
+ const separateLot=crypto.randomUUID();
+ await db.query("insert into product_lots(id,tenant_id,branch_id,product_id,lot_number,source_type,initial_qty,current_qty,status) values($1,$2,$3,$4,'SEPARATE-LOT','purchase',5,5,'active')",[separateLot,tenant,branch,prepared]);
+ await assert.rejects(()=>preview(800,input(.21)),/PRODUCTION_ADJUSTMENT_OUTPUT_ONLY_WHEN_LOT_DRIFT/);
+ await assert.rejects(()=>preview(1100),/PRODUCTION_CORRECTION_LOT_RECONCILIATION_REQUIRED/);
+ const readGap=async()=>Number((await db.query("select (select sum(current_qty) from product_lots where product_id=$1 and status in ('active','expired'))-(select quantity from branch_stock where product_id=$1) gap",[prepared])).rows[0].gap);
+ assert.equal(await readGap(),5);
+ await db.exec('begin');
+ await db.query('update products set stock=-100 where id=$1',[prepared]);
+ const outputOnly=await preview();
+ assert.equal(outputOnly.existingLotGap,5);
+ assert.equal(outputOnly.stockDelta,-200);
+ await apply(outputOnly,version);
+ assert.equal(Number((await db.query('select stock from products where id=$1',[prepared])).rows[0].stock),-300);
+ assert.equal(await readGap(),5);
+ assert.equal(Number((await db.query('select current_qty from product_lots where id=$1',[separateLot])).rows[0].current_qty),5);
+ assert.equal(Number((await db.query('select current_qty from product_lots where id=$1',[own])).rows[0].current_qty),400);
+ await db.exec('rollback');
+ await db.query('delete from product_lots where id=$1',[separateLot]);
  let plan=await preview();
  assert.equal(plan.usedQuantity,400);assert.equal(plan.remainingAfter,400);assert.equal(plan.stockDelta,-200);
  assert.deepEqual(await physical(),before,'preview is read-only');assert.equal((await db.query('select count(*) n from audit_log')).rows[0].n,beforeAudit);
@@ -118,7 +138,7 @@ const checks=`
  // New correction-to-zero must still permit cancellation of an unused batch.
  await db.exec(\`update product_lots set current_qty=current_qty+1 where id='\${own}'\`);
  await db.query('update branch_stock set quantity=quantity-5 where product_id=$1',[prepared]);
- await assert.rejects(()=>preview(), error => {
+ await assert.rejects(()=>preview(910,input(.21)), error => {
   assert.match(error.message,/PRODUCTION_CORRECTION_LOT_RECONCILIATION_REQUIRED/);
   const detail=JSON.parse(error.detail);
   assert.equal(detail.kind,'stock');

@@ -4,6 +4,11 @@ import { formatCurrency, formatNumber } from "@/lib/format";
 const signed=(n:number, money=false)=>`${n>0?"+":""}${money?`${formatCurrency(n)} đ`:formatNumber(n)}`;
 export function ProductionAdjustmentSummary({preview:p}:{preview:ProductionAdjustmentPreview}) {
   return <div className="space-y-3 text-sm">
+    {p.existingLotGap != null && (
+      <p className="rounded-lg border border-status-warning/40 bg-status-warning/10 p-3">
+        Lần sửa này chỉ giảm thành phẩm của mẻ. Chênh lệch sổ lô đã có từ trước ({formatNumber(p.existingLotGap)} {p.unit}) cần đối soát riêng.
+      </p>
+    )}
     <div className="rounded-lg border p-3"><div className="font-semibold">{p.productName}</div>
       <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div>Tổng mẻ trước → sau<strong className="block">{formatNumber(p.outputBefore)} → {formatNumber(p.outputAfter)} {p.unit}</strong></div>
