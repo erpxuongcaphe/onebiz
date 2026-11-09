@@ -1632,7 +1632,8 @@ export async function getOrderReconciliation(orderId: string): Promise<{
 
   // Mặt hàng các đơn con ĐÃ THANH TOÁN — nháp/đã huỷ không tính là "đã bán".
   const idsCompleted = children
-    .filter((c) => donConDungDuoc(c) && (!warehouseDelivery || c.source === "internal"))
+    .filter((c) => c.status === "completed" && !c.voidedAt && !c.cancelledAt &&
+      (!warehouseDelivery || c.source === "internal"))
     .map((c) => c.id);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let hangBan: any[] = [];
