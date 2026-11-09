@@ -20,6 +20,10 @@ const setup=`
  await db.exec(fs.readFileSync('supabase/migrations/20261109022247_production_output_only_lot_gap.sql','utf8'));
  await db.exec(fs.readFileSync('supabase/migrations/20261109022855_production_output_correction_branch_balance.sql','utf8'));
  await db.exec(fs.readFileSync('supabase/migrations/20261109030410_production_adjustment_unchanged_materials.sql','utf8'));
+ const deficitSql=fs.readFileSync('supabase/migrations/00473_branch_negative_sale_policy.sql','utf8');
+ await db.exec(deficitSql.slice(deficitSql.indexOf('create or replace function public._post_fnb_branch_cost_in_00390'),deficitSql.indexOf('-- Patch the deployed recipe')));
+ await db.exec('alter table audit_log add column if not exists created_at timestamptz default now()');
+ await db.exec(fs.readFileSync('supabase/migrations/20261109040000_production_adjustment_settled_shortfall.sql','utf8'));
 `;
 const checks=`
 {
@@ -198,6 +202,40 @@ const checks=`
  assert.equal(history.reason,'Generic SKU');assert.equal(history.created_by,actor);assert.equal(history.preview.outputBefore,1000);assert.equal(history.preview.outputAfter,800);assert.equal(history.preview.usedQuantity,400);
  assert.equal(Number(history.inventory_cost_delta)+Number(history.used_cost_delta),-100);
  await db.exec('update fnb_supply_branch_scopes set enforcement_enabled=true;');
+ // Fully settled production receipt with a live branch deficit.
+ await db.exec('begin');
+ const settledBatch=crypto.randomUUID(),settledLot=crypto.randomUUID();
+ const settledInvoice=crypto.randomUUID(),pendingInvoice=crypto.randomUUID();
+ await db.query("insert into production_orders(id,tenant_id,branch_id,product_id,code,status,planned_qty,completed_qty,cogs_amount,updated_at) values($1,$2,$3,$4,'SX-SETTLED','completed',1000,1000,2500,now())",[settledBatch,tenant,branch,prepared]);
+ await db.query("insert into production_order_materials values(gen_random_uuid(),$1,$2,.2,.2,'Tui',12500)",[settledBatch,raw]);
+ await db.query('delete from product_lots where product_id=$1',[prepared]);
+ await db.query("insert into product_lots(id,tenant_id,branch_id,product_id,production_order_id,lot_number,source_type,initial_qty,current_qty,status) values($1,$2,$3,$4,$5,'SETTLED','production',1000,0,'consumed')",[settledLot,tenant,branch,prepared,settledBatch]);
+ await db.query("insert into lot_allocations(tenant_id,lot_id,source_type,source_id,quantity) values($1,$2,'reconciliation',gen_random_uuid(),1000)",[tenant,settledLot]);
+ await db.query('update branch_stock set quantity=-500 where product_id=$1',[prepared]);
+ await db.query('update products set stock=-500 where id=$1',[prepared]);
+ await db.query('update fnb_branch_product_cost_balances set costed_quantity=0,total_cost=0,deficit_quantity=500 where product_id=$1',[prepared]);
+ for (const [invoice,quantity,pending,cost] of [[settledInvoice,1000,0,2500],[pendingInvoice,500,500,0]]) {
+  const event=(await db.query("insert into fnb_branch_product_cost_events(tenant_id,branch_id,product_id,direction,source_type,source_reference_type,source_reference_id,quantity,unit_cost,total_cost) values($1,$2,$3,'out','bom_consume','invoice',$4,$5,2.5,$5::numeric*2.5) returning id",[tenant,branch,prepared,invoice,quantity])).rows[0].id;
+  await db.query("insert into fnb_sale_cost_shortfalls_00473(tenant_id,branch_id,product_id,cost_event_id,invoice_id,quantity,pending_quantity,estimated_unit_cost,cost_known,settled_actual_cost) values($1,$2,$3,$4,$5,$6,$7,2.5,true,$8)",[tenant,branch,prepared,event,invoice,quantity,pending,cost]);
+ }
+ await db.query("insert into audit_log(tenant_id,user_id,action,entity_type,entity_id,new_data) values($1,$2,'fnb_stock_shortfall_settled','invoice',$3,$4)",[tenant,actor,settledInvoice,JSON.stringify({quantity:1000,received_unit_cost:2.5,branch_id:branch,product_id:prepared,source_id:settledBatch})]);
+ const settledStamp=(await db.query('select updated_at::text value from production_orders where id=$1',[settledBatch])).rows[0].value;
+ for (const [nextOutput,nextDeficit,ledgerCost] of [[810,690,-475],[1011,489,27.2008]]) {
+  await db.exec('savepoint shortfall_case');
+  const args=[settledBatch,settledStamp,nextOutput,input(.2),'Settled output correction'];
+  const result=(await db.query('select preview_production_used_adjustment($1,$2,$3,$4,$5) result',args)).rows[0].result;
+  assert.equal(result.shortfallQuantityDelta,nextDeficit-500);
+  assert.equal(result.shortfallCostDelta,ledgerCost);
+  assert.equal(result.usedCostDelta+result.shortfallCostDelta,0);
+  const applyArgs=[...args,crypto.randomUUID(),result.token];
+  await db.query('select apply_production_used_adjustment($1,$2,$3,$4,$5,$6,$7)',applyArgs);
+  await db.query('select apply_production_used_adjustment($1,$2,$3,$4,$5,$6,$7)',applyArgs);
+  assert.equal(await qty(prepared),-nextDeficit);
+  assert.equal(Number((await db.query('select sum(pending_quantity) n from fnb_sale_cost_shortfalls_00473 where product_id=$1',[prepared])).rows[0].n),nextDeficit);
+  assert.equal(Number((await db.query('select quantity from lot_allocations where lot_id=$1',[settledLot])).rows[0].quantity),nextOutput);
+  await db.exec('rollback to savepoint shortfall_case');
+ }
+ await db.exec('rollback');
  // RLS exposes no adjustment rows to another tenant or anonymous client.
  await db.exec('grant select on profiles to authenticated;grant usage on schema auth to authenticated;');
  await db.exec(\`select set_config('request.jwt.claim.sub',gen_random_uuid()::text,false);set role authenticated;\`);

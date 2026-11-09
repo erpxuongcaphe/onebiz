@@ -753,6 +753,8 @@ export interface ProductionAdjustmentMaterial {
 }
 export interface ProductionAdjustmentPreview {
   existingLotGap?: number;
+  shortfallQuantityDelta?: number;
+  shortfallCostDelta?: number;
   token: string; orderCode: string; productName: string; unit: string;
   outputBefore: number; outputAfter: number; usedQuantity: number;
   remainingBefore: number; remainingAfter: number; stockBefore: number; stockAfter: number; stockDelta: number;
