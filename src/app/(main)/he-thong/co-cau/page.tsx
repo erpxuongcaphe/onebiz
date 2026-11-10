@@ -144,7 +144,7 @@ export default function AccountHierarchyPage() {
     setSelected(current?.positionId ?? "");
     setDepartment(current?.departmentId ?? "");
     setManagedBranches(current?.managedBranchIds ?? []);
-    setAssignmentMode("replace");
+    setAssignmentMode(doc.assignments.filter(a => a.userId === person.id).length > 1 ? "append" : "replace");
   };
   const requestPreview = async () => {
     if (!snapshot || busy || roleLoading || operationLock.current) return;
