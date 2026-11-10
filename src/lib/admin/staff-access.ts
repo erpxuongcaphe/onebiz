@@ -1,4 +1,17 @@
-import type { AccountPosition } from "./account-hierarchy";
+import type { AccountPosition, AccountHierarchy } from "./account-hierarchy";
+
+/** Display configured scope without implying that branch access itself grants management. */
+export function describeStaffManagement(doc: AccountHierarchy, userId: string, branchIds: string[], branchNames: Map<string, string>): string {
+  if (doc.globalAdminIds.includes(userId)) return "Toàn doanh nghiệp (quyền quản trị riêng)";
+  const scopes = doc.assignments.filter(a => a.userId === userId).flatMap(a => {
+    const p = doc.positions.find(p => p.id === a.positionId);
+    if (!p || !Object.values(p.permissions).some(Boolean)) return [];
+    if (p.scope === "department") return [`Bộ phận ${doc.departments.find(d => d.id === a.departmentId)?.name ?? "chưa được chọn"} và bộ phận con`];
+    const ids = p.scope === "assigned" ? a.managedBranchIds.filter(id => branchIds.includes(id)) : branchIds;
+    return ids.map(id => branchNames.get(id) ?? "Chi nhánh không còn hiển thị");
+  });
+  return [...new Set(scopes)].join(", ") || "Chưa được giao quyền quản lý tài khoản";
+}
 
 export interface StaffRoleDraft {
   id: string;
