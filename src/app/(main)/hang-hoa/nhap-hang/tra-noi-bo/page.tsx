@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { NumericInput } from '@/components/ui/numeric-input';
 import { ReceivingSourceTabs } from '@/components/shared/receiving-source-tabs';
+import { InternalReturnFinancePanel } from '@/components/shared/internal-return-finance';
 import { formatNumber, formatDate } from '@/lib/format';
 import { getInternalReturns, submitInternalReturn, type InternalReturn } from '@/lib/services/supabase/internal-returns';
 import { getInternalReceivingWorkspace, type InternalReceivingOrder } from '@/lib/services/supabase/internal-receiving';
@@ -127,6 +128,7 @@ function Workspace(){
             <Button disabled={busy||!valid||loading} onClick={()=>preview?void submit():setPreview(true)}>{busy?'Đang ghi nhận…':preview?(current?'Xác nhận thực nhận':'Xác nhận gửi trả'):'Xem trước'}</Button></div>}
         </>}
         {current&&<details className="border-t pt-3"><summary className="cursor-pointer text-sm font-medium">Lịch sử · {current.events.length} lần</summary><ol className="mt-2 space-y-2 text-sm">{current.events.map(e=><li key={e.id} className="rounded bg-muted/30 p-2"><p>{e.action==='sent'?'Gửi trả':'Nhận trả'} · {e.actor_name} · {formatDate(e.created_at)}</p>{e.action==='received'&&<p>Giảm nợ {formatNumber(e.debt_reduced)}đ · Chờ hoàn/cấn trừ {formatNumber(e.refund_pending)}đ</p>}<p className="whitespace-pre-wrap">{e.note}</p></li>)}</ol></details>}
+        {current&&user?.id&&current.to_branch_id===branch&&hasPermission('inventory.internal_return_settle')&&<InternalReturnFinancePanel key={current.id} returnId={current.id} userId={user.id} canRefund={hasPermission('finance.create_transaction')}/>}
       </section>}
     </>}
   </main>;

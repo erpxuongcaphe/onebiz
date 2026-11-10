@@ -313,5 +313,111 @@ revoke all on function public.guard_internal_received_return_quantity() from pub
 
 revoke all on function public.get_internal_stock_returns(uuid,uuid),public.send_internal_stock_return(uuid,jsonb,text,uuid),public.receive_internal_stock_return(uuid,jsonb,text,uuid) from public,anon;
 grant execute on function public.get_internal_stock_returns(uuid,uuid),public.send_internal_stock_return(uuid,jsonb,text,uuid),public.receive_internal_stock_return(uuid,jsonb,text,uuid) to authenticated;
+create table public.internal_return_settlements (
+ id uuid primary key default gen_random_uuid(), event_id uuid not null references public.internal_stock_return_events(id),
+ tenant_id uuid not null references public.tenants(id), actor_id uuid not null references auth.users(id),
+ kind text not null check(kind in ('offset','refund')), amount numeric(18,2) not null check(amount>0),
+ invoice_id uuid references public.invoices(id), cash_id uuid references public.cash_transactions(id),
+ note text not null, created_at timestamptz not null default now()
+);
+create index internal_return_settlement_event on public.internal_return_settlements(event_id);
+alter table public.internal_return_settlements enable row level security;
+revoke all on public.internal_return_settlements from public,anon,authenticated;
+
+create function public.get_internal_return_finance(p_return_id uuid)
+returns jsonb language plpgsql stable security definer set search_path=public,pg_temp as $$
+declare t uuid:=get_user_tenant_id(); a uuid:=auth.uid(); r internal_stock_returns%rowtype; result jsonb;
+begin
+ select * into r from internal_stock_returns where id=p_return_id and tenant_id=t;
+ if a is null or not found or not coalesce(user_has_branch_access(a,r.to_branch_id),false)
+  or not coalesce(user_has_permission(a,'inventory.internal_return_settle'),false) then raise exception 'RETURN_SETTLE_DENIED'; end if;
+ select jsonb_build_object(
+  'credits',(select coalesce(jsonb_agg(jsonb_build_object('id',e.id,'createdAt',e.created_at,'original',e.refund_pending,
+    'remaining',e.refund_pending-coalesce((select sum(z.amount) from internal_return_settlements z where z.event_id=e.id),0)) order by e.created_at),'[]') from internal_stock_return_events e where e.return_id=r.id and e.action='received' and e.refund_pending>0),
+  'invoices',(select coalesce(jsonb_agg(to_jsonb(q)),'[]') from (select v.id,v.code,v.debt from internal_sales s join invoices v on v.id=s.invoice_id
+    where s.tenant_id=t and s.from_branch_id=r.to_branch_id and s.to_branch_id=r.from_branch_id and s.status='completed'
+    and v.tenant_id=t and v.status='completed' and v.deleted_at is null and v.debt>0 order by v.created_at limit 100) q),
+  'accounts',(select coalesce(jsonb_agg(jsonb_build_object('id',m.id,'name',m.name,'kind',m.kind)),'[]') from money_accounts m
+    where m.tenant_id=t and m.branch_id=r.to_branch_id and m.active and m.kind in ('cash','bank') and coalesce(user_has_permission(a,'finance.create_transaction'),false)),
+  'history',(select coalesce(jsonb_agg(jsonb_build_object('id',z.id,'kind',z.kind,'amount',z.amount,'note',z.note,'createdAt',z.created_at,'actor',p.full_name,'invoice',v.code,'cash',c.code) order by z.created_at),'[]')
+   from internal_return_settlements z join internal_stock_return_events e on e.id=z.event_id left join profiles p on p.id=z.actor_id
+   left join invoices v on v.id=z.invoice_id left join cash_transactions c on c.id=z.cash_id where e.return_id=r.id)
+ ) into result;
+ return result;
+end $$;
+
+create function public.settle_internal_return_credit(p_event_id uuid,p_kind text,p_amount numeric,p_target_id uuid,p_note text,p_request_id uuid)
+returns jsonb language plpgsql security definer set search_path=public,pg_temp as $$
+declare t uuid:=get_user_tenant_id(); a uuid:=auth.uid(); r internal_stock_returns%rowtype; e internal_stock_return_events%rowtype;
+ v invoices%rowtype; original invoices%rowtype; m money_accounts%rowtype; available numeric; balance numeric;
+ payload jsonb; previous internal_stock_return_requests%rowtype; result jsonb; sid uuid:=gen_random_uuid(); cash uuid;
+begin
+ if a is null or t is null or not coalesce(user_has_permission(a,'inventory.internal_return_settle'),false) then raise exception 'RETURN_SETTLE_DENIED'; end if;
+ if p_request_id is null then raise exception 'RETURN_REQUEST_REQUIRED'; end if;
+ perform pg_advisory_xact_lock(hashtextextended(t::text||p_request_id::text,0));
+ select * into e from internal_stock_return_events where id=p_event_id and action='received';
+ if not found then raise exception 'RETURN_CREDIT_NOT_CONFIRMED'; end if;
+ select * into r from internal_stock_returns where id=e.return_id and tenant_id=t;
+ if not found or not coalesce(user_has_branch_access(a,r.to_branch_id),false) then raise exception 'RETURN_SETTLE_DENIED'; end if;
+ if p_kind='refund' and not coalesce(user_has_permission(a,'finance.create_transaction'),false) then raise exception 'RETURN_REFUND_DENIED'; end if;
+ payload:=jsonb_build_object('action','settle','event',p_event_id,'kind',p_kind,'amount',p_amount,'target',p_target_id,'note',trim(p_note));
+ select * into previous from internal_stock_return_requests where tenant_id=t and request_id=p_request_id;
+ if found then
+  if previous.payload<>payload then raise exception 'RETURN_REQUEST_CHANGED'; end if;
+  return previous.result;
+ end if;
+ if p_kind not in ('offset','refund') or p_kind is null or p_amount is null or p_amount::text in ('NaN','Infinity','-Infinity') or p_amount<=0 or p_amount<>round(p_amount,2)
+  or length(trim(coalesce(p_note,''))) not between 3 and 500 then raise exception 'RETURN_SETTLEMENT_INVALID'; end if;
+ -- Serialize all settlements of this receipt. Invoice locks precede customer/credit locks.
+ select * into e from internal_stock_return_events where id=p_event_id for update;
+ select e.refund_pending-coalesce(sum(amount),0) into available from internal_return_settlements where event_id=e.id;
+ if p_amount>available then raise exception 'RETURN_CREDIT_EXCEEDED'; end if;
+ select v0.* into original from invoices v0 join internal_sales s on s.invoice_id=v0.id where s.id=r.sale_id and v0.tenant_id=t;
+ if p_kind='offset' then
+  select v0.* into v from invoices v0 where v0.id=p_target_id and v0.tenant_id=t for update;
+  if not found or v.status<>'completed' or v.deleted_at is not null or v.customer_id is distinct from original.customer_id
+    or not exists(select 1 from internal_sales s where s.invoice_id=v.id and s.tenant_id=t and s.from_branch_id=r.to_branch_id and s.to_branch_id=r.from_branch_id and s.status='completed') then raise exception 'RETURN_OFFSET_TARGET_INVALID'; end if;
+  if v.debt<p_amount then raise exception 'RETURN_OFFSET_EXCEEDS_DEBT'; end if;
+ else
+  select * into m from money_accounts where id=p_target_id and tenant_id=t and branch_id=r.to_branch_id and active and kind in ('cash','bank');
+  if not found then raise exception 'RETURN_REFUND_ACCOUNT_INVALID'; end if;
+ end if;
+ perform 1 from customers where id=original.customer_id and tenant_id=t for update;
+ select -amount into balance from customer_debt_adjustments where tenant_id=t and branch_id=r.to_branch_id and idempotency_key='internal-return:'||e.id::text for update;
+ if not found or balance<>available then raise exception 'RETURN_CREDIT_LEDGER_MISMATCH'; end if;
+ if p_kind='offset' then
+  update invoices set debt=debt-p_amount where id=v.id;
+ else
+  insert into cash_transactions(tenant_id,branch_id,code,type,category,amount,counterparty,customer_id,payment_method,money_account_id,reference_type,reference_id,note,created_by)
+  values(t,r.to_branch_id,next_cash_code(t,'payment'),'payment','Hoàn trả hàng nội bộ',p_amount,original.customer_name,original.customer_id,
+    case when m.kind='cash' then 'cash' else 'transfer' end,m.id,'internal_return_settlement',sid,trim(p_note),a) returning id into cash;
+ end if;
+ -- The immutable receipt and settlement history retain the original credit.
+ -- This row is the remaining balance, consumed without a second expense/debt.
+ if p_amount=available then
+  delete from customer_debt_adjustments where tenant_id=t and idempotency_key='internal-return:'||e.id::text;
+ else
+  update customer_debt_adjustments set amount=amount+p_amount where tenant_id=t and idempotency_key='internal-return:'||e.id::text;
+ end if;
+ insert into internal_return_settlements(id,event_id,tenant_id,actor_id,kind,amount,invoice_id,cash_id,note)
+ values(sid,e.id,t,a,p_kind,p_amount,case when p_kind='offset' then v.id end,cash,trim(p_note));
+ result:=jsonb_build_object('id',sid,'remaining',available-p_amount);
+ insert into audit_log(tenant_id,user_id,action,entity_type,entity_id,new_data)
+ values(t,a,'internal_return_settled','internal_stock_return',r.id,payload||result);
+ insert into internal_stock_return_requests values(t,p_request_id,payload,result);
+ return result;
+end $$;
+
+create function public.guard_internal_return_cash() returns trigger language plpgsql security definer set search_path=public,pg_temp as $$
+begin
+ if old.reference_type='internal_return_settlement' then raise exception 'Khoản hoàn gắn với trả hàng nội bộ. Không sửa/hủy riêng phiếu tiền; cần đối soát chứng từ trả liên quan.'; end if;
+ if tg_op='DELETE' then return old; end if;
+ return new;
+end $$;
+create trigger guard_internal_return_cash before update or delete on public.cash_transactions for each row execute function public.guard_internal_return_cash();
+revoke all on function public.guard_internal_return_cash() from public,anon,authenticated;
+revoke all on function public.get_internal_return_finance(uuid),public.settle_internal_return_credit(uuid,text,numeric,uuid,text,uuid) from public,anon;
+grant execute on function public.get_internal_return_finance(uuid),public.settle_internal_return_credit(uuid,text,numeric,uuid,text,uuid) to authenticated;
+
 commit;
 notify pgrst,'reload schema';
