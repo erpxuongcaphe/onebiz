@@ -9,6 +9,15 @@ import Page from "@/app/(main)/he-thong/co-cau/page";
 const empty: AccountHierarchy = { positions: [], departments: [], assignments: [], globalAdminIds: [] };
 beforeEach(() => { vi.clearAllMocks(); state.roles.mockResolvedValue([]); state.role = "owner"; state.load.mockResolvedValue({ version: 0, document: structuredClone(empty) }); state.users.mockResolvedValue([{ id: "staff", fullName: "Nhân viên A", branchIds: ["branch"], role: "staff", email: "", phone: null }]); state.preview.mockResolvedValue({ version: 0, fingerprint: "fixture", changes: [] }); state.history.mockResolvedValue([]); });
 describe("organizational hierarchy editor", () => {
+  it("starts individual assignment without assuming a manager position", async () => {
+    const document = structuredClone(empty); document.positions.push({ id: "manager", name: "Quản lý", parentId: null, scope: "branch", depth: "all", permissions: { edit: true, password: true, create: true } });
+    state.load.mockResolvedValue({ version: 1, document }); render(<Page />);
+    fireEvent.click(await screen.findByRole("button", { name: "Nhân viên & chi nhánh" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Gán chức vụ" }));
+    expect(screen.getByRole("combobox", { name: /^Chức vụ$/ })).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Cập nhật phân công" })).toBeDisabled();
+    expect(state.save).not.toHaveBeenCalled();
+  });
   it("does not load account data or grant access for a non-owner", async () => {
     state.role = "staff"; render(<Page />); expect(screen.getByText(/Chỉ chủ doanh nghiệp được cấu hình/)).toBeVisible(); expect(state.load).not.toHaveBeenCalled(); expect(state.users).not.toHaveBeenCalled();
   });
