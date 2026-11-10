@@ -2,6 +2,8 @@ import { getClient, getCurrentTenantId, handleError } from './base';
 
 function explainReceiptError(error: {message: string}): never {
   const messages: Record<string, string> = {
+    RETURN_RECEIPT_BELOW_SENT: 'Hàng của phiếu này đã được gửi trả. Không thể giảm số đã nhận xuống dưới số đã gửi trả; kiểm tra phiếu trả nội bộ trước khi sửa.',
+    RETURN_SOURCE_LINE_LOCKED: 'Dòng hàng đã liên kết phiếu trả nội bộ. Không thể đổi mã dòng nhận; hãy kiểm tra chứng từ gốc.',
     INTERNAL_RECEIVE_BRANCH_DENIED: 'Anh/chị không có quyền nhận hàng tại chi nhánh này.',
     INTERNAL_RECEIVE_DENIED: 'Tài khoản chưa được cấp quyền nhận hàng.',
     INTERNAL_RECEIVE_ADJUST_DENIED: 'Tài khoản chưa được cấp quyền sửa số đã nhận.',
