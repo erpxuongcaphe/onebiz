@@ -22,6 +22,7 @@ try {
  await db.exec(await readFile(new URL('../supabase/migrations/00029_invite_staff.sql',import.meta.url),'utf8'));
  await db.exec(`create trigger on_auth_user_created after insert on auth.users for each row execute function public.handle_new_user()`);
  await db.exec(await readFile(new URL('../supabase/migrations/20261102180654_trusted_account_bootstrap.sql',import.meta.url),'utf8'));
+ await db.exec(await readFile(new URL('../supabase/migrations/20261110153739_deferred_managed_account_bootstrap.sql',import.meta.url),'utf8'));
  const create=(n,user={},app={})=>db.query('insert into auth.users values($1,$2,$3,$4)',[id(n),`fixture-${n}@example.test`,user,app]);
  for(const payload of [{invited_tenant_id:id(1),invited_role:'owner'},{invited_role_id:id(10)},{invited_branch_id:id(20)},{invited_role:'owner'}]) {
   await assert.rejects(create(100,payload),/MANAGED_ACCOUNT_SERVER_CONTEXT_REQUIRED/);checks++;
@@ -41,5 +42,23 @@ try {
  check([id(1),id(2)].includes(bootstrap.tenant_id),false,'bootstrap never joins an existing tenant');
  check((await db.query('select count(*)::int as n from code_sequences where tenant_id=$1',[bootstrap.tenant_id])).rows[0].n,15,'new-tenant sequences retained');
  check((await db.query('select count(*)::int as n from profiles where tenant_id=$1',[id(2)])).rows[0].n,0,'untrusted target tenant unchanged');
+ // Reproduce GoTrue adminUserCreate: INSERT first, UPDATE trusted metadata later.
+ await db.exec('begin');
+ await create(110,{full_name:'Two-step staff',invited_tenant_id:id(1)}, {provider:'email'});
+ check((await db.query('select count(*)::int as n from profiles where id=$1',[id(110)])).rows[0].n,0,'no premature profile or tenant');
+ await db.query('update auth.users set raw_app_meta_data=$1 where id=$2', [{managed_tenant_id:id(1),managed_role_id:id(10)},id(110)]);
+ await db.exec('commit');
+ check((await db.query('select tenant_id,role_id,role from profiles where id=$1',[id(110)])).rows[0],{tenant_id:id(1),role_id:id(10),role:'staff'},'GoTrue two-step create succeeds in correct tenant');
+ await db.exec('begin');
+ await create(111,{invited_tenant_id:id(1)});
+ await db.query('update auth.users set raw_app_meta_data=$1 where id=$2',[{managed_tenant_id:id(1),managed_role_id:id(11)},id(111)]);
+ await assert.rejects(db.exec('commit'),/không thuộc tenant/);checks++;
+ await db.exec('rollback');
+ check((await db.query('select count(*)::int as n from auth.users where id=$1',[id(111)])).rows[0].n,0,'invalid final scope rolls back Auth insert');
+ await db.exec('begin');
+ await create(112,{invited_tenant_id:id(1)});
+ await db.query('delete from auth.users where id=$1',[id(112)]);
+ await db.exec('commit');
+ check((await db.query('select count(*)::int as n from profiles where id=$1',[id(112)])).rows[0].n,0,'insert then delete leaves no profile');
  console.log(`Trusted account bootstrap: ${checks} PostgreSQL/WASM checks passed. No production contacted.`);
 } finally { await db.close(); }
