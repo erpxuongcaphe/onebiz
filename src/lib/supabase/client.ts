@@ -2,6 +2,7 @@ import { createBrowserClient, type CookieOptions } from "@supabase/ssr";
 import { processLock } from "@supabase/auth-js";
 import type { Database } from "./types";
 import { getSharedCookieDomain } from "./cookie-domain";
+import { createSessionReadFetch } from "./session-read-fetch";
 
 /**
  * Supabase client cho browser (Client Components).
@@ -51,12 +52,22 @@ export function createClient(): Client {
       }
     : undefined;
 
-  cachedClient = createBrowserClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     // A trailing newline survives URL encoding as %0A in the Realtime WebSocket
     // apikey query param; HTTP requests may still appear healthy.
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!.trim(),
+  const publicKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!.trim();
+  cachedClient = createBrowserClient<Database>(
+    url,
+    publicKey,
     {
+      global: typeof window === "undefined" ? undefined : {
+        fetch: createSessionReadFetch(url, publicKey, (input, init) => window.fetch(input, init), async (token) => {
+          const auth = cachedClient?.auth;
+          if (!auth) return;
+          const { data } = await auth.getSession();
+          if (data.session?.access_token === token) await auth.refreshSession();
+        }),
+      },
       auth: {
         // PERF F15: processLock thay vì navigatorLock default. Tránh lock
         // contention khi N service fire song song trên page mount.
