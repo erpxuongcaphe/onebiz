@@ -142,6 +142,7 @@ function InternalReceivingWorkspace() {
         {order.policyVersion === 0 && <p className="mt-1 text-xs text-muted-foreground">Giữ ghi nhận theo phiếu gốc</p>}
         <p className="mb-3 text-sm text-muted-foreground">{order.fromBranch} → {order.toBranch ?? currentBranch?.name} · {formatDate(order.createdAt)}</p>
         {order.note&&<p className="mb-3 whitespace-pre-wrap text-sm">{order.note}</p>}
+        {order.status==='completed'&&order.items.some(i=>i.received>0)&&hasPermission('inventory.internal_return_send')&&<Link className="mb-3 inline-block text-sm font-medium text-primary underline" href={`/hang-hoa/nhap-hang/tra-noi-bo?branch=${encodeURIComponent(order.toBranchId??activeBranchId??'')}&sale=${encodeURIComponent(order.id)}`}>Trả hàng về kho giao</Link>}
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b">
           <div role="tablist" aria-label="Chi tiết nhận hàng" className="flex gap-4">
             {([['items','Hàng hóa'],['history',`Lịch sử nhận (${order.receipts.length})`],['documents','Chứng từ liên quan']] as const).map(([id,label])=><button key={id} type="button" role="tab" aria-selected={detailTab===id} disabled={receiving} className={`border-b-2 py-3 text-sm font-medium ${detailTab===id?'border-primary text-primary':'border-transparent text-muted-foreground'}`} onClick={()=>setDetailTab(id)}>{label}</button>)}
