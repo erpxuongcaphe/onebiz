@@ -75,7 +75,7 @@ jobs:
           PGDATABASE: postgres
         run: |
           npm install --prefix "$RUNNER_TEMP/internal-pos-runtime" --no-save --ignore-scripts --no-audit --no-fund @electric-sql/pglite@0.5.8
-          ONEBIZ_PGLITE_MODULE="$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js" node scripts/test-account-management-scope.mjs
+          ONEBIZ_PGLITE_MODULE="$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js" node scripts/test-account-management-scope.mjs --unified-staff
           ONEBIZ_PGLITE_MODULE="$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js" node scripts/test-trusted-account-bootstrap.mjs
           node scripts/fnb-db-test/run-internal-pos-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
           node scripts/fnb-db-test/run-scoped-read-context-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"

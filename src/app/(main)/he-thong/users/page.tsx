@@ -821,9 +821,9 @@ function UsersPage() {
               />
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <label className="space-y-1 text-sm">Chức vụ trong cơ cấu
+              <label className="space-y-1 text-sm">Chức vụ
                 <select className="h-11 w-full rounded-md border bg-background px-2 text-base sm:text-sm" value={createForm.positionId}
-                  onChange={e => setCreateForm({ ...createForm, positionId: e.target.value })}>
+                  onChange={e => { const position = management?.positions.find(p => p.id === e.target.value); setCreateForm({ ...createForm, positionId: e.target.value, roleId: position?.roleId && roles.some(r => r.id === position.roleId) ? position.roleId : "" }); }}>
                   <option value="">{management?.owner ? "Chưa phân công" : "Chọn chức vụ cấp dưới"}</option>
                   {management?.positions?.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
@@ -850,7 +850,7 @@ function UsersPage() {
             </div>
 
             <div className="space-y-1">
-              <Label htmlFor="create-role">Vai trò</Label>
+              <Label htmlFor="create-role">Nhóm quyền sử dụng</Label>
               <Select
                 value={createForm.roleId}
                 onValueChange={(v) =>

@@ -1,11 +1,11 @@
 import type { AccountHierarchy, AccountPosition } from "./account-hierarchy";
 export interface HierarchyDocumentChange { kind: string; name: string; before: string; after: string }
-export function describeHierarchyChanges(before: AccountHierarchy, after: AccountHierarchy, names: ReadonlyMap<string, string>, branchNames: ReadonlyMap<string, string> = new Map()): HierarchyDocumentChange[] {
+export function describeHierarchyChanges(before: AccountHierarchy, after: AccountHierarchy, names: ReadonlyMap<string, string>, branchNames: ReadonlyMap<string, string> = new Map(), roleNames: ReadonlyMap<string, string> = new Map()): HierarchyDocumentChange[] {
   const changes: HierarchyDocumentChange[] = [];
   const position = (p: AccountPosition, doc: AccountHierarchy) => {
     const scope = { branch: "Chi nhánh truy cập", assigned: "Nhóm chi nhánh được giao", department: "Bộ phận" }[p.scope];
     const actions = [p.permissions.edit && "Sửa thông tin", p.permissions.password && "Đặt mật khẩu", p.permissions.create && "Tạo cấp dưới"].filter(Boolean).join(", ") || "Chưa cấp thao tác";
-    return `${p.name} · Trực thuộc: ${doc.positions.find(n => n.id === p.parentId)?.name ?? "Cấp cao nhất"} · ${scope} · ${p.depth === "all" ? "Mọi cấp dưới" : "Cấp dưới trực tiếp"} · ${actions}`;
+    return `${p.name} · Trực thuộc: ${doc.positions.find(n => n.id === p.parentId)?.name ?? "Cấp cao nhất"} · ${scope} · ${p.depth === "all" ? "Mọi cấp dưới" : "Cấp dưới trực tiếp"} · ${actions}${p.roleId ? ` · Nhóm quyền: ${roleNames.get(p.roleId) ?? p.roleId}` : ""}`;
   };
   for (const id of new Set([...before.positions, ...after.positions].map(p => p.id))) {
     const old = before.positions.find(p => p.id === id), next = after.positions.find(p => p.id === id);

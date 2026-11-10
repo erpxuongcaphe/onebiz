@@ -5,6 +5,8 @@ export interface AccountPosition {
   parentId: string | null;
   scope: "branch" | "assigned" | "department";
   depth: "direct" | "all";
+  /** Explicit default business role; names never imply permission grants. */
+  roleId?: string | null;
   permissions: { edit: boolean; password: boolean; create: boolean };
 }
 export interface AccountDepartment { id: string; name: string; parentId: string | null }
