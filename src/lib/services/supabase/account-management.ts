@@ -1,6 +1,7 @@
 import { getClient, handleError } from "./base";
 import type { AccountHierarchy, AccountPosition, AccountDepartment } from "@/lib/admin/account-hierarchy";
 import type { getTenantUsers } from "./roles";
+import type { StaffRoleDraft, StaffRoleAssignment } from "@/lib/admin/staff-access";
 
 export interface AccountManagementContext {
   owner: boolean;
@@ -65,4 +66,18 @@ export async function saveAccountHierarchy(snapshot: HierarchySnapshot, preview:
   const { data, error } = await (getClient().rpc as any)("save_account_hierarchy", { p_document: snapshot.document, p_expected_version: preview.version, p_fingerprint: preview.fingerprint });
   if (error) hierarchyError(error);
   return Number(data);
+}
+
+export async function saveStaffAccess(snapshot: HierarchySnapshot, preview: HierarchyPreview,
+  roles: StaffRoleDraft[], assignments: StaffRoleAssignment[]): Promise<HierarchySnapshot> {
+  const { data, error } = await (getClient().rpc as any)("save_staff_access", {
+    p_document: snapshot.document, p_expected_version: preview.version, p_fingerprint: preview.fingerprint,
+    p_roles: roles, p_assignments: assignments,
+  });
+  if (error) {
+    if (/STAFF_(ROLE|USER)_STALE/.test(error.message ?? "")) throw new Error("Quyền đã được sửa ở nơi khác. Tải lại và đối chiếu trước khi lưu.");
+    hierarchyError(error);
+  }
+  if (!Number.isSafeInteger(data?.version) || !Array.isArray(data?.document?.positions)) throw new Error("Chưa xác nhận được kết quả lưu. Tải lại để kiểm tra trước khi thử lại.");
+  return data;
 }

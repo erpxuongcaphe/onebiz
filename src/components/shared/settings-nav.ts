@@ -9,8 +9,8 @@ export const settingsNav: SettingsGroup[] = [
     { label: "Thông tin doanh nghiệp", href: "/he-thong/thiet-lap", icon: "business", permissions: ["system.manage_roles"] },
     { label: "Chi nhánh", href: "/cai-dat/chi-nhanh", icon: "apartment", permissions: ["system.manage_branches"] },
     { label: "Người dùng", href: "/he-thong/users", icon: "manage_accounts", permissions: ["system.manage_users", "system.reset_user_password"] },
-    { label: "Cơ cấu & phân quyền", href: "/he-thong/co-cau", icon: "account_tree", permissions: ["system.manage_roles"] },
-    { label: "Vai trò & phân quyền", href: "/cai-dat/phan-quyen", icon: "shield", permissions: ["system.manage_roles"] },
+    { label: "Nhân sự & phân quyền", href: "/he-thong/co-cau", icon: "account_tree", permissions: ["system.manage_roles"] },
+    { label: "Nhóm quyền dùng chung", href: "/cai-dat/phan-quyen", icon: "shield", permissions: ["system.manage_roles"] },
     { label: "Ngôn ngữ", href: "/cai-dat/ngon-ngu", icon: "language" },
   ] },
   { label: "Bán hàng & thanh toán", items: [

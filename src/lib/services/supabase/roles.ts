@@ -94,10 +94,11 @@ export async function getRoleById(roleId: string): Promise<DbRoleDetail> {
   if (error || !role) handleError(error ?? { message: "Role not found" }, "getRoleById");
 
   // role_permissions scope qua role_id (đã verify ownership)
-  const { data: perms } = await supabase
+  const { data: perms, error: permissionsError } = await supabase
     .from("role_permissions")
     .select("permission_code")
     .eq("role_id", roleId);
+  if (permissionsError) handleError(permissionsError, "getRoleById:permissions");
 
   // Member count
   const { count } = await supabase

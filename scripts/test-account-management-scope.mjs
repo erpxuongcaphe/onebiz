@@ -192,5 +192,9 @@ await db.query(`select save_role_atomic('${id(20)}','{}',null)`);
 await db.query(`update profiles set is_active=false where id='${id(101)}'`);
 await actor(101); check(await allowed(102),false,'inactive manager denied');
 console.log(`Account hierarchy: ${checks} PostgreSQL/WASM checks passed. No production contacted.`);
+if (process.argv.includes('--unified-staff')) {
+  const { testStaffAccess } = await import('./test-staff-access.mjs');
+  await testStaffAccess(db, id);
+}
 } catch(error) { console.error(error.message, error.code, error.where ?? '', 'position', error.position, 'internal', error.internalQuery); if(error.query && error.position) console.error(error.query.slice(Math.max(0, Number(error.position)-220), Number(error.position)+120)); process.exitCode=1; }
 finally { await db.close(); }
