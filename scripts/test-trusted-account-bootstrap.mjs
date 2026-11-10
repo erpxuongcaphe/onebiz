@@ -60,5 +60,9 @@ try {
  await db.query('delete from auth.users where id=$1',[id(112)]);
  await db.exec('commit');
  check((await db.query('select count(*)::int as n from profiles where id=$1',[id(112)])).rows[0].n,0,'insert then delete leaves no profile');
+ check((await db.query('select count(*)::int as n from account_bootstrap_internal.pending')).rows[0].n,0,'no queued work remains after transactions');
+ await db.exec('create role untrusted_user; grant usage on schema public to untrusted_user; set role untrusted_user');
+ await assert.rejects(db.query('select * from account_bootstrap_internal.pending'),/permission denied/);checks++;
+ await db.exec('reset role');
  console.log(`Trusted account bootstrap: ${checks} PostgreSQL/WASM checks passed. No production contacted.`);
 } finally { await db.close(); }
