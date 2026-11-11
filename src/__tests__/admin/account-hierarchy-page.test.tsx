@@ -7,7 +7,7 @@ vi.mock("@/lib/services/supabase/roles", () => ({ getTenantUsers: state.users, g
 vi.mock("@/lib/services/supabase/account-management", () => ({ getAccountHierarchy: state.load, previewAccountHierarchy: state.preview, saveStaffAccess: state.save, getAccountHierarchyHistory: state.history, getAccountHierarchyVersion: state.detail }));
 import Page from "@/app/(main)/he-thong/co-cau/page";
 const empty: AccountHierarchy = { positions: [], departments: [], assignments: [], globalAdminIds: [] };
-beforeEach(() => { vi.clearAllMocks(); state.roles.mockResolvedValue([]); state.role = "owner"; state.load.mockResolvedValue({ version: 0, document: structuredClone(empty) }); state.users.mockResolvedValue([{ id: "staff", fullName: "Nhân viên A", branchIds: ["branch"], role: "staff", email: "", phone: null }]); state.preview.mockResolvedValue({ version: 0, fingerprint: "fixture", changes: [] }); state.history.mockResolvedValue([]); });
+beforeEach(() => { vi.clearAllMocks(); state.roles.mockResolvedValue([]); state.role = "owner"; state.load.mockResolvedValue({ version: 0, document: structuredClone(empty) }); state.users.mockResolvedValue([{ id: "staff", fullName: "Nhân viên A", branchIds: ["branch"], role: "staff", email: "", phone: null }]); state.preview.mockResolvedValue({ version: 0, fingerprint: "fixture", changes: [] }); state.history.mockResolvedValue([]); state.save.mockImplementation(async (snapshot: unknown) => snapshot); });
 describe("organizational hierarchy editor", () => {
   it("preserves other positions when editing a multi-position employee", async () => {
     const document = structuredClone(empty);
@@ -17,9 +17,9 @@ describe("organizational hierarchy editor", () => {
     fireEvent.click(await screen.findByRole("button",{name:"Nhân viên & chi nhánh"}));
     fireEvent.click(await screen.findByRole("button",{name:"Sửa phân công"}));
     expect(screen.getByRole("combobox",{name:"Cách gán"})).toHaveValue("append");
-    fireEvent.click(screen.getByRole("button",{name:"Cập nhật phân công"}));
-    expect(screen.getByText("two / one")).toBeVisible();
-    expect(state.save).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button",{name:"Lưu phân công"}));
+    expect(await screen.findByText("two / one")).toBeVisible();
+    expect(state.save).toHaveBeenCalledTimes(1);
   });
   it("starts individual assignment without assuming a manager position", async () => {
     const document = structuredClone(empty); document.positions.push({ id: "manager", name: "Quản lý", parentId: null, scope: "branch", depth: "all", permissions: { edit: true, password: true, create: true } });
@@ -27,7 +27,7 @@ describe("organizational hierarchy editor", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Nhân viên & chi nhánh" }));
     fireEvent.click(await screen.findByRole("button", { name: "Gán chức vụ" }));
     expect(screen.getByRole("combobox", { name: /^Chức vụ$/ })).toHaveValue("");
-    expect(screen.getByRole("button", { name: "Cập nhật phân công" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Lưu phân công" })).toBeDisabled();
     expect(state.save).not.toHaveBeenCalled();
   });
   it("does not load account data or grant access for a non-owner", async () => {
@@ -70,9 +70,11 @@ describe("organizational hierarchy editor", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Xem sơ đồ mẫu cửa hàng" }));
     fireEvent.click(screen.getByRole("button", { name: "Dùng sơ đồ này" }));
     fireEvent.click(screen.getByRole("button", { name: "Nhân viên & chi nhánh" }));
-    fireEvent.click(screen.getByLabelText("Chọn các nhân viên đang lọc"));
-    fireEvent.click(screen.getByRole("button", { name: "Lưu thay đổi" }));
-    expect(screen.getByRole("alert")).toHaveTextContent("chưa bấm Cập nhật phân công");
+    fireEvent.click(screen.getByLabelText("Chọn 1 nhân viên trong kết quả lọc"));
+    const positionSelect = screen.getByRole<HTMLSelectElement>("combobox", { name: /^Chức vụ$/ });
+    fireEvent.change(positionSelect, { target: { value: positionSelect.options[1].value } });
+    fireEvent.click(screen.getByRole("button", { name: "Lưu phân công" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Còn thay đổi cơ cấu");
     expect(state.preview).not.toHaveBeenCalled();
   });
 });

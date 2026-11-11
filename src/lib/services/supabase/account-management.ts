@@ -29,7 +29,10 @@ export async function getAccountHierarchyVersion(version: number): Promise<{ bef
   if (!data?.before || !data?.after) throw new Error("Chưa tải được chi tiết lịch sử.");
   return data;
 }
-export async function getManagedAccounts(): Promise<Awaited<ReturnType<typeof getTenantUsers>>> {
+export type ManagedAccount = Awaited<ReturnType<typeof getTenantUsers>>[number] & {
+  departmentIds?: string[]; positionIds?: string[];
+};
+export async function getManagedAccounts(): Promise<ManagedAccount[]> {
   const { data, error } = await (getClient().rpc as any)("get_managed_accounts");
   if (error) handleError(error, "getManagedAccounts");
   if (!Array.isArray(data)) throw new Error("Chưa tải được nhân viên trong phạm vi.");

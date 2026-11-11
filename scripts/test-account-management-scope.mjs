@@ -189,6 +189,31 @@ const auditId=(await db.query(`select begin_managed_password_reset('${id(100)}',
 await db.query('select complete_managed_password_reset($1,true)',[auditId]);
 check((await db.query('select action from audit_log where id=$1',[auditId])).rows[0].action,'password_reset_completed','reset audit recorded without credentials');
 await db.query(`select save_role_atomic('${id(20)}','{}',null)`);
+// Directory metadata must not change who can be listed, including cross-tenant,
+// peer/owner protection, revoked actions and explicitly delegated managers.
+await db.exec('reset role');
+const actors = [100,101,102,103,104,105,106,107,108,109];
+const beforeDirectory = new Map();
+for (const person of actors) {
+  await actor(person);
+  beforeDirectory.set(person,(await db.query('select get_managed_accounts() as value')).rows[0].value);
+}
+await db.exec('reset role');
+await db.exec(await readFile(new URL('../supabase/migrations/20261111044747_staff_directory_scope_metadata.sql',import.meta.url),'utf8'));
+for (const person of actors) {
+  await actor(person);
+  const after=(await db.query('select get_managed_accounts() as value')).rows[0].value;
+  const existing=after.map(({departmentIds,positionIds,...rest})=>rest);
+  assert.deepEqual(existing,beforeDirectory.get(person),`directory scope unchanged for ${person}`);checks++;
+  check(after.every(p=>Array.isArray(p.departmentIds)&&Array.isArray(p.positionIds)),true,'metadata arrays present for allowed rows');
+}
+await actor(100);
+const directory=(await db.query('select get_managed_accounts() as value')).rows[0].value;
+check(directory.find(p=>p.id===id(110)).departmentIds.includes('bar'),true,'new employee department correctly linked');
+check(directory.find(p=>p.id===id(110)).positionIds.includes('staff'),true,'new employee position correctly linked');
+await db.exec('reset role; set role anon');
+await assert.rejects(db.query('select get_managed_accounts()'),/permission denied/);checks++;
+await db.exec('reset role');
 await db.query(`update profiles set is_active=false where id='${id(101)}'`);
 await actor(101); check(await allowed(102),false,'inactive manager denied');
 console.log(`Account hierarchy: ${checks} PostgreSQL/WASM checks passed. No production contacted.`);
