@@ -40,15 +40,15 @@ export function useLocalList<T>(rows: T[], config: Config<T>) {
   };
 }
 
-export function LocalListTools<T>({ list, placeholder, disabled = false }: {
-  list: ReturnType<typeof useLocalList<T>>; placeholder: string; disabled?: boolean;
+export function LocalListTools<T>({ list, placeholder, disabled = false, hideSearch = false }: {
+  list: ReturnType<typeof useLocalList<T>>; placeholder: string; disabled?: boolean; hideSearch?: boolean;
 }) {
   return <div className="space-y-2">
     <div className="flex flex-wrap items-center gap-2" role="search" aria-label="Tìm kiếm và lọc danh sách">
-      <div className="relative min-w-0 basis-56 flex-1">
+      {!hideSearch && <div className="relative min-w-0 basis-56 flex-1">
         <Icon name="search" size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <Input aria-label={placeholder} placeholder={placeholder} value={list.search} onChange={e => list.setSearch(e.target.value)} className="pl-9 max-md:text-[16px] pointer-coarse:text-[16px]" disabled={disabled} />
-      </div>
+      </div>}
       {list.config.filters.map(filter => <Select key={filter.key} value={list.filters[filter.key] || "__all"} onValueChange={value => list.setFilter(filter.key, value === "__all" || !value ? "" : value)} disabled={disabled}>
         <SelectTrigger aria-label={`Lọc ${filter.label}`} className="w-full sm:w-auto sm:min-w-36"><SelectValue /></SelectTrigger>
         <SelectContent><SelectItem value="__all">{filter.label}: Tất cả</SelectItem>{filter.options.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>

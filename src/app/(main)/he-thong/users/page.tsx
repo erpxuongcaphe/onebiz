@@ -49,6 +49,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Icon } from "@/components/ui/icon";
 import { LocalListTools, useLocalList } from "@/components/shared/local-list-tools";
+import { StaffDirectoryFilterBar } from "@/components/shared/staff-directory-filters";
+import { EMPTY_STAFF_FILTERS, filterStaffDirectory, type StaffDirectoryFilters } from "@/lib/admin/staff-directory";
 
 interface UserRow {
   id: string;
@@ -60,6 +62,8 @@ interface UserRow {
   roleName: string | null;
   branchId: string | null;
   branchIds: string[];
+  departmentIds?: string[];
+  positionIds?: string[];
   isActive: boolean;
   createdAt: string;
 }
@@ -115,6 +119,7 @@ function UsersPage() {
   const [pinStatuses, setPinStatuses] = useState<Record<string, { hasPin: boolean; resetRequired: boolean }> | null>(null);
   const [resettingPin, setResettingPin] = useState(false);
   const [users, setUsers] = useState<UserRow[]>([]);
+  const [directoryFilters, setDirectoryFilters] = useState<StaffDirectoryFilters>({ ...EMPTY_STAFF_FILTERS });
   const [roles, setRoles] = useState<DbRole[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -346,10 +351,10 @@ function UsersPage() {
     return `${names.slice(0, 2).join(", ")} +${names.length - 2}`;
   };
 
-  const userList = useLocalList(users, {
+  const scopedDirectory = filterStaffDirectory(users, directoryFilters);
+  const userList = useLocalList(scopedDirectory, {
     searchText: u => `${u.fullName} ${u.email} ${u.phone ?? ""} ${u.roleName ?? u.role}`,
     filters: [
-      { key: "branch", label: "Chi nhánh", options: branches.map(b => ({ value: b.id, label: b.name })), matches: (u, value) => u.role === "owner" || u.branchIds.includes(value) },
       { key: "role", label: "Vai trò", options: [{ value: "unassigned", label: "Chưa gán vai trò" }, ...roles.map(r => ({ value: r.id, label: r.name }))], matches: (u, value) => value === "unassigned" ? !u.roleId : u.roleId === value },
       { key: "status", label: "Trạng thái", options: [{ value: "active", label: "Hoạt động" }, { value: "inactive", label: "Vô hiệu" }], matches: (u, value) => value === "active" ? u.isActive : !u.isActive },
       { key: "pin", label: "PIN", options: [{ value: "ready", label: "PIN đã tạo" }, { value: "missing", label: "PIN chưa tạo" }, { value: "reset", label: "PIN cần tạo lại" }], matches: (u, value) => { const p = pinStatuses?.[u.id]; return Boolean(p && (value === "reset" ? p.resetRequired : value === "ready" ? p.hasPin && !p.resetRequired : !p.hasPin && !p.resetRequired)); } },
@@ -370,9 +375,9 @@ function UsersPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Người dùng & Phân quyền</h1>
+          <h1 className="text-2xl font-bold">Nhân viên & phân quyền</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Quản lý tài khoản nhân viên, gán vai trò
+            Xác định phạm vi nhân viên trước, sau đó chọn thao tác được phép.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -411,6 +416,11 @@ function UsersPage() {
       </div>
 
       {/* User table */}
+      <StaffDirectoryFilterBar value={directoryFilters} onChange={next => { setDirectoryFilters(next); userList.setPage(1); }}
+        branches={branches.filter(b => users.some(u => u.branchIds.includes(b.id)))}
+        departments={(management?.departments ?? []).filter(d => users.some(u => u.departmentIds?.includes(d.id)))}
+        count={scopedDirectory.length} total={users.length} />
+      {users.some(u => u.departmentIds === undefined) && <p role="status" className="rounded-lg border p-3 text-sm">Thông tin phòng ban chưa được máy chủ cung cấp. Bộ lọc phòng ban chưa thể xác định những nhân viên này.</p>}
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
@@ -419,7 +429,7 @@ function UsersPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="mb-4"><LocalListTools list={userList} placeholder="Tìm họ tên, email, số điện thoại..." /></div>
+          <div className="mb-4"><LocalListTools hideSearch list={userList} placeholder="Tìm họ tên, email, số điện thoại..." /></div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -435,7 +445,7 @@ function UsersPage() {
               <tbody>
                 {userList.rows.map((user) => (
                   <tr key={user.id} className="border-b last:border-0">
-                    <td className="py-3 font-medium">{user.fullName}</td>
+                    <td className="py-3 font-medium">{user.fullName}<span className="mt-1 block text-xs font-normal text-muted-foreground">{user.departmentIds === undefined ? "Phòng ban chưa tải" : user.departmentIds.map(id => management?.departments.find(d => d.id === id)?.name ?? "Phòng ban không còn hiển thị").join(", ") || "Chưa phân phòng ban"}</span></td>
                     <td className="py-3 text-muted-foreground">{user.email || "—"}</td>
                     <td className="py-3 hidden md:table-cell" title={user.branchIds
                       .map((branchId) => branches.find((branch) => branch.id === branchId)?.name)
