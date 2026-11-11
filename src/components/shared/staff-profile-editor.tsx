@@ -649,6 +649,14 @@ export function StaffProfileEditor({
                                       cấu hình dùng chung toàn công ty.
                                     </p>
                                   )}
+                                {branchId &&
+                                  p.code === "inventory.transfer" && (
+                                    <p className="text-xs text-muted-foreground">
+                                      Chuyển kho cần quyền tại cả chi nhánh gửi
+                                      và chi nhánh nhận. Chặn ở một bên sẽ chặn
+                                      phiếu.
+                                    </p>
+                                  )}
                                 <p className="mt-1 text-xs text-muted-foreground">
                                   {p.group} · {result.source}
                                 </p>
