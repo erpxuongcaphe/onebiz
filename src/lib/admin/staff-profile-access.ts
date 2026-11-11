@@ -152,6 +152,22 @@ export function projectedStaffPermission(
       source: "Theo phân công quản lý nhân sự; còn kiểm tra phạm vi cấp dưới",
     };
   const role = snapshot.roles.find((r) => r.id === draft.roleId);
+  if (
+    code === "pos_fnb.cancel_unpaid_order" &&
+    !role?.permissions.includes(code)
+  ) {
+    const legacy = draft.exceptions.find(
+      (e) => e.branchId === null && e.permissionCode === "pos_fnb.void",
+    );
+    if (
+      legacy?.choice !== "revoke" &&
+      (legacy?.choice === "grant" || role?.permissions.includes("pos_fnb.void"))
+    )
+      return {
+        allowed: true,
+        source: "Theo quyền Hủy hóa đơn cũ; có thể chặn riêng tại chi nhánh",
+      };
+  }
   return {
     allowed: Boolean(role?.permissions.includes(code)),
     source: role ? `Theo mẫu ${role.name}` : "Chưa chọn nhóm quyền",

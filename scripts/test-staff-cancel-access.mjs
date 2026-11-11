@@ -225,6 +225,22 @@ try {
     true,
   );
   checks++;
+  await db.exec(`insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type)
+    values('${id(1)}','${id(101)}','pos_fnb.cancel_unpaid_order','revoke')`);
+  assert.equal(
+    (
+      await db.query(
+        `select _staff_legacy_cancel_permission('${id(101)}','${id(10)}') as ok`,
+      )
+    ).rows[0].ok,
+    false,
+  );
+  assert.deepEqual(
+    (await db.query("select get_my_auth_bootstrap() as result")).rows[0].result
+      .legacyPermissionDenials,
+    ["pos_fnb.cancel_unpaid_order"],
+  );
+  checks += 2;
   console.log(
     `Staff cancellation: ${checks} checks passed; granular denial blocks legacy void fallback, allowed-branch approval preserved.`,
   );

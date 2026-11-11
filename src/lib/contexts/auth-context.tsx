@@ -21,7 +21,7 @@ import { readDeviceBinding } from "@/lib/hooks/use-device-binding";
 import { isInternalAuthEmail } from "@/lib/auth/user-identifiers";
 import { canViewAllBranches, parseAccessibleBranchIds } from "@/lib/auth/branch-scope";
 import { readAuthBootstrap } from "@/lib/auth/bootstrap";
-import { permissionsForBranch } from '@/lib/permissions/branch-permissions';
+import { permissionsForBranch, permissionWithLegacyFallback } from '@/lib/permissions/branch-permissions';
 
 // --- Types ---
 
@@ -46,7 +46,7 @@ interface AuthContextValue extends AuthState {
   /** Branch ID to filter data queries — undefined means show all branches */
   activeBranchId: string | undefined;
   /** Check if current user has a specific permission */
-  hasPermission: (code: string) => boolean;
+  hasPermission: (code: string, legacyCode?: string) => boolean;
   /** Re-fetch profile + tenant + branches. Dùng sau khi user update /ho-so. */
   refreshProfile: () => Promise<void>;
   logout: () => Promise<void>;
@@ -84,6 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentBranch, setCurrentBranch] = useState<Branch | null>(null);
   const [permissions, setPermissions] = useState<Set<string>>(new Set());
   const [branchPermissionAdjustments, setBranchPermissionAdjustments] = useState<{branchId:string;code:string;allowed:boolean}[]>([]);
+  const [legacyPermissionDenials, setLegacyPermissionDenials] = useState<string[]>([]);
   const effectiveBranchPermissions = useMemo(() => permissionsForBranch(permissions,branchPermissionAdjustments,currentBranch?.id ?? null),[permissions,branchPermissionAdjustments,currentBranch?.id]);
   const [isLoading, setIsLoading] = useState(true);
   const [authDataError, setAuthDataError] = useState<string | null>(null);
@@ -103,6 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setCurrentBranch(null);
       setPermissions(new Set());
       setBranchPermissionAdjustments([]);
+      setLegacyPermissionDenials([]);
       clearProfileCache();
       const timeout = setTimeout(() => {
         if (request !== profileRequestRef.current) return;
@@ -207,6 +209,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         setPermissions(perms);
         setBranchPermissionAdjustments(bootstrap?.branchPermissionAdjustments ?? []);
+        setLegacyPermissionDenials(bootstrap?.legacyPermissionDenials ?? []);
 
         const tenantData = tenantRes.data;
         if (tenantData) {
@@ -540,6 +543,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setCurrentBranch(null);
         setPermissions(new Set());
         setBranchPermissionAdjustments([]);
+        setLegacyPermissionDenials([]);
         // Reset dedup ref để lần sign-in tiếp theo sẽ load lại
         loadedUserIdRef.current = null;
         // PERF F11: Clear profile cache trong base.ts để service không trả
@@ -675,13 +679,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Permission check helper
   const hasPermission = useCallback(
-    (code: string): boolean => {
+    (code: string, legacyCode?: string): boolean => {
       if (isLoading || authDataError || !user?.isActive) return false;
       if (user?.role === "owner") return true;
       if (effectiveBranchPermissions.has("*")) return true;
-      return effectiveBranchPermissions.has(code);
+      return permissionWithLegacyFallback(
+        effectiveBranchPermissions, branchPermissionAdjustments,
+        currentBranch?.id ?? null, code, legacyCode, legacyPermissionDenials,
+      );
     },
-    [user?.role, user?.isActive, effectiveBranchPermissions, isLoading, authDataError]
+    [user?.role, user?.isActive, effectiveBranchPermissions, branchPermissionAdjustments, legacyPermissionDenials, currentBranch?.id, isLoading, authDataError]
   );
 
   const logout = useCallback(async () => {
@@ -716,6 +723,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
         setPermissions(new Set());
         setBranchPermissionAdjustments([]);
+        setLegacyPermissionDenials([]);
         setTenant(null);
         setBranches([]);
         setCurrentBranch(null);

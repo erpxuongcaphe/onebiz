@@ -6,6 +6,8 @@ set local statement_timeout='30s';
 create function public._staff_legacy_cancel_permission(p_user uuid,p_branch uuid)
 returns boolean language sql stable security definer set search_path='' as $$
  select public.user_has_permission(p_user,'pos_fnb.void') and not exists(
+  select 1 from public.user_permission_overrides o where o.user_id=p_user
+   and o.permission_code='pos_fnb.cancel_unpaid_order' and o.override_type='revoke') and not exists(
   select 1 from public.user_branch_permission_overrides o
   where o.user_id=p_user and o.branch_id=p_branch
    and o.permission_code='pos_fnb.cancel_unpaid_order')
@@ -60,5 +62,12 @@ begin
   if patched=source then raise exception 'STAFF_CANCEL_OTP_LEGACY_CHANGED';end if;execute patched;
  end loop;
 end $patch$;
+-- Keep the client action aligned with explicit global denies, without another request.
+do $$ declare source text; patched text;
+begin
+ source:=pg_get_functiondef('public.get_my_auth_bootstrap()'::regprocedure);
+ patched:=replace(source,'''scope'',coalesce(','''legacyPermissionDenials'',coalesce((select jsonb_agg(o.permission_code) from public.user_permission_overrides o where o.user_id=v_actor and o.tenant_id=v_profile.tenant_id and o.permission_code=''pos_fnb.cancel_unpaid_order'' and o.override_type=''revoke''),''[]''::jsonb), ''scope'',coalesce(');
+ if patched=source then raise exception 'STAFF_CANCEL_BOOTSTRAP_CHANGED';end if;execute patched;
+end $$;
 insert into public.staff_branch_permission_catalog values('pos_fnb.cancel_unpaid_order',1);
 commit;

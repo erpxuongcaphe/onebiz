@@ -58,6 +58,57 @@ const snapshot: StaffProfileSnapshot = {
   branchPermissionCodes: ["pos_fnb.split_bill", "pos_fnb.transfer_table"],
 };
 describe("staff profile scope", () => {
+  it("explains the old cancellation alias but keeps local and global denials authoritative", () => {
+    const oldRole = {
+      ...snapshot,
+      roles: [{ id: "r", name: "Old role", permissions: ["pos_fnb.void"] }],
+    };
+    const draft = draftFromStaffProfile(oldRole);
+    expect(
+      projectedStaffPermission(
+        oldRole,
+        draft,
+        "premium",
+        "pos_fnb.cancel_unpaid_order",
+      ).allowed,
+    ).toBe(true);
+    const local = setStaffException(
+      draft,
+      "premium",
+      "pos_fnb.cancel_unpaid_order",
+      "revoke",
+    );
+    expect(
+      projectedStaffPermission(
+        oldRole,
+        local,
+        "premium",
+        "pos_fnb.cancel_unpaid_order",
+      ).allowed,
+    ).toBe(false);
+    expect(
+      projectedStaffPermission(
+        oldRole,
+        local,
+        "tubua",
+        "pos_fnb.cancel_unpaid_order",
+      ).allowed,
+    ).toBe(true);
+    const common = setStaffException(
+      draft,
+      null,
+      "pos_fnb.cancel_unpaid_order",
+      "revoke",
+    );
+    expect(
+      projectedStaffPermission(
+        oldRole,
+        common,
+        "tubua",
+        "pos_fnb.cancel_unpaid_order",
+      ).allowed,
+    ).toBe(false);
+  });
   it("removes branch management together with access, preserving dormant exceptions and the original draft", () => {
     const draft = draftFromStaffProfile(snapshot);
     draft.assignments = [

@@ -495,8 +495,7 @@ function FnbPosPageInner() {
     return () => { tableRefreshGeneration.current += 1; };
   }, [refreshLiveTables]);
   const canCancelUnpaidOrder =
-    hasPermission(PERMISSIONS.POS_FNB_CANCEL_UNPAID_ORDER) ||
-    hasPermission(PERMISSIONS.POS_FNB_VOID);
+    hasPermission(PERMISSIONS.POS_FNB_CANCEL_UNPAID_ORDER, PERMISSIONS.POS_FNB_VOID);
   // Day 1 16/05: Tách permission void bill ĐÃ thanh toán riêng — không gộp với
   // "cancel_unpaid_order" vì void paid phải hoàn kho + tạo phiếu chi.
   const canManageTables = hasPermission(PERMISSIONS.POS_FNB_MANAGE_TABLES);
