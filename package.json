@@ -11,7 +11,7 @@
     "test": "vitest",
     "test:run": "vitest run && node scripts/test-fnb-warehouse-bridge.mjs && node scripts/test-staff-profile-access.mjs && npm run test:staff-checkout-db",
     "test:staff-access-db": "node scripts/test-staff-profile-access.mjs && node scripts/test-staff-report-access.mjs && node scripts/test-staff-kitchen-access.mjs && node scripts/test-staff-cancel-access.mjs",
-    "test:staff-checkout-db": "node scripts/test-staff-checkout-access.mjs && node scripts/test-staff-checkout-posting.mjs && node scripts/test-staff-checkout-finance.mjs && node scripts/test-staff-report-access.mjs && node scripts/test-staff-kitchen-access.mjs && node scripts/test-staff-cancel-access.mjs",
+    "test:staff-checkout-db": "node scripts/test-staff-checkout-access.mjs && node scripts/test-staff-checkout-posting.mjs && node scripts/test-staff-checkout-finance.mjs && node scripts/test-staff-report-access.mjs && node scripts/test-staff-kitchen-access.mjs && node scripts/test-staff-cancel-access.mjs && node scripts/test-staff-discount-posting.mjs",
     "test:fnb-warehouse-db": "node scripts/test-fnb-warehouse-bridge.mjs",
     "test:smoke": "vitest run src/__tests__/smoke/",
     "check:tenant": "node scripts/check-tenant-isolation.mjs",
