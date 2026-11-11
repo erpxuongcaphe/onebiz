@@ -119,6 +119,12 @@ export function StaffProfileEditor({
       (filter === "custom" && custom)
     );
   });
+  const displayedGroups = [...new Set(displayed.map((p) => p.group))].map(
+    (name) => ({
+      name,
+      permissions: displayed.filter((p) => p.group === name),
+    }),
+  );
   const updateAssignment = (
     index: number,
     patch: Partial<StaffProfileDraft["assignments"][number]>,
@@ -565,63 +571,87 @@ export function StaffProfileEditor({
                     Không có quyền phù hợp bộ lọc.
                   </p>
                 )}
-                <div className="divide-y rounded-xl border">
-                  {displayed.map((p) => {
-                    const result = projectedStaffPermission(
-                      snapshot,
-                      draft,
-                      branchId,
-                      p.code,
-                    );
-                    const choice =
-                      draft.exceptions.find(
-                        (e) =>
-                          e.branchId === branchId &&
-                          e.permissionCode === p.code,
-                      )?.choice ?? "inherit";
-                    return (
-                      <div
-                        key={p.code}
-                        className="grid gap-3 p-4 lg:grid-cols-[minmax(0,1fr)_190px]"
-                      >
-                        <div>
-                          <p className="font-medium">{p.label}</p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {p.group} · {result.source}
-                          </p>
-                          <p
-                            className={`mt-2 text-sm ${result.allowed ? "text-emerald-700" : "text-slate-600"}`}
-                          >
-                            {result.allowed
-                              ? "✓ Được phép theo bản nháp"
-                              : "⊘ Chưa được phép theo bản nháp"}
-                          </p>
-                        </div>
-                        <select
-                          aria-label={`Quyền ${p.label}`}
-                          className={selectClass}
-                          value={choice}
-                          disabled={Boolean(
-                            branchId && !draft.branchIds.includes(branchId),
-                          )}
-                          onChange={(e) =>
-                            setDraft((d) =>
-                              setStaffException(
-                                d,
-                                branchId,
-                                p.code,
-                                e.target.value as OverrideChoice,
-                              ),
-                            )
-                          }
-                        >
-                          <option value="inherit">Theo cấu hình chung</option>
-                          <option value="grant">Cho phép thêm</option>
-                          <option value="revoke">Không cho phép</option>
-                        </select>
+                <div className="space-y-3">
+                  {displayedGroups.map((permissionGroup) => (
+                    <details
+                      key={`${scope}:${group}:${filter}:${search}:${permissionGroup.name}`}
+                      className="rounded-xl border"
+                      open={
+                        Boolean(search.trim()) ||
+                        group !== "all" ||
+                        filter === "custom" ||
+                        displayedGroups.length === 1
+                      }
+                    >
+                      <summary className="min-h-12 cursor-pointer px-4 py-3 font-semibold">
+                        {permissionGroup.name}{" "}
+                        <span className="font-normal text-muted-foreground">
+                          · {permissionGroup.permissions.length} quyền
+                        </span>
+                      </summary>
+                      <div className="divide-y border-t">
+                        {permissionGroup.permissions.map((p) => {
+                          const result = projectedStaffPermission(
+                            snapshot,
+                            draft,
+                            branchId,
+                            p.code,
+                          );
+                          const choice =
+                            draft.exceptions.find(
+                              (e) =>
+                                e.branchId === branchId &&
+                                e.permissionCode === p.code,
+                            )?.choice ?? "inherit";
+                          return (
+                            <div
+                              key={p.code}
+                              className="grid gap-3 p-4 lg:grid-cols-[minmax(0,1fr)_190px]"
+                            >
+                              <div>
+                                <p className="font-medium">{p.label}</p>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  {p.group} · {result.source}
+                                </p>
+                                <p
+                                  className={`mt-2 text-sm ${result.allowed ? "text-emerald-700" : "text-slate-600"}`}
+                                >
+                                  {result.allowed
+                                    ? "✓ Được phép theo bản nháp"
+                                    : "⊘ Chưa được phép theo bản nháp"}
+                                </p>
+                              </div>
+                              <select
+                                aria-label={`Quyền ${p.label}`}
+                                className={selectClass}
+                                value={choice}
+                                disabled={Boolean(
+                                  branchId &&
+                                    !draft.branchIds.includes(branchId),
+                                )}
+                                onChange={(e) =>
+                                  setDraft((d) =>
+                                    setStaffException(
+                                      d,
+                                      branchId,
+                                      p.code,
+                                      e.target.value as OverrideChoice,
+                                    ),
+                                  )
+                                }
+                              >
+                                <option value="inherit">
+                                  Theo cấu hình chung
+                                </option>
+                                <option value="grant">Cho phép thêm</option>
+                                <option value="revoke">Không cho phép</option>
+                              </select>
+                            </div>
+                          );
+                        })}
                       </div>
-                    );
-                  })}
+                    </details>
+                  ))}
                 </div>
               </div>
             )}
@@ -757,11 +787,11 @@ export function StaffProfileEditor({
         </aside>
       </div>
       {error && (
-        <div
-          role="alert"
-          className="rounded-xl border border-destructive/40 bg-destructive/5 p-4"
-        >
-          <p>{error}</p>
+        <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-4">
+          <p>
+            Chưa lưu thay đổi. Bản nháp vẫn được giữ để anh chỉnh lại hoặc đối
+            chiếu dữ liệu mới nhất.
+          </p>
           <Button
             className="mt-3"
             variant="outline"
@@ -788,6 +818,14 @@ export function StaffProfileEditor({
         </div>
       )}
       <footer className="sticky bottom-16 z-20 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-background/95 p-4 shadow-lg backdrop-blur md:bottom-0">
+        {error && (
+          <p
+            role="alert"
+            className="w-full text-sm font-medium text-destructive"
+          >
+            {error}
+          </p>
+        )}
         <div>
           <strong>
             {changes.length
