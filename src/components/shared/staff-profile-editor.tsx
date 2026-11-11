@@ -47,7 +47,11 @@ export function StaffProfileEditor({
   const [busy, setBusy] = useState(false);
   const saving = useRef(false);
   const [error, setError] = useState("");
-  const [roleDecision, setRoleDecision] = useState<string | null>(null);
+  const [roleDecisions, setRoleDecisions] = useState<
+    { index: number; roleId: string }[]
+  >([]);
+  const roleDecision = roleDecisions[0]?.roleId ?? null;
+  const dismissRoleDecision = () => setRoleDecisions((items) => items.slice(1));
   const [reloadConfirm, setReloadConfirm] = useState(false);
   const [checkCode, setCheckCode] = useState("");
   const [checkSearch, setCheckSearch] = useState("");
@@ -141,14 +145,31 @@ export function StaffProfileEditor({
       (p) => p.id === id,
     );
     updateAssignment(index, { positionId: id });
-    setRoleDecision(
-      position?.roleId && position.roleId !== draft.roleId
-        ? position.roleId
-        : null,
-    );
+    setRoleDecisions((items) => [
+      ...items.filter((item) => item.index !== index),
+      ...(position?.roleId && position.roleId !== draft.roleId
+        ? [{ index, roleId: position.roleId }]
+        : []),
+    ]);
   };
+  const assignmentKeys = draft.assignments.map(
+    (a) => `${a.positionId}:${a.departmentId ?? ""}`,
+  );
+  const saveIssue = !draft.branchIds.length
+    ? "Chọn ít nhất một chi nhánh được truy cập trước khi lưu."
+    : draft.assignments.some((a) => !a.positionId)
+      ? "Chọn chức vụ cho phân công còn trống, hoặc bấm Bỏ phân công này."
+      : new Set(assignmentKeys).size !== assignmentKeys.length
+        ? "Có phân công trùng chức vụ và bộ phận. Bỏ dòng trùng trước khi lưu."
+        : draft.assignments.some((a) =>
+              a.managedBranchIds.some((id) => !draft.branchIds.includes(id)),
+            )
+          ? "Phạm vi quản lý phải nằm trong các chi nhánh được truy cập."
+          : roleDecision
+            ? "Chọn dùng mẫu của chức vụ hay giữ mẫu hiện tại ở phần Chức vụ & bộ phận."
+            : "";
   const save = async () => {
-    if (saving.current || roleDecision) return;
+    if (saving.current || saveIssue) return;
     saving.current = true;
     setBusy(true);
     setError("");
@@ -370,12 +391,21 @@ export function StaffProfileEditor({
                 )}
                 <Button
                   variant="ghost"
-                  onClick={() =>
+                  onClick={() => {
                     setDraft((d) => ({
                       ...d,
                       assignments: d.assignments.filter((_, i) => i !== index),
-                    }))
-                  }
+                    }));
+                    setRoleDecisions((items) =>
+                      items
+                        .filter((item) => item.index !== index)
+                        .map((item) => ({
+                          ...item,
+                          index:
+                            item.index > index ? item.index - 1 : item.index,
+                        })),
+                    );
+                  }}
                 >
                   Bỏ phân công này
                 </Button>
@@ -415,7 +445,7 @@ export function StaffProfileEditor({
                 className="mt-4 space-y-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm"
               >
                 <p>
-                  Chức vụ vừa chọn dùng mẫu{" "}
+                  Phân công {roleDecisions[0].index + 1} dùng mẫu{" "}
                   <strong>
                     {snapshot.roles.find((r) => r.id === roleDecision)?.name}
                   </strong>
@@ -425,15 +455,12 @@ export function StaffProfileEditor({
                   <Button
                     onClick={() => {
                       setDraft((d) => ({ ...d, roleId: roleDecision }));
-                      setRoleDecision(null);
+                      dismissRoleDecision();
                     }}
                   >
                     Dùng mẫu của chức vụ
                   </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => setRoleDecision(null)}
-                  >
+                  <Button variant="outline" onClick={dismissRoleDecision}>
                     Giữ mẫu hiện tại
                   </Button>
                 </div>
@@ -447,9 +474,10 @@ export function StaffProfileEditor({
               <select
                 className={selectClass}
                 value={draft.roleId ?? ""}
-                onChange={(e) =>
-                  setDraft((d) => ({ ...d, roleId: e.target.value || null }))
-                }
+                onChange={(e) => {
+                  setDraft((d) => ({ ...d, roleId: e.target.value || null }));
+                  setRoleDecisions([]);
+                }}
               >
                 <option value="">Chưa chọn mẫu quyền</option>
                 {snapshot.roles.map((r) => (
@@ -829,6 +857,15 @@ export function StaffProfileEditor({
         </div>
       )}
       <footer className="sticky bottom-16 z-20 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-background/95 p-4 shadow-lg backdrop-blur md:bottom-0">
+        {saveIssue && (
+          <p
+            id="staff-save-issue"
+            role="status"
+            className="w-full text-sm text-amber-800"
+          >
+            {saveIssue}
+          </p>
+        )}
         {error && (
           <p
             role="alert"
@@ -853,26 +890,15 @@ export function StaffProfileEditor({
             disabled={busy}
             onClick={() => {
               setDraft(draftFromStaffProfile(snapshot));
-              setRoleDecision(null);
+              setRoleDecisions([]);
               setError("");
             }}
           >
             Hủy thay đổi
           </Button>
           <Button
-            disabled={
-              busy ||
-              !changes.length ||
-              Boolean(roleDecision) ||
-              !draft.branchIds.length ||
-              draft.assignments.some(
-                (a) =>
-                  !a.positionId ||
-                  a.managedBranchIds.some(
-                    (id) => !draft.branchIds.includes(id),
-                  ),
-              )
-            }
+            disabled={busy || !changes.length || Boolean(saveIssue)}
+            aria-describedby={saveIssue ? "staff-save-issue" : undefined}
             onClick={() => void save()}
           >
             {busy ? "Đang lưu…" : "Lưu phân công"}

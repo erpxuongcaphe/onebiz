@@ -108,7 +108,7 @@ export function projectedStaffPermission(
   draft: StaffProfileDraft,
   branchId: string | null,
   code: string,
-) {
+): { allowed: boolean; source: string } {
   if (!snapshot.user.isActive)
     return { allowed: false, source: "Tài khoản đã ngừng hoạt động" };
   const companyScope = Boolean(COMPANY_WIDE_STAFF_PERMISSIONS[code]);
@@ -157,6 +157,9 @@ export function projectedStaffPermission(
         );
         return (
           position &&
+          (!branchId ||
+            position.scope !== "assigned" ||
+            a.managedBranchIds.includes(branchId)) &&
           (position.permissions[accountAction] ||
             (accountAction === "edit" && position.permissions.create))
         );

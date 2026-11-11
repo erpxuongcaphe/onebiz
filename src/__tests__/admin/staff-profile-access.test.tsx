@@ -58,6 +58,116 @@ const snapshot: StaffProfileSnapshot = {
   branchPermissionCodes: ["pos_fnb.split_bill", "pos_fnb.transfer_table"],
 };
 describe("staff profile scope", () => {
+  it("keeps staff-management projection inside explicitly assigned branches", () => {
+    const draft = draftFromStaffProfile(snapshot);
+    draft.assignments = [
+      {
+        userId: "u",
+        positionId: "manager",
+        departmentId: null,
+        managedBranchIds: ["premium"],
+      },
+    ];
+    expect(
+      projectedStaffPermission(snapshot, draft, "premium", "system.create_user")
+        .allowed,
+    ).toBe(true);
+    expect(
+      projectedStaffPermission(snapshot, draft, "tubua", "system.create_user")
+        .allowed,
+    ).toBe(false);
+    expect(
+      projectedStaffPermission(
+        snapshot,
+        draft,
+        "tubua",
+        "system.reset_user_password",
+      ).allowed,
+    ).toBe(false);
+  });
+  it("explains incomplete and duplicate assignments before saving", () => {
+    const onSave = vi.fn();
+    render(
+      <StaffProfileEditor
+        snapshot={snapshot}
+        onSave={onSave}
+        onReload={vi.fn()}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "+ Thêm chức vụ / kiêm nhiệm" }),
+    );
+    expect(
+      screen.getByText(
+        "Chọn chức vụ cho phân công còn trống, hoặc bấm Bỏ phân công này.",
+      ),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Lưu phân công" }),
+    ).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Chức vụ 1"), {
+      target: { value: "manager" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "+ Thêm chức vụ / kiêm nhiệm" }),
+    );
+    fireEvent.change(screen.getByLabelText("Chức vụ 2"), {
+      target: { value: "manager" },
+    });
+    expect(
+      screen.getByText(
+        "Có phân công trùng chức vụ và bộ phận. Bỏ dòng trùng trước khi lưu.",
+      ),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Lưu phân công" }),
+    ).toBeDisabled();
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Bỏ phân công này" })[1],
+    );
+    expect(screen.getByRole("button", { name: "Lưu phân công" })).toBeEnabled();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+  it("removes a discarded assignment's pending role without losing another decision", async () => {
+    const data = structuredClone(snapshot);
+    data.roles.push({ id: "r2", name: "Mẫu thu ngân", permissions: [] });
+    data.hierarchy.document.positions.push({
+      ...data.hierarchy.document.positions[0],
+      id: "cashier",
+      name: "Thu ngân",
+      roleId: "r2",
+    });
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(
+      <StaffProfileEditor snapshot={data} onSave={onSave} onReload={vi.fn()} />,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "+ Thêm chức vụ / kiêm nhiệm" }),
+    );
+    fireEvent.change(screen.getByLabelText("Chức vụ 1"), {
+      target: { value: "cashier" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "+ Thêm chức vụ / kiêm nhiệm" }),
+    );
+    fireEvent.change(screen.getByLabelText("Chức vụ 2"), {
+      target: { value: "manager" },
+    });
+    // Selecting a position with the current role must not discard the first decision.
+    expect(
+      screen.getByRole("button", { name: "Dùng mẫu của chức vụ" }),
+    ).toBeVisible();
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Bỏ phân công này" })[0],
+    );
+    expect(
+      screen.queryByRole("button", { name: "Dùng mẫu của chức vụ" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Lưu phân công" }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+    expect(onSave.mock.calls[0][0].roleId).toBe("r");
+    expect(onSave.mock.calls[0][0].exceptions).toEqual(snapshot.exceptions);
+  });
   it("uses table management only in the actual branch when explaining merge access", () => {
     const data = {
       ...snapshot,
