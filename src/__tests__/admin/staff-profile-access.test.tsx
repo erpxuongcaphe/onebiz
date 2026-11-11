@@ -58,6 +58,42 @@ const snapshot: StaffProfileSnapshot = {
   branchPermissionCodes: ["pos_fnb.split_bill", "pos_fnb.transfer_table"],
 };
 describe("staff profile scope", () => {
+  it("does not misrepresent an explicit company-wide right as limited by branch access", () => {
+    const company = {
+      ...snapshot,
+      roles: [
+        {
+          id: "r",
+          name: "Company finance",
+          permissions: ["finance.view_cash_journal_company"],
+        },
+      ],
+    };
+    const draft = draftFromStaffProfile(company);
+    draft.branchIds = ["premium"];
+    const projected = projectedStaffPermission(
+      company,
+      draft,
+      "tubua",
+      "finance.view_cash_journal_company",
+    );
+    expect(projected.allowed).toBe(true);
+    expect(projected.source).toContain("Phạm vi toàn công ty");
+    const denied = setStaffException(
+      draft,
+      null,
+      "finance.view_cash_journal_company",
+      "revoke",
+    );
+    expect(
+      projectedStaffPermission(
+        company,
+        denied,
+        "tubua",
+        "finance.view_cash_journal_company",
+      ).allowed,
+    ).toBe(false);
+  });
   it("selects active branches without silently granting a closed branch", () => {
     const data = {
       ...snapshot,

@@ -10,6 +10,15 @@ const permissionLabels = new Map<string, string>(
 );
 permissionLabels.set("system.create_user", "Tạo tài khoản nhân viên");
 
+// These existing capabilities explicitly operate at company scope. A branch
+// picker cannot pretend to narrow them; they remain account-level settings.
+export const COMPANY_WIDE_STAFF_PERMISSIONS: Readonly<Record<string, string>> =
+  {
+    "reports.view_all_branches": "Xem báo cáo toàn công ty",
+    "finance.view_cash_journal_company": "Xem nhật ký thu chi toàn công ty",
+    "floor_plan.edit_global": "Sửa sơ đồ bàn mọi chi nhánh",
+  };
+
 export type OverrideChoice = "inherit" | "grant" | "revoke";
 export interface StaffException {
   branchId: string | null;
@@ -102,7 +111,8 @@ export function projectedStaffPermission(
 ) {
   if (!snapshot.user.isActive)
     return { allowed: false, source: "Tài khoản đã ngừng hoạt động" };
-  if (branchId && !draft.branchIds.includes(branchId))
+  const companyScope = Boolean(COMPANY_WIDE_STAFF_PERMISSIONS[code]);
+  if (branchId && !draft.branchIds.includes(branchId) && !companyScope)
     return { allowed: false, source: "Ngoài chi nhánh được truy cập" };
   const global = draft.exceptions.find(
     (e) => e.branchId === null && e.permissionCode === code,
@@ -123,7 +133,12 @@ export function projectedStaffPermission(
           : "Chặn riêng tại chi nhánh",
     };
   if (global?.choice === "grant")
-    return { allowed: true, source: "Cấp thêm riêng trên toàn tài khoản" };
+    return {
+      allowed: true,
+      source: companyScope
+        ? "Cấp thêm quyền cấp toàn công ty"
+        : "Cấp thêm riêng trên toàn tài khoản",
+    };
   const organization = snapshot.hierarchy.document;
   const accountActions: Partial<
     Record<string, "edit" | "create" | "password">
@@ -170,7 +185,9 @@ export function projectedStaffPermission(
   }
   return {
     allowed: Boolean(role?.permissions.includes(code)),
-    source: role ? `Theo mẫu ${role.name}` : "Chưa chọn nhóm quyền",
+    source: role
+      ? `Theo mẫu ${role.name}${companyScope ? " · Phạm vi toàn công ty" : ""}`
+      : "Chưa chọn nhóm quyền",
   };
 }
 export function staffProfileChanges(

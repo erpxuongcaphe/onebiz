@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { PERMISSION_GROUPS } from "@/lib/permissions/constants";
 import { normalizeListSearch } from "@/lib/local-list-query";
 import {
+  COMPANY_WIDE_STAFF_PERMISSIONS,
   draftFromStaffProfile,
   projectedStaffPermission,
   setStaffException,
@@ -172,12 +173,11 @@ export function StaffProfileEditor({
     checkCode && checkBranch
       ? projectedStaffPermission(snapshot, savedDraft, checkBranch, checkCode)
       : null;
-  const companyWide = projectedStaffPermission(
-    snapshot,
-    draft,
-    null,
-    "reports.view_all_branches",
-  ).allowed;
+  const companyWide = Object.entries(COMPANY_WIDE_STAFF_PERMISSIONS)
+    .filter(
+      ([code]) => projectedStaffPermission(snapshot, draft, null, code).allowed,
+    )
+    .map(([, label]) => label);
   const assignedBranchNames = draft.branchIds.map(branchName);
   return (
     <fieldset
@@ -536,7 +536,7 @@ export function StaffProfileEditor({
                 </div>
                 <p className="rounded-lg bg-blue-50 p-3 text-sm text-blue-950">
                   {branchId
-                    ? `Đang chỉnh riêng tại ${branchName(branchId)}. Chỉ các quyền đã hỗ trợ phạm vi chi nhánh xuất hiện bên dưới. Các quyền còn lại hiện được thiết lập tại Toàn tài khoản và áp dụng cho mọi chi nhánh được truy cập.`
+                    ? `Đang chỉnh riêng tại ${branchName(branchId)}. Chỉ các quyền đã hỗ trợ phạm vi chi nhánh xuất hiện bên dưới. Các quyền còn lại thiết lập tại Toàn tài khoản; quyền cấp toàn công ty được ghi rõ trong kết quả dự kiến.`
                     : "Quyền ở đây áp dụng chung cho tài khoản. Chặn chung được ưu tiên trước quyền cấp riêng ở chi nhánh."}
                 </p>
                 <Input
@@ -686,11 +686,11 @@ export function StaffProfileEditor({
           </div>
           <div className="rounded-xl bg-muted/40 p-4">
             <h3 className="font-semibold">Chưa chọn truy cập</h3>
-            {companyWide && (
+            {companyWide.length > 0 && (
               <p className="mt-2 text-sm text-amber-900">
-                Tài khoản vẫn có quyền xem toàn công ty. Danh sách chi nhánh này
-                không thu hẹp quyền báo cáo đó; cần điều chỉnh riêng nếu muốn
-                giới hạn.
+                Quyền cấp toàn công ty đang có: {companyWide.join("; ")}. Danh
+                sách chi nhánh được chọn không thu hẹp các quyền này. Điều chỉnh
+                tại Toàn tài khoản nếu muốn giới hạn.
               </p>
             )}
             {snapshot.branches
