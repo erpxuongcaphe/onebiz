@@ -605,9 +605,11 @@ export function StaffProfileEditor({
                     onChange={(e) => setGroup(e.target.value)}
                   >
                     <option value="all">Tất cả nhóm nghiệp vụ</option>
-                    {[...new Set(scopedCatalog.map((p) => p.group))].map((g) => (
-                      <option key={g}>{g}</option>
-                    ))}
+                    {[...new Set(scopedCatalog.map((p) => p.group))].map(
+                      (g) => (
+                        <option key={g}>{g}</option>
+                      ),
+                    )}
                   </select>
                   <select
                     aria-label="Lọc trạng thái quyền"
@@ -685,6 +687,13 @@ export function StaffProfileEditor({
                                       phiếu.
                                     </p>
                                   )}
+                                {p.code === "finance.create_transaction" && (
+                                  <p className="text-xs text-muted-foreground">
+                                    {branchId
+                                      ? "Chỉ lập phiếu thu/chi tại chi nhánh này; không cấp quyền sửa quỹ hoặc tài khoản tiền dùng chung."
+                                      : "Quyền chung này còn cho phép quản lý quỹ và tài khoản tiền dùng chung. Nếu chỉ cần lập phiếu tại quán, hãy cấp riêng ở chi nhánh."}
+                                  </p>
+                                )}
                                 <p className="mt-1 text-xs text-muted-foreground">
                                   {p.group} · {result.source}
                                 </p>
