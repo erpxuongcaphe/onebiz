@@ -46,7 +46,8 @@ interface AuthContextValue extends AuthState {
   /** Branch ID to filter data queries — undefined means show all branches */
   activeBranchId: string | undefined;
   /** Check if current user has a specific permission */
-  hasPermission: (code: string, legacyCode?: string) => boolean;
+  hasPermission: (code: string) => boolean;
+  hasPermissionWithLegacy: (code: string, legacyCode: string) => boolean;
   /** Re-fetch profile + tenant + branches. Dùng sau khi user update /ho-so. */
   refreshProfile: () => Promise<void>;
   logout: () => Promise<void>;
@@ -678,7 +679,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const activeBranchId = currentBranch?.id;
 
   // Permission check helper
-  const hasPermission = useCallback(
+  const hasPermissionWithLegacy = useCallback(
     (code: string, legacyCode?: string): boolean => {
       if (isLoading || authDataError || !user?.isActive) return false;
       if (user?.role === "owner") return true;
@@ -689,6 +690,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       );
     },
     [user?.role, user?.isActive, effectiveBranchPermissions, branchPermissionAdjustments, legacyPermissionDenials, currentBranch?.id, isLoading, authDataError]
+  );
+  // Preserve the single-argument API for Array.some/every callers.
+  const hasPermission = useCallback(
+    (code: string) => hasPermissionWithLegacy(code),
+    [hasPermissionWithLegacy],
   );
 
   const logout = useCallback(async () => {
@@ -773,6 +779,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         switchBranch,
         activeBranchId,
         hasPermission,
+        hasPermissionWithLegacy,
         refreshProfile,
         logout,
       }}

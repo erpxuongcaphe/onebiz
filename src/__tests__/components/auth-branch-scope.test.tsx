@@ -38,7 +38,24 @@ beforeEach(() => { localStorage.clear(); state.assigned = [{ branch_id: "premium
 afterEach(cleanup);
 const read = () => JSON.parse(screen.getByLabelText("scope").textContent!);
 
+function PermissionProbe() {
+  const { isLoading, hasPermission, hasPermissionWithLegacy } = useAuth();
+  return <output aria-label="permission-callback">{JSON.stringify({
+    ready: !isLoading,
+    every: ["reports.dashboard", "reports.analytics"].every(hasPermission),
+    missing: ["reports.dashboard", "reports.export"].every(hasPermission),
+    legacy: hasPermissionWithLegacy("pos_fnb.cancel_unpaid_order", "pos_fnb.void"),
+  })}</output>;
+}
+
 describe("authenticated branch restoration", () => {
+  it("keeps array permission callbacks separate from explicit legacy fallback", async () => {
+    state.permissions = ["reports.dashboard", "reports.analytics", "pos_fnb.void"];
+    render(<AuthProvider><PermissionProbe /></AuthProvider>);
+    const permission = () => JSON.parse(screen.getByLabelText("permission-callback").textContent!);
+    await waitFor(() => expect(permission().ready).toBe(true));
+    expect(permission()).toEqual({ ready: true, every: true, missing: false, legacy: true });
+  });
   it("does not restore an administrator's cached warehouse for a manager", async () => {
     localStorage.setItem("active_branch_id", "warehouse");
     render(<AuthProvider><Probe /></AuthProvider>);

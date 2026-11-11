@@ -224,7 +224,7 @@ type ShiftState =
 const MODIFIER_CACHE_TTL_MS = 60_000;
 
 function FnbPosPageInner() {
-  const { user, tenant, currentBranch, branches, isLoading: authLoading, hasPermission } = useAuth();
+  const { user, tenant, currentBranch, branches, isLoading: authLoading, hasPermission, hasPermissionWithLegacy } = useAuth();
   const { toast } = useToast();
   const { settings } = useSettings();
   const networkStatus = useNetworkStatus();
@@ -495,7 +495,7 @@ function FnbPosPageInner() {
     return () => { tableRefreshGeneration.current += 1; };
   }, [refreshLiveTables]);
   const canCancelUnpaidOrder =
-    hasPermission(PERMISSIONS.POS_FNB_CANCEL_UNPAID_ORDER, PERMISSIONS.POS_FNB_VOID);
+    hasPermissionWithLegacy(PERMISSIONS.POS_FNB_CANCEL_UNPAID_ORDER, PERMISSIONS.POS_FNB_VOID);
   // Day 1 16/05: Tách permission void bill ĐÃ thanh toán riêng — không gộp với
   // "cancel_unpaid_order" vì void paid phải hoàn kho + tạo phiếu chi.
   const canManageTables = hasPermission(PERMISSIONS.POS_FNB_MANAGE_TABLES);
@@ -508,7 +508,7 @@ function FnbPosPageInner() {
     ? billAuditHref(branchId, pos.activeTab?.kitchenOrderId, openOrders.orders.find(order => order.id === pos.activeTab?.kitchenOrderId)?.orderNumber ?? pos.activeTab?.label ?? "Bill đang xem")
     : undefined;
   const canVoidPaidBill =
-    hasPermission(PERMISSIONS.POS_FNB_VOID_PAID_BILL, PERMISSIONS.POS_FNB_VOID);
+    hasPermissionWithLegacy(PERMISSIONS.POS_FNB_VOID_PAID_BILL, PERMISSIONS.POS_FNB_VOID);
 
   const [catalogRefreshRevision, setCatalogRefreshRevision] = useState(0);
   const catalogScopeRef = useRef<string | null>(null);
