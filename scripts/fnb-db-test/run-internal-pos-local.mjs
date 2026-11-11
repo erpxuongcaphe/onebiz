@@ -191,5 +191,9 @@ try {
  assert.equal((await db.query('select note from invoice_items where invoice_id=$1',[noteInvoice.invoice_id])).rows[0].note,'3 củ bự');
  assert.equal((await db.query(call(withNote))).rows[0].result.invoice_id,noteInvoice.invoice_id);
  console.log('PASS: internal POS persists the original item note for printing and safely replays checkout.');
+ if(process.env.ONEBIZ_STAFF_INTERNAL_POSTING_TEST==='1') {
+  const {verifyInternalPostingScope}=await import('../staff-access-tests/internal-posting.mjs');
+  await verifyInternalPostingScope(db,{context,payload,call});
+ }
 } catch(error) { console.error(error.message,error.where??''); process.exitCode=1; }
 finally {await db.close();fs.rmSync(dir,{recursive:true,force:true});}

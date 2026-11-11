@@ -217,6 +217,12 @@ try {
   console.log(
     "Disposal scope: all six consumers, persisted branch, local grant/global denial, actual draft cancellation, untouched delegates on denial, authenticated DML guard and legacy preservation passed.",
   );
+  if (process.env.ONEBIZ_STAFF_INTERNAL_EXPORT_TEST === "1") {
+    const { verifyInternalExportScope } = await import(
+      "./staff-access-tests/internal-export.mjs"
+    );
+    await verifyInternalExportScope(db, { id, migration });
+  }
 } finally {
   await db.close();
 }
