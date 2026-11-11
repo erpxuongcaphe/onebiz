@@ -55,6 +55,8 @@ try {
     checks++;
   };
   await actor(100);
+  await db.exec(`update branches set is_active=false where id='${id(10)}';
+    insert into user_branches(user_id,branch_id,granted_by) values('${id(101)}','${id(10)}','${id(101)}');`);
   let s = await snapshot();
   check(s.exceptions.length, 1, "old exceptions readable");
   let d = draft(s);
@@ -66,6 +68,25 @@ try {
   });
   s = await save(s, d);
   check(s.user.branchIds.length, 2, "branches and exception saved atomically");
+  check(
+    (
+      await db.query(
+        `select granted_by from user_branches where user_id='${id(101)}' and branch_id='${id(10)}'`,
+      )
+    ).rows[0].granted_by,
+    id(101),
+    "retained inactive membership keeps original grant author",
+  );
+  check(
+    (
+      await db.query(
+        `select granted_by from user_branches where user_id='${id(101)}' and branch_id='${id(11)}'`,
+      )
+    ).rows[0].granted_by,
+    id(100),
+    "new active membership records current owner",
+  );
+  await db.query("update branches set is_active=true where id=$1", [id(10)]);
   check(s.exceptions.length, 2, "global deny preserved");
   check(
     (await db.query("select note from user_permission_overrides")).rows[0].note,

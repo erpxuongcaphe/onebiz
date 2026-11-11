@@ -121,10 +121,19 @@ begin
   end if;
  end loop;
  patch:=case when role_id is distinct from target.role_id then jsonb_build_object('role_id',role_id) else '{}'::jsonb end;
- if patch<>'{}'::jsonb or to_jsonb(v_branch_ids) is distinct from before_state->'user'->'branchIds' then
-  perform public.update_managed_user_atomic(p_user_id,patch,
-   case when to_jsonb(v_branch_ids) is not distinct from before_state->'user'->'branchIds' then null
-    else array(select b from unnest(v_branch_ids) b order by (b=target.branch_id) desc nulls last,b) end);
+ if patch<>'{}'::jsonb then
+  perform public.update_managed_user_atomic(p_user_id,patch,null);
+ end if;
+ if to_jsonb(v_branch_ids) is distinct from before_state->'user'->'branchIds' then
+  -- Owner and tenant checks above already validate this exact requested scope.
+  -- Delta writes retain the original grant metadata and existing inactive
+  -- memberships. The legacy helper rejects even retained inactive branches.
+  delete from public.user_branches where user_id=p_user_id and not branch_id=any(v_branch_ids);
+  insert into public.user_branches(user_id,branch_id,granted_by)
+   select p_user_id,b,actor.id from unnest(v_branch_ids) b
+   where not exists(select 1 from public.user_branches ub where ub.user_id=p_user_id and ub.branch_id=b);
+  update public.profiles set branch_id=case when target.branch_id=any(v_branch_ids) then target.branch_id else v_branch_ids[1] end,
+   updated_at=now() where id=p_user_id and tenant_id=actor.tenant_id;
  end if;
  -- Branch membership must be updated before validating assigned management scope. All changes roll back together.
  perform public._validate_account_hierarchy(actor.tenant_id,doc);
