@@ -127,6 +127,7 @@ begin
  end loop;
 end $policies$;
 
--- Do not enable the catalog entry until the complete isolated checkout and
--- print authorization suite has passed; this migration is under development.
+-- Activation follows the isolated RPC/RLS denial, branch-only payment,
+-- cash attribution and replay acceptance suite. No user override is created.
+insert into public.staff_branch_permission_catalog values('pos_fnb.checkout',1);
 commit;

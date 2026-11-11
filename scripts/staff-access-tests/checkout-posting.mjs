@@ -7,6 +7,7 @@ export async function installCheckoutTest(db) {
  alter table cash_transactions add column performed_by uuid,add column performed_by_name text,add column created_at timestamptz default transaction_timestamp();
  alter table branches add column tenant_id uuid,add column is_active boolean default true;
  update branches set tenant_id='00000000-0000-0000-0000-000000000002';
+ create table staff_branch_permission_catalog(permission_code text primary key,enforcement_version integer);
  create table user_permission_overrides(tenant_id uuid,user_id uuid,permission_code text,override_type text);
  create table user_branch_permission_overrides(tenant_id uuid,user_id uuid,branch_id uuid,permission_code text,override_type text);
  create table fnb_print_points(id uuid,tenant_id uuid,branch_id uuid,enabled boolean);

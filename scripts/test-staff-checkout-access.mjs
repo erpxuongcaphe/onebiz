@@ -47,7 +47,16 @@ try {
       "utf8",
     ),
   );
-  await db.exec(`insert into staff_branch_permission_catalog values('pos_fnb.checkout',1);
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::integer n from staff_branch_permission_catalog where permission_code='pos_fnb.checkout'",
+      )
+    ).rows[0].n,
+    1,
+  );
+  passed++;
+  await db.exec(`
  insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values('${id(1)}','${id(101)}','${id(10)}','pos_fnb.checkout','revoke','${id(100)}');
  select set_config('request.jwt.claim.sub','${id(101)}',false);`);
   const calls = [
