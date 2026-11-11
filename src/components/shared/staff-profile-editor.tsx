@@ -532,7 +532,7 @@ export function StaffProfileEditor({
                 </div>
                 <p className="rounded-lg bg-blue-50 p-3 text-sm text-blue-950">
                   {branchId
-                    ? `Đang chỉnh riêng tại ${branchName(branchId)}. Các quyền bên dưới hỗ trợ thiết lập riêng cho quán này. Những quyền dùng chung được thiết lập tại Toàn tài khoản.`
+                    ? `Đang chỉnh riêng tại ${branchName(branchId)}. Chỉ các quyền đã hỗ trợ phạm vi chi nhánh xuất hiện bên dưới. Các quyền còn lại hiện được thiết lập tại Toàn tài khoản và áp dụng cho mọi chi nhánh được truy cập.`
                     : "Quyền ở đây áp dụng chung cho tài khoản. Chặn chung được ưu tiên trước quyền cấp riêng ở chi nhánh."}
                 </p>
                 <Input
@@ -832,7 +832,7 @@ export function StaffProfileEditor({
               ? `${changes.length} thay đổi cho 1 nhân viên`
               : "Chưa có thay đổi"}
           </strong>
-          <p className="text-xs text-muted-foreground">
+          <p className="hidden text-xs text-muted-foreground md:block">
             Chức vụ, chi nhánh và quyền riêng được lưu cùng nhau.
           </p>
         </div>
