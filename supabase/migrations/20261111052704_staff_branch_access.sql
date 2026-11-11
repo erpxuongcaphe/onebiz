@@ -37,8 +37,10 @@ begin
  if choice is not null then return choice='grant'; end if;
  return public.user_has_permission(p_user_id,p_permission_code);
 end $$;
-revoke all on function public.user_has_permission_at_branch(uuid,text,uuid) from public,anon;
-grant execute on function public.user_has_permission_at_branch(uuid,text,uuid) to authenticated,service_role;
+-- Internal resolver: browser clients must not probe arbitrary users' rights.
+-- Existing secured RPCs and bootstrap invoke it as their function owner.
+revoke all on function public.user_has_permission_at_branch(uuid,text,uuid) from public,anon,authenticated;
+grant execute on function public.user_has_permission_at_branch(uuid,text,uuid) to service_role;
 
 create function public._staff_profile_snapshot(p_user_id uuid) returns jsonb
 language plpgsql stable security definer set search_path='' as $$

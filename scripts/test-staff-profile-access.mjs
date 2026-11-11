@@ -302,6 +302,23 @@ try {
   const { verifyInventoryBranchPermissions } = await import(
     "./staff-access-tests/inventory.mjs"
   );
+  check(
+    (
+      await db.query(
+        "select has_function_privilege('authenticated','user_has_permission_at_branch(uuid,text,uuid)','execute') allowed",
+      )
+    ).rows[0].allowed,
+    false,
+    "internal resolver cannot expose arbitrary staff permissions",
+  );
+  await db.exec("set role authenticated");
+  check(
+    (await db.query("select get_staff_profile_access($1) snapshot", [id(101)]))
+      .rows[0].snapshot.user.id,
+    id(101),
+    "secured owner snapshot still works with the browser database role",
+  );
+  await db.exec("reset role");
   await verifyInventoryBranchPermissions(db, { id, actor, check, rejects });
   const { verifyProductionBranchPermissions } = await import(
     "./staff-access-tests/production.mjs"
