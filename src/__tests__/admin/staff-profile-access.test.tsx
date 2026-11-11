@@ -58,6 +58,42 @@ const snapshot: StaffProfileSnapshot = {
   branchPermissionCodes: ["pos_fnb.split_bill", "pos_fnb.transfer_table"],
 };
 describe("staff profile scope", () => {
+  it("uses table management only in the actual branch when explaining merge access", () => {
+    const data = {
+      ...snapshot,
+      roles: [
+        {
+          id: "r",
+          name: "Table manager",
+          permissions: ["pos_fnb.manage_tables"],
+        },
+      ],
+    };
+    const draft = setStaffException(
+      draftFromStaffProfile(data),
+      "premium",
+      "pos_fnb.manage_tables",
+      "revoke",
+    );
+    expect(
+      projectedStaffPermission(data, draft, "premium", "pos_fnb.merge_bills")
+        .allowed,
+    ).toBe(false);
+    expect(
+      projectedStaffPermission(data, draft, "tubua", "pos_fnb.merge_bills")
+        .allowed,
+    ).toBe(true);
+    const denied = setStaffException(
+      draft,
+      "tubua",
+      "pos_fnb.merge_bills",
+      "revoke",
+    );
+    expect(
+      projectedStaffPermission(data, denied, "tubua", "pos_fnb.merge_bills")
+        .allowed,
+    ).toBe(false);
+  });
   it("does not misrepresent an explicit company-wide right as limited by branch access", () => {
     const company = {
       ...snapshot,

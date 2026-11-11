@@ -614,6 +614,13 @@ export function StaffProfileEditor({
                             >
                               <div>
                                 <p className="font-medium">{p.label}</p>
+                                {branchId &&
+                                  p.code === "pos_fnb.manage_tables" && (
+                                    <p className="text-xs text-muted-foreground">
+                                      Quyền riêng tại quán không cấp quyền sửa
+                                      cấu hình dùng chung toàn công ty.
+                                    </p>
+                                  )}
                                 <p className="mt-1 text-xs text-muted-foreground">
                                   {p.group} · {result.source}
                                 </p>

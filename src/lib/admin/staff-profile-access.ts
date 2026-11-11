@@ -168,15 +168,37 @@ export function projectedStaffPermission(
     };
   const role = snapshot.roles.find((r) => r.id === draft.roleId);
   if (
-    ["pos_fnb.cancel_unpaid_order", "pos_fnb.void_paid_bill"].includes(code) &&
+    [
+      "pos_fnb.cancel_unpaid_order",
+      "pos_fnb.void_paid_bill",
+      "pos_fnb.merge_bills",
+    ].includes(code) &&
     !role?.permissions.includes(code)
   ) {
+    if (code === "pos_fnb.merge_bills") {
+      const tablePermission = projectedStaffPermission(
+        snapshot,
+        draft,
+        branchId,
+        "pos_fnb.manage_tables",
+      );
+      return tablePermission.allowed
+        ? {
+            allowed: true,
+            source: `Theo quyền Quản lý bàn · ${tablePermission.source}`,
+          }
+        : {
+            allowed: false,
+            source: "Chưa có quyền Gộp bill hoặc Quản lý bàn tại chi nhánh",
+          };
+    }
+    const legacyCode = "pos_fnb.void";
     const legacy = draft.exceptions.find(
-      (e) => e.branchId === null && e.permissionCode === "pos_fnb.void",
+      (e) => e.branchId === null && e.permissionCode === legacyCode,
     );
     if (
       legacy?.choice !== "revoke" &&
-      (legacy?.choice === "grant" || role?.permissions.includes("pos_fnb.void"))
+      (legacy?.choice === "grant" || role?.permissions.includes(legacyCode))
     )
       return {
         allowed: true,

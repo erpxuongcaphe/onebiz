@@ -499,7 +499,7 @@ function FnbPosPageInner() {
   // Day 1 16/05: Tách permission void bill ĐÃ thanh toán riêng — không gộp với
   // "cancel_unpaid_order" vì void paid phải hoàn kho + tạo phiếu chi.
   const canManageTables = hasPermission(PERMISSIONS.POS_FNB_MANAGE_TABLES);
-  const canMergeBills = canManageTables || hasPermission(PERMISSIONS.POS_FNB_MERGE_BILLS);
+  const canMergeBills = hasPermissionWithLegacy(PERMISSIONS.POS_FNB_MERGE_BILLS, PERMISSIONS.POS_FNB_MANAGE_TABLES);
   const canTransferTables = hasPermission(PERMISSIONS.POS_FNB_TRANSFER_TABLE);
   const canCheckout = hasPermission(PERMISSIONS.POS_FNB_CHECKOUT);
   const canSplitBill = hasPermission(PERMISSIONS.POS_FNB_SPLIT_BILL);
