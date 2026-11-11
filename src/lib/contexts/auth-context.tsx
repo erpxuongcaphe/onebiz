@@ -7,6 +7,7 @@ import {
   useCallback,
   useEffect,
   useRef,
+  useMemo,
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
@@ -20,6 +21,7 @@ import { readDeviceBinding } from "@/lib/hooks/use-device-binding";
 import { isInternalAuthEmail } from "@/lib/auth/user-identifiers";
 import { canViewAllBranches, parseAccessibleBranchIds } from "@/lib/auth/branch-scope";
 import { readAuthBootstrap } from "@/lib/auth/bootstrap";
+import { permissionsForBranch } from '@/lib/permissions/branch-permissions';
 
 // --- Types ---
 
@@ -81,6 +83,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [currentBranch, setCurrentBranch] = useState<Branch | null>(null);
   const [permissions, setPermissions] = useState<Set<string>>(new Set());
+  const [branchPermissionAdjustments, setBranchPermissionAdjustments] = useState<{branchId:string;code:string;allowed:boolean}[]>([]);
+  const effectiveBranchPermissions = useMemo(() => permissionsForBranch(permissions,branchPermissionAdjustments,currentBranch?.id ?? null),[permissions,branchPermissionAdjustments,currentBranch?.id]);
   const [isLoading, setIsLoading] = useState(true);
   const [authDataError, setAuthDataError] = useState<string | null>(null);
   const [failedReadVersion, setFailedReadVersion] = useState(0);
@@ -98,6 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setBranches([]);
       setCurrentBranch(null);
       setPermissions(new Set());
+      setBranchPermissionAdjustments([]);
       clearProfileCache();
       const timeout = setTimeout(() => {
         if (request !== profileRequestRef.current) return;
@@ -201,6 +206,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const accessibleIds = parseAccessibleBranchIds(scopeRes.data);
 
         setPermissions(perms);
+        setBranchPermissionAdjustments(bootstrap?.branchPermissionAdjustments ?? []);
 
         const tenantData = tenantRes.data;
         if (tenantData) {
@@ -533,6 +539,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setBranches([]);
         setCurrentBranch(null);
         setPermissions(new Set());
+        setBranchPermissionAdjustments([]);
         // Reset dedup ref để lần sign-in tiếp theo sẽ load lại
         loadedUserIdRef.current = null;
         // PERF F11: Clear profile cache trong base.ts để service không trả
@@ -671,10 +678,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (code: string): boolean => {
       if (isLoading || authDataError || !user?.isActive) return false;
       if (user?.role === "owner") return true;
-      if (permissions.has("*")) return true;
-      return permissions.has(code);
+      if (effectiveBranchPermissions.has("*")) return true;
+      return effectiveBranchPermissions.has(code);
     },
-    [user?.role, user?.isActive, permissions, isLoading, authDataError]
+    [user?.role, user?.isActive, effectiveBranchPermissions, isLoading, authDataError]
   );
 
   const logout = useCallback(async () => {
@@ -708,6 +715,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAuthUser(null);
         setUser(null);
         setPermissions(new Set());
+        setBranchPermissionAdjustments([]);
         setTenant(null);
         setBranches([]);
         setCurrentBranch(null);
@@ -750,7 +758,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         tenant,
         branches,
         currentBranch,
-        permissions,
+        permissions: effectiveBranchPermissions,
         isLoading,
         authDataError,
         isAuthenticated: !!authUser,

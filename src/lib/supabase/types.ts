@@ -2901,6 +2901,14 @@ export interface Database {
       };
     };
     Functions: {
+      get_staff_profile_access: {
+        Args: { p_user_id: string };
+        Returns: Json;
+      };
+      save_staff_profile_access: {
+        Args: { p_user_id: string; p_expected_fingerprint: string; p_draft: Json };
+        Returns: Json;
+      };
       get_fnb_invoice_item_details_20261023: {
         Args: { p_invoice_ids: string[] };
         Returns: { invoice_id:string;invoice_item_id:string;note:string|null;modifier_selections:Json;variant_label:string|null;detail_source:string }[];
