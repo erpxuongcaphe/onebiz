@@ -694,6 +694,15 @@ export function StaffProfileEditor({
                                       : "Quyền chung này còn cho phép quản lý quỹ và tài khoản tiền dùng chung. Nếu chỉ cần lập phiếu tại quán, hãy cấp riêng ở chi nhánh."}
                                   </p>
                                 )}
+                                {branchId &&
+                                  p.code === "floor_plan.edit_branch" && (
+                                    <p className="text-xs text-muted-foreground">
+                                      Áp dụng cho bàn, khu vực và ảnh sơ đồ tại
+                                      quán này. Nếu tài khoản còn quyền Sửa sơ
+                                      đồ bàn mọi chi nhánh, quyền toàn công ty
+                                      đó vẫn cho phép sửa.
+                                    </p>
+                                  )}
                                 <p className="mt-1 text-xs text-muted-foreground">
                                   {p.group} · {result.source}
                                 </p>
