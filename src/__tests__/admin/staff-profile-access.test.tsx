@@ -58,6 +58,58 @@ const snapshot: StaffProfileSnapshot = {
   branchPermissionCodes: ["pos_fnb.split_bill", "pos_fnb.transfer_table"],
 };
 describe("staff profile scope", () => {
+  it("separates shared writes without changing existing exceptions or branch access", () => {
+    const original = {
+      ...snapshot,
+      exceptions: [
+        ...snapshot.exceptions,
+        {
+          branchId: null,
+          permissionCode: "products.edit",
+          choice: "grant" as const,
+        },
+      ],
+    };
+    render(
+      <StaffProfileEditor
+        snapshot={original}
+        onSave={vi.fn()}
+        onReload={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Tùy chỉnh quyền" }));
+    expect(
+      screen.queryByRole("combobox", { name: "Quyền Sửa sản phẩm" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Sửa dữ liệu dùng chung" }),
+    );
+    expect(
+      screen.getByText(/Các quyền này không tự cấp quyền xem doanh số/),
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Tìm quyền" }), {
+      target: { value: "products.edit" },
+    });
+    expect(
+      screen.getByRole("combobox", { name: "Quyền Sửa sản phẩm" }),
+    ).toHaveValue("grant");
+    expect(
+      screen.getByText("Thay đổi áp dụng cho toàn công ty"),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Premium" }),
+    );
+    expect(
+      screen.queryByText("Thay đổi áp dụng cho toàn công ty"),
+    ).not.toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Sửa dữ liệu dùng chung" }),
+    );
+    expect(
+      screen.getByRole("combobox", { name: "Quyền Sửa sản phẩm" }),
+    ).toHaveValue("grant");
+    expect(original.user.branchIds).toEqual(["premium", "tubua"]);
+  });
   it("keeps staff-management projection inside explicitly assigned branches", () => {
     const draft = draftFromStaffProfile(snapshot);
     draft.assignments = [

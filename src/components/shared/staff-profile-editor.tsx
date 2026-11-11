@@ -8,6 +8,7 @@ import { PERMISSION_GROUPS } from "@/lib/permissions/constants";
 import { normalizeListSearch } from "@/lib/local-list-query";
 import {
   COMPANY_WIDE_STAFF_PERMISSIONS,
+  SHARED_DATA_STAFF_PERMISSIONS,
   draftFromStaffProfile,
   projectedStaffPermission,
   setStaffException,
@@ -60,7 +61,7 @@ export function StaffProfileEditor({
   );
   const changes = staffProfileChanges(snapshot, draft);
   useUnsavedWork(changes.length > 0 || busy);
-  const branchId = scope === "company" ? null : scope;
+  const branchId = scope === "company" || scope === "shared" ? null : scope;
   const branchName = (id: string) =>
     snapshot.branches.find((b) => b.id === id)?.name ?? id;
   const currentRole = snapshot.roles.find((r) => r.id === draft.roleId);
@@ -103,9 +104,14 @@ export function StaffProfileEditor({
       ),
     }))
     .filter((g) => g.permissions.length > 0);
-  const displayed = catalog.filter((p) => {
+  const scopedCatalog = catalog.filter((p) => {
+    const shared = SHARED_DATA_STAFF_PERMISSIONS.has(p.code);
+    if (scope === "shared" ? !shared : shared) return false;
     if (branchId && !snapshot.branchPermissionCodes.includes(p.code))
       return false;
+    return true;
+  });
+  const displayed = scopedCatalog.filter((p) => {
     if (group !== "all" && p.group !== group) return false;
     if (
       !normalizeListSearch(`${p.label} ${p.group} ${p.code}`).includes(
@@ -547,15 +553,30 @@ export function StaffProfileEditor({
                 <div className="flex flex-wrap gap-2">
                   <Button
                     variant={scope === "company" ? "default" : "outline"}
-                    onClick={() => setScope("company")}
+                    onClick={() => {
+                      setScope("company");
+                      setGroup("all");
+                    }}
                   >
-                    Toàn tài khoản
+                    Quyền chung của tài khoản
+                  </Button>
+                  <Button
+                    variant={scope === "shared" ? "default" : "outline"}
+                    onClick={() => {
+                      setScope("shared");
+                      setGroup("all");
+                    }}
+                  >
+                    Sửa dữ liệu dùng chung
                   </Button>
                   {snapshot.branches.map((b) => (
                     <Button
                       key={b.id}
                       variant={scope === b.id ? "default" : "outline"}
-                      onClick={() => setScope(b.id)}
+                      onClick={() => {
+                        setScope(b.id);
+                        setGroup("all");
+                      }}
                     >
                       {b.name}
                       {!draft.branchIds.includes(b.id) ? " · Chưa cấp" : ""}
@@ -563,9 +584,11 @@ export function StaffProfileEditor({
                   ))}
                 </div>
                 <p className="rounded-lg bg-blue-50 p-3 text-sm text-blue-950">
-                  {branchId
-                    ? `Đang chỉnh riêng tại ${branchName(branchId)}. Chỉ các quyền đã hỗ trợ phạm vi chi nhánh xuất hiện bên dưới. Các quyền còn lại thiết lập tại Toàn tài khoản; quyền cấp toàn công ty được ghi rõ trong kết quả dự kiến.`
-                    : "Quyền ở đây áp dụng chung cho tài khoản. Chặn chung được ưu tiên trước quyền cấp riêng ở chi nhánh."}
+                  {scope === "shared"
+                    ? "Thay đổi áp dụng cho toàn công ty. Ví dụ: sửa tên sản phẩm sẽ đổi tên ở các quán cùng sử dụng sản phẩm đó. Các quyền này không tự cấp quyền xem doanh số hoặc bán hàng tại chi nhánh khác."
+                    : branchId
+                      ? `Đang chỉnh riêng tại ${branchName(branchId)}. Chỉ các quyền đã hỗ trợ phạm vi chi nhánh xuất hiện bên dưới. Quyền sửa danh mục chung nằm ở mục Sửa dữ liệu dùng chung.`
+                      : "Quyền chung là mặc định cho tài khoản; quyền nghiệp vụ vẫn chịu giới hạn chi nhánh được truy cập. Chặn chung được ưu tiên trước quyền cấp riêng tại chi nhánh. Các quyền xem toàn công ty được ghi rõ theo tên quyền."}
                 </p>
                 <Input
                   className="min-h-12"
@@ -582,7 +605,7 @@ export function StaffProfileEditor({
                     onChange={(e) => setGroup(e.target.value)}
                   >
                     <option value="all">Tất cả nhóm nghiệp vụ</option>
-                    {[...new Set(catalog.map((p) => p.group))].map((g) => (
+                    {[...new Set(scopedCatalog.map((p) => p.group))].map((g) => (
                       <option key={g}>{g}</option>
                     ))}
                   </select>
@@ -642,6 +665,11 @@ export function StaffProfileEditor({
                             >
                               <div>
                                 <p className="font-medium">{p.label}</p>
+                                {SHARED_DATA_STAFF_PERMISSIONS.has(p.code) && (
+                                  <p className="mt-1 text-sm font-medium text-amber-800">
+                                    Thay đổi áp dụng cho toàn công ty
+                                  </p>
+                                )}
                                 {branchId &&
                                   p.code === "pos_fnb.manage_tables" && (
                                     <p className="text-xs text-muted-foreground">

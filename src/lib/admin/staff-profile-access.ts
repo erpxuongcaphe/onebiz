@@ -20,6 +20,25 @@ export const COMPANY_WIDE_STAFF_PERMISSIONS: Readonly<Record<string, string>> =
   };
 
 export type OverrideChoice = "inherit" | "grant" | "revoke";
+// Explicit shared-master mutations; do not classify sales/debt visibility or
+// branch price lists as shared writes just because they share a code prefix.
+export const SHARED_DATA_STAFF_PERMISSIONS = new Set([
+  "products.create",
+  "products.edit",
+  "products.delete",
+  "products.import",
+  "products.duplicate",
+  "customers.create",
+  "customers.edit",
+  "customers.delete",
+  "customers.import",
+  "suppliers.create",
+  "suppliers.edit",
+  "suppliers.delete",
+  "suppliers.import",
+  "system.manage_branches",
+  "system.manage_roles",
+]);
 export interface StaffException {
   branchId: string | null;
   permissionCode: string;
@@ -286,7 +305,7 @@ export function staffProfileChanges(
         (e) => exceptionKey(e.branchId, e.permissionCode) === key,
       )!;
       changes.push(
-        `${exception.branchId ? branchName(exception.branchId) : "Toàn tài khoản"} · ${permissionLabels.get(exception.permissionCode) ?? exception.permissionCode}: ${choiceName(before.get(key))} → ${choiceName(after.get(key))}`,
+        `${exception.branchId ? branchName(exception.branchId) : SHARED_DATA_STAFF_PERMISSIONS.has(exception.permissionCode) ? "Dữ liệu dùng chung toàn công ty" : "Toàn tài khoản"} · ${permissionLabels.get(exception.permissionCode) ?? exception.permissionCode}: ${choiceName(before.get(key))} → ${choiceName(after.get(key))}`,
       );
     }
   return changes;
