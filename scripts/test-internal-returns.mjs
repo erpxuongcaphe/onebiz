@@ -34,7 +34,11 @@ create table return_items(return_id uuid,invoice_item_id uuid,product_id uuid,pr
 create table customer_debt_adjustments(tenant_id uuid,branch_id uuid not null,customer_id uuid,invoice_id uuid,amount numeric,reason text,idempotency_key text unique,created_by uuid);
 create function auth.uid() returns uuid language sql stable as $$select '${actor}'::uuid$$;
 create function get_user_tenant_id() returns uuid language sql stable as $$select '${tenant}'::uuid$$;
-create function user_has_permission(uuid,text) returns boolean language sql stable as $$select current_setting('test.denied',true) is distinct from 'yes'$$;
+create function user_has_permission(uuid,text) returns boolean language sql stable as $$
+select current_setting('test.denied',true) is distinct from 'yes'
+and (current_setting('test.return_read_only',true) is distinct from 'yes'
+     or $2 in ('inventory.view','inventory.internal_return_view'))
+$$;
 create function user_has_branch_access(uuid,uuid) returns boolean language sql stable as $$select $2::text=current_setting('test.branch',true)$$;
 create function increment_product_stock(uuid,numeric) returns void language sql as $$update products set stock=stock+$2 where id=$1$$;
 create function upsert_branch_stock(uuid,uuid,uuid,numeric) returns void language sql as $$insert into branch_stock(tenant_id,branch_id,product_id,quantity) values($1,$2,$3,$4) on conflict(tenant_id,branch_id,product_id) do update set quantity=branch_stock.quantity+excluded.quantity$$;
@@ -75,6 +79,7 @@ create table money_accounts(id uuid primary key,tenant_id uuid,branch_id uuid,na
 create function next_cash_code(uuid,text) returns text language sql as $$select gen_random_uuid()::text$$;
 `);
 await db.exec(readFileSync('supabase/migrations/20261110160400_internal_returns_two_party.sql','utf8'));
+await db.exec(readFileSync('supabase/migrations/20261111035000_internal_return_read_permission.sql','utf8'));
 const scalar=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
 const send=(qty,key=id(30))=>scalar('select send_internal_stock_return($1,$2,$3,$4)',[sale,JSON.stringify([{itemId:item,quantity:qty}]),'Hàng chưa dùng',key]);
 const before=await scalar('select count(*) from stock_movements');
@@ -93,6 +98,13 @@ const returnItem=await scalar('select id from internal_stock_return_items');
 const receive=(qty,key)=>scalar('select receive_internal_stock_return($1,$2,$3,$4)',[sent.id,JSON.stringify([{itemId:returnItem,quantity:qty}]),'Đã kiểm hàng',key]);
 await assert.rejects(receive(2,id(31)),/RETURN_SCOPE_DENIED/);
 await db.exec(`set test.branch='${warehouse}'`);
+await db.exec("set test.return_read_only='yes'");
+const listed=await scalar('select get_internal_stock_returns($1)',[warehouse]);
+assert.deepEqual(listed.map(row=>row.id),[sent.id]);
+await assert.rejects(scalar('select get_internal_stock_returns($1)',[branch]),/RETURN_LIST_DENIED/);
+await assert.rejects(receive(2,id(31)),/RETURN_RECEIVE_DENIED/);
+await assert.rejects(send(1,id(39)),/RETURN_SEND_DENIED/);
+await db.exec('reset test.return_read_only');
 const first=await receive(2,id(31));
 assert.equal(first.credit,18000);assert.equal(first.debtReduced,18000);assert.equal(first.refundPending,0);
 assert.deepEqual(await receive(2,id(31)),first);
