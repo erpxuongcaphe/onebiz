@@ -35,6 +35,14 @@ beforeEach(()=>{
 });
 afterEach(()=>{cleanup();vi.useRealTimers();});
 describe("auth bootstrap failure is distinct from genuine permission denial",()=>{
+ it("offers sign-in when there is no session instead of denying POS permission",async()=>{
+  mock.session.mockResolvedValue({data:{session:null},error:null});
+  render(<AuthProvider><Probe/></AuthProvider>);await flush();
+  expect(screen.queryByText("Không có quyền truy cập")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button",{name:"Đăng nhập lại"}));await flush();
+  expect(mock.router.replace).toHaveBeenCalledWith("/dang-nhap");
+  expect(mock.bootstrap).not.toHaveBeenCalled();
+ });
  it("clears the prior profile when manual recovery finds no current session",async()=>{
   render(<AuthProvider><ManualProbe/></AuthProvider>);await flush();
   expect(screen.getByText("POS được phép")).toBeInTheDocument();
