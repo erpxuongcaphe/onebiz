@@ -8,6 +8,7 @@ create function public._staff_report_permission(p_user uuid,p_code text,p_branch
 returns boolean language plpgsql stable security definer set search_path='' as $$
 declare tenant uuid;
 begin
+ if p_user is distinct from auth.uid() then return false; end if;
  select tenant_id into tenant from public.profiles where id=p_user and is_active;
  if tenant is null then return false; end if;
  if p_branch is null then
@@ -18,6 +19,9 @@ begin
  return public._staff_permission_at_scope(p_user,p_code,p_branch);
 end $$;
 revoke all on function public._staff_report_permission(uuid,text,uuid) from public,anon,authenticated;
+-- Three existing invoice summary RPCs are SECURITY INVOKER. Their callers
+-- need this self-only predicate; it must not expose another user's grants.
+grant execute on function public._staff_report_permission(uuid,text,uuid) to authenticated;
 
 do $patch$
 declare item record; source text; patched text; target oid; count_targets integer;

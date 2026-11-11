@@ -187,6 +187,50 @@ try {
     /REPORT_PERMISSION_DENIED/,
   );
   checks++;
+  // Exercise actual browser DB privileges, not only the database owner used
+  // for fixture setup. Invoice summary functions deliberately remain invoker.
+  await db.exec(`alter table invoices add column code text,add column created_at timestamptz,add column customer_name text,add column discount_amount numeric,add column promotion_discount numeric,add column issued_at timestamptz,add column order_code text;
+   alter table kitchen_orders add column order_type text;
+   create table shipping_orders(invoice_id uuid,tenant_id uuid);
+   create function get_user_accessible_branches(uuid) returns table(branch_id uuid) language sql set search_path=public as $$select b.id from public.branches b where public.user_has_branch_access($1,b.id)$$;`);
+  await db.exec(
+    "grant usage on schema auth to authenticated; grant select on all tables in schema public to authenticated; set role authenticated",
+  );
+  assert.equal(
+    (
+      await db.query(
+        `select _staff_report_permission('${id(101)}','pos_fnb.view_sales_summary','${id(11)}') allowed`,
+      )
+    ).rows[0].allowed,
+    true,
+  );
+  checks++;
+  assert.equal(
+    (
+      await db.query(
+        `select _staff_report_permission('${id(100)}','pos_fnb.view_sales_summary','${id(11)}') allowed`,
+      )
+    ).rows[0].allowed,
+    false,
+  );
+  checks++;
+  for (const name of [
+    "get_invoice_list_summary",
+    "get_invoice_list_summary_fnb_context_20261023",
+    "get_invoice_list_summary_fnb_choices_20261023",
+  ]) {
+    await assert.rejects(
+      db.query(`select ${name}('${id(10)}')`),
+      /FNB_SALES_SUMMARY_PERMISSION_DENIED/,
+    );
+    checks++;
+  }
+  const invoiceSummary = (
+    await db.query(`select * from get_invoice_list_summary('${id(11)}')`)
+  ).rows[0];
+  assert.equal(Number(invoiceSummary.gia_tri_hoan_thanh), 100);
+  checks++;
+  await db.exec("reset role");
   console.log(
     `PASS ${checks} report scope checks (${process.env.ONEBIZ_REPORT_AUDIT_FILE ? "actual exported bodies" : "public bodies and six private contract fixtures"})`,
   );
