@@ -290,6 +290,10 @@ try {
     "./staff-access-tests/fnb.mjs"
   );
   await verifyFnbBranchPermissions(db, { id, actor, check, rejects });
+  const { verifyHierarchyIntegration } = await import(
+    "./staff-access-tests/hierarchy.mjs"
+  );
+  await verifyHierarchyIntegration(db, { id, actor, check, rejects });
   console.log(`PASS ${checks} staff profile PostgreSQL checks`);
 } catch (error) {
   console.error(error.message, error.where);

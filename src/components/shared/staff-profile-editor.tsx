@@ -90,6 +90,14 @@ export function StaffProfileEditor({
         }
     return known;
   }, [snapshot.exceptions, snapshot.roles]);
+  const templateGroups = [...new Set(catalog.map((p) => p.group))]
+    .map((name) => ({
+      name,
+      permissions: catalog.filter(
+        (p) => p.group === name && currentRole?.permissions.includes(p.code),
+      ),
+    }))
+    .filter((g) => g.permissions.length > 0);
   const displayed = catalog.filter((p) => {
     if (branchId && !snapshot.branchPermissionCodes.includes(p.code))
       return false;
@@ -445,6 +453,38 @@ export function StaffProfileEditor({
               {currentRole?.permissions.length ?? 0} quyền trong mẫu · Các điều
               chỉnh riêng bên dưới được giữ khi đổi mẫu.
             </p>
+            <details className="mt-4 rounded-xl border p-4">
+              <summary className="cursor-pointer py-2 font-medium">
+                Xem các quyền trong mẫu
+              </summary>
+              <p className="my-3 text-sm text-muted-foreground">
+                Đây là quyền của mẫu chung. Quyền riêng và phạm vi của nhân viên
+                được đối chiếu ở phần kết quả.
+              </p>
+              {templateGroups.length ? (
+                templateGroups.map((g) => (
+                  <section key={g.name} className="mt-4">
+                    <h3 className="text-sm font-semibold">
+                      {g.name} · {g.permissions.length} quyền
+                    </h3>
+                    <ul className="mt-2 grid gap-2 text-sm sm:grid-cols-2">
+                      {g.permissions.map((p) => (
+                        <li key={p.code} className="flex gap-2">
+                          <span aria-hidden="true" className="text-emerald-700">
+                            ✓
+                          </span>
+                          {p.label}
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Mẫu chưa có quyền nghiệp vụ.
+                </p>
+              )}
+            </details>
           </section>
           <section className={cardClass}>
             <div className="flex flex-wrap items-center justify-between gap-3">

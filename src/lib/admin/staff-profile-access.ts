@@ -177,10 +177,33 @@ export function staffProfileChanges(
     changes.push(
       `Đổi nhóm quyền: ${snapshot.roles.find((r) => r.id === draft.roleId)?.name ?? "Chưa chọn"}`,
     );
-  if (
-    JSON.stringify(draft.assignments) !== JSON.stringify(original.assignments)
-  )
-    changes.push("Cập nhật chức vụ / bộ phận / phạm vi quản lý");
+  const assignmentKey = (a: AccountAssignment) =>
+    JSON.stringify([
+      a.positionId,
+      a.departmentId,
+      [...a.managedBranchIds].sort(),
+    ]);
+  const describeAssignment = (a: AccountAssignment) => {
+    const organization = snapshot.hierarchy.document;
+    const position =
+      organization.positions.find((p) => p.id === a.positionId)?.name ??
+      "Chưa chọn chức vụ";
+    const department =
+      organization.departments.find((d) => d.id === a.departmentId)?.name ??
+      "Chưa phân bộ phận";
+    const scope = a.managedBranchIds.length
+      ? `Quản lý nhân viên: ${a.managedBranchIds.map(branchName).join(", ")}`
+      : "Chưa giao quản lý nhân viên";
+    return `${position} · ${department} · ${scope}`;
+  };
+  const beforeAssignments = new Set(original.assignments.map(assignmentKey));
+  const afterAssignments = new Set(draft.assignments.map(assignmentKey));
+  for (const a of original.assignments)
+    if (!afterAssignments.has(assignmentKey(a)))
+      changes.push(`Bỏ phân công: ${describeAssignment(a)}`);
+  for (const a of draft.assignments)
+    if (!beforeAssignments.has(assignmentKey(a)))
+      changes.push(`Áp dụng phân công: ${describeAssignment(a)}`);
   const before = new Map(
     original.exceptions.map((e) => [
       exceptionKey(e.branchId, e.permissionCode),

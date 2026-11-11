@@ -27,6 +27,26 @@ function profileError(error: { message?: string; code?: string }): never {
     throw new Error(
       "Tài khoản có quyền xem tất cả chi nhánh. Hãy kiểm tra quyền này trước khi thu hẹp chi nhánh truy cập.",
     );
+  if (/HIERARCHY_BRANCH_INVALID/.test(text))
+    throw new Error(
+      "Quán được giao quản lý nhân viên phải đang hoạt động và nằm trong chi nhánh được truy cập. Chưa lưu thay đổi nào.",
+    );
+  if (/STAFF_BRANCH_INVALID/.test(text))
+    throw new Error(
+      "Chọn ít nhất một chi nhánh hợp lệ. Chi nhánh đã ngừng hoạt động không thể được cấp mới; bản nháp vẫn được giữ.",
+    );
+  if (/HIERARCHY_DUPLICATE_ASSIGNMENT/.test(text))
+    throw new Error(
+      "Đang có hai phân công trùng chức vụ và bộ phận. Gộp chi nhánh quản lý vào một phân công rồi lưu lại.",
+    );
+  if (/HIERARCHY_ASSIGNMENT_INVALID|STAFF_ASSIGNMENT_INVALID/.test(text))
+    throw new Error(
+      "Chức vụ hoặc bộ phận trong phân công không còn hợp lệ. Kiểm tra lại lựa chọn; chưa lưu thay đổi nào.",
+    );
+  if (/STAFF_ROLE_INVALID/.test(text))
+    throw new Error(
+      "Mẫu quyền đã thay đổi hoặc không còn tồn tại. Tải lại dữ liệu để chọn mẫu phù hợp.",
+    );
   throw new Error(
     "Chưa lưu được quyền. Kiểm tra chi nhánh, chức vụ và các điều chỉnh; bản nháp vẫn được giữ.",
   );
