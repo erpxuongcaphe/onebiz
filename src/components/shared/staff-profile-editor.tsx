@@ -269,7 +269,11 @@ export function StaffProfileEditor({
               onClick={() =>
                 setDraft((d) => ({
                   ...d,
-                  branchIds: snapshot.branches.map((b) => b.id),
+                  branchIds: snapshot.branches
+                    .filter(
+                      (b) => b.isActive !== false || d.branchIds.includes(b.id),
+                    )
+                    .map((b) => b.id),
                 }))
               }
             >

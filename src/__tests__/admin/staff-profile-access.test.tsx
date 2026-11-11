@@ -58,6 +58,30 @@ const snapshot: StaffProfileSnapshot = {
   branchPermissionCodes: ["pos_fnb.split_bill", "pos_fnb.transfer_table"],
 };
 describe("staff profile scope", () => {
+  it("selects active branches without silently granting a closed branch", () => {
+    const data = {
+      ...snapshot,
+      branches: [
+        ...snapshot.branches,
+        { id: "new", name: "New branch", isActive: true },
+        { id: "closed", name: "Closed branch", isActive: false },
+      ],
+    };
+    render(
+      <StaffProfileEditor
+        snapshot={data}
+        onSave={vi.fn()}
+        onReload={vi.fn()}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Chọn mọi chi nhánh hiện có" }),
+    );
+    expect(screen.getByRole("checkbox", { name: "New branch" })).toBeChecked();
+    expect(
+      screen.getByRole("checkbox", { name: "Closed branch · Ngừng hoạt động" }),
+    ).not.toBeChecked();
+  });
   it("explains the old cancellation alias but keeps local and global denials authoritative", () => {
     const oldRole = {
       ...snapshot,
