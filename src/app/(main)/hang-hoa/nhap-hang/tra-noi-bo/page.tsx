@@ -21,13 +21,16 @@ function Workspace(){
   const params=useSearchParams();const scope=useBranchFilter();const {hasPermission}=usePermissions();
   const {user}=useAuth();
   const [chosen,setChosen]=useState<string>();
-  const branch=chosen??params.get('branch')??scope.activeBranchId??'';
+  const requestedBranch=params.get('branch');
+  const branch=[chosen,requestedBranch,scope.activeBranchId].find(id=>scope.branches.some(b=>b.id===id))
+    ??scope.branches[0]?.id??'';
   const allowed=scope.branches.some(b=>b.id===branch);
-  const sale=params.get('sale');
+  const sale=requestedBranch&&requestedBranch!==branch?null:params.get('sale');
   const [rows,setRows]=useState<InternalReturn[]>([]);const [source,setSource]=useState<InternalReceivingOrder>();
   const [selected,setSelected]=useState<string>();const [quantities,setQuantities]=useState<Record<string,number|null>>({});
   const [note,setNote]=useState('');const [query,setQuery]=useState('');const [status,setStatus]=useState('all');
   const [error,setError]=useState('');const [success,setSuccess]=useState('');const [loading,setLoading]=useState(false);
+  const [loadFailed,setLoadFailed]=useState(false);
   const [busy,setBusy]=useState(false);const [preview,setPreview]=useState(false);const [unresolved,setUnresolved]=useState(false);
   const generation=useRef(0);const lock=useRef(false);
   const request=useRef<PendingReturn|undefined>(undefined);
@@ -51,12 +54,12 @@ function Workspace(){
   const refresh=useCallback(async()=>{
     const version=++generation.current;
     if(!scope.isReady||!allowed){setRows([]);setSource(undefined);return;}
-    setLoading(true);setError('');setRows([]);setSource(undefined);
+    setLoading(true);setError('');setLoadFailed(false);setRows([]);setSource(undefined);
     try{
       const [returns,sources]=await Promise.all([getInternalReturns(branch,sale??undefined),sale&&canSend?getInternalReceivingWorkspace(branch):Promise.resolve([])]);
       if(version!==generation.current)return;
       setRows(returns);setSource(sources.find(s=>s.id===sale));
-    }catch(e){if(version===generation.current)setError(e instanceof Error?e.message:'Không tải được phiếu.');}
+    }catch(e){if(version===generation.current){setLoadFailed(true);setError(e instanceof Error?e.message:'Không tải được phiếu.');}}
     finally{if(version===generation.current)setLoading(false);}
   },[branch,sale,scope.isReady,allowed,canSend]);
   useEffect(()=>{setSelected(undefined);setQuantities({});setPreview(false);void refresh();const version=generation.current;return()=>{if(generation.current===version)generation.current=version+1;};},[refresh]);
@@ -66,8 +69,24 @@ function Workspace(){
     !!source&&source.status==='completed'&&hasPermission('inventory.internal_return_send'));
   const items=current?current.items.map(i=>({id:i.id,name:i.product_name,code:i.product_code,unit:i.unit,limit:Number(i.quantity)-Number(i.received),factor:1,stockUnit:i.unit,unsupported:false})):
     source?.items.map(i=>({id:i.id,name:i.name,code:i.code,unit:i.unit,limit:Math.max(0,i.received-rows.flatMap(r=>r.items).filter(r=>r.sale_item_id===i.id).reduce((sum,r)=>sum+Number(r.quantity),0)),factor:i.receivingFactor??1,stockUnit:i.receivingUnit??i.unit,unsupported:i.treatment==='expense'||i.treatment==='review'}))??[];
-  const entered=items.filter(i=>Number(quantities[i.id])>0);
-  const valid=entered.length>0&&items.every(i=>!quantities[i.id]||(Number.isFinite(quantities[i.id])&&Number(quantities[i.id])>0&&Number(quantities[i.id])<=i.limit&&!i.unsupported))&&(action==='receive'||note.trim().length>=3);
+  const eligibleItems=items.filter(i=>!i.unsupported&&i.limit>0);
+  const unavailableItems=items.filter(i=>i.unsupported||i.limit<=0);
+  const selectedItems=items.filter(i=>action==='send'
+    ? Object.hasOwn(quantities,i.id)
+    : Number(quantities[i.id])>0);
+  const valid=selectedItems.length>0&&selectedItems.every(i=>{
+    const quantity=quantities[i.id];
+    return typeof quantity==='number'&&Number.isFinite(quantity)&&quantity>0&&quantity<=i.limit&&!i.unsupported;
+  })&&(action==='receive'||note.trim().length>=3);
+  const entered=selectedItems.filter(i=>Number(quantities[i.id])>0);
+  const toggleReturnItem=(id:string,checked:boolean)=>{
+    setQuantities(previous=>{
+      const next={...previous};
+      if(checked) next[id]=null;
+      else delete next[id];
+      return next;
+    });
+  };
   const credit=current?entered.reduce((sum,i)=>sum+Number(quantities[i.id])*Number(current.items.find(x=>x.id===i.id)?.credit_per_unit??0),0):0;
   const debtReduced=Math.min(current?.invoice_debt??0,credit);
   const submit=async()=>{
@@ -110,18 +129,42 @@ function Workspace(){
       {loading?<p role="status">Đang tải phiếu…</p>:<div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{visible.map(r=><button key={r.id} disabled={frozen} onClick={()=>{setSelected(r.id);setQuantities({});setNote('');setPreview(false);setError('');}} className={`min-w-0 rounded-lg border p-3 text-left text-sm ${selected===r.id?'border-primary bg-primary/5':''}`}>
         <div className="flex flex-wrap justify-between gap-1"><strong>{r.code}</strong><span>{labels[r.status]}</span></div>
         <p className="mt-1 break-words">{r.from_branch_name} → {r.to_branch_name}</p><p className="text-muted-foreground">Gốc {r.sale_code} · {formatDate(r.created_at)}</p>
-      </button>)}{!visible.length&&<p className="py-3 text-sm text-muted-foreground">Chưa có phiếu trả phù hợp.</p>}</div>}
+      </button>)}{!loadFailed&&!visible.length&&<p className="py-3 text-sm text-muted-foreground">Chưa có phiếu trả phù hợp.</p>}</div>}
       {rows.length===200&&<p className="text-xs">Đang hiển thị 200 phiếu gần nhất. Mở từ đơn gốc để đối chiếu riêng từng đơn.</p>}
       {(current||source)&&<section className="space-y-3 rounded-lg border p-3 sm:p-4">
         <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold">{current?`${current.code} · ${labels[current.status]}`:`Gửi trả từ ${source!.code}`}</h2>{current&&source&&<Button variant="ghost" disabled={frozen} onClick={()=>{setSelected(undefined);setQuantities({});setPreview(false);}}>Lập trả thêm</Button>}</div>
         {current&&<p className="whitespace-pre-wrap text-sm">Lý do: {current.reason}</p>}
-        <p className="text-sm text-muted-foreground">Nhập theo đơn vị trên phiếu gốc; hệ thống quy đổi khi ghi kho chi nhánh.</p>
-        <div className="divide-y">{items.map(i=><div key={i.id} className="grid min-w-0 grid-cols-[minmax(0,1fr)_7rem] gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_9rem_9rem]">
-          <div className="min-w-0"><p className="break-words text-sm font-medium">{i.name}</p><p className="text-xs text-muted-foreground">{i.code} · {i.unit}</p>{i.unsupported&&<p className="text-xs text-amber-800">Dòng vật tư/chi phí cần đối soát riêng.</p>}</div>
-          <div className="text-right text-sm">{action==='send'?'Còn được trả':'Chờ nhận'}<p className="font-medium">{formatNumber(i.limit)} {i.unit}</p></div>
-          {canAct&&<label className="col-span-2 flex items-center justify-between gap-2 text-sm sm:col-span-1 sm:block"><span>{action==='send'?'Số gửi trả':'Thực nhận'}</span><NumericInput aria-label={`${action==='send'?'Số gửi trả':'Thực nhận'} ${i.name}`} className="w-28 sm:w-full" value={quantities[i.id]??null} decimals={4} min={0} max={i.limit} disabled={frozen||preview||i.unsupported} onChange={value=>setQuantities(q=>({...q,[i.id]:value}))}/></label>}
-        </div>)}</div>
-        {canAct&&<><label className="block space-y-1 text-sm"><span>{action==='send'?'Lý do trả *':'Ghi chú nhận hàng'}</span><textarea className="min-h-16 w-full rounded border bg-background p-2" maxLength={500} value={note} disabled={frozen||preview} onChange={e=>setNote(e.target.value)}/></label>
+        <p className="text-sm text-muted-foreground">{action==='send'
+          ? 'Tích mặt hàng muốn trả rồi nhập số lượng theo đơn vị trên phiếu gốc.'
+          : 'Nhập số thực nhận theo đơn vị trên phiếu gốc.'}</p>
+        <div className="divide-y">
+          {(action==='send'?eligibleItems:items).map(i=>{
+            const checked=Object.hasOwn(quantities,i.id);
+            const itemLabel=<span className="min-w-0">
+              <span className="block break-words text-sm font-medium">{i.name}</span>
+              <span className="block text-xs text-muted-foreground">{i.code} · {i.unit}</span>
+            </span>;
+            return <div key={i.id} className="grid min-w-0 grid-cols-[minmax(0,1fr)_7rem] items-start gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_9rem_9rem]">
+              {action==='send'&&canAct
+                ? <label className="flex min-h-10 min-w-0 cursor-pointer items-start gap-3">
+                    <input type="checkbox" aria-label={`Chọn trả ${i.name}`} className="mt-0.5 size-5 shrink-0 accent-primary" checked={checked} disabled={frozen||preview} onChange={e=>toggleReturnItem(i.id,e.target.checked)}/>
+                    {itemLabel}
+                  </label>
+                : itemLabel}
+              <div className="text-right text-sm">{action==='send'?'Còn được trả':'Chờ nhận'}<p className="font-medium">{formatNumber(i.limit)} {i.unit}</p></div>
+              {canAct&&i.limit>0&&(action==='receive'||checked)&&<label className="col-span-2 flex items-center justify-between gap-2 text-sm sm:col-span-1 sm:block">
+                <span>{action==='send'?'Số gửi trả':'Thực nhận'}</span>
+                <NumericInput aria-label={`${action==='send'?'Số gửi trả':'Thực nhận'} ${i.name}`} className="w-28 sm:w-full" value={quantities[i.id]??null} decimals={4} min={0} max={i.limit} disabled={frozen||preview} onChange={value=>setQuantities(q=>({...q,[i.id]:value}))}/>
+              </label>}
+            </div>;
+          })}
+        </div>
+        {action==='send'&&!eligibleItems.length&&<p className="text-sm text-muted-foreground">Đơn này không còn mặt hàng đủ điều kiện gửi trả.</p>}
+        {action==='send'&&unavailableItems.length>0&&<details className="text-sm">
+          <summary className="cursor-pointer text-muted-foreground">{unavailableItems.length} dòng không thể chọn trả</summary>
+          <ul className="mt-2 space-y-1">{unavailableItems.map(i=><li key={i.id}>{i.name} ({i.code}) · {i.unsupported?'Dòng vật tư/chi phí cần đối soát riêng':'Không còn số lượng được trả'}</li>)}</ul>
+        </details>}
+        {canAct&&(action==='receive'||eligibleItems.length>0)&&<><label className="block space-y-1 text-sm"><span>{action==='send'?'Lý do trả *':'Ghi chú nhận hàng'}</span><textarea className="min-h-16 w-full rounded border bg-background p-2" maxLength={500} value={note} disabled={frozen||preview} onChange={e=>setNote(e.target.value)}/></label>
           {preview&&<div className="rounded border bg-muted/30 p-3 text-sm"><strong>Xem trước</strong>{entered.map(i=><p key={i.id} className="mt-1 break-words">{i.name}: {action==='send'?'giảm tồn chi nhánh':'tăng tồn Kho Tổng'} {formatNumber(Number(quantities[i.id])*i.factor)} {i.stockUnit}</p>)}
             {current?<p className="mt-2">Dự kiến giảm nợ {formatNumber(debtReduced)}đ; chờ hoàn/cấn trừ {formatNumber(credit-debtReduced)}đ. Tính lại theo công nợ tại lúc xác nhận, không ghi chi tiền.</p>:<p className="mt-2">Kho Tổng chưa tăng tồn hoặc giảm nợ cho đến khi nhân viên kho xác nhận thực nhận.</p>}</div>}
           {!unresolved&&<div className="flex flex-wrap justify-end gap-2">{preview&&<Button variant="outline" disabled={busy} onClick={()=>setPreview(false)}>Sửa lại</Button>}
