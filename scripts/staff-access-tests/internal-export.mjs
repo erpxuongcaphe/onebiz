@@ -252,4 +252,8 @@ export async function verifyInternalExportScope(db, { id, migration }) {
   console.log(
     "Internal export scope: 12 consumers, source branch, global denial/local grant, actual draft cancellation and 12 direct-DML guards passed; costing delegates remain bounded fixtures.",
   );
+  if (process.env.ONEBIZ_STAFF_ADJUSTMENT_TEST === "1") {
+    const { verifyAdjustmentScope } = await import("./adjustment.mjs");
+    await verifyAdjustmentScope(db, { id, migration });
+  }
 }

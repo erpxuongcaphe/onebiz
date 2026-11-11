@@ -87,4 +87,8 @@ try {
  check((await db.query("select not has_function_privilege('anon','adjust_stock_to_value_atomic(uuid,uuid,uuid,numeric,numeric,text)','execute') ok")).rows[0].ok,'anonymous call denied');
  check(Number((await db.query('select stock from products where id=$1',[id(30)])).rows[0].stock)===12,'product snapshot matches branch');
  console.log(`PASS ${checks} target adjustment checks. Real auth/mutation core; cost/lot storage fixtures, no production calls.`);
+ if(process.env.ONEBIZ_STAFF_ADJUSTMENT_POSTING_TEST==='1') {
+  const {verifyAdjustmentPosting}=await import('../staff-access-tests/adjustment-posting.mjs');
+  await verifyAdjustmentPosting(db,{id,call,balance});
+ }
 }finally{await db.close()}
