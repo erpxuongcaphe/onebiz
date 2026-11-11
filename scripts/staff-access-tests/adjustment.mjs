@@ -154,4 +154,8 @@ export async function verifyAdjustmentScope(db, { id, migration }) {
   console.log(
     "Adjustment scope: 10 consumers deny at the persisted branch, opening replay cannot use another branch grant, local manual grant and global denial verified. Posting checked separately.",
   );
+  if (process.env.ONEBIZ_STAFF_PURCHASE_TEST === "1") {
+    const { verifyPurchaseScope } = await import("./purchase.mjs");
+    await verifyPurchaseScope(db, { id, migration });
+  }
 }
