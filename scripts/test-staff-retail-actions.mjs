@@ -201,6 +201,12 @@ try {
   console.log(
     "Retail actions: draft/void denial, persisted branch, actual local draft adoption/delete and price override, global denial and six raw-DML guards passed. Refund posting remains separately covered by full refund CI.",
   );
+  if (process.env.ONEBIZ_STAFF_RETAIL_CHECKOUT_TEST === "1") {
+    const { verifyRetailCheckoutScope } = await import(
+      "./staff-access-tests/retail-checkout.mjs"
+    );
+    await verifyRetailCheckoutScope(db, { id, migration });
+  }
 } finally {
   await db.close();
 }
