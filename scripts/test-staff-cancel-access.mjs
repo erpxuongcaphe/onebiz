@@ -241,6 +241,12 @@ try {
     ["pos_fnb.cancel_unpaid_order"],
   );
   checks += 2;
+  const paidChecks = await (
+    await import("./staff-access-tests/paid-void.mjs")
+  ).verifyPaidVoidScope(db, id);
+  console.log(
+    `Paid invoice void: ${paidChecks} scope/legacy/OTP checks passed.`,
+  );
   console.log(
     `Staff cancellation: ${checks} checks passed; granular denial blocks legacy void fallback, allowed-branch approval preserved.`,
   );

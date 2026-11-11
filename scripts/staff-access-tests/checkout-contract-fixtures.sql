@@ -4,7 +4,7 @@
 create function get_document_payment_history_scoped(p_reference_type text,p_reference_id uuid,p_offset integer default 0,p_limit integer default 500)
 returns jsonb language plpgsql as $$declare v_actor uuid:=auth.uid();v_branch uuid;begin
  select branch_id into v_branch from invoices where id=p_reference_id;
- if not public.user_has_permission(v_actor,'pos_fnb.checkout') then raise exception 'PAYMENT_HISTORY_DENIED';end if;
+ if not (public.user_has_permission(v_actor,'pos_fnb.checkout') or public.user_has_permission(v_actor,'pos_fnb.void_paid_bill')) then raise exception 'PAYMENT_HISTORY_DENIED';end if;
  return '{}'::jsonb;end$$;
 create function get_open_shift_status_scoped(p_branch_id uuid) returns jsonb language plpgsql as $$declare v_actor uuid:=auth.uid();begin
  if not public.user_has_permission(v_actor,'pos_fnb.checkout') then raise exception 'SHIFT_STATUS_DENIED';end if;

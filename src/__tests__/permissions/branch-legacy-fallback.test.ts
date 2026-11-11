@@ -4,8 +4,7 @@ import {
   permissionWithLegacyFallback,
 } from "@/lib/permissions/branch-permissions";
 
-describe("branch exceptions and legacy cancellation", () => {
-  const code = "pos_fnb.cancel_unpaid_order";
+describe.each(["pos_fnb.cancel_unpaid_order", "pos_fnb.void_paid_bill"])("branch exceptions and legacy cancellation: %s", (code) => {
   const legacy = "pos_fnb.void";
   const base = new Set([legacy]);
   const adjustments = [{ branchId: "premium", code, allowed: false }];

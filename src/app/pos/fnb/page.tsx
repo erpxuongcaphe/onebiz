@@ -508,8 +508,7 @@ function FnbPosPageInner() {
     ? billAuditHref(branchId, pos.activeTab?.kitchenOrderId, openOrders.orders.find(order => order.id === pos.activeTab?.kitchenOrderId)?.orderNumber ?? pos.activeTab?.label ?? "Bill đang xem")
     : undefined;
   const canVoidPaidBill =
-    hasPermission(PERMISSIONS.POS_FNB_VOID_PAID_BILL) ||
-    hasPermission(PERMISSIONS.POS_FNB_VOID);
+    hasPermission(PERMISSIONS.POS_FNB_VOID_PAID_BILL, PERMISSIONS.POS_FNB_VOID);
 
   const [catalogRefreshRevision, setCatalogRefreshRevision] = useState(0);
   const catalogScopeRef = useRef<string | null>(null);

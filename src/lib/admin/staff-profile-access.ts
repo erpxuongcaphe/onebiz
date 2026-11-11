@@ -153,7 +153,7 @@ export function projectedStaffPermission(
     };
   const role = snapshot.roles.find((r) => r.id === draft.roleId);
   if (
-    code === "pos_fnb.cancel_unpaid_order" &&
+    ["pos_fnb.cancel_unpaid_order", "pos_fnb.void_paid_bill"].includes(code) &&
     !role?.permissions.includes(code)
   ) {
     const legacy = draft.exceptions.find(
