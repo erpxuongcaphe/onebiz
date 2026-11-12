@@ -60,8 +60,13 @@ export async function verifyInventoryBranchPermissions(
   ];
   for (const [file, name, renamed] of originals) {
     let source = await functionFromMigration(file, name);
-    if (name === "_change_inventory_check" && process.env.ONEBIZ_INVENTORY_CHANGE_AUDIT_FILE) {
-      const definitions = JSON.parse(await readFile(process.env.ONEBIZ_INVENTORY_CHANGE_AUDIT_FILE, "utf8"));
+    if (
+      name === "_change_inventory_check" &&
+      process.env.ONEBIZ_INVENTORY_CHANGE_AUDIT_FILE
+    ) {
+      const definitions = JSON.parse(
+        await readFile(process.env.ONEBIZ_INVENTORY_CHANGE_AUDIT_FILE, "utf8"),
+      );
       const current = definitions.find((entry) => entry.proname === name);
       if (!current) throw new Error(`Missing captured function ${name}`);
       source = current.definition;
@@ -112,22 +117,34 @@ export async function verifyInventoryBranchPermissions(
     values ('${id(1)}','${id(101)}','${id(10)}','inventory.view','revoke','${id(100)}');`);
   for (const action of ["edit", "cancel"]) {
     await rejects(
-      db.query("select _change_inventory_check($1,$2,$3,null,null,null,null,null,false)", [id(201), action, []]),
+      db.query(
+        "select _change_inventory_check($1,$2,$3,null,null,null,null,null,false)",
+        [id(201), action, []],
+      ),
       /INSUFFICIENT_PERMISSION/,
     );
     await rejects(
-      db.query("select _change_inventory_check($1,$2,$3,null,null,null,null,null,false)", [id(202), action, []]),
+      db.query(
+        "select _change_inventory_check($1,$2,$3,null,null,null,null,null,false)",
+        [id(202), action, []],
+      ),
       /INVENTORY_CHECK_REASON_REQUIRED/,
     );
   }
   await db.exec(`delete from role_permissions where role_id='${id(20)}' and permission_code='inventory.view';
     update user_branch_permission_overrides set branch_id='${id(11)}',override_type='grant' where permission_code='inventory.view';`);
   await rejects(
-    db.query("select _change_inventory_check($1,'edit',$2,null,null,null,null,null,false)", [id(202), []]),
+    db.query(
+      "select _change_inventory_check($1,'edit',$2,null,null,null,null,null,false)",
+      [id(202), []],
+    ),
     /INVENTORY_CHECK_REASON_REQUIRED/,
   );
   await rejects(
-    db.query("select _change_inventory_check($1,'edit',$2,null,null,null,null,null,false)", [id(201), []]),
+    db.query(
+      "select _change_inventory_check($1,'edit',$2,null,null,null,null,null,false)",
+      [id(201), []],
+    ),
     /INSUFFICIENT_PERMISSION/,
   );
   await db.exec(`delete from user_branch_permission_overrides where permission_code='inventory.view';

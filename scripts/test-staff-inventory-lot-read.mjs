@@ -153,6 +153,14 @@ try {
     "./staff-access-tests/inventory-stock-products.mjs"
   );
   await verifyInventoryStockProducts(db, id);
+  const { verifyInventoryReferences } = await import(
+    "./staff-access-tests/inventory-reference.mjs"
+  );
+  await verifyInventoryReferences(db, id);
+  const { verifyInventoryFnbInvoiceReads } = await import(
+    "./staff-access-tests/inventory-fnb-invoices.mjs"
+  );
+  await verifyInventoryFnbInvoiceReads(db, id);
 } finally {
   await db.close();
 }

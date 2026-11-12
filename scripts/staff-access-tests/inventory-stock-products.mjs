@@ -18,8 +18,12 @@ export async function verifyInventoryStockProducts(db, id) {
     select set_config('request.jwt.claim.sub','${id(101)}',false);
   `);
   if (process.env.ONEBIZ_INVENTORY_LOT_AUDIT_FILE) {
-    const definitions = JSON.parse(await readFile(process.env.ONEBIZ_INVENTORY_LOT_AUDIT_FILE, "utf8"));
-    const current = definitions.find((entry) => entry.proname === "get_products_with_branch_stock");
+    const definitions = JSON.parse(
+      await readFile(process.env.ONEBIZ_INVENTORY_LOT_AUDIT_FILE, "utf8"),
+    );
+    const current = definitions.find(
+      (entry) => entry.proname === "get_products_with_branch_stock",
+    );
     assert.ok(current);
     await db.exec(current.definition);
   } else {
@@ -33,8 +37,17 @@ export async function verifyInventoryStockProducts(db, id) {
         return query select bs.product_id from public.branch_stock bs where bs.tenant_id=v_tenant_id and bs.branch_id=p_branch_id;
       end $$;`);
   }
-  await db.exec(await readFile(new URL("../../supabase/migrations/20261112033141_staff_branch_inventory_stock_products.sql", import.meta.url), "utf8"));
-  const read = (branch) => db.query("select * from get_products_with_branch_stock($1)", [id(branch)]);
+  await db.exec(
+    await readFile(
+      new URL(
+        "../../supabase/migrations/20261112033141_staff_branch_inventory_stock_products.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  );
+  const read = (branch) =>
+    db.query("select * from get_products_with_branch_stock($1)", [id(branch)]);
   assert.equal((await read(10)).rows.length, 1);
   assert.equal((await read(11)).rows.length, 1);
   await db.exec(`insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
@@ -45,6 +58,11 @@ export async function verifyInventoryStockProducts(db, id) {
     update user_branch_permission_overrides set branch_id='${id(11)}',override_type='grant' where permission_code='inventory.view';`);
   assert.equal((await read(11)).rows.length, 1);
   await assert.rejects(read(10), /STOCK_READ_PERMISSION_DENIED/);
-  await assert.rejects(read(12), /STOCK_READ_PERMISSION_DENIED|STOCK_READ_BRANCH_DENIED/);
-  console.log("PASS stock product picker: branch grant/denial and tenant boundary.");
+  await assert.rejects(
+    read(12),
+    /STOCK_READ_PERMISSION_DENIED|STOCK_READ_BRANCH_DENIED/,
+  );
+  console.log(
+    "PASS stock product picker: branch grant/denial and tenant boundary.",
+  );
 }
