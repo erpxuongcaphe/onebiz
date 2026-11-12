@@ -30,7 +30,7 @@ try {
    ('${id(1)}','${id(10)}','${id(60)}','${id(80)}',2),('${id(1)}','${id(11)}','${id(60)}',null,20),
    ('${id(2)}','${id(12)}','${id(60)}',null,90);
   select set_config('request.jwt.claim.sub','${id(101)}',false);
-  insert into staff_branch_permission_catalog values('inventory.view',1),('pos_retail.checkout',1);
+  insert into staff_branch_permission_catalog values('inventory.view',1),('pos_retail.checkout',1),('pos_fnb.send_kitchen',1),('pos_fnb.checkout',1);
   grant usage on schema auth,public to authenticated;grant select on branch_stock to authenticated;`);
   await db.exec(await file("20261112081429_staff_pos_stock_snapshot.sql"));
   await db.exec(
@@ -51,6 +51,9 @@ try {
     ),
   );
   await db.exec(await file("20261112083252_staff_bom_availability_scope.sql"));
+  await db.exec(await functionFromMigration('20261112121837_staff_inventory_global_revoke_guard.sql','_staff_stock_has_no_view_exception'));
+  await db.exec(await file('20261112103125_staff_inventory_product_breakdown_scope.sql'));
+  await db.exec(await file('20261112131018_staff_stock_breakdown_global_revoke_guard.sql'));
   await db.exec("set role authenticated");
   const read = async (branch, ids) =>
     (
@@ -59,6 +62,8 @@ try {
         [id(branch), ids.map(id)],
       )
     ).rows;
+  await assert.rejects(read(10,[60]),/POS_STOCK_PERMISSION_DENIED/);
+  await db.exec(`reset role; insert into role_permissions values('${id(20)}','inventory.view'); set role authenticated;`);
   assert.deepEqual(await read(10, [60]), [
     { product_id: id(60), quantity: "12" },
   ]);
@@ -86,7 +91,8 @@ try {
     read(10, Array(201).fill(60)),
     /POS_STOCK_INVALID_REQUEST/,
   );
-  await db.exec(`reset role; insert into user_branches values('${id(101)}','${id(11)}',null);
+  await db.exec(`reset role; delete from role_permissions where permission_code='inventory.view';
+  insert into user_branches values('${id(101)}','${id(11)}',null);
   insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
    ('${id(1)}','${id(101)}','${id(10)}','inventory.view','revoke','${id(100)}'),
    ('${id(1)}','${id(101)}','${id(10)}','pos_retail.checkout','grant','${id(100)}');
@@ -120,6 +126,24 @@ try {
   );
   await assert.rejects(read(10, [60]), /POS_STOCK_PERMISSION_DENIED/);
   await assert.rejects(bom(1, 10, 60), /BOM_AVAILABILITY_PERMISSION_DENIED/);
+  await db.exec(`reset role; delete from user_branch_permission_overrides where permission_code in ('inventory.view','pos_retail.checkout');
+    insert into role_permissions values('${id(20)}','inventory.view');
+    insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type,created_by)
+     values('${id(1)}','${id(101)}','inventory.view','revoke','${id(100)}'); set role authenticated;`);
+  await assert.rejects(read(10,[60]),/POS_STOCK_PERMISSION_DENIED/);
+  await assert.rejects(bom(1,10,60),/BOM_AVAILABILITY_PERMISSION_DENIED/);
+  await db.exec(`reset role; insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+    values('${id(1)}','${id(101)}','${id(10)}','pos_retail.checkout','grant','${id(100)}'); set role authenticated;`);
+  assert.equal((await read(10,[60]))[0].quantity,'12','checkout remains available despite global inventory-view revoke');
+  assert.equal((await bom(1,10,60))[0].available,'3','checkout retains BOM availability independently');
+  for (const code of ['pos_fnb.send_kitchen','pos_fnb.checkout']) {
+    await db.exec(`reset role; delete from user_branch_permission_overrides where permission_code in ('pos_retail.checkout','pos_fnb.send_kitchen','pos_fnb.checkout');
+      insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+      values('${id(1)}','${id(101)}','${id(10)}','${code}','grant','${id(100)}'); set role authenticated;`);
+    assert.equal((await read(10,[60]))[0].quantity,'12',`${code} keeps its stock snapshot`);
+    assert.equal((await bom(1,10,60))[0].available,'3',`${code} keeps its BOM snapshot`);
+    await assert.rejects(read(11,[60]),/POS_STOCK_PERMISSION_DENIED/);
+  }
   await db.exec(
     `reset role; select set_config('request.jwt.claim.sub','',false); select set_config('test.jwt.role','service_role',false); set role service_role;`,
   );

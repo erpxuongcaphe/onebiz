@@ -42,6 +42,9 @@ try {
   await db.exec(
     await file("20261112104703_staff_inventory_branch_stock_reads.sql"),
   );
+  await db.exec(await functionFromMigration('20261112121837_staff_inventory_global_revoke_guard.sql','_staff_stock_has_no_view_exception'));
+  const scopeMigration=await file('20261112131018_staff_stock_breakdown_global_revoke_guard.sql');
+  await db.exec(scopeMigration.match(/do \$migration\$[\s\S]*?end \$migration\$;/)[0]);
   await db.exec("set role authenticated");
   const read = async (product = 60) =>
     (
@@ -113,6 +116,15 @@ try {
     [id(10)],
     "branch-only inventory grant keeps raw reads inside the granted branch",
   );
+  await db.exec(`reset role; delete from user_branch_permission_overrides where permission_code='inventory.view'; set role authenticated;`);
+  assert.deepEqual(await read(),[], 'no inventory grant must not use the global fast path');
+  await db.exec(`reset role; insert into role_permissions values('${id(20)}','inventory.view');
+    insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type,created_by)
+      values('${id(1)}','${id(101)}','inventory.view','revoke','${id(100)}'); set role authenticated;`);
+  assert.deepEqual(await read(),[], 'global inventory revoke must hide every branch');
+  await db.exec(`reset role; insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+    values('${id(1)}','${id(101)}','${id(10)}','inventory.view','grant','${id(100)}'); set role authenticated;`);
+  assert.deepEqual(await read(),[], 'global revoke cannot be bypassed by a branch grant');
   console.log(
     "PASS stock breakdown: quantities, explicit zero and denied/foreign branches are distinguished",
   );
