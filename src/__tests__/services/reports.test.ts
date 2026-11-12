@@ -306,6 +306,10 @@ vi.mock("@/lib/services/supabase/base", () => ({
       return chain;
     }),
     rpc: vi.fn((fn: string, params?: Record<string, unknown>) => {
+      if (fn === "get_financial_alert_lots") {
+        const result = tableDataMap.product_lots as { data: Array<Record<string, unknown>> | null; error: unknown } | undefined;
+        return { ...result, data: result?.data?.map(row => ({ ...row, product_name: (row.products as { name?: string } | null)?.name })) ?? (result?.error ? null : []) };
+      }
       if (fn === "get_profit_and_loss_report_v2") {
         return params?.p_exclude_internal
           ? buildConsolidatedProfitAndLossRpc()

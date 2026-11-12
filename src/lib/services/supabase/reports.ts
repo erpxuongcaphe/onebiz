@@ -596,21 +596,9 @@ export async function getFinancialAlerts(branchId?: string): Promise<FinancialAl
         .eq("tenant_id", tenantId)
         .filter("is_active", "eq", true);
 
-  // CEO 26/05/2026: Fix column name `lot_code` → `lot_number` (đúng schema
-  // migration 00104). Query này từng trả về 400 → dashboard cảnh báo lot
-  // sắp hết hạn không hoạt động được.
-  let lotQuery = (supabase as any)
-    .from("product_lots")
-    .select("id, lot_number, product_id, expiry_date, current_qty, products:products_scoped(name)")
-    .eq("tenant_id", tenantId)
-    .gt("current_qty", 0)
-    // CEO 16/08/2026: chỉ tính lô còn TỒN VẬT LÝ. Lô 'cancelled' (phiếu nhập
-    // bị huỷ) và 'consumed'/'disposed' vẫn giữ current_qty làm dấu vết lịch sử
-    // → cộng vào là báo thừa hàng không có thật.
-    .in("status", ["active", "expired"])
-    .not("expiry_date", "is", null)
-    .order("expiry_date", { ascending: true })
-    .limit(20);
+  // A bounded report projection keeps expiry alerts available without granting
+  // the report viewer direct access to complete inventory lot records.
+  const lotQuery = (supabase as any).rpc("get_financial_alert_lots", { p_branch: branchId ?? null });
 
   const cashToday = cashBookDate(new Date().toISOString());
   const cashPeriod = { from: `${cashToday.slice(0, 7)}-01`, to: cashToday };
@@ -624,7 +612,6 @@ export async function getFinancialAlerts(branchId?: string): Promise<FinancialAl
 
   if (branchId) {
     cashQuery = cashQuery.eq("branch_id", branchId);
-    lotQuery = lotQuery.eq("branch_id", branchId);
   }
 
   // Query all needed data in parallel
@@ -643,6 +630,7 @@ export async function getFinancialAlerts(branchId?: string): Promise<FinancialAl
 
   if (debtors.error) handleError(debtors.error, "getFinancialAlerts.debt");
   if (lotsData.error) handleError(lotsData.error, "getFinancialAlerts.lots");
+  if (!Array.isArray(lotsData.data)) throw new Error("Không xác định được danh sách cảnh báo lô hàng.");
 
   // --- 1. Overdue debt alerts ---
   const debtorRows = (debtors.data ?? []).map((c: any) => ({
@@ -773,8 +761,7 @@ export async function getFinancialAlerts(branchId?: string): Promise<FinancialAl
       description: expiredLots
         .slice(0, 3)
         .map((l) => {
-          const product = l.products as { name: string } | null;
-          return `${product?.name ?? "SP"} (${l.lot_number})`;
+          return `${l.product_name ?? "SP"} (${l.lot_number})`;
         })
         .join(", "),
       value: expiredLots.length,
@@ -796,8 +783,7 @@ export async function getFinancialAlerts(branchId?: string): Promise<FinancialAl
       description: soonExpiring
         .slice(0, 3)
         .map((l) => {
-          const product = l.products as { name: string } | null;
-          return `${product?.name ?? "SP"} (${l.lot_number})`;
+          return `${l.product_name ?? "SP"} (${l.lot_number})`;
         })
         .join(", "),
       value: soonExpiring.length,
