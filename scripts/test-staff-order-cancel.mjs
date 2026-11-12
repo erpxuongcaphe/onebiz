@@ -130,6 +130,10 @@ try {
   console.log(
     "PASS order cancellation: persisted branch scope, independent shipping right, local grant and global deny.",
   );
+  const { verifyOrderCreate } = await import(
+    "./staff-access-tests/order-create.mjs"
+  );
+  await verifyOrderCreate(db, id);
 } finally {
   await db.close();
 }
