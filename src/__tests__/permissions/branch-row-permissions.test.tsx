@@ -128,5 +128,9 @@ describe("row permissions across branches", () => {
     const tubua = transfer.result.current.forBranch("tubua");
     expect(premium.canCancel && tubua.canCancel).toBe(false);
     expect(tubua.canCancel).toBe(true);
+    expect(tubua.canView).toBe(true);
+    expect(tubua.canPrint).toBe(true);
+    expect(premium.canView).toBe(false);
+    expect(transfer.result.current.forBranch("other").canView).toBe(false);
   });
 });

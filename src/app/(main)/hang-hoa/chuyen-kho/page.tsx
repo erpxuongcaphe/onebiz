@@ -651,14 +651,14 @@ export default function ChuyenKhoPage() {
             }
           },
         }}
-        actions={[
+        actions={activeBranchId && txPerms.forBranch(activeBranchId).canCancel ? [
           {
             label: "Tạo phiếu chuyển kho",
             icon: <Icon name="add" size={16} />,
             variant: "default",
             onClick: () => setShowCreate(true),
           },
-        ]}
+        ] : []}
       />
 
       {viewAllBranches && (

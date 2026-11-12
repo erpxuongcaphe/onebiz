@@ -107,6 +107,38 @@ export async function verifyTwoBranchInventoryReads(db, id) {
     update user_branch_permission_overrides set override_type='revoke' where permission_code='inventory.view';
     set role authenticated;`);
   await check([id(910), id(912)], 5, 50, id(11));
+  await db.exec(`reset role;
+    delete from role_permissions where permission_code='inventory.view';
+    delete from user_branch_permission_overrides where permission_code='inventory.view';
+    insert into staff_branch_permission_catalog values ('inventory.transfer',1) on conflict do nothing;
+    insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type,created_by)
+      values('${id(1)}','${id(101)}','inventory.view','revoke','${id(100)}');
+    insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+      values('${id(1)}','${id(101)}','${id(10)}','inventory.transfer','grant','${id(100)}');`);
+  await db.exec(await readFile(new URL('../../supabase/migrations/20261112160642_staff_stock_transfer_action_document_reads.sql',import.meta.url),'utf8'));
+  await db.exec('set role authenticated');
+  const transfer = (await db.query('select get_stock_transfer_list_workspace() result')).rows[0].result;
+  assert.deepEqual(transfer.items.map(row=>row.id).sort(),[id(910),id(912)]);
+  assert.deepEqual((await db.query('select id from stock_transfers order by id')).rows.map(row=>row.id),[id(910),id(912)]);
+  assert.deepEqual((await db.query('select id from stock_transfer_items order by id')).rows.map(row=>row.id),[id(910),id(912)]);
+  assert.deepEqual((await db.query('select id from internal_sales')).rows,[], 'transfer permission does not grant internal sales');
+  await assert.rejects(db.query('select get_stock_transfer_list_workspace(p_branch_id=>$1)',[id(11)]),/PERMISSION_DENIED/);
+  await db.exec(`reset role; insert into role_permissions values('${id(20)}','reports.view_all_branches');
+    insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+      values('${id(1)}','${id(101)}','${id(13)}','inventory.transfer','grant','${id(100)}'); set role authenticated;`);
+  assert.deepEqual((await db.query('select id from stock_transfers order by id')).rows.map(row=>row.id),[id(910),id(912)],'report-all does not make an unassigned action grant effective');
+  await assert.rejects(db.query('select get_stock_transfer_list_workspace(p_branch_id=>$1)',[id(13)]),/PERMISSION_DENIED/);
+  await db.exec(`reset role; delete from role_permissions where permission_code='reports.view_all_branches'; set role authenticated;`);
+  await db.exec(`reset role; insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type,created_by)
+    values('${id(1)}','${id(101)}','inventory.transfer','revoke','${id(100)}'); set role authenticated;`);
+  assert.deepEqual((await db.query('select id from stock_transfers')).rows,[], 'global action revoke wins over branch grant');
+  await db.exec(`reset role;
+    delete from user_permission_overrides where user_id='${id(101)}' and permission_code in ('inventory.view','inventory.transfer');
+    delete from user_branch_permission_overrides where user_id='${id(101)}' and permission_code='inventory.transfer';
+    delete from staff_branch_permission_catalog where permission_code='inventory.transfer';
+    insert into role_permissions values ('${id(20)}','inventory.view');
+    insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+      values('${id(1)}','${id(101)}','${id(10)}','inventory.view','revoke','${id(100)}'); set role authenticated;`);
   console.log(
     "PASS two-branch inventory: same-side access, selected branch denial, totals, and direct documents and lines.",
   );

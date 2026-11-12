@@ -58,6 +58,15 @@ const snapshot: StaffProfileSnapshot = {
   branchPermissionCodes: ["pos_fnb.split_bill", "pos_fnb.transfer_table"],
 };
 describe("staff profile scope", () => {
+  it("distinguishes reading a transfer from performing it at both branches", () => {
+    const data = structuredClone(snapshot);
+    data.branchPermissionCodes.push("inventory.transfer");
+    render(<StaffProfileEditor snapshot={data} onSave={vi.fn()} onReload={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Tùy chỉnh quyền" }));
+    fireEvent.click(screen.getByRole("button", { name: "Premium" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Tìm quyền" }), { target: { value: "inventory.transfer" } });
+    expect(screen.getByText(/Chuyển kho cần quyền tại cả chi nhánh gửi/)).toHaveTextContent("quyền tại một chi nhánh được giao cũng cho xem phiếu");
+  });
   it("shows which rights cannot yet be adjusted separately for a branch", () => {
     const onSave = vi.fn();
     render(<StaffProfileEditor snapshot={snapshot} onSave={onSave} onReload={vi.fn()} />);

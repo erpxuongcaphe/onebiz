@@ -165,7 +165,7 @@ export const sidebarNavGroups: SidebarGroup[] = [
       // ── Weekly ──
       { label: "Kiểm kho", href: "/hang-hoa/kiem-kho", icon: "fact_check", permissions: ["inventory.view", "inventory.check", "inventory.edit_check", "inventory.cancel_check"] },
       { label: "Hạn sử dụng", href: "/hang-hoa/hsd", icon: "event_note", permission: "inventory.view" },
-      { label: "Chuyển kho", href: "/hang-hoa/chuyen-kho", icon: "swap_horiz", permission: "inventory.view" },
+      { label: "Chuyển kho", href: "/hang-hoa/chuyen-kho", icon: "swap_horiz", permissions: ["inventory.view", "inventory.transfer"] },
       // ── Occasionally / Rare ──
       { label: "Xuất dùng nội bộ", href: "/hang-hoa/xuat-dung-noi-bo", icon: "inventory", permission: "inventory.view" },
       { label: "Xuất hủy", href: "/hang-hoa/xuat-huy", icon: "delete", permission: "inventory.view" },

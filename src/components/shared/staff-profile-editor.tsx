@@ -773,7 +773,9 @@ export function StaffProfileEditor({
                                     <p className="text-xs text-muted-foreground">
                                       Chuyển kho cần quyền tại cả chi nhánh gửi
                                       và chi nhánh nhận. Chặn ở một bên sẽ chặn
-                                      phiếu.
+                                      thao tác. Để theo dõi công việc, quyền tại
+                                      một chi nhánh được giao cũng cho xem phiếu
+                                      chuyển liên quan đến chi nhánh đó.
                                     </p>
                                   )}
                                 {branchId && p.code === "inventory.create_po" && (
