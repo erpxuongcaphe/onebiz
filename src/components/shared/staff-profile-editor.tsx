@@ -666,7 +666,11 @@ export function StaffProfileEditor({
                               className="grid gap-3 p-4 lg:grid-cols-[minmax(0,1fr)_190px]"
                             >
                               <div>
-                                <p className="font-medium">{p.label}</p>
+                                <p className="font-medium">
+                                  {branchId && p.code === "production.view"
+                                    ? "Xem lệnh và số liệu lệnh sản xuất"
+                                    : p.label}
+                                </p>
                                 {SHARED_DATA_STAFF_PERMISSIONS.has(p.code) && (
                                   <p className="mt-1 text-sm font-medium text-amber-800">
                                     Thay đổi áp dụng cho toàn công ty
@@ -687,6 +691,14 @@ export function StaffProfileEditor({
                                       phiếu.
                                     </p>
                                   )}
+                                {branchId && p.code === "production.view" && (
+                                  <p className="text-xs text-muted-foreground">
+                                    Áp dụng cho lệnh sản xuất, nguyên liệu và
+                                    lịch sử điều chỉnh của lệnh tại chi nhánh
+                                    này. Danh sách lô và hạn sử dụng xét quyền
+                                    xem tồn kho.
+                                  </p>
+                                )}
                                 {p.code === "finance.create_transaction" && (
                                   <p className="text-xs text-muted-foreground">
                                     {branchId
