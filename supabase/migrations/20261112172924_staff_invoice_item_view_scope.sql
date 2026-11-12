@@ -76,6 +76,10 @@ begin
  select pg_get_viewdef(c.oid,true),c.relacl::text,c.relowner,c.reloptions into strict definition,old_acl,old_owner,old_options
  from pg_class c join pg_namespace n on n.oid=c.relnamespace
  where n.nspname='public' and c.relname='invoice_items_scoped' and c.relkind='v';
+ if not coalesce('security_barrier=true'=any(old_options),false)
+  or position('products.view_cost' in definition)=0
+  or position('_can_read_branch_inventory_00476' in definition)=0 then
+  raise exception 'STAFF_INVOICE_ITEM_VIEW_SECURITY_CHANGED'; end if;
  if (length(definition)-length(replace(definition,anchor,'')))/length(anchor)<>1 then
   raise exception 'STAFF_INVOICE_ITEM_VIEW_CHANGED'; end if;
  changed:=replace(definition,anchor,'o.id = t.invoice_id AND ((SELECT public._staff_invoice_item_legacy_scope()) OR coalesce((o.branch_id::text||'':''||o.source)=any((SELECT public._staff_invoice_item_allowed_scopes())::text[]),false)) AND (EXISTS');

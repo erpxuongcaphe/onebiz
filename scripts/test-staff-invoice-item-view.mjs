@@ -37,7 +37,12 @@ try {
    values ('${id(1)}','${id(101)}','${id(11)}','inventory.view','revoke','${id(100)}');
   select set_config('request.jwt.claim.sub','${id(101)}',false);
  `);
- await db.exec(await sql('20261112172924_staff_invoice_item_view_scope.sql'));
+ const migration=await sql('20261112172924_staff_invoice_item_view_scope.sql');
+ await db.exec('alter view invoice_items_scoped reset (security_barrier)');
+ await assert.rejects(db.exec(migration),/STAFF_INVOICE_ITEM_VIEW_SECURITY_CHANGED/,'migration fails closed if the protected view changed');
+ await db.exec('rollback');
+ await db.exec('alter view invoice_items_scoped set (security_barrier=true)');
+ await db.exec(migration);
  assert.equal((await db.query("select reloptions @> array['security_barrier=true'] kept from pg_class where oid='public.invoice_items_scoped'::regclass")).rows[0].kept,true,'security barrier is preserved');
  assert.equal((await db.query("select has_table_privilege('authenticated','public.invoice_items_scoped','select') allowed")).rows[0].allowed,true,'view grant is preserved');
  await db.exec('set role authenticated');
