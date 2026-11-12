@@ -58,6 +58,15 @@ const snapshot: StaffProfileSnapshot = {
   branchPermissionCodes: ["pos_fnb.split_bill", "pos_fnb.transfer_table"],
 };
 describe("staff profile scope", () => {
+  it("explains that purchasing also opens its related branch documents", () => {
+    const data = structuredClone(snapshot);
+    data.branchPermissionCodes.push("inventory.create_po");
+    render(<StaffProfileEditor snapshot={data} onSave={vi.fn()} onReload={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Tùy chỉnh quyền" }));
+    fireEvent.click(screen.getByRole("button", { name: "Premium" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Tìm quyền" }), { target: { value: "inventory.create_po" } });
+    expect(screen.getByText(/Quyền này cũng cho xem phiếu nhập, trả hàng nhập và hóa đơn đầu vào/)).toBeVisible();
+  });
   it("applies a whole category in the selected branch and saves only after review", async () => {
     const data = structuredClone(snapshot);
     const otherBranch = {

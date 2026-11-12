@@ -119,6 +119,7 @@ export async function verifyInventoryDocumentReads(db, id) {
   // earlier predicate before batched document policies are installed.
   await db.exec(await functionFromMigration('20261112121837_staff_inventory_global_revoke_guard.sql','_staff_inventory_row_visible'));
   await db.exec(await readFile(new URL('20261112122731_staff_inventory_document_read_batch.sql',dir),'utf8'));
+  await db.exec(await readFile(new URL('20261112123610_staff_purchase_action_document_reads.sql',dir),'utf8'));
   await db.exec("set role authenticated");
   const ids = async (table) =>
     (await db.query(`select id from ${table} order by id`)).rows.map(
@@ -163,6 +164,37 @@ export async function verifyInventoryDocumentReads(db, id) {
     assert.deepEqual(await ids(header),[],'ungranted inventory view hides document headers');
     if (child) assert.deepEqual(await ids(child),[],'ungranted inventory view hides document lines');
   }
+  await db.exec(`reset role;
+    create table suppliers(id uuid,tenant_id uuid,code text);
+    grant select on suppliers to authenticated;
+    alter table purchase_orders add column supplier_id uuid,add column supplier_name text,add column total numeric default 0;
+    alter table supplier_returns add column supplier_id uuid,add column supplier_name text,add column import_code text,add column total numeric default 0;
+    alter table input_invoices add column supplier_id uuid,add column supplier_name text,add column total_amount numeric default 0,add column tax_amount numeric default 0;
+    insert into staff_branch_permission_catalog values('inventory.create_po',1);
+    insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+    values('${id(1)}','${id(101)}','${id(10)}','inventory.create_po','grant','${id(100)}'); set role authenticated;`);
+  for (const [name,header,child] of [['purchase_order','purchase_orders','purchase_order_items'],['supplier_return','supplier_returns','supplier_return_items'],['input_invoice','input_invoices',null]]) {
+    assert.deepEqual(await ids(header),[id(710)],'purchase action reads only its own branch documents');
+    if (child) assert.deepEqual(await ids(child),[id(720)],'purchase action reads lines only through an allowed parent');
+    assert.equal((await db.query(`select get_${name}_list_workspace(p_branch_id=>$1) result`,[id(10)])).rows[0].result.total,1);
+    await assert.rejects(db.query(`select get_${name}_list_workspace(p_branch_id=>$1)`,[id(11)]),/PERMISSION_DENIED/);
+  }
+  assert.deepEqual(await ids('inventory_checks'),[],'purchase action does not grant general stocktake access');
+  await db.exec(`reset role; insert into role_permissions values('${id(20)}','reports.view_all_branches');
+    insert into purchase_orders(id,tenant_id,branch_id,code,status,created_by) values('${id(712)}','${id(1)}','${id(14)}','C','balanced','${id(101)}'); set role authenticated;`);
+  assert.equal((await db.query('select get_purchase_order_list_workspace() result')).rows[0].result.total,1,'all branches never expands the purchase action beyond assigned branches');
+  assert.deepEqual(await ids('purchase_orders'),[id(710)]);
+  await db.exec(`reset role; delete from purchase_orders where id='${id(712)}'; delete from role_permissions where permission_code='reports.view_all_branches'; set role authenticated;`);
+  await db.exec(`reset role; insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type,created_by)
+    values('${id(1)}','${id(101)}','inventory.view','revoke','${id(100)}'); set role authenticated;`);
+  assert.deepEqual(await ids('purchase_orders'),[id(710)],'independent purchase work survives a global inventory-view revoke');
+  assert.equal((await db.query('select get_purchase_order_list_workspace(p_branch_id=>$1) result',[id(10)])).rows[0].result.total,1);
+  await db.exec(`reset role; insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type,created_by)
+    values('${id(1)}','${id(101)}','inventory.create_po','revoke','${id(100)}'); set role authenticated;`);
+  assert.deepEqual(await ids('purchase_orders'),[],'global purchase revoke wins over local action grant');
+  await assert.rejects(db.query('select get_purchase_order_list_workspace(p_branch_id=>$1)',[id(10)]),/PERMISSION_DENIED/);
+  await db.exec(`reset role; delete from user_permission_overrides where user_id='${id(101)}' and permission_code in ('inventory.view','inventory.create_po');
+    delete from user_branch_permission_overrides where permission_code='inventory.create_po'; set role authenticated;`);
   await db.exec(`reset role;
     insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
     values('${id(1)}','${id(101)}','${id(11)}','inventory.view','grant','${id(100)}'); set role authenticated;`);

@@ -750,6 +750,11 @@ export function StaffProfileEditor({
                                       phiếu.
                                     </p>
                                   )}
+                                {branchId && p.code === "inventory.create_po" && (
+                                  <p className="text-xs text-muted-foreground">
+                                    Quyền này cũng cho xem phiếu nhập, trả hàng nhập và hóa đơn đầu vào tại các chi nhánh được giao để thực hiện công việc.
+                                  </p>
+                                )}
                                 {branchId && p.code === "production.view" && (
                                   <p className="text-xs text-muted-foreground">
                                     Áp dụng cho lệnh sản xuất, nguyên liệu và
