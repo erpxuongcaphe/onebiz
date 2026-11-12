@@ -64,7 +64,14 @@ try {
   delete from role_permissions where permission_code in ('inventory.view','pos_fnb.checkout'); set role authenticated;`);
  assert.deepEqual(await ids('invoice_items_scoped'),[id(60)],'legacy account keeps existing branch-bound reads');
  assert.deepEqual((await db.query('select public._staff_invoice_item_allowed_scopes() scopes')).rows[0].scopes,[`${id(10)}:fnb`],'direct helper does not disclose an unassigned branch');
+ await db.exec(`reset role; insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type,created_by)
+  values ('${id(1)}','${id(101)}','inventory.view','revoke','${id(100)}'); set role authenticated;`);
+ assert.deepEqual(await ids('invoice_items_scoped'),[],'account-wide revoke does not use the legacy fast path');
+ await db.exec(`reset role; insert into role_permissions values ('${id(20)}','pos_fnb.checkout'); set role authenticated;`);
+ assert.deepEqual(await ids('invoice_items_scoped'),[id(60)],'independent checkout survives global inventory revoke');
  await db.exec(`reset role; insert into user_branches values ('${id(101)}','${id(11)}',null);
+  delete from user_permission_overrides where permission_code='inventory.view';
+  delete from role_permissions where permission_code='pos_fnb.checkout';
   insert into invoices values ('${id(53)}','${id(1)}','${id(10)}','pos'),('${id(54)}','${id(1)}','${id(11)}','order');
   insert into invoice_items values ('${id(63)}','${id(53)}',1,400),('${id(64)}','${id(54)}',1,500);
   insert into staff_branch_permission_catalog values ('orders.view',1);

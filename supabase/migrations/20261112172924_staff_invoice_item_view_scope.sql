@@ -11,6 +11,9 @@ returns boolean language sql stable security definer set search_path='' as $$
  select exists(select 1 from public.profiles p where p.id=auth.uid() and p.tenant_id=public.get_user_tenant_id() and coalesce(p.is_active,false))
   and not exists(select 1 from public.user_branch_permission_overrides o where o.tenant_id=public.get_user_tenant_id()
    and o.user_id=auth.uid() and o.permission_code in ('inventory.view','invoices.view','orders.view','pos_fnb.view_orders'))
+  and not exists(select 1 from public.user_permission_overrides o where o.tenant_id=public.get_user_tenant_id()
+   and o.user_id=auth.uid() and o.override_type='revoke'
+   and o.permission_code in ('inventory.view','invoices.view','orders.view','pos_fnb.view_orders'))
 $$;
 revoke all on function public._staff_invoice_item_legacy_scope() from public,anon;
 grant execute on function public._staff_invoice_item_legacy_scope() to authenticated;
@@ -25,6 +28,8 @@ begin
  report_scope:=member or coalesce(public.user_has_permission(actor,'reports.view_all_branches'),false);
  if not report_scope then return false; end if;
  if not exists(select 1 from public.user_branch_permission_overrides o where o.tenant_id=p_tenant and o.user_id=actor
+   and o.permission_code in ('inventory.view','invoices.view','orders.view','pos_fnb.view_orders'))
+  and not exists(select 1 from public.user_permission_overrides o where o.tenant_id=p_tenant and o.user_id=actor and o.override_type='revoke'
    and o.permission_code in ('inventory.view','invoices.view','orders.view','pos_fnb.view_orders')) then return true; end if;
  if member then
   foreach code in array array['inventory.view','invoices.view'] loop
