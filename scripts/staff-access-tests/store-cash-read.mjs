@@ -96,4 +96,8 @@ export async function verifyStoreCashReads(db, id) {
   console.log(
     "PASS store cash: company aggregate denial and fund branch scope, with journal scope preserved.",
   );
+  const { verifyManagementFinanceScope } = await import(
+    "./management-finance-read.mjs"
+  );
+  await verifyManagementFinanceScope(db, id);
 }
