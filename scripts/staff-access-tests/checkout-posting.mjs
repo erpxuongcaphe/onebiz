@@ -12,7 +12,7 @@ export async function installCheckoutTest(db) {
  create table user_branch_permission_overrides(tenant_id uuid,user_id uuid,branch_id uuid,permission_code text,override_type text);
  create table fnb_print_points(id uuid,tenant_id uuid,branch_id uuid,enabled boolean);
  create table fnb_print_jobs(id uuid);
- create or replace function get_user_tenant_id() returns uuid language sql stable as $$select tenant_id from profiles where id=auth.uid()$$;`);
+ create or replace function get_user_tenant_id() returns uuid language sql stable as $$select tenant_id from public.profiles where id=auth.uid()$$;`);
   await db.exec(
     await functionFromMigration(
       "20261111052704_staff_branch_access.sql",
@@ -53,6 +53,56 @@ export async function installCheckoutTest(db) {
   );
   await db.exec(`create or replace function user_has_permission(uuid,text) returns boolean language sql as $$select $2<>'pos_fnb.checkout'$$;
  update user_branch_permission_overrides set override_type='grant' where permission_code='pos_fnb.checkout';`);
+  let fixturePaymentDefinition;
+  if (process.env.ONEBIZ_FNB_PAYMENT_VIEW_AUDIT_FILE) {
+    fixturePaymentDefinition = (
+      await db.query(
+        `select pg_get_functiondef('public._fnb_complete_payment_impl_00343(uuid,uuid,text,text,jsonb,numeric,boolean,numeric,uuid,text,text,uuid,numeric,uuid,text)'::regprocedure) as definition`,
+      )
+    ).rows[0].definition;
+    const definitions = JSON.parse(
+      await readFile(process.env.ONEBIZ_FNB_PAYMENT_VIEW_AUDIT_FILE, "utf8"),
+    );
+    const current = definitions.find(
+      (entry) => entry.proname === "_fnb_complete_payment_impl_00343",
+    );
+    assert.ok(current);
+    await db.exec(current.definition);
+  }
+  await db.exec(
+    await readFile(
+      new URL(
+        "../../supabase/migrations/20261112045533_staff_branch_fnb_order_view.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  );
+  await db.exec(`insert into user_branch_permission_overrides values
+    ('00000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000003','pos_fnb.view_orders','revoke');`);
+  await assert.rejects(db.query("select test_pay()"), /FNB_PAYMENT_DENIED/);
+  assert.equal(
+    await state(),
+    before,
+    "a denied branch view does not post payment or stock",
+  );
+  if (fixturePaymentDefinition) {
+    // The captured production implementation uses additional production views
+    // absent from this compact fixture. Test its denial above, then use the
+    // stock-posting fixture to exercise the full successful posting chain.
+    await db.exec(fixturePaymentDefinition);
+    await db.exec(
+      await readFile(
+        new URL(
+          "../../supabase/migrations/20261112045533_staff_branch_fnb_order_view.sql",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+    );
+  }
+  await db.exec(`create or replace function user_has_permission(uuid,text) returns boolean language sql as $$select $2 not in ('pos_fnb.checkout','pos_fnb.view_orders')$$;
+    update user_branch_permission_overrides set override_type='grant' where permission_code='pos_fnb.view_orders';`);
   // A separate order exception must not prevent actual F&B posting through
   // its secured RPC, even though direct invoice DML is restricted.
   await db.exec(`create table if not exists sales_orders(id uuid);

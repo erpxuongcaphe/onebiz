@@ -38,6 +38,16 @@ try {
   await (
     await import("./staff-access-tests/checkout-definitions.mjs")
   ).loadCheckoutDefinitions(db);
+  if (process.env.ONEBIZ_FNB_PRINT_VIEW_AUDIT_FILE) {
+    const definitions = JSON.parse(
+      await readFile(process.env.ONEBIZ_FNB_PRINT_VIEW_AUDIT_FILE, "utf8"),
+    );
+    for (const name of ["_fnb_print_access_v1", "fnb_print_enqueue_v1"]) {
+      const current = definitions.find((entry) => entry.proname === name);
+      assert.ok(current, `${name} is available in the captured definitions`);
+      await db.exec(current.definition);
+    }
+  }
   await db.exec(
     await readFile(
       new URL(
@@ -46,6 +56,90 @@ try {
       ),
       "utf8",
     ),
+  );
+  await db.exec(
+    await readFile(
+      new URL(
+        "../supabase/migrations/20261112054235_staff_branch_fnb_print_view.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  );
+  await db.exec(`alter table fnb_print_points add column routes jsonb;
+    alter table fnb_print_jobs add column tenant_id uuid,add column branch_id uuid,add column point_id uuid,
+      add column actor_id uuid,add column actor_name text,add column label text,add column route_key text,
+      add column route_label text,add column printer text,add column paper text,add column bytes_base64 text,
+      add column payload_hash bytea,add column status text default 'queued';
+    create function public.digest(bytea,text) returns bytea language sql immutable as $$select decode(md5(encode($1,'hex')),'hex')$$;
+    insert into fnb_print_points values('${id(70)}','${id(1)}','${id(10)}',true,
+      '[{"key":"cashier","paper":"80mm","printer":"Synthetic","label":"Cashier"}]');
+    insert into staff_branch_permission_catalog values('pos_fnb.view_orders',1);
+    select set_config('request.jwt.claim.sub','${id(101)}',false);
+    insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
+    ('${id(1)}','${id(101)}','${id(10)}','pos_fnb.view_orders','revoke','${id(100)}');`);
+  assert.equal(
+    (await db.query(`select _fnb_print_access_v1('${id(10)}') value`)).rows[0]
+      .value,
+    id(1),
+    "checkout independently retains print access",
+  );
+  await assert.rejects(
+    db.query(
+      `select fnb_print_enqueue_v1('${id(10)}',null,'cashier','Test','80mm','')`,
+    ),
+    /Thông tin phiếu không hợp lệ/,
+  );
+  const enqueue = (job) =>
+    db.query(
+      `select fnb_print_enqueue_v1('${id(10)}','${id(job)}','cashier','Test','80mm',encode(decode('1b401b6101' || repeat('00',20),'hex'),'base64'))`,
+    );
+  await enqueue(71);
+  await enqueue(71);
+  assert.equal(
+    (await db.query("select count(*)::int n from fnb_print_jobs")).rows[0].n,
+    1,
+    "retry with the same job never creates a duplicate",
+  );
+  await db.exec(`insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
+    ('${id(1)}','${id(101)}','${id(10)}','pos_fnb.checkout','revoke','${id(100)}');
+    update user_branch_permission_overrides set override_type='grant' where permission_code='pos_fnb.view_orders';`);
+  assert.equal(
+    (await db.query(`select _fnb_print_access_v1('${id(10)}') value`)).rows[0]
+      .value,
+    id(1),
+    "branch-only order view independently retains print access",
+  );
+  await assert.rejects(
+    db.query(
+      `select fnb_print_enqueue_v1('${id(10)}',null,'cashier','Test','80mm','')`,
+    ),
+    /Thông tin phiếu không hợp lệ/,
+  );
+  await enqueue(72);
+  await db.exec(
+    `update user_branch_permission_overrides set override_type='revoke' where permission_code='pos_fnb.view_orders';`,
+  );
+  await assert.rejects(
+    db.query(`select _fnb_print_access_v1('${id(10)}')`),
+    /Không có quyền/,
+  );
+  await assert.rejects(
+    db.query(
+      `select fnb_print_enqueue_v1('${id(10)}',null,'cashier','Test','80mm','')`,
+    ),
+    /Không có quyền/,
+  );
+  await assert.rejects(enqueue(73), /Không có quyền/);
+  assert.equal(
+    (await db.query("select count(*)::int n from fnb_print_jobs")).rows[0].n,
+    2,
+    "denied print creates no job",
+  );
+  await db.exec(`delete from user_branch_permission_overrides where user_id='${id(101)}' and permission_code in ('pos_fnb.view_orders','pos_fnb.checkout');
+    delete from staff_branch_permission_catalog where permission_code='pos_fnb.view_orders';`);
+  console.log(
+    "PASS: F&B print authorization preserves independent branch checkout/view rights and denies when neither applies",
   );
   assert.equal(
     (

@@ -76,6 +76,15 @@ export async function verifyInventoryFnbInvoiceReads(db, id) {
       "utf8",
     ),
   );
+  await db.exec(
+    await readFile(
+      new URL(
+        "../../supabase/migrations/20261112062412_staff_branch_fnb_view_invoices.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  );
   const query = async (sql, args = []) => (await db.query(sql, args)).rows;
   const catalog = async () =>
     (await query("select get_fnb_invoice_choice_catalog_20261023() r"))[0].r;
@@ -120,6 +129,26 @@ export async function verifyInventoryFnbInvoiceReads(db, id) {
   assert.deepEqual((await catalog()).sizes, ["L", "M"]);
   assert.equal((await notes(810)).length, 1);
   assert.equal((await details([810, 811])).length, 2);
+  await db.exec(`reset role;
+    delete from role_permissions where permission_code in ('inventory.view','invoices.view','pos_fnb.view_orders');
+    delete from user_branch_permission_overrides where permission_code='inventory.view';
+    insert into staff_branch_permission_catalog values('pos_fnb.view_orders',1);
+    insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
+      ('${id(1)}','${id(101)}','${id(10)}','pos_fnb.view_orders','grant','${id(100)}'),
+      ('${id(1)}','${id(101)}','${id(11)}','pos_fnb.view_orders','revoke','${id(100)}');
+    set role authenticated;`);
+  assert.deepEqual((await catalog()).sizes, ["M"]);
+  assert.deepEqual((await filters()).areas, ["A"]);
+  assert.equal((await options(810)).length, 1);
+  assert.equal((await options(811)).length, 0);
+  assert.equal((await notes(810)).length, 1);
+  await assert.rejects(notes(811), /INVOICE_VIEW_REQUIRED/);
+  await assert.rejects(details([810, 811]), /INVOICE_ACCESS_DENIED/);
+  await db.exec(
+    `reset role; insert into role_permissions values ('${id(20)}','invoices.view'); set role authenticated;`,
+  );
+  assert.deepEqual((await catalog()).sizes, ["L", "M"]);
+  assert.equal((await notes(811)).length, 1);
   console.log(
     "PASS F&B invoice reads: inventory scope, mixed invoices and independent invoice permission.",
   );
