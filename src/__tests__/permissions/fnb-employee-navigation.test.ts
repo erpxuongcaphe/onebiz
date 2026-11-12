@@ -59,7 +59,6 @@ describe("FnB employee navigation permissions", () => {
     for (const href of [
       "/hang-hoa/ton-kho",
       "/hang-hoa/lich-su-kho",
-      "/hang-hoa/kiem-kho",
       "/hang-hoa/hsd",
       "/hang-hoa/chuyen-kho",
       "/hang-hoa/xuat-dung-noi-bo",
@@ -69,5 +68,8 @@ describe("FnB employee navigation permissions", () => {
         new RegExp(`href: "${href.replaceAll("/", "\\/")}"[^\\n]+permission: "inventory\\.view"`),
       );
     }
+    expect(navConfig).toMatch(/href: "\/hang-hoa\/kiem-kho"[^\n]+permissions: \["inventory\.view", "inventory\.check", "inventory\.edit_check", "inventory\.cancel_check"\]/);
+    const cashier = DEFAULT_ROLE_TEMPLATES.find((item) => item.legacyRole === "cashier");
+    expect(cashier?.permissions.some((p) => ["inventory.view", "inventory.check", "inventory.edit_check", "inventory.cancel_check"].includes(p))).toBe(false);
   });
 });

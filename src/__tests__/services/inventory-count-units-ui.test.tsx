@@ -9,6 +9,7 @@ vi.mock("@/lib/contexts", () => ({
   useAuth: () => mocks.auth,
   useToast: () => ({ toast: mocks.toast }),
 }));
+vi.mock("@/lib/permissions/use-permission", () => ({ usePermissions: () => ({ hasPermission: (code: string) => code === "products.view_cost" }) }));
 vi.mock("@/lib/services/supabase/fnb-branch-cost", () => ({ getFnbBranchComponentCosts: async () => new Map([["milk", { unitCost: 30000 }]]) }));
 vi.mock("@/lib/services/supabase/product-stock-read", () => ({ getVisibleBranchStock: async () => ({ allowed: true, quantities: new Map([["milk", 24.5]]) }) }));
 vi.mock("@/lib/services/supabase/uom", () => ({ getUOMConversions: mocks.conversions }));
