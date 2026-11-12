@@ -103,4 +103,6 @@ export async function verifyCashBookReadScope(db, id) {
     "PASS cash book: local grants and denials constrain branch lists and receipt totals.",
   );
   await db.exec("reset role");
+  const { verifyCashDocumentReads } = await import("./cash-document-read.mjs");
+  await verifyCashDocumentReads(db, id);
 }
