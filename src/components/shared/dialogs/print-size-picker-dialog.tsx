@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import {
   Dialog,
   DialogContent,
@@ -37,6 +37,7 @@ interface PrintSizePickerDialogProps {
   /** Callback khi user chọn cỡ và bấm "In ngay". */
   onPrint: (paperSize: PaperSize) => void;
   defaultPaperSize?: PaperSize;
+  children?: ReactNode;
 }
 
 /**
@@ -49,6 +50,7 @@ export function PrintSizePickerDialog({
   title = "Chọn cỡ giấy in",
   onPrint,
   defaultPaperSize,
+  children,
 }: PrintSizePickerDialogProps) {
   const { settings } = useSettings();
   const defaultSize = defaultPaperSize ?? (settings?.print?.paperSize ?? "A4") as PaperSize;
@@ -116,6 +118,8 @@ export function PrintSizePickerDialog({
             );
           })}
         </div>
+
+        {children}
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
