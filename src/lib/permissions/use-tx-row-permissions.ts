@@ -205,7 +205,14 @@ export function useTxRowPermissions(kind: TxKind): TxRowPermissions & {
       const permissions = resolve((code) =>
         hasPermissionAtBranch(code, branchId ?? null),
       );
-      if (hasAssignedBranchAccess(branchId ?? null)) return permissions;
+      if (hasAssignedBranchAccess(branchId ?? null)) {
+        if (kind === "inventory_check") {
+          const canReadForWork = ["inventory.check", "inventory.edit_check", "inventory.cancel_check"]
+            .some((code) => hasPermissionAtBranch(code, branchId ?? null));
+          return { ...permissions, canView: permissions.canView || canReadForWork, canPrint: permissions.canPrint || canReadForWork };
+        }
+        return permissions;
+      }
       return {
         ...permissions,
         canDuplicate: false,

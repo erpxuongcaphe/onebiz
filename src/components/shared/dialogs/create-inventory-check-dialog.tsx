@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { NumericInput } from "@/components/ui/numeric-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth, useToast } from "@/lib/contexts";
+import { usePermissions } from "@/lib/permissions/use-permission";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import { getVisibleBranchStock } from "@/lib/services/supabase/product-stock-read";
 import { getUOMConversions, getUOMConversionsByProductIds } from "@/lib/services/supabase/uom";
@@ -93,6 +94,8 @@ export function CreateInventoryCheckDialog({
 }: CreateInventoryCheckDialogProps) {
   const { toast } = useToast();
   const { currentBranch, branches, activeBranchId } = useAuth();
+  const { hasPermission } = usePermissions();
+  const canViewCost = hasPermission("products.view_cost");
   const allowFlexibleCountUnits = (branches.find((branch) => branch.id === activeBranchId) ?? currentBranch)?.branchType === "store";
   const [code, setCode] = useState("");
   const [notes, setNotes] = useState("");
@@ -137,7 +140,7 @@ export function CreateInventoryCheckDialog({
       const seed = await loadDocumentCopy('inventory', copySource.id, activeBranchId, allowFlexibleCountUnits);
       const ids = seed.items.map(p => p.id);
       const conversions = await getUOMConversionsByProductIds(ids);
-      const costs = await getFnbBranchComponentCosts(activeBranchId, ids);
+      const costs = canViewCost ? await getFnbBranchComponentCosts(activeBranchId, ids) : new Map();
       const ctx = await getCurrentContext();
       const stock = new Map<string,number>();
       for (let offset=0;offset<ids.length;offset+=100) {
@@ -153,7 +156,7 @@ export function CreateInventoryCheckDialog({
     })().catch(e => {if (!cancelled) setCopyError(e instanceof Error ? e.message : 'Không đọc được phiếu nguồn.');})
       .finally(() => {if (!cancelled) setCopyLoading(false);});
     return () => {cancelled = true;};
-  }, [open, copySource, activeBranchId, allowFlexibleCountUnits]);
+  }, [open, copySource, activeBranchId, allowFlexibleCountUnits, canViewCost]);
 
   const { clearDraft, flushDraft } = useDurableFormDraft({
     form: copySource ? "inventory-check-copy" : "inventory-check-create",
@@ -255,7 +258,7 @@ export function CreateInventoryCheckDialog({
     let costPrice = Number(product.cost_price ?? 0);
     try {
       conversions = await getUOMConversions(product.id);
-      const costs = await getFnbBranchComponentCosts(branchId, [product.id]);
+      const costs = canViewCost ? await getFnbBranchComponentCosts(branchId, [product.id]) : new Map();
       costPrice = costs.get(product.id)?.unitCost ?? costPrice;
     } catch {
       toast({ title: "Không tải được đơn vị quy đổi hoặc giá vốn", description: "Thử thêm lại mặt hàng. Chưa thay đổi tồn kho.", variant: "error" });
@@ -611,7 +614,7 @@ export function CreateInventoryCheckDialog({
               ) : (
                 <div className="divide-y">
                   {/* CEO 04/07: NVL mới thêm hiện TRÊN CÙNG — chỉ đảo hiển thị, data giữ cũ→mới. */}
-                  {[...checkItems].reverse().map(item => <InventoryCountRow key={item.productId} item={item} allowFlexibleCountUnits={allowFlexibleCountUnits} saving={saving} updateActualStock={updateActualStock} updateCountUnit={updateCountUnit} updateActualBig={updateActualBig} updateActualSmall={updateActualSmall} removeProduct={removeProduct}/>)}
+                  {[...checkItems].reverse().map(item => <InventoryCountRow key={item.productId} item={item} canViewCost={canViewCost} allowFlexibleCountUnits={allowFlexibleCountUnits} saving={saving} updateActualStock={updateActualStock} updateCountUnit={updateCountUnit} updateActualBig={updateActualBig} updateActualSmall={updateActualSmall} removeProduct={removeProduct}/>)}
                 </div>
               )}
             </div>
@@ -626,13 +629,13 @@ export function CreateInventoryCheckDialog({
                 label="Dòng lệch"
                 value={`${formatNumber(increaseLines)} thừa · ${formatNumber(decreaseLines)} thiếu`}
               />
-              <FooterMetric label="Giá trị thừa" value={formatCurrency(increaseValue)} tone="success" />
-              <FooterMetric label="Giá trị thiếu" value={formatCurrency(decreaseValue)} tone="destructive" />
+              <FooterMetric label="Giá trị thừa" value={canViewCost ? formatCurrency(increaseValue) : "Không có quyền"} tone={canViewCost ? "success" : "default"} />
+              <FooterMetric label="Giá trị thiếu" value={canViewCost ? formatCurrency(decreaseValue) : "Không có quyền"} tone={canViewCost ? "destructive" : "default"} />
               <FooterMetric
                 label="Tổng chênh lệch"
-                value={`${netValue > 0 ? "+" : ""}${formatCurrency(netValue)}`}
+                value={canViewCost ? `${netValue > 0 ? "+" : ""}${formatCurrency(netValue)}` : "Không có quyền"}
                 strong
-                tone={netValue === 0 ? "default" : netValue > 0 ? "success" : "destructive"}
+                tone={!canViewCost || netValue === 0 ? "default" : netValue > 0 ? "success" : "destructive"}
               />
             </div>
             <div className="flex justify-end gap-2">
@@ -682,6 +685,7 @@ function FooterMetric({
 
 interface InventoryCountRowProps {
   item: InventoryCheckLine;
+  canViewCost: boolean;
   allowFlexibleCountUnits: boolean;
   saving: boolean;
   updateActualStock: (id: string, value: number) => void;
@@ -690,7 +694,7 @@ interface InventoryCountRowProps {
   updateActualSmall: (id: string, value: number) => void;
   removeProduct: (id: string) => void;
 }
-const InventoryCountRow = memo(function InventoryCountRow({item,allowFlexibleCountUnits,saving,updateActualStock,updateCountUnit,updateActualBig,updateActualSmall,removeProduct}: InventoryCountRowProps) {
+const InventoryCountRow = memo(function InventoryCountRow({item,canViewCost,allowFlexibleCountUnits,saving,updateActualStock,updateCountUnit,updateActualBig,updateActualSmall,removeProduct}: InventoryCountRowProps) {
 
   const actual = lineActual(item);
                     // Làm tròn + chuẩn hoá -0 → 0 (tránh hiện "-0" khi vừa đổi đơn vị).
@@ -821,7 +825,7 @@ const InventoryCountRow = memo(function InventoryCountRow({item,allowFlexibleCou
                           <span
                             className={`text-sm font-bold tabular-nums ${item.costPrice > 0 ? diffColor : "text-muted-foreground"}`}
                           >
-                            {!item.needsCount && item.costPrice > 0 ? `${diff > 0 ? "+" : ""}${formatCurrency(diffValue)}` : "—"}
+                            {!canViewCost ? "Không có quyền" : !item.needsCount && item.costPrice > 0 ? `${diff > 0 ? "+" : ""}${formatCurrency(diffValue)}` : "—"}
                           </span>
                         </div>
 

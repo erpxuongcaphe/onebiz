@@ -109,6 +109,14 @@ export async function verifyInventoryDocumentReads(db, id) {
       ),
     );
   }
+  // Match the earlier deployed-in-chain mutation migration for the two
+  // action checks in the real change-source function.
+  await db.exec(`do $test$ declare source text; code text; begin
+    source:=pg_get_functiondef('public.get_inventory_check_change_source(uuid)'::regprocedure);
+    foreach code in array array['inventory.edit_check','inventory.cancel_check'] loop
+      source:=regexp_replace(source,'user_has_permission\\(([^,]+),\\s*'''||replace(code,'.','\\.')||'''\\)',
+        'user_has_permission_at_branch(\\1,'''||code||''',(select staff_check_scope.branch_id from public.inventory_checks staff_check_scope where staff_check_scope.id=p_check_id and staff_check_scope.tenant_id=public.get_user_tenant_id()))','g');
+    end loop; execute source; end $test$;`);
   await db.exec(
     await readFile(
       new URL("20261112012240_staff_branch_inventory_document_read.sql", dir),
@@ -195,6 +203,33 @@ export async function verifyInventoryDocumentReads(db, id) {
   await assert.rejects(db.query('select get_purchase_order_list_workspace(p_branch_id=>$1)',[id(10)]),/PERMISSION_DENIED/);
   await db.exec(`reset role; delete from user_permission_overrides where user_id='${id(101)}' and permission_code in ('inventory.view','inventory.create_po');
     delete from user_branch_permission_overrides where permission_code='inventory.create_po'; set role authenticated;`);
+  // Install the stocktake action reader only after verifying the legacy document
+  // rules above, then test it with no inherited stocktake/view permissions.
+  await db.exec(`reset role; delete from role_permissions where permission_code in ('inventory.check','inventory.edit_check','inventory.cancel_check');
+    insert into staff_branch_permission_catalog values ('inventory.check',1),('inventory.edit_check',1),('inventory.cancel_check',1) on conflict do nothing;
+    create function _change_inventory_check(p_check_id uuid,p_action text,p_items jsonb,p_note text,p_reason text,p_source_version text,p_request_id uuid,p_preview_token text,p_apply boolean)
+    returns boolean language plpgsql as $$ declare actor uuid:=auth.uid(); begin
+    return public._staff_permission_at_scope(actor,'inventory.view',(select ic.branch_id from public.inventory_checks ic where ic.id=p_check_id and ic.tenant_id=public.get_user_tenant_id())); end $$;`);
+  await db.exec(await readFile(new URL('20261112124158_staff_stocktake_action_document_reads.sql',dir),'utf8'));
+  for (const code of ['inventory.check','inventory.edit_check','inventory.cancel_check']) {
+    await db.exec(`reset role;
+      insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+      values('${id(1)}','${id(101)}','${id(10)}','${code}','grant','${id(100)}'); set role authenticated;`);
+    assert.deepEqual(await ids('inventory_checks'),[id(710)],`${code} reads only its assigned branch's stocktake`);
+    assert.deepEqual(await ids('inventory_check_items_scoped'),[id(720)],`${code} reads only its allowed stocktake lines`);
+    assert.equal((await db.query('select get_inventory_check_list_workspace(p_branch_id=>$1) result',[id(10)])).rows[0].result.total,1);
+    if (code !== 'inventory.check') {
+      assert.equal((await db.query('select get_inventory_check_change_source($1) result',[id(710)])).rows[0].result.id,id(710),`${code} opens the real change-source document without inventory.view`);
+      await assert.rejects(db.query('select get_inventory_check_change_source($1)',[id(711)]),/INSUFFICIENT_PERMISSION|BRANCH_ACCESS_DENIED/);
+    }
+    await assert.rejects(db.query('select get_inventory_check_list_workspace(p_branch_id=>$1)',[id(11)]),/PERMISSION_DENIED/);
+    assert.deepEqual(await ids('purchase_orders'),[],`${code} does not grant purchasing documents`);
+    await db.exec(`reset role; insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type,created_by)
+      values('${id(1)}','${id(101)}','${code}','revoke','${id(100)}'); set role authenticated;`);
+    assert.deepEqual(await ids('inventory_checks'),[],`global revoke wins over local ${code} grant`);
+    await db.exec(`reset role; delete from user_permission_overrides where user_id='${id(101)}' and permission_code='${code}';
+      delete from user_branch_permission_overrides where user_id='${id(101)}' and permission_code='${code}'; set role authenticated;`);
+  }
   await db.exec(`reset role;
     insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
     values('${id(1)}','${id(101)}','${id(11)}','inventory.view','grant','${id(100)}'); set role authenticated;`);

@@ -117,6 +117,10 @@ describe("row permissions across branches", () => {
     expect(stocktake.result.current.forBranch("tubua").canDuplicate).toBe(
       false,
     );
+    expect(stocktake.result.current.forBranch("premium").canView).toBe(true);
+    expect(stocktake.result.current.forBranch("premium").canPrint).toBe(true);
+    expect(stocktake.result.current.forBranch("tubua").canView).toBe(false);
+    expect(stocktake.result.current.forBranch("other").canView).toBe(false);
   });
   it("distinguishes the source and destination of a stock transfer", () => {
     const transfer = renderHook(() => useTxRowPermissions("stock_transfer"));

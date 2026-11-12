@@ -273,4 +273,35 @@ export async function verifyInventoryBranchPermissions(
     ]),
     /INSUFFICIENT_PERMISSION/,
   );
+  // Verify the actual amendment guard without writing inventory or changing
+  // the fixtures subsequently used by the rest of this suite.
+  await db.exec(`begin;
+    delete from user_branch_permission_overrides where user_id='${id(101)}';
+    delete from user_permission_overrides where user_id='${id(101)}';
+    delete from role_permissions where role_id='${id(20)}' and permission_code in ('inventory.view','inventory.check','inventory.edit_check','inventory.cancel_check');
+    create function public._staff_my_inventory_view(p_branch uuid) returns boolean language sql stable as $$
+      select public._staff_permission_at_scope(auth.uid(),'inventory.view',p_branch) $$;`);
+  for (const name of ['_staff_stocktake_action_branches','_staff_stocktake_document_view'])
+    await db.exec(await functionFromMigration('20261112124158_staff_stocktake_action_document_reads.sql',name));
+  const stocktakeReadMigration = await readFile(new URL('../../supabase/migrations/20261112124158_staff_stocktake_action_document_reads.sql',import.meta.url),'utf8');
+  await db.exec(stocktakeReadMigration.match(/do \$stocktake_mutation\$[\s\S]*?end \$stocktake_mutation\$;/)[0]);
+  const rejectionInSavepoint = async (query, pattern) => {
+    await db.exec('savepoint trial');
+    await rejects(query(), pattern);
+    await db.exec('rollback to savepoint trial; release savepoint trial');
+  };
+  for (const [action,code] of [['edit','inventory.edit_check'],['cancel','inventory.cancel_check']]) {
+    await db.exec(`insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+      values('${id(1)}','${id(101)}','${id(10)}','${code}','grant','${id(100)}');
+      insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type,created_by)
+      values('${id(1)}','${id(101)}','inventory.view','revoke','${id(100)}');`);
+    await rejectionInSavepoint(() => db.query('select _change_inventory_check($1,$2,$3,null,null,null,null,null,false)',[id(201),action,[]]),/INVENTORY_CHECK_REASON_REQUIRED/);
+    await rejectionInSavepoint(() => db.query('select _change_inventory_check($1,$2,$3,null,null,null,null,null,false)',[id(202),action,[]]),/INSUFFICIENT_PERMISSION/);
+    await db.exec(`insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type,created_by)
+      values('${id(1)}','${id(101)}','${code}','revoke','${id(100)}');`);
+    await rejectionInSavepoint(() => db.query('select _change_inventory_check($1,$2,$3,null,null,null,null,null,false)',[id(201),action,[]]),/INSUFFICIENT_PERMISSION/);
+    await db.exec(`delete from user_permission_overrides where user_id='${id(101)}' and permission_code in ('inventory.view','${code}');
+      delete from user_branch_permission_overrides where user_id='${id(101)}' and permission_code='${code}';`);
+  }
+  await db.exec('rollback');
 }

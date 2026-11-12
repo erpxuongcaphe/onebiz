@@ -67,7 +67,7 @@ export function toPrintLines(
   }));
 }
 
-export function buildInventoryCheckPrintData(row: InventoryCheck): DocumentPrintData {
+export function buildInventoryCheckPrintData(row: InventoryCheck, canViewCost = true): DocumentPrintData {
   const user = formatUser(row.createdByName, row.createdBy);
   return {
     documentType: "PHIẾU KIỂM KHO",
@@ -81,9 +81,11 @@ export function buildInventoryCheckPrintData(row: InventoryCheck): DocumentPrint
     summaryRows: [
       { label: "SL lệch tăng", value: formatNumber(row.increaseQty) },
       { label: "SL lệch giảm", value: formatNumber(row.decreaseQty) },
-      { label: "GT tăng", value: formatCurrency(row.increaseAmount) },
-      { label: "GT giảm", value: formatCurrency(row.decreaseAmount) },
-      { label: "Tổng chênh lệch", value: formatCurrency(row.increaseAmount - row.decreaseAmount), bold: true },
+      ...(canViewCost ? [
+        { label: "GT tăng", value: formatCurrency(row.increaseAmount) },
+        { label: "GT giảm", value: formatCurrency(row.decreaseAmount) },
+        { label: "Tổng chênh lệch", value: formatCurrency(row.increaseAmount - row.decreaseAmount), bold: true },
+      ] : []),
     ],
     note: row.note,
     createdBy: user,

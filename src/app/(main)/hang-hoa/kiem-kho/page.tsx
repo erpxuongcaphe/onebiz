@@ -83,7 +83,7 @@ function useStarredSet() {
 /* ------------------------------------------------------------------ */
 /*  Inline detail                                                      */
 /* ------------------------------------------------------------------ */
-function VarianceTab({ checkId }: { checkId: string }) {
+function VarianceTab({ checkId, canViewCost }: { checkId: string; canViewCost: boolean }) {
   const [rows, setRows] = useState<InventoryCheckItemRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -172,25 +172,25 @@ function VarianceTab({ checkId }: { checkId: string }) {
           </div>
           <div className="text-lg font-semibold">{matched.length}</div>
         </div>
-        <div className="rounded-xl bg-status-success/10 p-3">
+        {canViewCost && <div className="rounded-xl bg-status-success/10 p-3">
           <div className="text-xs uppercase tracking-wider text-status-success">
             Lệch tăng
           </div>
           <div className="text-lg font-semibold text-status-success">
             {formatCurrency(totalIncrease)}
           </div>
-        </div>
-        <div className="rounded-xl bg-status-error/10 p-3">
+        </div>}
+        {canViewCost && <div className="rounded-xl bg-status-error/10 p-3">
           <div className="text-xs uppercase tracking-wider text-status-error">
             Lệch giảm
           </div>
           <div className="text-lg font-semibold text-status-error">
             {formatCurrency(totalDecrease)}
           </div>
-        </div>
+        </div>}
       </div>
 
-      <div className="flex items-center justify-between px-1">
+      {canViewCost ? <div className="flex items-center justify-between px-1">
         <span className="text-xs font-semibold">
           Chênh lệch ròng:
         </span>
@@ -202,7 +202,7 @@ function VarianceTab({ checkId }: { checkId: string }) {
           {netImpact >= 0 ? "+" : ""}
           {formatCurrency(netImpact)}
         </span>
-      </div>
+      </div> : <p className="text-xs text-muted-foreground">Giá trị chênh lệch chỉ hiển thị khi có quyền xem giá vốn.</p>}
 
       {/* Variance table */}
       <div className="border rounded-lg overflow-hidden">
@@ -221,9 +221,9 @@ function VarianceTab({ checkId }: { checkId: string }) {
               <th className="text-right px-3 py-2 font-medium uppercase tracking-wider text-xs w-20">
                 Lệch
               </th>
-              <th className="text-right px-3 py-2 font-medium uppercase tracking-wider text-xs w-28">
+              {canViewCost && <th className="text-right px-3 py-2 font-medium uppercase tracking-wider text-xs w-28">
                 Ảnh hưởng
-              </th>
+              </th>}
             </tr>
           </thead>
           <tbody>
@@ -272,7 +272,7 @@ function VarianceTab({ checkId }: { checkId: string }) {
                     {sign}
                     {formatNumber(r.difference)}
                   </td>
-                  <td
+                  {canViewCost && <td
                     className={`text-right px-3 py-2 font-mono ${
                       r.valueImpact > 0
                         ? "text-status-success"
@@ -286,7 +286,7 @@ function VarianceTab({ checkId }: { checkId: string }) {
                       : `${r.valueImpact > 0 ? "+" : ""}${formatCurrency(
                           r.valueImpact
                         )}`}
-                  </td>
+                  </td>}
                 </tr>
               );
             })}
@@ -301,10 +301,12 @@ function InventoryCheckDetail({
   item,
   onClose,
   onDelete,
+  canViewCost,
 }: {
   item: InventoryCheck;
   onClose: () => void;
   onDelete?: () => void;
+  canViewCost: boolean;
 }) {
   const status = statusMap[item.status];
 
@@ -362,28 +364,26 @@ function InventoryCheckDetail({
                   <span className="text-status-error">{formatNumber(item.decreaseQty)}</span>
                 ),
               },
-              {
+              ...(canViewCost ? [{
                 label: "GT tăng",
                 value: (
                   <span className="text-status-success">
                     {formatCurrency(item.increaseAmount)}
                   </span>
                 ),
-              },
-              {
+              }, {
                 label: "GT giảm",
                 value: (
                   <span className="text-status-error">
                     {formatCurrency(item.decreaseAmount)}
                   </span>
                 ),
-              },
-              {
+              }, {
                 label: "Tổng chênh lệch",
                 value: formatCurrency(
                   item.increaseAmount - item.decreaseAmount
                 ),
-              },
+              }] : []),
               ...(item.note
                 ? [{ label: "Ghi chú", value: item.note, fullWidth: true }]
                 : []),
@@ -395,7 +395,7 @@ function InventoryCheckDetail({
     {
       id: "variance",
       label: "Chi tiết kiểm kê",
-      content: <VarianceTab checkId={item.id} />,
+      content: <VarianceTab checkId={item.id} canViewCost={canViewCost} />,
     },
     {
       id: "history",
@@ -425,7 +425,9 @@ function InventoryCheckDetail({
 export default function KiemKhoPage() {
   const { toast } = useToast();
   const { activeBranchId, currentBranch } = useBranchFilter();
-  const { hasAny, isLoading: permissionsLoading } = usePermissions();
+  const { hasAny, hasPermission, hasPermissionAtBranch, hasAssignedBranchAccess, isLoading: permissionsLoading } = usePermissions();
+  const canViewCost = hasPermission("products.view_cost");
+  const canCreateCheck = hasAssignedBranchAccess(activeBranchId ?? null) && hasPermissionAtBranch("inventory.check", activeBranchId ?? null);
   const { printWithPicker, printerDialog } = usePrintWithPicker();
   const txPerms = useTxRowPermissions("inventory_check");
   const [data, setData] = useState<InventoryCheck[]>([]);
@@ -536,13 +538,14 @@ export default function KiemKhoPage() {
       header: "Tổng thực tế",
       size: 130,
       cell: ({ row }) =>
-        formatCurrency(row.original.increaseAmount + row.original.decreaseAmount),
+        canViewCost ? formatCurrency(row.original.increaseAmount + row.original.decreaseAmount) : "Không có quyền",
     },
     {
       id: "totalDiff",
       header: "Tổng chênh lệch",
       size: 130,
       cell: ({ row }) => {
+        if (!canViewCost) return "Không có quyền";
         const diff = row.original.increaseAmount - row.original.decreaseAmount;
         return (
           <span className={diff >= 0 ? "text-status-success" : "text-status-error"}>
@@ -625,8 +628,10 @@ export default function KiemKhoPage() {
       { header: "Tổng SP", key: "totalProducts", width: 10 },
       { header: "SL lệch tăng", key: "increaseQty", width: 12 },
       { header: "SL lệch giảm", key: "decreaseQty", width: 12 },
-      { header: "GT tăng", key: "increaseAmount", width: 15, format: (v: number) => v },
-      { header: "GT giảm", key: "decreaseAmount", width: 15, format: (v: number) => v },
+      ...(canViewCost ? [
+        { header: "GT tăng", key: "increaseAmount", width: 15, format: (v: number) => v },
+        { header: "GT giảm", key: "decreaseAmount", width: 15, format: (v: number) => v },
+      ] : []),
       { header: "Ghi chú", key: "note", width: 30 },
     ];
     const range = computeListPresetRange(datePreset);
@@ -697,6 +702,7 @@ export default function KiemKhoPage() {
   const renderDetail = (item: InventoryCheck, onClose: () => void) => (
     <InventoryCheckDetail
       item={item}
+      canViewCost={canViewCost}
       onClose={onClose}
       onDelete={
         item.status !== "unbalanced" && txPerms.forBranch(item.branchId).canCancel ? () => setChangeTarget({...item,action:"cancel"}) : undefined
@@ -721,14 +727,14 @@ export default function KiemKhoPage() {
           excel: () => handleExport("excel"),
           csv: () => handleExport("csv"),
         }}
-        actions={[
+        actions={canCreateCheck ? [
           {
             label: "Kiểm kho",
             icon: <Icon name="add" size={16} />,
             variant: "default",
             onClick: () => { setCopySource(null); setCreateOpen(true); },
           },
-        ]}
+        ] : []}
       />
 
       {viewAllBranches && (
@@ -745,7 +751,7 @@ export default function KiemKhoPage() {
         total={total}
         density="compact"
         columnToggle
-        toolbarMetrics={<><ListMetric icon={<Icon name="inventory_2" size={15} />} label="Kết quả" value={total.toString()} hint="Toàn bộ kết quả lọc" /><ListMetric icon={<Icon name="pending_actions" size={15} />} label="Đang xử lý" value={summary.processingCount.toString()} hint="Toàn bộ kết quả lọc" tone={summary.processingCount > 0 ? "danger" : "default"} /><ListMetric icon={<Icon name="check_circle" size={15} />} label="Đã cân bằng" value={summary.balancedCount.toString()} hint={`${summary.cancelledCount} phiếu đã hủy`} /><ListMetric icon={<Icon name={summary.netVariance >= 0 ? "trending_up" : "trending_down"} size={15} />} label="Chênh lệch ròng" value={formatCurrency(summary.netVariance)} hint="Toàn bộ kết quả lọc" tone={summary.netVariance < 0 ? "danger" : "default"} /></>}
+        toolbarMetrics={<><ListMetric icon={<Icon name="inventory_2" size={15} />} label="Kết quả" value={total.toString()} hint="Toàn bộ kết quả lọc" /><ListMetric icon={<Icon name="pending_actions" size={15} />} label="Đang xử lý" value={summary.processingCount.toString()} hint="Toàn bộ kết quả lọc" tone={summary.processingCount > 0 ? "danger" : "default"} /><ListMetric icon={<Icon name="check_circle" size={15} />} label="Đã cân bằng" value={summary.balancedCount.toString()} hint={`${summary.cancelledCount} phiếu đã hủy`} />{canViewCost && <ListMetric icon={<Icon name={summary.netVariance >= 0 ? "trending_up" : "trending_down"} size={15} />} label="Chênh lệch ròng" value={formatCurrency(summary.netVariance)} hint="Toàn bộ kết quả lọc" tone={summary.netVariance < 0 ? "danger" : "default"} />}</>}
         toolbarActions={<><Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)} aria-label={`Lọc theo thời gian: ${datePresetLabel}`}><Icon name="calendar_today" size={15} /><span className="hidden sm:inline">{datePresetLabel}</span></Button><Button type="button" variant="outline" size="sm" className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)} aria-label="Mở bộ lọc kiểm kho"><Icon name="filter_alt" size={15} /><span className="hidden sm:inline">Bộ lọc</span>{filterChips.length > 0 && <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">{filterChips.length}</span>}</Button></>}
         toolbarFooter={<FilterChips filters={filterChips} onClearAll={filterChips.length > 1 ? clearListFilters : undefined} />}
         emptyState={emptyState}
@@ -795,18 +801,17 @@ export default function KiemKhoPage() {
                 { header: "Tổng SP", key: "totalProducts", width: 10 },
                 { header: "SL lệch tăng", key: "increaseQty", width: 12 },
                 { header: "SL lệch giảm", key: "decreaseQty", width: 12 },
-                {
+                ...(canViewCost ? [{
                   header: "GT tăng",
                   key: "increaseAmount",
                   width: 15,
                   format: (v: number) => v,
-                },
-                {
+                }, {
                   header: "GT giảm",
                   key: "decreaseAmount",
                   width: 15,
                   format: (v: number) => v,
-                },
+                }] : []),
               ];
               exportToExcel(selectedRows, cols, "phieu-kiem-kho-da-chon");
               toast({
@@ -822,7 +827,7 @@ export default function KiemKhoPage() {
             onClick: (selectedRows) => {
               selectedRows.forEach((row) =>
                 printWithPicker(
-                  buildInventoryCheckPrintData(row),
+                  buildInventoryCheckPrintData(row, canViewCost),
                   "In phiếu kiểm kho",
                   { channel: "backoffice", docType: "inventory_check", branchId: activeBranchId },
                 ),
@@ -906,7 +911,7 @@ export default function KiemKhoPage() {
             onDuplicate: () => { if (!activeBranchId || row.branchId !== activeBranchId) { toast({title:"Chọn đúng chi nhánh của phiếu để sao chép.",variant:"error"}); return; } setCopySource(row); setCreateOpen(true); },
             permissions: txPerms.forBranch(row.branchId),
             onPrint: () =>
-              printWithPicker(buildInventoryCheckPrintData(row), "In phiếu kiểm kho", {
+              printWithPicker(buildInventoryCheckPrintData(row, canViewCost), "In phiếu kiểm kho", {
                 channel: "backoffice",
                 docType: "inventory_check",
                 branchId: activeBranchId,
