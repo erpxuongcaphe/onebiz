@@ -132,4 +132,5 @@ begin
 end $$;
 revoke all on function public.get_stock_work_document_list(text,uuid,integer,integer,text,text,text[],timestamptz,timestamptz,uuid,numeric,numeric) from public,anon;
 grant execute on function public.get_stock_work_document_list(text,uuid,integer,integer,text,text,text[],timestamptz,timestamptz,uuid,numeric,numeric) to authenticated;
+notify pgrst,'reload schema';
 commit;

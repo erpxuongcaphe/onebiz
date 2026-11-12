@@ -95,6 +95,8 @@ try {
    values ('${id(1)}','${id(101)}','${id(11)}','inventory.view','grant','${id(100)}'); set role authenticated;`);
  const mixed=await list('disposal_export');
  assert.equal(mixed.total,2,'combined list includes view-only and action-only branches');
+ assert.deepEqual((await db.query('select id from disposal_exports order by id')).rows.map(x=>x.id),[id(201)],'non-cost columns retain independently granted branch viewing');
+ await assert.rejects(db.query('select total_amount from disposal_exports'), /permission denied/);
  assert.equal(mixed.items.find(x=>x.id===id(200)).total_amount,null);
  assert.equal(mixed.items.find(x=>x.id===id(201)).total_amount,null,'inventory view alone does not reveal cost');
  assert.equal(mixed.costVisible,false); assert.equal(mixed.summary.completedValue,null);
