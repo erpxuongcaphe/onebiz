@@ -57,6 +57,15 @@ export async function verifyInventoryCatalogScope(db, id, catalog) {
       "utf8",
     ),
   );
+  await db.exec(
+    await readFile(
+      new URL(
+        "../../supabase/migrations/20261112104703_staff_inventory_branch_stock_reads.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  );
   const oldCatalog = async () =>
     (await db.query("select get_inventory_catalog_00573(p_limit=>100) result"))
       .rows[0].result;
