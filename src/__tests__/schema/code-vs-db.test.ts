@@ -47,6 +47,7 @@ const RPC = new Set(schema.rpc as string[]);
  * dưới sẽ BẮT XOÁ dòng ngay khi dump đã có (sau `node scripts/dump-db-schema.mjs`).
  */
 const RPC_CHO_MIGRATION = new Map<string, string>([
+  ["get_pos_stock_snapshot_scoped", "20261112081429_staff_pos_stock_snapshot.sql"],
   ["get_staff_profile_access", "20261111052704_staff_branch_access.sql"],
   ["save_staff_profile_access", "20261111052704_staff_branch_access.sql"],
   // Applied and verified on ONEBIZ 02/11; remove after the next full schema dump.
