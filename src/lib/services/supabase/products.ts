@@ -13,6 +13,7 @@ import { getRecordedMovementPrices } from "@/lib/stock-movement-values";
 import { getStockValuations } from "./stock-valuation";
 import { readHistoryPages } from "./read-history-pages";
 import { getFnbUnavailableProductIds, listFnbProductBranchMenuScopes } from "./fnb-product-branch-menu";
+import { getVisibleBranchStock } from "./product-stock-read";
 
 // Apply branch menu status in SQL before count/range, never after pagination.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -133,6 +134,9 @@ export async function getProducts(params: QueryParams): Promise<QueryResult<Prod
   const unavailable = branchId && params.filters?.channel === "fnb"
     ? getFnbUnavailableProductIds(await listFnbProductBranchMenuScopes(tenantId), branchId) : [];
   const hasStockFilter = Boolean(params.filters?.stock);
+  if (branchId && hasStockFilter && !(await getVisibleBranchStock(branchId, [])).allowed) {
+    throw new Error("Anh/chị không có quyền lọc tồn kho tại chi nhánh này.");
+  }
   const supplierJoin = supplierNameFilter(params.filters) ? "!inner" : "";
   const selectCols =
     `*, categories!products_category_id_fkey(name, code), suppliers!products_supplier_id_fkey${supplierJoin}(name)` +
@@ -236,12 +240,27 @@ export async function getProducts(params: QueryParams): Promise<QueryResult<Prod
     return product;
   });
   if (branchId) {
-    const values = new Map((await getStockValuations(products.map(product => product.id), [branchId]))
+    const missing = products.filter(product => product.branchStock === undefined);
+    const stockBatches: Array<Promise<{ allowed: boolean; quantities: Map<string, number> }>> = [];
+    for (let offset = 0; offset < missing.length; offset += 1000) {
+      const batch = missing.slice(offset, offset + 1000);
+      stockBatches.push(getVisibleBranchStock(branchId, batch.map(product => product.id)));
+    }
+    const [visibleBatches, valuations] = await Promise.all([
+      Promise.all(stockBatches),
+      getStockValuations(products.map(product => product.id), [branchId]),
+    ]);
+    for (const [index, visible] of visibleBatches.entries()) {
+      for (const product of missing.slice(index * 1000, (index + 1) * 1000)) {
+        product.branchStock = visible.allowed ? visible.quantities.get(product.id) : null;
+      }
+    }
+    const values = new Map(valuations
       .map(value => [value.productId, value]));
     for (const product of products) {
       const value = values.get(product.id);
       if (value?.complete && value.unitCost != null) product.costPrice = value.unitCost;
-      product.stockValue = value?.value ?? ((product.branchStock ?? 0) === 0 ? 0 : null);
+      product.stockValue = product.branchStock === null ? null : value?.value ?? ((product.branchStock ?? 0) === 0 ? 0 : null);
       product.stockValuationComplete = product.stockValue !== null;
     }
   }
@@ -273,6 +292,9 @@ export async function getAllMatchingProductIds(params: QueryParams): Promise<str
   const unavailable = branchId && params.filters?.channel === "fnb"
     ? getFnbUnavailableProductIds(await listFnbProductBranchMenuScopes(tenantId), branchId) : [];
   const hasStockFilter = Boolean(params.filters?.stock);
+  if (branchId && hasStockFilter && !(await getVisibleBranchStock(branchId, [])).allowed) {
+    throw new Error("Anh/chị không có quyền lọc tồn kho tại chi nhánh này.");
+  }
   const supplierJoin = supplierNameFilter(params.filters)
     ? ", suppliers!products_supplier_id_fkey!inner(name)" : "";
   const industryScope = branchId ? await getBranchIndustryScope(supabase, tenantId, branchId) : undefined;

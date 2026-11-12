@@ -194,14 +194,14 @@ export function ProductAutocomplete({
                   <div
                     className={cn(
                       "text-xs",
-                      p.stock <= 0
+                      p.stock !== null && p.stock <= 0
                         ? "text-status-error font-medium"
-                        : p.stock <= 5
+                        : p.stock !== null && p.stock <= 5
                           ? "text-status-warning"
                           : "text-muted-foreground"
                     )}
                   >
-                    Tồn: {formatNumber(p.stock)} {p.sellUnit ?? p.unit ?? ""}
+                    Tồn: {p.stock === null ? "chưa xác định" : `${formatNumber(p.stock)} ${p.sellUnit ?? p.unit ?? ""}`}
                   </div>
                 </div>
               </li>

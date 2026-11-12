@@ -559,6 +559,12 @@ describe("getDSO", () => {
 });
 
 describe("getFinancialAlerts", () => {
+  it("does not turn hidden product stock into a false shortage", async () => {
+    tableDataMap = { ...defaultTableData(), products: { data: [{ id: "hidden", name: "Ẩn", stock: null, min_stock: 5 }], error: null } };
+    const alerts = await getFinancialAlerts();
+    expect(alerts.find(row => row.id === "low_stock_summary")).toBeUndefined();
+    expect(alerts.find(row => row.id === "stock_scope_unavailable")?.title).toContain("Chưa đủ quyền");
+  });
   it.each(["customers", "product_lots"])("does not interpret a failed %s source as no alerts", async table => {
     tableDataMap = { ...defaultTableData(), [table]: { data: null, error: { message: "SOURCE_UNAVAILABLE" } } };
     await expect(getFinancialAlerts()).rejects.toThrow("SOURCE_UNAVAILABLE");

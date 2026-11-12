@@ -760,7 +760,7 @@ export function StaffProfileEditor({
                                 )}
                                 {branchId && p.code === "inventory.view" && (
                                   <p className="text-xs text-muted-foreground">
-                                    Quyền bán lẻ vẫn cần nhận số lượng tồn tại chi nhánh để bán hàng. Quyền kiểm kho, sản xuất, xem giá vốn và báo cáo có thể cho xem dữ liệu liên quan theo phạm vi của từng quyền.
+                                    Quyền bán lẻ vẫn cần nhận số lượng tồn tại chi nhánh để bán hàng. Quyền xem tổng tồn được gán, kiểm kho, sản xuất, xem giá vốn và báo cáo có thể cho xem dữ liệu liên quan theo phạm vi của từng quyền.
                                   </p>
                                 )}
                                 {p.code === "finance.create_transaction" && (

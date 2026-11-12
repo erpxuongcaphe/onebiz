@@ -681,7 +681,15 @@ export async function getFinancialAlerts(branchId?: string): Promise<FinancialAl
 
   // --- 2. Low stock alerts ---
   // Normalize stock data: branch_stock vs products have different shapes
-  const stockRows = lowStockProducts.map((p: any) => {
+  if (!branchId && lowStockProducts.some((p: any) => p.stock == null)) {
+    alerts.push({
+      id: "stock_scope_unavailable", type: "low_stock", severity: "info",
+      title: "Chưa đủ quyền xem toàn bộ cảnh báo tồn",
+      description: "Một số số tồn không thuộc phạm vi được xem, nên danh sách cảnh báo có thể chưa đầy đủ.",
+      value: 0, link: "/hang-hoa",
+    });
+  }
+  const stockRows = lowStockProducts.filter((p: any) => branchId ? p.quantity != null : p.stock != null).map((p: any) => {
     const product = p.products as Record<string, unknown> | null;
     return {
       id: (product?.id ?? p.id) as string,
@@ -1079,6 +1087,7 @@ export async function getStockAlerts(): Promise<StockAlert[]> {
   const alerts: StockAlert[] = [];
 
   for (const p of data ?? []) {
+    if (p.stock == null) continue;
     const stock = Number(p.stock ?? 0);
     const minStock = Number(p.min_stock ?? 0);
     const maxStock = Number(p.max_stock ?? 0);

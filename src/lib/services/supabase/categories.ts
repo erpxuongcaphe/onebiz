@@ -227,7 +227,7 @@ export async function getProductsByCategoryId(
     id: string;
     code: string;
     name: string;
-    stock: number;
+    stock: number | null;
     unit?: string;
   }>
 > {
@@ -253,7 +253,7 @@ export async function getProductsByCategoryId(
     id: row.id,
     code: row.code ?? "",
     name: row.name ?? "",
-    stock: Number(row.stock ?? 0),
+    stock: row.stock == null ? null : Number(row.stock),
     unit: row.unit ?? undefined,
   }));
 }

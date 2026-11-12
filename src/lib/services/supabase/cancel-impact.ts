@@ -18,7 +18,7 @@ export type RefundMethod = "cash" | "transfer" | "card";
 
 export interface NegativeStockRow {
   productName: string;
-  available: number;
+  available: number | null;
   needed: number;
   unit: string;
 }
@@ -276,24 +276,19 @@ export async function getPurchaseCancelImpact(
   base.branchName = branchName;
   base.stockLineCount = items.filter((i) => i.received > 0).length;
 
-  // Cảnh báo tồn âm: mirror guard RPC — products.stock < received_quantity
-  // (đã bán/dùng bớt → hoàn nhập sẽ đẩy tồn âm). Cảnh báo nhưng vẫn cho hủy.
-  const stockMap = await fetchProductStocks(
-    items.map((i) => i.productId),
-    ctx.tenantId,
-  );
-  for (const it of items) {
-    if (it.received <= 0) continue;
-    const onHand = stockMap.get(it.productId) ?? 0;
-    if (onHand < it.received) {
-      base.negativeStock.push({
-        productName: it.productName,
-        available: onHand,
-        needed: it.received,
-        unit: it.unit,
-      });
+  // The server returns only shortage indicators for this authorized document.
+  // Never infer zero from a hidden products_scoped balance.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: risks, error: riskError } = await (supabase as any).rpc("get_purchase_cancel_stock_risks", { p_order_id: purchaseOrderId });
+  if (riskError) handleError(riskError, "getPurchaseCancelImpact.stock");
+  if (!Array.isArray(risks)) throw new Error("Không xác định được cảnh báo tồn kho của phiếu nhập.");
+  base.negativeStock = risks.map((risk: { product_name?: unknown; unit?: unknown; needed?: unknown }) => {
+    const needed = Number(risk.needed);
+    if (typeof risk.product_name !== "string" || risk.needed == null || !Number.isFinite(needed) || needed <= 0) {
+      throw new Error("Cảnh báo tồn kho của phiếu nhập chưa hợp lệ.");
     }
-  }
+    return { productName: risk.product_name, available: null, needed, unit: typeof risk.unit === "string" ? risk.unit : "" };
+  });
 
   if (paid > 0) {
     base.cashDirection = "collect_from_supplier";
@@ -322,23 +317,4 @@ async function fetchPurchaseItems(
     received: Number((r as { received_quantity?: number }).received_quantity ?? 0),
     unit: (r.unit as string) ?? "",
   }));
-}
-
-async function fetchProductStocks(
-  productIds: string[],
-  tenantId: string,
-): Promise<Map<string, number>> {
-  const map = new Map<string, number>();
-  const ids = productIds.filter(Boolean);
-  if (ids.length === 0) return map;
-  const supabase = getClient();
-  for (let i = 0; i < ids.length; i += 200) {
-    const { data } = await supabase
-      .from("products_scoped")
-      .select("id, stock")
-      .eq("tenant_id", tenantId)
-      .in("id", ids.slice(i, i + 200));
-    for (const r of data ?? []) map.set(r.id as string, Number((r as { stock?: number }).stock ?? 0));
-  }
-  return map;
 }

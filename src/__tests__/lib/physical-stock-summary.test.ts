@@ -22,4 +22,8 @@ describe("physical stock totals", () => {
     expect(summarizePhysicalStock([{ ...products[0], branchStock: undefined }], true))
       .toEqual([{ unit: "G", quantity: 0 }]);
   });
+  it("does not present a partial or hidden total as a real zero", () => {
+    expect(summarizePhysicalStock([...products, { ...products[0], branchStock: null }], true)).toEqual([]);
+    expect(summarizePhysicalStock([{ ...products[0], stock: null }], false)).toEqual([]);
+  });
 });

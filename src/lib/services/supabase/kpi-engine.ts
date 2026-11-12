@@ -691,7 +691,9 @@ async function computeActualForKpi(
       // A2 (07/07): bỏ món menu F&B (không giữ tồn thật) khỏi giá trị tồn
       .neq("inventory_role", "fnb_menu_item");
     if (error) throw new Error(error.message);
-    return ((data ?? []) as Array<{ stock: number; cost_price: number }>).reduce(
+    const balances = (data ?? []) as Array<{ stock: number | null; cost_price: number }>;
+    if (balances.some(row => row.stock === null)) return null;
+    return balances.reduce(
       (s, r) => s + Number(r.stock ?? 0) * Number(r.cost_price ?? 0),
       0,
     );

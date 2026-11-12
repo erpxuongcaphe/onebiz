@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
+import { getVisibleBranchStock } from "@/lib/services/supabase/product-stock-read";
 import { createDisposalExport } from "@/lib/services/supabase/inventory";
 import { useProductUom } from "@/lib/hooks/use-product-uom";
 import { OperationalQuantityInput, type UnitEntry } from "@/components/shared/operational-quantity-input";
@@ -100,29 +101,37 @@ export function CreateDisposalDialog({
     }
 
     const timer = setTimeout(async () => {
-      const supabase = getClient();
-      const ctx = await getCurrentContext();
-      const { data } = await applyFnbCatalogScope(supabase
-        .from("products_scoped")
-        .select("id, code, name, unit, stock, cost_price")
-        .or(`name.ilike.%${productSearch}%,code.ilike.%${productSearch}%`)
-        .eq("tenant_id", currentTenantId ?? ctx.tenantId)
-        .eq("is_active", true), fnbCatalog)
-        .limit(8);
+      try {
+        const supabase = getClient();
+        const ctx = await getCurrentContext();
+        const { data, error } = await applyFnbCatalogScope(supabase
+          .from("products_scoped")
+          .select("id, code, name, unit, cost_price")
+          .or(`name.ilike.%${productSearch}%,code.ilike.%${productSearch}%`)
+          .eq("tenant_id", currentTenantId ?? ctx.tenantId)
+          .eq("is_active", true), fnbCatalog)
+          .limit(8);
 
-      if (cancelled) return;
-      setFilteredProducts((data ?? []).map((p) => ({
-        id: p.id,
-        code: p.code ?? "",
-        name: p.name,
-        unit: p.unit ?? "Cái",
-        stock: Number(p.stock ?? 0),
-        cost_price: Number(p.cost_price ?? 0),
-      })));
+        if (error) throw error;
+        if (cancelled || !data?.length) return;
+        const visible = await getVisibleBranchStock(ctx.branchId, data.map(p => p.id));
+        if (!visible.allowed) throw new Error("Không có quyền xem tồn kho của chi nhánh để tạo phiếu.");
+        if (cancelled) return;
+        setFilteredProducts((data ?? []).map((p) => ({
+          id: p.id,
+          code: p.code ?? "",
+          name: p.name,
+          unit: p.unit ?? "Cái",
+          stock: visible.quantities.get(p.id) ?? 0,
+          cost_price: Number(p.cost_price ?? 0),
+        })));
+      } catch (error) {
+        if (!cancelled) toast({ title: "Không tải được tồn kho", description: error instanceof Error ? error.message : "Vui lòng thử lại.", variant: "error" });
+      }
     }, 300);
 
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [productSearch, currentTenantId, fnbCatalog]);
+  }, [productSearch, currentTenantId, fnbCatalog, toast]);
 
   function addProduct(product: ProductResult) {
     if (items.some((item) => item.product_id === product.id)) return;

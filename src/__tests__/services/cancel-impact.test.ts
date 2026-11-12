@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const state = vi.hoisted(() => ({ calls: [] as unknown[][], receiptError: false, receiptMalformed: false, completed: true, debt: 0, purchaseStatus: "completed", branchId: "branch" as string | null, deniedTable: "" }));
+const state = vi.hoisted(() => ({ calls: [] as unknown[][], receiptError: false, receiptMalformed: false, riskError: false, riskMalformed: false, completed: true, debt: 0, purchaseStatus: "completed", branchId: "branch" as string | null, deniedTable: "" }));
 vi.mock("@/lib/services/supabase/payments", () => ({
   getPaymentHistory: async (type: string, id: string) => {
     state.calls.push(["payment_history", type, id]);
@@ -16,7 +16,11 @@ vi.mock("@/lib/services/supabase/payments", () => ({
 vi.mock("@/lib/services/supabase/base", () => ({
   getCurrentContext: async () => ({ tenantId: "tenant" }),
   handleError: (error: unknown) => { throw error; },
-  getClient: () => ({ from: (table: string) => {
+  getClient: () => ({ rpc: async (name: string, args: unknown) => {
+    state.calls.push(["rpc", name, args]);
+    return state.riskError ? { data: null, error: new Error("Risk unavailable") }
+      : { data: [{ product_name: "Synthetic product", needed: state.riskMalformed ? null : 5, unit: "unit" }], error: null };
+  }, from: (table: string) => {
     state.calls.push([table, "from"]);
     if (table === "customers" || table === "suppliers") throw new Error("Company balance must not be read");
     const response = () => table === state.deniedTable ? { data: null, error: new Error("Document access denied") }
@@ -39,7 +43,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
 }));
 import { getInvoiceCancelImpact, getPurchaseCancelImpact } from "@/lib/services/supabase/cancel-impact";
 
-beforeEach(() => { state.calls = []; state.receiptError = false; state.receiptMalformed = false; state.completed = true; state.debt = 0; state.purchaseStatus = "completed"; state.branchId = "branch"; state.deniedTable = ""; });
+beforeEach(() => { state.calls = []; state.receiptError = false; state.receiptMalformed = false; state.riskError = false; state.riskMalformed = false; state.completed = true; state.debt = 0; state.purchaseStatus = "completed"; state.branchId = "branch"; state.deniedTable = ""; });
 describe("invoice cancellation cash impact", () => {
   it("reads effective receipts rather than assuming invoice.paid is refundable", async () => {
     const impact = await getInvoiceCancelImpact("invoice");
@@ -90,11 +94,20 @@ describe("invoice cancellation cash impact", () => {
     expect(impact).toMatchObject({ total: 180, hasSideEffects: true, debtAmount: 110,
       counterpartyDebtBefore: null, cashDirection: "collect_from_supplier", cashAmount: 70,
       suggestedMethod: "cash", stockLineCount: 1, branchName: "Test branch",
-      negativeStock: [{ productName: "Synthetic product", available: 2, needed: 5, unit: "unit" }] });
+      negativeStock: [{ productName: "Synthetic product", available: null, needed: 5, unit: "unit" }] });
     expect(impact.refundMethods).toBeUndefined();
     expect(state.calls).toContainEqual(["purchase_orders", "eq", "tenant_id", "tenant"]);
-    expect(state.calls).toContainEqual(["products_scoped", "eq", "tenant_id", "tenant"]);
+    expect(state.calls).toContainEqual(["rpc", "get_purchase_cancel_stock_risks", { p_order_id: "purchase" }]);
+    expect(state.calls.some(([table]) => table === "products_scoped")).toBe(false);
     expect(state.calls.some(([table]) => table === "customers" || table === "suppliers")).toBe(false);
+  });
+  it("does not guess a shortage or allow cancellation when its stock check fails", async () => {
+    state.riskError = true;
+    await expect(getPurchaseCancelImpact("purchase")).rejects.toThrow("Risk unavailable");
+  });
+  it("does not allow cancellation from a malformed stock warning", async () => {
+    state.riskMalformed = true;
+    await expect(getPurchaseCancelImpact("purchase")).rejects.toThrow("chưa hợp lệ");
   });
   it.each(["draft", "ordered"])("retains no-side-effect preview for %s purchases", async status => {
     state.purchaseStatus = status; state.debt = 110;
