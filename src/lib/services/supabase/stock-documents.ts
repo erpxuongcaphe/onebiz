@@ -45,7 +45,7 @@ const DOCUMENT_CONFIG: Record<string, DocumentConfig> = {
   purchase_order: { headerTable: "purchase_orders", itemTable: "purchase_order_items", itemForeignKey: "purchase_order_id", itemSectionLabel: "Hàng hóa trên phiếu nhập" },
   input_invoice: { headerTable: "input_invoices", itemSectionLabel: "Hàng hóa theo phiếu nhập liên kết" },
   production_order: { headerTable: "production_orders", itemTable: "production_order_materials", itemForeignKey: "production_order_id", itemSectionLabel: "Nguyên vật liệu của lệnh sản xuất" },
-  inventory_check: { headerTable: "inventory_checks", itemTable: "inventory_check_items", itemForeignKey: "check_id", itemSectionLabel: "Kết quả kiểm kê" },
+  inventory_check: { headerTable: "inventory_checks", itemTable: "inventory_check_items_scoped", itemForeignKey: "check_id", itemSectionLabel: "Kết quả kiểm kê" },
   disposal_export: { headerTable: "disposal_exports", itemTable: "disposal_export_items", itemForeignKey: "disposal_id", itemSectionLabel: "Hàng hóa xuất hủy" },
   sales_return: { headerTable: "sales_returns", itemTable: "return_items", itemForeignKey: "return_id", itemSectionLabel: "Hàng hóa trả lại" },
   internal_sale: { headerTable: "internal_sales", itemTable: "internal_sale_items", itemForeignKey: "internal_sale_id", itemSectionLabel: "Hàng hóa bán nội bộ" },

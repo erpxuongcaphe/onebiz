@@ -137,6 +137,10 @@ try {
   console.log(
     "PASS inventory lots: authenticated list, totals, direct reads, expiry and unit history respect branch exceptions.",
   );
+  const { verifyInventoryDocumentReads } = await import(
+    "./staff-access-tests/inventory-documents.mjs"
+  );
+  await verifyInventoryDocumentReads(db, id);
 } finally {
   await db.close();
 }
