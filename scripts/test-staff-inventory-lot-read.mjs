@@ -161,6 +161,8 @@ try {
   );
   await db.exec('reset role');
   await db.exec(await migration('20261112115805_staff_lot_trace_report_access.sql'));
+  await db.exec(await functionFromMigration('20261112121837_staff_inventory_global_revoke_guard.sql','_staff_lot_has_no_view_exception'));
+  await db.exec(await functionFromMigration('20261112121837_staff_inventory_global_revoke_guard.sql','_staff_inventory_row_visible'));
   await db.exec(`insert into branches(id,tenant_id,name) values ('${id(14)}','${id(1)}','Unassigned');
     insert into product_lots(id,tenant_id,branch_id,product_id,lot_number,source_type,received_date,initial_qty,current_qty,status)
     values ('${id(612)}','${id(1)}','${id(14)}','${id(600)}','C','purchase',current_date,5,5,'active');
@@ -173,6 +175,21 @@ try {
   await db.exec(`reset role; update user_branch_permission_overrides set override_type='revoke' where permission_code='reports.analytics'; set role authenticated;`);
   assert.deepEqual(await lotIds(),[id(611)],'analytics denial does not widen lot access');
   await db.exec(`reset role; delete from user_branch_permission_overrides where permission_code='reports.analytics'; set role authenticated;`);
+  await db.exec(`reset role; insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type,created_by)
+    values('${id(1)}','${id(101)}','inventory.view','revoke','${id(100)}'); set role authenticated;`);
+  assert.deepEqual(await lotIds(),[],'global inventory revoke wins over local inventory grant');
+  await db.exec(`reset role; delete from user_branch_permission_overrides where permission_code='inventory.view'; set role authenticated;`);
+  assert.deepEqual(await lotIds(),[],'global revoke is enforced without any local exception');
+  await db.exec(`reset role; insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+    values('${id(1)}','${id(101)}','${id(11)}','inventory.view','grant','${id(100)}'); set role authenticated;`);
+  await db.exec(`reset role; insert into role_permissions values('${id(20)}','production.view'); set role authenticated;`);
+  assert.deepEqual(await lotIds(),[id(610),id(611)],'independent production view keeps its lots after global inventory revoke');
+  await db.exec(`reset role; delete from role_permissions where permission_code='production.view';
+    delete from user_permission_overrides where user_id='${id(101)}' and permission_code='inventory.view'; set role authenticated;`);
+  await db.exec(`reset role; delete from user_branch_permission_overrides where permission_code='inventory.view'; set role authenticated;`);
+  assert.deepEqual(await lotIds(),[],'ungranted inventory or operational access does not expose raw lots');
+  await db.exec(`reset role; insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+    values('${id(1)}','${id(101)}','${id(11)}','inventory.view','grant','${id(100)}'); set role authenticated;`);
   console.log(
     "PASS inventory lots: authenticated list, totals, direct reads, expiry and unit history respect branch exceptions.",
   );

@@ -115,6 +115,10 @@ export async function verifyInventoryDocumentReads(db, id) {
       "utf8",
     ),
   );
+  // Match chronological production order: the later global guard replaces the
+  // earlier predicate before batched document policies are installed.
+  await db.exec(await functionFromMigration('20261112121837_staff_inventory_global_revoke_guard.sql','_staff_inventory_row_visible'));
+  await db.exec(await readFile(new URL('20261112122731_staff_inventory_document_read_batch.sql',dir),'utf8'));
   await db.exec("set role authenticated");
   const ids = async (table) =>
     (await db.query(`select id from ${table} order by id`)).rows.map(
@@ -147,6 +151,21 @@ export async function verifyInventoryDocumentReads(db, id) {
   assert.deepEqual(await ids("inventory_check_items_scoped"), [id(721)]);
   assert.equal((await list()).total, 1);
   assert.equal((await list()).summary.netVariance, 900);
+  await db.exec(`reset role; delete from user_branch_permission_overrides where permission_code='inventory.view';
+    insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type,created_by)
+    values('${id(1)}','${id(101)}','inventory.view','revoke','${id(100)}'); set role authenticated;`);
+  for (const [, , header, child] of documents) {
+    assert.deepEqual(await ids(header),[],'global revoke hides document headers');
+    if (child) assert.deepEqual(await ids(child),[],'global revoke hides child rows through parent RLS');
+  }
+  await db.exec(`reset role; delete from user_permission_overrides where user_id='${id(101)}' and permission_code='inventory.view'; set role authenticated;`);
+  for (const [, , header, child] of documents) {
+    assert.deepEqual(await ids(header),[],'ungranted inventory view hides document headers');
+    if (child) assert.deepEqual(await ids(child),[],'ungranted inventory view hides document lines');
+  }
+  await db.exec(`reset role;
+    insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+    values('${id(1)}','${id(101)}','${id(11)}','inventory.view','grant','${id(100)}'); set role authenticated;`);
   console.log(
     "PASS inventory documents: six workspace entry checks, direct headers and lines, and scoped inventory-check totals and details.",
   );

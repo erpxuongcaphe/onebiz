@@ -163,6 +163,7 @@ try {
   await db.exec(
     await file("20261112065630_staff_branch_fnb_view_direct_reads.sql"),
   );
+  await db.exec(await file("20261112122122_staff_fnb_view_global_revoke_guard.sql"));
   const visible = async (table) =>
     (await db.query(`select id from ${table} order by id`)).rows.map(
       (r) => r.id,
@@ -203,6 +204,22 @@ try {
     [id(30), id(31)],
     "company reporting retains its independent all-branch scope",
   );
+  await db.exec(`reset role; delete from role_permissions where permission_code in ('pos_fnb.send_kitchen','reports.analytics','reports.view_all_branches');
+    delete from user_branch_permission_overrides where permission_code='pos_fnb.view_orders';
+    insert into user_branches values('${id(101)}','${id(11)}',null);
+    insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type,created_by)
+    values('${id(1)}','${id(101)}','pos_fnb.view_orders','revoke','${id(100)}'); set role authenticated;`);
+  assert.deepEqual(await visible('kitchen_orders'),[],'global view revoke cannot bypass the legacy fast path');
+  assert.deepEqual(await visible('kitchen_order_items'),[],'global revoke also hides child rows');
+  await db.exec(`reset role; insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+    values('${id(1)}','${id(101)}','${id(10)}','pos_fnb.view_orders','grant','${id(100)}'); set role authenticated;`);
+  assert.deepEqual(await visible('kitchen_orders'),[],'local grant cannot override global view revoke');
+  await db.exec(`reset role; delete from user_permission_overrides where permission_code='pos_fnb.view_orders';
+    delete from user_branch_permission_overrides where permission_code='pos_fnb.view_orders'; set role authenticated;`);
+  assert.deepEqual(await visible('kitchen_orders'),[],'ungranted F&B view does not expose raw orders');
+  await db.exec(`reset role; insert into role_permissions values('${id(20)}','pos_fnb.checkout'); set role authenticated;`);
+  assert.deepEqual(await visible('kitchen_orders'),[id(30),id(31)],'independent checkout still has the orders required to sell');
+  assert.deepEqual(await visible('kitchen_order_items'),[id(40),id(41)],'independent checkout retains order lines');
   await db.exec("reset role");
   console.log(
     "PASS: F&B order-view branch checks preserve kitchen actions, return reads and independent retail return permission",

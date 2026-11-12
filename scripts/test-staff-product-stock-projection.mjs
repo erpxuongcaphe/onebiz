@@ -14,6 +14,9 @@ try {
   alter function public.user_has_branch_access(uuid,uuid) security definer;
   create table products(id uuid,tenant_id uuid,name text);
   create table branch_stock(tenant_id uuid,branch_id uuid,product_id uuid,quantity numeric,variant_id uuid);
+  alter table branch_stock enable row level security;
+  create policy legacy_stock on branch_stock for select to authenticated using (tenant_id=public.get_user_tenant_id());
+  grant select on branch_stock to authenticated;
   insert into products values('${id(60)}','${id(1)}','Coffee'),('${id(61)}','${id(2)}','Other');
   insert into branch_stock values('${id(1)}','${id(10)}','${id(60)}',10,null),('${id(1)}','${id(11)}','${id(60)}',20,null);
   insert into branches(id,tenant_id,name) values('${id(13)}','${id(1)}','Unassigned');
@@ -32,6 +35,9 @@ try {
   select set_config('request.jwt.claim.sub','${id(101)}',false);`);
  await db.exec(await file('20261112104703_staff_inventory_branch_stock_reads.sql'));
  await db.exec(await file('20261112110113_staff_product_stock_projection.sql'));
+ await db.exec(`create function public._staff_lot_has_no_view_exception() returns boolean language sql as $$select true$$;
+  create function public._staff_inventory_row_visible(uuid) returns boolean language sql as $$select true$$;`);
+ await db.exec(await file('20261112121837_staff_inventory_global_revoke_guard.sql'));
  await db.exec('set role authenticated');
  const stock=async()=>(await db.query('select stock from products_scoped')).rows[0].stock;
  const scope=async(branch,items=[60])=>(await db.query('select get_product_list_branch_stock($1,$2::uuid[]) data',[id(branch),items.map(id)])).rows[0].data;
@@ -62,6 +68,22 @@ try {
  await db.exec(`reset role; update profiles set is_active=false where id='${id(101)}'; set role authenticated;`);
  await assert.rejects(scope(10),/PRODUCT_STOCK_AUTH_REQUIRED/);
  await db.exec(`reset role; delete from user_branch_permission_overrides where user_id='${id(101)}'; update profiles set is_active=null where id='${id(101)}'; set role authenticated;`);
- assert.deepEqual(await scope(10),{allowed:true,rows:[{product_id:id(60),quantity:10}]},'legacy null active flag retains existing access without exceptions');
+ assert.deepEqual(await scope(10),{allowed:false,rows:[]},'an ungranted view remains restricted even with a legacy null active flag');
+ await db.exec(`reset role; update profiles set is_active=true where id='${id(101)}'; insert into role_permissions values('${id(20)}','inventory.view');
+  insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type,created_by) values('${id(1)}','${id(101)}','inventory.view','revoke','${id(100)}'); set role authenticated;`);
+ assert.deepEqual(await scope(10),{allowed:false,rows:[]},'an explicit company-level revoke cannot fall through the legacy branch guard');
+ assert.equal((await db.query('select count(*)::int n from branch_stock')).rows[0].n,0,'raw branch rows honor global revoke too');
+ await db.exec(`reset role; insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+  values('${id(1)}','${id(101)}','${id(10)}','inventory.view','grant','${id(100)}'); set role authenticated;`);
+ assert.deepEqual(await scope(10),{allowed:false,rows:[]},'a local grant does not override the explicit global deny');
+ await db.exec(`reset role; insert into role_permissions values('${id(20)}','inventory.check'); set role authenticated;`);
+ assert.deepEqual(await scope(10),{allowed:true,rows:[{product_id:id(60),quantity:10}]},'independent stocktake still has its required balance');
+ assert.equal((await db.query('select count(*)::int n from branch_stock')).rows[0].n,2,'independent stocktake retains only assigned branch rows');
+ await db.exec(`reset role; delete from role_permissions where permission_code in ('inventory.check','inventory.view');
+  delete from user_permission_overrides where user_id='${id(101)}' and permission_code='inventory.view';
+  delete from user_branch_permission_overrides where user_id='${id(101)}' and permission_code='inventory.view'; set role authenticated;`);
+ assert.deepEqual(await scope(10),{allowed:false,rows:[]},'a staff member with no stock-view or operational permission cannot read balances');
+ await db.exec(`reset role; insert into role_permissions values('${id(20)}','pos_retail.checkout'); set role authenticated;`);
+ assert.deepEqual(await scope(10),{allowed:true,rows:[{product_id:id(60),quantity:10}]},'retail checkout keeps stock access without the inventory-view grant');
  console.log('PASS product stock view: legacy totals, scoped sums and unknown-versus-zero');
 }catch(e){console.error(e.message,e.where??'');process.exitCode=1;}finally{await db.close();}
