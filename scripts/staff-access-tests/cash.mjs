@@ -290,4 +290,6 @@ export async function verifyCashScope(db) {
   console.log(
     "PASS cash scope: denied branch/document/payload paths unchanged, actual local-only invoice payment and reversal preserve cash/debt, global denial wins, shared accounts not granted and direct cash DML blocked.",
   );
+  const { verifyCashBookReadScope } = await import("./cash-book-read.mjs");
+  await verifyCashBookReadScope(db, id);
 }
