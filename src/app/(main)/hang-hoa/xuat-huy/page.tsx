@@ -597,7 +597,7 @@ export default function XuatHuyPage() {
           buildTransactionRowActions({
             row,
             kind: "disposal",
-            permissions: txPerms,
+            permissions: txPerms.forBranch(row.branchId),
             onPrint: () =>
               printDocumentWithTemplate({
                 channel: "backoffice",

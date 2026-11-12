@@ -6,10 +6,19 @@ import {
 } from "@/lib/permissions/branch-permissions";
 import { useTxRowPermissions } from "@/lib/permissions/use-tx-row-permissions";
 
-const base = new Set(["orders.cancel", "orders.create"]);
+const base = new Set([
+  "orders.cancel",
+  "orders.create",
+  "production.cancel_order",
+  "inventory.check",
+  "inventory.transfer",
+]);
 const adjustments = [
   { branchId: "premium", code: "orders.cancel", allowed: false },
   { branchId: "tubua", code: "orders.create", allowed: false },
+  { branchId: "premium", code: "production.cancel_order", allowed: false },
+  { branchId: "tubua", code: "inventory.check", allowed: false },
+  { branchId: "premium", code: "inventory.transfer", allowed: false },
 ];
 vi.mock("@/lib/permissions/use-permission", () => ({
   usePermissions: () => ({
@@ -62,4 +71,25 @@ describe("row permissions across branches", () => {
       expect(result.current.forBranch(undefined).canCancel).toBe(false);
     },
   );
+  it("applies production and stocktake exceptions to the document branch", () => {
+    const production = renderHook(() => useTxRowPermissions("production"));
+    expect(production.result.current.forBranch("premium").canCancel).toBe(
+      false,
+    );
+    expect(production.result.current.forBranch("tubua").canCancel).toBe(true);
+    const stocktake = renderHook(() => useTxRowPermissions("inventory_check"));
+    expect(stocktake.result.current.forBranch("premium").canDuplicate).toBe(
+      true,
+    );
+    expect(stocktake.result.current.forBranch("tubua").canDuplicate).toBe(
+      false,
+    );
+  });
+  it("distinguishes the source and destination of a stock transfer", () => {
+    const transfer = renderHook(() => useTxRowPermissions("stock_transfer"));
+    const premium = transfer.result.current.forBranch("premium");
+    const tubua = transfer.result.current.forBranch("tubua");
+    expect(premium.canCancel && tubua.canCancel).toBe(false);
+    expect(tubua.canCancel).toBe(true);
+  });
 });

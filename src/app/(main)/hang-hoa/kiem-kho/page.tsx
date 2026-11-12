@@ -699,7 +699,7 @@ export default function KiemKhoPage() {
       item={item}
       onClose={onClose}
       onDelete={
-        item.status !== "unbalanced" && txPerms.canCancel ? () => setChangeTarget({...item,action:"cancel"}) : undefined
+        item.status !== "unbalanced" && txPerms.forBranch(item.branchId).canCancel ? () => setChangeTarget({...item,action:"cancel"}) : undefined
       }
     />
   );
@@ -878,8 +878,8 @@ export default function KiemKhoPage() {
             icon: <Icon name="cancel" size={16} />,
             variant: "destructive",
             onClick: (selectedRows) => {
-              if (!txPerms.canCancel) { toast({title:"Tài khoản chưa được cấp quyền hủy phiếu kiểm kho.",variant:"error"}); return; }
               if (selectedRows.length !== 1) { toast({title:"Chọn một phiếu để xem trước chênh lệch và ghi lý do hủy.",variant:"info"}); return; }
+              if (!txPerms.forBranch(selectedRows[0].branchId).canCancel) { toast({title:"Tài khoản chưa được cấp quyền hủy phiếu kiểm kho tại chi nhánh này.",variant:"error"}); return; }
               if (selectedRows[0].status === "unbalanced") return;
               setChangeTarget({...selectedRows[0],action:"cancel"});
             },
@@ -892,7 +892,7 @@ export default function KiemKhoPage() {
         rowActions={(row) => {
           // Sprint UX-1 Stage 4: standardized transaction row actions
           const workflowActions: Array<{ label: string; icon?: React.ReactNode; onClick: () => void }> = [];
-          if (row.status === "processing") {
+          if (row.status === "processing" && txPerms.forBranch(row.branchId).canDuplicate) {
             workflowActions.push({
               label: applyingId === row.id ? "Đang áp dụng..." : "Áp dụng kiểm kê",
               icon: <Icon name="check_circle" size={16} />,
@@ -904,7 +904,7 @@ export default function KiemKhoPage() {
             row,
             kind: "inventory_check",
             onDuplicate: () => { if (!activeBranchId || row.branchId !== activeBranchId) { toast({title:"Chọn đúng chi nhánh của phiếu để sao chép.",variant:"error"}); return; } setCopySource(row); setCreateOpen(true); },
-            permissions: txPerms,
+            permissions: txPerms.forBranch(row.branchId),
             onPrint: () =>
               printWithPicker(buildInventoryCheckPrintData(row), "In phiếu kiểm kho", {
                 channel: "backoffice",

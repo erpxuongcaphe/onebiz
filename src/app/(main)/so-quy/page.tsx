@@ -1130,14 +1130,14 @@ function CashBookPage({ drilldown }: { drilldown: ReturnType<typeof readCashBook
             <TransactionDetail
               entry={entry}
               onClose={onClose}
-              onDelete={() => setDeletingEntry(entry)}
+              onDelete={txPerms.forBranch(entry.branchId).canCancel ? () => setDeletingEntry(entry) : undefined}
             />
           )}
           rowActions={(row) =>
             buildTransactionRowActions({
               row,
               kind: "cash_transaction",
-              permissions: txPerms,
+              permissions: txPerms.forBranch(row.branchId),
               onView: () => {
                 const idx = data.findIndex((d) => d.id === row.id);
                 setExpandedRow(expandedRow === idx ? null : idx);

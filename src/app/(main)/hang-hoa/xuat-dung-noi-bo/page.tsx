@@ -548,7 +548,7 @@ export default function XuatDungNoiBoPage() {
           buildTransactionRowActions({
             row,
             kind: "internal_export",
-            permissions: txPerms,
+            permissions: txPerms.forBranch(row.branchId),
             onPrint: () =>
               printDocumentWithTemplate({
                 channel: "backoffice",

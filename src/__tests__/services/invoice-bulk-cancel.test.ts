@@ -40,6 +40,32 @@ describe("bulk completed invoice cancellation", () => {
     expect(result.map(r=>r.ok)).toEqual([false,true,true]);
     expect(result[0].message).toContain("kiểm tra lại hóa đơn");
   });
+  it("checks each invoice's branch and state before bulk cancellation", async () => {
+    const rows = [
+      row("a", { branchId: "premium" }),
+      row("b", { branchId: "tubua" }),
+      row("c", { branchId: "premium", status: "draft" }),
+    ];
+    const deps = setup(rows);
+    const result = await executeInvoiceBulkCancel(
+      rows,
+      "Nhập sai",
+      {
+        fnb: true,
+        retail: true,
+        forInvoice: (invoice) =>
+          invoice.status === "draft" || invoice.branchId === "tubua",
+      },
+      vi.fn(),
+      deps,
+    );
+    expect(result.map((item) => item.ok)).toEqual([false, true, true]);
+    expect(deps.voidInvoice).toHaveBeenCalledExactlyOnceWith({
+      invoiceId: "b",
+      reason: "Nhập sai",
+    });
+    expect(deps.cancelDraft).toHaveBeenCalledExactlyOnceWith("c");
+  });
   it("does not mutate anything when preview values or status changed", async () => {
     const rows=[row("a")], deps=setup([row("a",{paid:10000})]);
     await expect(executeInvoiceBulkCancel(rows,"Nhập sai",{fnb:true,retail:true},vi.fn(),deps)).rejects.toThrow("đã thay đổi");

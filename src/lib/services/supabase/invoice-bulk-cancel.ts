@@ -8,8 +8,20 @@ export interface InvoiceCancelPreview {
   refund: number; stockMovements: number;
 }
 export interface InvoiceCancelResult { id: string; code: string; ok: boolean; message: string }
-export interface InvoiceCancelPermissions { fnb: boolean; retail: boolean }
-export function canCancelInvoice(row: Pick<InvoiceCancelPreview, "source">, permissions: InvoiceCancelPermissions) {
+export interface InvoiceCancelPermissions {
+  fnb: boolean;
+  retail: boolean;
+  forInvoice?: (
+    row: Pick<InvoiceCancelPreview, "source"> &
+      Partial<Pick<InvoiceCancelPreview, "branchId" | "status">>,
+  ) => boolean;
+}
+export function canCancelInvoice(
+  row: Pick<InvoiceCancelPreview, "source"> &
+    Partial<Pick<InvoiceCancelPreview, "branchId" | "status">>,
+  permissions: InvoiceCancelPermissions,
+) {
+  if (permissions.forInvoice) return permissions.forInvoice(row);
   return row.source === "fnb" ? permissions.fnb : permissions.retail;
 }
 function selection(ids: string[]) {

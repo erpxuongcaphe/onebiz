@@ -270,10 +270,11 @@ function ProductionOrderDetail({
 export default function SanXuatPage() {
   const { toast } = useToast();
   const { activeBranchId, currentBranch } = useBranchFilter();
-  const { hasAny, isLoading: permissionsLoading } = usePermissions();
+  const { hasAny, hasPermissionAtBranch, hasAssignedBranchAccess, isLoading: permissionsLoading } = usePermissions();
   const canViewCost = !permissionsLoading && hasAny(["products.view_cost"]);
   const txPerms = useTxRowPermissions("production");
-  const canCorrectCompleted = hasAny(["production.correct_order"]);
+  const canActAtBranch = (code: string, branchId: string | undefined) =>
+    hasAssignedBranchAccess(branchId ?? null) && hasPermissionAtBranch(code, branchId ?? null);
   const [data, setData] = useState<ProductionOrder[]>([]);
   const units=useProductUom(data.map(order=>order.productId));
   const [total, setTotal] = useState(0);
@@ -475,13 +476,11 @@ export default function SanXuatPage() {
     toColumnId: string
   ) => {
     if (!canTransitionProductionStatus(_fromColumnId, toColumnId)) return;
-    if (toColumnId === "completed" ? !hasAny(["production.complete_order"]) : !txPerms.canEdit) return;
+    const order = data.find((item) => item.id === itemId);
+    if (!order || (toColumnId === "completed" ? !canActAtBranch("production.complete_order", order.branchId) : !txPerms.forBranch(order.branchId).canEdit)) return;
     if (toColumnId === "completed") {
-      const order = data.find((item) => item.id === itemId);
-      if (order) {
-        setCompletingOrder(order);
-        setCompleteOpen(true);
-      }
+      setCompletingOrder(order);
+      setCompleteOpen(true);
       return;
     }
 
@@ -650,15 +649,17 @@ export default function SanXuatPage() {
               <div><h2 className="font-semibold">Tiến độ sản xuất</h2><p className="text-xs text-muted-foreground">Toàn bộ lệnh theo bộ lọc. Chọn thẻ để xem chi tiết; hoàn thành cần xác nhận lượng thực dùng và thực nhận.</p></div>
               <select aria-label="Sắp xếp lệnh trên bảng" className="h-9 rounded-md border bg-background px-2 text-sm" value={boardSort} onChange={event => setBoardSort(event.target.value)}><option value="due">Ưu tiên quá hạn / đến hạn</option><option value="oldest">Cũ nhất trước</option><option value="newest">Mới nhất trước</option></select>
             </div>
-            {loading ? <p role="status" className="py-8 text-center text-sm text-muted-foreground">Đang tải bảng tiến độ…</p> : boardOrder ? <ProductionOrderDetail orderId={boardOrder.id} canViewCost={canViewCost} onClose={() => setBoardOrderId(null)} onEdit={boardOrder.status !== "cancelled" && (boardOrder.status === "completed" ? canCorrectCompleted : txPerms.canEdit) ? () => setCorrectingItem({order:boardOrder,cancel:false}) : undefined} onDelete={boardOrder.status !== "cancelled" && txPerms.canCancel ? () => boardOrder.status === "completed" ? setCorrectingItem({order:boardOrder,cancel:true}) : setCancellingItem(boardOrder) : undefined} /> : <KanbanBoard
+            {loading ? <p role="status" className="py-8 text-center text-sm text-muted-foreground">Đang tải bảng tiến độ…</p> : boardOrder ? <ProductionOrderDetail orderId={boardOrder.id} canViewCost={canViewCost} onClose={() => setBoardOrderId(null)} onEdit={boardOrder.status !== "cancelled" && (boardOrder.status === "completed" ? canActAtBranch("production.correct_order", boardOrder.branchId) : txPerms.forBranch(boardOrder.branchId).canEdit) ? () => setCorrectingItem({order:boardOrder,cancel:false}) : undefined} onDelete={boardOrder.status !== "cancelled" && txPerms.forBranch(boardOrder.branchId).canCancel ? () => boardOrder.status === "completed" ? setCorrectingItem({order:boardOrder,cancel:true}) : setCancellingItem(boardOrder) : undefined} /> : <KanbanBoard
             className="h-[calc(100dvh-22rem)]"
             columns={kanbanColumns}
               getItemId={(o) => o.id}
-              onCardMove={txPerms.canEdit || hasAny(["production.complete_order"]) ? handleCardMove : undefined}
+              onCardMove={data.some((item) => txPerms.forBranch(item.branchId).canEdit || canActAtBranch("production.complete_order", item.branchId)) ? handleCardMove : undefined}
               onCardClick={order => setBoardOrderId(order.id)}
-              canDrop={(_id, from, to) =>
-                canTransitionProductionStatus(from, to) && (to === "completed" ? hasAny(["production.complete_order"]) : txPerms.canEdit)
-              }
+              canDrop={(id, from, to) => {
+                const order = data.find((item) => item.id === id);
+                return !!order && canTransitionProductionStatus(from, to) &&
+                  (to === "completed" ? canActAtBranch("production.complete_order", order.branchId) : txPerms.forBranch(order.branchId).canEdit);
+              }}
               emptyMessage="Không có lệnh"
               renderCard={(order) => (
                 <div className="space-y-1">
@@ -723,9 +724,9 @@ export default function SanXuatPage() {
                 canViewCost={canViewCost}
                 orderId={item.id}
                 onClose={onClose}
-                onEdit={item.status !== "cancelled" && (item.status === "completed" ? canCorrectCompleted : txPerms.canEdit) ? ()=>setCorrectingItem({order:item,cancel:false}):undefined}
+                onEdit={item.status !== "cancelled" && (item.status === "completed" ? canActAtBranch("production.correct_order", item.branchId) : txPerms.forBranch(item.branchId).canEdit) ? ()=>setCorrectingItem({order:item,cancel:false}):undefined}
                 onDelete={
-                  item.status !== "cancelled" && txPerms.canCancel
+                  item.status !== "cancelled" && txPerms.forBranch(item.branchId).canCancel
                     ? () => item.status === "completed" ? setCorrectingItem({order:item,cancel:true}) : setCancellingItem(item)
                     : undefined
                 }
@@ -736,7 +737,7 @@ export default function SanXuatPage() {
               buildTransactionRowActions({
                 row,
                 kind: "production",
-                permissions: txPerms,
+                permissions: txPerms.forBranch(row.branchId),
                 onEdit: row.status !== "cancelled" && row.status !== "completed" ? () => setCorrectingItem({order:row,cancel:false}) : undefined,
                 onPrint: () =>
                   printDocumentWithTemplate({
@@ -760,13 +761,13 @@ export default function SanXuatPage() {
                       createdBy: row.createdBy ?? "",
                     }),
                   }),
-                extraActions: row.status === "completed" && canCorrectCompleted ? [{
+                extraActions: row.status === "completed" && canActAtBranch("production.correct_order", row.branchId) ? [{
                   label: "Điều chỉnh mẻ / đã sử dụng", icon: <Icon name="edit_note" size={16} />,
                   onClick: () => setCorrectingItem({order:row,cancel:false}),
                 }] : [],
                 // Workflow: "Hoàn thành" specific cho production
                 workflowActions:
-                  row.status !== "completed" && row.status !== "cancelled" && hasAny(["production.complete_order"])
+                  row.status !== "completed" && row.status !== "cancelled" && canActAtBranch("production.complete_order", row.branchId)
                     ? [
                         {
                           label: "Hoàn thành",

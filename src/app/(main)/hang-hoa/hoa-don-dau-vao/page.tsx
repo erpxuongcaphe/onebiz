@@ -401,7 +401,7 @@ export default function HoaDonDauVaoPage() {
             item={item}
             onClose={onClose}
             onDelete={
-              txPerms.canCancel && item.status !== "cancelled"
+              txPerms.forBranch(item.branchId).canCancel && item.status !== "cancelled"
                 ? () => setDeletingInvoice(item)
                 : undefined
             }
@@ -411,7 +411,7 @@ export default function HoaDonDauVaoPage() {
           buildTransactionRowActions({
             row,
             kind: "input_invoice",
-            permissions: txPerms,
+            permissions: txPerms.forBranch(row.branchId),
             onView: () => {
               const idx = data.findIndex((d) => d.id === row.id);
               setExpandedRow(expandedRow === idx ? null : idx);
@@ -427,7 +427,7 @@ export default function HoaDonDauVaoPage() {
             },
             // Workflow: "Ghi nhận" cho HĐ chưa ghi sổ
             workflowActions:
-              row.status === "unrecorded" && txPerms.canCancel
+              row.status === "unrecorded" && txPerms.forBranch(row.branchId).canCancel
                 ? [
                     {
                       label: "Ghi nhận",

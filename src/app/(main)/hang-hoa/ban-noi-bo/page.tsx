@@ -304,7 +304,7 @@ function InternalSaleDetail({
 export default function InternalSalePage() {
   const { toast } = useToast();
   const { activeBranchId, currentBranch, isReady: branchReady } = useBranchFilter();
-  const { hasAny, isLoading: permissionsLoading } = usePermissions();
+  const { hasAny, hasPermissionAtBranch, isLoading: permissionsLoading } = usePermissions();
   const txPerms = useTxRowPermissions("internal_sale");
   const [data, setData] = useState<InternalSaleRow[]>([]);
   const [cancelReason, setCancelReason] = useState("");
@@ -919,7 +919,8 @@ export default function InternalSalePage() {
               item={row}
               onClose={onClose}
               onCancel={
-                row.status !== "cancelled" && (row.status !== "completed" || hasAny(["pos_retail.void"]))
+                row.status !== "cancelled" && txPerms.forBranch(row.fromBranchId).canCancel &&
+                (row.status !== "completed" || hasPermissionAtBranch("pos_retail.void", row.fromBranchId))
                   ? () => { setCancelReason(""); setCancellingItem(row); }
                   : undefined
               }
@@ -929,7 +930,11 @@ export default function InternalSalePage() {
             buildTransactionRowActions({
               row,
               kind: "internal_sale",
-              permissions: txPerms,
+              permissions: {
+                ...txPerms.forBranch(row.fromBranchId),
+                canView: txPerms.forBranch(row.fromBranchId).canView || txPerms.forBranch(row.toBranchId).canView,
+                canPrint: txPerms.forBranch(row.fromBranchId).canPrint || txPerms.forBranch(row.toBranchId).canPrint,
+              },
               onView: () => {
                 const idx = data.findIndex((d) => d.id === row.id);
                 setExpandedRow(expandedRow === idx ? null : idx);
@@ -950,7 +955,7 @@ export default function InternalSalePage() {
               },
               onAuditLog: () => setAuditDialogTarget(row),
               onCancel:
-                row.status !== "cancelled" && (row.status !== "completed" || hasAny(["pos_retail.void"]))
+                row.status !== "cancelled" && (row.status !== "completed" || hasPermissionAtBranch("pos_retail.void", row.fromBranchId))
                   ? () => { setCancelReason(""); setCancellingItem(row); }
                   : undefined,
             })

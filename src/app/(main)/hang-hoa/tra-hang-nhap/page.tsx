@@ -348,7 +348,7 @@ export default function TraHangNhapPage() {
           buildTransactionRowActions({
             row,
             kind: "purchase_return",
-            permissions: txPerms,
+            permissions: txPerms.forBranch(row.branchId),
             onView: () => {
               const idx = data.findIndex((d) => d.id === row.id);
               setExpandedRow(expandedRow === idx ? null : idx);

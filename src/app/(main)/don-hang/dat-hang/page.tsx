@@ -175,6 +175,8 @@ function OrderDetail({
   onEdit,
   onDelete,
   onDataChanged,
+  canCreateSale,
+  canProcess,
 }: {
   order: SalesOrder;
   onClose: () => void;
@@ -182,6 +184,8 @@ function OrderDetail({
   onDelete?: () => void;
   /** Gọi khi data đơn đổi (gắn vận đơn làm tổng tiền đổi) → refetch list. */
   onDataChanged?: () => void;
+  canCreateSale: boolean;
+  canProcess: boolean;
 }) {
   // CEO 14/07: đơn đã xuất hóa đơn RIÊNG → hiện "Đã xuất hóa đơn" ở mọi nơi
   // trong chi tiết (không phải trạng thái bán, số bán thật ở hóa đơn kia).
@@ -310,7 +314,7 @@ function OrderDetail({
                       </div>
                     </div>
                   </div>
-                ) : order.status !== "cancelled" ? (
+                ) : order.status !== "cancelled" && canCreateSale ? (
                   <div>
                     <Button
                       variant="outline"
@@ -419,6 +423,8 @@ function OrderDetail({
                   fulfilledById={order.fulfilledById}
                   processingClosedAt={order.processingClosedAt}
                   processingClosedReason={order.processingClosedReason}
+                  canCreateSale={canCreateSale}
+                  canProcess={canProcess}
                   onDataChanged={onDataChanged}
                 />
               </div>
@@ -448,14 +454,18 @@ export default function DatHangPage() {
   } = useBranchFilter();
   const { printWithPicker, printerDialog } = usePrintWithPicker();
   const txPerms = useTxRowPermissions("sales_order");
-  const { hasAny } = usePermissions();
-  const canCloseProcessing = hasAny(["orders.create"]);
+  const { hasAny, hasPermissionAtBranch, hasAssignedBranchAccess } = usePermissions();
+  const canCreateSaleFor = (branchId?: string) =>
+    txPerms.forBranch(branchId).canEdit ||
+    (hasAssignedBranchAccess(branchId ?? null) &&
+      hasPermissionAtBranch("pos_retail.checkout", branchId ?? null));
   const [bulkProcessingIds, setBulkProcessingIds] = useState<string[]>([]);
   const [clearOrderSelection, setClearOrderSelection] = useState(0);
   const duocXemToanChuoi = hasAny([
     "reports.view_all_branches",
   ]);
   const [data, setData] = useState<SalesOrder[]>([]);
+  const canCloseProcessing = hasAny(["orders.create"]) || data.some((order) => txPerms.forBranch(order.branchId).canEdit);
   const [loadedListKey,setLoadedListKey]=useState('');
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -1225,9 +1235,12 @@ export default function DatHangPage() {
             label: "Đánh dấu đã xử lý",
             icon: <Icon name="check_circle" size={16} />,
             disabled: loading || loadedListKey !== orderListKey || bulkProcessingIds.length > 0,
-            onClick: (_rows: SalesOrder[], selectedIds: string[]) => {
+            onClick: (rows: SalesOrder[], selectedIds: string[]) => {
               if (selectedIds.length > 100) {
                 toast({ title: "Chọn tối đa 100 đơn mỗi lần", variant: "info" }); return;
+              }
+              if (rows.some((row) => !txPerms.forBranch(row.branchId).canEdit)) {
+                toast({ title: "Chưa đủ quyền xử lý tại tất cả chi nhánh đã chọn", variant: "error" }); return;
               }
               setBulkProcessingIds([...new Set(selectedIds)]);
             },
@@ -1272,6 +1285,14 @@ export default function DatHangPage() {
                 });
                 return;
               }
+              if (cancellable.some((row) => !txPerms.forBranch(row.branchId).canCancel)) {
+                toast({
+                  title: "Chưa đủ quyền hủy tại tất cả chi nhánh đã chọn",
+                  description: "Bỏ các đơn ngoài phạm vi được phép rồi thử lại.",
+                  variant: "error",
+                });
+                return;
+              }
               if (
                 !window.confirm(
                   `Hủy ${cancellable.length} đơn đặt hàng? Thao tác này không thể hoàn tác.`,
@@ -1308,6 +1329,8 @@ export default function DatHangPage() {
             order={order}
             onClose={onClose}
             onDataChanged={taiLaiSauKhiDoiDuLieu}
+            canProcess={txPerms.forBranch(order.branchId).canEdit}
+            canCreateSale={canCreateSaleFor(order.branchId)}
             onEdit={
               // CEO 20/07: nút chính "Sửa đơn" → mở form sửa (giống form tạo,
               // có cảnh báo thay đổi). Chuyển thành hóa đơn/thanh toán nằm ở menu.
@@ -1344,7 +1367,8 @@ export default function DatHangPage() {
             },
             // "Chuyển thành hóa đơn" (thu tiền) → mở POS. Chỉ đơn chưa hủy/tất toán.
             workflowActions:
-              row.status !== "completed" && row.status !== "cancelled"
+              row.status !== "completed" && row.status !== "cancelled" &&
+              canCreateSaleFor(row.branchId)
                 ? [{
                     label: "Chuyển thành hóa đơn (thu tiền)",
                     icon: <Icon name="point_of_sale" size={16} />,

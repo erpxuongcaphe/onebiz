@@ -920,7 +920,7 @@ export default function TraHangPage() {
           buildTransactionRowActions({
             row,
             kind: "sales_return",
-            permissions: txPerms,
+            permissions: txPerms.forBranch(row.branchId),
             onView: () => {
               const idx = data.findIndex((d) => d.id === row.id);
               setExpandedRow(expandedRow === idx ? null : idx);

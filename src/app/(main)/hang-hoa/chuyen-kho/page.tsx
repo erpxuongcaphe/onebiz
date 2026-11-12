@@ -802,13 +802,16 @@ export default function ChuyenKhoPage() {
           rowActions={(row) => {
             // Sprint UX-1 Stage 4: standardized transaction row actions
             const workflowActions: Array<{ label: string; icon?: React.ReactNode; onClick: () => void }> = [];
-            if (row.status === "draft") {
+            const fromPermissions = txPerms.forBranch(row.fromBranchId);
+            const toPermissions = txPerms.forBranch(row.toBranchId);
+            const canTransfer = fromPermissions.canCancel && toPermissions.canCancel;
+            if (row.status === "draft" && canTransfer) {
               workflowActions.push({
                 label: "Bắt đầu vận chuyển",
                 icon: <Icon name="local_shipping" size={16} />,
                 onClick: () => requestStartTransit(row),
               });
-            } else if (row.status === "in_transit") {
+            } else if (row.status === "in_transit" && canTransfer) {
               workflowActions.push({
                 label: "Hoàn thành nhập kho",
                 icon: <Icon name="check_circle" size={16} />,
@@ -819,7 +822,12 @@ export default function ChuyenKhoPage() {
             return buildTransactionRowActions({
               row,
               kind: "stock_transfer",
-              permissions: txPerms,
+              permissions: {
+                ...fromPermissions,
+                canView: fromPermissions.canView || toPermissions.canView,
+                canPrint: fromPermissions.canPrint || toPermissions.canPrint,
+                canCancel: canTransfer,
+              },
               onView: () => {
                 const idx = data.findIndex((d) => d.id === row.id);
                 setExpandedRow(expandedRow === idx ? null : idx);

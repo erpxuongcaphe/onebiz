@@ -51,12 +51,16 @@ export function ChildSalesBlock({
   fulfilledById,
   processingClosedAt,
   processingClosedReason,
+  canCreateSale,
+  canProcess,
   onDataChanged,
 }: {
   orderId: string;
   fulfilledById?: string;
   processingClosedAt?: string;
   processingClosedReason?: string;
+  canCreateSale: boolean;
+  canProcess: boolean;
   onDataChanged?: () => void;
 }) {
   const { toast } = useToast();
@@ -99,6 +103,7 @@ export function ChildSalesBlock({
   }, [taiDoiChieu]);
 
   const taoThemDonBan = useCallback(async () => {
+    if (!canCreateSale) return;
     setDangTao(true);
     try {
       const child = await createChildSaleFromOrder(orderId);
@@ -118,7 +123,7 @@ export function ChildSalesBlock({
     } finally {
       setDangTao(false);
     }
-  }, [orderId, taiDoiChieu, toast, onDataChanged, warehouseDelivery]);
+  }, [orderId, taiDoiChieu, toast, onDataChanged, warehouseDelivery, canCreateSale]);
 
   // Hoàn tất: CHỈ gắn vào đơn con đã thanh toán và chưa bị huỷ/void.
   //
@@ -147,7 +152,7 @@ export function ChildSalesBlock({
       : null;
 
   const hoanTat = useCallback(async () => {
-    if (!donConGan) return;
+    if (!canProcess || !donConGan) return;
     try {
       await markOrderProcessed(orderId, donConGan.id);
       toast({
@@ -164,9 +169,10 @@ export function ChildSalesBlock({
         description: err instanceof Error ? err.message : "Lỗi",
       });
     }
-  }, [orderId, donConGan, taiDoiChieu, toast, onDataChanged]);
+  }, [orderId, donConGan, taiDoiChieu, toast, onDataChanged, canProcess]);
 
   const moLai = useCallback(async () => {
+    if (!canProcess) return;
     try {
       if (processingClosedAt) await reopenSalesOrderProcessing(orderId);
       else await markOrderProcessed(orderId, null);
@@ -184,7 +190,7 @@ export function ChildSalesBlock({
         description: err instanceof Error ? err.message : "Lỗi",
       });
     }
-  }, [orderId, processingClosedAt, taiDoiChieu, toast, onDataChanged]);
+  }, [orderId, processingClosedAt, taiDoiChieu, toast, onDataChanged, canProcess]);
 
   // Máy chủ chưa bật 00331 → không vẽ gì, giữ màn cũ nguyên vẹn.
   if (!batTinhNang) return null;
@@ -209,7 +215,7 @@ export function ChildSalesBlock({
           ) : null}
         </h3>
         <div className="flex flex-wrap gap-2">
-          <Button
+          {canCreateSale && <Button
             type="button"
             variant="outline"
             size="sm"
@@ -218,8 +224,8 @@ export function ChildSalesBlock({
           >
             <Icon name="add" size={15} className="mr-1" />
             {dangTao ? "Đang tạo..." : warehouseDelivery ? "Giao phần còn thiếu" : "Tạo thêm đơn bán"}
-          </Button>
-          {fulfilledById || processingClosedAt ? (
+          </Button>}
+          {canProcess && (fulfilledById || processingClosedAt ? (
             <Button
               type="button"
               variant="outline"
@@ -246,7 +252,7 @@ export function ChildSalesBlock({
               <Icon name="task_alt" size={15} className="mr-1" />
               Hoàn tất xử lý
             </Button>
-          ) : null}
+          ) : null)}
         </div>
       </div>
 
