@@ -1,5 +1,12 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { generateDocumentHtml, type DocumentPrintData } from "@/lib/print-document";
+import { printReceiptDirect } from "@/components/shared/print-receipt";
+import { sendPrintJob } from "@/lib/printer/print-job";
+
+vi.mock("@/lib/printer/print-job", () => ({
+  getPrintSettings: () => ({ openCashDrawer: false }),
+  sendPrintJob: vi.fn().mockResolvedValue({ success: true }),
+}));
 
 /** Đếm số <th> trong thead + số <td> của từng <tr> trong tbody. */
 function countCols(html: string) {
@@ -25,6 +32,16 @@ function baseDoc(over: Partial<DocumentPrintData> = {}): DocumentPrintData {
 }
 
 describe("generateDocumentHtml — cột bảng mặt hàng KHÔNG lệch", () => {
+  it.each(["A4", "A5", "80mm", "58mm"] as const)("giữ các dòng ghi chú trên khổ %s", (paperSize) => {
+    const html = generateDocumentHtml(
+      baseDoc({ note: "Giao sáng\r\n\r\nGọi trước & nhận tại <quầy>\nCửa bên\rCảm ơn" }),
+      paperSize,
+    );
+    expect(html).toContain(
+      '<div class="note"><strong>Ghi chú:</strong> Giao sáng<br><br>Gọi trước &amp; nhận tại &lt;quầy&gt;<br>Cửa bên<br>Cảm ơn</div>',
+    );
+  });
+
   it("có cột Giảm giá + dòng giảm 0 → số ô dòng = số ô header (bug HD001328)", () => {
     const html = generateDocumentHtml(baseDoc(), "A4");
     const { thCount, tdPerRow } = countCols(html);
@@ -64,4 +81,25 @@ describe("generateDocumentHtml — cột bảng mặt hàng KHÔNG lệch", () =
     const { thCount, tdPerRow } = countCols(html);
     expect(tdPerRow.every((n) => n === thCount)).toBe(true);
   });
+});
+
+it("gửi ghi chú nhiều dòng khi in qua mẫu bill nhiệt dự phòng", () => {
+  printReceiptDirect({
+    invoiceCode: "HD001328",
+    customerName: "Khách lẻ",
+    items: [],
+    subtotal: 0,
+    discountAmount: 0,
+    total: 0,
+    paid: 0,
+    change: 0,
+    paymentMethod: "cash",
+    date: "27/06/2026",
+    note: "Gọi trước\nGiao tại <quầy>",
+  }, "58mm");
+
+  expect(sendPrintJob).toHaveBeenCalledWith(expect.objectContaining({
+    paperSize: "58mm",
+    html: expect.stringContaining("Ghi chu: Gọi trước<br>Giao tại &lt;quầy&gt;"),
+  }));
 });

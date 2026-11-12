@@ -3,6 +3,7 @@ import { sendPrintJob, getPrintSettings } from "@/lib/printer/print-job";
 
 import { useRef, useCallback } from "react";
 import { formatCurrency, formatNumber } from "@/lib/format";
+import { formatPrintNoteHtml } from "@/lib/print-document";
 
 export interface ReceiptData {
   invoiceCode: string;
@@ -212,7 +213,9 @@ export function PrintReceipt({ data, width = "80mm" }: PrintReceiptProps) {
         {data.note && (
           <>
             <div className="line" />
-            <div style={{ fontSize: "10px" }}>Ghi chu: {data.note}</div>
+            <div style={{ fontSize: "10px", whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+              Ghi chu: {data.note}
+            </div>
           </>
         )}
 
@@ -312,7 +315,7 @@ ${(data.shippingFee ?? 0) > 0 ? `<div class="row"><span>Phi giao hang</span><spa
 ${data.change > 0
   ? `<div class="row"><span>Tien thua:</span><span>${formatCurrency(data.change)}</span></div>`
   : `<div class="row"${data.paid < data.total ? ' style="font-weight:bold"' : ""}><span>Con phai tra:</span><span>${formatCurrency(Math.max(data.total - data.paid, 0))}</span></div>`}
-${data.note ? `<div class="line"></div><div style="font-size:10px">Ghi chu: ${data.note}</div>` : ""}
+${data.note ? `<div class="line"></div><div style="font-size:10px;overflow-wrap:anywhere">Ghi chu: ${formatPrintNoteHtml(data.note)}</div>` : ""}
 <div class="line"></div>
 <div class="center footer"><div>Cam on quy khach!</div><div>Hen gap lai</div></div>
 <script>window.onload=function(){window.print();window.close()}<\/script>
