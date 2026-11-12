@@ -55,12 +55,12 @@ const mockProducts = [
 
 const mockLots = [
   {
-    id: "lot1", lot_code: "L001", product_id: "p1",
+    id: "lot1", lot_number: "L001", product_id: "p1",
     expiry_date: new Date(Date.now() - 86400000).toISOString(),
     current_qty: 10, products: { name: "SP A" },
   },
   {
-    id: "lot2", lot_code: "L002", product_id: "p2",
+    id: "lot2", lot_number: "L002", product_id: "p2",
     expiry_date: new Date(Date.now() + 15 * 86400000).toISOString(),
     current_qty: 5, products: { name: "SP B" },
   },
@@ -563,6 +563,10 @@ describe("getDSO", () => {
 });
 
 describe("getFinancialAlerts", () => {
+  it("does not present an incomplete expiry projection as no alerts", async () => {
+    tableDataMap = { ...defaultTableData(), product_lots: { data: [{ id: "broken", expiry_date: null }], error: null } };
+    await expect(getFinancialAlerts()).rejects.toThrow("Không xác định được danh sách cảnh báo lô hàng");
+  });
   it("does not turn hidden product stock into a false shortage", async () => {
     tableDataMap = { ...defaultTableData(), products: { data: [{ id: "hidden", name: "Ẩn", stock: null, min_stock: 5 }], error: null } };
     const alerts = await getFinancialAlerts();

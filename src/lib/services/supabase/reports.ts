@@ -630,7 +630,13 @@ export async function getFinancialAlerts(branchId?: string): Promise<FinancialAl
 
   if (debtors.error) handleError(debtors.error, "getFinancialAlerts.debt");
   if (lotsData.error) handleError(lotsData.error, "getFinancialAlerts.lots");
-  if (!Array.isArray(lotsData.data)) throw new Error("Không xác định được danh sách cảnh báo lô hàng.");
+  if (!Array.isArray(lotsData.data) || lotsData.data.some((lot: unknown) => {
+    if (!lot || typeof lot !== "object") return true;
+    const row = lot as Record<string, unknown>;
+    return typeof row.id !== "string" || typeof row.lot_number !== "string" ||
+      typeof row.expiry_date !== "string" || !Number.isFinite(Date.parse(row.expiry_date)) ||
+      row.current_qty == null || !Number.isFinite(Number(row.current_qty)) || Number(row.current_qty) <= 0;
+  })) throw new Error("Không xác định được danh sách cảnh báo lô hàng.");
 
   // --- 1. Overdue debt alerts ---
   const debtorRows = (debtors.data ?? []).map((c: any) => ({
