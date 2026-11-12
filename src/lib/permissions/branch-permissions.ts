@@ -16,6 +16,26 @@ export function permissionsForBranch(
   return next;
 }
 
+/** Match permissionsForBranch without allocating a permission set per table row. */
+export function hasPermissionForBranch(
+  base: ReadonlySet<string>,
+  adjustments: readonly { branchId: string; code: string; allowed: boolean }[],
+  branchId: string | null,
+  code: string,
+) {
+  if (base.has("*")) return true;
+  let allowed = base.has(code);
+  for (const entry of adjustments) {
+    if (entry.code !== code) continue;
+    if (branchId === null) {
+      if (!entry.allowed) allowed = false;
+    } else if (entry.branchId === branchId) {
+      allowed = entry.allowed;
+    }
+  }
+  return allowed;
+}
+
 /** Legacy aliases cannot bypass an explicit exception on the target operation. */
 export function permissionWithLegacyFallback(
   effective: ReadonlySet<string>,

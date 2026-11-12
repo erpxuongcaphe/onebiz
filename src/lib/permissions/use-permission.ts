@@ -12,6 +12,9 @@ import type { PermissionCode } from "./constants";
 export interface PermissionsAPI {
   /** Check if user has a specific permission */
   hasPermission: (code: PermissionCode | string) => boolean;
+  /** Check a specific row's branch, regardless of the currently selected branch. */
+  hasPermissionAtBranch: (code: PermissionCode | string, branchId: string | null) => boolean;
+  hasAssignedBranchAccess: (branchId: string | null) => boolean;
   /** Check if user has ANY of the given permissions */
   hasAny: (codes: (PermissionCode | string)[]) => boolean;
   /** Check if user has ALL of the given permissions */
@@ -25,7 +28,7 @@ export interface PermissionsAPI {
 }
 
 export function usePermissions(): PermissionsAPI {
-  const { user, permissions, isLoading, authDataError, refreshProfile } = useAuth();
+  const { user, permissions, isLoading, authDataError, refreshProfile, hasPermissionAtBranch, hasAssignedBranchAccess } = useAuth();
 
   const isOwner = user?.role === "owner";
 
@@ -42,5 +45,5 @@ export function usePermissions(): PermissionsAPI {
   const hasAll = (codes: (PermissionCode | string)[]): boolean =>
     codes.every((c) => hasPermission(c));
 
-  return { hasPermission, hasAny, hasAll, permissions, isLoading, loadError: authDataError, retry: refreshProfile };
+  return { hasPermission, hasPermissionAtBranch, hasAssignedBranchAccess, hasAny, hasAll, permissions, isLoading, loadError: authDataError, retry: refreshProfile };
 }

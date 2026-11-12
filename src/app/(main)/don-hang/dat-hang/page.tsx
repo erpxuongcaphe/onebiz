@@ -1311,11 +1311,13 @@ export default function DatHangPage() {
             onEdit={
               // CEO 20/07: nút chính "Sửa đơn" → mở form sửa (giống form tạo,
               // có cảnh báo thay đổi). Chuyển thành hóa đơn/thanh toán nằm ở menu.
+              txPerms.forBranch(order.branchId).canEdit &&
               order.status !== "completed" && order.status !== "cancelled"
                 ? () => openEditOrder(order)
                 : undefined
             }
             onDelete={
+              txPerms.forBranch(order.branchId).canCancel &&
               order.status !== "completed" && order.status !== "cancelled"
                 ? () => setCancellingItem(order)
                 : undefined
@@ -1326,7 +1328,7 @@ export default function DatHangPage() {
           buildTransactionRowActions({
             row,
             kind: "sales_order",
-            permissions: txPerms,
+            permissions: txPerms.forBranch(row.branchId),
             // CEO 20/07: "Sửa đơn" mở form sửa (thêm/bớt hàng + cảnh báo).
             onEdit:
               row.status !== "completed" && row.status !== "cancelled"

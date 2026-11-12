@@ -53,9 +53,40 @@ export async function installCheckoutTest(db) {
   );
   await db.exec(`create or replace function user_has_permission(uuid,text) returns boolean language sql as $$select $2<>'pos_fnb.checkout'$$;
  update user_branch_permission_overrides set override_type='grant' where permission_code='pos_fnb.checkout';`);
+  // A separate order exception must not prevent actual F&B posting through
+  // its secured RPC, even though direct invoice DML is restricted.
+  await db.exec(`create table if not exists sales_orders(id uuid);
+    create table if not exists sales_order_items(id uuid);
+    create table if not exists shipping_orders(id uuid);
+    alter table invoices enable row level security;
+    alter table invoice_items enable row level security;
+    alter table sales_orders enable row level security;
+    alter table sales_order_items enable row level security;
+    alter table shipping_orders enable row level security;
+    insert into user_branch_permission_overrides values('00000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000003','orders.cancel','revoke');
+    grant usage on schema public,auth to authenticated;
+    grant execute on function public.test_pay(uuid) to authenticated;`);
+  await db.exec(
+    await readFile(
+      new URL(
+        "../../supabase/migrations/20261112040420_staff_branch_order_direct_writes.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  );
   console.log(
     "PASS: branch checkout denial prevents invoice, cash and stock writes; continuing actual posting chain with branch-only checkout grant",
   );
+}
+
+export async function payAsAuthenticated(db) {
+  await db.exec("set role authenticated");
+  try {
+    return (await db.query("select test_pay() result")).rows[0].result;
+  } finally {
+    await db.exec("reset role");
+  }
 }
 
 export async function verifyCheckoutCashActor(db, invoiceId) {

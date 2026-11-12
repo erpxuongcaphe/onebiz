@@ -48,6 +48,16 @@ function PermissionProbe() {
   })}</output>;
 }
 
+function BranchActionProbe() {
+  const { isLoading, hasAssignedBranchAccess } = useAuth();
+  return <output aria-label="branch-actions">{JSON.stringify({
+    ready: !isLoading,
+    premium: hasAssignedBranchAccess("premium"),
+    warehouse: hasAssignedBranchAccess("warehouse"),
+    unknown: hasAssignedBranchAccess(null),
+  })}</output>;
+}
+
 describe("authenticated branch restoration", () => {
   it("keeps array permission callbacks separate from explicit legacy fallback", async () => {
     state.permissions = ["reports.dashboard", "reports.analytics", "pos_fnb.void"];
@@ -86,6 +96,13 @@ describe("authenticated branch restoration", () => {
     render(<AuthProvider><Probe /></AuthProvider>);
     await waitFor(() => expect(read().branches).toEqual(["warehouse", "premium"]));
     expect(read().current).toBeUndefined();
+  });
+  it("does not turn company-wide reporting into action rights in an unassigned branch", async () => {
+    state.permissions = ["reports.view_all_branches", "orders.cancel"];
+    render(<AuthProvider><BranchActionProbe /></AuthProvider>);
+    const action = () => JSON.parse(screen.getByLabelText("branch-actions").textContent!);
+    await waitFor(() => expect(action().ready).toBe(true));
+    expect(action()).toEqual({ ready: true, premium: true, warehouse: false, unknown: false });
   });
   it("keeps a branch administrator inside the assigned data scope", async () => {
     state.permissions = ["system.manage_branches"];

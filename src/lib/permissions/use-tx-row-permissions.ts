@@ -171,25 +171,49 @@ const PERMISSION_MAP: Record<
   },
 };
 
-export function useTxRowPermissions(kind: TxKind): TxRowPermissions {
-  const { hasPermission } = usePermissions();
+export function useTxRowPermissions(kind: TxKind): TxRowPermissions & {
+  forBranch: (branchId: string | null | undefined) => TxRowPermissions;
+} {
+  const { hasPermission, hasPermissionAtBranch, hasAssignedBranchAccess } =
+    usePermissions();
   const map = PERMISSION_MAP[kind];
 
-  const check = (code: string | string[] | undefined, fallback = true): boolean => {
-    if (code === undefined) return fallback;
-    if (Array.isArray(code)) return code.every((c) => hasPermission(c));
-    return hasPermission(code);
+  const resolve = (checkPermission: (code: string) => boolean): TxRowPermissions => {
+    const check = (
+      code: string | string[] | undefined,
+      fallback = true,
+    ): boolean => {
+      if (code === undefined) return fallback;
+      if (Array.isArray(code)) return code.every((c) => checkPermission(c));
+      return checkPermission(code);
+    };
+    return {
+      canView: check(map.canView),
+      canDuplicate: check(map.canDuplicate),
+      canEdit: check(map.canEdit),
+      canPrint: check(map.canPrint),
+      canExport: check(map.canExport),
+      canReturn: check(map.canReturn),
+      canPayment: check(map.canPayment),
+      canAuditLog: check(map.canAuditLog),
+      canCancel: check(map.canCancel),
+    };
   };
-
   return {
-    canView: check(map.canView),
-    canDuplicate: check(map.canDuplicate),
-    canEdit: check(map.canEdit),
-    canPrint: check(map.canPrint),
-    canExport: check(map.canExport),
-    canReturn: check(map.canReturn),
-    canPayment: check(map.canPayment),
-    canAuditLog: check(map.canAuditLog),
-    canCancel: check(map.canCancel),
+    ...resolve(hasPermission),
+    forBranch: (branchId) => {
+      const permissions = resolve((code) =>
+        hasPermissionAtBranch(code, branchId ?? null),
+      );
+      if (hasAssignedBranchAccess(branchId ?? null)) return permissions;
+      return {
+        ...permissions,
+        canDuplicate: false,
+        canEdit: false,
+        canReturn: false,
+        canPayment: false,
+        canCancel: false,
+      };
+    },
   };
 }

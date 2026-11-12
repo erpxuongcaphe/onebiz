@@ -45,7 +45,7 @@ try {
  const staffCheckout = process.env.ONEBIZ_STAFF_CHECKOUT_TEST === '1'
    ? await import('../staff-access-tests/checkout-posting.mjs') : null;
  if (staffCheckout) await staffCheckout.installCheckoutTest(db);
- const first=(await db.query('select test_pay() result')).rows[0].result;
+ const first=staffCheckout ? await staffCheckout.payAsAuthenticated(db) : (await db.query('select test_pay() result')).rows[0].result;
  if (staffCheckout) await staffCheckout.verifyCheckoutCashActor(db, first.invoice_id);
  const snapshot=async()=>JSON.stringify((await db.query(`select
  (select jsonb_agg(b order by product_id) from branch_stock b) stock,
