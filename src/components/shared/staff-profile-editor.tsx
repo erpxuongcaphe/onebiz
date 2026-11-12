@@ -111,6 +111,9 @@ export function StaffProfileEditor({
       return false;
     return true;
   });
+  const notBranchConfigurable = branchId
+    ? catalog.filter((p) => !SHARED_DATA_STAFF_PERMISSIONS.has(p.code) && !snapshot.branchPermissionCodes.includes(p.code))
+    : [];
   const displayed = scopedCatalog.filter((p) => {
     if (group !== "all" && p.group !== group) return false;
     if (
@@ -591,6 +594,17 @@ export function StaffProfileEditor({
                       ? `Đang chỉnh riêng tại ${branchName(branchId)}. Chỉ các quyền đã hỗ trợ phạm vi chi nhánh xuất hiện bên dưới. Quyền sửa danh mục chung nằm ở mục Sửa dữ liệu dùng chung.`
                       : "Quyền chung là mặc định cho tài khoản; quyền nghiệp vụ vẫn chịu giới hạn chi nhánh được truy cập. Chặn chung được ưu tiên trước quyền cấp riêng tại chi nhánh. Các quyền xem toàn công ty được ghi rõ theo tên quyền."}
                 </p>
+                {branchId && notBranchConfigurable.length > 0 && (
+                  <details className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+                    <summary className="cursor-pointer font-medium">
+                      {notBranchConfigurable.length} quyền chưa thể chỉnh riêng theo chi nhánh
+                    </summary>
+                    <p className="mt-2">Các quyền sau hiện áp dụng theo quyền chung của tài khoản. Không thể dùng nút chọn tất cả bên dưới để thay đổi riêng các quyền này.</p>
+                    <ul className="mt-2 list-disc space-y-1 pl-5">
+                      {notBranchConfigurable.map((p) => <li key={p.code}>{p.label} · {p.group}</li>)}
+                    </ul>
+                  </details>
+                )}
                 <Input
                   className="min-h-12"
                   aria-label="Tìm quyền"

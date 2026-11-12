@@ -58,6 +58,15 @@ const snapshot: StaffProfileSnapshot = {
   branchPermissionCodes: ["pos_fnb.split_bill", "pos_fnb.transfer_table"],
 };
 describe("staff profile scope", () => {
+  it("shows which rights cannot yet be adjusted separately for a branch", () => {
+    const onSave = vi.fn();
+    render(<StaffProfileEditor snapshot={snapshot} onSave={onSave} onReload={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Tùy chỉnh quyền" }));
+    fireEvent.click(screen.getByRole("button", { name: "Premium" }));
+    fireEvent.click(screen.getByText(/quyền chưa thể chỉnh riêng theo chi nhánh/));
+    expect(screen.getByText(/Không thể dùng nút chọn tất cả bên dưới/)).toBeVisible();
+    expect(onSave).not.toHaveBeenCalled();
+  });
   it("explains that purchasing also opens its related branch documents", () => {
     const data = structuredClone(snapshot);
     data.branchPermissionCodes.push("inventory.create_po");
