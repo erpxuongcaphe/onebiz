@@ -601,7 +601,19 @@ export function StaffProfileEditor({
                     </summary>
                     <p className="mt-2">Các quyền sau hiện áp dụng theo quyền chung của tài khoản. Không thể dùng nút chọn tất cả bên dưới để thay đổi riêng các quyền này.</p>
                     <ul className="mt-2 list-disc space-y-1 pl-5">
-                      {notBranchConfigurable.map((p) => <li key={p.code}>{p.label} · {p.group}</li>)}
+                      {notBranchConfigurable.map((p) => (
+                        <li key={p.code}>
+                          {p.label} · {p.group}{" "}
+                          <button type="button" className="font-medium underline" onClick={() => {
+                            setScope("company");
+                            setGroup("all");
+                            setFilter("all");
+                            setSearch(p.code);
+                          }}>
+                            Xem quyền chung: {p.label}
+                          </button>
+                        </li>
+                      ))}
                     </ul>
                   </details>
                 )}

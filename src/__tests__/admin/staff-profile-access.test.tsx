@@ -65,6 +65,9 @@ describe("staff profile scope", () => {
     fireEvent.click(screen.getByRole("button", { name: "Premium" }));
     fireEvent.click(screen.getByText(/quyền chưa thể chỉnh riêng theo chi nhánh/));
     expect(screen.getByText(/Không thể dùng nút chọn tất cả bên dưới/)).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Xem quyền chung: Xem đơn hàng" }));
+    expect(screen.getByRole("textbox", { name: "Tìm quyền" })).toHaveValue("orders.view");
+    expect(screen.getByText(/Quyền chung là mặc định cho tài khoản/)).toBeVisible();
     expect(onSave).not.toHaveBeenCalled();
   });
   it("explains that purchasing also opens its related branch documents", () => {
