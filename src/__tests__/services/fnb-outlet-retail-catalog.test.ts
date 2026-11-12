@@ -42,7 +42,7 @@ describe("F&B outlet Retail ingredient catalog", () => {
     expect(page).toContain("getProductStats(catalogProductType");
     expect(page).toContain("branchId: branchStockView ? activeBranchId : undefined");
     expect(service).toContain('branchId ? ", branch_stock(quantity)" : ""');
-    expect(service).toContain("typedRow.branch_stock?.[0]?.quantity ?? 0");
+    expect(service).toContain("getVisibleBranchStock(branchId, missing.slice");
   });
 
   it("clears incompatible category and brand filters when switching outlet views", () => {

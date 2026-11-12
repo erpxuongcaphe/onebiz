@@ -27,7 +27,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
     return query;
   } }),
 }));
-import { getAllMatchingProductIds, getProducts, getProductsForExport } from "@/lib/services/supabase/products";
+import { getAllMatchingProductIds, getProducts, getProductsForExport, getProductStats } from "@/lib/services/supabase/products";
 
 const params = {
   page: 0, pageSize: 50, branchId: "test-branch", search: "TEST", searchField: "code" as const,
@@ -44,6 +44,14 @@ beforeEach(() => {
 });
 
 describe("product list filters", () => {
+  it("does not turn hidden branch stock into false out-of-stock counts or valuation", async () => {
+    state.rows = [{ id: "one", stock: null, cost_price: 1, branch_stock: [], inventory_role: "retail_stock_item" }];
+    state.stockAllowed = false;
+    expect(await getProductStats("sku", { branchId: "test-branch" })).toMatchObject({ outOfStock: null, lowStock: null, stockValueComplete: false });
+    state.stockAllowed = true;
+    expect(await getProductStats("sku", { branchId: "test-branch" })).toMatchObject({ outOfStock: 1, lowStock: 0 });
+    expect(await getProductStats("sku")).toMatchObject({ outOfStock: null, lowStock: null, stockValueComplete: false });
+  });
   it("distinguishes hidden stock from an authorized missing row", async () => {
     state.rows = [{ id: "one", code: "A", name: "A", stock: null }];
     state.stockAllowed = false;

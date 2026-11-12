@@ -434,8 +434,8 @@ export default function HangHoaPage() {
     totalCount: number;
     stockValue: number;
     stockValueComplete?: boolean;
-    outOfStock: number;
-    lowStock: number;
+    outOfStock: number | null;
+    lowStock: number | null;
   } | null>(null);
   const [search, setSearch] = useState("");
   // CEO 28/05/2026: debounce search 300ms — tránh gọi getProducts mỗi keystroke.
@@ -2250,14 +2250,14 @@ export default function HangHoaPage() {
               <ListMetric
                 icon={<Icon name="remove_shopping_cart" size={15} />}
                 label="Hết hàng"
-                value={stats ? formatNumber(stats.outOfStock) : "—"}
+                value={!stats ? "—" : stats.outOfStock === null ? "Chưa đủ dữ liệu" : formatNumber(stats.outOfStock)}
                 loading={!stats}
                 tone={(stats?.outOfStock ?? 0) > 0 ? "danger" : "default"}
               />
               <ListMetric
                 icon={<Icon name="warning" size={15} />}
                 label="Sắp hết (≤ 5)"
-                value={stats ? formatNumber(stats.lowStock) : "—"}
+                value={!stats ? "—" : stats.lowStock === null ? "Chưa đủ dữ liệu" : formatNumber(stats.lowStock)}
                 loading={!stats}
                 tone={(stats?.lowStock ?? 0) > 0 ? "danger" : "default"}
               />
