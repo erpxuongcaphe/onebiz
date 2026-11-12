@@ -4,6 +4,7 @@ import { functionFromMigration } from "./inventory.mjs";
 
 export async function verifyManagementFinanceScope(db, id) {
   await db.exec(`
+    alter table management_finance_categories add column if not exists cash_flow_activity text default 'unclassified';
     create table internal_receipt_expense_sources(
       id uuid, tenant_id uuid, event_id uuid, sale_id uuid, receipt_id uuid,
       sale_item_id uuid, quantity numeric, consolidated_amount numeric
@@ -108,6 +109,30 @@ export async function verifyManagementFinanceScope(db, id) {
       values ('${id(850)}','${id(4)}','2035-01-01',10);
     insert into management_finance_settlements(event_id,cash_transaction_id,request_id,request_payload,created_by)
       values ('${id(851)}','${id(705)}','${id(862)}','{}','${id(1)}');
+  `);
+  assert.equal((await report()).summary.income, 0);
+  await db.exec(`
+    delete from management_finance_settlements where event_id='${id(851)}';
+    update cash_transactions set transaction_date='2035-01-01' where id='${id(704)}';
+    insert into management_finance_settlements(event_id,cash_transaction_id,request_id,request_payload,created_by)
+      values ('${id(851)}','${id(704)}','${id(864)}','{}','${id(1)}');
+  `);
+  const links = (
+    await db.query(
+      "select get_management_finance_cash_links('2035-01-01','2035-01-01',null) result",
+    )
+  ).rows[0].result;
+  assert.deepEqual(
+    links.items.map((item) => item.cash_id),
+    [id(704)],
+  );
+  await db.exec(`
+    delete from management_finance_settlements where event_id='${id(851)}';
+    insert into branches(id,tenant_id,is_active,name) values ('${id(13)}','${id(2)}',true,'Unassigned');
+    insert into cash_transactions(id,tenant_id,branch_id,code,status,type,amount)
+      values ('${id(706)}','${id(2)}','${id(13)}','Unassigned','completed','receipt',20);
+    insert into management_finance_settlements(event_id,cash_transaction_id,request_id,request_payload,created_by)
+      values ('${id(851)}','${id(706)}','${id(863)}','{}','${id(1)}');
   `);
   assert.equal((await report()).summary.income, 0);
   console.log(

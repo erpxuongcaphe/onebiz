@@ -35,7 +35,7 @@ begin
   source := replace(source, allocations_anchor,
     '(not public.user_has_branch_access(auth.uid(),a.branch_id) or not public._staff_cash_row_visible(a.branch_id))');
   source := replace(source, event_anchor,
-    'where e.tenant_id=v_tenant and not exists(select 1 from public.management_finance_settlements s join public.cash_transactions c on c.id=s.cash_transaction_id where s.event_id=e.id and not public._staff_cash_row_visible(c.branch_id)) and not exists');
+    'where e.tenant_id=v_tenant and not exists(select 1 from public.management_finance_settlements s join public.cash_transactions c on c.id=s.cash_transaction_id where s.event_id=e.id and (not public._staff_cash_row_visible(c.branch_id) or (exists(select 1 from public.user_branch_permission_overrides o where o.user_id=auth.uid() and o.permission_code=''finance.view_cash_book'') and not coalesce(public.user_has_branch_access(auth.uid(),c.branch_id),false)))) and not exists');
   execute source;
 
   -- Shared category labels contain no transaction amounts. The branch journal
