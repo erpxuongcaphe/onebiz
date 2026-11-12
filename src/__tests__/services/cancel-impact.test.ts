@@ -1,5 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const state = vi.hoisted(() => ({ calls: [] as unknown[][], receiptError: false, completed: true, debt: 0, purchaseStatus: "completed", branchId: "branch" as string | null, deniedTable: "" }));
+const state = vi.hoisted(() => ({ calls: [] as unknown[][], receiptError: false, receiptMalformed: false, completed: true, debt: 0, purchaseStatus: "completed", branchId: "branch" as string | null, deniedTable: "" }));
+vi.mock("@/lib/services/supabase/payments", () => ({
+  getPaymentHistory: async (type: string, id: string) => {
+    state.calls.push(["payment_history", type, id]);
+    if (state.receiptError) throw new Error("Receipt access denied");
+    if (state.receiptMalformed) return [{ id: "bad", amount: 10, type: "receipt" }];
+    return [
+      { id: "a", amount: 60, paymentMethod: "cash", type: "receipt", status: "completed" },
+      { id: "b", amount: 40, paymentMethod: "transfer", type: "receipt", status: "completed" },
+      { id: "c", amount: 500, paymentMethod: "cash", type: "receipt", status: "cancelled" },
+      { id: "d", amount: 500, paymentMethod: "cash", type: "payment", status: "completed" },
+    ];
+  },
+}));
 vi.mock("@/lib/services/supabase/base", () => ({
   getCurrentContext: async () => ({ tenantId: "tenant" }),
   handleError: (error: unknown) => { throw error; },
@@ -26,29 +39,32 @@ vi.mock("@/lib/services/supabase/base", () => ({
 }));
 import { getInvoiceCancelImpact, getPurchaseCancelImpact } from "@/lib/services/supabase/cancel-impact";
 
-beforeEach(() => { state.calls = []; state.receiptError = false; state.completed = true; state.debt = 0; state.purchaseStatus = "completed"; state.branchId = "branch"; state.deniedTable = ""; });
+beforeEach(() => { state.calls = []; state.receiptError = false; state.receiptMalformed = false; state.completed = true; state.debt = 0; state.purchaseStatus = "completed"; state.branchId = "branch"; state.deniedTable = ""; });
 describe("invoice cancellation cash impact", () => {
   it("reads effective receipts rather than assuming invoice.paid is refundable", async () => {
     const impact = await getInvoiceCancelImpact("invoice");
     expect(impact.cashAmount).toBe(100);
     expect(impact.refundMethods).toEqual({ cash: 60, transfer: 40 });
-    for (const [field, value] of [["tenant_id", "tenant"], ["branch_id", "branch"], ["reference_id", "invoice"], ["reference_type", "invoice"], ["type", "receipt"], ["status", "completed"]]) {
-      expect(state.calls).toContainEqual(["cash_transactions", "eq", field, value]);
-    }
+    expect(state.calls).toContainEqual(["payment_history", "invoice", "invoice"]);
+    expect(state.calls.some(([table]) => table === "cash_transactions")).toBe(false);
   });
   it("fails closed instead of showing zero when receipt access fails", async () => {
     state.receiptError = true;
     await expect(getInvoiceCancelImpact("invoice")).rejects.toThrow("Receipt access denied");
   });
+  it("does not turn an incomplete receipt response into zero refund", async () => {
+    state.receiptMalformed = true;
+    await expect(getInvoiceCancelImpact("invoice")).rejects.toThrow("Chưa xác nhận được khoản thu");
+  });
   it("does not load or offer money reversal for an unpaid draft", async () => {
     state.completed = false;
     expect((await getInvoiceCancelImpact("invoice")).cashAmount).toBe(0);
-    expect(state.calls.some(([table]) => table === "cash_transactions")).toBe(false);
+    expect(state.calls.some(([table]) => table === "payment_history")).toBe(false);
   });
   it("does not read receipts without an identified invoice branch", async () => {
     state.branchId = null;
     await expect(getInvoiceCancelImpact("invoice")).rejects.toThrow("Hóa đơn chưa xác định chi nhánh");
-    expect(state.calls.some(([table]) => table === "cash_transactions")).toBe(false);
+    expect(state.calls.some(([table]) => table === "payment_history")).toBe(false);
   });
   it.each([
     ["invoices", getInvoiceCancelImpact],

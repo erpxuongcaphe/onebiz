@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { functionFromMigration } from "./inventory.mjs";
 
 export async function verifyCashDocumentReads(db, id) {
   await db.exec(`
@@ -59,10 +60,11 @@ export async function verifyCashDocumentReads(db, id) {
     await db.exec(`
       create function get_document_payment_history_scoped(p_reference_type text,p_reference_id uuid,p_offset integer default 0,p_limit integer default 500)
       returns jsonb language plpgsql security definer set search_path=public as $$
-      declare v_actor uuid:=auth.uid();v_branch uuid;v_allowed boolean;
+      declare v_actor uuid:=auth.uid();v_branch uuid;v_source text;v_allowed boolean;
       begin
-        select branch_id into v_branch from invoices where id=p_reference_id;
-        v_allowed:=public.user_has_permission(v_actor,'finance.view_cash_book') or public.user_has_permission(v_actor,'invoices.view');
+        select branch_id,source into v_branch,v_source from invoices where id=p_reference_id;
+        v_allowed:=public.user_has_permission(v_actor,'finance.view_cash_book') or public.user_has_permission(v_actor,'invoices.view')
+          or (v_source='fnb' and public._staff_permission_at_scope(v_actor,'pos_fnb.void_paid_bill',v_branch));
         if not coalesce(v_allowed,false) then raise exception 'PAYMENT_HISTORY_DENIED';end if;
         return '{}';
       end$$;
@@ -101,6 +103,21 @@ export async function verifyCashDocumentReads(db, id) {
     await readFile(
       new URL(
         "../../supabase/migrations/20261112031451_staff_branch_cash_document_reads.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  );
+  await db.exec(
+    await functionFromMigration(
+      "20261111102740_staff_branch_paid_void_permissions.sql",
+      "_staff_legacy_paid_void_permission",
+    ),
+  );
+  await db.exec(
+    await readFile(
+      new URL(
+        "../../supabase/migrations/20261112093837_staff_fnb_legacy_void_receipt_history.sql",
         import.meta.url,
       ),
       "utf8",
@@ -176,6 +193,24 @@ export async function verifyCashDocumentReads(db, id) {
     id(701),
   ]);
   await db.exec("rollback");
+  await db.exec(`begin;
+    delete from test_staff_permissions where code in ('finance.view_cash_book','invoices.view','pos_fnb.checkout');
+    delete from user_branch_permission_overrides where permission_code in ('finance.view_cash_book','invoices.view','pos_fnb.void_paid_bill','pos_fnb.checkout');
+    insert into test_staff_permissions values ('pos_fnb.void') on conflict do nothing;
+    update invoices set source='fnb' where id='${id(701)}';`);
+  await db.query("select get_document_payment_history_scoped('invoice',$1)", [
+    id(701),
+  ]);
+  await db.exec(
+    `insert into user_branch_permission_overrides values ('${id(2)}','${id(1)}','${id(4)}','pos_fnb.void_paid_bill','revoke'); savepoint denied_legacy;`,
+  );
+  await assert.rejects(
+    db.query("select get_document_payment_history_scoped('invoice',$1)", [
+      id(701),
+    ]),
+    /PAYMENT_HISTORY_DENIED/,
+  );
+  await db.exec("rollback to savepoint denied_legacy; rollback");
   if (actualPath) {
     await db.exec(`
       update user_branch_permission_overrides set override_type='revoke'

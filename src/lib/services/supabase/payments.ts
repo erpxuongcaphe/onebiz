@@ -453,6 +453,7 @@ export async function getPaymentHistory(
     transactionDate: row.transaction_date,
     timeSource: row.time_source ?? null,
     timeReason: row.time_reason ?? null,
+    status: row.status,
     cancelled: (row as { status?: string }).status === "cancelled",
   }));
 }

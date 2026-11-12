@@ -11,7 +11,7 @@
  */
 
 import { getClient, getCurrentContext, handleError } from "./base";
-import { readHistoryPages } from "./read-history-pages";
+import { getPaymentHistory } from "./payments";
 
 export type CancelDocType = "invoice" | "purchase";
 export type RefundMethod = "cash" | "transfer" | "card";
@@ -139,19 +139,16 @@ export async function getInvoiceCancelImpact(
   return base;
 }
 
-async function readInvoiceReceipts(invoiceId: string, tenantId: string, branchId: string | null) {
+async function readInvoiceReceipts(invoiceId: string, _tenantId: string, branchId: string | null) {
   if (!branchId) throw new Error("Hóa đơn chưa xác định chi nhánh. Kiểm tra trước khi hủy.");
-  const rows = await readHistoryPages<{ id: string; amount: number; payment_method: string | null }>(async (offset, size) => {
-    const result = await getClient().from("cash_transactions")
-      .select("id,amount,payment_method", { count: "exact" })
-      .eq("tenant_id", tenantId).eq("reference_id", invoiceId)
-      .eq("reference_type", "invoice").eq("type", "receipt").eq("status", "completed")
-      .eq("branch_id", branchId).order("id").range(offset, offset + size - 1);
-    return { ...result, data: result.data as { id: string; amount: number; payment_method: string | null }[] | null };
-  });
+  const rows = await getPaymentHistory("invoice", invoiceId);
   const methods: Partial<Record<RefundMethod, number>> = {};
   for (const row of rows) {
-    const method = normalizeMethod(row.payment_method);
+    if (typeof row.status !== "string" || !Number.isFinite(Number(row.amount))) {
+      throw new Error("Chưa xác nhận được khoản thu của hóa đơn. Vui lòng tải lại.");
+    }
+    if (row.type !== "receipt" || row.status !== "completed") continue;
+    const method = normalizeMethod(row.paymentMethod);
     methods[method] = (methods[method] ?? 0) + Number(row.amount);
   }
   return methods;
