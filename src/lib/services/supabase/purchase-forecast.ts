@@ -317,69 +317,30 @@ export async function getPurchaseForecast(
     };
   }
 
-  // ── 3) Lấy dòng đơn gốc và phần đã xuất từ hóa đơn con hợp lệ ──
-  const orderLines: PurchaseForecastOrderLine[] = [];
+  // ── 3) Chỉ lấy nhu cầu còn lại đã tổng hợp và kiểm tra phạm vi ở máy chủ ──
+  const remainingLines: PurchaseForecastRemainingLine[] = [];
   for (let i = 0; i < orderIds.length; i += 100) {
-    const items = await readForecastRows(supabase
-      .from("invoice_items_scoped")
-      .select("id, invoice_id, product_id, quantity, total", {count:"exact"})
-      .in("invoice_id", orderIds.slice(i, i + 100)));
-    for (const it of (items ?? []) as AnyRow[]) {
-      if (!it.product_id) continue;
-      orderLines.push({
-        orderId: it.invoice_id,
-        productId: it.product_id,
-        quantity: Number(it.quantity) || 0,
-        total: Number(it.total) || 0,
-      });
+    const batch = orderIds.slice(i, i + 100);
+    const { data, error } = await supabase.rpc("get_purchase_forecast_remaining_lines", { p_order_ids: batch });
+    if (error?.message?.includes("PURCHASE_FORECAST_ORDER_SCOPE_OR_STATE_CHANGED"))
+      throw new Error("Đơn hàng đã thay đổi hoặc anh chưa có quyền xem tại chi nhánh. Vui lòng tải lại.");
+    if (error?.message?.includes("PURCHASE_FORECAST_CHILD_SCOPE_REQUIRED"))
+      throw new Error("Có hóa đơn liên quan thuộc chi nhánh anh chưa được phép xem, chưa thể tính đủ nhu cầu.");
+    if (error) throw new Error(error.message || "Không tải được nhu cầu còn lại. Vui lòng thử lại.");
+    if (!Array.isArray(data)) throw new Error("Dữ liệu dự kiến mua hàng không hợp lệ. Vui lòng tải lại.");
+    const seen = new Set<string>();
+    for (const row of data) {
+      const quantities = [row?.orderedQuantity, row?.issuedQuantity, row?.remainingQuantity, row?.remainingAmount];
+      const key = `${row?.orderId}::${row?.productId}`;
+      if (!batch.includes(row?.orderId) || typeof row?.productId !== "string" || !row.productId ||
+          quantities.some((v) => (typeof v !== "number" && (typeof v !== "string" || !v.trim())) || !Number.isFinite(Number(v))) || seen.has(key))
+        throw new Error("Dữ liệu dự kiến mua hàng không hợp lệ. Vui lòng tải lại.");
+      seen.add(key);
+      remainingLines.push({ orderId: row.orderId, productId: row.productId,
+        orderedQuantity: Number(row.orderedQuantity), issuedQuantity: Number(row.issuedQuantity),
+        remainingQuantity: Number(row.remainingQuantity), remainingAmount: Number(row.remainingAmount) });
     }
   }
-
-  const childSales: PurchaseForecastChildSale[] = [];
-  for (let i = 0; i < orderIds.length; i += 100) {
-    const children = await readForecastRows(supabase
-      .from("invoices")
-      .select("id, source_order_id, status, deleted_at, voided_at, cancelled_at", {count:"exact"})
-      .eq("tenant_id", tenantId)
-      .in("source_order_id", orderIds.slice(i, i + 100))
-      .eq("status", "completed")
-      .is("deleted_at", null)
-      .is("voided_at", null)
-      .is("cancelled_at", null));
-    for (const child of (children ?? []) as AnyRow[]) {
-      childSales.push({
-        id: child.id,
-        orderId: child.source_order_id,
-        status: child.status,
-        deletedAt: child.deleted_at,
-        voidedAt: child.voided_at,
-        cancelledAt: child.cancelled_at,
-      });
-    }
-  }
-
-  const childSaleLines: PurchaseForecastChildSaleLine[] = [];
-  const childSaleIds = childSales.map((sale) => sale.id);
-  for (let i = 0; i < childSaleIds.length; i += 100) {
-    const items = await readForecastRows(supabase
-      .from("invoice_items_scoped")
-      .select("id, invoice_id, product_id, quantity", {count:"exact"})
-      .in("invoice_id", childSaleIds.slice(i, i + 100)));
-    for (const it of (items ?? []) as AnyRow[]) {
-      if (!it.product_id) continue;
-      childSaleLines.push({
-        childSaleId: it.invoice_id,
-        productId: it.product_id,
-        quantity: Number(it.quantity) || 0,
-      });
-    }
-  }
-
-  const remainingLines = tinhNhuCauMuaConLai(
-    orderLines,
-    childSales,
-    childSaleLines,
-  );
 
   // key = branchId|productId. Chỉ phần CÒN CẦN mới đi xuống BOM/MRP.
   const perBranch = new Map<
