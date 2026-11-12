@@ -37,7 +37,23 @@ export async function verifyCashDocumentReads(db, id) {
     for (const name of names) {
       const match = actual.find((entry) => entry.proname === name);
       assert.ok(match, name);
-      await db.exec(match.definition);
+      let definition = match.definition;
+      if (name === "get_document_payment_history_scoped") {
+        for (const permission of [
+          "pos_fnb.checkout",
+          "pos_fnb.void_paid_bill",
+          "pos_retail.checkout",
+          "pos_retail.void",
+        ]) {
+          const anchor = `public.user_has_permission(v_actor,'${permission}')`;
+          assert.ok(definition.includes(anchor), permission);
+          definition = definition.replaceAll(
+            anchor,
+            `public._staff_permission_at_scope(v_actor,'${permission}',v_branch)`,
+          );
+        }
+      }
+      await db.exec(definition);
     }
   } else {
     await db.exec(`
@@ -126,6 +142,22 @@ export async function verifyCashDocumentReads(db, id) {
     ]),
     /PAYMENT_HISTORY_DENIED/,
   );
+  if (actualPath) {
+    await db.exec(`
+      update user_branch_permission_overrides set override_type='revoke'
+        where user_id='${id(1)}' and branch_id='${id(4)}' and permission_code='finance.view_cash_book';
+      insert into user_branch_permission_overrides values
+        ('${id(2)}','${id(1)}','${id(4)}','pos_fnb.checkout','grant');
+      insert into shifts(id,tenant_id,branch_id,cashier_id,status)
+        values ('${id(785)}','${id(2)}','${id(4)}','${id(1)}','open');
+      update invoices set source='fnb',shift_id='${id(785)}' where id='${id(701)}';
+    `);
+    const ownShiftHistory = await db.query(
+      "select get_document_payment_history_scoped('invoice',$1) result",
+      [id(701)],
+    );
+    assert.equal(ownShiftHistory.rows[0].result.branch_id, id(4));
+  }
   console.log(
     "PASS cash documents: permitted COD rows only, search, cross-branch shipment denial and payment history scope.",
   );
