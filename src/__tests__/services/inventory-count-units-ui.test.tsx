@@ -10,6 +10,7 @@ vi.mock("@/lib/contexts", () => ({
   useToast: () => ({ toast: mocks.toast }),
 }));
 vi.mock("@/lib/services/supabase/fnb-branch-cost", () => ({ getFnbBranchComponentCosts: async () => new Map([["milk", { unitCost: 30000 }]]) }));
+vi.mock("@/lib/services/supabase/product-stock-read", () => ({ getVisibleBranchStock: async () => ({ allowed: true, quantities: new Map([["milk", 24.5]]) }) }));
 vi.mock("@/lib/services/supabase/uom", () => ({ getUOMConversions: mocks.conversions }));
 // The quantity workflow is independent of Base UI portal/exit animations.
 // Shared select behavior is covered separately; use its native semantic contract.

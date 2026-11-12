@@ -16,6 +16,7 @@ import { NumericInput } from "@/components/ui/numeric-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth, useToast } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
+import { getVisibleBranchStock } from "@/lib/services/supabase/product-stock-read";
 import { getUOMConversions, getUOMConversionsByProductIds } from "@/lib/services/supabase/uom";
 import { loadDocumentCopy, type DocumentCopySource } from "@/lib/services/supabase/document-copy";
 import { pickBestConversion, getDirectConvertibleUnits, getDirectConversionFactor } from "@/lib/format-uom";
@@ -242,33 +243,12 @@ export function CreateInventoryCheckDialog({
     setAddingCount(addingProducts.current.size);
     setShowProductDropdown(false);
     try {
-    const supabase = getClient();
     const ctx = await getCurrentContext();
     if (session !== formSession.current) return;
     const branchId = activeBranchId ?? ctx.branchId;
-    // branch_stock can have multiple base rows when variant_id is NULL; sum rows instead of maybeSingle().
-    const { data: branchStockRows, error: stockErr } = await supabase
-      .from("branch_stock")
-      .select("quantity")
-      .eq("tenant_id", ctx.tenantId)
-      .eq("branch_id", branchId)
-      .eq("product_id", product.id)
-      .is("variant_id", null);
-
-    if (stockErr) {
-      if (session !== formSession.current) return;
-      toast({
-        title: "Không đọc được tồn kho chi nhánh",
-        description: stockErr.message,
-        variant: "error",
-      });
-      return;
-    }
-
-    const systemStock = (branchStockRows ?? []).reduce(
-      (sum, row) => sum + Number(row.quantity ?? 0),
-      0,
-    );
+    const visible = await getVisibleBranchStock(branchId, [product.id]);
+    if (!visible.allowed) throw new Error("Không có quyền xem tồn kho tại chi nhánh này.");
+    const systemStock = visible.quantities.get(product.id) ?? 0;
 
     // CEO 28/05/2026: load quy cách để cho nhập theo thùng + lẻ.
     let conversions: UOMConversion[] = [];

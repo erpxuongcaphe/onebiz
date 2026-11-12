@@ -1214,22 +1214,18 @@ export async function getStockCard(
   // 3) Tồn hệ thống hiện tại để đối soát drift.
   let systemStock = 0;
   if (branchId) {
-    const { data: bs } = await supabase
-      .from("branch_stock")
-      .select("quantity")
-      .eq("tenant_id", tenantId)
-      .eq("product_id", productId)
-      .eq("branch_id", branchId)
-      .is("variant_id", null)
-      .maybeSingle();
-    systemStock = Number((bs as { quantity?: number } | null)?.quantity ?? 0);
+    const visible = await getVisibleBranchStock(branchId, [productId]);
+    if (!visible.allowed) throw new Error("Không có quyền xem tồn kho tại chi nhánh này.");
+    systemStock = visible.quantities.get(productId) ?? 0;
   } else {
-    const { data: pr } = await supabase
+    const { data: pr, error } = await supabase
       .from("products_scoped")
       .select("stock")
       .eq("id", productId)
       .maybeSingle();
-    systemStock = Number((pr as { stock?: number } | null)?.stock ?? 0);
+    if (error) handleError(error, "getStockCard.stock");
+    if (pr?.stock == null) throw new Error("Không có quyền xem tổng tồn trong phạm vi này.");
+    systemStock = Number(pr.stock);
   }
 
   // 4) Enrich (đối tác + mã chứng từ thật) + đảo MỚI TRÊN CÙNG cho hiển thị.
