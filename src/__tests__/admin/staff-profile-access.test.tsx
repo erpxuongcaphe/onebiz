@@ -58,6 +58,56 @@ const snapshot: StaffProfileSnapshot = {
   branchPermissionCodes: ["pos_fnb.split_bill", "pos_fnb.transfer_table"],
 };
 describe("staff profile scope", () => {
+  it("applies a whole category in the selected branch and saves only after review", async () => {
+    const data = structuredClone(snapshot);
+    const otherBranch = {
+      branchId: "tubua",
+      permissionCode: "pos_fnb.transfer_table",
+      choice: "revoke" as const,
+    };
+    data.exceptions.push(otherBranch);
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(
+      <StaffProfileEditor snapshot={data} onSave={onSave} onReload={vi.fn()} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Tùy chỉnh quyền" }));
+    fireEvent.click(screen.getByRole("button", { name: "Premium" }));
+    const search = screen.getByRole("textbox", { name: "Tìm quyền" });
+    fireEvent.change(search, { target: { value: "pos_fnb.split_bill" } });
+    expect(
+      screen.getByText("Bao gồm 1 quyền đang ẩn bởi bộ lọc."),
+    ).toBeVisible();
+    const groupAction = () =>
+      screen.getByRole("combobox", { name: "Áp dụng cho cả nhóm POS FnB" });
+    fireEvent.change(groupAction(), { target: { value: "grant" } });
+    expect(onSave).not.toHaveBeenCalled();
+    fireEvent.change(search, { target: { value: "" } });
+    const split = screen.getByRole("combobox", { name: "Quyền Tách bill" });
+    const transfer = screen.getByRole("combobox", { name: "Quyền Chuyển bàn" });
+    expect(split).toHaveValue("grant");
+    expect(transfer).toHaveValue("grant");
+    fireEvent.change(groupAction(), { target: { value: "inherit" } });
+    expect(split).toHaveValue("inherit");
+    expect(transfer).toHaveValue("inherit");
+    fireEvent.change(groupAction(), { target: { value: "revoke" } });
+    fireEvent.click(screen.getByRole("button", { name: "Lưu phân công" }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+    expect(onSave.mock.calls[0][0].exceptions).toEqual([
+      ...snapshot.exceptions,
+      otherBranch,
+      {
+        branchId: "premium",
+        permissionCode: "pos_fnb.split_bill",
+        choice: "revoke",
+      },
+      {
+        branchId: "premium",
+        permissionCode: "pos_fnb.transfer_table",
+        choice: "revoke",
+      },
+    ]);
+  });
+
   it("separates shared writes without changing existing exceptions or branch access", () => {
     const original = {
       ...snapshot,
@@ -96,9 +146,7 @@ describe("staff profile scope", () => {
     expect(
       screen.getByText("Thay đổi áp dụng cho toàn công ty"),
     ).toBeInTheDocument();
-    fireEvent.click(
-      screen.getByRole("button", { name: "Premium" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Premium" }));
     expect(
       screen.queryByText("Thay đổi áp dụng cho toàn công ty"),
     ).not.toBeInTheDocument();

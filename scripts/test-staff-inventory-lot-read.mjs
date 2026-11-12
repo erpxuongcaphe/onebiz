@@ -145,6 +145,10 @@ try {
     "./staff-access-tests/inventory-related.mjs"
   );
   await verifyRelatedInventoryReads(db, id);
+  const { verifyTwoBranchInventoryReads } = await import(
+    "./staff-access-tests/inventory-two-branch.mjs"
+  );
+  await verifyTwoBranchInventoryReads(db, id);
 } finally {
   await db.close();
 }

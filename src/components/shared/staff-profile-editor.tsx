@@ -134,6 +134,7 @@ export function StaffProfileEditor({
     (name) => ({
       name,
       permissions: displayed.filter((p) => p.group === name),
+      allPermissions: scopedCatalog.filter((p) => p.group === name),
     }),
   );
   const updateAssignment = (
@@ -647,6 +648,64 @@ export function StaffProfileEditor({
                         </span>
                       </summary>
                       <div className="divide-y border-t">
+                        <div className="grid gap-2 bg-muted/30 p-4 sm:grid-cols-[minmax(0,1fr)_220px] sm:items-center">
+                          <div>
+                            <p className="text-sm font-medium">
+                              Tất cả {permissionGroup.allPermissions.length}{" "}
+                              quyền trong nhóm
+                            </p>
+                            {permissionGroup.permissions.length <
+                              permissionGroup.allPermissions.length && (
+                              <p className="text-xs text-muted-foreground">
+                                Bao gồm{" "}
+                                {permissionGroup.allPermissions.length -
+                                  permissionGroup.permissions.length}{" "}
+                                quyền đang ẩn bởi bộ lọc.
+                              </p>
+                            )}
+                          </div>
+                          <select
+                            aria-label={`Áp dụng cho cả nhóm ${permissionGroup.name}`}
+                            className={selectClass}
+                            value=""
+                            disabled={
+                              busy ||
+                              Boolean(
+                                branchId && !draft.branchIds.includes(branchId),
+                              )
+                            }
+                            onChange={(e) => {
+                              const choice = e.target.value;
+                              if (
+                                choice !== "grant" &&
+                                choice !== "revoke" &&
+                                choice !== "inherit"
+                              )
+                                return;
+                              setDraft((current) =>
+                                permissionGroup.allPermissions.reduce(
+                                  (next, permission) =>
+                                    setStaffException(
+                                      next,
+                                      branchId,
+                                      permission.code,
+                                      choice,
+                                    ),
+                                  current,
+                                ),
+                              );
+                            }}
+                          >
+                            <option value="" disabled>
+                              Chọn thao tác cho cả nhóm
+                            </option>
+                            <option value="grant">Cho phép tất cả</option>
+                            <option value="revoke">
+                              Không cho phép tất cả
+                            </option>
+                            <option value="inherit">Theo cấu hình chung</option>
+                          </select>
+                        </div>
                         {permissionGroup.permissions.map((p) => {
                           const result = projectedStaffPermission(
                             snapshot,
