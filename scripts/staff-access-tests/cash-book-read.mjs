@@ -105,4 +105,6 @@ export async function verifyCashBookReadScope(db, id) {
   await db.exec("reset role");
   const { verifyCashDocumentReads } = await import("./cash-document-read.mjs");
   await verifyCashDocumentReads(db, id);
+  const { verifyCashRefundView } = await import("./cash-refund-view.mjs");
+  await verifyCashRefundView(db, id);
 }
