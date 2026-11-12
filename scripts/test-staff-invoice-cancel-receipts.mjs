@@ -28,16 +28,24 @@ try {
     await db.exec(await functionFromMigration(migration, name));
   await db.exec(`create table invoices(id uuid,tenant_id uuid,branch_id uuid,source text,status text,deleted_at timestamptz);
   create table cash_transactions(id uuid,tenant_id uuid,branch_id uuid,reference_id uuid,reference_type text,type text,status text,amount numeric);
+  create table stock_movements(id uuid,tenant_id uuid,branch_id uuid,reference_id uuid,reference_type text,type text);
   insert into invoices values ('${id(50)}','${id(1)}','${id(10)}','fnb','completed',null),
-   ('${id(51)}','${id(1)}','${id(11)}','pos','completed',null),('${id(52)}','${id(2)}','${id(12)}','fnb','completed',null);
+   ('${id(51)}','${id(1)}','${id(11)}','pos','completed',null),('${id(52)}','${id(2)}','${id(12)}','fnb','completed',null),
+   ('${id(53)}','${id(1)}','${id(10)}','pos','draft',null);
   insert into cash_transactions values
    ('${id(70)}','${id(1)}','${id(10)}','${id(50)}','invoice','receipt','completed',60),
    ('${id(71)}','${id(1)}','${id(10)}','${id(50)}','invoice','receipt','cancelled',500),
    ('${id(72)}','${id(1)}','${id(10)}','${id(50)}','invoice','payment','completed',500),
    ('${id(73)}','${id(1)}','${id(11)}','${id(50)}','invoice','receipt','completed',500),
    ('${id(74)}','${id(1)}','${id(11)}','${id(51)}','invoice','receipt','completed',70);
+  insert into stock_movements values
+   ('${id(80)}','${id(1)}','${id(10)}','${id(50)}','invoice','out'),
+   ('${id(81)}','${id(1)}','${id(10)}','${id(50)}','bom_consume','out'),
+   ('${id(82)}','${id(1)}','${id(11)}','${id(50)}','invoice','out'),
+   ('${id(83)}','${id(1)}','${id(10)}','${id(50)}','invoice','in'),
+   ('${id(84)}','${id(1)}','${id(10)}','${id(53)}','invoice','out');
   insert into user_branches values('${id(101)}','${id(11)}',null);
-  insert into role_permissions values('${id(20)}','pos_fnb.void'),('${id(20)}','pos_retail.void');
+  insert into role_permissions values('${id(20)}','pos_fnb.void'),('${id(20)}','pos_retail.void'),('${id(20)}','orders.cancel');
   insert into staff_branch_permission_catalog values('pos_fnb.void_paid_bill',1),('pos_retail.void',1);
   grant usage on schema public,auth to authenticated;
   select set_config('request.jwt.claim.sub','${id(101)}',false);`);
@@ -48,16 +56,23 @@ try {
   const read = async (ids) =>
     (
       await db.query(
-        "select * from get_invoice_cancel_receipt_totals($1::uuid[]) order by invoice_id",
+        "select * from get_invoice_cancel_preview_totals($1::uuid[]) order by invoice_id",
         [ids.map(id)],
       )
     ).rows;
   assert.deepEqual(await read([50, 51]), [
-    { invoice_id: id(50), refund: "60" },
-    { invoice_id: id(51), refund: "70" },
+    { invoice_id: id(50), refund: "60", stock_movements: 2 },
+    { invoice_id: id(51), refund: "70", stock_movements: 0 },
+  ]);
+  assert.deepEqual(await read([53]), [
+    { invoice_id: id(53), refund: "0", stock_movements: 1 },
   ]);
   await assert.rejects(read([50, 52]), /INVOICE_CANCEL_PREVIEW_DENIED/);
   await assert.rejects(read([50, 50]), /INVOICE_CANCEL_PREVIEW_INVALID/);
+  await assert.rejects(
+    read(Array.from({ length: 101 }, (_, n) => 1000 + n)),
+    /INVOICE_CANCEL_PREVIEW_INVALID/,
+  );
   await assert.rejects(
     db.query("select * from cash_transactions"),
     /permission denied/,
@@ -65,7 +80,9 @@ try {
   await db.exec(`reset role; insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
   ('${id(1)}','${id(101)}','${id(11)}','pos_retail.void','revoke','${id(100)}'); set role authenticated;`);
   await assert.rejects(read([50, 51]), /INVOICE_CANCEL_PREVIEW_DENIED/);
-  assert.deepEqual(await read([50]), [{ invoice_id: id(50), refund: "60" }]);
+  assert.deepEqual(await read([50]), [
+    { invoice_id: id(50), refund: "60", stock_movements: 2 },
+  ]);
   await db.exec(`reset role; insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
   ('${id(1)}','${id(101)}','${id(10)}','pos_fnb.void_paid_bill','revoke','${id(100)}'); set role authenticated;`);
   await assert.rejects(read([50]), /INVOICE_CANCEL_PREVIEW_DENIED/);

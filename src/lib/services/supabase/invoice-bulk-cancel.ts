@@ -1,5 +1,4 @@
 import { getClient, getCurrentContext, handleError } from "./base";
-import { readHistoryPages } from "./read-history-pages";
 import { cancelInvoice, voidCompletedInvoice } from "./invoices";
 
 export interface InvoiceCancelPreview {
@@ -37,40 +36,34 @@ export async function previewInvoiceBulkCancel(ids: string[], permissions: Invoi
     .eq("tenant_id", ctx.tenantId).is("deleted_at", null).in("id", selected);
   if (error) handleError(error, "previewInvoiceBulkCancel");
   if (!data || data.length !== selected.length) throw new Error("Có hóa đơn đã thay đổi hoặc ngoài phạm vi được xem. Tải lại danh sách.");
-  const refundable = data.filter(row => row.status === "completed" && canCancelInvoice({
+  const authorizedIds = data.filter(row => ["completed", "draft", "confirmed"].includes(row.status) && canCancelInvoice({
     source: row.source ?? "", branchId: row.branch_id ?? "", status: row.status,
   }, permissions)).map(row => row.id);
-  const [cash, movements] = await Promise.all([
-    (async () => {
-      if (!refundable.length) return [] as { invoice_id: string; refund: number | string | null }[];
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (db as any).rpc("get_invoice_cancel_receipt_totals", { p_invoice_ids: refundable });
-      if (result.error) handleError(result.error, "previewInvoiceBulkCancel:receipts");
-      const rows = result.data as { invoice_id: string; refund: number | string | null }[] | null;
-      if (!Array.isArray(rows) || rows.length !== refundable.length ||
-        new Set(rows.map(row => row.invoice_id)).size !== refundable.length ||
-        rows.some(row => !refundable.includes(row.invoice_id) || row.refund == null ||
-          (typeof row.refund !== "number" && (typeof row.refund !== "string" || row.refund.trim() === "")) ||
-          !Number.isFinite(Number(row.refund)))) {
-        throw new Error("Chưa xác nhận được tổng khoản thu. Vui lòng tải lại.");
-      }
-      return rows;
-    })(),
-    readHistoryPages<{ id: string; reference_id: string | null }>(async (offset, size) => {
-      return await db.from("stock_movements_scoped").select("id,reference_id", { count: "exact" })
-        .eq("tenant_id", ctx.tenantId).in("reference_id", selected).eq("type", "out")
-        .in("reference_type", ["invoice", "bom_consume", "modifier_topping"])
-        .order("id").range(offset, offset + size - 1);
-    }),
-  ]);
+  type Totals = { invoice_id: string; refund: number | string | null; stock_movements: number | string | null };
+  let totals: Totals[] = [];
+  if (authorizedIds.length) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await (db as any).rpc("get_invoice_cancel_preview_totals", { p_invoice_ids: authorizedIds });
+    if (result.error) handleError(result.error, "previewInvoiceBulkCancel:totals");
+    const rows = result.data as Totals[] | null;
+    if (!Array.isArray(rows) || rows.length !== authorizedIds.length ||
+      new Set(rows.map(row => row.invoice_id)).size !== authorizedIds.length ||
+      rows.some(row => !authorizedIds.includes(row.invoice_id) || row.refund == null || row.stock_movements == null ||
+        (typeof row.refund !== "number" && (typeof row.refund !== "string" || row.refund.trim() === "")) ||
+        (typeof row.stock_movements !== "number" && (typeof row.stock_movements !== "string" || row.stock_movements.trim() === "")) ||
+        !Number.isFinite(Number(row.refund)) || !Number.isSafeInteger(Number(row.stock_movements)) || Number(row.stock_movements) < 0)) {
+      throw new Error("Chưa xác nhận được tổng khoản thu và xuất kho. Vui lòng tải lại.");
+    }
+    totals = rows;
+  }
   const byId = new Map(data.map(row => [row.id, row]));
   return selected.map(id => {
     const row = byId.get(id)!;
     return { id, code: row.code, status: row.status, source: row.source ?? "",
       branchId: row.branch_id ?? "", total: Number(row.total ?? 0),
       paid: Number(row.paid ?? 0), debt: Number(row.debt ?? 0), paymentMethod: row.payment_method ?? "cash",
-      refund: Number(cash.find(item => item.invoice_id === id)?.refund ?? 0),
-      stockMovements: movements.filter(item => item.reference_id === id).length };
+      refund: Number(totals.find(item => item.invoice_id === id)?.refund ?? 0),
+      stockMovements: Number(totals.find(item => item.invoice_id === id)?.stock_movements ?? 0) };
   });
 }
 export function invoiceCancelFingerprint(row: InvoiceCancelPreview) {
