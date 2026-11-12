@@ -45,8 +45,12 @@ try {
     values ('${id(1)}','${id(101)}','${id(10)}','inventory.dispose','grant','${id(100)}');
   select set_config('request.jwt.claim.sub','${id(101)}',false);
  `);
- await db.exec(await functionFromMigration('00315_disposal_export_list_workspace.sql','get_disposal_export_list_workspace'));
- await db.exec(await functionFromMigration('00316_warehouse_list_workspaces_batch.sql','get_internal_export_list_workspace'));
+ const captured=process.env.ONEBIZ_STOCK_WORK_AUDIT_FILE ? JSON.parse(await readFile(process.env.ONEBIZ_STOCK_WORK_AUDIT_FILE,'utf8')) : null;
+ for (const [file,name] of [['00315_disposal_export_list_workspace.sql','get_disposal_export_list_workspace'],['00316_warehouse_list_workspaces_batch.sql','get_internal_export_list_workspace']]) {
+  const actual=captured?.find(x=>x.proname===name);
+  if (captured) assert.ok(actual,`${name} must be captured`);
+  await db.exec(actual ? actual.definition : await functionFromMigration(file,name));
+ }
  await db.exec(await sql('20261112162406_staff_stock_work_documents_safe_projection.sql'));
  await db.exec(await sql('20261112165047_staff_stock_work_cost_column_protection.sql'));
  await db.exec('set role authenticated');
