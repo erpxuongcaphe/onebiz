@@ -26,15 +26,21 @@ try {
   insert into branches(id,tenant_id,name,code) values('${id(13)}','${id(1)}','Empty','E');
   create table products(id uuid primary key,tenant_id uuid);
   create table branch_stock(tenant_id uuid,branch_id uuid,product_id uuid,quantity numeric,reserved numeric,updated_at timestamptz);
+  alter function public.get_user_tenant_id() security definer;
+  alter table branch_stock enable row level security;
+  create policy legacy_stock on branch_stock for select to authenticated using (tenant_id=public.get_user_tenant_id());
   insert into products values('${id(60)}','${id(1)}'),('${id(61)}','${id(2)}');
   insert into branch_stock values ('${id(1)}','${id(10)}','${id(60)}',10,2,now()),
    ('${id(1)}','${id(10)}','${id(60)}',5,1,now()),('${id(1)}','${id(11)}','${id(60)}',20,0,now());
   insert into user_branches values('${id(101)}','${id(11)}',null);
   insert into role_permissions values('${id(20)}','inventory.view');
-  insert into staff_branch_permission_catalog values('inventory.view',1);
-  grant usage on schema public,auth to authenticated;select set_config('request.jwt.claim.sub','${id(101)}',false);`);
+  insert into staff_branch_permission_catalog values('inventory.view',1),('production.view',1);
+  grant usage on schema public,auth to authenticated;grant select on branch_stock to authenticated;select set_config('request.jwt.claim.sub','${id(101)}',false);`);
   await db.exec(
     await file("20261112103125_staff_inventory_product_breakdown_scope.sql"),
+  );
+  await db.exec(
+    await file("20261112104703_staff_inventory_branch_stock_reads.sql"),
   );
   await db.exec("set role authenticated");
   const read = async (product = 60) =>
@@ -44,6 +50,13 @@ try {
         [id(product)],
       )
     ).rows;
+  const raw = async () =>
+    (
+      await db.query(
+        "select distinct branch_id from branch_stock order by branch_id",
+      )
+    ).rows.map((r) => r.branch_id);
+  assert.deepEqual(await raw(), [id(10), id(11)]);
   assert.deepEqual(await read(), [
     { branch_id: id(10), quantity: "15", reserved: "3" },
     { branch_id: id(11), quantity: "20", reserved: "0" },
@@ -56,6 +69,26 @@ try {
     await read(),
     [{ branch_id: id(11), quantity: "20", reserved: "0" }],
     "denied and unassigned branches are omitted, never reported as zero",
+  );
+  assert.deepEqual(await raw(), [id(11)]);
+  await db.exec(
+    `reset role; insert into role_permissions values('${id(20)}','production.view'); set role authenticated;`,
+  );
+  assert.deepEqual(
+    await raw(),
+    [id(10), id(11)],
+    "production dashboard can still read required stock",
+  );
+  assert.deepEqual(
+    await read(),
+    [{ branch_id: id(11), quantity: "20", reserved: "0" }],
+    "production access does not widen the inventory breakdown",
+  );
+  await db.exec(`reset role; insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+   values('${id(1)}','${id(101)}','${id(10)}','production.view','revoke','${id(100)}'); set role authenticated;`);
+  assert.deepEqual(await raw(), [id(11)], "local production denial is honored");
+  await db.exec(
+    `reset role; delete from role_permissions where permission_code='production.view'; delete from user_branch_permission_overrides where permission_code='production.view'; set role authenticated;`,
   );
   await db.exec(
     `reset role; insert into role_permissions values('${id(20)}','reports.view_all_branches'); set role authenticated;`,
@@ -74,6 +107,11 @@ try {
     await read(),
     [{ branch_id: id(10), quantity: "15", reserved: "3" }],
     "branch-only grant does not expose other branches",
+  );
+  assert.deepEqual(
+    await raw(),
+    [id(10)],
+    "branch-only inventory grant keeps raw reads inside the granted branch",
   );
   console.log(
     "PASS stock breakdown: quantities, explicit zero and denied/foreign branches are distinguished",

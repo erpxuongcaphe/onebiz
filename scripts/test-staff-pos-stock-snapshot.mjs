@@ -22,14 +22,20 @@ try {
     ),
   );
   await db.exec(`create table branch_stock(tenant_id uuid,branch_id uuid,product_id uuid,variant_id uuid,quantity numeric);
+  alter function public.get_user_tenant_id() security definer;
+  alter table branch_stock enable row level security;
+  create policy legacy_stock on branch_stock for select to authenticated using (tenant_id=public.get_user_tenant_id());
   insert into branch_stock values
    ('${id(1)}','${id(10)}','${id(60)}',null,12),('${id(1)}','${id(10)}','${id(61)}',null,7),
    ('${id(1)}','${id(10)}','${id(60)}','${id(80)}',2),('${id(1)}','${id(11)}','${id(60)}',null,20),
    ('${id(2)}','${id(12)}','${id(60)}',null,90);
   select set_config('request.jwt.claim.sub','${id(101)}',false);
   insert into staff_branch_permission_catalog values('inventory.view',1),('pos_retail.checkout',1);
-  grant usage on schema auth,public to authenticated;`);
+  grant usage on schema auth,public to authenticated;grant select on branch_stock to authenticated;`);
   await db.exec(await file("20261112081429_staff_pos_stock_snapshot.sql"));
+  await db.exec(
+    await file("20261112104703_staff_inventory_branch_stock_reads.sql"),
+  );
   await db.exec(`create function auth.role() returns text language sql stable as $$select current_setting('test.jwt.role',true)$$;
     select set_config('test.jwt.role','authenticated',false);
     create table products(id uuid primary key,tenant_id uuid,name text);
@@ -89,6 +95,15 @@ try {
     { product_id: id(60), quantity: "12" },
     { product_id: id(61), quantity: "7" },
   ]);
+  assert.deepEqual(
+    (
+      await db.query(
+        "select distinct branch_id from branch_stock order by branch_id",
+      )
+    ).rows.map((r) => r.branch_id),
+    [id(10)],
+    "checkout can receive stock change events only for its authorized branch",
+  );
   assert.equal(
     (await bom(1, 10, 60))[0].available,
     "3",
@@ -97,6 +112,11 @@ try {
   await assert.rejects(read(11, [60]), /POS_STOCK_PERMISSION_DENIED/);
   await db.exec(
     `reset role; update user_branch_permission_overrides set override_type='revoke' where permission_code='pos_retail.checkout'; set role authenticated;`,
+  );
+  assert.equal(
+    (await db.query("select count(*)::int n from branch_stock")).rows[0].n,
+    0,
+    "revoked checkout cannot receive stock rows or events",
   );
   await assert.rejects(read(10, [60]), /POS_STOCK_PERMISSION_DENIED/);
   await assert.rejects(bom(1, 10, 60), /BOM_AVAILABILITY_PERMISSION_DENIED/);
