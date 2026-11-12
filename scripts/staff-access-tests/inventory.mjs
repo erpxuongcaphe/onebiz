@@ -59,7 +59,13 @@ export async function verifyInventoryBranchPermissions(
     ["20261026115757_inventory_check_amendment.sql", "_change_inventory_check"],
   ];
   for (const [file, name, renamed] of originals) {
-    const source = await functionFromMigration(file, name);
+    let source = await functionFromMigration(file, name);
+    if (name === "_change_inventory_check" && process.env.ONEBIZ_INVENTORY_CHANGE_AUDIT_FILE) {
+      const definitions = JSON.parse(await readFile(process.env.ONEBIZ_INVENTORY_CHANGE_AUDIT_FILE, "utf8"));
+      const current = definitions.find((entry) => entry.proname === name);
+      if (!current) throw new Error(`Missing captured function ${name}`);
+      source = current.definition;
+    }
     await db.exec(
       renamed
         ? source.replace(`public.${name}(`, `public.${renamed}(`)
@@ -83,7 +89,50 @@ export async function verifyInventoryBranchPermissions(
       "utf8",
     ),
   );
+  await db.exec(
+    await functionFromMigration(
+      "20261111070229_staff_branch_checkout_permissions.sql",
+      "_staff_permission_at_scope",
+    ),
+  );
+  await db.exec(
+    await readFile(
+      new URL(
+        "../../supabase/migrations/20261112033025_staff_branch_inventory_shared_reads.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  );
   await actor(101);
+  // The view prerequisite must follow the stored check's branch, without
+  // broadening the separate permission to change the check.
+  await db.exec(`insert into staff_branch_permission_catalog values ('inventory.view',1);
+    insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+    values ('${id(1)}','${id(101)}','${id(10)}','inventory.view','revoke','${id(100)}');`);
+  for (const action of ["edit", "cancel"]) {
+    await rejects(
+      db.query("select _change_inventory_check($1,$2,$3,null,null,null,null,null,false)", [id(201), action, []]),
+      /INSUFFICIENT_PERMISSION/,
+    );
+    await rejects(
+      db.query("select _change_inventory_check($1,$2,$3,null,null,null,null,null,false)", [id(202), action, []]),
+      /INVENTORY_CHECK_REASON_REQUIRED/,
+    );
+  }
+  await db.exec(`delete from role_permissions where role_id='${id(20)}' and permission_code='inventory.view';
+    update user_branch_permission_overrides set branch_id='${id(11)}',override_type='grant' where permission_code='inventory.view';`);
+  await rejects(
+    db.query("select _change_inventory_check($1,'edit',$2,null,null,null,null,null,false)", [id(202), []]),
+    /INVENTORY_CHECK_REASON_REQUIRED/,
+  );
+  await rejects(
+    db.query("select _change_inventory_check($1,'edit',$2,null,null,null,null,null,false)", [id(201), []]),
+    /INSUFFICIENT_PERMISSION/,
+  );
+  await db.exec(`delete from user_branch_permission_overrides where permission_code='inventory.view';
+    delete from staff_branch_permission_catalog where permission_code='inventory.view';
+    insert into role_permissions values ('${id(20)}','inventory.view');`);
   // Existing templates still authorize both accessible branches before any exception.
   for (const document of [201, 202]) {
     const result = await db.query(

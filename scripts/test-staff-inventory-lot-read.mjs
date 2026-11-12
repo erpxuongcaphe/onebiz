@@ -149,6 +149,10 @@ try {
     "./staff-access-tests/inventory-two-branch.mjs"
   );
   await verifyTwoBranchInventoryReads(db, id);
+  const { verifyInventoryStockProducts } = await import(
+    "./staff-access-tests/inventory-stock-products.mjs"
+  );
+  await verifyInventoryStockProducts(db, id);
 } finally {
   await db.close();
 }
