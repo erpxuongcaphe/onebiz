@@ -224,6 +224,23 @@ export async function verifyInventoryDocumentReads(db, id) {
     }
     await assert.rejects(db.query('select get_inventory_check_list_workspace(p_branch_id=>$1)',[id(11)]),/PERMISSION_DENIED/);
     assert.deepEqual(await ids('purchase_orders'),[],`${code} does not grant purchasing documents`);
+    if (code === 'inventory.check') {
+      await db.exec(`reset role;
+        insert into role_permissions values('${id(20)}','reports.view_all_branches');
+        insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type,created_by)
+          values('${id(1)}','${id(101)}','inventory.view','revoke','${id(100)}');
+        insert into inventory_checks(id,tenant_id,branch_id,code,status,created_by) values
+          ('${id(712)}','${id(1)}','${id(14)}','unassigned','balanced','${id(101)}');
+        insert into inventory_check_items values ('${id(722)}','${id(712)}','${id(600)}','Coffee',0,30,30,10);
+        set role authenticated;`);
+      assert.deepEqual(await ids('inventory_checks'),[id(710)],'report-all does not extend stocktake work beyond assigned branches');
+      assert.deepEqual(await ids('inventory_check_items_scoped'),[id(720)],'report-all cannot reveal an unassigned stocktake line');
+      assert.equal((await list()).total,1,'stocktake remains available despite explicit inventory-view revoke');
+      await db.exec(`reset role; delete from inventory_check_items where id='${id(722)}';
+        delete from inventory_checks where id='${id(712)}';
+        delete from role_permissions where permission_code='reports.view_all_branches';
+        delete from user_permission_overrides where user_id='${id(101)}' and permission_code='inventory.view'; set role authenticated;`);
+    }
     await db.exec(`reset role; insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type,created_by)
       values('${id(1)}','${id(101)}','${code}','revoke','${id(100)}'); set role authenticated;`);
     assert.deepEqual(await ids('inventory_checks'),[],`global revoke wins over local ${code} grant`);
