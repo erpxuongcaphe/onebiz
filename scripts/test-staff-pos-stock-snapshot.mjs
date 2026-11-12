@@ -30,6 +30,21 @@ try {
   insert into staff_branch_permission_catalog values('inventory.view',1),('pos_retail.checkout',1);
   grant usage on schema auth,public to authenticated;`);
   await db.exec(await file("20261112081429_staff_pos_stock_snapshot.sql"));
+  await db.exec(`create function auth.role() returns text language sql stable as $$select current_setting('test.jwt.role',true)$$;
+    select set_config('test.jwt.role','authenticated',false);
+    create table products(id uuid primary key,tenant_id uuid,name text);
+    create table bom_items(bom_id uuid,material_id uuid,quantity numeric,waste_percent numeric);
+    insert into products values ('${id(60)}','${id(1)}','Finished'),('${id(61)}','${id(1)}','Material'),('${id(62)}','${id(2)}','Other');
+    insert into bom_items values ('${id(90)}','${id(61)}',2,0);
+    create function public.get_active_bom_for_branch(uuid,uuid) returns uuid language sql stable as $$select '${id(90)}'::uuid$$;
+    create function public.should_cascade_bom_at_branch(uuid,uuid) returns boolean language sql stable as $$select true$$;`);
+  await db.exec(
+    await functionFromMigration(
+      "00300_optimize_bom_availability_batch.sql",
+      "get_bom_availability_batch",
+    ),
+  );
+  await db.exec(await file("20261112083252_staff_bom_availability_scope.sql"));
   await db.exec("set role authenticated");
   const read = async (branch, ids) =>
     (
@@ -41,6 +56,24 @@ try {
   assert.deepEqual(await read(10, [60]), [
     { product_id: id(60), quantity: "12" },
   ]);
+  const bom = async (tenant, branch, sku) =>
+    (
+      await db.query(
+        "select * from get_bom_availability_batch($1,$2,$3::uuid[])",
+        [id(tenant), id(branch), [id(sku)]],
+      )
+    ).rows;
+  assert.equal(
+    (await bom(1, 10, 60))[0].available,
+    "3",
+    "availability math stays unchanged",
+  );
+  assert.deepEqual(
+    await bom(1, 10, 62),
+    [],
+    "another tenant product is not revealed",
+  );
+  await assert.rejects(bom(2, 12, 62), /BOM_AVAILABILITY_AUTH_DENIED/);
   await assert.rejects(read(11, [60]), /POS_STOCK_BRANCH_DENIED/);
   await assert.rejects(read(12, [60]), /POS_STOCK_BRANCH_DENIED/);
   await assert.rejects(
@@ -56,11 +89,25 @@ try {
     { product_id: id(60), quantity: "12" },
     { product_id: id(61), quantity: "7" },
   ]);
+  assert.equal(
+    (await bom(1, 10, 60))[0].available,
+    "3",
+    "checkout grant retains BOM availability",
+  );
   await assert.rejects(read(11, [60]), /POS_STOCK_PERMISSION_DENIED/);
   await db.exec(
     `reset role; update user_branch_permission_overrides set override_type='revoke' where permission_code='pos_retail.checkout'; set role authenticated;`,
   );
   await assert.rejects(read(10, [60]), /POS_STOCK_PERMISSION_DENIED/);
+  await assert.rejects(bom(1, 10, 60), /BOM_AVAILABILITY_PERMISSION_DENIED/);
+  await db.exec(
+    `reset role; select set_config('request.jwt.claim.sub','',false); select set_config('test.jwt.role','service_role',false); set role service_role;`,
+  );
+  assert.equal(
+    (await bom(1, 10, 60))[0].available,
+    "3",
+    "trusted service-role workflows retain availability reads",
+  );
   console.log(
     "PASS POS stock snapshot: branch boundaries, local POS grant, denied inventory and bounded product projection",
   );
