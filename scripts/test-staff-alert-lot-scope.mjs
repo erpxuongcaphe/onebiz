@@ -15,7 +15,7 @@ try {
   create table products(id uuid,tenant_id uuid,name text);
   create table product_lots(id uuid,tenant_id uuid,branch_id uuid,product_id uuid,lot_number text,expiry_date date,current_qty numeric,status text);
   insert into products values('${id(60)}','${id(1)}','Coffee');
-  insert into product_lots values('${id(70)}','${id(1)}','${id(10)}','${id(60)}','A',current_date+1,3,'active'),('${id(71)}','${id(1)}','${id(11)}','${id(60)}','B',current_date+2,4,'active'),('${id(72)}','${id(2)}','${id(12)}','${id(60)}','OTHER',current_date,4,'active'),('${id(73)}','${id(1)}','${id(10)}','${id(60)}','VOID',current_date,4,'cancelled');
+  insert into product_lots values('${id(70)}','${id(1)}','${id(10)}','${id(60)}','A',current_date+1,3,'active'),('${id(71)}','${id(1)}','${id(11)}','${id(60)}','B',current_date+2,4,'active'),('${id(72)}','${id(2)}','${id(12)}','${id(60)}','OTHER',current_date,4,'active'),('${id(73)}','${id(1)}','${id(10)}','${id(60)}','VOID',current_date,4,'cancelled'),('${id(74)}','${id(1)}','${id(10)}','${id(60)}','CONSUMED',current_date,4,'consumed'),('${id(75)}','${id(1)}','${id(10)}','${id(60)}','DISPOSED',current_date,4,'disposed'),('${id(76)}','${id(1)}','${id(10)}','${id(60)}','EMPTY',current_date,0,'active');
   insert into user_branches values('${id(101)}','${id(11)}',null);
   insert into role_permissions values('${id(20)}','reports.dashboard');
   insert into staff_branch_permission_catalog values('reports.dashboard',1),('inventory.view',1);
