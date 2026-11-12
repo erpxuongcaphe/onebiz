@@ -70,9 +70,11 @@ statements.push(`
  delete from user_permission_overrides where user_id='${id(101)}' and permission_code='products.view_cost';
  insert into role_permissions values ('${id(20)}','products.view_cost');
  set role authenticated;
- do $$declare d jsonb; begin
+ do $$declare d jsonb; legacy jsonb; begin
   d:=public.get_stock_work_document_detail('disposal_export','${id(200)}');
   if (d->>'totalAmount')::numeric<>999 or (d->'items'->0->>'unitPrice')::numeric<>333 then raise exception 'authorized cost missing'; end if;
+  legacy:=public.get_disposal_export_list_workspace();
+  if not (legacy->>'costVisible')::boolean or (legacy->'items'->0->>'total_amount')::numeric<>999 then raise exception 'legacy cost-enabled reader lost data'; end if;
   if has_column_privilege('authenticated','public.disposal_exports','total_amount','select') then raise exception 'cost exposed through raw table'; end if;
  end$$;
  reset role;
