@@ -4,7 +4,19 @@ import { functionFromMigration } from "./inventory.mjs";
 
 export async function verifyOrderCreate(db, id) {
   await db.exec(`reset role;
-    alter table invoices add column source text default 'order', add column fulfilled_by_id uuid, add column source_order_id uuid;
+    alter table invoices alter column id set default gen_random_uuid(),
+      add column source text default 'order', add column fulfilled_by_id uuid, add column source_order_id uuid,
+      add column customer_id uuid, add column customer_name text, add column subtotal numeric, add column discount_amount numeric,
+      add column tax_amount numeric, add column delivery_fee numeric, add column total numeric,
+      add column payment_method text, add column created_by uuid, add column auto_saved boolean;
+    alter table shipping_orders add column created_at timestamptz default now(), add column shipping_fee numeric, add column cod_amount numeric,
+      add column receiver_name text, add column receiver_phone text, add column receiver_address text, add column note text;
+    alter table delivery_partners add column tenant_id uuid, add column is_active boolean;
+    create table products(id uuid primary key,tenant_id uuid,name text,unit text,is_active boolean,product_type text);
+    create table invoice_items(id uuid primary key default gen_random_uuid(),invoice_id uuid,product_id uuid,product_name text,unit text,
+      quantity numeric,unit_price numeric,discount numeric,total numeric,note text,transaction_quantity numeric,transaction_unit text,transaction_unit_price numeric,conversion_factor numeric);
+    create function resolve_product_uom_factor(uuid,uuid,text) returns numeric language sql as $$select 1::numeric$$;
+    insert into products values ('${id(600)}','${id(1)}','Test product','Cái',true,'sku');
     create table sales_order_processing_closures(order_id uuid,closed_at timestamptz);
     create function can_read_branch_document_00567(uuid,uuid) returns boolean language sql stable as $$select $1=public.get_user_tenant_id() and public.user_has_branch_access(auth.uid(),$2)$$;
     insert into invoices(id,tenant_id,branch_id,code,status,paid,debt) values
@@ -158,6 +170,33 @@ export async function verifyOrderCreate(db, id) {
   );
   await db.exec(`delete from role_permissions where permission_code in ('orders.create','pos_retail.checkout');
     update user_branch_permission_overrides set branch_id='${id(11)}',override_type='grant' where permission_code='orders.create';`);
+  const created = (
+    await db.query(
+      "select save_sales_order_atomic(null,'TEST-ORDER',$1,null,$2,0,null,null,null,null,null) result",
+      [id(11), [{ product_id: id(600), quantity: 2, unit_price: 10000 }]],
+    )
+  ).rows[0].result;
+  assert.equal(
+    Number(
+      (
+        await db.query("select total from invoices where id=$1", [
+          created.order_id,
+        ])
+      ).rows[0].total,
+    ),
+    20000,
+  );
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "select quantity from invoice_items where invoice_id=$1",
+          [created.order_id],
+        )
+      ).rows[0].quantity,
+    ),
+    2,
+  );
   assert.equal(
     (
       await db.query(
