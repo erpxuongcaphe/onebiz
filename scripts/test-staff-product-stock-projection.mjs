@@ -48,6 +48,9 @@ try {
  await db.exec(`reset role; insert into role_permissions values('${id(20)}','inventory.dispose'); set role authenticated;`);
  assert.deepEqual(await scope(10),{allowed:true,rows:[{product_id:id(60),quantity:10}]},'independent disposal right keeps required branch balance readable');
  await db.exec(`reset role; delete from role_permissions where permission_code='inventory.dispose'; set role authenticated;`);
+ await db.exec(`reset role; insert into role_permissions values('${id(20)}','pos_retail.checkout'); set role authenticated;`);
+ assert.deepEqual(await scope(10),{allowed:true,rows:[{product_id:id(60),quantity:10}]},'independent retail checkout retains branch stock access');
+ await db.exec(`reset role; delete from role_permissions where permission_code='pos_retail.checkout'; set role authenticated;`);
  await db.exec(`reset role; insert into role_permissions values('${id(20)}','reports.view_all_branches'); set role authenticated;`);
  assert.equal(await stock(),'20','sum excludes the explicitly denied branch');
  await db.exec(`reset role; delete from role_permissions where permission_code in ('inventory.view','reports.view_all_branches');

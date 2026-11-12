@@ -16,7 +16,7 @@ export interface FnbProduct {
   sell_price: number;
   image_url?: string;
   sort_order?: number;
-  stock: number;
+  stock: number | null;
   category_id: string | null;
   /** Sprint UI-4: dùng cho sub-category pills (group by brand). Null nếu chưa gán. */
   brand?: string | null;
@@ -195,7 +195,8 @@ function ProductCard({
   // được làm theo đơn (nguyên liệu track ở NVL, không ở SP bán).
   // Trước đây mặc định hiển thị overlay → CEO báo "hết hàng mờ căm không thấy gì"
   // do stock=0 toàn bộ SP FnB.
-  const outOfStock = enforceStock && product.stock <= 0;
+  const outOfStock = enforceStock && product.stock !== null && product.stock <= 0;
+  const stockUnknown = enforceStock && product.stock === null;
   // CEO 22/05/2026: rollback POS guard — cho phép bán SP giá 0đ tự do
   // (KM, tặng kèm, miễn phí intentional). Cashier tự chịu trách nhiệm.
   const [loadedUrl, setLoadedUrl] = useState<string | undefined>();
@@ -204,14 +205,14 @@ function ProductCard({
   const imageError = Boolean(product.image_url && failedUrl === product.image_url);
 
   return (
-    <button type="button" onClick={onClick} disabled={outOfStock}
+    <button type="button" onClick={onClick} disabled={outOfStock || stockUnknown}
       aria-label={product.name + ", " + formatCurrency(product.sell_price) + "đ"}
       title={product.name}
       className={cn(
         "group relative flex h-full min-w-0 flex-col overflow-hidden rounded-lg border bg-white text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 dark:bg-card",
         cartQty > 0 ? "border-primary/50 bg-primary/5" : "border-border hover:border-primary/40 hover:bg-muted/40",
         compact ? "justify-between p-2.5" : "",
-        outOfStock && "opacity-50",
+        (outOfStock || stockUnknown) && "opacity-50",
       )}>
       {!compact && (
         <div className="relative min-h-0 flex-1 overflow-hidden bg-slate-100/70 p-1 dark:bg-muted/30">
@@ -239,7 +240,7 @@ function ProductCard({
           {cartQty > 0 && (
             <span className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-md bg-primary px-1 text-xs font-bold tabular-nums text-primary-foreground" aria-label={"Đã thêm " + cartQty + " vào giỏ"}>{cartQty}</span>
           )}
-          {enforceStock && cartQty === 0 && <span className="whitespace-nowrap text-xs text-muted-foreground">{outOfStock ? "Hết hàng" : "Sẵn sàng"}</span>}
+          {enforceStock && cartQty === 0 && <span className="whitespace-nowrap text-xs text-muted-foreground">{product.stock === null ? "Chưa xác định" : outOfStock ? "Hết hàng" : "Sẵn sàng"}</span>}
         </div>
       </div>
       {outOfStock && !compact && <Badge variant="destructive" className="absolute left-3 top-3">Hết hàng</Badge>}
