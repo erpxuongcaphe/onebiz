@@ -20,11 +20,22 @@ export async function verifyApprovalScope(db, { id, actor, call }) {
       await db.exec(f.definition);
     }
   }
+  if (process.env.ONEBIZ_LEGACY_OTP_AUDIT_FILE) {
+    const definitions = JSON.parse(
+      await readFile(process.env.ONEBIZ_LEGACY_OTP_AUDIT_FILE, "utf8"),
+    );
+    const current = definitions.find(
+      (entry) => entry.proname === "_verify_and_use_manager_otp_before_00566",
+    );
+    assert.ok(current);
+    await db.exec(current.definition);
+  }
   await db.exec(`create role service_role;
  alter function user_has_permission(uuid,text) set search_path=public;
  alter function user_has_branch_access(uuid,uuid) set search_path=public;
  create table user_permission_overrides(tenant_id uuid,user_id uuid,permission_code text,override_type text);
  create table user_branch_permission_overrides(tenant_id uuid,user_id uuid,branch_id uuid,permission_code text,override_type text);
+ create table staff_branch_permission_catalog(permission_code text primary key,enforcement_version integer);
  insert into branch_grants values('${id(1)}','${id(11)}'),('${id(2)}','${id(11)}');
  delete from manager_approval_requests; delete from manager_otp_codes;
  insert into user_branch_permission_overrides values('${id(100)}','${id(1)}','${id(10)}','pos_fnb.discount','revoke'),('${id(100)}','${id(1)}','${id(11)}','pos_fnb.discount','grant');`);
@@ -61,6 +72,15 @@ export async function verifyApprovalScope(db, { id, actor, call }) {
     await readFile(
       new URL(
         "../../supabase/migrations/20261111150452_staff_branch_approval_consumption.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  );
+  await db.exec(
+    await readFile(
+      new URL(
+        "../../supabase/migrations/20261112034850_staff_branch_retail_discount_catalog.sql",
         import.meta.url,
       ),
       "utf8",
@@ -170,6 +190,96 @@ export async function verifyApprovalScope(db, { id, actor, call }) {
       [issued.otp_id, id(2)],
     ),
     /SCOPE_DENIED/,
+  );
+  // Retail uses the same approval lifecycle, but has a separate permission.
+  await db.exec(`delete from manager_approval_requests; delete from manager_otp_codes;
+    delete from grants where actor='${id(1)}' and permission='pos_retail.discount';
+    delete from user_branch_permission_overrides;
+    insert into user_branch_permission_overrides values
+      ('${id(100)}','${id(1)}','${id(10)}','pos_retail.discount','revoke'),
+      ('${id(100)}','${id(1)}','${id(11)}','pos_retail.discount','grant');
+    insert into manager_approval_requests(id,tenant_id,branch_id,action_code,requested_by,reason,summary,payload)
+      values ('${id(820)}','${id(100)}','${id(10)}','pos_retail.discount_override','${id(2)}','Test reason','Test','{"amount":100}'),
+             ('${id(821)}','${id(100)}','${id(11)}','pos_retail.discount_override','${id(2)}','Test reason','Test','{"amount":100}');`);
+  await actor(1);
+  assert.deepEqual(
+    (await call("select pending_manager_approvals_00566() v")).map((x) => x.id),
+    [id(821)],
+  );
+  await assert.rejects(
+    call("select issue_manager_approval_otp_00566($1) v", [id(820)]),
+    /PERMISSION_DENIED/,
+  );
+  const retail = await call("select issue_manager_approval_otp_00566($1) v", [
+    id(821),
+  ]);
+  await actor(2);
+  await db.exec(
+    `update user_branch_permission_overrides set override_type='revoke' where permission_code='pos_retail.discount' and branch_id='${id(11)}';`,
+  );
+  await assert.rejects(
+    call(
+      "select verify_and_use_manager_otp($1,'pos_retail.discount_override',$2) v",
+      [retail.code, { approval_request_id: id(821) }],
+    ),
+    /APPROVER_SCOPE_DENIED/,
+  );
+  await db.exec(
+    `update user_branch_permission_overrides set override_type='grant' where permission_code='pos_retail.discount' and branch_id='${id(11)}';`,
+  );
+  await call(
+    "select verify_and_use_manager_otp($1,'pos_retail.discount_override',$2) v",
+    [retail.code, { approval_request_id: id(821) }],
+  );
+  assert.equal(
+    await call(
+      "select verify_otp_authorization($1,'pos_retail.discount_override',$2,null) v",
+      [retail.otp_id, id(2)],
+    ),
+    id(1),
+  );
+  await assert.rejects(
+    call(
+      "select verify_otp_authorization($1,'pos_retail.discount_override',$2,null) v",
+      [retail.otp_id, id(2)],
+    ),
+    /SCOPE_DENIED/,
+  );
+  await actor(1);
+  await db.exec(`insert into grants values ('${id(1)}','pos_fnb.cancel_unpaid_order');
+    insert into user_branch_permission_overrides values ('${id(100)}','${id(1)}','${id(11)}','pos_fnb.cancel_unpaid_order','grant');`);
+  const legacy = await call(
+    "select _issue_manager_otp_before_00566('fnb.cancel_unpaid_bill','{}',$1,null::text,null::text) v",
+    [id(11)],
+  );
+  await db.exec(
+    `update user_branch_permission_overrides set override_type='revoke' where permission_code='pos_fnb.cancel_unpaid_order';`,
+  );
+  await actor(2);
+  await assert.rejects(
+    call(
+      "select verify_and_use_manager_otp($1,'fnb.cancel_unpaid_bill','{}') v",
+      [legacy.code],
+    ),
+    /APPROVER_SCOPE_DENIED/,
+  );
+  assert.equal(
+    await call("select used_at v from manager_otp_codes where id=$1", [
+      legacy.otp_id,
+    ]),
+    null,
+  );
+  await db.exec(
+    `update user_branch_permission_overrides set override_type='grant' where permission_code='pos_fnb.cancel_unpaid_order';`,
+  );
+  assert.equal(
+    (
+      await call(
+        "select verify_and_use_manager_otp($1,'fnb.cancel_unpaid_bill','{}') v",
+        [legacy.code],
+      )
+    ).otp_id,
+    legacy.otp_id,
   );
   console.log(
     "PASS: all seven approval stages respect persisted branch, local-only manager grant works through issuance/verification/consumption, revocation blocks unused and verified tokens, replay blocked.",
