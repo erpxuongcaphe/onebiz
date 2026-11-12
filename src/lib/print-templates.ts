@@ -301,12 +301,7 @@ export function buildInvoicePrintData(
     currentDebt != null &&
     (currentDebt > 0 || oldDebt > 0);
 
-  const summaryRows: {
-    label: string;
-    value: string;
-    bold?: boolean;
-    tone?: "danger" | "success";
-  }[] = [
+  const summaryRows: NonNullable<DocumentPrintData["summaryRows"]> = [
     {
       label: "Tổng tiền hàng",
       value: formatCurrency(row.totalAmount - shippingFee),
@@ -330,24 +325,25 @@ export function buildInvoicePrintData(
       ? row.amountTendered
       : row.paid;
   summaryRows.push({ label: "Khách đã thanh toán", value: formatCurrency(paidDisplay) });
+  const remaining = due - row.paid;
+  const invoiceBalanceRow: NonNullable<DocumentPrintData["invoiceBalanceRow"]> = paidDisplay > due
+    ? { label: "Tiền thối lại", value: formatCurrency(paidDisplay - due) }
+    : {
+        label: "Khách còn phải trả",
+        value: formatCurrency(remaining),
+        tone: remaining > 0 ? "danger" : "success",
+      };
+  const retailDebt = showDebt && row.source !== "fnb";
   if (showDebt) {
-    summaryRows.push({ label: "Nợ cũ", value: formatCurrency(oldDebt) });
+    summaryRows.push({ label: "Nợ cũ", value: formatCurrency(oldDebt), ...(retailDebt ? { customerDebt: true } : {}) });
     summaryRows.push({
       label: "Còn nợ",
       value: formatCurrency(currentDebt ?? 0),
       bold: true,
+      ...(retailDebt ? { customerDebt: true } : {}),
     });
-  } else if (paidDisplay > due) {
-    // Đưa dư: chỉ "Tiền thối lại" (đã ngầm báo trả đủ) — không thêm "Còn phải trả 0đ" thừa.
-    summaryRows.push({ label: "Tiền thối lại", value: formatCurrency(paidDisplay - due) });
   } else {
-    // Trả đủ → "Khách còn phải trả" 0đ (xanh); trả thiếu → số dương (đỏ).
-    const remaining = due - row.paid;
-    summaryRows.push({
-      label: "Khách còn phải trả",
-      value: formatCurrency(remaining),
-      tone: remaining > 0 ? "danger" : "success",
-    });
+    summaryRows.push(invoiceBalanceRow);
   }
 
   return {
@@ -371,6 +367,7 @@ export function buildInvoicePrintData(
       ? { items, itemColumns: saleColumnsFor(items) }
       : {}),
     summaryRows,
+    ...(retailDebt ? { invoiceBalanceRow } : {}),
     // CEO 08/07: in ghi chú người bán trên hóa đơn (như phiếu nhập/xuất).
     note: row.note,
     showSignature: on(f.signature),

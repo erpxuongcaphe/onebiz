@@ -20,6 +20,14 @@ export interface DocumentLineItem {
   note?: string;
 }
 
+export interface DocumentSummaryRow {
+  label: string;
+  value: string;
+  bold?: boolean;
+  tone?: "danger" | "success";
+  customerDebt?: boolean;
+}
+
 export interface DocumentPrintData {
   thermalLayout?: ThermalLayoutConfig;
   /** Readable F&B thermal defaults; leaves A4/A5 and other document flows intact. */
@@ -51,12 +59,9 @@ export interface DocumentPrintData {
 
   // Summary rows at bottom. tone: nhấn màu dòng "Khách còn phải trả"
   // (danger = còn nợ, success = đã đủ) — preview + máy in màu thấy màu.
-  summaryRows?: {
-    label: string;
-    value: string;
-    bold?: boolean;
-    tone?: "danger" | "success";
-  }[];
+  summaryRows?: DocumentSummaryRow[];
+  /** Số còn phải trả hoặc tiền thối của riêng hóa đơn, dùng khi ẩn dư nợ khách hàng. */
+  invoiceBalanceRow?: DocumentSummaryRow;
 
   // Footer note
   note?: string;
@@ -383,7 +388,7 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
   .summary .bold td { font-weight: 700; ${isThermal ? "border-top: 1px dashed #000; font-size: 13px; padding-top: 5px;" : `border-top: 2px solid #222; background: #f5f5f5; font-size: ${isA5 ? "14px" : "16px"}; padding-top: 7px;`} }
   .summary .bold td.right { font-weight: 800; }
 
-  .note { margin-top: ${isThermal ? "3px" : "16px"}; font-size: ${isThermal ? "9px" : "12px"}; color: ${isThermal ? "#000" : "#555"}; }
+  .note { margin-top: ${isThermal ? "3px" : "16px"}; font-size: ${isThermal ? "9px" : "12px"}; color: ${isThermal ? "#000" : "#555"}; overflow-wrap: anywhere; }
 
   .footer { margin-top: 32px; display: ${isThermal || d.showSignature === false ? "none" : "flex"}; justify-content: space-around; }
   .footer .col { text-align: center; flex: 1; padding: 0 6px; }
@@ -450,7 +455,7 @@ ${isThermal && itemsBlock ? `<hr class="sep" />` : ""}
 ${itemsBlock}
 ${isThermal && summaryHtml ? `<hr class="sep" />` : ""}
 ${summaryHtml ? `<table class="summary">${summaryHtml}</table>` : ""}
-${d.note ? `<div class="note"><strong>Ghi chú:</strong> ${esc(d.note)}</div>` : ""}${qrBlock}
+${d.note ? `<div class="note"><strong>Ghi chú:</strong> ${formatPrintNoteHtml(d.note)}</div>` : ""}${qrBlock}
 ${fnbLayout?.showStaff && d.createdBy ? `<div class="note">Nhân viên: ${esc(d.createdBy)}</div>` : ""}
 
 ${
@@ -487,6 +492,10 @@ function esc(s: unknown): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+export function formatPrintNoteHtml(note: string): string {
+  return esc(note).replace(/\r\n|\r|\n/g, "<br>");
 }
 
 function fmtVnd(n: number): string {

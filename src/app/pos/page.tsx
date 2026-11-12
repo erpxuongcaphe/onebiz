@@ -76,6 +76,7 @@ import { printShiftReport } from "@/lib/print-shift-report";
 import { resolvePrintTemplate } from "@/lib/services";
 import { applyTemplateToDocData } from "@/lib/print-apply-template";
 import { printDocument, type DocumentPrintData } from "@/lib/print-document";
+import { useRetailInvoicePrint } from "@/lib/hooks/use-retail-invoice-print";
 // CEO 13/07: dựng khối khách trên phiếu POS qua CÙNG helper với trang Hóa đơn.
 import {
   buildBuyerHeaderFields,
@@ -670,6 +671,7 @@ function PosPageInner() {
     });
   }, [currentBranch, branches, switchBranch, toast, user?.branchId]);
   const { settings, updateSettings } = useSettings();
+  const { printPreparedRetailInvoice, printerDialog } = useRetailInvoicePrint();
   const [currentShift, setCurrentShift] = useState<Shift | null>(null);
   const [openShiftDialogOpen, setOpenShiftDialogOpen] = useState(false);
   const [closeShiftDialogOpen, setCloseShiftDialogOpen] = useState(false);
@@ -2766,7 +2768,7 @@ function PosPageInner() {
                 createdBy: user?.fullName,
               };
             }
-            printDocument(applyTemplateToDocData(doc, resolved), {
+            printPreparedRetailInvoice(applyTemplateToDocData(doc, resolved), {
               paperSize: resolved.paperSize,
             });
           } else {
@@ -2926,7 +2928,7 @@ function PosPageInner() {
       setSubmitting(null);
       submitLockRef.current = false;
     }
-  }, [state, toast, autoPrint, networkStatus.isOnline, currentShift, currentBranch?.id, user?.id, appliedPromotion, appliedRedeem, clientSessionId, hasUnsavedCart]);
+  }, [state, toast, autoPrint, networkStatus.isOnline, currentShift, currentBranch?.id, user?.id, appliedPromotion, appliedRedeem, clientSessionId, hasUnsavedCart, printPreparedRetailInvoice]);
 
   // CEO 04/05/2026: Bỏ handleDebtCheckout — nút "Ghi nợ" cũ thay bằng
   // handleComplete ghi nợ phần thiếu cho khách đã được thu ngân chọn.
@@ -3057,6 +3059,7 @@ function PosPageInner() {
   // ============================================================
   return (
     <>
+      {printerDialog}
       {/* ═══════════ OFFLINE STATUS BAR ═══════════ */}
       <ConnectionStatusBar
         status={networkStatus}

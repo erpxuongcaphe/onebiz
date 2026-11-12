@@ -262,6 +262,7 @@ export function applyBrandToDocData(
 }
 
 export interface PrintWithTemplateOptions {
+  onPrint?: typeof printDocument;
   channel: PrintChannel;
   docType: PrintDocType;
   branchId?: string | null;
@@ -278,6 +279,7 @@ export interface PrintWithTemplateOptions {
 export async function printDocumentWithTemplate(
   opts: PrintWithTemplateOptions,
 ): Promise<void> {
+  const print = opts.onPrint ?? printDocument;
   let baseWithUnits = opts.base;
   try {
     baseWithUnits = await withOperationalPrintUnits(opts.base,opts.docType);
@@ -306,13 +308,13 @@ export async function printDocumentWithTemplate(
     // VẪN áp thương hiệu chi nhánh (in ĐÚNG địa chỉ/SĐT chi nhánh) dù chưa có mẫu riêng.
     try {
       const brand = await getResolvedBrand(opts.branchId ?? null, { branchOnly: opts.channel === "fnb" });
-      printDocument(applyBrandToDocData(opts.base, brand), { paperSize: fallback });
+      print(applyBrandToDocData(opts.base, brand), { paperSize: fallback });
     } catch {
-      printDocument(opts.base, { paperSize: fallback });
+      print(opts.base, { paperSize: fallback });
     }
     return;
   }
 
   const data = applyTemplateToDocData(opts.base, resolved);
-  printDocument(data, { paperSize: resolved.paperSize });
+  print(data, { paperSize: resolved.paperSize });
 }
