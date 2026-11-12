@@ -141,6 +141,10 @@ try {
     "./staff-access-tests/inventory-documents.mjs"
   );
   await verifyInventoryDocumentReads(db, id);
+  const { verifyRelatedInventoryReads } = await import(
+    "./staff-access-tests/inventory-related.mjs"
+  );
+  await verifyRelatedInventoryReads(db, id);
 } finally {
   await db.close();
 }
