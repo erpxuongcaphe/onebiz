@@ -63,6 +63,8 @@ try {
   delete from user_permission_overrides where permission_code='inventory.view';
   delete from role_permissions where permission_code in ('inventory.view','pos_fnb.checkout'); set role authenticated;`);
  assert.deepEqual(await ids('invoice_items_scoped'),[id(60)],'legacy account keeps existing branch-bound reads');
+ const legacyPlan=(await db.query('explain (analyze, verbose) select id from invoice_items_scoped')).rows.map(x=>Object.values(x)[0]).join('\n');
+ assert.match(legacyPlan,/\(never executed\)\n\s*Output: (?:public\.)?_staff_invoice_item_allowed_scopes\(\)/,'legacy reads skip the branch/source scan');
  assert.deepEqual((await db.query('select public._staff_invoice_item_allowed_scopes() scopes')).rows[0].scopes,[`${id(10)}:fnb`],'direct helper does not disclose an unassigned branch');
  await db.exec(`reset role; insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type,created_by)
   values ('${id(1)}','${id(101)}','inventory.view','revoke','${id(100)}'); set role authenticated;`);
