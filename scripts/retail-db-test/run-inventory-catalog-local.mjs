@@ -140,4 +140,8 @@ try {
  check(JSON.stringify(after)===JSON.stringify(before),'every stock record byte-for-byte unchanged');
  check((await db.query("select not prosecdef and provolatile='s' readonly from pg_proc where proname='get_inventory_catalog_00573'")).rows[0].readonly,'STABLE SECURITY INVOKER');
  console.log(`PASS ${checks} inventory catalog checks: active zero stock visible; filters/counts/export pagination; tenant/branch/cost permissions; FNB menu exclusion; stock records unchanged.`);
+ if (process.env.ONEBIZ_STAFF_INVENTORY_CATALOG_TEST === '1') {
+  const { verifyInventoryCatalogScope } = await import('../staff-access-tests/inventory-catalog.mjs');
+  await verifyInventoryCatalogScope(db, uuid, catalog);
+ }
 } finally { await db.close(); }
