@@ -55,3 +55,35 @@ describe("F&B invoice reprint routing", () => {
     expect(page.match(/channel: row.source === "fnb" \? "fnb" : "retail"/g)).toHaveLength(2);
   });
 });
+
+it("waits for a Retail print choice and omits only customer debt for that print", async () => {
+  mocks.resolve.mockResolvedValue({ paperSize: "A5" });
+  const invoiceBalanceRow = { label: "Khách còn phải trả", value: "30,000" };
+  const total = { label: "Tổng cộng", value: "100,000" };
+  const retail = {
+    ...data,
+    invoiceBalanceRow,
+    summaryRows: [
+      total,
+      { label: "Nợ cũ", value: "50,000", customerDebt: true },
+      { label: "Còn nợ", value: "80,000", customerDebt: true },
+    ],
+  };
+  const { result } = renderHook(usePrintWithPicker);
+  const context = { channel: "retail", docType: "sale_invoice", chooseCustomerDebt: true } as const;
+  await act(async () => result.current.printWithPicker(retail, "In", context));
+  const picker = () => (result.current.printerDialog as React.ReactElement<{
+    showCustomerDebtChoice: boolean;
+    onPrint: (paper: "A5", includeCustomerDebt: boolean) => void;
+  }>).props;
+  expect(picker().showCustomerDebtChoice).toBe(true);
+  expect(mocks.print).not.toHaveBeenCalled();
+  act(() => picker().onPrint("A5", false));
+  expect(mocks.print).toHaveBeenLastCalledWith(expect.objectContaining({
+    summaryRows: [total, invoiceBalanceRow],
+  }), { paperSize: "A5", branchId: undefined });
+
+  await act(async () => result.current.printWithPicker(retail, "In", context));
+  act(() => picker().onPrint("A5", true));
+  expect(mocks.print).toHaveBeenLastCalledWith(retail, { paperSize: "A5", branchId: undefined });
+});

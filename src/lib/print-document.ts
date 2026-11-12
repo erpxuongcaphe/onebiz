@@ -20,6 +20,14 @@ export interface DocumentLineItem {
   note?: string;
 }
 
+export interface DocumentSummaryRow {
+  label: string;
+  value: string;
+  bold?: boolean;
+  tone?: "danger" | "success";
+  customerDebt?: boolean;
+}
+
 export interface DocumentPrintData {
   thermalLayout?: ThermalLayoutConfig;
   /** Readable F&B thermal defaults; leaves A4/A5 and other document flows intact. */
@@ -51,12 +59,9 @@ export interface DocumentPrintData {
 
   // Summary rows at bottom. tone: nhấn màu dòng "Khách còn phải trả"
   // (danger = còn nợ, success = đã đủ) — preview + máy in màu thấy màu.
-  summaryRows?: {
-    label: string;
-    value: string;
-    bold?: boolean;
-    tone?: "danger" | "success";
-  }[];
+  summaryRows?: DocumentSummaryRow[];
+  /** Số còn phải trả hoặc tiền thối của riêng hóa đơn, dùng khi ẩn dư nợ khách hàng. */
+  invoiceBalanceRow?: DocumentSummaryRow;
 
   // Footer note
   note?: string;

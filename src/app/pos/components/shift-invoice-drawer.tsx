@@ -29,6 +29,7 @@ import { printReceiptDirect, type ReceiptData } from "@/components/shared/print-
 // CEO 03/07: in lại dùng ĐÚNG đường in của trang Hóa đơn (mẫu theo chi nhánh).
 import { buildInvoicePrintData, toPrintLines } from "@/lib/print-templates";
 import { printDocumentWithTemplate } from "@/lib/print-apply-template";
+import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
 import { useToast } from "@/lib/contexts";
 import { cn } from "@/lib/utils";
 import type { Invoice } from "@/lib/types";
@@ -47,6 +48,7 @@ export function ShiftInvoiceDrawer({
   shiftOpenedAt,
 }: ShiftInvoiceDrawerProps) {
   const { toast } = useToast();
+  const { printPreparedRetailInvoice, printerDialog } = usePrintWithPicker();
   const [loading, setLoading] = useState(false);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [reprintingCode, setReprintingCode] = useState<string | null>(null);
@@ -106,6 +108,7 @@ export function ShiftInvoiceDrawer({
           docType: "sale_invoice",
           branchId: inv.branchId ?? branchId ?? null,
           base: buildInvoicePrintData(inv, undefined, toPrintLines(items)),
+          onPrint: inv.source === "fnb" ? undefined : printPreparedRetailInvoice,
         });
       } catch (engineErr) {
         console.error("[POS] reprint via template failed, fallback receipt:", engineErr);
@@ -130,11 +133,6 @@ export function ShiftInvoiceDrawer({
         };
         printReceiptDirect(receipt);
       }
-      toast({
-        title: `Đã in lại ${inv.code}`,
-        variant: "success",
-        duration: 2000,
-      });
     } catch (err) {
       console.error("[POS] reprint failed:", err);
       toast({
@@ -150,6 +148,7 @@ export function ShiftInvoiceDrawer({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
+        {printerDialog}
         <SheetHeader className="px-4 py-3 border-b">
           <SheetTitle className="flex items-center gap-2 text-base">
             <Icon name="receipt_long" size={16} className="text-primary" />
