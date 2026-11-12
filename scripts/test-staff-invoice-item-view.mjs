@@ -87,6 +87,17 @@ try {
  assert.deepEqual(await ids('invoice_items_scoped'),[id(64)],'order permission does not expose unrelated POS or F&B lines');
  await db.exec(`reset role; insert into role_permissions values ('${id(20)}','pos_retail.checkout'); set role authenticated;`);
  assert.deepEqual(await ids('invoice_items_scoped'),[id(63),id(64)],'retail checkout retains assigned POS/order lines');
+ await db.exec(`reset role; delete from role_permissions where permission_code='pos_retail.checkout';
+  delete from user_branch_permission_overrides where permission_code='orders.view';
+  insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+   values ('${id(1)}','${id(101)}','${id(11)}','inventory.view','revoke','${id(100)}');
+  insert into role_permissions values ('${id(20)}','pos_fnb.view_sales_summary'); set role authenticated;`);
+ assert.deepEqual(await ids('invoice_items_scoped'),[id(60),id(61)],'F&B sales summary does not authorize retail or order lines');
+ await db.exec(`reset role; delete from role_permissions where permission_code='pos_fnb.view_sales_summary';
+  insert into role_permissions values ('${id(20)}','reports.view_detail'); set role authenticated;`);
+ assert.deepEqual(await ids('invoice_items_scoped'),[],'detail modifier alone does not authorize invoice lines');
+ await db.exec(`reset role; insert into role_permissions values ('${id(20)}','reports.analytics'); set role authenticated;`);
+ assert.deepEqual(await ids('invoice_items_scoped'),[id(60),id(61),id(63),id(64)],'analytics with detail permission retains assigned branch reports');
  await db.exec(`reset role; update profiles set is_active=false where id='${id(101)}'; set role authenticated;`);
  assert.deepEqual(await ids('invoice_items_scoped'),[],'inactive account cannot use owner-backed view');
  console.log('PASS invoice line raw/view scope, independent checkout and inactive account');
