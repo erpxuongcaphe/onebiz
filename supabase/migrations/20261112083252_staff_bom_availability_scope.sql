@@ -32,7 +32,9 @@ revoke all on function public._staff_bom_availability_guard(uuid,uuid) from publ
 do $migration$
 declare source text; patched text;
  anchor text:='where public.should_cascade_bom_at_branch(s.sku, p_branch_id)';
- replacement text:='where public._staff_bom_availability_guard(p_tenant_id,p_branch_id) and exists(select 1 from public.products staff_sku where staff_sku.id=s.sku and staff_sku.tenant_id=p_tenant_id) and public.should_cascade_bom_at_branch(s.sku, p_branch_id)';
+ -- The uncorrelated scalar subquery permits PostgreSQL to evaluate the guard
+ -- once per statement rather than repeating the same access check per SKU.
+ replacement text:='where (select public._staff_bom_availability_guard(p_tenant_id,p_branch_id)) and exists(select 1 from public.products staff_sku where staff_sku.id=s.sku and staff_sku.tenant_id=p_tenant_id) and public.should_cascade_bom_at_branch(s.sku, p_branch_id)';
 begin
  source:=pg_get_functiondef('public.get_bom_availability_batch(uuid,uuid,uuid[])'::regprocedure);
  if (length(source)-length(replace(source,anchor,'')))/length(anchor)<>1 then raise exception 'STAFF_BOM_AVAILABILITY_CONSUMER_CHANGED';end if;
