@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
@@ -131,7 +131,7 @@ function InternalExportDetail({
                 label: "Tổng giá trị",
                 value: (
                   <span className="font-semibold text-primary">
-                    {formatCurrency(item.totalAmount)}
+                    {item.costVisible === false ? "Không có quyền" : formatCurrency(item.totalAmount)}
                   </span>
                 ),
               },
@@ -199,7 +199,9 @@ export default function XuatDungNoiBoPage() {
   const [amountMax, setAmountMax] = useState("");
   const [creatorOptions, setCreatorOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [searchField, setSearchField] = useState("all");
-  const [summary, setSummary] = useState({ completedCount: 0, draftCount: 0, cancelledCount: 0, completedValue: 0 });
+  const [summary, setSummary] = useState({ completedCount: 0, draftCount: 0, cancelledCount: 0, completedValue: 0, costVisible: false });
+  const [listError, setListError] = useState(false);
+  const fetchVersion = useRef(0);
   const [filterOpen, setFilterOpen] = useState(false);
   // CEO 08/07: xem tất cả chi nhánh (cục bộ) khi bảng trống vì lọc chi nhánh.
   const [viewAllBranches, setViewAllBranches] = useState(false);
@@ -267,7 +269,7 @@ export default function XuatDungNoiBoPage() {
       size: 140,
       cell: ({ row }) => (
         <span className="text-right block">
-          {formatCurrency(row.original.totalAmount)}
+          {row.original.costVisible === false ? "Không có quyền" : formatCurrency(row.original.totalAmount)}
         </span>
       ),
     },
@@ -284,9 +286,11 @@ export default function XuatDungNoiBoPage() {
 
   /* ---- Fetch data ---- */
   const fetchData = useCallback(async () => {
+    const request = ++fetchVersion.current;
     if (permissionsLoading) return;
-    if (!activeBranchId && !duocXemToanChuoi) { setData([]); setTotal(0); setOtherBranchCount(0); setLoading(false); return; }
+    if (!activeBranchId && !duocXemToanChuoi) { setData([]); setTotal(0); setOtherBranchCount(0); setSummary({ completedCount: 0, draftCount: 0, cancelledCount: 0, completedValue: 0, costVisible: false }); setLoading(false); return; }
     setLoading(true);
+    setListError(false);
     // Không có try/finally thì truy vấn lỗi là cờ loading không bao giờ tắt →
     // trang treo mãi ở vòng xoay, người dùng không biết vì sao.
     try {
@@ -296,6 +300,7 @@ export default function XuatDungNoiBoPage() {
     const branchScope = duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId;
     const query = { search, searchField, statuses: selectedStatuses, dateFrom: effectiveDateFrom, dateTo: effectiveDateTo, createdBy: creatorFilter, amountMin: amountMin ? Number(amountMin) : undefined, amountMax: amountMax ? Number(amountMax) : undefined, branchId: branchScope };
     const result = await getInternalExportListWorkspace({ page, pageSize, ...query });
+    if (request !== fetchVersion.current) return;
     setData(result.data);
     setTotal(result.total);
     setSummary(result.summary);
@@ -303,23 +308,29 @@ export default function XuatDungNoiBoPage() {
     // lọc, bỏ branch). Chỉ khi đang lọc theo 1 chi nhánh cụ thể.
     if (duocXemToanChuoi && result.data.length === 0 && !viewAllBranches && activeBranchId) {
       const all = await getInternalExportListWorkspace({ page: 0, pageSize: 1, ...query, branchId: undefined });
+      if (request !== fetchVersion.current) return;
       setOtherBranchCount(all.total);
     } else {
       setOtherBranchCount(0);
     }
     } catch (e) {
+      if (request !== fetchVersion.current) return;
+      setListError(true);
+      setData([]); setTotal(0); setOtherBranchCount(0);
+      setSummary({ completedCount: 0, draftCount: 0, cancelledCount: 0, completedValue: 0, costVisible: false });
       toast({
         variant: "error",
         title: "Không tải được danh sách phiếu xuất dùng nội bộ",
         description: e instanceof Error ? e.message : "Lỗi không xác định",
       });
     } finally {
-      setLoading(false);
+      if (request === fetchVersion.current) setLoading(false);
     }
   }, [page, pageSize, search, searchField, selectedStatuses, datePreset, dateFrom, dateTo, creatorFilter, amountMin, amountMax, activeBranchId, viewAllBranches, toast, duocXemToanChuoi, permissionsLoading]);
 
   useEffect(() => {
     fetchData();
+    return () => { fetchVersion.current++; };
   }, [fetchData]);
 
   useEffect(() => {
@@ -341,7 +352,8 @@ export default function XuatDungNoiBoPage() {
     ];
     const range = computeListPresetRange(datePreset);
     const rows = await getInternalExportsForExport({ search, searchField, statuses: selectedStatuses, dateFrom: datePreset === "custom" ? dateFrom : range.from, dateTo: datePreset === "custom" ? dateTo : range.to, createdBy: creatorFilter, amountMin: amountMin ? Number(amountMin) : undefined, amountMax: amountMax ? Number(amountMax) : undefined, branchId: duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId });
-    if (type === "excel") exportToExcel(rows, exportColumns, "xuat-dung-noi-bo"); else exportToCsv(rows, exportColumns, "xuat-dung-noi-bo");
+    const safeColumns = rows.every((row) => row.costVisible !== false) ? exportColumns : exportColumns.filter((column) => column.key !== "totalAmount");
+    if (type === "excel") exportToExcel(rows, safeColumns, "xuat-dung-noi-bo"); else exportToCsv(rows, safeColumns, "xuat-dung-noi-bo");
   };
 
   /* ---- Inline detail renderer ---- */
@@ -391,17 +403,17 @@ export default function XuatDungNoiBoPage() {
         searchField={searchField}
         onSearchFieldChange={setSearchField}
         onExport={{
-          excel: () => handleExport("excel"),
-          csv: () => handleExport("csv"),
+          excel: () => void handleExport("excel").catch((error) => toast({ title: "Không xuất được phiếu", description: error instanceof Error ? error.message : undefined, variant: "error" })),
+          csv: () => void handleExport("csv").catch((error) => toast({ title: "Không xuất được phiếu", description: error instanceof Error ? error.message : undefined, variant: "error" })),
         }}
-        actions={[
+        actions={activeBranchId && txPerms.forBranch(activeBranchId).canCancel ? [
           {
             label: "Xuất dùng nội bộ",
             icon: <Icon name="add" size={16} />,
             variant: "default",
             onClick: () => setCreateOpen(true),
           },
-        ]}
+        ] : []}
       />
 
       {viewAllBranches && (
@@ -418,7 +430,7 @@ export default function XuatDungNoiBoPage() {
         total={total}
         density="compact"
         columnToggle
-        toolbarMetrics={<><ListMetric icon={<Icon name="inventory_2" size={15} />} label="Kết quả" value={total.toString()} hint="Toàn bộ kết quả lọc" /><ListMetric icon={<Icon name="check_circle" size={15} />} label="Hoàn thành" value={summary.completedCount.toString()} hint="Toàn bộ kết quả lọc" /><ListMetric icon={<Icon name="edit_note" size={15} />} label="Phiếu tạm" value={summary.draftCount.toString()} hint={`${summary.cancelledCount} phiếu đã hủy`} tone={summary.draftCount > 0 ? "danger" : "default"} /><ListMetric icon={<Icon name="payments" size={15} />} label="Giá trị đã xuất" value={formatCurrency(summary.completedValue)} hint="Chỉ tính phiếu hoàn thành" /></>}
+        toolbarMetrics={<><ListMetric icon={<Icon name="inventory_2" size={15} />} label="Kết quả" value={total.toString()} hint="Toàn bộ kết quả lọc" /><ListMetric icon={<Icon name="check_circle" size={15} />} label="Hoàn thành" value={summary.completedCount.toString()} hint="Toàn bộ kết quả lọc" /><ListMetric icon={<Icon name="edit_note" size={15} />} label="Phiếu tạm" value={summary.draftCount.toString()} hint={`${summary.cancelledCount} phiếu đã hủy`} tone={summary.draftCount > 0 ? "danger" : "default"} /><ListMetric icon={<Icon name="payments" size={15} />} label="Giá trị đã xuất" value={loading ? "Đang tải" : listError ? "Không tải được" : summary.costVisible ? formatCurrency(summary.completedValue) : "Không có quyền"} hint="Chỉ tính phiếu hoàn thành" /></>}
         toolbarActions={<><Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)}><Icon name="calendar_today" size={15} /><span className="hidden sm:inline">{datePresetLabel}</span></Button><Button type="button" variant="outline" size="sm" className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)} aria-label={`Mở bộ lọc${filterChips.length ? `, ${filterChips.length} điều kiện` : ""}`}><Icon name="filter_alt" size={15} /><span className="hidden sm:inline">Bộ lọc</span>{filterChips.length > 0 && <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">{filterChips.length}</span>}</Button></>}
         toolbarFooter={<FilterChips filters={filterChips} onClearAll={filterChips.length > 1 ? clearListFilters : undefined} />}
         emptyState={emptyState}
@@ -461,12 +473,12 @@ export default function XuatDungNoiBoPage() {
                   format: (v: string) => formatDate(v),
                 },
                 { header: "Người tạo", key: "createdBy", width: 15 },
-                {
+                ...(selectedRows.every((row) => row.costVisible !== false) ? [{
                   header: "Tổng giá trị",
                   key: "totalAmount",
                   width: 15,
                   format: (v: number) => v,
-                },
+                }] : []),
                 {
                   header: "Trạng thái",
                   key: "status",

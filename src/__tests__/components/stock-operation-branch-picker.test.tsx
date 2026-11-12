@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const state = vi.hoisted(() => ({ read: vi.fn(), toast: vi.fn(), scope: {} }));
+const state = vi.hoisted(() => ({ read: vi.fn(), toast: vi.fn(), scope: {}, canViewCost: false }));
 vi.mock("@/components/ui/dialog", () => ({
   Dialog: ({ open, children }: { open: boolean; children: React.ReactNode }) => open ? <div>{children}</div> : null,
   DialogContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -10,6 +10,7 @@ vi.mock("@/components/ui/dialog", () => ({
   DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 vi.mock("@/lib/contexts", () => ({ useToast: () => ({ toast: state.toast }) }));
+vi.mock("@/lib/permissions/use-permission", () => ({ usePermissions: () => ({ hasPermission: () => state.canViewCost }) }));
 vi.mock("@/lib/hooks/use-fnb-catalog-scope", () => ({ useFnbCatalogScope: () => state.scope }));
 vi.mock("@/lib/fnb-catalog-scope", () => ({ applyFnbCatalogScope: (query: unknown) => query }));
 vi.mock("@/lib/hooks/use-product-uom", () => ({ useProductUom: () => ({ map: new Map() }) }));
@@ -27,8 +28,12 @@ import { CreateDisposalDialog } from "@/components/shared/dialogs/create-disposa
 import { CreateInternalExportDialog } from "@/components/shared/dialogs/create-internal-export-dialog";
 
 describe("stock operation product picker", () => {
-  beforeEach(() => { state.read.mockReset(); state.toast.mockReset(); });
+  beforeEach(() => { state.read.mockReset(); state.toast.mockReset(); state.canViewCost = false; });
   afterEach(cleanup);
+  it.each([["xuất hủy", CreateDisposalDialog], ["xuất nội bộ", CreateInternalExportDialog]])("does not present masked cost as zero for %s", (_name, Component) => {
+    render(<Component open onOpenChange={vi.fn()} />);
+    expect(screen.getByText("Không có quyền")).toBeInTheDocument();
+  });
   it.each([["xuất hủy", CreateDisposalDialog], ["xuất nội bộ", CreateInternalExportDialog]])("uses the actual branch stock for %s", async (_name, Component) => {
     state.read.mockResolvedValue({ allowed: true, quantities: new Map([["coffee", 3]]) });
     render(<Component open onOpenChange={vi.fn()} />);

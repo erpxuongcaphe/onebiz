@@ -206,6 +206,11 @@ export function useTxRowPermissions(kind: TxKind): TxRowPermissions & {
         hasPermissionAtBranch(code, branchId ?? null),
       );
       if (hasAssignedBranchAccess(branchId ?? null)) {
+        if (kind === "disposal" || kind === "internal_export") {
+          const code = kind === "disposal" ? "inventory.dispose" : "inventory.internal_export";
+          const canReadForWork = hasPermissionAtBranch(code, branchId ?? null);
+          return { ...permissions, canView: permissions.canView || canReadForWork, canPrint: permissions.canPrint || canReadForWork };
+        }
         if (kind === "stock_transfer") {
           const canReadForWork = hasPermissionAtBranch("inventory.transfer", branchId ?? null);
           return { ...permissions, canView: permissions.canView || canReadForWork, canPrint: permissions.canPrint || canReadForWork };

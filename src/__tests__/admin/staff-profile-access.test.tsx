@@ -58,6 +58,14 @@ const snapshot: StaffProfileSnapshot = {
   branchPermissionCodes: ["pos_fnb.split_bill", "pos_fnb.transfer_table"],
 };
 describe("staff profile scope", () => {
+  it("explains stock action document access and separate cost rights", () => {
+    const data = structuredClone(snapshot); data.branchPermissionCodes.push("inventory.dispose");
+    render(<StaffProfileEditor snapshot={data} onSave={vi.fn()} onReload={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", {name:"Tùy chỉnh quyền"}));
+    fireEvent.click(screen.getByRole("button", {name:"Premium"}));
+    fireEvent.change(screen.getByRole("textbox", {name:"Tìm quyền"}), {target:{value:"inventory.dispose"}});
+    expect(screen.getByText(/Giá trị và giá vốn cần quyền xem giá vốn riêng/)).toBeVisible();
+  });
   it("distinguishes reading a transfer from performing it at both branches", () => {
     const data = structuredClone(snapshot);
     data.branchPermissionCodes.push("inventory.transfer");

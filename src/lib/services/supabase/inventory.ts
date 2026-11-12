@@ -57,6 +57,7 @@ function mapDisposalExport(row: any): DisposalExport {
     date: row.created_at,
     totalProducts: Number(row.total_products ?? 0),
     totalAmount: Number(row.total_amount ?? 0),
+    costVisible: row.costVisible !== false,
     reason: row.reason ?? "",
     note: row.note ?? undefined,
     status: row.status === "completed" || row.status === "cancelled" ? row.status : "draft",
@@ -75,7 +76,32 @@ export interface DisposalExportListWorkspaceParams {
 }
 
 export interface DisposalExportListWorkspaceResult extends QueryResult<DisposalExport> {
-  summary: { completedCount: number; draftCount: number; cancelledCount: number; completedValue: number };
+  summary: { completedCount: number; draftCount: number; cancelledCount: number; completedValue: number; costVisible: boolean };
+}
+
+// Both action and view rights are evaluated per persisted branch by the RPC.
+// Cost amounts are independently masked on the server before they reach the UI.
+async function getStockWorkList(supabase: any, kind: string, params: DisposalExportListWorkspaceParams | InternalExportListWorkspaceParams, from?: string, toExclusive?: string) {
+  const { data, error } = await supabase.rpc("get_stock_work_document_list", {
+    p_kind: kind, p_branch: params.branchId ?? null, p_page: params.page, p_page_size: params.pageSize,
+    p_search: params.search?.trim() || null, p_search_field: params.searchField ?? "all",
+    p_statuses: params.statuses?.length ? params.statuses : null, p_from: from ?? null, p_to: toExclusive ?? null,
+    p_created_by: "createdBy" in params ? params.createdBy || null : null,
+    p_amount_min: Number.isFinite(params.amountMin) ? params.amountMin : null,
+    p_amount_max: Number.isFinite(params.amountMax) ? params.amountMax : null,
+  });
+  if (error?.message?.includes("STOCK_WORK_VALUE_FILTER_DENIED")) throw new Error("Không thể lọc theo giá trị khi chưa có quyền xem giá vốn.");
+  if (error) handleError(error, "getStockWorkList");
+  if (!data || typeof data.costVisible !== "boolean" || !Array.isArray(data.items) || !Number.isSafeInteger(data.total) || data.total < 0 ||
+      !data.summary || ["completedCount", "draftCount", "cancelledCount"].some((key) => !Number.isSafeInteger(data.summary[key]) || data.summary[key] < 0) ||
+      (!data.costVisible && data.summary.completedValue != null) ||
+      (data.costVisible && (data.summary.completedValue == null || !Number.isFinite(Number(data.summary.completedValue)))) ||
+      data.items.some((r: any) => !r || typeof r.id !== "string" || r.costVisible !== data.costVisible ||
+        (!data.costVisible && r.total_amount != null) ||
+        (data.costVisible && (r.total_amount == null || !Number.isFinite(Number(r.total_amount)))))) {
+    throw new Error("Dữ liệu danh sách phiếu không hợp lệ.");
+  }
+  return data;
 }
 
 export async function getDisposalExportListWorkspace(
@@ -83,16 +109,7 @@ export async function getDisposalExportListWorkspace(
 ): Promise<DisposalExportListWorkspaceResult> {
   const supabase = getClient();
   const { from, toExclusive } = normalizeCreatedAtRange({ dateFrom: params.dateFrom, dateTo: params.dateTo });
-  const { data, error } = await (supabase.rpc as any)("get_disposal_export_list_workspace", {
-    p_page: params.page, p_page_size: params.pageSize,
-    p_search: params.search?.trim() || null, p_search_field: params.searchField ?? "all",
-    p_statuses: params.statuses?.length ? params.statuses : null,
-    p_date_from: from ?? null, p_date_to_exclusive: toExclusive ?? null,
-    p_amount_min: Number.isFinite(params.amountMin) ? params.amountMin : null,
-    p_amount_max: Number.isFinite(params.amountMax) ? params.amountMax : null,
-    p_branch_id: params.branchId ?? null,
-  });
-  if (error) handleError(error, "getDisposalExportListWorkspace");
+  const data = await getStockWorkList(supabase, "disposal_export", params, from, toExclusive);
   const payload = (data ?? {}) as Record<string, any>;
   const summary = (payload.summary ?? {}) as Record<string, unknown>;
   return {
@@ -103,55 +120,49 @@ export async function getDisposalExportListWorkspace(
       draftCount: Number(summary.draftCount ?? 0),
       cancelledCount: Number(summary.cancelledCount ?? 0),
       completedValue: Number(summary.completedValue ?? 0),
+      costVisible: payload.costVisible,
     },
   };
+}
+
+async function collectCompleteStockWorkExport<T extends { id: string }>(read: (page: number) => Promise<{ data: T[]; total: number }>): Promise<T[]> {
+  const rows: T[] = [];
+  const seen = new Set<string>();
+  let expected: number | undefined;
+  for (let page = 0; ; page += 1) {
+    const result = await read(page);
+    if (!Number.isSafeInteger(result.total) || result.total < 0 || (expected !== undefined && result.total !== expected))
+      throw new Error("Danh sách phiếu đã thay đổi. Vui lòng xuất lại.");
+    expected ??= result.total;
+    if (result.data.length !== Math.min(200, expected - rows.length))
+      throw new Error("Chưa tải đủ phiếu. Vui lòng xuất lại.");
+    for (const row of result.data) {
+      if (!row.id || seen.has(row.id)) throw new Error("Danh sách phiếu đã thay đổi. Vui lòng xuất lại.");
+      seen.add(row.id); rows.push(row);
+    }
+    if (rows.length === expected) return rows;
+  }
 }
 
 export async function getDisposalExportsForExport(
   params: Omit<DisposalExportListWorkspaceParams, "page" | "pageSize">,
 ): Promise<DisposalExport[]> {
-  const rows: DisposalExport[] = [];
-  for (let page = 0; ; page += 1) {
-    const result = await getDisposalExportListWorkspace({ ...params, page, pageSize: 200 });
-    rows.push(...result.data);
-    if (rows.length >= result.total || result.data.length === 0) return rows;
-  }
+  return collectCompleteStockWorkExport((page) => getDisposalExportListWorkspace({ ...params, page, pageSize: 200 }));
 }
 
 export async function getDisposalExports(params: QueryParams): Promise<QueryResult<DisposalExport>> {
-  const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-  const { from, to } = getPaginationRange(params);
+  return getDisposalExportListWorkspace(stockWorkParams(params));
+}
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let query = (supabase as any)
-    .from("disposal_exports")
-    .select("*, profiles!disposal_exports_created_by_fkey(full_name)", { count: "exact" })
-    .eq("tenant_id", tenantId);
-
-  // Search theo mã phiếu
-  if (params.search) {
-    query = query.ilike("code", `%${params.search}%`);
-  }
-
-  query = applyStatusFilter(query, params.filters?.status);
-  query = applyCreatedAtRange(query, params.filters);
-
-  // Filter: branch
-  if (params.branchId) {
-    query = query.eq("branch_id", params.branchId);
-  }
-
-  // Sort & paginate
-  query = query
-    .order("created_at", { ascending: false })
-    .range(from, to);
-
-  const { data, count, error } = await query;
-  if (error) handleError(error, "getDisposalExports");
-
-  const exports: DisposalExport[] = (data ?? []).map(mapDisposalExport);
-  return { data: exports, total: count ?? 0 };
+function stockWorkParams(params: QueryParams): DisposalExportListWorkspaceParams {
+  const status = params.filters?.status;
+  const statuses = (Array.isArray(status) ? status : status ? [status] : []).filter((value) => value && value !== "all");
+  return {
+    page: params.page, pageSize: params.pageSize, search: params.search, searchField: "code",
+    statuses, branchId: params.branchId,
+    dateFrom: typeof params.filters?.dateFrom === "string" ? params.filters.dateFrom : undefined,
+    dateTo: typeof params.filters?.dateTo === "string" ? params.filters.dateTo : undefined,
+  };
 }
 
 export function getDisposalStatuses() {
@@ -171,58 +182,8 @@ const internalExportStatusNameMap: Record<string, string> = {
   cancelled: "Đã hủy",
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mapInternalExport(row: any): InternalExport {
-  const profile = row.profiles as { full_name: string } | null;
-  return {
-    id: row.id,
-    code: row.code,
-    date: row.created_at,
-    totalProducts: 0, // Cần aggregate từ internal_export_items — bỏ qua ở list view
-    totalAmount: Number(row.total_amount ?? 0),
-    status: row.status === "completed" ? "completed" : "draft",
-    statusName: internalExportStatusNameMap[row.status] ?? row.status,
-    note: row.note ?? undefined,
-    createdBy: row.created_by ?? "",
-    createdByName: profile?.full_name ?? "",
-    branchId: row.branch_id ?? undefined,
-  };
-}
-
 export async function getInternalExports(params: QueryParams): Promise<QueryResult<InternalExport>> {
-  const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-  const { from, to } = getPaginationRange(params);
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let query = (supabase as any)
-    .from("internal_exports")
-    .select("*, profiles!internal_exports_created_by_fkey(full_name)", { count: "exact" })
-    .eq("tenant_id", tenantId);
-
-  // Search theo mã phiếu
-  if (params.search) {
-    query = query.ilike("code", `%${params.search}%`);
-  }
-
-  query = applyStatusFilter(query, params.filters?.status);
-  query = applyCreatedAtRange(query, params.filters);
-
-  // Filter: branch
-  if (params.branchId) {
-    query = query.eq("branch_id", params.branchId);
-  }
-
-  // Sort & paginate
-  query = query
-    .order("created_at", { ascending: false })
-    .range(from, to);
-
-  const { data, count, error } = await query;
-  if (error) handleError(error, "getInternalExports");
-
-  const exports: InternalExport[] = (data ?? []).map(mapInternalExport);
-  return { data: exports, total: count ?? 0 };
+  return getInternalExportListWorkspace(stockWorkParams(params));
 }
 
 function mapInternalExportWorkspace(row: any): InternalExport {
@@ -230,7 +191,7 @@ function mapInternalExportWorkspace(row: any): InternalExport {
   const branch = row.branches as { name: string } | null;
   return {
     id: row.id, code: row.code, date: row.created_at,
-    totalProducts: Number(row.total_products ?? 0), totalAmount: Number(row.total_amount ?? 0),
+    totalProducts: Number(row.total_products ?? 0), totalAmount: Number(row.total_amount ?? 0), costVisible: row.costVisible !== false,
     status: row.status === "completed" || row.status === "cancelled" ? row.status : "draft",
     statusName: internalExportStatusNameMap[row.status] ?? row.status,
     note: row.note ?? undefined, department: row.department ?? undefined, createdBy: row.created_by ?? "", createdByName: profile?.full_name ?? "",
@@ -244,33 +205,21 @@ export interface InternalExportListWorkspaceParams {
   amountMin?: number; amountMax?: number; branchId?: string;
 }
 export interface InternalExportListWorkspaceResult extends QueryResult<InternalExport> {
-  summary: { completedCount: number; draftCount: number; cancelledCount: number; completedValue: number };
+  summary: { completedCount: number; draftCount: number; cancelledCount: number; completedValue: number; costVisible: boolean };
 }
 export async function getInternalExportListWorkspace(params: InternalExportListWorkspaceParams): Promise<InternalExportListWorkspaceResult> {
   const supabase = getClient();
   const { from, toExclusive } = normalizeCreatedAtRange({ dateFrom: params.dateFrom, dateTo: params.dateTo });
-  const { data, error } = await (supabase.rpc as any)("get_internal_export_list_workspace", {
-    p_page: params.page, p_page_size: params.pageSize, p_search: params.search?.trim() || null,
-    p_search_field: params.searchField ?? "all", p_statuses: params.statuses?.length ? params.statuses : null,
-    p_date_from: from ?? null, p_date_to_exclusive: toExclusive ?? null, p_created_by: params.createdBy || null,
-    p_amount_min: Number.isFinite(params.amountMin) ? params.amountMin : null,
-    p_amount_max: Number.isFinite(params.amountMax) ? params.amountMax : null, p_branch_id: params.branchId ?? null,
-  });
-  if (error) handleError(error, "getInternalExportListWorkspace");
+  const data = await getStockWorkList(supabase, "internal_export", params, from, toExclusive);
   const payload = (data ?? {}) as Record<string, any>;
   const summary = (payload.summary ?? {}) as Record<string, unknown>;
   return { data: Array.isArray(payload.items) ? payload.items.map(mapInternalExportWorkspace) : [], total: Number(payload.total ?? 0), summary: {
     completedCount: Number(summary.completedCount ?? 0), draftCount: Number(summary.draftCount ?? 0),
-    cancelledCount: Number(summary.cancelledCount ?? 0), completedValue: Number(summary.completedValue ?? 0),
+    cancelledCount: Number(summary.cancelledCount ?? 0), completedValue: Number(summary.completedValue ?? 0), costVisible: payload.costVisible,
   }};
 }
 export async function getInternalExportsForExport(params: Omit<InternalExportListWorkspaceParams, "page" | "pageSize">): Promise<InternalExport[]> {
-  const rows: InternalExport[] = [];
-  for (let page = 0; ; page += 1) {
-    const result = await getInternalExportListWorkspace({ ...params, page, pageSize: 200 });
-    rows.push(...result.data);
-    if (rows.length >= result.total || result.data.length === 0) return rows;
-  }
+  return collectCompleteStockWorkExport((page) => getInternalExportListWorkspace({ ...params, page, pageSize: 200 }));
 }
 
 export function getInternalExportStatuses() {

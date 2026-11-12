@@ -21,6 +21,8 @@ const adjustments = [
   { branchId: "premium", code: "production.cancel_order", allowed: false },
   { branchId: "tubua", code: "inventory.check", allowed: false },
   { branchId: "premium", code: "inventory.transfer", allowed: false },
+  { branchId: "premium", code: "inventory.dispose", allowed: true },
+  { branchId: "tubua", code: "inventory.internal_export", allowed: true },
 ];
 vi.mock("@/lib/permissions/use-permission", () => ({
   usePermissions: () => ({
@@ -132,5 +134,14 @@ describe("row permissions across branches", () => {
     expect(tubua.canPrint).toBe(true);
     expect(premium.canView).toBe(false);
     expect(transfer.result.current.forBranch("other").canView).toBe(false);
+  });
+  it("allows work-document viewing only at the assigned branch of each stock action", () => {
+    const disposal=renderHook(() => useTxRowPermissions("disposal"));
+    expect(disposal.result.current.forBranch("premium").canView).toBe(true);
+    expect(disposal.result.current.forBranch("tubua").canView).toBe(false);
+    expect(disposal.result.current.forBranch("other").canView).toBe(false);
+    const internal=renderHook(() => useTxRowPermissions("internal_export"));
+    expect(internal.result.current.forBranch("tubua").canView).toBe(true);
+    expect(internal.result.current.forBranch("premium").canView).toBe(false);
   });
 });

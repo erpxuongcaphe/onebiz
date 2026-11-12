@@ -22,10 +22,12 @@ beforeEach(() => {
       items: [{
         id: "de-1", code: "XH000001", created_at: "2026-08-11T01:00:00Z",
         total_products: 3, total_amount: "1250000", reason: "Het han", note: "Lo A",
+        costVisible: true,
         status: "cancelled", created_by: "user-1", branch_id: "branch-1",
         profiles: { full_name: "Nhan vien A" }, branches: { name: "Chi nhanh A" },
       }],
       total: 31,
+      costVisible: true,
       summary: { completedCount: 12, draftCount: 8, cancelledCount: 11, completedValue: "18500000" },
     },
     error: null,
@@ -40,7 +42,7 @@ describe("getDisposalExportListWorkspace", () => {
       branchId: "branch-1", branchName: "Chi nhanh A", createdByName: "Nhan vien A",
     });
     expect(result.total).toBe(31);
-    expect(result.summary).toEqual({ completedCount: 12, draftCount: 8, cancelledCount: 11, completedValue: 18500000 });
+    expect(result.summary).toEqual({ completedCount: 12, draftCount: 8, cancelledCount: 11, completedValue: 18500000, costVisible: true });
   });
 
   it("passes every filter and the Vietnam date window to the RPC", async () => {
@@ -49,21 +51,27 @@ describe("getDisposalExportListWorkspace", () => {
       statuses: ["completed", "cancelled"], dateFrom: "2026-08-01", dateTo: "2026-08-10",
       amountMin: 100000, amountMax: 9000000, branchId: "branch-1",
     });
-    expect(rpc).toHaveBeenCalledWith("get_disposal_export_list_workspace", expect.objectContaining({
+    expect(rpc).toHaveBeenCalledWith("get_stock_work_document_list", expect.objectContaining({
       p_page: 2, p_page_size: 50, p_search: "NVL-001", p_search_field: "product",
-      p_statuses: ["completed", "cancelled"], p_date_from: "2026-07-31T17:00:00.000Z",
-      p_date_to_exclusive: "2026-08-10T17:00:00.000Z", p_amount_min: 100000,
-      p_amount_max: 9000000, p_branch_id: "branch-1",
+      p_statuses: ["completed", "cancelled"], p_from: "2026-07-31T17:00:00.000Z",
+      p_to: "2026-08-10T17:00:00.000Z", p_amount_min: 100000,
+      p_amount_max: 9000000, p_branch: "branch-1", p_kind: "disposal_export",
     }));
   });
 
   it("exports every page from the same filtered workspace", async () => {
+    const firstPage = Array.from({length: 200}, (_, i) => ({ id: `id-${i}`, code: `A${i}`, status: "completed", costVisible: false, total_amount: null }));
     rpc
-      .mockResolvedValueOnce({ data: { items: [{ id: "1", code: "A", status: "completed" }], total: 2, summary: {} }, error: null })
-      .mockResolvedValueOnce({ data: { items: [{ id: "2", code: "B", status: "completed" }], total: 2, summary: {} }, error: null });
+      .mockResolvedValueOnce({ data: { items: firstPage, total: 201, costVisible: false, summary: {completedCount:201,draftCount:0,cancelledCount:0,completedValue:null} }, error: null })
+      .mockResolvedValueOnce({ data: { items: [{ id: "last", code: "B", status: "completed", costVisible: false, total_amount: null }], total: 201, costVisible: false, summary: {completedCount:201,draftCount:0,cancelledCount:0,completedValue:null} }, error: null });
     const rows = await getDisposalExportsForExport({ statuses: ["completed"] });
-    expect(rows.map((row) => row.code)).toEqual(["A", "B"]);
-    expect(rpc).toHaveBeenNthCalledWith(2, "get_disposal_export_list_workspace", expect.objectContaining({ p_page: 1, p_page_size: 200 }));
+    expect(rows).toHaveLength(201); expect(rows.at(-1)?.code).toBe("B");
+    expect(rpc).toHaveBeenNthCalledWith(2, "get_stock_work_document_list", expect.objectContaining({ p_page: 1, p_page_size: 200 }));
+    expect(rows.every((row) => row.costVisible === false)).toBe(true);
+  });
+  it("fails instead of silently exporting an incomplete page", async () => {
+    rpc.mockResolvedValueOnce({data:{items:[{id:"a",costVisible:false,total_amount:null}],total:2,costVisible:false,summary:{completedCount:2,draftCount:0,cancelledCount:0,completedValue:null}},error:null});
+    await expect(getDisposalExportsForExport({})).rejects.toThrow("Chưa tải đủ phiếu");
   });
 });
 

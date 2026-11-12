@@ -104,7 +104,7 @@ export function buildDisposalPrintData(row: DisposalExport): DocumentPrintData {
       { label: "Tổng sản phẩm", value: String(row.totalProducts) },
       { label: "Lý do", value: row.reason || "" },
     ],
-    summaryRows: [
+    summaryRows: row.costVisible === false ? [] : [
       { label: "Tổng giá trị", value: formatCurrency(row.totalAmount), bold: true },
     ],
     note: row.reason,
@@ -160,7 +160,7 @@ export function buildInternalExportPrintData(row: InternalExport): DocumentPrint
       { label: "Trạng thái", value: row.statusName || row.status },
       { label: "Tổng sản phẩm", value: String(row.totalProducts) },
     ],
-    summaryRows: [
+    summaryRows: row.costVisible === false ? [] : [
       { label: "Tổng giá trị", value: formatCurrency(row.totalAmount), bold: true },
     ],
     note: row.note,

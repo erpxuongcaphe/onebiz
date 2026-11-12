@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
+import { usePermissions } from "@/lib/permissions/use-permission";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import { getVisibleBranchStock } from "@/lib/services/supabase/product-stock-read";
 import { createInternalExport } from "@/lib/services/supabase/inventory";
@@ -58,6 +59,8 @@ export function CreateInternalExportDialog({
   onSuccess,
 }: CreateInternalExportDialogProps) {
   const { toast } = useToast();
+  const { hasPermission } = usePermissions();
+  const canViewCost = hasPermission("products.view_cost");
   const fnbCatalog = useFnbCatalogScope();
   const [code, setCode] = useState("");
   const [productSearch, setProductSearch] = useState("");
@@ -344,10 +347,10 @@ export function CreateInternalExportDialog({
                       </div>
                       <OperationalQuantityInput productId={item.product_id} disabled={saving} quantity={item.quantity} unit={item.unit} conversions={units.map.get(item.product_id)} max={item.stock} label={`Số lượng ${item.product_name}`} onChange={(value, entry) => updateQuantity(item.product_id,value,entry)} />
                       <div className="text-right text-sm tabular-nums">
-                        {formatCurrency(item.cost_price)}
+                        {canViewCost ? formatCurrency(item.cost_price) : "Không có quyền"}
                       </div>
                       <div className="text-right text-sm font-bold tabular-nums text-primary">
-                        {formatCurrency(item.quantity * item.cost_price)}
+                        {canViewCost ? formatCurrency(item.quantity * item.cost_price) : "Không có quyền"}
                       </div>
                       <Button
                         variant="ghost"
@@ -381,7 +384,7 @@ export function CreateInternalExportDialog({
           <div className="mx-auto grid w-full max-w-[1380px] grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto]">
             <div className="grid gap-2 text-sm sm:grid-cols-3 xl:grid-cols-4">
               <FooterMetric label="Dòng" value={formatNumber(items.length)} />
-              <FooterMetric label="Giá trị xuất" value={formatCurrency(totalValue)} strong />
+              <FooterMetric label="Giá trị xuất" value={canViewCost ? formatCurrency(totalValue) : "Không có quyền"} strong />
               <FooterMetric label="Trạng thái" value="Ghi sổ khi tạo" />
             </div>
             <div className="flex justify-end gap-2">
