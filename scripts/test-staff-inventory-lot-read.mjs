@@ -134,6 +134,31 @@ try {
   assert.equal((await workspace()).summary.currentQty, 10);
   assert.equal((await workspace(id(11))).items[0].id, id(611));
   assert.deepEqual(await lotIds(), [id(611)]);
+  await db.exec("reset role");
+  await db.exec(
+    await migration("20261112075532_staff_branch_lot_production_access.sql"),
+  );
+  await db.exec(`insert into staff_branch_permission_catalog values ('production.view',1);
+    insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+    values ('${id(1)}','${id(101)}','${id(10)}','production.view','grant','${id(100)}');
+    set role authenticated;`);
+  assert.deepEqual(
+    await lotIds(),
+    [id(610), id(611)],
+    "production can read its own branch lots for the dashboard",
+  );
+  await assert.rejects(workspace(id(10)), /PRODUCT_LOT_LIST_PERMISSION_DENIED/);
+  await db.exec(
+    `reset role; update user_branch_permission_overrides set override_type='revoke' where permission_code='production.view'; set role authenticated;`,
+  );
+  assert.deepEqual(
+    await lotIds(),
+    [id(611)],
+    "denied production does not widen inventory access",
+  );
+  await db.exec(
+    `reset role; delete from user_branch_permission_overrides where permission_code='production.view'; set role authenticated;`,
+  );
   console.log(
     "PASS inventory lots: authenticated list, totals, direct reads, expiry and unit history respect branch exceptions.",
   );
