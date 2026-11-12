@@ -1,0 +1,72 @@
+import { readFile } from "node:fs/promises";
+import { pathToFileURL } from "node:url";
+import assert from "node:assert/strict";
+import { initializeStaffAccessFixture } from "./staff-access-tests/fixture.mjs";
+import { functionFromMigration } from "./staff-access-tests/inventory.mjs";
+const { PGlite } = await import(
+  process.env.ONEBIZ_PGLITE_MODULE
+    ? pathToFileURL(process.env.ONEBIZ_PGLITE_MODULE).href
+    : "@electric-sql/pglite"
+);
+const db = new PGlite();
+const id = (n) => `00000000-0000-0000-0000-${String(n).padStart(12, "0")}`;
+const file = (name) =>
+  readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), "utf8");
+try {
+  await initializeStaffAccessFixture(db, id);
+  await db.exec(await file("20261111052704_staff_branch_access.sql"));
+  await db.exec(
+    await functionFromMigration(
+      "20261111070229_staff_branch_checkout_permissions.sql",
+      "_staff_permission_at_scope",
+    ),
+  );
+  await db.exec(`create table branch_stock(tenant_id uuid,branch_id uuid,product_id uuid,variant_id uuid,quantity numeric);
+  insert into branch_stock values
+   ('${id(1)}','${id(10)}','${id(60)}',null,12),('${id(1)}','${id(10)}','${id(61)}',null,7),
+   ('${id(1)}','${id(10)}','${id(60)}','${id(80)}',2),('${id(1)}','${id(11)}','${id(60)}',null,20),
+   ('${id(2)}','${id(12)}','${id(60)}',null,90);
+  select set_config('request.jwt.claim.sub','${id(101)}',false);
+  insert into staff_branch_permission_catalog values('inventory.view',1),('pos_retail.checkout',1);
+  grant usage on schema auth,public to authenticated;`);
+  await db.exec(await file("20261112081429_staff_pos_stock_snapshot.sql"));
+  await db.exec("set role authenticated");
+  const read = async (branch, ids) =>
+    (
+      await db.query(
+        "select * from get_pos_stock_snapshot_scoped($1,$2::uuid[]) order by product_id",
+        [id(branch), ids.map(id)],
+      )
+    ).rows;
+  assert.deepEqual(await read(10, [60]), [
+    { product_id: id(60), quantity: "12" },
+  ]);
+  await assert.rejects(read(11, [60]), /POS_STOCK_BRANCH_DENIED/);
+  await assert.rejects(read(12, [60]), /POS_STOCK_BRANCH_DENIED/);
+  await assert.rejects(
+    read(10, Array(201).fill(60)),
+    /POS_STOCK_INVALID_REQUEST/,
+  );
+  await db.exec(`reset role; insert into user_branches values('${id(101)}','${id(11)}',null);
+  insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
+   ('${id(1)}','${id(101)}','${id(10)}','inventory.view','revoke','${id(100)}'),
+   ('${id(1)}','${id(101)}','${id(10)}','pos_retail.checkout','grant','${id(100)}');
+  set role authenticated;`);
+  assert.deepEqual(await read(10, [60, 61]), [
+    { product_id: id(60), quantity: "12" },
+    { product_id: id(61), quantity: "7" },
+  ]);
+  await assert.rejects(read(11, [60]), /POS_STOCK_PERMISSION_DENIED/);
+  await db.exec(
+    `reset role; update user_branch_permission_overrides set override_type='revoke' where permission_code='pos_retail.checkout'; set role authenticated;`,
+  );
+  await assert.rejects(read(10, [60]), /POS_STOCK_PERMISSION_DENIED/);
+  console.log(
+    "PASS POS stock snapshot: branch boundaries, local POS grant, denied inventory and bounded product projection",
+  );
+} catch (e) {
+  console.error(e.message, e.where ?? "");
+  process.exitCode = 1;
+} finally {
+  await db.close();
+}

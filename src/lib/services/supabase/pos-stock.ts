@@ -77,13 +77,13 @@ export async function getPosStockSnapshot(
     chunks(productIds, QUERY_CHUNK_SIZE),
     4,
     async (ids) => {
-      const { data, error } = await supabase
-        .from("branch_stock")
-        .select("product_id, quantity")
-        .eq("tenant_id", tenantId)
-        .eq("branch_id", branchId)
-        .is("variant_id", null)
-        .in("product_id", ids);
+      // This narrowly scoped projection keeps POS availability separate from
+      // the full inventory listing when stock-view exceptions are configured.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any).rpc("get_pos_stock_snapshot_scoped", {
+        p_branch: branchId,
+        p_product_ids: ids,
+      });
       if (error) handleError(error, "getPosStockSnapshot:branch_stock");
       return data ?? [];
     },
