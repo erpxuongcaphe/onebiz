@@ -35,9 +35,23 @@ begin
 end $$;
 revoke all on function public._staff_fnb_order_direct_read(uuid,uuid) from public,anon;
 grant execute on function public._staff_fnb_order_direct_read(uuid,uuid) to authenticated;
+-- Resolve the small set of branches once per statement instead of performing
+-- up to fifteen permission checks for every order in a POS/report query.
+create function public._staff_fnb_order_has_no_view_exception()
+returns boolean language sql stable security definer set search_path='' as $$
+ select not exists(select 1 from public.user_branch_permission_overrides o
+  where o.tenant_id=public.get_user_tenant_id() and o.user_id=auth.uid() and o.permission_code='pos_fnb.view_orders')
+$$;
+create function public._staff_fnb_order_readable_branches()
+returns uuid[] language sql stable security definer set search_path='' as $$
+ select coalesce(array_agg(b.id),'{}'::uuid[]) from public.branches b
+  where b.tenant_id=public.get_user_tenant_id() and public._staff_fnb_order_direct_read(b.tenant_id,b.id)
+$$;
+revoke all on function public._staff_fnb_order_has_no_view_exception(),public._staff_fnb_order_readable_branches() from public,anon;
+grant execute on function public._staff_fnb_order_has_no_view_exception(),public._staff_fnb_order_readable_branches() to authenticated;
 create policy staff_fnb_order_view_read on public.kitchen_orders as restrictive for select to authenticated
- using (public._staff_fnb_order_direct_read(tenant_id,branch_id));
+ using ((select public._staff_fnb_order_has_no_view_exception())
+  or coalesce(branch_id=any((select public._staff_fnb_order_readable_branches())::uuid[]),false));
 create policy staff_fnb_order_item_view_read on public.kitchen_order_items as restrictive for select to authenticated
- using (exists(select 1 from public.kitchen_orders ko where ko.id=kitchen_order_items.kitchen_order_id
-  and public._staff_fnb_order_direct_read(ko.tenant_id,ko.branch_id)));
+ using (exists(select 1 from public.kitchen_orders ko where ko.id=kitchen_order_items.kitchen_order_id));
 commit;
