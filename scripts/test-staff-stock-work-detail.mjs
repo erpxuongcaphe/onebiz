@@ -50,6 +50,8 @@ try {
  await db.exec(await sql('20261112162406_staff_stock_work_documents_safe_projection.sql'));
  await db.exec(await sql('20261112165047_staff_stock_work_cost_column_protection.sql'));
  await db.exec('set role authenticated');
+ const grants=(await db.query("select has_table_privilege('authenticated','public.disposal_exports','select') table_grant, has_column_privilege('authenticated','public.disposal_exports','id','select') id_grant, has_column_privilege('authenticated','public.disposal_exports','code','select') code_grant, has_column_privilege('authenticated','public.disposal_exports','total_amount','select') cost_grant")).rows[0];
+ assert.deepEqual(grants,{table_grant:false,id_grant:true,code_grant:true,cost_grant:false},'preflight checks required code columns without granting cost');
  await assert.rejects(db.query('select total_amount from disposal_exports'), /permission denied/);
  await assert.rejects(db.query('select unit_cost from disposal_export_items'), /permission denied/);
  await assert.rejects(db.query('select total_amount from internal_exports'), /permission denied/);

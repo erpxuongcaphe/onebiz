@@ -244,7 +244,10 @@ select
   relation_name,
   operation,
   oid is not null as relation_exists,
-  coalesce(has_table_privilege('authenticated', oid, privilege_name), false)
+  case when operation = 'select' and relation_name in ('disposal_exports', 'internal_exports') then
+    coalesce(has_column_privilege('authenticated', oid, 'id', 'SELECT'), false)
+      and coalesce(has_column_privilege('authenticated', oid, 'code', 'SELECT'), false)
+  else coalesce(has_table_privilege('authenticated', oid, privilege_name), false) end
     as authenticated_grant_ok,
   case
     when oid is null then false
@@ -264,7 +267,10 @@ select
   coalesce(relrowsecurity, false) as rls_enabled
 from checked
 where oid is null
-   or not coalesce(has_table_privilege('authenticated', oid, privilege_name), false)
+   or not (case when operation = 'select' and relation_name in ('disposal_exports', 'internal_exports') then
+     coalesce(has_column_privilege('authenticated', oid, 'id', 'SELECT'), false)
+       and coalesce(has_column_privilege('authenticated', oid, 'code', 'SELECT'), false)
+   else coalesce(has_table_privilege('authenticated', oid, privilege_name), false) end)
    or (
      relkind not in ('v', 'm')
      and relrowsecurity

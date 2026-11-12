@@ -98,6 +98,16 @@ for (const file of roots.flatMap(walk).filter((path) => [".ts", ".tsx"].includes
   visit(sourceFile);
 }
 
+// Product stock history resolves these two document codes through a dynamic
+// table name. The browser only selects id/code, and newer installations grant
+// those columns without granting the protected cost columns.
+for (const relation of ['disposal_exports', 'internal_exports']) {
+  const key = `${relation}|select`;
+  const callers = contracts.get(key) ?? [];
+  callers.push('src/lib/services/supabase/products.ts:codeOnlyLoaders');
+  contracts.set(key, callers);
+}
+
 const rows = [...contracts.entries()]
   .map(([key, callers]) => {
     const [relation, operation] = key.split("|");
@@ -148,7 +158,10 @@ select
   relation_name,
   operation,
   oid is not null as relation_exists,
-  coalesce(has_table_privilege('authenticated', oid, privilege_name), false)
+  case when operation = 'select' and relation_name in ('disposal_exports', 'internal_exports') then
+    coalesce(has_column_privilege('authenticated', oid, 'id', 'SELECT'), false)
+      and coalesce(has_column_privilege('authenticated', oid, 'code', 'SELECT'), false)
+  else coalesce(has_table_privilege('authenticated', oid, privilege_name), false) end
     as authenticated_grant_ok,
   case
     when oid is null then false
@@ -168,7 +181,10 @@ select
   coalesce(relrowsecurity, false) as rls_enabled
 from checked
 where oid is null
-   or not coalesce(has_table_privilege('authenticated', oid, privilege_name), false)
+   or not (case when operation = 'select' and relation_name in ('disposal_exports', 'internal_exports') then
+     coalesce(has_column_privilege('authenticated', oid, 'id', 'SELECT'), false)
+       and coalesce(has_column_privilege('authenticated', oid, 'code', 'SELECT'), false)
+   else coalesce(has_table_privilege('authenticated', oid, privilege_name), false) end)
    or (
      relkind not in ('v', 'm')
      and relrowsecurity
