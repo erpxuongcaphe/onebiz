@@ -161,4 +161,6 @@ export async function verifyCashDocumentReads(db, id) {
   console.log(
     "PASS cash documents: permitted COD rows only, search, cross-branch shipment denial and payment history scope.",
   );
+  const { verifyStoreCashReads } = await import("./store-cash-read.mjs");
+  await verifyStoreCashReads(db, id);
 }
