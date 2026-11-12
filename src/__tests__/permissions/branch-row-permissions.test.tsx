@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import {
   hasPermissionForBranch,
   permissionsForBranch,
+  permissionWithLegacyAtBranch,
+  permissionWithLegacyFallback,
 } from "@/lib/permissions/branch-permissions";
 import { useTxRowPermissions } from "@/lib/permissions/use-tx-row-permissions";
 
@@ -31,6 +33,37 @@ vi.mock("@/lib/permissions/use-permission", () => ({
 }));
 
 describe("row permissions across branches", () => {
+  it("keeps legacy F&B void for each row without bypassing explicit denials", () => {
+    const legacy = new Set(["pos_fnb.void"]);
+    const local = [
+      { branchId: "premium", code: "pos_fnb.void_paid_bill", allowed: false },
+      { branchId: "tubua", code: "pos_fnb.void_paid_bill", allowed: true },
+    ];
+    const check = (branch: string | null, denials: string[] = []) =>
+      permissionWithLegacyAtBranch(
+        legacy,
+        local,
+        branch,
+        "pos_fnb.void_paid_bill",
+        "pos_fnb.void",
+        denials,
+      );
+    expect(check("premium")).toBe(false);
+    expect(check("tubua")).toBe(true);
+    expect(check("other")).toBe(true);
+    expect(check("other", ["pos_fnb.void_paid_bill"])).toBe(false);
+    for (const branch of ["premium", "tubua", "other", null]) {
+      expect(check(branch)).toBe(
+        permissionWithLegacyFallback(
+          permissionsForBranch(legacy, local, branch),
+          local,
+          branch,
+          "pos_fnb.void_paid_bill",
+          "pos_fnb.void",
+        ),
+      );
+    }
+  });
   it("uses the same rules as the complete branch permission set", () => {
     for (const branch of ["premium", "tubua", "other", null])
       for (const code of ["orders.cancel", "orders.create", "orders.view"])

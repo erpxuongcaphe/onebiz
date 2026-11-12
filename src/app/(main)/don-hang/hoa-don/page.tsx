@@ -530,7 +530,7 @@ export default function HoaDonPage() {
   // K2 08/08: nút "Xem tất cả chi nhánh" trước đây KHÔNG kiểm quyền — nhân
   // viên chỉ được gán 1 chi nhánh vẫn bấm được và danh sách chạy toàn tenant.
   // Branch administration does not grant company-wide data access.
-  const { hasAny, hasPermission, hasPermissionAtBranch, hasAssignedBranchAccess } = usePermissions();
+  const { hasAny, hasPermission, hasPermissionAtBranch, hasPermissionAtBranchWithLegacy, hasAssignedBranchAccess } = usePermissions();
   const duocXemToanChuoi = hasAny([
     "reports.view_all_branches",
   ]);
@@ -559,7 +559,9 @@ export default function HoaDonPage() {
   const canVoidRetail = hasPermission("pos_retail.void");
   const canVoidInvoice = (source: string | undefined, branchId: string | null) =>
     hasAssignedBranchAccess(branchId) &&
-    hasPermissionAtBranch(source === "fnb" ? "pos_fnb.void_paid_bill" : "pos_retail.void", branchId);
+    (source === "fnb"
+      ? hasPermissionAtBranchWithLegacy("pos_fnb.void_paid_bill", "pos_fnb.void", branchId)
+      : hasPermissionAtBranch("pos_retail.void", branchId));
   const [payingItem, setPayingItem] = useState<Invoice | null>(null);
   // Sprint UX-1 Stage 4: Audit log dialog + duplicating state
   const [auditDialogTarget, setAuditDialogTarget] = useState<Invoice | null>(null);

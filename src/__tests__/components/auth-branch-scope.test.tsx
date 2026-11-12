@@ -39,12 +39,13 @@ afterEach(cleanup);
 const read = () => JSON.parse(screen.getByLabelText("scope").textContent!);
 
 function PermissionProbe() {
-  const { isLoading, hasPermission, hasPermissionWithLegacy } = useAuth();
+  const { isLoading, hasPermission, hasPermissionWithLegacy, hasPermissionAtBranchWithLegacy } = useAuth();
   return <output aria-label="permission-callback">{JSON.stringify({
     ready: !isLoading,
     every: ["reports.dashboard", "reports.analytics"].every(hasPermission),
     missing: ["reports.dashboard", "reports.export"].every(hasPermission),
     legacy: hasPermissionWithLegacy("pos_fnb.cancel_unpaid_order", "pos_fnb.void"),
+    legacyRow: hasPermissionAtBranchWithLegacy("pos_fnb.void_paid_bill", "pos_fnb.void", "premium"),
   })}</output>;
 }
 
@@ -64,7 +65,7 @@ describe("authenticated branch restoration", () => {
     render(<AuthProvider><PermissionProbe /></AuthProvider>);
     const permission = () => JSON.parse(screen.getByLabelText("permission-callback").textContent!);
     await waitFor(() => expect(permission().ready).toBe(true));
-    expect(permission()).toEqual({ ready: true, every: true, missing: false, legacy: true });
+    expect(permission()).toEqual({ ready: true, every: true, missing: false, legacy: true, legacyRow: true });
   });
   it("does not restore an administrator's cached warehouse for a manager", async () => {
     localStorage.setItem("active_branch_id", "warehouse");

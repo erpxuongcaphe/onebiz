@@ -30,21 +30,32 @@ function selection(ids: string[]) {
   return unique;
 }
 /** Tenant/RLS scoped, original ledgers rather than current BOM estimates. */
-export async function previewInvoiceBulkCancel(ids: string[]): Promise<InvoiceCancelPreview[]> {
+export async function previewInvoiceBulkCancel(ids: string[], permissions: InvoiceCancelPermissions): Promise<InvoiceCancelPreview[]> {
   const selected = selection(ids), db = getClient(), ctx = await getCurrentContext();
   const { data, error } = await db.from("invoices")
     .select("id,code,status,source,branch_id,total,paid,debt,payment_method")
     .eq("tenant_id", ctx.tenantId).is("deleted_at", null).in("id", selected);
   if (error) handleError(error, "previewInvoiceBulkCancel");
   if (!data || data.length !== selected.length) throw new Error("Có hóa đơn đã thay đổi hoặc ngoài phạm vi được xem. Tải lại danh sách.");
+  const refundable = data.filter(row => row.status === "completed" && canCancelInvoice({
+    source: row.source ?? "", branchId: row.branch_id ?? "", status: row.status,
+  }, permissions)).map(row => row.id);
   const [cash, movements] = await Promise.all([
-    readHistoryPages<{ id: string; reference_id: string | null; amount: number }>(async (offset, size) => {
-      const result = await db.from("cash_transactions").select("id,reference_id,amount", { count: "exact" })
-        .eq("tenant_id", ctx.tenantId).in("reference_id", selected)
-        .eq("reference_type", "invoice").eq("type", "receipt").eq("status", "completed")
-        .order("id").range(offset, offset + size - 1);
-      return { ...result, data: result.data as { id: string; reference_id: string | null; amount: number }[] | null };
-    }),
+    (async () => {
+      if (!refundable.length) return [] as { invoice_id: string; refund: number | string | null }[];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (db as any).rpc("get_invoice_cancel_receipt_totals", { p_invoice_ids: refundable });
+      if (result.error) handleError(result.error, "previewInvoiceBulkCancel:receipts");
+      const rows = result.data as { invoice_id: string; refund: number | string | null }[] | null;
+      if (!Array.isArray(rows) || rows.length !== refundable.length ||
+        new Set(rows.map(row => row.invoice_id)).size !== refundable.length ||
+        rows.some(row => !refundable.includes(row.invoice_id) || row.refund == null ||
+          (typeof row.refund !== "number" && (typeof row.refund !== "string" || row.refund.trim() === "")) ||
+          !Number.isFinite(Number(row.refund)))) {
+        throw new Error("Chưa xác nhận được tổng khoản thu. Vui lòng tải lại.");
+      }
+      return rows;
+    })(),
     readHistoryPages<{ id: string; reference_id: string | null }>(async (offset, size) => {
       return await db.from("stock_movements_scoped").select("id,reference_id", { count: "exact" })
         .eq("tenant_id", ctx.tenantId).in("reference_id", selected).eq("type", "out")
@@ -58,7 +69,7 @@ export async function previewInvoiceBulkCancel(ids: string[]): Promise<InvoiceCa
     return { id, code: row.code, status: row.status, source: row.source ?? "",
       branchId: row.branch_id ?? "", total: Number(row.total ?? 0),
       paid: Number(row.paid ?? 0), debt: Number(row.debt ?? 0), paymentMethod: row.payment_method ?? "cash",
-      refund: cash.filter(item => item.reference_id === id).reduce((sum, item) => sum + Number(item.amount), 0),
+      refund: Number(cash.find(item => item.invoice_id === id)?.refund ?? 0),
       stockMovements: movements.filter(item => item.reference_id === id).length };
   });
 }
@@ -75,7 +86,7 @@ export async function executeInvoiceBulkCancel(
   selection(preview.map(row => row.id));
   if (reason.trim().length < 3) throw new Error("Nhập lý do hủy ít nhất 3 ký tự.");
   if (new Set(preview.map(row => row.id)).size !== preview.length) throw new Error("Danh sách có hóa đơn trùng.");
-  const current = await dependencies.preview(preview.map(row => row.id));
+  const current = await dependencies.preview(preview.map(row => row.id), permissions);
   if (current.length !== preview.length || preview.some(row => {
     const fresh = current.find(item => item.id === row.id);
     return !fresh || invoiceCancelFingerprint(fresh) !== invoiceCancelFingerprint(row);

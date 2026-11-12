@@ -53,3 +53,23 @@ export function permissionWithLegacyFallback(
       entry.code === code && (branchId === null || entry.branchId === branchId),
   );
 }
+
+/** Resolve a legacy alias against a document's branch, not the current filter. */
+export function permissionWithLegacyAtBranch(
+  base: ReadonlySet<string>,
+  adjustments: readonly { branchId: string; code: string; allowed: boolean }[],
+  branchId: string | null,
+  code: string,
+  legacyCode: string,
+  legacyDenials: readonly string[] = [],
+) {
+  if (base.has("*")) return true;
+  if (legacyDenials.includes(code)) return false;
+  if (hasPermissionForBranch(base, adjustments, branchId, code)) return true;
+  if (!hasPermissionForBranch(base, adjustments, branchId, legacyCode))
+    return false;
+  return !adjustments.some(
+    (entry) =>
+      entry.code === code && (branchId === null || entry.branchId === branchId),
+  );
+}

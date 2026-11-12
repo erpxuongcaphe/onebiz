@@ -24,6 +24,7 @@ import { readAuthBootstrap } from "@/lib/auth/bootstrap";
 import {
   hasPermissionForBranch,
   permissionsForBranch,
+  permissionWithLegacyAtBranch,
   permissionWithLegacyFallback,
 } from "@/lib/permissions/branch-permissions";
 
@@ -53,6 +54,7 @@ interface AuthContextValue extends AuthState {
   hasPermission: (code: string) => boolean;
   /** Resolve permissions for a row's branch, independently of the selected branch. */
   hasPermissionAtBranch: (code: string, branchId: string | null) => boolean;
+  hasPermissionAtBranchWithLegacy: (code: string, legacyCode: string, branchId: string | null) => boolean;
   /** Whether a branch is assigned for operational actions (reporting may be broader). */
   hasAssignedBranchAccess: (branchId: string | null) => boolean;
   hasPermissionWithLegacy: (code: string, legacyCode: string) => boolean;
@@ -721,6 +723,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     [permissions, branchPermissionAdjustments, user?.role, user?.isActive, isLoading, authDataError],
   );
+  const hasPermissionAtBranchWithLegacy = useCallback(
+    (code: string, legacyCode: string, branchId: string | null): boolean => {
+      if (isLoading || authDataError || !user?.isActive) return false;
+      if (user.role === "owner" || permissions.has("*")) return true;
+      return permissionWithLegacyAtBranch(permissions, branchPermissionAdjustments, branchId, code, legacyCode, legacyPermissionDenials);
+    },
+    [permissions, branchPermissionAdjustments, legacyPermissionDenials, user?.role, user?.isActive, isLoading, authDataError],
+  );
   const hasAssignedBranchAccess = useCallback(
     (branchId: string | null): boolean => {
       if (isLoading || authDataError || !user?.isActive) return false;
@@ -814,6 +824,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         activeBranchId,
         hasPermission,
         hasPermissionAtBranch,
+        hasPermissionAtBranchWithLegacy,
         hasAssignedBranchAccess,
         hasPermissionWithLegacy,
         refreshProfile,

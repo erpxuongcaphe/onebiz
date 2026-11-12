@@ -14,6 +14,7 @@ export interface PermissionsAPI {
   hasPermission: (code: PermissionCode | string) => boolean;
   /** Check a specific row's branch, regardless of the currently selected branch. */
   hasPermissionAtBranch: (code: PermissionCode | string, branchId: string | null) => boolean;
+  hasPermissionAtBranchWithLegacy: (code: PermissionCode | string, legacyCode: PermissionCode | string, branchId: string | null) => boolean;
   hasAssignedBranchAccess: (branchId: string | null) => boolean;
   /** Check if user has ANY of the given permissions */
   hasAny: (codes: (PermissionCode | string)[]) => boolean;
@@ -28,7 +29,7 @@ export interface PermissionsAPI {
 }
 
 export function usePermissions(): PermissionsAPI {
-  const { user, permissions, isLoading, authDataError, refreshProfile, hasPermissionAtBranch, hasAssignedBranchAccess } = useAuth();
+  const { user, permissions, isLoading, authDataError, refreshProfile, hasPermissionAtBranch, hasPermissionAtBranchWithLegacy, hasAssignedBranchAccess } = useAuth();
 
   const isOwner = user?.role === "owner";
 
@@ -45,5 +46,5 @@ export function usePermissions(): PermissionsAPI {
   const hasAll = (codes: (PermissionCode | string)[]): boolean =>
     codes.every((c) => hasPermission(c));
 
-  return { hasPermission, hasPermissionAtBranch, hasAssignedBranchAccess, hasAny, hasAll, permissions, isLoading, loadError: authDataError, retry: refreshProfile };
+  return { hasPermission, hasPermissionAtBranch, hasPermissionAtBranchWithLegacy, hasAssignedBranchAccess, hasAny, hasAll, permissions, isLoading, loadError: authDataError, retry: refreshProfile };
 }
