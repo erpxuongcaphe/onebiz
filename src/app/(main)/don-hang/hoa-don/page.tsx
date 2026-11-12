@@ -107,6 +107,7 @@ import { DocumentNoteBox } from "@/components/shared/document-note-box";
 import { useToast, useBranchFilter, useAuth } from "@/lib/contexts";
 import { buildInvoicePrintData, toPrintLines } from "@/lib/print-templates";
 import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
+import { useRetailInvoicePrint } from "@/lib/hooks/use-retail-invoice-print";
 import type { Invoice, ShippingOrder } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
@@ -523,6 +524,7 @@ export default function HoaDonPage() {
   const { activeBranchId, currentBranch, branches, isReady: branchScopeReady } = useBranchFilter();
   const router = useRouter();
   const { printWithPicker, printerDialog } = usePrintWithPicker();
+  const { printRetailInvoice, printerDialog: retailPrinterDialog } = useRetailInvoicePrint();
   const txPerms = useTxRowPermissions("invoice");
   // K2 08/08: nút "Xem tất cả chi nhánh" trước đây KHÔNG kiểm quyền — nhân
   // viên chỉ được gán 1 chi nhánh vẫn bấm được và danh sách chạy toàn tenant.
@@ -1446,15 +1448,13 @@ export default function HoaDonPage() {
               // chỉ in phần đầu, không có dòng mặt hàng).
               onPrint: async () => {
                 const items = await getInvoiceItems(row.id);
-                printWithPicker(
-                  buildInvoicePrintData(
-                    row,
-                    businessInfo ?? undefined,
-                    toPrintLines(items),
-                  ),
-                  "In hóa đơn",
-                  { channel: row.source === "fnb" ? "fnb" : "retail", docType: "sale_invoice", branchId: row.branchId ?? activeBranchId, chooseCustomerDebt: true },
-                );
+                const data = buildInvoicePrintData(row, businessInfo ?? undefined, toPrintLines(items));
+                const branchId = row.branchId ?? activeBranchId;
+                if (row.source === "fnb") {
+                  printWithPicker(data, "In hóa đơn", { channel: "fnb", docType: "sale_invoice", branchId });
+                } else {
+                  void printRetailInvoice(data, branchId);
+                }
               },
               // Trả hàng (redirect)
               onReturn: () => {
@@ -1552,6 +1552,7 @@ export default function HoaDonPage() {
       />
 
       {printerDialog}
+      {retailPrinterDialog}
 
       {payingItem && (
         <RecordPaymentDialog

@@ -29,7 +29,7 @@ import { printReceiptDirect, type ReceiptData } from "@/components/shared/print-
 // CEO 03/07: in lại dùng ĐÚNG đường in của trang Hóa đơn (mẫu theo chi nhánh).
 import { buildInvoicePrintData, toPrintLines } from "@/lib/print-templates";
 import { printDocumentWithTemplate } from "@/lib/print-apply-template";
-import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
+import { useRetailInvoicePrint } from "@/lib/hooks/use-retail-invoice-print";
 import { useToast } from "@/lib/contexts";
 import { cn } from "@/lib/utils";
 import type { Invoice } from "@/lib/types";
@@ -48,7 +48,7 @@ export function ShiftInvoiceDrawer({
   shiftOpenedAt,
 }: ShiftInvoiceDrawerProps) {
   const { toast } = useToast();
-  const { printPreparedRetailInvoice, printerDialog } = usePrintWithPicker();
+  const { printPreparedRetailInvoice, printerDialog } = useRetailInvoicePrint();
   const [loading, setLoading] = useState(false);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [reprintingCode, setReprintingCode] = useState<string | null>(null);
@@ -132,6 +132,13 @@ export function ShiftInvoiceDrawer({
           isOffline: false,
         };
         printReceiptDirect(receipt);
+      }
+      if (inv.source === "fnb") {
+        toast({
+          title: `Đã in lại ${inv.code}`,
+          variant: "success",
+          duration: 2000,
+        });
       }
     } catch (err) {
       console.error("[POS] reprint failed:", err);

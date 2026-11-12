@@ -333,13 +333,14 @@ export function buildInvoicePrintData(
         value: formatCurrency(remaining),
         tone: remaining > 0 ? "danger" : "success",
       };
+  const retailDebt = showDebt && row.source !== "fnb";
   if (showDebt) {
-    summaryRows.push({ label: "Nợ cũ", value: formatCurrency(oldDebt), customerDebt: true });
+    summaryRows.push({ label: "Nợ cũ", value: formatCurrency(oldDebt), ...(retailDebt ? { customerDebt: true } : {}) });
     summaryRows.push({
       label: "Còn nợ",
       value: formatCurrency(currentDebt ?? 0),
       bold: true,
-      customerDebt: true,
+      ...(retailDebt ? { customerDebt: true } : {}),
     });
   } else {
     summaryRows.push(invoiceBalanceRow);
@@ -366,7 +367,7 @@ export function buildInvoicePrintData(
       ? { items, itemColumns: saleColumnsFor(items) }
       : {}),
     summaryRows,
-    invoiceBalanceRow: showDebt ? invoiceBalanceRow : undefined,
+    ...(retailDebt ? { invoiceBalanceRow } : {}),
     // CEO 08/07: in ghi chú người bán trên hóa đơn (như phiếu nhập/xuất).
     note: row.note,
     showSignature: on(f.signature),

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import {
   Dialog,
   DialogContent,
@@ -35,9 +35,9 @@ interface PrintSizePickerDialogProps {
   /** Title hiển thị (ví dụ "In hóa đơn", "In phiếu nhập"). Default "Chọn cỡ giấy in". */
   title?: string;
   /** Callback khi user chọn cỡ và bấm "In ngay". */
-  onPrint: (paperSize: PaperSize, includeCustomerDebt?: boolean) => void;
+  onPrint: (paperSize: PaperSize) => void;
   defaultPaperSize?: PaperSize;
-  showCustomerDebtChoice?: boolean;
+  children?: ReactNode;
 }
 
 /**
@@ -50,22 +50,18 @@ export function PrintSizePickerDialog({
   title = "Chọn cỡ giấy in",
   onPrint,
   defaultPaperSize,
-  showCustomerDebtChoice = false,
+  children,
 }: PrintSizePickerDialogProps) {
   const { settings } = useSettings();
   const defaultSize = defaultPaperSize ?? (settings?.print?.paperSize ?? "A4") as PaperSize;
   const [selected, setSelected] = useState<PaperSize>(defaultSize);
-  const [includeCustomerDebt, setIncludeCustomerDebt] = useState(true);
 
   useEffect(() => {
-    if (open) {
-      setSelected(defaultSize);
-      setIncludeCustomerDebt(true);
-    }
+    if (open) setSelected(defaultSize);
   }, [open, defaultSize]);
 
   const handlePrint = () => {
-    onPrint(selected, showCustomerDebtChoice ? includeCustomerDebt : undefined);
+    onPrint(selected);
     onOpenChange(false);
   };
 
@@ -123,20 +119,7 @@ export function PrintSizePickerDialog({
           })}
         </div>
 
-        {showCustomerDebtChoice && (
-          <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-3">
-            <input
-              type="checkbox"
-              className="mt-0.5 size-4 shrink-0 accent-primary"
-              checked={includeCustomerDebt}
-              onChange={(event) => setIncludeCustomerDebt(event.target.checked)}
-            />
-            <span className="text-sm">
-              <span className="block font-medium">In công nợ cũ</span>
-              <span className="block text-muted-foreground">Bỏ chọn để ẩn nợ cũ và dư nợ tích lũy trong lần in này.</span>
-            </span>
-          </label>
-        )}
+        {children}
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

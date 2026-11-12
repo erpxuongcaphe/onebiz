@@ -76,7 +76,7 @@ import { printShiftReport } from "@/lib/print-shift-report";
 import { resolvePrintTemplate } from "@/lib/services";
 import { applyTemplateToDocData } from "@/lib/print-apply-template";
 import { printDocument, type DocumentPrintData } from "@/lib/print-document";
-import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
+import { useRetailInvoicePrint } from "@/lib/hooks/use-retail-invoice-print";
 // CEO 13/07: dựng khối khách trên phiếu POS qua CÙNG helper với trang Hóa đơn.
 import {
   buildBuyerHeaderFields,
@@ -671,7 +671,7 @@ function PosPageInner() {
     });
   }, [currentBranch, branches, switchBranch, toast, user?.branchId]);
   const { settings, updateSettings } = useSettings();
-  const { printPreparedRetailInvoice, printerDialog } = usePrintWithPicker();
+  const { printPreparedRetailInvoice, printerDialog } = useRetailInvoicePrint();
   const [currentShift, setCurrentShift] = useState<Shift | null>(null);
   const [openShiftDialogOpen, setOpenShiftDialogOpen] = useState(false);
   const [closeShiftDialogOpen, setCloseShiftDialogOpen] = useState(false);
