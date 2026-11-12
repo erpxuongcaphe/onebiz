@@ -134,6 +134,10 @@ try {
     "./staff-access-tests/order-create.mjs"
   );
   await verifyOrderCreate(db, id);
+  const { verifyOrderDirectWrites } = await import(
+    "./staff-access-tests/order-direct-writes.mjs"
+  );
+  await verifyOrderDirectWrites(db, id);
 } finally {
   await db.close();
 }
