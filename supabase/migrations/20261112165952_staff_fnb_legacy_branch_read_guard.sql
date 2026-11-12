@@ -8,6 +8,7 @@ returns boolean language plpgsql stable security definer set search_path='' as $
 declare actor uuid:=auth.uid(); member boolean; report_scope boolean; code text;
 begin
  if actor is null or p_tenant is distinct from public.get_user_tenant_id() then return false; end if;
+ if not exists(select 1 from public.profiles p where p.id=actor and p.tenant_id=p_tenant and coalesce(p.is_active,false)) then return false; end if;
  if not exists(select 1 from public.branches b where b.id=p_branch and b.tenant_id=p_tenant) then return false; end if;
  member:=coalesce(public.user_has_branch_access(actor,p_branch),false);
  report_scope:=member or coalesce(public.user_has_permission(actor,'reports.view_all_branches'),false);

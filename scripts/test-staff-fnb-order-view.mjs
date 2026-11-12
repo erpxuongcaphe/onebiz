@@ -228,6 +228,9 @@ try {
   assert.deepEqual(await visible('kitchen_order_items'),[id(40)],'unassigned branch child rows are also hidden');
   await db.exec(`reset role; insert into role_permissions values('${id(20)}','reports.view_all_branches'); set role authenticated;`);
   assert.deepEqual(await visible('kitchen_orders'),[id(30),id(31)],'global view plus all-branch reporting retains company access');
+  await db.exec(`reset role; update profiles set is_active=false where id='${id(101)}'; set role authenticated;`);
+  assert.deepEqual(await visible('kitchen_orders'),[],'inactive accounts cannot use legacy global view');
+  assert.deepEqual(await visible('kitchen_order_items'),[],'inactive accounts cannot read order lines');
   await db.exec("reset role");
   console.log(
     "PASS: F&B order-view branch checks preserve kitchen actions, return reads and independent retail return permission",
