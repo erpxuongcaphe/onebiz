@@ -9,9 +9,9 @@ const page = readFileSync("src/app/(main)/hang-hoa/page.tsx", "utf8");
 
 describe("F&B outlet Retail ingredient catalog", () => {
   it("labels menu BOM availability separately from physical stock", () => {
-    expect(page).toContain('header: isFnbOutletView ? "Có thể pha" : "Tồn kho"');
+    expect(page).toContain('header: isFnbOutletView ? "Có thể pha" : branchStockView ? "Tồn kho" : "Tồn trong phạm vi được xem"');
     expect(page).toContain('"Ước tính từ tồn nguyên liệu theo BOM"');
-    expect(page).toContain('header: "Tồn kho"');
+    expect(page).toContain('header: branchStockView ? "Tồn kho" : "Tồn trong phạm vi được xem"');
     expect(page).toContain("formatNumber(avail.available)");
   });
 
