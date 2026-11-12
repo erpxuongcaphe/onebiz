@@ -106,6 +106,15 @@ export async function verifyCashDocumentReads(db, id) {
       "utf8",
     ),
   );
+  await db.exec(
+    await readFile(
+      new URL(
+        "../../supabase/migrations/20261112072731_staff_branch_invoice_view_payment_history.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  );
   const workspace = async (search = null) =>
     (
       await db.query(
@@ -142,6 +151,31 @@ export async function verifyCashDocumentReads(db, id) {
     ]),
     /PAYMENT_HISTORY_DENIED/,
   );
+  await db.exec(`begin;
+    delete from test_staff_permissions where code='finance.view_cash_book';
+    delete from user_branch_permission_overrides where permission_code='finance.view_cash_book';
+    insert into user_branch_permission_overrides values ('${id(2)}','${id(1)}','${id(4)}','invoices.view','grant');`);
+  await db.query("select get_document_payment_history_scoped('invoice',$1)", [
+    id(701),
+  ]);
+  await db.exec(
+    `update user_branch_permission_overrides set override_type='revoke' where permission_code='invoices.view';`,
+  );
+  await db.exec("savepoint denied_invoice");
+  await assert.rejects(
+    db.query("select get_document_payment_history_scoped('invoice',$1)", [
+      id(701),
+    ]),
+    /PAYMENT_HISTORY_DENIED/,
+  );
+  await db.exec("rollback to savepoint denied_invoice");
+  await db.exec(
+    `insert into test_staff_permissions values ('finance.view_cash_book') on conflict do nothing;`,
+  );
+  await db.query("select get_document_payment_history_scoped('invoice',$1)", [
+    id(701),
+  ]);
+  await db.exec("rollback");
   if (actualPath) {
     await db.exec(`
       update user_branch_permission_overrides set override_type='revoke'

@@ -152,6 +152,58 @@ try {
       `delete from role_permissions where permission_code='pos_retail.checkout'; update user_branch_permission_overrides set override_type='grant' where branch_id='${id(10)}' and permission_code='pos_fnb.view_orders'`,
     );
   }
+  await db.exec(`alter table kitchen_orders enable row level security;
+    alter table kitchen_order_items enable row level security;
+    alter function public.get_user_tenant_id() security definer;
+    create policy legacy_orders on kitchen_orders for select to authenticated using (tenant_id=public.get_user_tenant_id());
+    create policy legacy_items on kitchen_order_items for select to authenticated using (true);
+    grant usage on schema public,auth to authenticated;
+    grant select on kitchen_orders,kitchen_order_items to authenticated;
+    delete from role_permissions where permission_code='pos_fnb.split_bill';`);
+  await db.exec(
+    await file("20261112065630_staff_branch_fnb_view_direct_reads.sql"),
+  );
+  const visible = async (table) =>
+    (await db.query(`select id from ${table} order by id`)).rows.map(
+      (r) => r.id,
+    );
+  await db.exec("set role authenticated");
+  assert.deepEqual(
+    await visible("kitchen_orders"),
+    [id(30)],
+    "a local view grant does not expose the denied branch",
+  );
+  assert.deepEqual(
+    await visible("kitchen_order_items"),
+    [id(40)],
+    "child rows follow the protected order",
+  );
+  await db.exec(
+    `reset role; insert into role_permissions values('${id(20)}','pos_fnb.send_kitchen'); set role authenticated;`,
+  );
+  assert.deepEqual(
+    await visible("kitchen_orders"),
+    [id(30), id(31)],
+    "independent kitchen permission still enables POS order reads",
+  );
+  assert.deepEqual(await visible("kitchen_order_items"), [id(40), id(41)]);
+  await db.exec(
+    `reset role; delete from user_branches where user_id='${id(101)}' and branch_id='${id(11)}'; set role authenticated;`,
+  );
+  assert.deepEqual(
+    await visible("kitchen_orders"),
+    [id(30)],
+    "POS rights do not grant an unassigned branch",
+  );
+  await db.exec(
+    `reset role; insert into role_permissions values('${id(20)}','reports.analytics'),('${id(20)}','reports.view_all_branches'); set role authenticated;`,
+  );
+  assert.deepEqual(
+    await visible("kitchen_orders"),
+    [id(30), id(31)],
+    "company reporting retains its independent all-branch scope",
+  );
+  await db.exec("reset role");
   console.log(
     "PASS: F&B order-view branch checks preserve kitchen actions, return reads and independent retail return permission",
   );

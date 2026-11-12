@@ -86,6 +86,30 @@ export async function installCheckoutTest(db) {
     before,
     "a denied branch view does not post payment or stock",
   );
+  await db.exec(`alter table kitchen_orders enable row level security;
+    alter table kitchen_order_items enable row level security;
+    alter function public.get_user_tenant_id() security definer;
+    create policy test_kitchen_order_select on kitchen_orders for select to authenticated using (tenant_id=public.get_user_tenant_id());
+    create policy test_kitchen_item_select on kitchen_order_items for select to authenticated using (true);
+    grant usage on schema public,auth to authenticated;
+    grant select on kitchen_orders,kitchen_order_items to authenticated;
+    create or replace function user_has_permission(uuid,text) returns boolean language sql as $$select false$$;`);
+  await db.exec(
+    await readFile(
+      new URL(
+        "../../supabase/migrations/20261112065630_staff_branch_fnb_view_direct_reads.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  );
+  await db.exec("set role authenticated");
+  assert.equal(
+    (await db.query("select count(*)::int n from kitchen_orders")).rows[0].n,
+    1,
+    "a branch checkout grant retains POS order reads despite a separate denied view",
+  );
+  await db.exec("reset role");
   if (fixturePaymentDefinition) {
     // The captured production implementation uses additional production views
     // absent from this compact fixture. Test its denial above, then use the
