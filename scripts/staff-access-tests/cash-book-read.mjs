@@ -107,4 +107,8 @@ export async function verifyCashBookReadScope(db, id) {
   await verifyCashDocumentReads(db, id);
   const { verifyCashRefundView } = await import("./cash-refund-view.mjs");
   await verifyCashRefundView(db, id);
+  const { verifyManagementFinanceActions } = await import(
+    "./management-finance-actions.mjs"
+  );
+  await verifyManagementFinanceActions(db, id);
 }
