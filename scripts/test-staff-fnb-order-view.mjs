@@ -164,6 +164,7 @@ try {
     await file("20261112065630_staff_branch_fnb_view_direct_reads.sql"),
   );
   await db.exec(await file("20261112122122_staff_fnb_view_global_revoke_guard.sql"));
+  await db.exec(await file("20261112165952_staff_fnb_legacy_branch_read_guard.sql"));
   const visible = async (table) =>
     (await db.query(`select id from ${table} order by id`)).rows.map(
       (r) => r.id,
@@ -220,6 +221,13 @@ try {
   await db.exec(`reset role; insert into role_permissions values('${id(20)}','pos_fnb.checkout'); set role authenticated;`);
   assert.deepEqual(await visible('kitchen_orders'),[id(30),id(31)],'independent checkout still has the orders required to sell');
   assert.deepEqual(await visible('kitchen_order_items'),[id(40),id(41)],'independent checkout retains order lines');
+  await db.exec(`reset role; delete from role_permissions where permission_code='pos_fnb.checkout';
+    insert into role_permissions values('${id(20)}','pos_fnb.view_orders');
+    delete from user_branches where user_id='${id(101)}' and branch_id='${id(11)}'; set role authenticated;`);
+  assert.deepEqual(await visible('kitchen_orders'),[id(30)],'global view alone cannot read an unassigned branch');
+  assert.deepEqual(await visible('kitchen_order_items'),[id(40)],'unassigned branch child rows are also hidden');
+  await db.exec(`reset role; insert into role_permissions values('${id(20)}','reports.view_all_branches'); set role authenticated;`);
+  assert.deepEqual(await visible('kitchen_orders'),[id(30),id(31)],'global view plus all-branch reporting retains company access');
   await db.exec("reset role");
   console.log(
     "PASS: F&B order-view branch checks preserve kitchen actions, return reads and independent retail return permission",
