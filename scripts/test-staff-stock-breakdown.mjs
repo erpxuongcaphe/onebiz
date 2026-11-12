@@ -45,6 +45,7 @@ try {
   await db.exec(await functionFromMigration('20261112121837_staff_inventory_global_revoke_guard.sql','_staff_stock_has_no_view_exception'));
   const scopeMigration=await file('20261112131018_staff_stock_breakdown_global_revoke_guard.sql');
   await db.exec(scopeMigration.match(/do \$migration\$[\s\S]*?end \$migration\$;/)[0]);
+  await db.exec(await file('20261112131515_staff_stock_breakdown_assigned_scope.sql'));
   await db.exec("set role authenticated");
   const read = async (product = 60) =>
     (
@@ -63,8 +64,14 @@ try {
   assert.deepEqual(await read(), [
     { branch_id: id(10), quantity: "15", reserved: "3" },
     { branch_id: id(11), quantity: "20", reserved: "0" },
-    { branch_id: id(13), quantity: "0", reserved: "0" },
   ]);
+  await db.exec(`reset role; insert into role_permissions values('${id(20)}','reports.view_all_branches'); set role authenticated;`);
+  assert.deepEqual(await read(),[
+    { branch_id: id(10), quantity: "15", reserved: "3" },
+    { branch_id: id(11), quantity: "20", reserved: "0" },
+    { branch_id: id(13), quantity: "0", reserved: "0" },
+  ], 'all-branch reporting grant explicitly permits the unassigned branch');
+  await db.exec(`reset role; delete from role_permissions where permission_code='reports.view_all_branches'; set role authenticated;`);
   await assert.rejects(read(61), /STOCK_BREAKDOWN_PRODUCT_INVALID/);
   await db.exec(`reset role; insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
   values('${id(1)}','${id(101)}','${id(10)}','inventory.view','revoke','${id(100)}'); set role authenticated;`);

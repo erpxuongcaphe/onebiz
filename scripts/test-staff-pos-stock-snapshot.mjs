@@ -54,6 +54,7 @@ try {
   await db.exec(await functionFromMigration('20261112121837_staff_inventory_global_revoke_guard.sql','_staff_stock_has_no_view_exception'));
   await db.exec(await file('20261112103125_staff_inventory_product_breakdown_scope.sql'));
   await db.exec(await file('20261112131018_staff_stock_breakdown_global_revoke_guard.sql'));
+  await db.exec(await file('20261112131515_staff_stock_breakdown_assigned_scope.sql'));
   await db.exec("set role authenticated");
   const read = async (branch, ids) =>
     (
