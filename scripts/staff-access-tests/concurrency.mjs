@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { initializeStaffAccessFixture } from "./fixture.mjs";
+import { functionFromMigration } from "./inventory.mjs";
 
 if (process.env.STAFF_EPHEMERAL_DB !== "onebiz_staff_access_test") {
   throw new Error("Dedicated disposable staff-access database required.");
@@ -201,3 +202,32 @@ assert.equal(
 console.log(
   "PASS legacy role edits invalidate the snapshot with no partial save",
 );
+
+// Shipping already holds its row while another path may hold the invoice
+// first. An own-order permission check must not wait and create a deadlock.
+await execute(await functionFromMigration("20261111070229_staff_branch_checkout_permissions.sql","_staff_permission_at_scope"));
+for (const name of ["_staff_order_owner_unrestricted","_staff_order_independent_branches"])
+  await execute(await functionFromMigration("20261113004524_staff_own_order_scope.sql",name));
+await execute(`
+ create table invoices(id uuid primary key,tenant_id uuid,branch_id uuid,source text,created_by uuid,code text);
+ create table shipping_orders(id uuid primary key,tenant_id uuid,invoice_id uuid,status text,code text,partner_id uuid,updated_at timestamptz);
+ create table delivery_partners(id uuid,name text);
+ create function can_read_branch_document_00567(t uuid,b uuid) returns boolean language sql stable security definer set search_path=public as $$select t=get_user_tenant_id() and user_has_branch_access(auth.uid(),b)$$;
+ insert into invoices values ('${id(501)}','${id(1)}','${id(10)}','order','${id(101)}','INV');
+ insert into shipping_orders values ('${id(502)}','${id(1)}','${id(501)}','pending','SHIP',null,now());
+ delete from role_permissions where role_id='${id(20)}';
+ insert into role_permissions values ('${id(20)}','orders.view_own_only'),('${id(20)}','orders.create');
+`);
+await execute(await functionFromMigration("20261113005650_staff_own_order_action_scope.sql","_staff_order_target_visible"));
+await execute(await functionFromMigration("00276_atomic_shipping_status.sql","update_shipping_order_status_atomic"));
+await execute(await readFile(new URL("../../supabase/migrations/20261113013054_staff_shipping_owner_guard.sql",import.meta.url),"utf8"));
+const releaseInvoice=await hold(`select 1 from invoices where id='${id(501)}' for update`);
+try {
+  const start=Date.now();
+  await assert.rejects(execute(`set request.jwt.claim.sub='${id(101)}'; select update_shipping_order_status_atomic('${id(502)}','picked_up',null);`),/could not obtain lock/);
+  assert.ok(Date.now()-start<6000,"shipping must not wait on reverse invoice lock");
+  assert.equal(await execute(`select status from shipping_orders where id='${id(502)}'`),"pending","failed attempt must roll back");
+} finally { await releaseInvoice(); }
+await execute(`set request.jwt.claim.sub='${id(101)}'; select update_shipping_order_status_atomic('${id(502)}','picked_up',null);`);
+assert.equal(await execute(`select status from shipping_orders where id='${id(502)}'`),"picked_up");
+console.log("PASS shipping own-order guard fails promptly on conflicting lock and succeeds afterward");

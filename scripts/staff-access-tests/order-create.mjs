@@ -121,6 +121,7 @@ export async function verifyOrderCreate(db, id) {
   }
   await db.exec(await readFile(new URL("../../supabase/migrations/20261113005650_staff_own_order_action_scope.sql", import.meta.url), "utf8"));
   await db.exec(await readFile(new URL("../../supabase/migrations/20261113012350_staff_legacy_order_owner_guard.sql", import.meta.url), "utf8"));
+  await db.exec(await readFile(new URL("../../supabase/migrations/20261113013054_staff_shipping_owner_guard.sql", import.meta.url), "utf8"));
   const invoke =
     (sql, args = []) =>
     () =>
@@ -244,7 +245,10 @@ export async function verifyOrderCreate(db, id) {
     delete from role_permissions where permission_code in ('orders.create','pos_retail.checkout','invoices.view');
     insert into role_permissions values ('${id(20)}','orders.create'),('${id(20)}','orders.view_own_only');
     update invoices set created_by='${id(101)}' where id='${id(214)}';
-    update invoices set created_by='${id(100)}' where id='${id(215)}';`);
+    update invoices set created_by='${id(100)}' where id='${id(215)}';
+    insert into shipping_orders(id,tenant_id,invoice_id,code,status) values
+     ('${id(234)}','${id(1)}','${id(214)}','OWN-SHIP','pending'),
+     ('${id(235)}','${id(1)}','${id(215)}','OTHER-SHIP','pending');`);
   await assert.rejects(invoke("select close_sales_orders_processing($1,null,false)", [[id(214),id(215)]]), /STAFF_OWN_ORDER_ACTION_DENIED/);
   assert.equal((await db.query("select close_sales_orders_processing($1,null,false) result", [[id(214)]])).rows[0].result.selected_count,1,'own order remains operable');
   await db.exec(`delete from user_permission_overrides where permission_code='orders.cancel';
@@ -256,8 +260,12 @@ export async function verifyOrderCreate(db, id) {
   await assert.rejects(invoke("select cancel_legacy_sales_order_atomic($1,'test reason')",[id(223)]), /STAFF_OWN_ORDER_ACTION_DENIED/);
   assert.equal((await db.query("select status from sales_orders where id=$1",[id(223)])).rows[0].status,"new",'denied cancellation has no effect');
   await db.query("select cancel_legacy_sales_order_atomic($1,'test reason')",[id(222)]);
+  await assert.rejects(invoke("select update_shipping_order_status_atomic($1,'picked_up',null)",[id(235)]), /STAFF_OWN_ORDER_ACTION_DENIED/);
+  assert.equal((await db.query("select status from shipping_orders where id=$1",[id(235)])).rows[0].status,"pending",'denied shipping status stays unchanged');
+  await db.query("select update_shipping_order_status_atomic($1,'picked_up',null)",[id(234)]);
   await db.exec(`insert into role_permissions values ('${id(20)}','pos_retail.checkout');`);
   await db.query("select cancel_legacy_sales_order_atomic($1,'test reason')",[id(223)]);
+  await db.query("select update_shipping_order_status_atomic($1,'picked_up',null)",[id(235)]);
   assert.equal((await db.query("select close_sales_orders_processing($1,null,false) result", [[id(215)]])).rows[0].result.selected_count,1,'independent checkout preserves actual order flow');
   console.log(
     "PASS order create: all entry guards, independent retail path, mixed-branch batch and local-only grant.",

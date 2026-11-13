@@ -713,6 +713,9 @@ export async function updateShippingOrderStatus(
       p_note: note ?? null,
     },
   );
+  if (error?.code === "55P03") {
+    throw new Error("Đơn đang được xử lý ở thao tác khác. Anh/chị tải lại và thử cập nhật vận đơn lần nữa.");
+  }
   if (error) handleError(error, "updateShippingOrderStatus.rpc");
   if (!data) throw new Error("Máy chủ không trả về vận đơn đã cập nhật.");
   return mapShippingOrder(data);
