@@ -662,6 +662,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
     rpc: vi.fn((fn: string, params: unknown) => {
       rpcCalls.push({ fn, params });
       if (fn === "get_financial_alert_lots") return tableMocks.product_lots ?? { data: [], error: null };
+      if (fn === "get_cash_flow_alert_totals") return tableMocks.cash_transactions ?? { data: [], error: null };
       if (fn === "save_pos_draft_atomic_v3") {
         return {
           data: { invoice_id: "inv-draft-1", invoice_code: "NH000001", status: "draft", revision: 1 },

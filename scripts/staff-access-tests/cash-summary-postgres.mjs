@@ -34,6 +34,18 @@ sql.push(`do $$declare r record;begin
  begin perform * from get_cash_flow_category_summary('2026-11-01','2026-11-30',null); raise exception 'ALL_BRANCH_LEAK';
  exception when insufficient_privilege then null;end;
  end$$;
+ insert into role_permissions values('${id(20)}','reports.dashboard');
+ do $$begin
+ if (select amount from get_cash_flow_alert_totals('2026-11-01','2026-11-30','${id(10)}') where type='receipt') is distinct from 150
+ then raise exception 'ALERT_TOTAL_INCORRECT'; end if;
+ begin perform * from get_cash_flow_alert_totals('2026-11-01','2026-11-30','${id(12)}'); raise exception 'ALERT_TENANT_LEAK';
+ exception when insufficient_privilege then null;end;
+ end$$;
+ insert into staff_branch_permission_catalog values('reports.dashboard',1);
+ insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+ values('${id(1)}','${id(101)}','${id(10)}','reports.dashboard','revoke','${id(100)}');
+ do $$begin begin perform * from get_cash_flow_alert_totals('2026-11-01','2026-11-30','${id(10)}');
+ raise exception 'ALERT_OVERRIDE_LEAK'; exception when insufficient_privilege then null;end;end$$;
  insert into staff_branch_permission_catalog values('reports.analytics',1);
  insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
  values('${id(1)}','${id(101)}','${id(10)}','reports.analytics','revoke','${id(100)}');

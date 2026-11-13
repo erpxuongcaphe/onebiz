@@ -74,6 +74,7 @@ const mockCashFlowNegative = [
 // Shared table data map — override per test
 let tableDataMap: Record<string, unknown> = {};
 let queryHistory: { table: string; chain: ReturnType<typeof createChain> }[] = [];
+let rpcHistory: { fn: string; params?: Record<string, unknown> }[] = [];
 
 function defaultTableData(): Record<string, unknown> {
   return {
@@ -306,6 +307,8 @@ vi.mock("@/lib/services/supabase/base", () => ({
       return chain;
     }),
     rpc: vi.fn((fn: string, params?: Record<string, unknown>) => {
+      rpcHistory.push({ fn, params });
+      if (fn === "get_cash_flow_alert_totals") return tableDataMap.cash_transactions ?? { data: [], error: null };
       if (fn === "get_financial_alert_lots") {
         const result = tableDataMap.product_lots as { data: Array<Record<string, unknown>> | null; error: unknown } | undefined;
         return { ...result, data: result?.data?.map(row => ({ ...row, product_name: (row.products as { name?: string } | null)?.name })) ?? (result?.error ? null : []) };
@@ -339,6 +342,7 @@ import {
 
 beforeEach(() => {
   tableDataMap = defaultTableData();
+  rpcHistory = [];
 });
 
 describe("getProfitAndLoss", () => {
@@ -563,6 +567,20 @@ describe("getDSO", () => {
 });
 
 describe("getFinancialAlerts", () => {
+  it("does not hide a failed or malformed cash summary as a healthy balance", async () => {
+    tableDataMap = { ...defaultTableData(), cash_transactions: { data: null, error: { message: "CASH_SUMMARY_FAILED" } } };
+    await expect(getFinancialAlerts()).rejects.toThrow("CASH_SUMMARY_FAILED");
+    tableDataMap = { ...defaultTableData(), cash_transactions: { data: [{ type: "receipt", amount: null }], error: null } };
+    await expect(getFinancialAlerts()).rejects.toThrow("Không xác định được số liệu cảnh báo thu chi");
+  });
+  it("handles database numeric totals without concatenating strings", async () => {
+    tableDataMap = { ...defaultTableData(), cash_transactions: { data: [
+      { type: "receipt", amount: "1000000" }, { type: "receipt", amount: "500000" },
+      { type: "payment", amount: "2500000" },
+    ], error: null } };
+    const alerts = await getFinancialAlerts();
+    expect(alerts.find(row => row.id === "negative_cashflow")?.value).toBe(1_000_000);
+  });
   it("does not present an incomplete expiry projection as no alerts", async () => {
     tableDataMap = { ...defaultTableData(), product_lots: { data: [{ id: "broken", expiry_date: null }], error: null } };
     await expect(getFinancialAlerts()).rejects.toThrow("Không xác định được danh sách cảnh báo lô hàng");
@@ -585,12 +603,10 @@ describe("getFinancialAlerts", () => {
       queryHistory = [];
       tableDataMap = defaultTableData();
       await getFinancialAlerts("synthetic-branch");
-      const query = queryHistory.find(row => row.table === "cash_transactions")!.chain;
-      expect(query.eq).toHaveBeenCalledWith("status", "completed");
-      expect(query.eq).toHaveBeenCalledWith("branch_id", "synthetic-branch");
-      expect(query.gte).toHaveBeenCalledWith("transaction_date", "2026-11-01");
-      expect(query.lte).toHaveBeenCalledWith("transaction_date", "2026-11-01");
-      expect(query.gte).not.toHaveBeenCalledWith("created_at", expect.anything());
+      expect(queryHistory.some(row => row.table === "cash_transactions")).toBe(false);
+      expect(rpcHistory).toContainEqual({ fn: "get_cash_flow_alert_totals", params: {
+        p_branch: "synthetic-branch", p_from: "2026-11-01", p_to: "2026-11-01",
+      } });
     } finally { vi.useRealTimers(); }
   });
 

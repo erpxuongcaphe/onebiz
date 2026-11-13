@@ -35,6 +35,14 @@ try {
  await assert.rejects(db.query(`select * from get_cash_flow_category_summary('2026-11-01','2026-11-30','${id(12)}')`),/REPORT_BRANCH_DENIED/);
  await assert.rejects(db.query(`select * from get_cash_flow_category_summary('2026-11-01','2026-11-30',null)`),/REPORT_ALL_BRANCHES_DENIED/);
  await assert.rejects(db.query(`select * from get_cash_flow_category_summary('2026-11-30','2026-11-01','${id(10)}')`),/REPORT_DATE_RANGE_INVALID/);
+ await db.exec(`insert into role_permissions values('${id(20)}','reports.dashboard');`);
+ rows=(await db.query(`select type,amount::text from get_cash_flow_alert_totals('2026-11-01','2026-11-30','${id(10)}') order by type`)).rows;
+ assert.deepEqual(rows,[{type:'payment',amount:'20'},{type:'receipt',amount:'150'}]);
+ await assert.rejects(db.query(`select * from get_cash_flow_alert_totals('2026-11-01','2026-11-30','${id(12)}')`),/REPORT_BRANCH_DENIED/);
+ await db.exec(`insert into staff_branch_permission_catalog values('reports.dashboard',1);
+ insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+ values('${id(1)}','${id(101)}','${id(10)}','reports.dashboard','revoke','${id(100)}');`);
+ await assert.rejects(db.query(`select * from get_cash_flow_alert_totals('2026-11-01','2026-11-30','${id(10)}')`),/REPORT_PERMISSION_DENIED/);
  await db.exec(`insert into staff_branch_permission_catalog values('reports.analytics',1);
  insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
  values('${id(1)}','${id(101)}','${id(10)}','reports.analytics','revoke','${id(100)}');`);

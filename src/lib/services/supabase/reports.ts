@@ -602,34 +602,31 @@ export async function getFinancialAlerts(branchId?: string): Promise<FinancialAl
 
   const cashToday = cashBookDate(new Date().toISOString());
   const cashPeriod = { from: `${cashToday.slice(0, 7)}-01`, to: cashToday };
-  let cashQuery = supabase
-    .from("cash_transactions")
-    .select("type, amount")
-    .eq("tenant_id", tenantId)
-    .eq("status", "completed")
-    .gte("transaction_date", cashPeriod.from)
-    .lte("transaction_date", cashPeriod.to);
-
-  if (branchId) {
-    cashQuery = cashQuery.eq("branch_id", branchId);
-  }
+  // Alert viewers need totals, not access to individual cash-book rows.
+  const cashQuery = (supabase as any).rpc("get_cash_flow_alert_totals", {
+    p_from: cashPeriod.from, p_to: cashPeriod.to, p_branch: branchId ?? null,
+  });
 
   // Query all needed data in parallel
-  const [debtors, lowStockProducts, lotsData, cashFlowData] = await Promise.all([
+  const [debtors, lowStockProducts, lotsData, cashFlowResult] = await Promise.all([
     debtQuery,
     fetchAllReportRows<Record<string, unknown>>(
       () => stockQuery.order(branchId ? "product_id" : "id", { ascending: true }),
       "getFinancialAlerts.stock",
     ),
     lotQuery,
-    fetchAllReportRows(
-      () => cashQuery.order("transaction_date", { ascending: true }).order("id", { ascending: true }),
-      "getFinancialAlerts.cash",
-    ),
+    cashQuery,
   ]);
 
   if (debtors.error) handleError(debtors.error, "getFinancialAlerts.debt");
   if (lotsData.error) handleError(lotsData.error, "getFinancialAlerts.lots");
+  if (cashFlowResult.error) handleError(cashFlowResult.error, "getFinancialAlerts.cash");
+  if (!Array.isArray(cashFlowResult.data) || cashFlowResult.data.some((row: unknown) => {
+    if (!row || typeof row !== "object") return true;
+    const item = row as Record<string, unknown>;
+    return !["receipt", "payment"].includes(String(item.type)) || item.amount == null || !Number.isFinite(Number(item.amount));
+  })) throw new Error("Không xác định được số liệu cảnh báo thu chi.");
+  const cashFlowData = cashFlowResult.data as Array<{ type: string; amount: number | string }>;
   if (!Array.isArray(lotsData.data) || lotsData.data.some((lot: unknown) => {
     if (!lot || typeof lot !== "object") return true;
     const row = lot as Record<string, unknown>;
@@ -800,10 +797,10 @@ export async function getFinancialAlerts(branchId?: string): Promise<FinancialAl
   // --- 4. Negative cash flow alert ---
   const totalReceipts = cashFlowData
     .filter((c) => c.type === "receipt")
-    .reduce((s, c) => s + ((c.amount as number) ?? 0), 0);
+    .reduce((s, c) => s + Number(c.amount), 0);
   const totalPayments = cashFlowData
     .filter((c) => c.type === "payment")
-    .reduce((s, c) => s + ((c.amount as number) ?? 0), 0);
+    .reduce((s, c) => s + Number(c.amount), 0);
 
   const netCashFlow = totalReceipts - totalPayments;
   if (netCashFlow < 0) {
