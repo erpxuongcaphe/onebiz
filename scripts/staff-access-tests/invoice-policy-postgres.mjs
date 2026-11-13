@@ -140,6 +140,20 @@ sql.push(`
   if n<>1 then raise exception 'legacy unrestricted behavior changed';end if;
  end$$;
  reset role;
+ delete from role_permissions where role_id='${id(20)}';
+ insert into role_permissions values ('${id(20)}','pos_fnb.view_sales_summary');
+ set role authenticated;
+ do $$begin
+  if (select count(*) from invoice_items where invoice_id='${id(53)}')<>0
+   or (select count(*) from invoice_items_scoped where invoice_id='${id(53)}')<>0 then
+   raise exception 'summary exposed F&B invoice lines';end if;
+ end$$;
+ reset role;insert into role_permissions values ('${id(20)}','pos_fnb.checkout');set role authenticated;
+ do $$begin
+  if (select count(*) from invoice_items where invoice_id='${id(53)}')<>1 then
+   raise exception 'independent F&B checkout lost invoice lines';end if;
+ end$$;
+ reset role;
 `);
 if(process.env.ONEBIZ_PGLITE_MODULE){const {PGlite}=await import(pathToFileURL(process.env.ONEBIZ_PGLITE_MODULE).href);const db=new PGlite();try{await db.exec(sql.join('\n'));}finally{await db.close();}console.log('PASS local invoice fixture rehearsal (PGlite)');process.exit(0);}
 const args=['-Xq','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p','55433','-U','staff_test','-d','onebiz_staff_access_test'];
