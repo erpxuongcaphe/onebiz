@@ -83,10 +83,9 @@ try {
  await db.exec(`reset role; delete from user_branch_permission_overrides where permission_code='inventory.view';
   delete from user_permission_overrides where permission_code='inventory.view';
   delete from role_permissions where permission_code in ('inventory.view','pos_fnb.checkout'); set role authenticated;`);
- assert.deepEqual(await ids('invoice_items_scoped'),[id(60)],'legacy account keeps existing branch-bound reads');
- const legacyPlan=(await db.query('explain (analyze, verbose) select id from invoice_items_scoped')).rows.map(x=>Object.values(x)[0]).join('\n');
- assert.match(legacyPlan,/\(never executed\)\n\s*Output: (?:public\.)?_staff_invoice_item_allowed_scopes\(\)/,'legacy reads skip the branch/source scan');
- assert.deepEqual((await db.query('select public._staff_invoice_item_allowed_scopes() scopes')).rows[0].scopes,[`${id(10)}:fnb`],'direct helper does not disclose an unassigned branch');
+ assert.deepEqual(await ids('invoice_items'),[],'legacy account without an invoice-related permission cannot read raw lines');
+ assert.deepEqual(await ids('invoice_items_scoped'),[],'legacy account without an invoice-related permission cannot read scoped lines');
+ assert.deepEqual((await db.query('select public._staff_invoice_item_allowed_scopes() scopes')).rows[0].scopes,[],'direct helper does not grant scopes without permission');
  await db.exec(`reset role; insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type,created_by)
   values ('${id(1)}','${id(101)}','inventory.view','revoke','${id(100)}'); set role authenticated;`);
  assert.deepEqual(await ids('invoice_items_scoped'),[],'account-wide revoke does not use the legacy fast path');
@@ -101,14 +100,22 @@ try {
   insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
    values ('${id(1)}','${id(101)}','${id(11)}','orders.view','grant','${id(100)}'); set role authenticated;`);
  assert.deepEqual(await ids('invoice_items_scoped'),[id(64)],'order permission does not expose unrelated POS or F&B lines');
- await db.exec(`reset role; insert into role_permissions values ('${id(20)}','pos_retail.checkout'); set role authenticated;`);
- assert.deepEqual(await ids('invoice_items_scoped'),[id(63),id(64)],'retail checkout retains assigned POS/order lines');
- await db.exec(`reset role; delete from role_permissions where permission_code='pos_retail.checkout';
-  delete from user_branch_permission_overrides where permission_code='orders.view';
+ await db.exec(`reset role;
+  insert into invoices values ('${id(56)}','${id(1)}','${id(10)}','internal'),('${id(57)}','${id(1)}','${id(11)}','internal'),('${id(58)}','${id(1)}','${id(10)}',null);
+  insert into invoice_items values ('${id(66)}','${id(56)}',1,600),('${id(67)}','${id(57)}',1,700),('${id(68)}','${id(58)}',1,800);
+  insert into staff_branch_permission_catalog values ('inventory.internal_export',1);
   insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
-   values ('${id(1)}','${id(101)}','${id(11)}','inventory.view','revoke','${id(100)}');
+   values ('${id(1)}','${id(101)}','${id(10)}','inventory.internal_export','grant','${id(100)}'); set role authenticated;`);
+ assert.deepEqual(await ids('invoice_items_scoped'),[id(64),id(66)],'local internal-sale action retains only its own branch invoice lines');
+ await db.exec(`reset role; insert into role_permissions values ('${id(20)}','pos_retail.checkout'); set role authenticated;`);
+ assert.deepEqual(await ids('invoice_items_scoped'),[id(63),id(64),id(66),id(67),id(68)],'retail checkout retains assigned POS/order, legacy missing-source and internal-sale lines');
+ await db.exec(`reset role; delete from invoice_items where id in ('${id(66)}','${id(67)}','${id(68)}');
+  delete from invoices where id in ('${id(56)}','${id(57)}','${id(58)}');
+  delete from user_branch_permission_overrides where permission_code='inventory.internal_export';
+  delete from role_permissions where permission_code='pos_retail.checkout';
+  delete from user_branch_permission_overrides where permission_code='orders.view';
   insert into role_permissions values ('${id(20)}','pos_fnb.view_sales_summary'); set role authenticated;`);
- assert.deepEqual(await ids('invoice_items_scoped'),[],'F&B sales summary alone does not authorize raw item lines');
+ assert.deepEqual(await ids('invoice_items_scoped'),[],'F&B sales summary alone does not authorize raw item lines even without overrides');
  await db.exec(`reset role; delete from role_permissions where permission_code='pos_fnb.view_sales_summary';
   insert into role_permissions values ('${id(20)}','reports.fnb'); set role authenticated;`);
  assert.deepEqual(await ids('invoice_items_scoped'),[],'F&B reporting alone does not authorize raw item lines');
