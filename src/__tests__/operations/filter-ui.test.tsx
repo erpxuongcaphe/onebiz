@@ -4,10 +4,10 @@ import { OperationsFilterBar } from "@/components/operations/filter-bar";
 import { initialFilters } from "@/lib/operations/filters";
 import { useHubAccess } from "@/lib/operations/use-hub-access";
 
-const session = vi.hoisted(() => ({ user: { id: "user-a" }, isLoading: false, hasPermission: vi.fn(() => true) }));
+const session = vi.hoisted(() => ({ authUser: { id: "user-a" }, user: { id: "user-a" }, isLoading: false, hasPermission: vi.fn(() => true) }));
 vi.mock("@/lib/contexts", () => ({ useAuth: () => session }));
 function Entry() { return <span>{useHubAccess() ? "Cho phép" : "Chặn"}</span>; }
-beforeEach(() => { session.user = { id: "user-a" }; session.isLoading = false; session.hasPermission.mockReturnValue(true); });
+beforeEach(() => { session.authUser = { id: "user-a" }; session.user = { id: "user-a" }; session.isLoading = false; session.hasPermission.mockReturnValue(true); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("Hub filters and permission-dependent entry", () => {
