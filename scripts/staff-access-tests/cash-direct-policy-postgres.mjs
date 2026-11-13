@@ -71,10 +71,10 @@ statements.push(`
    then raise exception 'denied branch exposed'; end if;
  end$$;
  reset role; insert into role_permissions values ('${id(20)}','reports.dashboard'); set role authenticated;
- do $$begin if (select count(*) from cash_transactions)<>2 then raise exception 'independent dashboard access lost'; end if; end$$;
+ do $$begin if (select count(*) from cash_transactions)<>1 then raise exception 'dashboard bypasses cash-book revocation'; end if; end$$;
  reset role; delete from role_permissions where permission_code='reports.dashboard';
  insert into role_permissions values ('${id(20)}','reports.analytics'); set role authenticated;
- do $$begin if (select count(*) from cash_transactions)<>2 then raise exception 'independent cash-flow summary access lost'; end if; end$$;
+ do $$begin if (select count(*) from cash_transactions)<>1 then raise exception 'analytics bypasses cash-book revocation'; end if; end$$;
  reset role; delete from role_permissions where permission_code in ('reports.analytics','finance.view_cash_book');
  update user_branch_permission_overrides set branch_id='${id(11)}',override_type='grant' where permission_code='finance.view_cash_book';
  set role authenticated;
@@ -92,7 +92,10 @@ statements.push(`
  end$$;
  reset role; delete from user_branch_permission_overrides where permission_code='finance.view_cash_book'; set role authenticated;
  do $$begin if (select count(*) from cash_transactions)<>0 then raise exception 'global-only revoke bypassed'; end if; end$$;
- reset role; insert into role_permissions values ('${id(20)}','finance.create_transaction'); set role authenticated;
+ reset role; insert into role_permissions values ('${id(20)}','reports.dashboard'),('${id(20)}','reports.analytics'); set role authenticated;
+ do $$begin if (select count(*) from cash_transactions)<>0 then raise exception 'report grants bypass global cash revoke';end if;end$$;
+ reset role; delete from role_permissions where permission_code in ('reports.dashboard','reports.analytics');
+ insert into role_permissions values ('${id(20)}','finance.create_transaction'); set role authenticated;
  do $$begin if (select count(*) from money_accounts)<>2 then raise exception 'payment account access lost'; end if; end$$;
  reset role;
 `);
@@ -114,6 +117,25 @@ statements.push(`set role authenticated;
  values('${id(1)}','${id(101)}','pos_fnb.view_sales_summary','revoke','${id(100)}'); set role authenticated;
  do $$begin if (select count(*) from dashboard_live_signals)<>0 then raise exception 'SIGNAL_GLOBAL_REVOKE_BYPASS';end if;end$$;
  reset role;`);
+// End-to-end: a revoked cash-book reader may still get bounded report totals,
+// while direct voucher rows remain hidden even with the report permission.
+statements.push(`alter table cash_transactions add column transaction_date date,add column created_at timestamptz,
+ add column type text,add column category text,add column amount numeric,add column status text,
+ add column payment_method text,add column reference_type text;
+ update cash_transactions set transaction_date='2026-11-01',created_at='2026-11-01T12:00Z',
+  type='receipt',category='Sales',amount=100,status='completed';
+ insert into role_permissions values ('${id(20)}','reports.analytics');
+ create function public._can_read_branch_inventory_00476(p_user uuid,p_tenant uuid,p_branch uuid)
+ returns boolean language sql as $$select public.user_has_branch_access(p_user,p_branch) or public.user_has_permission(p_user,'reports.view_all_branches')$$;`);
+statements.push(await functionFromMigration('20261111094222_staff_branch_report_permissions.sql','_staff_report_permission'));
+const reportGuard=await functionFromMigration('00513_inventory_operational_read_projections.sql','assert_report_access');
+statements.push(reportGuard.replace('public.user_has_permission(v_actor,p_permission_code)','public._staff_report_permission(v_actor,p_permission_code,p_branch_id)'));
+await migration('20261113074601_staff_cash_flow_summary_projection.sql');
+statements.push(`set role authenticated; do $$begin
+ if (select count(*) from cash_transactions)<>0 then raise exception 'SUMMARY_REVEALED_RAW_VOUCHERS';end if;
+ if (select sum(amount) from get_cash_flow_category_summary('2026-11-01','2026-11-30','${id(10)}')) is distinct from 100
+ then raise exception 'AUTHORIZED_SUMMARY_MISSING';end if;
+ end$$; reset role;`);
 if (process.env.ONEBIZ_PGLITE_MODULE) {
  const {PGlite}=await import(pathToFileURL(process.env.ONEBIZ_PGLITE_MODULE).href);
  const db=new PGlite();

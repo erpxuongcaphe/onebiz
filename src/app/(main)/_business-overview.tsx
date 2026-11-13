@@ -91,10 +91,11 @@ function RevenueTooltip({ active, payload, label }: RevenueTooltipProps) {
 }
 export default function BusinessOverview() {
   const { activeBranchId, branchLabel, isReady } = useBranchFilter();
-  const { tenant, user, hasPermission } = useAuth();
-  const canViewProfit = hasPermission("reports.view_profit") && hasPermission("reports.view_detail");
-  const canViewCash = hasPermission("finance.view_cash_book");
-  const canViewDebt = hasPermission("reports.analytics") && hasPermission("reports.view_detail");
+  const { tenant, user, hasPermissionAtBranch } = useAuth();
+  const reportBranch = activeBranchId ?? null;
+  const canViewProfit = hasPermissionAtBranch("reports.view_profit", reportBranch) && hasPermissionAtBranch("reports.view_detail", reportBranch);
+  const canViewCash = hasPermissionAtBranch("finance.view_cash_book", reportBranch);
+  const canViewDebt = hasPermissionAtBranch("reports.analytics", reportBranch) && hasPermissionAtBranch("reports.view_detail", reportBranch);
   const { toast } = useToast();
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisMonth", defaultViewMode: "chart" });
@@ -563,7 +564,7 @@ export default function BusinessOverview() {
             valueColor="text-foreground"
           />}
         </div>
-        {canViewProfit && updatedAt && <ManagementReview current={kpis.financial.current} previous={kpis.financial.previous} branchId={activeBranchId} range={range} branches={visibleBranches} branchError={branchError} updatedAt={updatedAt} branchSort={branchSort} onBranchSort={setBranchSort} hasPermission={hasPermission} />}
+        {canViewProfit && updatedAt && <ManagementReview current={kpis.financial.current} previous={kpis.financial.previous} branchId={activeBranchId} range={range} branches={visibleBranches} branchError={branchError} updatedAt={updatedAt} branchSort={branchSort} onBranchSort={setBranchSort} hasPermission={(code) => hasPermissionAtBranch(code, reportBranch)} />}
         {canViewCash && <ManagementCashSummary rows={cashRows} error={cashError} branchId={activeBranchId} range={range} />}
         {canViewDebt && <ManagementDebtSummary workspace={debtWorkspace} error={debtError} branchId={activeBranchId} />}
 

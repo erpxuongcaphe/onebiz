@@ -1,6 +1,7 @@
 -- Guard direct REST reads for branch exceptions and explicit global revokes.
 -- Existing active users without either keep their old access.
--- Cash-book branch editing stays disabled until the remaining readers are audited.
+-- Roll out only after aggregate readers and compatible web clients are live.
+-- Older report clients read this table directly and would otherwise show partial data.
 begin;
 set local lock_timeout='3s';
 set local statement_timeout='30s';
@@ -19,13 +20,7 @@ begin
    where o.tenant_id=tenant and o.user_id=actor and o.permission_code='finance.view_cash_book' and o.override_type='revoke')
   then return null; end if;
  select coalesce(array_agg(b.id),'{}'::uuid[]) into result from public.branches b
- where b.tenant_id=tenant and (
-  public._staff_my_cash_book_view(b.id)
-  or public._staff_permission_at_scope(actor,'reports.dashboard',b.id)
-  -- Existing cash-flow summaries are built from direct rows for users with
-  -- analytics access even without the separate report-detail permission.
-  or public._staff_permission_at_scope(actor,'reports.analytics',b.id)
- );
+ where b.tenant_id=tenant and public._staff_my_cash_book_view(b.id);
  return result;
 end $$;
 revoke all on function public._staff_cash_direct_allowed_branches() from public,anon;
