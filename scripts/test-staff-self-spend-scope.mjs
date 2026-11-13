@@ -45,7 +45,11 @@ try {
  assert.deepEqual(await call(),[id(11)]);
  await db.exec(`insert into role_permissions values ('${id(20)}','finance.view_cash_journal_company')`);
  assert.deepEqual(new Set(await call()),new Set([id(10),id(11)]));
- await db.exec(`delete from role_permissions where permission_code='finance.view_cash_journal_company';
+ await db.exec(`delete from role_permissions where permission_code in ('finance.view_cash_journal_company','finance.view_cash_journal_self_spend','finance.view_branch_self_spend_journal');
+  insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+  values ('${id(1)}','${id(101)}','${id(11)}','finance.view_cash_journal_self_spend','grant','${id(100)}');`);
+ assert.deepEqual(await call(),[id(11)]);
+ await db.exec(`insert into role_permissions values ('${id(20)}','finance.view_branch_self_spend_journal');
   insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type,created_by)
   values ('${id(1)}','${id(101)}','finance.view_cash_journal_self_spend','revoke','${id(100)}');`);
  assert.deepEqual(await call(),[]);
