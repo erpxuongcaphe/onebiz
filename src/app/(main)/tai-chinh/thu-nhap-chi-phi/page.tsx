@@ -23,7 +23,7 @@ import {getFinanceCategories, getFinanceWorkspace, getAllFinanceRows, saveFinanc
   type FinanceKind, type CashFlowActivity, type FinanceCategory, type FinanceEvent, type FinanceFilters, type FinanceWorkspace} from '@/lib/services/supabase/management-finance';
 
 export default function ManagementFinancePage() {
-  const {activeBranchId:globalBranchId, branches, hasPermissionAtBranch, hasAssignedBranchAccess, isLoading} = useAuth();
+  const {activeBranchId:globalBranchId, branches, hasPermissionAtBranch, hasAssignedBranchAccess, isLoading, user, tenant} = useAuth();
   const [localBranch,setLocalBranch]=useState<string>();
   const [urlReady,setUrlReady]=useState(false);
   const activeBranchId=localBranch==='all'?undefined:localBranch??globalBranchId;
@@ -68,15 +68,25 @@ export default function ManagementFinancePage() {
   const [actionSaving, setActionSaving] = useState(false);
   const [actionError, setActionError] = useState('');
   const scopePermission = (code: string) => hasPermissionAtBranch(code, activeBranchId ?? null);
-  const canRead = urlReady && !branchDenied && scopePermission('finance.view_cash_book');
+  // “Tất cả” means the server-filtered set of assigned, readable branches;
+  // a grant for one branch must not be mistaken for a company-wide grant.
+  const readableBranches = (branches ?? []).filter(branch => hasAssignedBranchAccess(branch.id) && hasPermissionAtBranch('finance.view_cash_book', branch.id)).map(branch => branch.id).sort();
+  const readScopeKey = JSON.stringify([user?.id, tenant?.id, activeBranchId, readableBranches]);
+  const canRead = urlReady && !branchDenied && (activeBranchId
+    ? scopePermission('finance.view_cash_book')
+    : readableBranches.length > 0);
   const canCreate = !branchDenied && scopePermission('finance.create_transaction');
   const canCancel = !branchDenied && scopePermission('finance.void_transaction');
   const canExport = !branchDenied && scopePermission('reports.export');
   const scoped = {...filters, branchId: activeBranchId};
   const reportPeriod = new URLSearchParams({preset:'custom',from:filters.from,to:filters.to,view:'table',branch:activeBranchId??'all'}).toString();
   const rangeError = financeReportRangeError(filters.from, filters.to);
-  const exportScope = JSON.stringify([activeBranchId, filters, view, revision]);
+  const exportScope = JSON.stringify([readScopeKey, filters, view, revision]);
   const exportToken = useRef<object | null>(null);
+  useLayoutEffect(() => {
+    setData(null);
+    setCategoryRows([]);
+  }, [readScopeKey]);
   useLayoutEffect(() => {
     exportToken.current = !isLoading && canRead && canExport && !rangeError ? {} : null;
     return () => {exportToken.current = null;};
@@ -90,7 +100,7 @@ export default function ManagementFinancePage() {
       .catch(e => {if (active) setError(e instanceof Error ? e.message : 'Không tải được báo cáo.');})
       .finally(() => {if (active) setLoading(false);});
     return () => {active = false;};
-  }, [isLoading, canRead, activeBranchId, filters, page, revision, rangeError]);
+  }, [isLoading, canRead, readScopeKey, activeBranchId, filters, page, revision, rangeError]);
   useEffect(() => {
     if (isLoading || !canRead) return;
     let active = true;
@@ -108,7 +118,7 @@ export default function ManagementFinancePage() {
       .catch(e => {if (active) setError(e instanceof Error ? e.message : 'Không tải đủ khoản ghi nhận.');})
       .finally(() => {if (active) setCategoryLoading(false);});
     return () => {active = false;};
-  }, [isLoading,canRead,view,filters,activeBranchId,revision,rangeError]);
+  }, [isLoading,canRead,readScopeKey,view,filters,activeBranchId,revision,rangeError]);
   const patch = useCallback((value: Partial<FinanceFilters>) => {setFilters(f => ({...f, ...value})); setPage(0);}, []);
   useEffect(()=>{
     if(initialCategoryApplied.current || !categories.length) return;
