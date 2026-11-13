@@ -12,6 +12,10 @@ export interface PartyHistoryPage {
   partyId: string; mode: "customer" | "supplier"; branchId: string | null;
   canViewDebt: boolean; revision: string; total: number; rows: PartyHistoryRow[];
 }
+export interface PartyHistoryPageV2 extends PartyHistoryPage {
+  scope: "company" | "assigned" | "branch";
+  branchIds: string[]; activityBranchIds: string[]; debtBranchIds: string[];
+}
 export type PartyHistoryDocument = Omit<PartyHistoryRow, "totalAmount"> & { totalAmount: number; total: number; amountOwed: number | null };
 export type PartyHistoryReturn = Omit<PartyHistoryRow, "totalAmount"> & { totalAmount: number };
 export function partyHistoryModel(page: PartyHistoryPage | null) {
@@ -79,17 +83,77 @@ export function parsePartyHistoryPage(value: unknown, request: {
     canViewDebt: page.canViewDebt, revision: page.revision, total: Number(page.total), rows };
 }
 
+/** V2 permits independently masked debt fields for each document's branch. */
+export function parsePartyHistoryPageV2(value: unknown, request: {
+  partyId: string; mode: "customer" | "supplier"; branchId: string | null; offset: number; limit: number;
+}): PartyHistoryPageV2 {
+  const page = object(value);
+  if (!["company", "assigned", "branch"].includes(String(page.scope))
+    || !Array.isArray(page.branchIds) || !Array.isArray(page.activityBranchIds) || !Array.isArray(page.debtBranchIds)
+    || !Array.isArray(page.rows) || typeof page.canViewDebt !== "boolean") throw invalid();
+  const readIds = (values: unknown[]) => {
+    const ids = values.map(text);
+    if (ids.some(id => !id) || new Set(ids).size !== ids.length) throw invalid();
+    return ids;
+  };
+  const branchIds = readIds(page.branchIds), activityBranchIds = readIds(page.activityBranchIds), debtBranchIds = readIds(page.debtBranchIds);
+  const scopeBranches = new Set(branchIds), activityBranches = new Set(activityBranchIds), debtBranches = new Set(debtBranchIds);
+  if (!activityBranchIds.length || activityBranchIds.some(id => !scopeBranches.has(id)) || debtBranchIds.some(id => !scopeBranches.has(id))
+    || page.canViewDebt !== (debtBranchIds.length > 0)
+    || request.branchId === null && page.scope === "branch"
+    || request.branchId !== null && (page.scope !== "branch" || branchIds.length !== 1 || branchIds[0] !== request.branchId)) throw invalid();
+  // Reuse strict structural/date checks, then independently validate each
+  // original paid/debt field against the authorized branch set.
+  const originalRows = page.rows.map(object);
+  const sanitized = { ...page, canViewDebt: false, rows: originalRows.map(row => ({ ...row, paid: null, debt: null })) };
+  const parsed = parsePartyHistoryPage(sanitized, request);
+  const allCompanyActivity = page.scope === "company" && activityBranchIds.length === branchIds.length;
+  const rows = parsed.rows.map((row, index) => {
+    const original = originalRows[index];
+    const paid = nullableNumber(original.paid), debt = nullableNumber(original.debt);
+    if (row.branchId === null ? row.kind !== "loyalty" || !allCompanyActivity : !activityBranches.has(row.branchId)) throw invalid();
+    const canReadRowDebt = row.kind === "document" && row.branchId !== null && debtBranches.has(row.branchId);
+    if (canReadRowDebt ? paid === null || debt === null : paid !== null || debt !== null) throw invalid();
+    if (row.balanceAfter !== null && !allCompanyActivity) throw invalid();
+    return { ...row, paid, debt };
+  });
+  return { ...parsed, canViewDebt: page.canViewDebt, scope: page.scope as PartyHistoryPageV2["scope"],
+    branchIds, activityBranchIds, debtBranchIds, rows };
+}
+
 export async function readPartyHistoryPages(
   request: { partyId: string; mode: "customer" | "supplier"; branchId: string | null },
   read: (offset: number, limit: number) => Promise<unknown>, signal?: AbortSignal,
 ): Promise<PartyHistoryPage> {
-  let first: PartyHistoryPage | null = null;
+  return readPartyHistoryPagesUsing(request, read, parsePartyHistoryPage, signal);
+}
+
+export async function readPartyHistoryPagesV2(
+  request: { partyId: string; mode: "customer" | "supplier"; branchId: string | null },
+  read: (offset: number, limit: number) => Promise<unknown>, signal?: AbortSignal,
+): Promise<PartyHistoryPageV2> {
+  return readPartyHistoryPagesUsing(request, read, parsePartyHistoryPageV2, signal);
+}
+
+async function readPartyHistoryPagesUsing<T extends PartyHistoryPage>(
+  request: { partyId: string; mode: "customer" | "supplier"; branchId: string | null },
+  read: (offset: number, limit: number) => Promise<unknown>,
+  parse: (value: unknown, request: { partyId: string; mode: "customer" | "supplier"; branchId: string | null; offset: number; limit: number }) => T,
+  signal?: AbortSignal,
+): Promise<T> {
+  let first: T | null = null;
+  let signature: string | null = null;
   const rows: PartyHistoryRow[] = [], seen = new Set<string>();
   for (let offset = 0; ; offset += 200) {
     signal?.throwIfAborted();
-    const page = parsePartyHistoryPage(await read(offset, 200), { ...request, offset, limit: 200 });
+    const page = parse(await read(offset, 200), { ...request, offset, limit: 200 });
     signal?.throwIfAborted();
-    if (first && (first.revision !== page.revision || first.total !== page.total || first.canViewDebt !== page.canViewDebt)) throw invalid();
+    const v2 = "activityBranchIds" in page ? page as unknown as PartyHistoryPageV2 : null;
+    const nextSignature = JSON.stringify({ revision: page.revision, total: page.total, canViewDebt: page.canViewDebt,
+      scope: v2?.scope ?? null, branchIds: v2 ? [...v2.branchIds].sort() : null,
+      activityBranchIds: v2 ? [...v2.activityBranchIds].sort() : null, debtBranchIds: v2 ? [...v2.debtBranchIds].sort() : null });
+    if (signature !== null && signature !== nextSignature) throw invalid();
+    signature = nextSignature;
     first ??= page;
     for (const row of page.rows) {
       const key = `${row.kind}:${row.id}`;

@@ -802,6 +802,16 @@ export function StaffProfileEditor({
                                     Quyền này mở trang xem sơ đồ tại chi nhánh đã chọn. Quyền bán hàng F&amp;B, in đơn hoặc hóa đơn, quản lý bàn, xem hoặc sửa sản phẩm và một số quyền toàn công ty vẫn cho đọc dữ liệu bàn để phục vụ công việc; kiểm tra các quyền đó nếu cần giới hạn dữ liệu.
                                   </p>
                                 )}
+                                {branchId && ["customers.view_debt", "suppliers.view_debt"].includes(p.code) && (
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    Quyền này giới hạn số công nợ và tạm ứng tương ứng theo quán. Các quyền độc lập như xem báo cáo chi tiết, sổ quỹ, xem hóa đơn hoặc nhập số dư đầu kỳ vẫn có thể cho xem thông tin tài chính trong phạm vi được cấp; hãy kiểm tra cả những quyền đó.
+                                  </p>
+                                )}
+                                {branchId && ["customers.view_sales", "suppliers.view_purchases"].includes(p.code) && (
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    Quyền này giới hạn tổng và lịch sử tương ứng theo quán. Quyền xem hóa đơn, phiếu nhập hoặc báo cáo là quyền độc lập và vẫn có thể cho xem các chứng từ trong phạm vi được cấp.
+                                  </p>
+                                )}
                                 {branchId && p.code === "invoices.adjust_issued_at" && (
                                   <p className="mt-1 text-xs text-muted-foreground">
                                     Cho phép chỉnh ngày giờ hóa đơn tại chi nhánh được chọn. Không cấp quyền này vẫn thanh toán bình thường với thời gian tự động.

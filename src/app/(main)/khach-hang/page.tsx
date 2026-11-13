@@ -13,10 +13,11 @@ import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
 import { ListMetric } from "@/components/shared/list-metric";
 import { ListWorkspaceError } from "@/components/shared/list-workspace-error";
-import { getScopedCustomerDirectory } from "@/lib/services/supabase/party-directory-workspace";
-import { getScopedPartyHistory } from "@/lib/services/supabase/party-history-workspace";
+import { getScopedCustomerDirectoryV2 } from "@/lib/services/supabase/party-directory-workspace";
+import { getScopedPartyHistoryV2 } from "@/lib/services/supabase/party-history-workspace";
+import { PartyDirectoryMetricScope } from "@/components/shared/party-directory-metric-scope";
 import { partyHistoryModel, type PartyHistoryDocument } from "@/lib/services/supabase/party-history-reader";
-import { customerDirectoryModel, customerEditProfile, directoryScopeLabel, type DirectoryCustomer as Customer } from "@/lib/services/supabase/party-directory-model";
+import { customerDirectoryModel, customerEditProfile, directoryMetricScopeLabel, sameDirectoryMetricScope, type DirectoryCustomer as Customer } from "@/lib/services/supabase/party-directory-model";
 import {
   FilterChips,
   type ListFilterChip,
@@ -101,17 +102,19 @@ function useStarredSet() {
 export default function KhachHangPage() {
   const { toast } = useToast();
   const { user, tenant } = useAuth();
-  const { activeBranchId, isReady: branchScopeReady } = useBranchFilter();
+  const { activeBranchId, branches, isReady: branchScopeReady } = useBranchFilter();
 
   // Sprint S2 Phase 1 + 3a (CEO 12/05): defense-in-depth permission cho xoá KH.
   //   - canDeleteCustomer = true  → bấm Xoá → ConfirmDialog → service trực tiếp
   //   - canDeleteCustomer = false → bấm Xoá → ConfirmDialog → mở OTP dialog
   //     → manager cấp OTP từ /manager/otp → cashier nhập → service với otpId
-  const { hasPermission } = usePermissions();
+  const { hasPermission, hasPermissionAtBranch } = usePermissions();
   const canDeleteCustomer = hasPermission(PERMISSIONS.CUSTOMERS_DELETE);
   const canEditCustomer = hasPermission(PERMISSIONS.CUSTOMERS_EDIT);
   // Sprint A.2: cashier KHÔNG được thấy công nợ KH (leak business data).
-  const canViewDebt = hasPermission(PERMISSIONS.CUSTOMERS_VIEW_DEBT);
+  const canViewDebt = activeBranchId
+    ? hasPermissionAtBranch(PERMISSIONS.CUSTOMERS_VIEW_DEBT, activeBranchId)
+    : branches.some(branch => hasPermissionAtBranch(PERMISSIONS.CUSTOMERS_VIEW_DEBT, branch.id));
 
   // OTP delegation state
   const [otpDialogOpen, setOtpDialogOpen] = useState(false);
@@ -297,7 +300,7 @@ export default function KhachHangPage() {
       const effectiveDateFrom =
         datePreset === "custom" ? dateFrom : presetRange.from;
       const effectiveDateTo = datePreset === "custom" ? dateTo : presetRange.to;
-      return getScopedCustomerDirectory({
+      return getScopedCustomerDirectoryV2({
         page,
         pageSize,
         sortBy: sorting[0]?.id,
@@ -526,6 +529,7 @@ export default function KhachHangPage() {
     try {
     const exported = await loadWorkspace(true, controller.signal);
     if (controller.signal.aborted) return;
+    if (!sameDirectoryMetricScope(workspace.scope, exported.scope)) throw new Error("Phạm vi quyền đã thay đổi. Vui lòng tải lại danh sách trước khi xuất.");
     const selected = selectedIds ? new Set(selectedIds) : null;
     const exportData = selected ? exported.data.filter(row => selected.has(row.id)) : exported.data;
     if (selected && exportData.length !== selected.size) throw new Error("Danh sách đã thay đổi. Chọn lại các dòng cần xuất.");
@@ -537,18 +541,18 @@ export default function KhachHangPage() {
       { header: "Địa chỉ", key: "address", width: 35 },
       { header: "Mã số thuế", key: "taxCode", width: 18 },
       ...(exported.canViewDebt && canViewDebt ? [{
-        header: "Nợ hiện tại",
+        header: `Nợ hiện tại (${directoryMetricScopeLabel(exported.scope, "debt", branches)})`,
         key: "currentDebt",
         width: 15,
         format: (v: number) => v,
       }] : []),
       ...(exported.canViewActivity ? [{
-        header: "Tổng bán",
+        header: `Tổng bán (${directoryMetricScopeLabel(exported.scope, "activity", branches)})`,
         key: "totalSales",
         width: 15,
         format: (v: number) => v,
       }, {
-        header: "Doanh số ròng", key: "totalSalesMinusReturns", width: 18,
+        header: `Doanh số ròng (${directoryMetricScopeLabel(exported.scope, "activity", branches)})`, key: "totalSalesMinusReturns", width: 18,
       }] : []),
       { header: "Nhóm", key: "groupName", width: 20 },
       { header: "Điểm", key: "loyaltyPoints", width: 12 },
@@ -674,7 +678,7 @@ export default function KhachHangPage() {
           columnToggle
           toolbarMetrics={
             <>
-              {workspace && <span className="col-span-2 px-2 text-xs font-medium text-muted-foreground">{directoryScopeLabel(workspace.scope)}</span>}
+              {workspace && <div className="col-span-2"><PartyDirectoryMetricScope scope={workspace.scope} branches={branches} kind="customer" /></div>}
               <ListMetric
                 icon={<Icon name="group" size={15} />}
                 label="Kết quả"
@@ -1186,7 +1190,7 @@ function CustomerDetailPanel({
   const { user, tenant } = useAuth();
   const historyLoader = useCallback(() => {
     void historyRevision; void customer.currentDebt;
-    return getScopedPartyHistory("customer", customer.id, activeBranchId ?? null);
+    return getScopedPartyHistoryV2("customer", customer.id, activeBranchId ?? null);
   }, [customer.id, activeBranchId, historyRevision, customer.currentDebt]);
   const history = useListWorkspaceQuery(historyLoader, canViewActivity, `${tenant?.id ?? ""}:${user?.id ?? ""}:${canViewDebt}`);
   const { documents: invoices, returns, loyalty } = partyHistoryModel(history.data);
@@ -1329,7 +1333,7 @@ function CustomerDetailPanel({
                   header: "Còn nợ",
                   align: "right" as const,
                   accessor: (r: PartyHistoryDocument) =>
-                    (r.debt ?? 0) > 0 ? (
+                    r.debt === null ? <span className="text-muted-foreground">Không có quyền</span> : r.debt > 0 ? (
                       <span className="text-destructive font-semibold">
                         {formatCurrency(r.debt ?? 0)}
                       </span>
@@ -1420,6 +1424,7 @@ function CustomerDetailPanel({
       content: (
         <div className="space-y-4">
           {salesError && <p role="alert" className="text-sm text-destructive">{salesError}</p>}
+          {canViewActivity && <p className="text-xs text-muted-foreground">Danh sách hóa đơn bên dưới chỉ gồm chi nhánh anh được xem cả lịch sử bán và công nợ. Nợ hiện tại phía trên tính theo phạm vi công nợ được cấp.</p>}
           <DetailInfoGrid
             columns={2}
             fields={[
@@ -1486,7 +1491,7 @@ function CustomerDetailPanel({
                 ]}
                 summary={[
                   {
-                    label: "Tổng nợ từ các hoá đơn",
+                    label: "Tổng nợ từ các hóa đơn đang được xem",
                     value: (
                       <span className="text-destructive">
                         {formatCurrency(totalOutstanding)}
@@ -1499,7 +1504,7 @@ function CustomerDetailPanel({
           )}
           {canViewActivity && !salesLoading && !salesError && outstandingInvoices.length === 0 && (
             <div className="text-sm text-muted-foreground py-2 text-center">
-              Không có hoá đơn nào còn nợ.
+              Không có hóa đơn còn nợ trong phạm vi lịch sử được xem.
             </div>
           )}
         </div>

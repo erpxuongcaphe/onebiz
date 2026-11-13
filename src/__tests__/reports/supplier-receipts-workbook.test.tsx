@@ -3,8 +3,8 @@ import { afterEach, expect, it, vi } from "vitest";
 import * as XLSX from "xlsx-js-style";
 const fake = vi.hoisted(() => ({ save: vi.fn(), full: vi.fn(), read: vi.fn() }));
 vi.mock("file-saver", () => ({ saveAs: fake.save }));
-vi.mock("@/lib/contexts/auth-context", () => ({ useAuth: () => ({ user: { id: "actor" }, tenant: { id: "tenant" }, hasPermission: () => true }) }));
-vi.mock("@/lib/services/supabase/supplier-receipts", () => ({ getAllSupplierReceipts: fake.full, getSupplierReceiptWorkspace: fake.read, SUPPLIER_RECEIPT_KINDS: { receipt: "Nhập kho" }, SUPPLIER_RECEIPT_STATUSES: { verified: "Đủ nguồn", missing_price: "Thiếu giá lịch sử" } }));
+vi.mock("@/lib/contexts/auth-context", () => ({ useAuth: () => ({ user: { id: "actor" }, tenant: { id: "tenant" }, branches: [{ id: "fixture", name: "Fixture" }], hasPermission: () => true, hasPermissionAtBranch: () => true, hasAssignedBranchAccess: () => true }) }));
+vi.mock("@/lib/services/supabase/supplier-receipts", () => ({ getAllSupplierReceiptsV2: fake.full, getSupplierReceiptWorkspaceV2: fake.read, SUPPLIER_RECEIPT_KINDS: { receipt: "Nhập kho" }, SUPPLIER_RECEIPT_STATUSES: { verified: "Đủ nguồn", missing_price: "Thiếu giá lịch sử" } }));
 import { SupplierReceiptsPanel } from "@/components/shared/report/supplier-receipts-panel";
 import { exportReportToExcel } from "@/lib/utils/excel-export";
 
@@ -18,7 +18,7 @@ async function reopen(blob: Blob) {
 it("reopens the actual full receipt workbook with numeric precision and explicit missing cells", async () => {
   const row = { id: "one", occurredAt: "2026-10-01T00:00:00Z", kind: "receipt", branchId: null, branchName: "Fixture", orderId: null, orderCode: "PN-fixture", supplierId: null, supplierName: "Fixture", documentCode: "PN-fixture", documentStatus: "partial", productId: null, productCode: "SKU-fixture", productName: "Synthetic only", stockUnit: "G", quantity: 1234.5678, unitPrice: 0.000123456, amount: 0.1524, signedAmount: 0.1524, priceSource: "movement", status: "verified" };
   const unknown = { ...row, id: "two", unitPrice: null, amount: null, signedAmount: null, priceSource: null, status: "missing_price" };
-  fake.read.mockResolvedValue({ items: [row, unknown], total: 2, summary: { rows: 2, reviewRows: 1, receivedAmount: null, revertedAmount: 0, returnedAmount: 0, netAmount: null } }); fake.full.mockResolvedValue([row, unknown]);
+  fake.read.mockResolvedValue({ authorizedBranchIds: ["fixture"], scopeComplete: true, items: [row, unknown], total: 2, summary: { rows: 2, reviewRows: 1, receivedAmount: null, revertedAmount: 0, returnedAmount: 0, netAmount: null } }); fake.full.mockResolvedValue([row, unknown]);
   render(<SupplierReceiptsPanel branchId="fixture" branchName="Fixture" range={{ from: "2026-10-01", to: "2026-10-31" }} ready />);
   await screen.findAllByText("PN-fixture"); fireEvent.click(screen.getByRole("button", { name: "Excel đầy đủ" })); await waitFor(() => expect(fake.save).toHaveBeenCalledTimes(1));
   const wb = await reopen(fake.save.mock.calls[0][0]); const sheet = wb.Sheets["Thực nhập"]; expect(sheet).toBeTruthy();

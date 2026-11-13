@@ -26,6 +26,11 @@ const workspaceSchema = z.object({
 });
 export type SupplierReceiptRow = z.infer<typeof rowSchema>;
 export type SupplierReceiptWorkspace = z.infer<typeof workspaceSchema>;
+const workspaceV2Schema = workspaceSchema.extend({
+  authorizedBranchIds: z.array(id).min(1),
+  scopeComplete: z.boolean(),
+});
+export type SupplierReceiptWorkspaceV2 = z.infer<typeof workspaceV2Schema>;
 export type SupplierReceiptSort = "occurredAt" | "kind" | "branchName" | "orderCode" | "supplierName" | "documentCode" | "documentStatus" |
   "productCode" | "productName" | "stockUnit" | "quantity" | "unitPrice" | "amount" | "signedAmount" | "priceSource" | "status";
 export interface SupplierReceiptQuery {
@@ -33,10 +38,18 @@ export interface SupplierReceiptQuery {
   status?: SupplierReceiptRow["status"] | "all"; search?: string; sortBy?: SupplierReceiptSort; descending?: boolean; page?: number; size?: number;
 }
 export async function getSupplierReceiptWorkspace(query: SupplierReceiptQuery): Promise<SupplierReceiptWorkspace> {
+  return readSupplierReceiptWorkspace(query, false);
+}
+
+export async function getSupplierReceiptWorkspaceV2(query: SupplierReceiptQuery): Promise<SupplierReceiptWorkspaceV2> {
+  return readSupplierReceiptWorkspace(query, true) as Promise<SupplierReceiptWorkspaceV2>;
+}
+
+async function readSupplierReceiptWorkspace(query: SupplierReceiptQuery, scoped: boolean): Promise<SupplierReceiptWorkspace | SupplierReceiptWorkspaceV2> {
   if (!toCreatedAtRangeWindow({ from: query.from, to: query.to })) throw new Error("Khoảng ngày thực nhập chưa hợp lệ.");
   const page = query.page ?? 0, size = query.size ?? 50;
   if (!Number.isSafeInteger(page) || page < 0 || !Number.isSafeInteger(size) || size < 1 || size > 200) throw new Error("Phân trang thực nhập chưa hợp lệ.");
-  const { data, error } = await getClient().rpc("get_supplier_receipt_workspace_v1" as never, {
+  const { data, error } = await getClient().rpc((scoped ? "get_supplier_receipt_workspace_v2" : "get_supplier_receipt_workspace_v1") as never, {
     p_branch_id: query.branchId ?? null, p_from: query.from, p_to: query.to, p_page: page, p_size: size,
     p_supplier_id: query.supplierId ?? null, p_kind: query.kind ?? "all", p_status: query.status ?? "all", p_search: query.search?.trim() || null,
     p_sort_by: query.sortBy ?? "occurredAt", p_sort_desc: query.descending ?? true,
@@ -46,9 +59,17 @@ export async function getSupplierReceiptWorkspace(query: SupplierReceiptQuery): 
     if (error.code === "42501") throw new Error("Không có quyền xem thực nhập trong phạm vi này.");
     handleError(error, "getSupplierReceiptWorkspace");
   }
-  const parsed = workspaceSchema.safeParse(data);
+  const parsed = (scoped ? workspaceV2Schema : workspaceSchema).safeParse(data);
   if (!parsed.success) throw new Error("Nguồn thực nhập chưa đầy đủ. Vui lòng tải lại.");
   const result = parsed.data;
+  if (scoped) {
+    const scopedResult = result as SupplierReceiptWorkspaceV2;
+    if (new Set(scopedResult.authorizedBranchIds).size !== scopedResult.authorizedBranchIds.length ||
+      (query.branchId && (scopedResult.authorizedBranchIds.length !== 1 || scopedResult.authorizedBranchIds[0] !== query.branchId)) ||
+      scopedResult.items.some(row => !row.branchId || !scopedResult.authorizedBranchIds.includes(row.branchId))) {
+      throw new Error("Phạm vi chi nhánh thực nhập không hợp lệ. Vui lòng tải lại.");
+    }
+  }
   const summary = result.summary;
   if (summary.rows !== result.total || summary.reviewRows > result.total ||
     result.items.length !== Math.max(0, Math.min(size, result.total - page * size)) || new Set(result.items.map(row => row.id)).size !== result.items.length ||
@@ -62,6 +83,20 @@ export async function getSupplierReceiptWorkspace(query: SupplierReceiptQuery): 
     throw new Error("Tổng và chi tiết thực nhập không khớp.");
   }
   return result;
+}
+export async function getAllSupplierReceiptsV2(query: Omit<SupplierReceiptQuery, "page" | "size">, expected?: Pick<SupplierReceiptWorkspaceV2, "fingerprint" | "scopeComplete" | "authorizedBranchIds">): Promise<SupplierReceiptRow[]> {
+  let fingerprint: string | undefined = expected?.fingerprint;
+  let scope: string | undefined = expected && JSON.stringify([expected.scopeComplete, [...expected.authorizedBranchIds].sort()]);
+  return readHistoryPages(async (offset, size) => {
+    const result = await getSupplierReceiptWorkspaceV2({ ...query, page: offset / size, size });
+    const nextScope = JSON.stringify([result.scopeComplete, [...result.authorizedBranchIds].sort()]);
+    if ((fingerprint !== undefined && fingerprint !== result.fingerprint) || (scope !== undefined && scope !== nextScope)) {
+      throw new Error("Dữ liệu hoặc quyền chi nhánh đã thay đổi. Vui lòng xuất lại.");
+    }
+    fingerprint = result.fingerprint;
+    scope = nextScope;
+    return { data: result.items, count: result.total, error: null };
+  });
 }
 export async function getAllSupplierReceipts(query: Omit<SupplierReceiptQuery, "page" | "size">): Promise<SupplierReceiptRow[]> {
   let fingerprint: string | undefined;

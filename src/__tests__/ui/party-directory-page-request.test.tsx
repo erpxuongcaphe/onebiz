@@ -5,10 +5,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({ branch: "branch-a", toast: vi.fn(), customer: vi.fn(), supplier: vi.fn(), excel: vi.fn(), csv: vi.fn(), invoices: vi.fn(), orders: vi.fn(), history: vi.fn() }));
 vi.mock("@/lib/contexts", () => ({
   useAuth: () => ({ user: { id: "user-a" }, tenant: { id: "tenant-a" }, hasPermission: () => true }),
-  useBranchFilter: () => ({ activeBranchId: state.branch, isReady: true }), useToast: () => ({ toast: state.toast }),
+  useBranchFilter: () => ({ activeBranchId: state.branch, branches: [{ id: state.branch, name: "Quán thử" }], isReady: true }), useToast: () => ({ toast: state.toast }),
 }));
 vi.mock("@/lib/contexts/auth-context", () => ({ useAuth: () => ({ user: { id: "user-a" }, tenant: { id: "tenant-a" }, hasPermission: () => true }) }));
-vi.mock("@/lib/permissions/use-permission", () => ({ usePermissions: () => ({ hasPermission: () => true }) }));
+vi.mock("@/lib/permissions/use-permission", () => ({ usePermissions: () => ({ hasPermission: () => true, hasPermissionAtBranch: () => true }) }));
 vi.mock("@/lib/hooks/use-revalidate-on-focus", () => ({ useRevalidateOnFocus: vi.fn() }));
 vi.mock("@/lib/hooks/use-breakpoint", () => ({ useBreakpoint: () => true }));
 vi.mock("next/dynamic", () => ({ default: () => () => null }));
@@ -29,8 +29,8 @@ vi.mock("@/components/shared/fnb-invoice-context", () => ({ FnbInvoiceContext: (
 vi.mock("@/lib/services", () => ({ getCustomerListWorkspace: state.customer, getSupplierListWorkspace: state.supplier,
   getCustomerGroupsAsync: async () => [], deleteCustomer: vi.fn(), deleteSupplier: vi.fn(), getInvoicesForCustomer: state.invoices,
   getReturnsForCustomer: async () => [], getLoyaltyTransactions: async () => ({ data: [] }), getPurchaseOrdersForSupplier: state.orders, getPurchaseOrderStatusMeta: () => ({}) }));
-vi.mock("@/lib/services/supabase/party-directory-workspace", () => ({ getScopedCustomerDirectory: state.customer, getScopedSupplierDirectory: state.supplier }));
-vi.mock("@/lib/services/supabase/party-history-workspace", () => ({ getScopedPartyHistory: state.history }));
+vi.mock("@/lib/services/supabase/party-directory-workspace", () => ({ getScopedCustomerDirectoryV2: state.customer, getScopedSupplierDirectoryV2: state.supplier }));
+vi.mock("@/lib/services/supabase/party-history-workspace", () => ({ getScopedPartyHistoryV2: state.history }));
 vi.mock("@/lib/services/supabase/customers", () => ({ standardizeWalkInCustomerCode: vi.fn() }));
 vi.mock("@/lib/services/supabase/excel-import", () => ({ bulkImportCustomers: vi.fn(), bulkImportSuppliers: vi.fn() }));
 vi.mock("@/lib/services/supabase/supplier-return-history", () => ({ getSupplierReturnHistory: vi.fn() }));
@@ -42,7 +42,7 @@ import SupplierPage from "@/app/(main)/hang-hoa/nha-cung-cap/page";
 function payload(name: string, activity = true, debt = true) {
   return { contacts: [{ id: name, name, code: name, phone: "", type: "individual", isActive: false, createdAt: "2026-10-01T00:00:00Z",
     activity: activity ? 100 : null, debt: debt ? 20 : null, returns: activity ? 0 : null, orders: activity ? 1 : null, lastPurchaseAt: null }], total: 1,
-    revision: "a".repeat(32), scope: { scope: "branch", branchIds: [state.branch] },
+    revision: "a".repeat(32), scope: { scope: "branch", branchIds: [state.branch], activityBranchIds: activity ? [state.branch] : [], debtBranchIds: debt ? [state.branch] : [] },
     activity: activity ? 100 : null, debt: debt ? 20 : null, returns: activity ? 0 : null, netSales: activity ? 100 : null,
     partiesWithDebt: debt ? 1 : null, canViewActivity: activity, canViewDebt: debt };
 }
@@ -111,6 +111,15 @@ describe.each([
     const keys = state.excel.mock.calls[0][1].map((column: {key:string}) => column.key);
     expect(keys).toContain("currentDebt");
     expect(keys).toContain(Page === CustomerPage ? "totalSalesMinusReturns" : "totalPurchases");
+  });
+  it("does not export if the effective metric scope changed since display", async () => {
+    render(<Page />); await screen.findByText(contact);
+    const changed = payload(contact);
+    changed.scope.activityBranchIds = [];
+    read.mockResolvedValueOnce(changed);
+    fireEvent.click(screen.getByRole("button", { name: "Xuất Excel" }));
+    await waitFor(() => expect(state.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Không xuất được dữ liệu" })));
+    expect(state.excel).not.toHaveBeenCalled();
   });
   it("uses the same authorized columns for Excel and CSV and cancels preparation on scope change", async () => {
     render(<Page />); await screen.findByText(contact);

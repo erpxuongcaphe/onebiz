@@ -162,7 +162,7 @@ describe("customer list wiring", () => {
   it("passes the active branch and refetches when the branch changes", () => {
     expect(page).toContain("useBranchFilter");
     expect(page).toContain("branchId: activeBranchId ?? null");
-    expect(page).toContain("getScopedCustomerDirectory(");
+    expect(page).toContain("getScopedCustomerDirectoryV2(");
     expect(page).toContain("branchScopeReady");
     expect(page).toContain("activeBranchId,");
   });
