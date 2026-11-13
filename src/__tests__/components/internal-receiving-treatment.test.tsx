@@ -3,10 +3,10 @@ import {fireEvent,render,screen,waitFor} from '@testing-library/react';
 import type {InternalReceivingOrder} from '@/lib/services/supabase/internal-receiving';
 import type {ReactNode} from 'react';
 
-const mocks=vi.hoisted(()=>({read:vi.fn(),receive:vi.fn(),params:'branch=xtb&sale=sale-source'}));
+const mocks=vi.hoisted(()=>({read:vi.fn(),receive:vi.fn(),params:'branch=xtb&sale=sale-source',permission:vi.fn(),assigned:vi.fn()}));
 vi.mock('next/navigation',()=>({useSearchParams:()=>new URLSearchParams(mocks.params)}));
 vi.mock('@/lib/contexts',()=>({useAuth:()=>({user:{id:'user',tenantId:'tenant'}}),useBranchFilter:()=>({activeBranchId:'warehouse',currentBranch:{id:'warehouse',name:'Kho Tổng'},isReady:true,branches:[{id:'warehouse',name:'Kho Tổng'},{id:'xtb',name:'Tư Búa'}]})}));
-vi.mock('@/lib/permissions/use-permission',()=>({usePermissions:()=>({hasPermission:()=>true,hasPermissionAtBranch:()=>true})}));
+vi.mock('@/lib/permissions/use-permission',()=>({usePermissions:()=>({hasPermission:()=>true,hasPermissionAtBranch:mocks.permission,hasAssignedBranchAccess:mocks.assigned})}));
 vi.mock('@/lib/hooks/use-product-uom',()=>({useProductUom:()=>({map:new Map(),error:null})}));
 vi.mock('@/lib/services/supabase/internal-receiving',()=>({getInternalReceivingWorkspace:mocks.read,receiveInternalSale:mocks.receive}));
 vi.mock('@/components/shared/data-table',()=>({DataTable:({data,expandedRow,renderDetail}:{data:InternalReceivingOrder[];expandedRow:number|null;renderDetail:(row:InternalReceivingOrder,onClose:()=>void)=>ReactNode})=><div>{data.map(row=><div key={row.id}>{row.code}</div>)}{expandedRow!=null&&expandedRow>=0&&renderDetail(data[expandedRow],()=>{})}</div>}));
@@ -16,9 +16,35 @@ const order:InternalReceivingOrder={id:'sale-source',code:'BNB-FIXTURE',createdA
   {id:'milk',productId:'milk-case',code:'SKU-MILK-CASE',name:'Sữa thùng',unit:'Thùng',dispatched:2,received:0,treatment:'stock',receivingProductId:'milk-box',receivingProductCode:'SKU-MILK-BOX',receivingFactor:12,receivingUnit:'Hộp'},
   {id:'tool',productId:'tool',code:'SKU-TOOL',name:'Vật tư vận hành',unit:'Cái',dispatched:3,received:0,treatment:'expense'},
 ]};
-beforeEach(()=>{vi.clearAllMocks();sessionStorage.clear();vi.stubGlobal('matchMedia',vi.fn(()=>({matches:false,addEventListener:vi.fn(),removeEventListener:vi.fn()})));mocks.params='branch=xtb&sale=sale-source';mocks.read.mockResolvedValue([order]);mocks.receive.mockResolvedValue({receiptId:'new-receipt'});});
+beforeEach(()=>{vi.clearAllMocks();sessionStorage.clear();vi.stubGlobal('matchMedia',vi.fn(()=>({matches:false,addEventListener:vi.fn(),removeEventListener:vi.fn()})));mocks.params='branch=xtb&sale=sale-source';mocks.permission.mockReturnValue(true);mocks.assigned.mockReturnValue(true);mocks.read.mockResolvedValue([order]);mocks.receive.mockResolvedValue({receiptId:'new-receipt'});});
 
 describe('internal receiving treatment',()=>{
+  it('uses the receiving branch for receiving and adjustment rights',async()=>{
+    mocks.permission.mockImplementation((code:string,branch:string|null)=> code==='inventory.view' || branch==='xtb');
+    render(<Page/>);
+    expect(await screen.findByRole('button',{name:'Nhận hàng'})).toBeInTheDocument();
+    expect(mocks.permission).toHaveBeenCalledWith('inventory.create_po','xtb');
+  });
+  it('does not query a visible branch when inventory access is revoked there',async()=>{
+    mocks.permission.mockImplementation((code:string,branch:string|null)=> !(code==='inventory.view' && branch==='xtb'));
+    render(<Page/>);
+    await screen.findByText('Không có quyền xem phiếu nhận tại chi nhánh này.');
+    expect(mocks.read).not.toHaveBeenCalled();
+  });
+  it('all-branches requests include only assigned branches with inventory view',async()=>{
+    mocks.params='branch=all';
+    mocks.permission.mockImplementation((code:string,branch:string|null)=> !(code==='inventory.view' && branch==='warehouse'));
+    render(<Page/>);
+    await waitFor(()=>expect(mocks.read).toHaveBeenCalledWith('xtb'));
+    expect(mocks.read).not.toHaveBeenCalledWith('warehouse');
+  });
+  it('does not offer receipt edits without both receiving and adjustment rights',async()=>{
+    mocks.permission.mockImplementation((code:string)=>code!=='inventory.create_po');
+    mocks.read.mockResolvedValue([{...order,receipts:[{id:'previous',createdAt:'2026-10-19T09:00:00Z',updatedAt:'2026-10-19T09:00:00Z',createdBy:'Admin',revision:1,items:[{itemId:'tool',quantity:1}]}]}]);
+    render(<Page/>);
+    fireEvent.click(await screen.findByRole('tab',{name:'Lịch sử nhận (1)'}));
+    expect(screen.queryByRole('button',{name:'Sửa lần nhận'})).not.toBeInTheDocument();
+  });
   it('opens the permitted source branch locally without changing the POS branch',async()=>{
     render(<Page/>);
     await screen.findByText('Chi phí vận hành',{selector:'span'});
