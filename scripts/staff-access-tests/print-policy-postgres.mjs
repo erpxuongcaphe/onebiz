@@ -41,12 +41,23 @@ statements.push(`
   perform public.fnb_print_enqueue_v1('${id(10)}','${id(74)}','kitchen','Synthetic','80mm',encode(decode('1b401b6101' || repeat('00',20),'hex'),'base64'));
   if (select count(*) from fnb_print_jobs) <> 1 then raise exception 'Duplicate kitchen job'; end if;
   begin
+   perform public.fnb_print_enqueue_v1('${id(10)}','${id(75)}','cashier','Synthetic','80mm',encode(decode('1b401b6101' || repeat('00',20),'hex'),'base64'));
+   raise exception 'Kitchen-only permission unexpectedly allowed cashier print';
+  exception when others then
+   if sqlerrm not like '%Không có quyền in bill%' then raise; end if;
+  end;
+  begin
    perform public._fnb_print_access_v1('${id(11)}');
    raise exception 'Unexpected access to unassigned branch';
   exception when others then
    if sqlerrm not like '%Không có quyền%' then raise; end if;
   end;
   if (select count(*) from fnb_print_jobs) <> 1 then raise exception 'Denied request created a job'; end if;
+ end$$;
+ insert into role_permissions values ('${id(20)}','pos_fnb.checkout');
+ do $$begin
+  perform public.fnb_print_enqueue_v1('${id(10)}','${id(76)}','cashier','Synthetic','80mm',encode(decode('1b401b6101' || repeat('00',20),'hex'),'base64'));
+  if (select count(*) from fnb_print_jobs) <> 2 then raise exception 'Checkout user lost cashier printing'; end if;
  end$$;
 `);
 if (process.env.ONEBIZ_PGLITE_MODULE) {
