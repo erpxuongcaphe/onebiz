@@ -80,9 +80,23 @@ create function next_cash_code(uuid,text) returns text language sql as $$select 
 `);
 await db.exec(readFileSync('supabase/migrations/20261110160400_internal_returns_two_party.sql','utf8'));
 await db.exec(readFileSync('supabase/migrations/20261111035000_internal_return_read_permission.sql','utf8'));
+// Exercise the actual branch-permission migration against the real posting
+// functions; this fixture keeps all inventory and accounting data synthetic.
+await db.exec(`
+ create table public.staff_branch_permission_catalog(permission_code text primary key,enforcement_version integer);
+ create function public._staff_permission_any_branch(uuid,text) returns boolean language sql stable as $$select public.user_has_permission($1,$2)$$;
+ create function public._staff_permission_at_scope(uuid,text,uuid) returns boolean language sql stable as $$
+  select public.user_has_permission($1,$2) and $3::text is distinct from nullif(current_setting('test.denied_branch',true),'')
+ $$;
+`);
+await db.exec(readFileSync('supabase/migrations/20261113131259_staff_internal_return_branch_permissions.sql','utf8'));
 const scalar=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0])[0];
 const send=(qty,key=id(30))=>scalar('select send_internal_stock_return($1,$2,$3,$4)',[sale,JSON.stringify([{itemId:item,quantity:qty}]),'Hàng chưa dùng',key]);
 const before=await scalar('select count(*) from stock_movements');
+await db.exec(`set test.denied_branch='${branch}'`);
+await assert.rejects(send(1,id(49)),/RETURN_SCOPE_DENIED/);
+assert.equal(await scalar('select count(*) from stock_movements'),before);
+await db.exec('reset test.denied_branch');
 await assert.rejects(send(11),/RETURN_EXCEEDS_RECEIVED/);
 assert.equal(await scalar('select count(*) from stock_movements'),before);
 const sent=await send(6);
@@ -98,6 +112,9 @@ const returnItem=await scalar('select id from internal_stock_return_items');
 const receive=(qty,key)=>scalar('select receive_internal_stock_return($1,$2,$3,$4)',[sent.id,JSON.stringify([{itemId:returnItem,quantity:qty}]),'Đã kiểm hàng',key]);
 await assert.rejects(receive(2,id(31)),/RETURN_SCOPE_DENIED/);
 await db.exec(`set test.branch='${warehouse}'`);
+await db.exec(`set test.denied_branch='${warehouse}'`);
+await assert.rejects(receive(2,id(48)),/RETURN_SCOPE_DENIED/);
+await db.exec('reset test.denied_branch');
 await db.exec("set test.return_read_only='yes'");
 const listed=await scalar('select get_internal_stock_returns($1)',[warehouse]);
 assert.deepEqual(listed.map(row=>row.id),[sent.id]);
@@ -144,6 +161,10 @@ await assert.rejects(settle(creditEvent,'offset',1000,invoice,id(40)),/RETURN_SE
 await db.exec(`set test.branch='${warehouse}';update invoices set debt=10000 where id='${invoice}';
 insert into money_accounts values('${id(45)}','${tenant}','${warehouse}','Quỹ kho','cash',true);
 insert into money_accounts values('${id(46)}','${tenant}','${branch}','Quỹ quán','cash',true);`);
+await db.exec(`set test.denied_branch='${warehouse}'`);
+await assert.rejects(settle(creditEvent,'offset',1000,invoice,id(47)),/RETURN_SETTLE_DENIED/);
+await assert.rejects(scalar('select get_internal_return_finance($1)',[sent.id]),/RETURN_SETTLE_DENIED/);
+await db.exec('reset test.denied_branch');
 await assert.rejects(settle(creditEvent,'offset',11000,invoice,id(40)),/RETURN_OFFSET_EXCEEDS_DEBT/);
 const offset=await settle(creditEvent,'offset',10000,invoice,id(40));
 assert.equal(offset.remaining,14000);assert.deepEqual(await settle(creditEvent,'offset',10000,invoice,id(40)),offset);

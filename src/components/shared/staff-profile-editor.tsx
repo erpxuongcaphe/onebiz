@@ -806,6 +806,11 @@ export function StaffProfileEditor({
                                     Quyền này cũng cho xem phiếu nhập, trả hàng nhập và hóa đơn đầu vào tại các chi nhánh được giao để thực hiện công việc.
                                   </p>
                                 )}
+                                {branchId && ["inventory.internal_return_view", "inventory.internal_return_send", "inventory.internal_return_receive", "inventory.internal_return_settle"].includes(p.code) && (
+                                  <p className="text-xs text-muted-foreground">
+                                    Gửi trả xét quyền tại quán gửi; nhận và xử lý công nợ xét tại kho nhận. Xem danh sách còn cần quyền xem tồn kho; hoàn tiền cần thêm quyền lập phiếu thu/chi tại kho nhận.
+                                  </p>
+                                )}
                                 {branchId && ["inventory.dispose", "inventory.internal_export"].includes(p.code) && (
                                   <p className="text-xs text-muted-foreground">
                                     Quyền này cũng cho xem chứng từ công việc tại chi nhánh được giao. Giá trị và giá vốn cần quyền xem giá vốn riêng.
