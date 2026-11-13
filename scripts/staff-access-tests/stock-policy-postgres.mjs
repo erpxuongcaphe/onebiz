@@ -112,6 +112,36 @@ statements.push(`
  do $$begin if (select count(id) from stock_movements)<>0 then raise exception 'global-only stock revoke bypassed'; end if; end$$;
  reset role;
 `);
+statements.push(`
+ create table inventory_opening_batches(id uuid,tenant_id uuid,branch_id uuid);
+ insert into inventory_opening_batches values ('${id(510)}','${id(1)}','${id(10)}'),('${id(511)}','${id(1)}','${id(11)}'),('${id(512)}','${id(2)}','${id(12)}');
+ insert into staff_branch_permission_catalog values ('inventory.adjust',1);
+ insert into role_permissions values ('${id(20)}','inventory.adjust');
+ alter table inventory_opening_batches enable row level security;
+ create policy inventory_opening_batches_read on inventory_opening_batches for select to authenticated using
+  (tenant_id=(select p.tenant_id from profiles p where p.id=auth.uid() and coalesce(p.is_active,true))
+   and user_has_branch_access(auth.uid(),branch_id) and user_has_permission(auth.uid(),'inventory.adjust'));
+ grant select on inventory_opening_batches,profiles to authenticated;
+ alter function public.user_has_permission(uuid,text) security definer;
+`);
+statements.push(await migration('20261113070604_staff_inventory_opening_batch_scope.sql'));
+statements.push(`
+ set role authenticated;
+ do $$begin if (select count(*) from inventory_opening_batches)<>2 then raise exception 'legacy opening read changed';end if;end$$;
+ reset role;insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+  values ('${id(1)}','${id(101)}','${id(10)}','inventory.adjust','revoke','${id(100)}');set role authenticated;
+ do $$begin if (select count(*) from inventory_opening_batches)<>1 then raise exception 'opening denied branch exposed';end if;end$$;
+ reset role;delete from role_permissions where permission_code='inventory.adjust';
+ update user_branch_permission_overrides set branch_id='${id(11)}',override_type='grant' where permission_code='inventory.adjust';set role authenticated;
+ do $$begin if (select count(*) from inventory_opening_batches)<>1 then raise exception 'opening local-only grant failed';end if;end$$;
+ reset role;insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type,created_by)
+  values ('${id(1)}','${id(101)}','inventory.adjust','revoke','${id(100)}');set role authenticated;
+ do $$begin if (select count(*) from inventory_opening_batches)<>0 then raise exception 'opening global revoke bypassed';end if;end$$;
+ reset role;delete from user_permission_overrides where permission_code='inventory.adjust';
+ insert into role_permissions values ('${id(20)}','inventory.adjust');update profiles set is_active=false where id='${id(101)}';set role authenticated;
+ do $$begin if (select count(*) from inventory_opening_batches)<>0 then raise exception 'inactive account retained opening access';end if;end$$;
+ reset role;
+`);
 if (process.env.ONEBIZ_PGLITE_MODULE) {
  const {PGlite}=await import(pathToFileURL(process.env.ONEBIZ_PGLITE_MODULE).href);
  const db=new PGlite();try { await db.exec(statements.join('\n')); } finally { await db.close(); }

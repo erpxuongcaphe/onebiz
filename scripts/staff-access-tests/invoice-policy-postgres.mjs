@@ -231,9 +231,11 @@ sql.push(`
    then raise exception 'header scope did not compose with legacy and own-order policies';end if;
  end$$;
  reset role;insert into role_permissions values ('${id(20)}','pos_fnb.checkout');set role authenticated;
- do $$begin
+ do $$declare n integer;begin
   if not exists(select 1 from invoices where id='${id(53)}') or not exists(select 1 from invoice_items where invoice_id='${id(53)}')
    then raise exception 'independent checkout lost header or lines';end if;
+  update invoices set status=status where id='${id(53)}';get diagnostics n=row_count;
+  if n<>1 then raise exception 'independent checkout invoice update blocked';end if;
  end$$;
  reset role;
 `);
