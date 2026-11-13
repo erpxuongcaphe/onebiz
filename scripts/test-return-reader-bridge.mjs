@@ -46,7 +46,21 @@ const checks = `
  reset role;update public.profiles set is_active=false where id='${id(10)}';set role authenticated;
  do $$begin begin perform public.staff_returnable_invoice_items('${id(34)}');raise exception 'inactive allowed';exception when insufficient_privilege then if sqlerrm<>'RETURN_READ_DENIED' then raise;end if;end;end$$;
 `;
-const input = `${setup}\n${migration}\n${migration}\n${checks}`;
+const scopedSetup = `
+ reset role;
+ create function public._staff_permission_at_scope(uuid,text,uuid) returns boolean language sql as $$select false$$;
+ create or replace function public.staff_returnable_invoice_items(p_invoice_id uuid)
+ returns table(id uuid,product_id uuid,product_name text,unit text,quantity numeric,unit_price numeric,total numeric,returned_qty numeric)
+ language plpgsql as $$begin raise exception 'SCOPED_READER_KEPT';end$$;
+`;
+const scopedCheck = `
+ set role authenticated;
+ do $$begin
+  begin perform public.staff_returnable_invoice_items('${id(30)}');raise exception 'bridge downgraded reader';
+  exception when raise_exception then if sqlerrm<>'SCOPED_READER_KEPT' then raise;end if;end;
+ end$$;
+`;
+const input = `${setup}\n${migration}\n${migration}\n${checks}\n${scopedSetup}\n${migration}\n${scopedCheck}`;
 if (process.env.ONEBIZ_PGLITE_MODULE) {
  const { PGlite } = await import(pathToFileURL(process.env.ONEBIZ_PGLITE_MODULE).href);
  const db = new PGlite(); try { await db.exec(input); } finally { await db.close(); }
