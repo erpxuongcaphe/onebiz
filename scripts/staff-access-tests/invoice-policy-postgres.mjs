@@ -74,6 +74,58 @@ sql.push(`
  do $$begin if not public.close_sales_order_processing('${id(51)}') then raise exception 'independent checkout lost'; end if;end$$;
  reset role;
 `);
+sql.push(`
+ delete from role_permissions where permission_code='pos_retail.checkout';
+ insert into role_permissions values ('${id(20)}','pos_fnb.checkout');
+ create table sales_orders(id uuid primary key,tenant_id uuid,branch_id uuid,created_by uuid);
+ create table sales_order_items(id uuid primary key,order_id uuid);
+ create table shipping_orders(id uuid primary key,invoice_id uuid);
+ insert into sales_orders values ('${id(70)}','${id(1)}','${id(10)}','${id(101)}'),('${id(71)}','${id(1)}','${id(11)}','${id(100)}');
+ insert into sales_order_items values ('${id(80)}','${id(70)}'),('${id(81)}','${id(71)}');
+ insert into shipping_orders values ('${id(90)}','${id(50)}'),('${id(91)}','${id(51)}');
+ insert into invoices values ('${id(53)}','${id(1)}','${id(10)}','fnb','${id(100)}');
+ insert into invoice_items values ('${id(63)}','${id(53)}',1,0);
+ alter table sales_orders enable row level security; alter table sales_order_items enable row level security;
+ alter table shipping_orders enable row level security;
+ create policy all_sales_orders on sales_orders for all to authenticated using (true) with check (true);
+ create policy all_sales_items on sales_order_items for all to authenticated using (true) with check (true);
+ create policy all_shipping on shipping_orders for all to authenticated using (true) with check (true);
+ create policy write_invoices on invoices for update to authenticated using (true) with check (true);
+ create policy write_items on invoice_items for update to authenticated using (true) with check (true);
+ grant select,update,insert,delete on sales_orders,sales_order_items,shipping_orders to authenticated;
+ grant update on invoices,invoice_items to authenticated;
+`);
+sql.push(await migration('20261113011515_staff_own_order_direct_writes.sql'));
+sql.push(`
+ set role authenticated;
+ do $$declare n int;begin
+  update invoices set source='fnb' where id='${id(51)}'; get diagnostics n=row_count;
+  if n<>0 then raise exception 'other order header write allowed';end if;
+  update invoices set source='order' where id='${id(50)}';get diagnostics n=row_count;
+  if n<>1 then raise exception 'own order header write blocked';end if;
+  update invoice_items set quantity=5 where id='${id(60)}';get diagnostics n=row_count;
+  if n<>1 then raise exception 'own order item write blocked';end if;
+  update invoice_items set quantity=5 where id='${id(61)}';get diagnostics n=row_count;
+  if n<>0 then raise exception 'other order item write allowed';end if;
+  update invoice_items set quantity=5 where id='${id(63)}';get diagnostics n=row_count;
+  if n<>1 then raise exception 'unrelated FNB item blocked';end if;
+  update shipping_orders set invoice_id=invoice_id where id='${id(91)}';get diagnostics n=row_count;
+  if n<>0 then raise exception 'other shipping write allowed';end if;
+  update sales_order_items set order_id=order_id where id='${id(81)}';get diagnostics n=row_count;
+  if n<>0 then raise exception 'other legacy order write allowed';end if;
+  begin update sales_order_items set order_id='${id(71)}' where id='${id(80)}';
+   raise exception 'moving item to another order allowed';
+  exception when insufficient_privilege then null; end;
+ end$$;
+ reset role;insert into role_permissions values ('${id(20)}','pos_retail.checkout');set role authenticated;
+ do $$declare n int;begin
+  update shipping_orders set invoice_id=invoice_id where id='${id(91)}';get diagnostics n=row_count;
+  if n<>1 then raise exception 'independent checkout shipping blocked';end if;
+  update sales_order_items set order_id=order_id where id='${id(81)}';get diagnostics n=row_count;
+  if n<>1 then raise exception 'independent checkout legacy blocked';end if;
+ end$$;
+ reset role;
+`);
 if(process.env.ONEBIZ_PGLITE_MODULE){const {PGlite}=await import(pathToFileURL(process.env.ONEBIZ_PGLITE_MODULE).href);const db=new PGlite();try{await db.exec(sql.join('\n'));}finally{await db.close();}console.log('PASS local invoice fixture rehearsal (PGlite)');process.exit(0);}
 const args=['-Xq','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p','55433','-U','staff_test','-d','onebiz_staff_access_test'];
 const child=spawn('psql',args,{env:{PATH:process.env.PATH,PGPASSWORD:'ephemeral-test-only',PGSSLMODE:'disable',PGCONNECT_TIMEOUT:'5'},stdio:['pipe','pipe','pipe']});
