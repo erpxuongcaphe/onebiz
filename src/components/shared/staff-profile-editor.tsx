@@ -884,14 +884,15 @@ export function StaffProfileEditor({
                                 {branchId && p.code === "production.view" && (
                                   <p className="text-xs text-muted-foreground">
                                     Áp dụng cho lệnh sản xuất, nguyên liệu và
-                                    lịch sử điều chỉnh của lệnh tại chi nhánh
-                                    này. Danh sách lô và hạn sử dụng xét quyền
-                                    xem tồn kho.
+                                    lịch sử điều chỉnh tại chi nhánh này. Quyền
+                                    này cũng có thể cho đọc dữ liệu lô phục vụ
+                                    sản xuất trong phạm vi được phép; kiểm tra
+                                    thêm quyền xem tồn kho khi cấu hình màn hình kho.
                                   </p>
                                 )}
                                 {branchId && p.code === "inventory.view" && (
                                   <p className="text-xs text-muted-foreground">
-                                    Quyền bán lẻ vẫn cần nhận số lượng tồn tại chi nhánh để bán hàng. Quyền xem tổng tồn được gán, kiểm kho, sản xuất, xem giá vốn và báo cáo có thể cho xem dữ liệu liên quan theo phạm vi của từng quyền; báo cáo truy xuất lô cho xem thông tin lô.
+                                    Quyền bán lẻ vẫn cần nhận số lượng tồn để bán hàng. Xem tổng tồn được gán, kiểm kho, điều chỉnh hoặc chuyển/xuất kho, nhập hàng, sản xuất, xem giá vốn và báo cáo có thể cho đọc dữ liệu kho liên quan theo phạm vi của từng quyền; quyền sản xuất và báo cáo cũng có thể cho đọc dữ liệu lô.
                                   </p>
                                 )}
                                 {p.code === "finance.create_transaction" && (
