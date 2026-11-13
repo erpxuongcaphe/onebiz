@@ -44,6 +44,11 @@ statements.push(`
  do $$begin if (select count(*) from kitchen_orders)<>1 or (select count(*) from kitchen_order_items)<>1 then raise exception 'checkout lost assigned orders'; end if; end$$;
  reset role;
  delete from role_permissions where permission_code='pos_fnb.checkout';
+ insert into role_permissions values ('${id(20)}','pos_fnb.view_sales_summary');
+ set role authenticated;
+ do $$begin if (select count(*) from kitchen_orders)<>0 or (select count(*) from kitchen_order_items)<>0 then raise exception 'summary permission exposed order details'; end if; end$$;
+ reset role;
+ delete from role_permissions where permission_code='pos_fnb.view_sales_summary';
  insert into staff_branch_permission_catalog values ('pos_fnb.view_orders',1);
  insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
   values('${id(1)}','${id(101)}','${id(10)}','pos_fnb.view_orders','grant','${id(100)}');
