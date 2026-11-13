@@ -69,6 +69,8 @@ export async function verifyCashBookReadScope(db, id) {
     insert into user_branch_permission_overrides values
       ('${id(2)}','${id(1)}','${id(3)}','finance.view_cash_book','revoke');
     set role authenticated;`);
+  await assert.rejects(directCount(), /Vui lòng tải lại trang/, 'old clients must not silently show incomplete totals');
+  await db.exec(`select set_config('request.headers','{"x-client-info":"onebiz-cash-scope/1"}',false)`);
   assert.equal(await directCount(), 1, 'direct REST table read hides the denied branch');
   await db.exec(`reset role; insert into test_staff_permissions values ('reports.dashboard'); set role authenticated;`);
   assert.equal(await directCount(), 1, 'dashboard permission must not expose cash vouchers in a denied branch');
