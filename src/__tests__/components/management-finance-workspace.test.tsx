@@ -42,6 +42,32 @@ describe('management finance reporting workspace',() => {
     await waitFor(()=>expect(mocks.workspace).toHaveBeenCalledWith(expect.objectContaining({branchId:'premium'}),0));
     expect(screen.getByRole('button',{name:'Ghi nhận chi phí'})).toBeInTheDocument();
   });
+  it('loads all permitted branches for a user with a grant at only one assigned branch',async()=>{
+    mocks.permission.mockImplementation((code:string, branch:string|null) => code === 'finance.view_cash_book' && branch === 'premium');
+    mocks.assigned.mockImplementation((branch:string) => branch === 'premium');
+    window.history.replaceState({},'','/?branch=all');
+    render(<Page/>);
+    await waitFor(()=>expect(mocks.workspace).toHaveBeenCalledWith(expect.objectContaining({branchId:undefined}),0));
+    expect(screen.queryByRole('button',{name:'Ghi nhận chi phí'})).not.toBeInTheDocument();
+  });
+  it('does not load the all-branch list when the only grant is outside assigned branches',async()=>{
+    mocks.permission.mockImplementation((_code:string, branch:string|null) => branch === 'premium');
+    mocks.assigned.mockImplementation((branch:string) => branch === 'xtb');
+    window.history.replaceState({},'','/?branch=all');
+    render(<Page/>);
+    expect(await screen.findByText('Tài khoản chưa có quyền xem thu nhập / chi phí.')).toBeInTheDocument();
+    expect(mocks.workspace).not.toHaveBeenCalled();
+  });
+  it('reloads an all-branch list when its readable branches change',async()=>{
+    let readable = new Set(['xtb','premium']);
+    mocks.permission.mockImplementation((code:string, branch:string|null) => code === 'finance.view_cash_book' && branch !== null && readable.has(branch));
+    window.history.replaceState({},'','/?branch=all');
+    const {rerender} = render(<Page/>);
+    await waitFor(()=>expect(mocks.workspace).toHaveBeenCalledTimes(1));
+    readable = new Set(['premium']);
+    rerender(<Page/>);
+    await waitFor(()=>expect(mocks.workspace).toHaveBeenCalledTimes(2));
+  });
   it('does not read finance data for a visible branch that is not assigned',async()=>{
     mocks.assigned.mockImplementation((branch:string)=>branch!=='premium');
     window.history.replaceState({},'','/?branch=premium');
