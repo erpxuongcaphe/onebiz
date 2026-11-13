@@ -2984,6 +2984,7 @@ export async function getCashFlowDetailed(
     let query = supabase
       .from("cash_transactions")
       .select("transaction_date, type, amount, category")
+      .setHeader("x-client-info", "onebiz-cash-scope/1")
       .eq("tenant_id", tenantId)
       .eq("status", "completed")
       .gte("transaction_date", fromDate)
