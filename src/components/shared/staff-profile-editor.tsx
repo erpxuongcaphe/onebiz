@@ -764,6 +764,21 @@ export function StaffProfileEditor({
                                     đơn theo phạm vi được giao khi có quyền mua hàng.
                                   </p>
                                 )}
+                                {p.code === "finance.view_cash_book" && (
+                                  <p className="mt-1 text-xs text-amber-800">
+                                    Lưu ý: không cho xem sổ quỹ chưa chắc ẩn được
+                                    dữ liệu thu chi nếu nhân viên còn quyền xem
+                                    bảng tổng quan hoặc phân tích báo cáo tại chi
+                                    nhánh đó. Hãy kiểm tra cả hai quyền báo cáo.
+                                  </p>
+                                )}
+                                {["reports.dashboard", "reports.analytics"].includes(p.code) && (
+                                  <p className="mt-1 text-xs text-amber-800">
+                                    Quyền báo cáo này có thể cho phép truy cập dữ
+                                    liệu thu chi của chi nhánh, kể cả khi không
+                                    cho xem sổ quỹ. Chỉ cấp nếu phù hợp.
+                                  </p>
+                                )}
                                 {SHARED_DATA_STAFF_PERMISSIONS.has(p.code) && (
                                   <p className="mt-1 text-sm font-medium text-amber-800">
                                     Thay đổi áp dụng cho toàn công ty
