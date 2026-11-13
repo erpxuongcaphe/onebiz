@@ -8,7 +8,7 @@ do $patch$
 declare item record; target oid; matches integer; source text; patched text;
 begin
  for item in select * from (values
-  ('complete_draft_atomic_v6','(select i.branch_id from public.invoices i where i.id=p_invoice_id and i.tenant_id=v_tenant and i.deleted_at is null)'),
+  ('complete_draft_atomic_v6','(select i.branch_id from public.invoices i where i.id=p_invoice_id and i.tenant_id=v_tenant and i.deleted_at is null for update)'),
   ('pos_complete_checkout_atomic_v4','p_branch_id')
  ) v(name,branch_expression) loop
   select count(*),min(p.oid::bigint)::oid into matches,target from pg_proc p
