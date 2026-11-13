@@ -16,6 +16,9 @@ vi.mock("@/lib/services/supabase/base", () => ({
       if (name === "staff_fnb_kpi_summary") return {data:{
         totalRevenue:153000,returnAmount:153000,netRevenue:0,totalOrders:4,avgTicket:38250,avgTurnoverMinutes:0,
       },error:null};
+      if (name === "staff_fnb_cashier_summary") return {data:[
+        {cashier_name:"Thu ngân",revenue:"120",orders:"1",avg_ticket:"120"},
+      ],error:null};
       if (name === "staff_fnb_invoice_detail_page") return {
         data:rowsByTable.invoices.slice(Number(args.p_offset),Number(args.p_offset)+Number(args.p_limit)),error:null,
       };
@@ -90,13 +93,15 @@ describe("F&B report invoice drill-down", () => {
     }]]);
   });
 
-  it("uses the invoice creator FK for the cashier report", async () => {
+  it("uses branch-scoped server totals for the cashier report", async () => {
     rowsByTable.invoices = [
       { total: 120, created_by: "user-1", profiles: { full_name: "Thu ngân" } },
     ];
     const result = await getCashierPerformance("branch-1", { from: "2026-09-22", to: "2026-09-22" });
     expect(result).toEqual([{ cashierName: "Thu ngân", revenue: 120, orders: 1, avgTicket: 120 }]);
-    expect(queryCalls).toContainEqual(["select", ["total, created_by, profiles!invoices_created_by_fkey(full_name)"]]);
+    expect(queryCalls).toContainEqual(["rpc", ["staff_fnb_cashier_summary", {
+      p_branch_id:"branch-1",p_from:"2026-09-21T17:00:00.000Z",p_to:"2026-09-22T17:00:00.000Z",
+    }]]);
   });
 
   it("reconciles invoice gross, F&B returns and net without changing source data", async () => {

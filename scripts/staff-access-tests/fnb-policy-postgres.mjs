@@ -82,6 +82,8 @@ statements.push(`
   ('${id(502)}','${id(2)}','${id(12)}','fnb','completed','2026-10-07 08:00Z',400),
   ('${id(503)}','${id(1)}','${id(10)}','fnb','cancelled','2026-10-07 08:00Z',999),
   ('${id(504)}','${id(1)}','${id(10)}','fnb','draft','2026-10-07 08:00Z',50);
+ alter table invoices add column created_by uuid;
+ update invoices set created_by=case when id='${id(501)}' then '${id(100)}'::uuid else '${id(101)}'::uuid end;
  insert into sales_returns values
   ('${id(510)}','${id(1)}','${id(10)}','${id(500)}','confirmed',30,'2026-10-07 08:00Z'),
   ('${id(511)}','${id(1)}','${id(11)}','${id(501)}','completed',60,'2026-10-07 08:00Z'),
@@ -110,6 +112,12 @@ statements.push(`
   if public.staff_fnb_kpi_summary('${id(10)}','2026-10-06 17:00Z','2026-10-07 17:00Z')
    <> '{"totalRevenue":250,"returnAmount":30,"netRevenue":220,"totalOrders":2,"avgTicket":125,"avgTurnoverMinutes":20}'::jsonb
    then raise exception 'KPI gross, returns or turnover mismatch';end if;
+  select * into x from public.staff_fnb_hour_summary('${id(10)}',null,null) where hour=15;
+  if x.revenue<>250 or x.orders<>2 or (select count(*) from public.staff_fnb_hour_summary('${id(10)}',null,null))<>24
+   then raise exception 'Vietnam hour summary mismatch';end if;
+  select * into x from public.staff_fnb_cashier_summary('${id(10)}',null,null);
+  if x.cashier_name<>'Staff A' or x.revenue<>250 or x.orders<>2 or x.avg_ticket<>125
+   then raise exception 'cashier summary mismatch';end if;
   if public.staff_fnb_kpi_summary('${id(10)}','2025-01-01','2025-01-02')
    <> '{"totalRevenue":0,"returnAmount":0,"netRevenue":0,"totalOrders":0,"avgTicket":0,"avgTurnoverMinutes":0}'::jsonb
    then raise exception 'empty KPI period mismatch';end if;
@@ -145,6 +153,8 @@ statements.push(`
   if public.staff_fnb_kpi_summary(null,null,null)
    <> '{"totalRevenue":550,"returnAmount":90,"netRevenue":460,"totalOrders":3,"avgTicket":183,"avgTurnoverMinutes":30}'::jsonb
    then raise exception 'all-branch KPI mismatch';end if;
+  if (select sum(revenue) from public.staff_fnb_cashier_summary(null,null,null))<>550
+   or (select count(*) from public.staff_fnb_cashier_summary(null,null,null))<>2 then raise exception 'all-branch cashier mismatch';end if;
  end$$;
  reset role;delete from role_permissions where permission_code in ('reports.fnb','reports.view_all_branches');set role authenticated;
  do $$begin
@@ -153,6 +163,10 @@ statements.push(`
   begin perform public.staff_fnb_table_summary(null,null,null);raise exception 'unpermitted table report allowed';
   exception when insufficient_privilege then if sqlerrm<>'FNB_REPORT_PERMISSION_REQUIRED' then raise;end if;end;
   begin perform public.staff_fnb_kpi_summary(null,null,null);raise exception 'unpermitted KPI report allowed';
+  exception when insufficient_privilege then if sqlerrm<>'FNB_REPORT_PERMISSION_REQUIRED' then raise;end if;end;
+  begin perform public.staff_fnb_hour_summary(null,null,null);raise exception 'unpermitted hourly report allowed';
+  exception when insufficient_privilege then if sqlerrm<>'FNB_REPORT_PERMISSION_REQUIRED' then raise;end if;end;
+  begin perform public.staff_fnb_cashier_summary(null,null,null);raise exception 'unpermitted cashier report allowed';
   exception when insufficient_privilege then if sqlerrm<>'FNB_REPORT_PERMISSION_REQUIRED' then raise;end if;end;
  end$$;
  reset role;

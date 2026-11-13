@@ -24,7 +24,8 @@ vi.mock("@/lib/services/supabase/base", () => ({
   handleError: (error: Error) => { throw error; },
   getClient: () => ({ rpc: async (name: string, args: Record<string, unknown>) => {
     state.rpcCalls.push({name,args});
-    return {data:name === "staff_fnb_table_summary" ? [{table_name:"Table 1",revenue:"112000",orders:"2"}] : state.rpcData,error:null};
+    return {data:name === "staff_fnb_table_summary" ? [{table_name:"Table 1",revenue:"112000",orders:"2"}] :
+      name === "staff_fnb_hour_summary" ? Array.from({length:24},(_,hour)=>({hour,revenue:hour===15?"112000":"0",orders:hour===15?"2":"0"})) : state.rpcData,error:null};
   }, from: (table: string) => {
     const query = { table, filters: [] as Array<[string, string, unknown]>, select: "" };
     state.queries.push(query);
@@ -50,7 +51,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
   } }),
 }));
 
-import { getModifierStats, getRevenueByCategory, getRevenueByMenuItem, getRevenueByOrderType, getRevenueByPlatform, getRevenueByTable } from "@/lib/services/supabase/fnb-analytics";
+import { getModifierStats, getRevenueByCategory, getRevenueByHourFnb, getRevenueByMenuItem, getRevenueByOrderType, getRevenueByPlatform, getRevenueByTable } from "@/lib/services/supabase/fnb-analytics";
 
 beforeEach(() => { state.queries.length = 0; state.rpcCalls.length = 0; state.rpcData = [{product_name:"Coffee",quantity:"2",revenue:"112000"}]; });
 
@@ -77,6 +78,13 @@ describe("F&B revenue uses completed invoices independently of kitchen status", 
   it("reads table aggregates without exposing individual bills", async () => {
     expect(await getRevenueByTable("branch")).toEqual([{tableName:"Table 1",revenue:112000,orders:2}]);
     expect(state.rpcCalls).toEqual([{name:"staff_fnb_table_summary",args:{p_branch_id:"branch",p_from:null,p_to:null}}]);
+    expect(state.queries).toHaveLength(0);
+  });
+
+  it("reads all 24 Vietnam-hour totals without individual bills", async () => {
+    const rows=await getRevenueByHourFnb("branch");
+    expect(rows).toHaveLength(24);
+    expect(rows[15]).toEqual({hour:15,label:"15h",revenue:112000,orders:2});
     expect(state.queries).toHaveLength(0);
   });
 

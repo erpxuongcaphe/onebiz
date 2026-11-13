@@ -301,42 +301,19 @@ export async function getRevenueByHourFnb(
   range?: { from: string; to: string },
 ): Promise<HourlyRevenue[]> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-  // P1-3B-R1: range filter.
   const rangeWindow = toCreatedAtRangeWindow(range);
-
-  let query = supabase
-    .from("invoices")
-    .select("total, ngay_chung_tu")
-    .eq("tenant_id", tenantId)
-    .eq("source", "fnb")
-    .not("status", "eq", "cancelled");
-  if (branchId) query = query.eq("branch_id", branchId);
-  if (rangeWindow) {
-    query = query.gte("ngay_chung_tu", rangeWindow.start).lt("ngay_chung_tu", rangeWindow.end);
-  }
-
-  const rows = await fetchAllFnbRows(() => query.order("id", { ascending: true }), "[fnb.report]");
-
-  const hourMap = new Map<number, { revenue: number; orders: number }>();
-  for (let h = 0; h < 24; h++) {
-    hourMap.set(h, { revenue: 0, orders: 0 });
-  }
-
-  for (const row of (rows ?? []) as unknown as InvoiceDocRow[]) {
-    const hour = new Date(row.ngay_chung_tu).getHours();
-    const prev = hourMap.get(hour)!;
-    prev.revenue += Number(row.total ?? 0);
-    prev.orders += 1;
-  }
-
-  return Array.from(hourMap.entries())
-    .map(([hour, data]) => ({
-      hour,
-      label: `${hour}h`,
-      ...data,
-    }))
-    .sort((a, b) => a.hour - b.hour);
+  const {data,error} = await (supabase.rpc as any)("staff_fnb_hour_summary", {
+    p_branch_id:branchId ?? null,p_from:rangeWindow?.start ?? null,p_to:rangeWindow?.end ?? null,
+  });
+  if (error) handleError(error, "[getRevenueByHourFnb]");
+  if (!Array.isArray(data) || data.length !== 24) throw new Error("Không tải đủ tổng hợp theo giờ F&B.");
+  return data.map((row: {hour:number;revenue:number|string;orders:number|string}, index:number) => {
+    const hour=Number(row.hour),revenue=Number(row.revenue),orders=Number(row.orders);
+    if (hour!==index || row.revenue==null || row.orders==null || !Number.isFinite(revenue) || !Number.isFinite(orders)) {
+      throw new Error("Dữ liệu tổng hợp theo giờ F&B chưa hợp lệ. Vui lòng tải lại.");
+    }
+    return {hour,label:`${hour}h`,revenue,orders};
+  });
 }
 
 /**
@@ -347,37 +324,20 @@ export async function getCashierPerformance(
   range?: { from: string; to: string },
 ): Promise<CashierPerformance[]> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-  // P1-3B-R1: range filter.
   const rangeWindow = toCreatedAtRangeWindow(range);
-
-  let query = supabase
-    .from("invoices")
-    .select("total, created_by, profiles!invoices_created_by_fkey(full_name)")
-    .eq("tenant_id", tenantId)
-    .eq("source", "fnb")
-    .not("status", "eq", "cancelled");
-  if (branchId) query = query.eq("branch_id", branchId);
-  if (rangeWindow) {
-    query = query.gte("ngay_chung_tu", rangeWindow.start).lt("ngay_chung_tu", rangeWindow.end);
-  }
-
-  const rows = await fetchAllFnbRows(() => query.order("id", { ascending: true }), "[fnb.report]");
-
-  const map = new Map<string, { cashierName: string; revenue: number; orders: number }>();
-  for (const row of rows ?? []) {
-    const profile = (row as Record<string, unknown>).profiles as { full_name: string } | null;
-    const name = profile?.full_name ?? "Không rõ";
-    const key = row.created_by;
-    const prev = map.get(key) ?? { cashierName: name, revenue: 0, orders: 0 };
-    prev.revenue += Number(row.total ?? 0);
-    prev.orders += 1;
-    map.set(key, prev);
-  }
-
-  return Array.from(map.values())
-    .map((c) => ({ ...c, avgTicket: c.orders > 0 ? Math.round(c.revenue / c.orders) : 0 }))
-    .sort((a, b) => b.revenue - a.revenue);
+  const {data,error} = await (supabase.rpc as any)("staff_fnb_cashier_summary", {
+    p_branch_id:branchId ?? null,p_from:rangeWindow?.start ?? null,p_to:rangeWindow?.end ?? null,
+  });
+  if (error) handleError(error, "[getCashierPerformance]");
+  if (!Array.isArray(data)) throw new Error("Không tải được tổng hợp nhân viên F&B.");
+  return data.map((row: {cashier_name:string;revenue:number|string;orders:number|string;avg_ticket:number|string}) => {
+    const revenue=Number(row.revenue),orders=Number(row.orders),avgTicket=Number(row.avg_ticket);
+    if (typeof row.cashier_name!=="string" || row.revenue==null || row.orders==null || row.avg_ticket==null ||
+        !Number.isFinite(revenue) || !Number.isFinite(orders) || !Number.isFinite(avgTicket)) {
+      throw new Error("Dữ liệu tổng hợp nhân viên F&B chưa hợp lệ. Vui lòng tải lại.");
+    }
+    return {cashierName:row.cashier_name,revenue,orders,avgTicket};
+  });
 }
 
 // === New report types ===
