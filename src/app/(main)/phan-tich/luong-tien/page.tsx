@@ -107,7 +107,7 @@ export default function LuongTienPage() {
     const request = { scope, pending: true, queued: false }; flight.current = request;
     const run = async () => {
       const dateError = financeReportRangeError(range.from, range.to); if (dateError) throw new Error(dateError);
-      if (!canViewCashBook) return { rows: [], months: await getCashFlowDetailed(6, activeBranchId, { from: range.from, to: range.to }), accountReport: null, accounts: [], balances: null, updatedAt: new Date().toISOString() };
+      if (!canViewCashBook) return { rows: [], months: await getCashFlowDetailed(6, activeBranchId, { from: range.from, to: range.to }, { summaryOnly: true }), accountReport: null, accounts: [], balances: null, updatedAt: new Date().toISOString() };
       const dateToExclusive = new Date(Date.parse(range.to) + 86_400_000).toISOString().slice(0, 10);
       const [entries, sources, accountReport] = await Promise.all([
         getAllCashBookEntries({ branchId: activeBranchId, dateFrom: range.from, dateToExclusive, statuses: ["completed"] }),
