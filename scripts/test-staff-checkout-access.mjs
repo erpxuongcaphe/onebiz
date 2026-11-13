@@ -103,6 +103,7 @@ try {
   );
   await db.exec(`insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
     ('${id(1)}','${id(101)}','${id(10)}','pos_fnb.checkout','revoke','${id(100)}');
+    delete from role_permissions where role_id='${id(20)}' and permission_code='pos_fnb.checkout';
     update user_branch_permission_overrides set override_type='grant' where permission_code='pos_fnb.view_orders';`);
   assert.equal(
     (await db.query(`select _fnb_print_access_v1('${id(10)}') value`)).rows[0]
@@ -136,24 +137,30 @@ try {
     2,
     "denied print creates no job",
   );
+  await db.exec(`insert into role_permissions values ('${id(20)}','pos_fnb.view_orders');`);
+  await enqueue(73);
+  assert.equal((await db.query("select count(*)::int n from fnb_print_jobs")).rows[0].n,3,
+    'existing view permission keeps cashier printing despite a new branch exception');
+  await db.exec(`delete from role_permissions where role_id='${id(20)}' and permission_code='pos_fnb.view_orders';`);
   // Sending to the kitchen remains an independent everyday staff capability.
   await db.exec(`insert into role_permissions values ('${id(20)}','pos_fnb.send_kitchen');`);
   assert.equal((await db.query(`select _fnb_print_access_v1('${id(10)}') value`)).rows[0].value,id(1),
     'kitchen staff retain access even when cashier and order-view rights are revoked');
   const enqueueKitchen=()=>db.query(`select fnb_print_enqueue_v1('${id(10)}','${id(74)}','kitchen','Test','80mm',encode(decode('1b401b6101' || repeat('00',20),'hex'),'base64'))`);
   await enqueueKitchen(); await enqueueKitchen();
-  assert.equal((await db.query("select count(*)::int n from fnb_print_jobs")).rows[0].n,3,
+  assert.equal((await db.query("select count(*)::int n from fnb_print_jobs")).rows[0].n,4,
     'retrying the same kitchen job does not create another job');
   await assert.rejects(enqueue(75), /Không có quyền in bill/, 'kitchen-only permission does not silently grant cashier bills');
   await db.exec(`delete from user_branches where user_id='${id(101)}' and branch_id='${id(11)}';`);
   await assert.rejects(db.query(`select _fnb_print_access_v1('${id(11)}')`),/Không có quyền/,
     'kitchen permission cannot print in an unassigned branch');
   await db.exec(`insert into user_branches values('${id(101)}','${id(11)}',null);
-    delete from role_permissions where role_id='${id(20)}' and permission_code='pos_fnb.send_kitchen';`);
+    delete from role_permissions where role_id='${id(20)}' and permission_code='pos_fnb.send_kitchen';
+    insert into role_permissions values ('${id(20)}','pos_fnb.checkout');`);
   await db.exec(`delete from user_branch_permission_overrides where user_id='${id(101)}' and permission_code in ('pos_fnb.view_orders','pos_fnb.checkout');
     delete from staff_branch_permission_catalog where permission_code='pos_fnb.view_orders';`);
   console.log(
-    "PASS: F&B print authorization preserves independent branch checkout/view rights and denies when neither applies",
+    "PASS: F&B print authorization preserves legacy and independent branch rights and denies when neither applies",
   );
   assert.equal(
     (
@@ -172,7 +179,6 @@ try {
       `select _create_sales_return_auth_impl_00244('${id(50)}','[]',0)`,
       /FNB_RETURN_CHECKOUT_DENIED/,
     ],
-    [`select _fnb_print_access_v1('${id(10)}')`, /Không có quyền/],
     [
       `select _fnb_resolve_order_recipe_defaults_20261021('${id(30)}')`,
       /FNB_CHECKOUT_DENIED/,
@@ -187,10 +193,6 @@ try {
       /FNB_CHECKOUT_DENIED/,
     ],
     [`select fnb_open_shift_atomic('${id(10)}')`, /FNB_OPEN_SHIFT_DENIED/],
-    [
-      `select fnb_print_enqueue_v1('${id(10)}',null,'cashier','Test','80mm','')`,
-      /Không có quyền/,
-    ],
     [
       `select fnb_save_order_note_v1('${id(30)}','test','')`,
       /ORDER_NOTE_ACCESS_DENIED/,
@@ -240,6 +242,10 @@ try {
       throw e;
     }
   }
+  assert.equal((await db.query(`select _fnb_print_access_v1('${id(10)}') value`)).rows[0].value,id(1),
+    'existing checkout permission continues to allow printing despite a new branch exception');
+  await assert.rejects(db.query(`select fnb_print_enqueue_v1('${id(10)}',null,'cashier','Test','80mm','')`),
+    /Thông tin phiếu không hợp lệ/, 'existing cashier print passes authorization');
   assert.equal(
     (await db.query(`select _fnb_print_access_v1('${id(11)}') value`)).rows[0]
       .value,
