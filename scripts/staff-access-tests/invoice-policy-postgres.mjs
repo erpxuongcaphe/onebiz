@@ -116,6 +116,10 @@ sql.push(`
   begin update sales_order_items set order_id='${id(71)}' where id='${id(80)}';
    raise exception 'moving item to another order allowed';
   exception when insufficient_privilege then null; end;
+  begin insert into sales_orders values ('${id(72)}','${id(1)}','${id(10)}','${id(100)}');
+   raise exception 'forged creator allowed';
+  exception when insufficient_privilege then null; end;
+  insert into sales_orders values ('${id(73)}','${id(1)}','${id(10)}','${id(101)}');
  end$$;
  reset role;insert into role_permissions values ('${id(20)}','pos_retail.checkout');set role authenticated;
  do $$declare n int;begin
@@ -123,6 +127,11 @@ sql.push(`
   if n<>1 then raise exception 'independent checkout shipping blocked';end if;
   update sales_order_items set order_id=order_id where id='${id(81)}';get diagnostics n=row_count;
   if n<>1 then raise exception 'independent checkout legacy blocked';end if;
+ end$$;
+ reset role; delete from role_permissions where permission_code in ('pos_retail.checkout','orders.view_own_only'); set role authenticated;
+ do $$declare n int;begin
+  update sales_order_items set order_id=order_id where id='${id(81)}';get diagnostics n=row_count;
+  if n<>1 then raise exception 'legacy unrestricted behavior changed';end if;
  end$$;
  reset role;
 `);
