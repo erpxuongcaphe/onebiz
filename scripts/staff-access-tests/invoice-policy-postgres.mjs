@@ -99,6 +99,8 @@ sql.push(await migration('20261113011515_staff_own_order_direct_writes.sql'));
 sql.push(`
  set role authenticated;
  do $$declare n int;begin
+  if (select count(*) from sales_orders)<>1 or (select count(*) from sales_order_items)<>1 then
+   raise exception 'own legacy read scope failed';end if;
   update invoices set source='fnb' where id='${id(51)}'; get diagnostics n=row_count;
   if n<>0 then raise exception 'other order header write allowed';end if;
   update invoices set source='order' where id='${id(50)}';get diagnostics n=row_count;
@@ -123,6 +125,8 @@ sql.push(`
  end$$;
  reset role;insert into role_permissions values ('${id(20)}','pos_retail.checkout');set role authenticated;
  do $$declare n int;begin
+  if (select count(*) from sales_orders)<>3 or (select count(*) from sales_order_items)<>2 then
+   raise exception 'independent legacy reads lost';end if;
   update shipping_orders set invoice_id=invoice_id where id='${id(91)}';get diagnostics n=row_count;
   if n<>1 then raise exception 'independent checkout shipping blocked';end if;
   update sales_order_items set order_id=order_id where id='${id(81)}';get diagnostics n=row_count;
@@ -130,6 +134,8 @@ sql.push(`
  end$$;
  reset role; delete from role_permissions where permission_code in ('pos_retail.checkout','orders.view_own_only'); set role authenticated;
  do $$declare n int;begin
+  if (select count(*) from sales_orders)<>3 or (select count(*) from sales_order_items)<>2 then
+   raise exception 'legacy unrestricted reads changed';end if;
   update sales_order_items set order_id=order_id where id='${id(81)}';get diagnostics n=row_count;
   if n<>1 then raise exception 'legacy unrestricted behavior changed';end if;
  end$$;

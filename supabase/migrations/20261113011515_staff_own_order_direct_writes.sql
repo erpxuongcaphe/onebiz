@@ -50,4 +50,13 @@ begin
   end loop;
  end loop;
 end $policies$;
+-- Legacy order tables have their own read path, independent of invoices.
+create policy staff_own_legacy_order_read on public.sales_orders as restrictive
+ for select to authenticated using (
+  (select public._staff_order_owner_unrestricted())
+  or created_by=(select auth.uid())
+  or coalesce(branch_id=any((select public._staff_order_independent_branches())::uuid[]),false)
+ );
+create policy staff_own_legacy_order_item_read on public.sales_order_items as restrictive
+ for select to authenticated using (public._staff_own_legacy_order_write_allowed(order_id));
 commit;
