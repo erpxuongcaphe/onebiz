@@ -36,6 +36,19 @@ export function hasPermissionForBranch(
   return allowed;
 }
 
+/** The print server preserves existing account-level F&B printing rights even
+ * when an operational permission is restricted at a particular branch. */
+export function hasFnbPrintPermission(
+  base: ReadonlySet<string>,
+  adjustments: readonly { branchId: string; code: string; allowed: boolean }[],
+  branchId: string,
+) {
+  if (base.has("*") || base.has("system.manage_branches")) return true;
+  return ["pos_fnb.view_orders", "pos_fnb.send_kitchen", "pos_fnb.checkout"].some(
+    (code) => base.has(code) || hasPermissionForBranch(base, adjustments, branchId, code),
+  );
+}
+
 /** Legacy aliases cannot bypass an explicit exception on the target operation. */
 export function permissionWithLegacyFallback(
   effective: ReadonlySet<string>,
