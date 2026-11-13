@@ -780,6 +780,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Verify floor access and independent POS rights
+        run: node scripts/test-staff-floor-access.mjs
+
       - name: Run tests
         run: npm run test:run
       - name: Verify sent F&B order notes on isolated PostgreSQL

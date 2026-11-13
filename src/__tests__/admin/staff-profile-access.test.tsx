@@ -58,6 +58,16 @@ const snapshot: StaffProfileSnapshot = {
   branchPermissionCodes: ["pos_fnb.split_bill", "pos_fnb.transfer_table"],
 };
 describe("staff profile scope", () => {
+  it("shows floor-view scope and explains the independent table readers", () => {
+    const data = structuredClone(snapshot);
+    data.branchPermissionCodes.push("floor_plan.view");
+    render(<StaffProfileEditor snapshot={data} onSave={vi.fn()} onReload={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Tùy chỉnh quyền" }));
+    fireEvent.click(screen.getByRole("button", { name: "Premium" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Tìm quyền" }), { target: { value: "floor_plan.view" } });
+    expect(screen.getByText(/Quyền này mở trang xem sơ đồ tại chi nhánh đã chọn/)).toBeVisible();
+    expect(screen.getByText(/vẫn cho đọc dữ liệu bàn để phục vụ công việc/)).toBeVisible();
+  });
   it("explains that importing customers also permits opening debt work", () => {
     render(<StaffProfileEditor snapshot={snapshot} onSave={vi.fn()} onReload={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "Tùy chỉnh quyền" }));
