@@ -270,6 +270,12 @@ try {
   assert.deepEqual((await db.query('select distinct branch_id from restaurant_tables order by branch_id')).rows.map(row=>row.branch_id),[id(11)],
     'a branch-only view grant does not give floor data at other assigned branches');
   await db.exec(`reset role;
+    delete from user_branches where user_id='${id(101)}' and branch_id='${id(11)}';
+    set role authenticated;`);
+  assert.deepEqual((await db.query('select id from restaurant_tables')).rows, [],
+    'a stale branch grant cannot give access after the branch assignment is removed');
+  await db.exec(`reset role;
+    insert into user_branches(user_id,branch_id) values('${id(101)}','${id(11)}');
     insert into role_permissions values('${id(20)}','floor_plan.view');
     insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
       values('${id(1)}','${id(101)}','${id(10)}','floor_plan.view','revoke','${id(100)}');
