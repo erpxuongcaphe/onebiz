@@ -3,7 +3,6 @@ on:
   pull_request:
     paths:
       - 'supabase/migrations/**'
-      - 'supabase/rollout/**'
       - 'scripts/staff-access-tests/**'
       - 'scripts/test-staff-profile-access.mjs'
       - '.github/workflows/staff-access-database.yml'

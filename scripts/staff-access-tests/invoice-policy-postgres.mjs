@@ -35,8 +35,8 @@ sql.push(`
 `);
 // The additive bridge is installed first while the original policies and
 // browser are still active. The final migration must replace it cleanly.
-sql.push(await readFile(new URL('../../supabase/rollout/staff-return-reader-bridge.sql',import.meta.url),'utf8'));
-sql.push(await readFile(new URL('../../supabase/rollout/staff-return-reader-bridge.sql',import.meta.url),'utf8'));
+sql.push(await migration('20261113041930_staff_return_reader_bridge.sql'));
+sql.push(await migration('20261113041930_staff_return_reader_bridge.sql'));
 sql.push(`
  insert into role_permissions values ('${id(20)}','pos_fnb.view_orders');set role authenticated;
  do $$begin
@@ -70,7 +70,7 @@ sql.push(await functionFromMigration('20261111070229_staff_branch_checkout_permi
 sql.push(await migration('20261112172924_staff_invoice_item_view_scope.sql'));
 sql.push(await migration('20261113004524_staff_own_order_scope.sql'));
 // Replaying phase one after the final migration must never weaken the reader.
-sql.push(await readFile(new URL('../../supabase/rollout/staff-return-reader-bridge.sql',import.meta.url),'utf8'));
+sql.push(await migration('20261113041930_staff_return_reader_bridge.sql'));
 sql.push(`
  set role authenticated;
  do $$begin
