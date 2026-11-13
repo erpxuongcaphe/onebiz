@@ -26,7 +26,7 @@ sql.push(`create table cash_transactions(tenant_id uuid,branch_id uuid,transacti
 sql.push(await readFile('supabase/migrations/20261113074601_staff_cash_flow_summary_projection.sql','utf8'));
 sql.push(`do $$declare r record;begin
  select * into r from get_cash_flow_category_summary('2026-11-01','2026-11-30','${id(10)}') where type='receipt';
- if r.amount<>150 or r.transaction_date<>'2026-11-01'::date then raise exception 'SUMMARY_TOTAL_INCORRECT'; end if;
+ if r.amount is distinct from 150 or r.transaction_date is distinct from '2026-11-01'::date then raise exception 'SUMMARY_TOTAL_INCORRECT'; end if;
  begin perform * from get_cash_flow_category_summary('2026-11-01','2026-11-30','${id(11)}'); raise exception 'BRANCH_LEAK';
  exception when insufficient_privilege then null;end;
  begin perform * from get_cash_flow_category_summary('2026-11-01','2026-11-30','${id(12)}'); raise exception 'TENANT_LEAK';
@@ -42,7 +42,7 @@ sql.push(`do $$declare r record;begin
  exception when insufficient_privilege then null;end;
  end$$;
  select set_config('request.jwt.claim.sub','${id(100)}',false);
- do $$begin if (select sum(amount) from get_cash_flow_category_summary('2026-11-01','2026-11-30',null))<>370
+ do $$begin if (select sum(amount) from get_cash_flow_category_summary('2026-11-01','2026-11-30',null)) is distinct from 370
  then raise exception 'ALL_BRANCH_TOTAL_INCORRECT';end if;end$$;`);
 if (process.env.ONEBIZ_PGLITE_REHEARSAL === '1') {
  const {PGlite}=await import('@electric-sql/pglite');
