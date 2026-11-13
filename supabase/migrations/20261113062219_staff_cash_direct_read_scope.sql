@@ -1,5 +1,5 @@
--- Guard direct REST reads once an administrator has configured cash-book
--- branch exceptions. Existing users without exceptions keep their old access.
+-- Guard direct REST reads for branch exceptions and explicit global revokes.
+-- Existing active users without either keep their old access.
 -- Cash-book branch editing stays disabled until the remaining readers are audited.
 begin;
 set local lock_timeout='3s';
@@ -14,7 +14,10 @@ begin
  -- NULL is the legacy compatibility sentinel, not an unrestricted grant:
  -- all existing tenant and branch policies remain in force.
  if not exists(select 1 from public.user_branch_permission_overrides o
-  where o.tenant_id=tenant and o.user_id=actor and o.permission_code='finance.view_cash_book') then return null; end if;
+  where o.tenant_id=tenant and o.user_id=actor and o.permission_code='finance.view_cash_book')
+  and not exists(select 1 from public.user_permission_overrides o
+   where o.tenant_id=tenant and o.user_id=actor and o.permission_code='finance.view_cash_book' and o.override_type='revoke')
+  then return null; end if;
  select coalesce(array_agg(b.id),'{}'::uuid[]) into result from public.branches b
  where b.tenant_id=tenant and (
   public._staff_my_cash_book_view(b.id)

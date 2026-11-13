@@ -90,6 +90,8 @@ statements.push(`
    or (select count(*) from money_accounts)<>0 or (select count(*) from party_advance_refunds)<>0
    then raise exception 'global revoke bypassed'; end if;
  end$$;
+ reset role; delete from user_branch_permission_overrides where permission_code='finance.view_cash_book'; set role authenticated;
+ do $$begin if (select count(*) from cash_transactions)<>0 then raise exception 'global-only revoke bypassed'; end if; end$$;
  reset role; insert into role_permissions values ('${id(20)}','finance.create_transaction'); set role authenticated;
  do $$begin if (select count(*) from money_accounts)<>2 then raise exception 'payment account access lost'; end if; end$$;
  reset role;
