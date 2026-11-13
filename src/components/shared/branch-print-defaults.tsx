@@ -15,11 +15,11 @@ export function saveDevicePrintOverride(tenantId: string | undefined, branchId: 
 
 /** Apply branch defaults to every employee browser; local exceptions are scoped. */
 export function BranchPrintDefaults() {
-  const { tenant, currentBranch, hasPermission } = useAuth();
+  const { tenant, currentBranch, hasFnbPrintAccess } = useAuth();
   const { updateSettings } = useSettings();
   const branchId = currentBranch?.id;
   const tenantId = tenant?.id;
-  const allowed = hasPermission("pos_fnb.view_orders") || hasPermission("pos_fnb.send_kitchen") || hasPermission("pos_fnb.checkout") || hasPermission("system.manage_branches");
+  const allowed = hasFnbPrintAccess(branchId ?? null);
   useEffect(() => {
     updateSettings("print", { fnbBranchQueue: false });
     if (!branchId || !tenantId || !allowed) return;

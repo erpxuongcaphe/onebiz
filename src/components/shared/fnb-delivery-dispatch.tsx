@@ -18,10 +18,10 @@ const time = (value: string | null) => value ? new Date(value).toLocaleString("v
 export function FnbDeliveryDispatch() {
   const { branches, currentBranch, user } = useAuth();
   const { toast } = useToast();
-  const { hasPermission } = usePermissions();
-  const canAssign = hasPermission("pos_fnb.send_kitchen");
+  const { hasPermissionAtBranch } = usePermissions();
   const [selectedBranch, setBranch] = useState<string | null>(null);
   const branchId = selectedBranch ?? currentBranch?.id ?? branches[0]?.id ?? "";
+  const canAssign = hasPermissionAtBranch("pos_fnb.send_kitchen", branchId || null);
   const [day, setDay] = useState(today);
   const [state, setState] = useState<DeliveryDispatchState>("all");
   const [offset, setOffset] = useState(0);
