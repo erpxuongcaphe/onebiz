@@ -21,6 +21,7 @@ import { readDeviceBinding } from "@/lib/hooks/use-device-binding";
 import { isInternalAuthEmail } from "@/lib/auth/user-identifiers";
 import { canViewAllBranches, parseAccessibleBranchIds } from "@/lib/auth/branch-scope";
 import { readAuthBootstrap } from "@/lib/auth/bootstrap";
+import { ALL_PERMISSION_CODES } from "@/lib/permissions/constants";
 import {
   hasPermissionForBranch,
   hasFnbPrintPermission,
@@ -68,7 +69,31 @@ interface AuthContextValue extends AuthState {
 
 // --- Context ---
 
-const AuthContext = createContext<AuthContextValue | null>(null);
+export const AuthContext = createContext<AuthContextValue | null>(null);
+
+/** Keep report permissions aligned with the report's independent branch picker. */
+export function AuthBranchPermissionScope({ branchId, ready, children }: {
+  branchId: string | null; ready: boolean; children: ReactNode;
+}) {
+  const parent = useAuth();
+  const { hasPermissionAtBranch, hasPermissionAtBranchWithLegacy } = parent;
+  const hasPermission = useCallback(
+    (code: string) => ready && hasPermissionAtBranch(code, branchId),
+    [ready, hasPermissionAtBranch, branchId],
+  );
+  const hasPermissionWithLegacy = useCallback(
+    (code: string, legacyCode: string) => ready &&
+      hasPermissionAtBranchWithLegacy(code, legacyCode, branchId),
+    [ready, hasPermissionAtBranchWithLegacy, branchId],
+  );
+  const permissions = useMemo(() => {
+    const candidates = new Set<string>([...parent.permissions, ...ALL_PERMISSION_CODES]);
+    return new Set([...candidates].filter(hasPermission));
+  }, [parent.permissions, hasPermission]);
+  const value = useMemo(() => ({ ...parent, permissions, hasPermission, hasPermissionWithLegacy }),
+    [parent, permissions, hasPermission, hasPermissionWithLegacy]);
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
 
 // Sprint LT-6 (CEO 27/05/2026): 30-day HARD session timeout.
 // CEO yêu cầu user không bị đá khi đang dùng (giữ session) nhưng định

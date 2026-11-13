@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({ navigate: vi.fn() }));
 vi.mock("next/navigation", () => ({ usePathname: () => "/phan-tich/fnb-shipper" }));
 vi.mock("next/link", () => ({ default: ({ children, onClick, prefetch, ...props }: { children: ReactNode; onClick?: (event: MouseEvent<HTMLAnchorElement>) => void; href: string; prefetch?: boolean }) => { void prefetch; return <a {...props} onClick={event => { event.preventDefault(); onClick?.(event); state.navigate(props.href); }}>{children}</a>; } }));
-vi.mock("@/lib/contexts/auth-context", () => ({ useAuth: () => ({ user: { id: "user" }, tenant: { id: "tenant" }, permissions: new Set(["reports.analytics", "reports.view_detail"]), branches: [{ id: "branch" }], isLoading: false, hasPermission: () => true }) }));
+vi.mock("@/lib/contexts/auth-context", () => ({ AuthBranchPermissionScope: ({children}: {children: ReactNode}) => children, useAuth: () => ({ user: { id: "user" }, tenant: { id: "tenant" }, permissions: new Set(["reports.analytics", "reports.view_detail"]), branches: [{ id: "branch" }], isLoading: false, hasPermission: () => true }) }));
 vi.mock("@/lib/contexts/report-scope-context", () => ({ ReportScopeProvider: ({ children }: { children: ReactNode }) => children }));
 vi.mock("@/lib/hooks/use-report-scope", () => ({ useReportScope: () => ({ isReady: true, activeBranchId: "branch", scopeKey: "branch" }) }));
 vi.mock("@/components/shared/report/report-scope-selector", () => ({ ReportScopeSelector: () => <p>Phạm vi thử</p> }));
