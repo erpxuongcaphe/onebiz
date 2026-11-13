@@ -57,6 +57,7 @@ const snapshotSchema = z.object({
     id: z.string(),
     fullName: z.string(),
     roleId: z.string().nullable(),
+    platformRole: z.string().optional(),
     isActive: z.boolean(),
     branchIds: z.array(z.string()),
   }),

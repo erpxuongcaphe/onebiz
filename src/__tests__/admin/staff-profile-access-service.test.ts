@@ -35,6 +35,10 @@ const snapshot: StaffProfileSnapshot = {
 };
 beforeEach(() => rpc.mockReset());
 describe("staff profile service", () => {
+  it("keeps the platform role needed to explain effective company-wide settings", async () => {
+    rpc.mockResolvedValue({ data: { ...snapshot, user: { ...snapshot.user, platformRole: "staff" } }, error: null });
+    expect((await getStaffProfileAccess("person")).user.platformRole).toBe("staff");
+  });
   it("rejects incomplete server snapshots rather than constructing an empty permission draft", async () => {
     rpc.mockResolvedValue({ data: { user: snapshot.user }, error: null });
     await expect(getStaffProfileAccess("person")).rejects.toThrow(

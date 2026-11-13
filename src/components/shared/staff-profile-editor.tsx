@@ -789,7 +789,7 @@ export function StaffProfileEditor({
                                 )}
                                 {p.code === "inventory.lock" && (
                                   <p className="mt-1 text-xs text-amber-800">
-                                    Khóa tồn đầu kỳ áp dụng toàn công ty. Máy chủ hiện chỉ cho chủ hoặc admin thực hiện; cấp quyền này riêng cho nhân viên chưa đủ để thao tác.
+                                    Khóa tồn đầu kỳ áp dụng toàn công ty. Chủ/admin được phép; để nhân viên thao tác, chọn “Cho phép thêm” cho người đó. Quyền từ mẫu chức vụ không tự mở quyền này.
                                   </p>
                                 )}
                                 {p.code === "pos_fnb.void" && (

@@ -54,6 +54,7 @@ export interface StaffProfileSnapshot {
     id: string;
     fullName: string;
     roleId: string | null;
+    platformRole?: string;
     isActive: boolean;
     branchIds: string[];
   };
@@ -145,6 +146,12 @@ export function projectedStaffPermission(
         (e) => e.branchId === branchId && e.permissionCode === code,
       )
     : undefined;
+  if (code === "inventory.lock" && snapshot.user.platformRole) {
+    if (["owner", "admin"].includes(snapshot.user.platformRole))
+      return { allowed: true, source: "Chủ/admin được phép quản lý cấu hình toàn công ty" };
+    if (global?.choice !== "grant")
+      return { allowed: false, source: "Nhân viên cần được cấp riêng quyền khóa tồn toàn công ty" };
+  }
   if (global?.choice === "revoke")
     return { allowed: false, source: "Đang chặn riêng trên toàn tài khoản" };
   if (local)

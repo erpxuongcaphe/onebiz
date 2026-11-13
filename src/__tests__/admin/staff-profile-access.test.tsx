@@ -88,12 +88,22 @@ describe("staff profile scope", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Tìm quyền" }), { target: { value: "pos_fnb.edit_sent_order" } });
     expect(screen.getByText(/luồng duyệt hiện tại chưa hỗ trợ yêu cầu sửa món đã gửi bếp/)).toBeVisible();
   });
-  it("explains the current server restriction on the company-wide opening-stock lock", () => {
+  it("explains the explicit individual grant for the company-wide opening-stock lock", () => {
     render(<StaffProfileEditor snapshot={snapshot} onSave={vi.fn()} onReload={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "Tùy chỉnh quyền" }));
     fireEvent.click(screen.getByRole("button", { name: "Sửa dữ liệu dùng chung" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Tìm quyền" }), { target: { value: "inventory.lock" } });
-    expect(screen.getByText(/Máy chủ hiện chỉ cho chủ hoặc admin thực hiện/)).toBeVisible();
+    expect(screen.getByText(/Quyền từ mẫu chức vụ không tự mở quyền này/)).toBeVisible();
+  });
+  it("does not silently activate an inherited stock lock for existing staff", () => {
+    const data = structuredClone(snapshot);
+    data.user.platformRole = "staff";
+    data.roles[0].permissions.push("inventory.lock");
+    const draft = draftFromStaffProfile(data);
+    expect(projectedStaffPermission(data,draft,null,"inventory.lock").allowed).toBe(false);
+    expect(projectedStaffPermission(data,setStaffException(draft,null,"inventory.lock","grant"),null,"inventory.lock").allowed).toBe(true);
+    data.user.platformRole = "admin";
+    expect(projectedStaffPermission(data,setStaffException(draft,null,"inventory.lock","revoke"),null,"inventory.lock").allowed).toBe(true);
   });
   it("allows a cash-book exception for one branch while keeping unrelated rights", async () => {
     const data = structuredClone(snapshot);
