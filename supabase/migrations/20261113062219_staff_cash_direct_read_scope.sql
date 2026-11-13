@@ -19,8 +19,9 @@ begin
  where b.tenant_id=tenant and (
   public._staff_my_cash_book_view(b.id)
   or public._staff_permission_at_scope(actor,'reports.dashboard',b.id)
-  or (public._staff_permission_at_scope(actor,'reports.analytics',b.id)
-      and public._staff_permission_at_scope(actor,'reports.view_detail',b.id))
+  -- Existing cash-flow summaries are built from direct rows for users with
+  -- analytics access even without the separate report-detail permission.
+  or public._staff_permission_at_scope(actor,'reports.analytics',b.id)
  );
  return result;
 end $$;

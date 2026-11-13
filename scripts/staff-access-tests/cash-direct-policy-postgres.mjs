@@ -72,7 +72,10 @@ statements.push(`
  end$$;
  reset role; insert into role_permissions values ('${id(20)}','reports.dashboard'); set role authenticated;
  do $$begin if (select count(*) from cash_transactions)<>2 then raise exception 'independent dashboard access lost'; end if; end$$;
- reset role; delete from role_permissions where permission_code in ('reports.dashboard','finance.view_cash_book');
+ reset role; delete from role_permissions where permission_code='reports.dashboard';
+ insert into role_permissions values ('${id(20)}','reports.analytics'); set role authenticated;
+ do $$begin if (select count(*) from cash_transactions)<>2 then raise exception 'independent cash-flow summary access lost'; end if; end$$;
+ reset role; delete from role_permissions where permission_code in ('reports.analytics','finance.view_cash_book');
  update user_branch_permission_overrides set branch_id='${id(11)}',override_type='grant' where permission_code='finance.view_cash_book';
  set role authenticated;
  do $$begin
