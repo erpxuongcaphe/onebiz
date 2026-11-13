@@ -18,6 +18,15 @@ function createQueryChain(data: unknown[] | null, count?: number) {
 
 vi.mock("@/lib/services/supabase/base", () => ({
   getClient: () => ({
+    rpc: vi.fn((name: string) => {
+      if (name !== "get_cash_dashboard_totals") return { data: null, error: { message: "RPC_NOT_MOCKED" } };
+      const rows = overrides.cash_transactions ?? [
+        { type: "receipt", status: "completed", amount: 1200000, reference_type: "invoice" },
+        { type: "payment", status: "completed", amount: 400000 },
+        { type: "payment", status: "completed", amount: 100000 },
+      ];
+      return { data: rows.filter((row: unknown) => (row as { status: string }).status === "completed"), error: null };
+    }),
     from: vi.fn((table: string) => {
       if (overrides[table]) return createQueryChain(overrides[table]);
       if (table === "invoices") {

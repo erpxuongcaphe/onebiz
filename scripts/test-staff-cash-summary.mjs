@@ -25,7 +25,7 @@ try {
  ('${id(1)}','${id(10)}','2026-11-03','payment','Bỏ qua',999,'draft'),
  ('${id(1)}','${id(11)}','2026-11-02','receipt','Bán hàng',200,'completed'),
  ('${id(2)}','${id(12)}','2026-11-02','receipt','Bán hàng',9999,'completed');
- alter table cash_transactions add column created_at timestamptz;
+ alter table cash_transactions add column created_at timestamptz,add column payment_method text,add column reference_type text;
  update cash_transactions set created_at='2026-10-31T18:00:00Z';
  insert into role_permissions values('${id(20)}','reports.analytics');
  select set_config('request.jwt.claim.sub','${id(101)}',false);`);
@@ -48,11 +48,14 @@ try {
  await db.exec(`insert into role_permissions values('${id(20)}','reports.dashboard');`);
  rows=(await db.query(`select type,amount::text from get_cash_flow_alert_totals('2026-11-01','2026-11-30','${id(10)}') order by type`)).rows;
  assert.deepEqual(rows,[{type:'payment',amount:'20'},{type:'receipt',amount:'150'}]);
+ rows=(await db.query(`select type,amount::text from get_cash_dashboard_totals('2026-11-01','2026-11-02','${id(10)}') order by type`)).rows;
+ assert.deepEqual(rows,[{type:'receipt',amount:'100'}]);
  await assert.rejects(db.query(`select * from get_cash_flow_alert_totals('2026-11-01','2026-11-30','${id(12)}')`),/REPORT_BRANCH_DENIED/);
  await db.exec(`insert into staff_branch_permission_catalog values('reports.dashboard',1);
  insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
  values('${id(1)}','${id(101)}','${id(10)}','reports.dashboard','revoke','${id(100)}');`);
  await assert.rejects(db.query(`select * from get_cash_flow_alert_totals('2026-11-01','2026-11-30','${id(10)}')`),/REPORT_PERMISSION_DENIED/);
+ await assert.rejects(db.query(`select * from get_cash_dashboard_totals('2026-11-01','2026-11-02','${id(10)}')`),/REPORT_PERMISSION_DENIED/);
  await db.exec(`insert into staff_branch_permission_catalog values('reports.analytics',1);
  insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
  values('${id(1)}','${id(101)}','${id(10)}','reports.analytics','revoke','${id(100)}');`);

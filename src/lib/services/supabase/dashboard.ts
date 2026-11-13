@@ -134,22 +134,19 @@ export async function getDashboardKpis(branchId?: string): Promise<DashboardKpis
       .gte("created_at", yesterday.start)
       .lt("created_at", yesterday.end),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    bq((supabase as any)
-      .from("cash_transactions")
-      .select("type, amount, payment_method, reference_type, status")
-      .eq("status", "completed")
-      .eq("tenant_id", tenantId)
-      .gte("transaction_date", cashBookDate(today.start))
-      .lt("transaction_date", cashBookDate(today.end))),
+    (supabase as any).rpc("get_cash_dashboard_totals", { p_from: cashBookDate(today.start), p_to: cashBookDate(today.end), p_branch: branchId ?? null }),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    bq((supabase as any)
-      .from("cash_transactions")
-      .select("type, amount, payment_method, reference_type, status")
-      .eq("status", "completed")
-      .eq("tenant_id", tenantId)
-      .gte("transaction_date", cashBookDate(yesterday.start))
-      .lt("transaction_date", cashBookDate(yesterday.end))),
+    (supabase as any).rpc("get_cash_dashboard_totals", { p_from: cashBookDate(yesterday.start), p_to: cashBookDate(yesterday.end), p_branch: branchId ?? null }),
   ]);
+
+  for (const result of [todayCash, yesterdayCash]) {
+    if (result.error) handleError(result.error, "getDashboardKpis.cash");
+    if (!Array.isArray(result.data) || result.data.some((row: unknown) => {
+      if (!row || typeof row !== "object") return true;
+      const item = row as Record<string, unknown>;
+      return typeof item.type !== "string" || item.status !== "completed" || item.amount == null || !Number.isFinite(Number(item.amount));
+    })) throw new Error("Không xác định được số liệu thu chi tổng quan.");
+  }
 
   const calcRevenue = (data: { total: number; status: string }[] | null) =>
     (data ?? [])

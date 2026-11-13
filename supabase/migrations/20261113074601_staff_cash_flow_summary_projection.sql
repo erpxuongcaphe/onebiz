@@ -101,4 +101,30 @@ begin
 end $$;
 revoke all on function public.get_cash_expense_report_totals(timestamptz,timestamptz,text,uuid) from public,anon;
 grant execute on function public.get_cash_expense_report_totals(timestamptz,timestamptz,text,uuid) to authenticated;
+
+-- Legacy KPI cards need only grouped collection totals for each payment type.
+create function public.get_cash_dashboard_totals(
+ p_from date,p_to date,p_branch uuid default null
+) returns table(type text,payment_method text,reference_type text,status text,amount numeric)
+language plpgsql stable security definer set search_path='' as $$
+declare v_tenant uuid;
+begin
+ if p_from is null or p_to is null or p_from>=p_to then
+  raise exception 'REPORT_DATE_RANGE_INVALID' using errcode='22023';
+ end if;
+ perform public.assert_report_access('reports.dashboard',p_branch);
+ select p.tenant_id into v_tenant from public.profiles p
+  where p.id=auth.uid() and coalesce(p.is_active,true);
+ return query select c.type::text,
+  case when c.payment_method in ('transfer','card') then c.payment_method::text else 'cash' end,
+  case when c.reference_type in ('invoice','sales_return','invoice_void') then c.reference_type::text else null end,
+  'completed'::text,sum(coalesce(c.amount,0))::numeric
+ from public.cash_transactions c
+ where c.tenant_id=v_tenant and (p_branch is null or c.branch_id=p_branch)
+  and c.status='completed' and c.type in ('receipt','payment')
+  and c.transaction_date>=p_from and c.transaction_date<p_to
+ group by 1,2,3;
+end $$;
+revoke all on function public.get_cash_dashboard_totals(date,date,uuid) from public,anon;
+grant execute on function public.get_cash_dashboard_totals(date,date,uuid) to authenticated;
 commit;

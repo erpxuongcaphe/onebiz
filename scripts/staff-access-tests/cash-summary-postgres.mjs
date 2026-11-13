@@ -21,7 +21,7 @@ sql.push(`create table cash_transactions(tenant_id uuid,branch_id uuid,transacti
  ('${id(1)}','${id(10)}','2026-11-02','payment',null,20,'completed'),
  ('${id(1)}','${id(11)}','2026-11-02','receipt','Bán hàng',200,'completed'),
  ('${id(2)}','${id(12)}','2026-11-02','receipt','Bán hàng',9999,'completed');
- alter table cash_transactions add column created_at timestamptz;
+ alter table cash_transactions add column created_at timestamptz,add column payment_method text,add column reference_type text;
  update cash_transactions set created_at='2026-10-31T18:00:00Z';
  insert into role_permissions values('${id(20)}','reports.analytics');
  select set_config('request.jwt.claim.sub','${id(101)}',false);`);
@@ -45,6 +45,8 @@ sql.push(`do $$declare r record;begin
  do $$begin
  if (select amount from get_cash_flow_alert_totals('2026-11-01','2026-11-30','${id(10)}') where type='receipt') is distinct from 150
  then raise exception 'ALERT_TOTAL_INCORRECT'; end if;
+ if (select amount from get_cash_dashboard_totals('2026-11-01','2026-11-02','${id(10)}') where type='receipt') is distinct from 100
+ then raise exception 'DASHBOARD_TOTAL_INCORRECT'; end if;
  begin perform * from get_cash_flow_alert_totals('2026-11-01','2026-11-30','${id(12)}'); raise exception 'ALERT_TENANT_LEAK';
  exception when insufficient_privilege then null;end;
  end$$;
@@ -53,6 +55,8 @@ sql.push(`do $$declare r record;begin
  values('${id(1)}','${id(101)}','${id(10)}','reports.dashboard','revoke','${id(100)}');
  do $$begin begin perform * from get_cash_flow_alert_totals('2026-11-01','2026-11-30','${id(10)}');
  raise exception 'ALERT_OVERRIDE_LEAK'; exception when insufficient_privilege then null;end;end$$;
+ do $$begin begin perform * from get_cash_dashboard_totals('2026-11-01','2026-11-02','${id(10)}');
+ raise exception 'DASHBOARD_OVERRIDE_LEAK'; exception when insufficient_privilege then null;end;end$$;
  insert into staff_branch_permission_catalog values('reports.analytics',1);
  insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
  values('${id(1)}','${id(101)}','${id(10)}','reports.analytics','revoke','${id(100)}');
