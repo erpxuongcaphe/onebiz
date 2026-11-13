@@ -47,6 +47,7 @@ const RPC = new Set(schema.rpc as string[]);
  * dưới sẽ BẮT XOÁ dòng ngay khi dump đã có (sau `node scripts/dump-db-schema.mjs`).
  */
 const RPC_CHO_MIGRATION = new Map<string, string>([
+  ["get_sales_day_invoice_receivable", "20261113124451_dashboard_debt_refund_source.sql"],
   // The additive projection migration must be applied before this client is deployed.
   ["get_cash_flow_category_summary", "20261113074601_staff_cash_flow_summary_projection.sql"],
   ["get_cash_flow_alert_totals", "20261113074601_staff_cash_flow_summary_projection.sql"],
