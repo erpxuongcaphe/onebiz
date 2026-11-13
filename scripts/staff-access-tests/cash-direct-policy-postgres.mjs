@@ -16,37 +16,79 @@ statements.push(await functionFromMigration('20261111095224_staff_branch_kitchen
 statements.push(await functionFromMigration('20261112030753_staff_branch_cash_book_read.sql','_staff_my_cash_book_view'));
 statements.push(`
  create table cash_transactions(id uuid,tenant_id uuid,branch_id uuid);
+ create table cash_amendments(id uuid,tenant_id uuid,original_cash_id uuid);
+ create table money_accounts(id uuid,tenant_id uuid,branch_id uuid);
+ create table party_advance_refunds(id uuid,tenant_id uuid,branch_id uuid,mode text);
  insert into cash_transactions values ('${id(70)}','${id(1)}','${id(10)}'),('${id(71)}','${id(1)}','${id(11)}'),('${id(72)}','${id(2)}','${id(12)}');
+ insert into cash_amendments values ('${id(80)}','${id(1)}','${id(70)}'),('${id(81)}','${id(1)}','${id(71)}');
+ insert into money_accounts values ('${id(90)}','${id(1)}','${id(10)}'),('${id(91)}','${id(1)}','${id(11)}');
+ insert into party_advance_refunds values ('${id(92)}','${id(1)}','${id(10)}','customer'),('${id(93)}','${id(1)}','${id(11)}','customer');
  insert into user_branches values ('${id(101)}','${id(11)}',null);
  insert into role_permissions values ('${id(20)}','finance.view_cash_book');
+ insert into role_permissions values ('${id(20)}','customers.view_debt');
  insert into staff_branch_permission_catalog values ('finance.view_cash_book',1);
  alter table cash_transactions enable row level security;
  create policy legacy_scope on cash_transactions for select to authenticated using
   (tenant_id=(select public.get_user_tenant_id()) and public.user_has_branch_access((select auth.uid()),branch_id));
  alter function public.get_user_tenant_id() security definer;
  alter function public.user_has_branch_access(uuid,uuid) security definer;
+ alter function public.user_has_permission(uuid,text) security definer;
+ alter table cash_amendments enable row level security; alter table money_accounts enable row level security;
+ alter table party_advance_refunds enable row level security;
+ create policy cash_amendment_read on cash_amendments for select to authenticated using
+  (exists(select 1 from cash_transactions c join profiles p on p.id=auth.uid() and coalesce(p.is_active,true)
+   where c.id=cash_amendments.original_cash_id and c.tenant_id=cash_amendments.tenant_id
+    and p.tenant_id=c.tenant_id and user_has_branch_access(auth.uid(),c.branch_id)
+    and user_has_permission(auth.uid(),'finance.view_cash_book')));
+ create policy money_account_read on money_accounts for select to authenticated using
+  (tenant_id=(select p.tenant_id from profiles p where p.id=auth.uid() and coalesce(p.is_active,true))
+   and user_has_branch_access(auth.uid(),branch_id) and (user_has_permission(auth.uid(),'finance.view_cash_book')
+    or user_has_permission(auth.uid(),'finance.create_transaction')));
+ create policy party_advance_refund_read on party_advance_refunds for select to authenticated using
+  (tenant_id=get_user_tenant_id() and user_has_branch_access(auth.uid(),branch_id)
+   and user_has_permission(auth.uid(),'finance.view_cash_book')
+   and user_has_permission(auth.uid(),case mode when 'customer' then 'customers.view_debt' else 'suppliers.view_debt' end));
  grant usage on schema public,auth to authenticated;
- grant select on cash_transactions to authenticated;
+ grant select on cash_transactions,cash_amendments,money_accounts,party_advance_refunds,profiles to authenticated;
  select set_config('request.jwt.claim.sub','${id(101)}',false);
 `);
 await migration('20261113062219_staff_cash_direct_read_scope.sql');
+await migration('20261113062653_staff_cash_related_direct_reads.sql');
 statements.push(`
  set role authenticated;
- do $$begin if (select count(*) from cash_transactions)<>2 then raise exception 'legacy cash visibility changed'; end if; end$$;
+ do $$begin
+  if (select count(*) from cash_transactions)<>2 or (select count(*) from money_accounts)<>2
+   or (select count(*) from cash_amendments)<>2 or (select count(*) from party_advance_refunds)<>2
+   then raise exception 'legacy cash visibility changed'; end if;
+ end$$;
  reset role;
  insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
   values('${id(1)}','${id(101)}','${id(10)}','finance.view_cash_book','revoke','${id(100)}');
  set role authenticated;
- do $$begin if (select count(*) from cash_transactions)<>1 then raise exception 'denied branch exposed'; end if; end$$;
+ do $$begin
+  if (select count(*) from cash_transactions)<>1 or (select count(*) from money_accounts)<>1
+   or (select count(*) from cash_amendments)<>1 or (select count(*) from party_advance_refunds)<>1
+   then raise exception 'denied branch exposed'; end if;
+ end$$;
  reset role; insert into role_permissions values ('${id(20)}','reports.dashboard'); set role authenticated;
  do $$begin if (select count(*) from cash_transactions)<>2 then raise exception 'independent dashboard access lost'; end if; end$$;
  reset role; delete from role_permissions where permission_code in ('reports.dashboard','finance.view_cash_book');
  update user_branch_permission_overrides set branch_id='${id(11)}',override_type='grant' where permission_code='finance.view_cash_book';
  set role authenticated;
- do $$begin if (select count(*) from cash_transactions)<>1 then raise exception 'local grant scope mismatch'; end if; end$$;
+ do $$begin
+  if (select count(*) from cash_transactions)<>1 or (select count(*) from money_accounts)<>1
+   or (select count(*) from cash_amendments)<>1 or (select count(*) from party_advance_refunds)<>1
+   then raise exception 'local grant scope mismatch'; end if;
+ end$$;
  reset role; insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type,created_by)
   values('${id(1)}','${id(101)}','finance.view_cash_book','revoke','${id(100)}'); set role authenticated;
- do $$begin if (select count(*) from cash_transactions)<>0 then raise exception 'global revoke bypassed'; end if; end$$;
+ do $$begin
+  if (select count(*) from cash_transactions)<>0 or (select count(*) from cash_amendments)<>0
+   or (select count(*) from money_accounts)<>0 or (select count(*) from party_advance_refunds)<>0
+   then raise exception 'global revoke bypassed'; end if;
+ end$$;
+ reset role; insert into role_permissions values ('${id(20)}','finance.create_transaction'); set role authenticated;
+ do $$begin if (select count(*) from money_accounts)<>2 then raise exception 'payment account access lost'; end if; end$$;
  reset role;
 `);
 if (process.env.ONEBIZ_PGLITE_MODULE) {
