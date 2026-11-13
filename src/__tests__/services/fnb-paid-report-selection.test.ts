@@ -119,11 +119,4 @@ describe("F&B revenue uses completed invoices independently of kitchen status", 
     expect(state.queries).toHaveLength(0);
   });
 
-  it.each([
-  ] as const)("filters %s by invoice business date rather than kitchen creation date", async (_name, read) => {
-    await read();
-    const filters = state.queries.find(q => q.table === "kitchen_orders")!.filters;
-    expect(filters.some(([op, key]) => op === "gte" && key === "invoices.ngay_chung_tu")).toBe(true);
-    expect(filters.some(([, key]) => key === "created_at")).toBe(false);
-  });
 });
