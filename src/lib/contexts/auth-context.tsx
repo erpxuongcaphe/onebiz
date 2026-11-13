@@ -23,6 +23,7 @@ import { canViewAllBranches, parseAccessibleBranchIds } from "@/lib/auth/branch-
 import { readAuthBootstrap } from "@/lib/auth/bootstrap";
 import {
   hasPermissionForBranch,
+  hasFnbPrintPermission,
   permissionsForBranch,
   permissionWithLegacyAtBranch,
   permissionWithLegacyFallback,
@@ -57,6 +58,8 @@ interface AuthContextValue extends AuthState {
   hasPermissionAtBranchWithLegacy: (code: string, legacyCode: string, branchId: string | null) => boolean;
   /** Whether a branch is assigned for operational actions (reporting may be broader). */
   hasAssignedBranchAccess: (branchId: string | null) => boolean;
+  /** Print access retains legacy account grants while accepting branch grants. */
+  hasFnbPrintAccess: (branchId: string | null) => boolean;
   hasPermissionWithLegacy: (code: string, legacyCode: string) => boolean;
   /** Re-fetch profile + tenant + branches. Dùng sau khi user update /ho-so. */
   refreshProfile: () => Promise<void>;
@@ -739,6 +742,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     [assignedBranchIds, user?.role, user?.isActive, isLoading, authDataError],
   );
+  const hasFnbPrintAccess = useCallback(
+    (branchId: string | null): boolean => {
+      if (isLoading || authDataError || !user?.isActive || !branchId) return false;
+      if (user.role === "owner") return true;
+      return assignedBranchIds.has(branchId) &&
+        hasFnbPrintPermission(permissions, branchPermissionAdjustments, branchId);
+    },
+    [isLoading, authDataError, user?.isActive, user?.role, assignedBranchIds, permissions, branchPermissionAdjustments],
+  );
 
   const logout = useCallback(async () => {
     // Flag để SIGNED_OUT handler biết đây là user-initiated, không show
@@ -826,6 +838,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         hasPermissionAtBranch,
         hasPermissionAtBranchWithLegacy,
         hasAssignedBranchAccess,
+        hasFnbPrintAccess,
         hasPermissionWithLegacy,
         refreshProfile,
         logout,
