@@ -56,6 +56,7 @@ import type { ProductCategory, StockMovement, UOMConversion } from "@/lib/types"
 import { StockWithConversion } from "@/components/shared/stock-with-conversion";
 import { StockDocumentLink } from "@/components/shared/stock-document-link";
 import { Icon } from "@/components/ui/icon";
+import { useStockRowAdjustPermission } from "@/lib/permissions/use-stock-row-adjust-permission";
 import { OpeningStockDialog } from "@/components/shared/dialogs/opening-stock-dialog";
 import { OpeningStockHistoryDialog } from "@/components/shared/dialogs/opening-stock-history-dialog";
 import { downloadTemplate } from "@/lib/excel";
@@ -83,7 +84,7 @@ function StockRowDetail({
 }) {
   const { toast } = useToast();
   const { hasPermission } = useAuth();
-  const canAdjust = hasPermission("inventory.adjust");
+  const canAdjust = useStockRowAdjustPermission(row.branchId);
   const canViewCost = hasPermission("products.view_cost");
 
   const [branches, setBranches] = useState<
@@ -119,6 +120,7 @@ function StockRowDetail({
   const [adjustConfirming, setAdjustConfirming] = useState(false);
 
   const handleOpenAdjust = () => {
+    if (!canAdjust) return;
     setAdjustRequestId(crypto.randomUUID());
     setNewQtyInput(String(row.quantity));
     setAdjustReason("");
@@ -146,6 +148,10 @@ function StockRowDetail({
 
   // Bước 2: user đã đọc cảnh báo + bấm "Xác nhận cập nhật" → ghi thật.
   const handleSaveAdjust = async () => {
+    if (!canAdjust) {
+      toast({ title: "Không có quyền điều chỉnh tồn tại chi nhánh này", variant: "error" });
+      return;
+    }
     const newQty = Number(newQtyInput.replace(/,/g, "."));
     setAdjustSaving(true);
     try {
