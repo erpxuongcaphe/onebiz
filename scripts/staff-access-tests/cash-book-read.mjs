@@ -78,6 +78,15 @@ export async function verifyCashBookReadScope(db, id) {
   await db.exec(`reset role; delete from user_permission_overrides where permission_code='finance.view_cash_book';
     insert into test_staff_permissions values ('finance.view_cash_book');
     delete from user_branch_permission_overrides where permission_code='finance.view_cash_book';`);
+  // Real payment writer stays usable when cash-book viewing is independently
+  // denied. The transaction is rolled back so later fixture tests stay stable.
+  await db.exec(`begin;
+    delete from user_permission_overrides where permission_code='finance.create_transaction';
+    insert into user_branch_permission_overrides values
+      ('${id(2)}','${id(1)}','${id(4)}','finance.view_cash_book','revoke');
+    set local role authenticated;`);
+  await db.query("select record_invoice_payment($1,100,'cash','synthetic')", [id(701)]);
+  await db.exec('rollback');
   const list = async (branch = null) =>
     (
       await db.query(
