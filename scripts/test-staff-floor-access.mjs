@@ -14,6 +14,19 @@ const file = (n) =>
   readFile(new URL("../supabase/migrations/" + n, import.meta.url), "utf8");
 try {
   await initializeStaffAccessFixture(db, id);
+  await db.exec(`create function public.get_user_effective_permissions_before_account_hierarchy(p_user uuid)
+    returns table(permission_code text) language sql stable as $$
+      select c.code from (select rp.permission_code as code from public.profiles p
+        join public.role_permissions rp on rp.role_id=p.role_id where p.id=p_user
+        union select o.permission_code from public.user_permission_overrides o
+        where o.user_id=p_user and o.override_type='grant') c
+      where not exists(select 1 from public.user_permission_overrides r
+        where r.user_id=p_user and r.permission_code=c.code and r.override_type='revoke')
+    $$`);
+  await db.exec(`create function public.get_user_effective_permissions(p_user uuid)
+    returns table(permission_code text) language sql stable as $$
+      select x.permission_code from public.get_user_effective_permissions_before_account_hierarchy(p_user) x
+    $$`);
   await db.exec(await file("20261111052704_staff_branch_access.sql"));
   for (const [f, n] of [
     [
@@ -259,6 +272,17 @@ try {
     'the new migration must fail closed if an existing read policy has drifted');
   await db.exec('rollback; alter policy synthetic_changed_read_policy on floor_plan_zones rename to staff_floor_branch_read');
   await db.exec(await file('20261114033000_staff_floor_view_scope.sql'));
+  const permissionParity = async () => {
+    const result = await db.query(`select c.code from unnest(array[
+      'reports.view_all_branches','floor_plan.edit_global','orders.print','invoices.print',
+      'system.manage_branches','products.view','products.edit','floor_plan.view','floor_plan.edit_branch',
+      'pos_fnb.send_kitchen','pos_fnb.checkout','pos_fnb.view_orders','pos_fnb.manage_tables']::text[]) c(code)
+      join public.profiles p on p.id=$1
+      where public.user_has_permission(p.id,c.code) is distinct from
+       (p.role='owner' or exists(select 1 from public.get_user_effective_permissions(p.id) x where x.permission_code=c.code))`,[id(101)]);
+    assert.deepEqual(result.rows, [], 'bulk permission set must match the existing permission helper');
+  };
+  await permissionParity();
   await db.exec('set role authenticated');
   assert.deepEqual((await db.query('select id from restaurant_tables')).rows, [],
     'without floor or an independent operational permission, direct reads are denied');
@@ -299,7 +323,9 @@ try {
     assert.deepEqual((await db.query(`select distinct branch_id from ${table} order by branch_id`)).rows.map(row=>row.branch_id),[id(10)],
       `${table}: global view revoke and the POS alternative follow the same branch scope`);
   }
-  await db.exec(`reset role;
+  await db.exec('reset role');
+  await permissionParity();
+  await db.exec(`
     delete from user_branch_permission_overrides where user_id='${id(101)}' and permission_code='pos_fnb.send_kitchen';
     insert into role_permissions values('${id(20)}','products.view');
     set role authenticated;`);
