@@ -68,7 +68,7 @@ export async function verifyCashBookReadScope(db, id) {
     set role authenticated;`);
   assert.equal(await directCount(), 1, 'direct REST table read hides the denied branch');
   await db.exec(`reset role; insert into test_staff_permissions values ('reports.dashboard'); set role authenticated;`);
-  assert.equal(await directCount(), 2, 'independent dashboard permission remains effective');
+  assert.equal(await directCount(), 1, 'dashboard permission must not expose cash vouchers in a denied branch');
   await db.exec(`reset role; delete from test_staff_permissions where code in ('reports.dashboard','finance.view_cash_book');
     update user_branch_permission_overrides set branch_id='${id(4)}',override_type='grant'
       where permission_code='finance.view_cash_book'; set role authenticated;`);
