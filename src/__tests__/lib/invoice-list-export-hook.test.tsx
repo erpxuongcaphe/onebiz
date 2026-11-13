@@ -6,8 +6,8 @@ vi.mock("@/lib/services/supabase/invoice-list-export", () => ({ getInvoicesForFi
 vi.mock("@/lib/services/supabase/fnb-invoice-export-details",()=>({getFnbInvoiceExportDetails:mocks.details,fnbInvoiceItemExportColumns:[{header:"Size",key:"size"}]}));
 vi.mock("@/lib/utils/export", () => ({ exportToExcel: mocks.excel, exportToCsv: mocks.csv }));
 import { useInvoiceListExport } from "@/lib/hooks/use-invoice-list-export";
-const data = Array.from({ length: 437 }, (_, i) => ({ id: `i${i}`, code: `HD${i}`, totalAmount: 50000, discount: 1000, source: "fnb", fnbOrderType: "takeaway" }) as Invoice);
-function options() { return { scope: { mode: "branch" as const, branchId: "a", duocDemChiNhanhKhac: false }, query: { filters: { status: ["completed"] } }, ready: true, allowed: true, fnb: true, onError: vi.fn(), onSuccess: vi.fn() }; }
+const data = Array.from({ length: 437 }, (_, i) => ({ id: `i${i}`, branchId:"a", code: `HD${i}`, totalAmount: 50000, discount: 1000, source: "fnb", fnbOrderType: "takeaway" }) as Invoice);
+function options() { return { scope: { mode: "branch" as const, branchId: "a", duocDemChiNhanhKhac: false }, query: { filters: { status: ["completed"] } }, ready: true, allowed: true, fnb: true, exportableBranches:["a"], accountScope:"tenant/user", onError: vi.fn(), onSuccess: vi.fn() }; }
 beforeEach(() => { vi.clearAllMocks();mocks.details.mockResolvedValue({items:[],summaries:new Map()}); mocks.read.mockResolvedValue(data); mocks.excel.mockResolvedValue(undefined); mocks.csv.mockResolvedValue(undefined); });
 describe("Invoice export interaction", () => {
   it.each(["excel", "csv"] as const)("passes every filtered row to %s, including type labels and numeric amounts", async type => {
@@ -53,6 +53,22 @@ describe("Invoice export interaction", () => {
     const { result } = renderHook(() => useInvoiceListExport(opts));
     await act(async () => { await result.current.start("excel"); });
     expect(opts.onError).toHaveBeenCalledTimes(1); expect(mocks.excel).not.toHaveBeenCalled(); expect(result.current.progress).toBeNull();
+  });
+  it("does not export mixed-branch rows when one branch lacks export access", async () => {
+    mocks.read.mockResolvedValue([{...data[0],branchId:"a"},{...data[1],branchId:"b"}]);
+    const opts=options();const {result}=renderHook(()=>useInvoiceListExport(opts));
+    await act(async()=>{await result.current.start("excel");});
+    expect(opts.onError).toHaveBeenCalledWith(expect.stringContaining("chưa được cấp quyền xuất"));
+    expect(mocks.details).not.toHaveBeenCalled();expect(mocks.excel).not.toHaveBeenCalled();
+  });
+  it("cancels a pending export when allowed branches change", async () => {
+    let resolve!: (value: Invoice[]) => void;
+    mocks.read.mockReturnValue(new Promise<Invoice[]>(r => {resolve=r;}));
+    const opts=options();const {result,rerender}=renderHook(props=>useInvoiceListExport(props),{initialProps:opts});
+    let pending!:Promise<void>;act(()=>{pending=result.current.start("excel");});
+    rerender({...opts,exportableBranches:["b"]});
+    await act(async()=>{resolve(data);await pending;});
+    expect(mocks.excel).not.toHaveBeenCalled();expect(mocks.details).not.toHaveBeenCalled();
   });
   it("exports separate Excel line detail and full CSV choices, aborting if detail load fails",async()=>{
     const opts=options();mocks.details.mockResolvedValue({items:[{invoiceCode:"HD0",size:"Size L",temperature:"Nóng"}],summaries:new Map([["i0","1 × Bạc Sỉu (Size L) · Đá/Nóng: Nóng"]])});

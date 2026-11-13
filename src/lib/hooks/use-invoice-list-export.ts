@@ -11,15 +11,19 @@ import {buildRetailDocumentSheets,buildRetailDocumentExport,retailDocumentLineCo
 import {exportReportToExcel} from "@/lib/utils/excel-export";
 import {formatDate} from "@/lib/format";
 import {invoiceFnbTypeLabel,invoiceRetailTypeLabel} from "@/lib/utils/invoice-list-filters";
+import {documentRowsExportable} from "@/lib/permissions/document-export-scope";
 
 export function useInvoiceListExport(options:{
   scope: PhamViChiNhanh; query: InvoiceExportQuery|null; ready:boolean; allowed:boolean; fnb:boolean;
+  exportableBranches: readonly string[];
+  accountScope: string;
   currentPage?: {ids:readonly string[];number:number;ready:boolean};
   onError:(message:string)=>void; onSuccess:(count:number,scopeLabel:string)=>void;
 }) {
   const [progress,setProgress]=useState<InvoiceExportProgress|null>(null);
   const active=useRef<AbortController|null>(null);
-  const context=JSON.stringify([options.scope,options.query,options.ready,options.allowed,options.fnb,options.currentPage]);
+  const context=JSON.stringify([options.accountScope,options.scope,options.query,options.ready,options.allowed,options.fnb,options.currentPage,options.exportableBranches]);
+  const currentContext=useRef(context);currentContext.current=context;
   useEffect(()=>()=>{active.current?.abort();},[context]);
   const cancel=useCallback(()=>{active.current?.abort();},[]);
   const start=async(type:"excel"|"csv",target:"filtered"|"page"="filtered")=>{
@@ -29,29 +33,34 @@ export function useInvoiceListExport(options:{
     if(target==='page'&&(!options.currentPage?.ready||!options.currentPage.ids.length)){options.onError("Chờ trang hiện tại tải xong và có dữ liệu trước khi xuất.");return;}
     const scopeLabel=target==='page'?`trang ${options.currentPage!.number} đang xem`:'toàn bộ theo bộ lọc';
     const controller=new AbortController();active.current=controller;setProgress({loaded:0,total:0});
+    const valid=()=>!controller.signal.aborted && currentContext.current===context;
     try {
       const rows=target==='page'
         ?await readSelectedInvoiceExport(options.scope,options.query,options.currentPage!.ids,controller.signal)
         :await getInvoicesForFilteredExport(options.scope,options.query,{signal:controller.signal,onProgress:setProgress});
       if(target==='page')setProgress({loaded:rows.length,total:rows.length});
-      if(controller.signal.aborted)return;
+      if(!valid())return;
       if(!rows.length){options.onError("Không có hóa đơn theo bộ lọc đã chọn.");return;}
+      if(!documentRowsExportable(rows,options.exportableBranches)) {
+        options.onError("Có hóa đơn thuộc chi nhánh chưa được cấp quyền xuất. Hãy lọc chi nhánh được phép rồi xuất lại.");
+        return;
+      }
       if(rows.every(row=>row.source!=="fnb")){
         const lines=await readRetailDocumentExportLines(rows,controller.signal);
-        if(controller.signal.aborted)return;
+        if(!valid())return;
         const range=retailDocumentExportRange(rows,options.query);
         if(type==="excel")await exportReportToExcel({kind:"ban-hang",mode:"full",range,reportTitle:`Chứng từ bán hàng — ${scopeLabel}`,
           branchName:options.scope.mode==="branch"?(rows[0]?.branchName??""):"Các chi nhánh được phép",
           description:`Phạm vi xuất: ${scopeLabel}. ${retailDocumentExportScopeText(options.query)}`,
           sheets:buildRetailDocumentSheets(rows,lines,[`CHỨNG TỪ BÁN HÀNG — ${scopeLabel.toLocaleUpperCase('vi')}`,`${rows.length} chứng từ · ${lines.length} dòng hàng`]),
-          shouldSave:()=>!controller.signal.aborted});
-        else await exportToCsv(buildRetailDocumentExport(rows,lines).details,retailDocumentLineColumns,target==='page'?`chi-tiet-chung-tu-trang-${options.currentPage!.number}`:"chi-tiet-chung-tu-theo-bo-loc",{shouldSave:()=>!controller.signal.aborted});
-        if(!controller.signal.aborted)options.onSuccess(rows.length,scopeLabel);
+          shouldSave:valid});
+        else await exportToCsv(buildRetailDocumentExport(rows,lines).details,retailDocumentLineColumns,target==='page'?`chi-tiet-chung-tu-trang-${options.currentPage!.number}`:"chi-tiet-chung-tu-theo-bo-loc",{shouldSave:valid});
+        if(valid())options.onSuccess(rows.length,scopeLabel);
         return;
       }
       const choices=parseFnbChoiceFilter(options.query.filters?.fnbOptions);
       const details=await getFnbInvoiceExportDetails(rows,controller.signal,choices);
-      if(controller.signal.aborted)return;
+      if(!valid())return;
       const records=rows.map(row=>({...row,fnbItemSummary:details.summaries.get(row.id)??"",invoiceTypeLabel:options.fnb?invoiceFnbTypeLabel(row.fnbOrderType):row.source==="fnb"?"F&B":invoiceRetailTypeLabel(row.retailSaleType)}));
       const statusLabels:Record<string,string>={completed:"Hoàn thành",processing:"Đang xử lý",cancelled:"Đã hủy",delivery_failed:"Giao thất bại"};
       const columns=[
@@ -66,13 +75,13 @@ export function useInvoiceListExport(options:{
         {header:"Trạng thái",key:"status",width:15,format:(v:string)=>statusLabels[v]??v},
       ];
       // The final guard also runs after the lazy XLSX import and before download.
-      const exportOptions={shouldSave:()=>!controller.signal.aborted,additionalSheets:details.items.length?[{name:hasFnbChoiceFilter(choices)?"Món khớp bộ lọc":"Chi tiết món",data:details.items,columns:fnbInvoiceItemExportColumns}]:[]};
+      const exportOptions={shouldSave:valid,additionalSheets:details.items.length?[{name:hasFnbChoiceFilter(choices)?"Món khớp bộ lọc":"Chi tiết món",data:details.items,columns:fnbInvoiceItemExportColumns}]:[]};
       const name=target==='page'?`danh-sach-hoa-don-trang-${options.currentPage!.number}`:"danh-sach-hoa-don";
       if(type==="excel")await exportToExcel(records,columns,name,exportOptions);
       else await exportToCsv(records,columns,name,exportOptions);
-      if(!controller.signal.aborted)options.onSuccess(rows.length,scopeLabel);
+      if(valid())options.onSuccess(rows.length,scopeLabel);
     }catch(error){
-      if(!controller.signal.aborted)options.onError(error instanceof Error?error.message:"Không xuất được hóa đơn. Anh/chị vui lòng thử lại.");
+      if(valid())options.onError(error instanceof Error?error.message:"Không xuất được hóa đơn. Anh/chị vui lòng thử lại.");
     }finally{
       if(active.current===controller){active.current=null;setProgress(null);}
     }
