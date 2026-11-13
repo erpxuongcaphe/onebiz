@@ -8,7 +8,7 @@ set local lock_timeout='3s';
 set local statement_timeout='30s';
 create function public._staff_fnb_order_direct_read(p_tenant uuid,p_branch uuid)
 returns boolean language plpgsql stable security definer set search_path='' as $$
-declare actor uuid:=auth.uid(); member boolean; report_scope boolean; code text;
+declare actor uuid:=auth.uid(); member boolean; code text;
 begin
  if actor is null or p_tenant is distinct from public.get_user_tenant_id() then return false;end if;
  if not exists(select 1 from public.user_branch_permission_overrides o
@@ -25,12 +25,7 @@ begin
    if public._staff_permission_at_scope(actor,code,p_branch) then return true;end if;
   end loop;
  end if;
- report_scope:=member or coalesce(public.user_has_permission(actor,'reports.view_all_branches'),false);
- if report_scope then
-  foreach code in array array['reports.analytics','reports.fnb','reports.dashboard'] loop
-   if public._staff_permission_at_scope(actor,code,p_branch) then return true;end if;
-  end loop;
- end if;
+ -- Reporting uses separately scoped aggregate/detail RPCs.
  return false;
 end $$;
 revoke all on function public._staff_fnb_order_direct_read(uuid,uuid) from public,anon;

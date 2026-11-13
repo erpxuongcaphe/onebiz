@@ -202,8 +202,8 @@ try {
   );
   assert.deepEqual(
     await visible("kitchen_orders"),
-    [id(30), id(31)],
-    "company reporting retains its independent all-branch scope",
+    [id(30)],
+    "all-branch reports use aggregate RPCs without opening raw orders outside POS scope",
   );
   await db.exec(`reset role; delete from role_permissions where permission_code in ('pos_fnb.send_kitchen','reports.analytics','reports.view_all_branches');
     delete from user_branch_permission_overrides where permission_code='pos_fnb.view_orders';

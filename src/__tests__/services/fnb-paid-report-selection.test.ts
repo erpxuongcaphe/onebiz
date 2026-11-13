@@ -29,6 +29,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
       name === "staff_fnb_channel_summary" ? [{dimension:args.p_dimension==="platform"?"Grab":"delivery",revenue:"112000",orders:"2"}] :
       name === "staff_fnb_turnover_summary" ? [{table_name:"Table 1",avg_minutes:"20",orders:"2"}] :
       name === "staff_fnb_category_summary" ? [{category_name:"Drinks",revenue:"112000",orders:"2",quantity:"2"}] :
+      name === "staff_fnb_daily_summary" ? [{day_label:"07/10/2026",revenue:"112000",orders:"2"}] :
       name === "staff_fnb_modifier_summary" ? [{group_id:"sugar",group_name:"Sugar",option_id:"less",option_label:"Less",selection_count:"2",total_quantity:"2",total_price_delta:"0",percent_in_group:"100"}] : state.rpcData,error:null};
   }, from: (table: string) => {
     const query = { table, filters: [] as Array<[string, string, unknown]>, select: "" };
@@ -55,7 +56,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
   } }),
 }));
 
-import { getModifierStats, getRevenueByCategory, getRevenueByHourFnb, getRevenueByMenuItem, getRevenueByOrderType, getRevenueByPlatform, getRevenueByTable, getTableTurnover } from "@/lib/services/supabase/fnb-analytics";
+import { getDailyRevenueFnb, getModifierStats, getRevenueByCategory, getRevenueByHourFnb, getRevenueByMenuItem, getRevenueByOrderType, getRevenueByPlatform, getRevenueByTable, getTableTurnover } from "@/lib/services/supabase/fnb-analytics";
 
 beforeEach(() => { state.queries.length = 0; state.rpcCalls.length = 0; state.rpcData = [{product_name:"Coffee",quantity:"2",revenue:"112000"}]; });
 
@@ -76,6 +77,12 @@ describe("F&B revenue uses completed invoices independently of kitchen status", 
   it("reads table service time as a scoped aggregate", async () => {
     expect(await getTableTurnover("branch")).toEqual([{tableName:"Table 1",avgMinutes:20,orders:2}]);
     expect(state.rpcCalls[0]).toEqual({name:"staff_fnb_turnover_summary",args:{p_branch_id:"branch"}});
+    expect(state.queries).toHaveLength(0);
+  });
+
+  it("reads daily revenue as branch-scoped totals", async () => {
+    expect(await getDailyRevenueFnb("branch",30)).toEqual([{date:"07/10/2026",revenue:112000,orders:2}]);
+    expect(state.rpcCalls[0]).toEqual({name:"staff_fnb_daily_summary",args:{p_branch_id:"branch",p_since:expect.any(String)}});
     expect(state.queries).toHaveLength(0);
   });
 

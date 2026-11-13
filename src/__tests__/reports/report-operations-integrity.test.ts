@@ -39,8 +39,14 @@ const chartContainer = readFileSync(
 
 describe("operations report integrity", () => {
   it("loads delivery staff names without a missing PostgREST relationship", () => {
-    expect(fnbAnalytics).toContain("[fnb.deliveryProfiles]");
+    const deliverySql = readFileSync(
+      "supabase/migrations/20261113020048_staff_fnb_report_detail.sql",
+      "utf8",
+    );
+    expect(fnbAnalytics).toContain("staff_fnb_delivery_summary");
     expect(fnbAnalytics).not.toContain("profiles!kitchen_orders_delivery_staff_id_fkey");
+    expect(deliverySql).toContain("p.id=s.delivery_staff_id and p.tenant_id=tenant");
+    expect(deliverySql).toContain("branches:=public._staff_fnb_detail_branches(p_branch_id)");
   });
 
   it("gives shared charts a stable initial size", () => {

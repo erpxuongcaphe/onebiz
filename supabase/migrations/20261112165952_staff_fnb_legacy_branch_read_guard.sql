@@ -21,11 +21,7 @@ begin
    if public._staff_permission_at_scope(actor,code,p_branch) then return true; end if;
   end loop;
  end if;
- if report_scope then
-  foreach code in array array['reports.analytics','reports.fnb','reports.dashboard'] loop
-   if public._staff_permission_at_scope(actor,code,p_branch) then return true; end if;
-  end loop;
- end if;
+ -- Reporting uses separately scoped aggregate/detail RPCs.
  return false;
 end $$;
 -- Resolve the permitted branch list once per statement, including for legacy

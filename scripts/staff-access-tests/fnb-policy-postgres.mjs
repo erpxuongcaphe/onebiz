@@ -50,6 +50,11 @@ statements.push(`
  do $$begin if (select count(*) from kitchen_orders)<>0 or (select count(*) from kitchen_order_items)<>0 then raise exception 'summary permission exposed order details'; end if; end$$;
  reset role;
  delete from role_permissions where permission_code='pos_fnb.view_sales_summary';
+ insert into role_permissions values ('${id(20)}','reports.fnb'),('${id(20)}','reports.analytics'),('${id(20)}','reports.dashboard');
+ set role authenticated;
+ do $$begin if (select count(*) from kitchen_orders)<>0 or (select count(*) from kitchen_order_items)<>0 then raise exception 'report permission exposed raw order details';end if;end$$;
+ reset role;
+ delete from role_permissions where permission_code in ('reports.fnb','reports.analytics','reports.dashboard');
  insert into staff_branch_permission_catalog values ('pos_fnb.view_orders',1);
  insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
   values('${id(1)}','${id(101)}','${id(10)}','pos_fnb.view_orders','grant','${id(100)}');
@@ -146,6 +151,8 @@ statements.push(`
   if x.table_name<>'Table A' or x.avg_minutes<>20 or x.orders<>1 then raise exception 'table turnover mismatch';end if;
   select * into x from public.staff_fnb_category_summary('${id(10)}');
   if x.category_name<>'Drinks' or x.revenue<>200 or x.orders<>1 or x.quantity<>2 then raise exception 'category summary mismatch';end if;
+  select * into x from public.staff_fnb_daily_summary('${id(10)}','2026-10-06 17:00Z');
+  if x.day_label<>'07/10/2026' or x.revenue<>250 or x.orders<>2 then raise exception 'daily revenue summary mismatch';end if;
   if public.staff_fnb_kpi_summary('${id(10)}','2025-01-01','2025-01-02')
    <> '{"totalRevenue":0,"returnAmount":0,"netRevenue":0,"totalOrders":0,"avgTicket":0,"avgTurnoverMinutes":0}'::jsonb
    then raise exception 'empty KPI period mismatch';end if;
@@ -205,6 +212,8 @@ statements.push(`
   begin perform public.staff_fnb_turnover_summary(null);raise exception 'unpermitted turnover report allowed';
   exception when insufficient_privilege then if sqlerrm<>'FNB_REPORT_PERMISSION_REQUIRED' then raise;end if;end;
   begin perform public.staff_fnb_category_summary(null);raise exception 'unpermitted category report allowed';
+  exception when insufficient_privilege then if sqlerrm<>'FNB_REPORT_PERMISSION_REQUIRED' then raise;end if;end;
+  begin perform public.staff_fnb_daily_summary(null,'2026-10-01');raise exception 'unpermitted daily report allowed';
   exception when insufficient_privilege then if sqlerrm<>'FNB_REPORT_PERMISSION_REQUIRED' then raise;end if;end;
  end$$;
  reset role;

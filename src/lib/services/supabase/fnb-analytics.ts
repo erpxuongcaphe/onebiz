@@ -6,13 +6,8 @@
 // Ngày chứng từ (migration 00335): bảng `invoices` dùng cột sinh tự động
 // `ngay_chung_tu` = coalesce(issued_at, created_at). Toàn bộ `kitchen_orders`
 // giữ `created_at` — đó là thời gian vận hành/giao dịch thật của đơn bếp.
-// Generated types chưa khai báo cột này → cast `InvoiceDocRow` tại chỗ đọc.
-
 import { getClient, getCurrentTenantId, handleError } from "./base";
-import { formatShortDate } from "@/lib/format";
 import { toCreatedAtRangeWindow } from "@/lib/utils/list-date-preset-range";
-
-type InvoiceDocRow = { ngay_chung_tu: string; total: number | null };
 
 const FNB_REPORT_PAGE_SIZE = 1000;
 
@@ -442,37 +437,19 @@ export async function getDailyRevenueFnb(
   days = 30,
 ): Promise<DailyRevenue[]> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
   const since = new Date();
   since.setDate(since.getDate() - days);
-
-  let query = supabase
-    .from("invoices")
-    .select("total, ngay_chung_tu")
-    .eq("tenant_id", tenantId)
-    .eq("source", "fnb")
-    .not("status", "eq", "cancelled")
-    .gte("ngay_chung_tu", since.toISOString());
-  if (branchId) query = query.eq("branch_id", branchId);
-
-  const rows = await fetchAllFnbRows(() => query.order("id", { ascending: true }), "[fnb.report]");
-
-  const map = new Map<string, { revenue: number; orders: number }>();
-  for (const row of (rows ?? []) as unknown as InvoiceDocRow[]) {
-    const date = formatShortDate(row.ngay_chung_tu);
-    const prev = map.get(date) ?? { revenue: 0, orders: 0 };
-    prev.revenue += Number(row.total ?? 0);
-    prev.orders += 1;
-    map.set(date, prev);
-  }
-
-  return Array.from(map.entries())
-    .map(([date, data]) => ({ date, ...data }))
-    .sort((a, b) => {
-      const [dA, mA, yA] = a.date.split("/").map(Number);
-      const [dB, mB, yB] = b.date.split("/").map(Number);
-      return new Date(yA, mA - 1, dA).getTime() - new Date(yB, mB - 1, dB).getTime();
-    });
+  const {data,error}=await (supabase.rpc as any)("staff_fnb_daily_summary",{
+    p_branch_id:branchId ?? null,p_since:since.toISOString(),
+  });
+  if(error) handleError(error,"[getDailyRevenueFnb]");
+  if(!Array.isArray(data)) throw new Error("Không tải được tổng hợp doanh thu theo ngày.");
+  return data.map((row:{day_label:string;revenue:number|string;orders:number|string})=>{
+    const revenue=Number(row.revenue),orders=Number(row.orders);
+    if(typeof row.day_label!=="string" || row.revenue==null || row.orders==null ||
+      !Number.isFinite(revenue) || !Number.isFinite(orders)) throw new Error("Dữ liệu doanh thu theo ngày chưa hợp lệ.");
+    return {date:row.day_label,revenue,orders};
+  });
 }
 
 /**

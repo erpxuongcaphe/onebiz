@@ -241,5 +241,22 @@ begin
 end $$;
 revoke all on function public.staff_fnb_category_summary(uuid) from public,anon;
 grant execute on function public.staff_fnb_category_summary(uuid) to authenticated;
+create function public.staff_fnb_daily_summary(p_branch_id uuid,p_since timestamptz)
+returns table(day_label text,revenue numeric,orders bigint)
+language plpgsql stable security definer set search_path='' as $$
+declare tenant uuid:=public.get_user_tenant_id();branches uuid[];
+begin
+ branches:=public._staff_fnb_report_branches(p_branch_id);
+ if p_since is null then raise exception 'FNB_REPORT_FILTER_INVALID' using errcode='22023';end if;
+ return query
+ select to_char((i.ngay_chung_tu at time zone 'Asia/Ho_Chi_Minh')::date,'DD/MM/YYYY'),
+  sum(coalesce(i.total,0))::numeric,count(*)::bigint
+ from public.invoices i where i.tenant_id=tenant and i.branch_id=any(branches)
+  and i.source='fnb' and i.status<>'cancelled' and i.ngay_chung_tu>=p_since
+ group by (i.ngay_chung_tu at time zone 'Asia/Ho_Chi_Minh')::date
+ order by (i.ngay_chung_tu at time zone 'Asia/Ho_Chi_Minh')::date;
+end $$;
+revoke all on function public.staff_fnb_daily_summary(uuid,timestamptz) from public,anon;
+grant execute on function public.staff_fnb_daily_summary(uuid,timestamptz) to authenticated;
 notify pgrst,'reload schema';
 commit;
