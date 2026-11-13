@@ -114,6 +114,12 @@ try {
   delete from user_branch_permission_overrides where permission_code='inventory.internal_export';
   delete from role_permissions where permission_code='pos_retail.checkout';
   delete from user_branch_permission_overrides where permission_code='orders.view';
+  insert into role_permissions values ('${id(20)}','orders.print'); set role authenticated;`);
+ assert.deepEqual(await ids('invoice_items_scoped'),[id(64)],'order print retains order lines without granting unrelated invoice lines');
+ await db.exec(`reset role; delete from role_permissions where permission_code='orders.print';
+  insert into role_permissions values ('${id(20)}','invoices.print'); set role authenticated;`);
+ assert.deepEqual(await ids('invoice_items_scoped'),[id(60),id(61),id(63),id(64)],'invoice print retains document lines in assigned branches');
+ await db.exec(`reset role; delete from role_permissions where permission_code='invoices.print';
   insert into role_permissions values ('${id(20)}','pos_fnb.view_sales_summary'); set role authenticated;`);
  assert.deepEqual(await ids('invoice_items_scoped'),[],'F&B sales summary alone does not authorize raw item lines even without overrides');
  await db.exec(`reset role; delete from role_permissions where permission_code='pos_fnb.view_sales_summary';

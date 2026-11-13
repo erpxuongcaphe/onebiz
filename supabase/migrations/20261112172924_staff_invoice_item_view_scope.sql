@@ -20,16 +20,20 @@ begin
  report_scope:=member or coalesce(public.user_has_permission(actor,'reports.view_all_branches'),false);
  if not report_scope then return false; end if;
  if member then
-  foreach code in array array['inventory.view','invoices.view'] loop
+  foreach code in array array['inventory.view','invoices.view','invoices.print','invoices.export'] loop
    if public._staff_permission_at_scope(actor,code,p_branch) then return true; end if;
   end loop;
-  if p_source='order' and public._staff_permission_at_scope(actor,'orders.view',p_branch) then return true; end if;
+  if p_source='order' then
+   foreach code in array array['orders.view','orders.print','orders.export'] loop
+    if public._staff_permission_at_scope(actor,code,p_branch) then return true; end if;
+   end loop;
+  end if;
   if p_source='fnb' then
    foreach code in array array['pos_fnb.view_orders','pos_fnb.checkout','pos_fnb.send_kitchen','pos_fnb.void_paid_bill'] loop
     if public._staff_permission_at_scope(actor,code,p_branch) then return true; end if;
    end loop;
   elsif p_source in ('pos','order') then
-   foreach code in array array['pos_retail.checkout','pos_retail.void','orders.create','orders.cancel'] loop
+   foreach code in array array['pos_retail.checkout','pos_retail.void','pos_retail.save_draft','orders.create','orders.cancel'] loop
     if public._staff_permission_at_scope(actor,code,p_branch) then return true; end if;
    end loop;
   elsif p_source='internal' then
