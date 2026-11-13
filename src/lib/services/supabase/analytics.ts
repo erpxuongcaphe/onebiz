@@ -2799,6 +2799,24 @@ export async function getFinanceKpis(
   return report.kpis;
 }
 
+async function getCashExpenseReportTotals(
+  supabase: ReturnType<typeof getClient>, range: { start: string; end: string }, branchId?: string,
+): Promise<Array<{ year: number; month: number; category: string; amount: number | string }>> {
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  const data = await fetchAllPostgrestRows<{ year: number; month: number; category: string; amount: number | string }>(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    () => (supabase as any).rpc("get_cash_expense_report_totals", {
+      p_from: range.start, p_to: range.end, p_timezone: timezone, p_branch: branchId ?? null,
+    }).order("year", { ascending: true }).order("month", { ascending: true }).order("category", { ascending: true }),
+    "[getCashExpenseReportTotals]",
+  );
+  if (data.some(row => !Number.isInteger(row.year) || !Number.isInteger(row.month) || row.month < 1 || row.month > 12 ||
+    typeof row.category !== "string" || row.amount == null || !Number.isFinite(Number(row.amount)))) {
+    throw new Error("Không xác định được số liệu chi theo tháng.");
+  }
+  return data;
+}
+
 export async function getRevenueVsExpense(
   months: number = 12,
   branchId?: string,
@@ -2818,10 +2836,7 @@ export async function getRevenueVsExpense(
       () => bq((supabase as any).from("invoices").select("ngay_chung_tu, total").eq("tenant_id", tenantId).eq("status", "completed").gte("ngay_chung_tu", range.start).lt("ngay_chung_tu", range.end)).order("ngay_chung_tu", { ascending: true }),
       "[getRevenueVsExpense.invoices]",
     ),
-    fetchAllPostgrestRows(
-      () => bq(supabase.from("cash_transactions").select("created_at, type, amount").eq("tenant_id", tenantId).gte("created_at", range.start).lt("created_at", range.end)).order("created_at", { ascending: true }),
-      "[getRevenueVsExpense.cashTransactions]",
-    ),
+    getCashExpenseReportTotals(supabase, range, branchId),
   ]);
 
   // P1-3B-R4: key kèm year để không merge T6/2025 và T6/2026.
@@ -2839,11 +2854,8 @@ export async function getRevenueVsExpense(
   });
 
   cashData.forEach(c => {
-    if (c.type === "payment") {
-      const d = new Date(c.created_at);
-      const key = `T${d.getMonth() + 1}/${d.getFullYear()}`;
-      if (expMap.has(key)) expMap.set(key, (expMap.get(key) ?? 0) + (c.amount ?? 0));
-    }
+    const key = `T${c.month}/${c.year}`;
+    if (expMap.has(key)) expMap.set(key, (expMap.get(key) ?? 0) + Number(c.amount));
   });
 
   return Array.from(revMap.keys()).map(month => ({
@@ -2858,23 +2870,13 @@ export async function getExpenseBreakdown(
   range?: { from: string; to: string },
 ): Promise<{ name: string; value: number }[]> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
   const r = resolveRange(range, thisMonthRange());
-
-  let query = supabase
-    .from("cash_transactions")
-    .select("category, amount")
-    .eq("tenant_id", tenantId)
-    .eq("type", "payment")
-    .gte("created_at", r.start)
-    .lt("created_at", r.end);
-  if (branchId) query = query.eq("branch_id", branchId);
-  const data = await fetchAllPostgrestRows(() => query.order("created_at", { ascending: true }), "[getExpenseBreakdown]");
+  const data = await getCashExpenseReportTotals(supabase, r, branchId);
 
   const map = new Map<string, number>();
   (data ?? []).forEach(c => {
-    const cat = (c.category as string) || "Khác";
-    map.set(cat, (map.get(cat) ?? 0) + (c.amount ?? 0));
+    const cat = c.category || "Khác";
+    map.set(cat, (map.get(cat) ?? 0) + Number(c.amount));
   });
 
   return Array.from(map.entries())

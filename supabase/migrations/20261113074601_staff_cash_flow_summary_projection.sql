@@ -76,4 +76,29 @@ begin
 end $$;
 revoke all on function public.get_cash_flow_created_month_totals(timestamptz,timestamptz,text,uuid) from public,anon;
 grant execute on function public.get_cash_flow_created_month_totals(timestamptz,timestamptz,text,uuid) to authenticated;
+
+-- Compatibility readers used these amounts without a status filter; preserve
+-- that accounting behavior while withholding individual cash transactions.
+create function public.get_cash_expense_report_totals(
+ p_from timestamptz,p_to timestamptz,p_timezone text,p_branch uuid default null
+) returns table(year integer,month integer,category text,amount numeric)
+language plpgsql stable security definer set search_path='' as $$
+declare v_tenant uuid;
+begin
+ if p_from is null or p_to is null or p_from>=p_to or p_timezone is null then
+  raise exception 'REPORT_DATE_RANGE_INVALID' using errcode='22023';
+ end if;
+ perform public.assert_report_access('reports.analytics',p_branch);
+ select p.tenant_id into v_tenant from public.profiles p
+  where p.id=auth.uid() and coalesce(p.is_active,true);
+ return query select extract(year from c.created_at at time zone p_timezone)::integer,
+  extract(month from c.created_at at time zone p_timezone)::integer,
+  coalesce(nullif(c.category,''),'Khác'),sum(coalesce(c.amount,0))::numeric
+ from public.cash_transactions c
+ where c.tenant_id=v_tenant and (p_branch is null or c.branch_id=p_branch)
+  and c.type='payment' and c.created_at>=p_from and c.created_at<p_to
+ group by 1,2,3 order by 1,2,3;
+end $$;
+revoke all on function public.get_cash_expense_report_totals(timestamptz,timestamptz,text,uuid) from public,anon;
+grant execute on function public.get_cash_expense_report_totals(timestamptz,timestamptz,text,uuid) to authenticated;
 commit;

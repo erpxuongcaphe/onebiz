@@ -37,7 +37,10 @@ try {
  assert.deepEqual(rows,[{year:2026,month:11,type:'payment',amount:'20'},{year:2026,month:11,type:'receipt',amount:'150'}]);
  rows=(await db.query(`select month from get_cash_flow_created_month_totals('2026-10-01','2026-12-01','UTC','${id(10)}') limit 1`)).rows;
  assert.equal(rows[0].month,10);
+ rows=(await db.query(`select category,amount::text from get_cash_expense_report_totals('2026-10-01','2026-12-01','Asia/Ho_Chi_Minh','${id(10)}') order by category`)).rows;
+ assert.deepEqual(rows,[{category:'Bỏ qua',amount:'999'},{category:'Khác',amount:'20'}]);
  await assert.rejects(db.query(`select * from get_cash_flow_created_month_totals('2026-10-01','2026-12-01','Asia/Ho_Chi_Minh','${id(12)}')`),/REPORT_BRANCH_DENIED/);
+ await assert.rejects(db.query(`select * from get_cash_expense_report_totals('2026-10-01','2026-12-01','UTC','${id(12)}')`),/REPORT_BRANCH_DENIED/);
  await assert.rejects(db.query(`select * from get_cash_flow_category_summary('2026-11-01','2026-11-30','${id(11)}')`),/REPORT_BRANCH_DENIED/);
  await assert.rejects(db.query(`select * from get_cash_flow_category_summary('2026-11-01','2026-11-30','${id(12)}')`),/REPORT_BRANCH_DENIED/);
  await assert.rejects(db.query(`select * from get_cash_flow_category_summary('2026-11-01','2026-11-30',null)`),/REPORT_ALL_BRANCHES_DENIED/);
@@ -55,6 +58,7 @@ try {
  values('${id(1)}','${id(101)}','${id(10)}','reports.analytics','revoke','${id(100)}');`);
  await assert.rejects(db.query(`select * from get_cash_flow_category_summary('2026-11-01','2026-11-30','${id(10)}')`),/REPORT_PERMISSION_DENIED/);
  await assert.rejects(db.query(`select * from get_cash_flow_created_month_totals('2026-10-01','2026-12-01','UTC','${id(10)}')`),/REPORT_PERMISSION_DENIED/);
+ await assert.rejects(db.query(`select * from get_cash_expense_report_totals('2026-10-01','2026-12-01','UTC','${id(10)}')`),/REPORT_PERMISSION_DENIED/);
  await db.exec(`insert into role_permissions values('${id(20)}','reports.view_all_branches');`);
  await assert.rejects(db.query(`select * from get_cash_flow_category_summary('2026-11-01','2026-11-30',null)`),/REPORT_PERMISSION_DENIED/);
  await db.exec(`update profiles set is_active=false where id='${id(101)}'`);
