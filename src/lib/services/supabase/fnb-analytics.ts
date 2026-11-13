@@ -249,68 +249,18 @@ export async function getFnbKpis(
   range?: { from: string; to: string },
 ): Promise<FnbKpis> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
   const rangeWindow = toCreatedAtRangeWindow(range);
-
-  let query = supabase
-    .from("invoices")
-    .select("id, total, ngay_chung_tu")
-    .eq("tenant_id", tenantId)
-    .eq("source", "fnb")
-    .not("status", "eq", "cancelled");
-
-  if (branchId) query = query.eq("branch_id", branchId);
-  if (rangeWindow) {
-    query = query.gte("ngay_chung_tu", rangeWindow.start).lt("ngay_chung_tu", rangeWindow.end);
+  const {data,error} = await (supabase.rpc as any)("staff_fnb_kpi_summary", {
+    p_branch_id: branchId ?? null, p_from: rangeWindow?.start ?? null, p_to: rangeWindow?.end ?? null,
+  });
+  if (error) handleError(error, "[getFnbKpis]");
+  if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("Không tải được tổng hợp F&B.");
+  const keys = ["totalRevenue","returnAmount","netRevenue","totalOrders","avgTicket","avgTurnoverMinutes"] as const;
+  const values = Object.fromEntries(keys.map(key => [key, Number(data[key])])) as unknown as FnbKpis;
+  if (keys.some(key => data[key] == null || !Number.isFinite(values[key]))) {
+    throw new Error("Dữ liệu tổng hợp F&B chưa hợp lệ. Vui lòng tải lại.");
   }
-
-  const invoices = await fetchAllFnbRows(() => query.order("id", { ascending: true }), "[getFnbKpis.invoices]");
-  const rows = (invoices ?? []) as unknown as InvoiceDocRow[];
-
-  const totalRevenue = rows.reduce((s, r) => s + Number(r.total ?? 0), 0);
-  const totalOrders = rows.length;
-  const avgTicket = totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0;
-
-  let returnQuery = supabase
-    .from("sales_returns")
-    .select("id, total, invoices!sales_returns_invoice_id_fkey!inner(source)")
-    .eq("tenant_id", tenantId)
-    .in("status", ["confirmed", "completed"])
-    .eq("invoices.source", "fnb");
-  if (branchId) returnQuery = returnQuery.eq("branch_id", branchId);
-  if (rangeWindow) {
-    returnQuery = returnQuery.gte("created_at", rangeWindow.start).lt("created_at", rangeWindow.end);
-  }
-  const returns = await fetchAllFnbRows(
-    () => returnQuery.order("id", { ascending: true }),
-    "[getFnbKpis.returns]",
-  );
-  const returnAmount = returns.reduce((sum, row) => sum + Number(row.total ?? 0), 0);
-  const netRevenue = totalRevenue - returnAmount;
-
-  // Avg turnover from kitchen_orders (time from created_at to status='completed')
-  let koQuery = supabase
-    .from("kitchen_orders")
-    .select("created_at, updated_at")
-    .eq("tenant_id", tenantId)
-    .eq("status", "completed")
-    .not("table_id", "is", null);
-  if (branchId) koQuery = koQuery.eq("branch_id", branchId);
-  if (rangeWindow) {
-    koQuery = koQuery.gte("created_at", rangeWindow.start).lt("created_at", rangeWindow.end);
-  }
-
-  const koRows = await fetchAllFnbRows(() => koQuery.order("id", { ascending: true }), "[fnb.kitchenOrders]");
-  let avgTurnoverMinutes = 0;
-  if (koRows && koRows.length > 0) {
-    const totalMinutes = koRows.reduce((sum, r) => {
-      const diff = new Date(r.updated_at).getTime() - new Date(r.created_at).getTime();
-      return sum + diff / 60000;
-    }, 0);
-    avgTurnoverMinutes = Math.round(totalMinutes / koRows.length);
-  }
-
-  return { totalRevenue, returnAmount, netRevenue, totalOrders, avgTicket, avgTurnoverMinutes };
+  return values;
 }
 
 /**

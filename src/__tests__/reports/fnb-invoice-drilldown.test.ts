@@ -13,6 +13,9 @@ vi.mock("@/lib/services/supabase/base", () => ({
   getClient: () => ({
     rpc: async (name: string, args: Record<string, unknown>) => {
       queryCalls.push(["rpc", [name, args]]);
+      if (name === "staff_fnb_kpi_summary") return {data:{
+        totalRevenue:153000,returnAmount:153000,netRevenue:0,totalOrders:4,avgTicket:38250,avgTurnoverMinutes:0,
+      },error:null};
       return {data:[{table_name:"Bàn 1",revenue:"120",orders:"1"}],error:null};
     },
     from: (table: "invoices" | "kitchen_orders" | "sales_returns") => {
@@ -101,10 +104,9 @@ describe("F&B report invoice drill-down", () => {
 
     const kpis = await getFnbKpis("branch-1", { from: "2026-09-22", to: "2026-09-22" });
     expect(kpis).toMatchObject({ totalRevenue: 153000, returnAmount: 153000, netRevenue: 0, totalOrders: 4 });
-    expect(queryCalls).toContainEqual(["eq", ["invoices.source", "fnb"]]);
-    expect(queryCalls).toContainEqual(["in", ["status", ["confirmed", "completed"]]]);
-    expect(queryCalls).toContainEqual(["gte", ["created_at", "2026-09-21T17:00:00.000Z"]]);
-    expect(queryCalls).toContainEqual(["lt", ["created_at", "2026-09-22T17:00:00.000Z"]]);
+    expect(queryCalls).toContainEqual(["rpc", ["staff_fnb_kpi_summary", {
+      p_branch_id:"branch-1",p_from:"2026-09-21T17:00:00.000Z",p_to:"2026-09-22T17:00:00.000Z",
+    }]]);
   });
 
   it("pages only F&B return documents and preserves the original invoice reference", async () => {

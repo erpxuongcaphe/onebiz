@@ -75,5 +75,36 @@ begin
 end $$;
 revoke all on function public.staff_fnb_table_summary(uuid,timestamptz,timestamptz) from public,anon;
 grant execute on function public.staff_fnb_table_summary(uuid,timestamptz,timestamptz) to authenticated;
+create function public.staff_fnb_kpi_summary(
+ p_branch_id uuid default null,p_from timestamptz default null,p_to timestamptz default null
+) returns jsonb language plpgsql stable security definer set search_path='' as $$
+declare tenant uuid:=public.get_user_tenant_id();branches uuid[];
+ gross numeric;return_total numeric;order_count bigint;turnover numeric;
+begin
+ branches:=public._staff_fnb_report_branches(p_branch_id);
+ if p_from is not null and p_to is not null and p_from>=p_to then
+  raise exception 'FNB_REPORT_FILTER_INVALID' using errcode='22023';end if;
+ select coalesce(sum(i.total),0),count(*) into gross,order_count
+ from public.invoices i where i.tenant_id=tenant and i.branch_id=any(branches)
+  and i.source='fnb' and i.status<>'cancelled'
+  and (p_from is null or i.ngay_chung_tu>=p_from)
+  and (p_to is null or i.ngay_chung_tu<p_to);
+ select coalesce(sum(r.total),0) into return_total from public.sales_returns r
+ join public.invoices i on i.id=r.invoice_id and i.tenant_id=tenant
+ where r.tenant_id=tenant and r.branch_id=any(branches) and i.source='fnb'
+  and r.status in ('confirmed','completed')
+  and (p_from is null or r.created_at>=p_from)
+  and (p_to is null or r.created_at<p_to);
+ select coalesce(floor(avg(extract(epoch from (date_trunc('milliseconds',k.updated_at)-date_trunc('milliseconds',k.created_at)))/60)+0.5),0) into turnover
+ from public.kitchen_orders k where k.tenant_id=tenant and k.branch_id=any(branches)
+  and k.status='completed' and k.table_id is not null
+  and (p_from is null or k.created_at>=p_from)
+  and (p_to is null or k.created_at<p_to);
+ return jsonb_build_object('totalRevenue',gross,'returnAmount',return_total,'netRevenue',gross-return_total,
+  'totalOrders',order_count,'avgTicket',case when order_count=0 then 0 else floor(gross/order_count+0.5) end,
+  'avgTurnoverMinutes',turnover);
+end $$;
+revoke all on function public.staff_fnb_kpi_summary(uuid,timestamptz,timestamptz) from public,anon;
+grant execute on function public.staff_fnb_kpi_summary(uuid,timestamptz,timestamptz) to authenticated;
 notify pgrst,'reload schema';
 commit;

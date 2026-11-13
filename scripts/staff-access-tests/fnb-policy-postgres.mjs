@@ -69,18 +69,27 @@ statements.push(`
 statements.push(`
  alter table kitchen_orders add column invoice_id uuid;
  alter table kitchen_orders add column table_id uuid;
+ alter table kitchen_orders add column status text,add column created_at timestamptz,add column updated_at timestamptz;
  alter table kitchen_order_items add column product_name text,add column quantity numeric,add column unit_price numeric;
  create table invoices(id uuid primary key,tenant_id uuid,branch_id uuid,source text,status text,ngay_chung_tu timestamptz,total numeric);
  create table restaurant_tables(id uuid primary key,name text);
+ create table sales_returns(id uuid primary key,tenant_id uuid,branch_id uuid,invoice_id uuid,status text,total numeric,created_at timestamptz);
  insert into restaurant_tables values ('${id(900)}','Table A'),('${id(901)}','Table B');
  create function public.can_read_branch_document_00567(t uuid,b uuid) returns boolean language sql stable security definer set search_path=public as $$select t=get_user_tenant_id() and (user_has_branch_access(auth.uid(),b) or user_has_permission(auth.uid(),'reports.view_all_branches'))$$;
  insert into invoices values
   ('${id(500)}','${id(1)}','${id(10)}','fnb','completed','2026-10-07 08:00Z',200),
   ('${id(501)}','${id(1)}','${id(11)}','fnb','completed','2026-10-07 08:00Z',300),
   ('${id(502)}','${id(2)}','${id(12)}','fnb','completed','2026-10-07 08:00Z',400),
-  ('${id(503)}','${id(1)}','${id(10)}','fnb','cancelled','2026-10-07 08:00Z',999);
+  ('${id(503)}','${id(1)}','${id(10)}','fnb','cancelled','2026-10-07 08:00Z',999),
+  ('${id(504)}','${id(1)}','${id(10)}','fnb','draft','2026-10-07 08:00Z',50);
+ insert into sales_returns values
+  ('${id(510)}','${id(1)}','${id(10)}','${id(500)}','confirmed',30,'2026-10-07 08:00Z'),
+  ('${id(511)}','${id(1)}','${id(11)}','${id(501)}','completed',60,'2026-10-07 08:00Z'),
+  ('${id(512)}','${id(1)}','${id(10)}','${id(500)}','draft',999,'2026-10-07 08:00Z');
  update kitchen_orders set invoice_id=case id when '${id(30)}' then '${id(500)}'::uuid when '${id(31)}' then '${id(501)}'::uuid else '${id(502)}'::uuid end;
  update kitchen_orders set table_id=case when id='${id(31)}' then '${id(901)}'::uuid else '${id(900)}'::uuid end;
+ update kitchen_orders set status='completed',created_at='2026-10-07 08:00Z',
+  updated_at=case when id='${id(31)}' then '2026-10-07 08:40Z'::timestamptz else '2026-10-07 08:20Z'::timestamptz end;
  insert into kitchen_orders(id,tenant_id,branch_id,invoice_id) values ('${id(33)}','${id(1)}','${id(10)}','${id(503)}');
  insert into kitchen_orders(id,tenant_id,branch_id,invoice_id,table_id) values ('${id(34)}','${id(1)}','${id(10)}','${id(500)}','${id(900)}');
  update kitchen_order_items set product_name='Coffee',quantity=2,unit_price=100 where id='${id(40)}';
@@ -98,10 +107,20 @@ statements.push(`
   if x.quantity<>2 or x.revenue<>200 then raise exception 'menu aggregate mismatch';end if;
   select * into x from public.staff_fnb_table_summary('${id(10)}','2026-10-06 17:00Z','2026-10-07 17:00Z');
   if x.table_name<>'Table A' or x.orders<>1 or x.revenue<>200 then raise exception 'table aggregate or deduplication mismatch';end if;
+  if public.staff_fnb_kpi_summary('${id(10)}','2026-10-06 17:00Z','2026-10-07 17:00Z')
+   <> '{"totalRevenue":250,"returnAmount":30,"netRevenue":220,"totalOrders":2,"avgTicket":125,"avgTurnoverMinutes":20}'::jsonb
+   then raise exception 'KPI gross, returns or turnover mismatch';end if;
+  if public.staff_fnb_kpi_summary('${id(10)}','2025-01-01','2025-01-02')
+   <> '{"totalRevenue":0,"returnAmount":0,"netRevenue":0,"totalOrders":0,"avgTicket":0,"avgTurnoverMinutes":0}'::jsonb
+   then raise exception 'empty KPI period mismatch';end if;
+  begin perform public.staff_fnb_kpi_summary('${id(10)}','2026-10-07','2026-10-06');raise exception 'invalid date range allowed';
+  exception when invalid_parameter_value then null;end;
   if (select count(*) from public.staff_fnb_menu_summary(null,null,null,15))<>1 then raise exception 'assigned branch aggregate missing';end if;
   begin perform public.staff_fnb_menu_summary('${id(11)}',null,null,15);raise exception 'unassigned branch allowed';
   exception when insufficient_privilege then if sqlerrm<>'BRANCH_ACCESS_DENIED' then raise;end if;end;
   begin perform public.staff_fnb_table_summary('${id(11)}',null,null);raise exception 'unassigned table branch allowed';
+  exception when insufficient_privilege then if sqlerrm<>'BRANCH_ACCESS_DENIED' then raise;end if;end;
+  begin perform public.staff_fnb_kpi_summary('${id(11)}',null,null);raise exception 'unassigned KPI branch allowed';
   exception when insufficient_privilege then if sqlerrm<>'BRANCH_ACCESS_DENIED' then raise;end if;end;
  end$$;
  reset role;
@@ -114,6 +133,8 @@ statements.push(`
   exception when insufficient_privilege then if sqlerrm<>'FNB_REPORT_PERMISSION_REQUIRED' then raise;end if;end;
   begin perform public.staff_fnb_table_summary('${id(10)}',null,null);raise exception 'table branch revoke ignored';
   exception when insufficient_privilege then if sqlerrm<>'FNB_REPORT_PERMISSION_REQUIRED' then raise;end if;end;
+  begin perform public.staff_fnb_kpi_summary('${id(10)}',null,null);raise exception 'KPI branch revoke ignored';
+  exception when insufficient_privilege then if sqlerrm<>'FNB_REPORT_PERMISSION_REQUIRED' then raise;end if;end;
  end$$;
  reset role;delete from user_branch_permission_overrides where permission_code='reports.fnb';
  insert into role_permissions values ('${id(20)}','reports.view_all_branches');set role authenticated;
@@ -121,12 +142,17 @@ statements.push(`
   select * into x from public.staff_fnb_menu_summary(null,null,null,15);
   if x.quantity<>3 or x.revenue<>500 then raise exception 'all-branch aggregate mismatch';end if;
   if (select sum(revenue) from public.staff_fnb_table_summary(null,null,null))<>500 then raise exception 'all-branch table aggregate mismatch';end if;
+  if public.staff_fnb_kpi_summary(null,null,null)
+   <> '{"totalRevenue":550,"returnAmount":90,"netRevenue":460,"totalOrders":3,"avgTicket":183,"avgTurnoverMinutes":30}'::jsonb
+   then raise exception 'all-branch KPI mismatch';end if;
  end$$;
  reset role;delete from role_permissions where permission_code in ('reports.fnb','reports.view_all_branches');set role authenticated;
  do $$begin
   begin perform public.staff_fnb_menu_summary(null,null,null,15);raise exception 'unpermitted report allowed';
   exception when insufficient_privilege then if sqlerrm<>'FNB_REPORT_PERMISSION_REQUIRED' then raise;end if;end;
   begin perform public.staff_fnb_table_summary(null,null,null);raise exception 'unpermitted table report allowed';
+  exception when insufficient_privilege then if sqlerrm<>'FNB_REPORT_PERMISSION_REQUIRED' then raise;end if;end;
+  begin perform public.staff_fnb_kpi_summary(null,null,null);raise exception 'unpermitted KPI report allowed';
   exception when insufficient_privilege then if sqlerrm<>'FNB_REPORT_PERMISSION_REQUIRED' then raise;end if;end;
  end$$;
  reset role;
