@@ -27,14 +27,27 @@ describe("sales dashboard permission and scope", () => {
     render(<Dashboard />);
     expect(await screen.findByTestId('net-sales')).toHaveTextContent('1,000');
     expect(screen.getByTestId('all-branch-sales')).toHaveTextContent('1,350');
-    expect(screen.getByText('Bán nội bộ được loại khỏi doanh số chuỗi')).toBeInTheDocument();
+    expect(screen.getByText('Doanh số không gồm nội bộ')).toBeInTheDocument();
+  });
+  it("loads each branch only when details are opened and shows its own sales", async () => {
+    state.branchId = undefined;
+    state.permissions.add("reports.view_all_branches"); state.permissions.add("reports.dashboard");
+    state.fetch.mockImplementation(async (branch: string | undefined) => branch
+      ? { ...sample, sales: branch === "b1" ? 150 : 250 }
+      : { ...sample, sales: 300, internal_net: 100 });
+    render(<Dashboard />);
+    await screen.findByTestId("all-branch-sales");
+    fireEvent.click(screen.getByRole("button", { name: "Doanh số từng chi nhánh" }));
+    expect(await screen.findByText("Quán A")).toBeInTheDocument();
+    expect(screen.getByText("150 đ")).toBeInTheDocument();
+    expect(screen.getByText("250 đ")).toBeInTheDocument();
   });
   it("shows current outstanding invoice debt separately from cash and old debt collections", async () => {
     state.permissions.add("customers.view_debt");
     render(<Dashboard />);
     expect(await screen.findByTestId("invoice-receivable")).toHaveTextContent("12,345");
     expect(receivable).toHaveBeenCalledWith("b1", "2026-10-20");
-    expect(screen.getByText("HĐ ngày này còn nợ")).toBeInTheDocument();
+    expect(screen.getByText("Chưa thanh toán")).toBeInTheDocument();
     expect(screen.getByText("Thực thu sau hoàn")).toBeInTheDocument();
   });
   it("does not fetch or show debt without permission", async () => {
