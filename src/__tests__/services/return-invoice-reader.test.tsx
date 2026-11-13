@@ -40,6 +40,17 @@ describe("return invoice line loading", () => {
     expect(screen.queryByText("Cà phê")).toBeNull();
   });
 
+  it("clears the selected invoice when its search text changes", async () => {
+    mocks.rpc.mockResolvedValue({ data: [{ id: "line-a", product_name: "Cà phê", quantity: 1 }], error: null });
+    render(<CreateReturnDialog open onOpenChange={vi.fn()} />);
+    const input = screen.getByPlaceholderText("Tìm hóa đơn theo mã");
+    fireEvent.change(input, { target: { value: "HD-A" } });
+    fireEvent.click(await screen.findByRole("button", { name: /HD-A/ }));
+    expect(await screen.findByText("Cà phê")).toBeTruthy();
+    fireEvent.change(input, { target: { value: "HD-B" } });
+    expect(screen.queryByText("Cà phê")).toBeNull();
+  });
+
   it("ignores the earlier invoice response after another invoice is selected", async () => {
     let finishFirst!: (value: unknown) => void;
     mocks.lookup.mockImplementation(async ({ search }: { search: string }) => ({ data: [{ id: search === "HD-B" ? "invoice-b" : "invoice-a", code: search, customerId: null, customerName: "Khách", debt: 0 }] }));

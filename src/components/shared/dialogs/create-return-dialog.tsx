@@ -397,6 +397,11 @@ export function CreateReturnDialog({
                   <Input
                     value={invoiceSearch}
                     onChange={(e) => {
+                      invoiceItemsRequest.current += 1;
+                      setSelectedInvoice(null);
+                      setInvoiceItems([]);
+                      setInvoiceItemsMessage(null);
+                      setInvoiceItemsLoading(false);
                       setInvoiceSearch(e.target.value);
                       setShowInvoiceDropdown(true);
                       setInvoiceLookupMessage(null);
