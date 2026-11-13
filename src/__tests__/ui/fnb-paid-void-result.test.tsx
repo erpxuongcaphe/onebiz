@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { FnbOrderHistoryDialog } from "@/app/pos/fnb/components/fnb-order-history-dialog";
 const mocks = vi.hoisted(() => ({ list: vi.fn(), voidInvoice: vi.fn(), verify: vi.fn(), toast: vi.fn() }));
-vi.mock("@/lib/contexts", () => ({ useToast: () => ({ toast: mocks.toast }), useAuth: () => ({hasPermission: () => false}) }));
+vi.mock("@/lib/contexts", () => ({ useToast: () => ({ toast: mocks.toast }), useAuth: () => ({hasPermission: () => false, hasPermissionAtBranch: () => false}) }));
 vi.mock("@/lib/hooks/use-live-data-refresh", () => ({ useLiveDataRefresh: () => {} }));
 vi.mock("@/lib/services/supabase/invoices", () => ({ getFnbRecentInvoices: mocks.list, getFnbInvoiceForReprint: vi.fn() }));
 vi.mock("@/lib/services/supabase/fnb-sales-history", () => ({todayFnb: () => "2026-10-20", getFnbDayHistory: mocks.list, getFnbDayCash: vi.fn(), getFnbHistoryItems: vi.fn().mockResolvedValue([])}));

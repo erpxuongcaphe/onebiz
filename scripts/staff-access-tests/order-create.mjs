@@ -116,6 +116,10 @@ export async function verifyOrderCreate(db, id) {
       "utf8",
     ),
   );
+  for (const name of ["_staff_order_owner_unrestricted", "_staff_order_independent_branches"]) {
+    await db.exec(await functionFromMigration("20261113004524_staff_own_order_scope.sql", name));
+  }
+  await db.exec(await readFile(new URL("../../supabase/migrations/20261113005650_staff_own_order_action_scope.sql", import.meta.url), "utf8"));
   const invoke =
     (sql, args = []) =>
     () =>
@@ -229,6 +233,16 @@ export async function verifyOrderCreate(db, id) {
       .rows[0].status,
     "draft",
   );
+  await db.exec(`delete from user_permission_overrides where permission_code='orders.create';
+    delete from user_branch_permission_overrides where permission_code='orders.create';
+    delete from role_permissions where permission_code in ('orders.create','pos_retail.checkout','invoices.view');
+    insert into role_permissions values ('${id(20)}','orders.create'),('${id(20)}','orders.view_own_only');
+    update invoices set created_by='${id(101)}' where id='${id(214)}';
+    update invoices set created_by='${id(100)}' where id='${id(215)}';`);
+  await assert.rejects(invoke("select close_sales_orders_processing($1,null,false)", [[id(214),id(215)]]), /STAFF_OWN_ORDER_ACTION_DENIED/);
+  assert.equal((await db.query("select close_sales_orders_processing($1,null,false) result", [[id(214)]])).rows[0].result.selected_count,1,'own order remains operable');
+  await db.exec(`insert into role_permissions values ('${id(20)}','pos_retail.checkout');`);
+  assert.equal((await db.query("select close_sales_orders_processing($1,null,false) result", [[id(215)]])).rows[0].result.selected_count,1,'independent checkout preserves actual order flow');
   console.log(
     "PASS order create: all entry guards, independent retail path, mixed-branch batch and local-only grant.",
   );
