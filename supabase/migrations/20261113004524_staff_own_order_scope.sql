@@ -33,7 +33,7 @@ grant execute on function public._staff_order_owner_unrestricted(),public._staff
 -- prepare a return for a non-F&B invoice without receiving a general-purpose
 -- grant to read all Retail invoice lines. Mirror the return writer's source,
 -- active profile and persisted-branch checks and retain the own-order limit.
-create function public.staff_returnable_invoice_items(p_invoice_id uuid)
+create or replace function public.staff_returnable_invoice_items(p_invoice_id uuid)
 returns table(id uuid,product_id uuid,product_name text,unit text,quantity numeric,
  unit_price numeric,total numeric,returned_qty numeric)
 language plpgsql stable security definer set search_path='' as $$
@@ -47,10 +47,10 @@ begin
   then raise exception 'RETURN_READ_DENIED' using errcode='42501'; end if;
  if doc.status<>'completed' or doc.status is null then raise exception 'INVOICE_NOT_COMPLETED' using errcode='22023'; end if;
  if doc.source='fnb' then
-  if not public._staff_permission_at_scope(actor,'pos_fnb.checkout',doc.branch_id)
+  if not coalesce(public._staff_permission_at_scope(actor,'pos_fnb.checkout',doc.branch_id),false)
    then raise exception 'RETURN_READ_DENIED' using errcode='42501'; end if;
- elsif not public._staff_permission_at_scope(actor,'pos_retail.checkout',doc.branch_id)
-   and not public._staff_permission_at_scope(actor,'pos_fnb.view_orders',doc.branch_id)
+ elsif not coalesce(public._staff_permission_at_scope(actor,'pos_retail.checkout',doc.branch_id),false)
+   and not coalesce(public._staff_permission_at_scope(actor,'pos_fnb.view_orders',doc.branch_id),false)
   then raise exception 'RETURN_READ_DENIED' using errcode='42501'; end if;
  if doc.source='order' and not public._staff_order_owner_unrestricted()
   and doc.created_by is distinct from actor

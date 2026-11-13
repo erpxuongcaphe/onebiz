@@ -34,6 +34,39 @@ sql.push(`
  insert into role_permissions values ('${id(20)}','orders.view'),('${id(20)}','orders.view_own_only'),('${id(20)}','orders.create');
  select set_config('request.jwt.claim.sub','${id(101)}',false);
 `);
+// The additive bridge is installed first while the original policies and
+// browser are still active. The final migration must replace it cleanly.
+sql.push(await readFile(new URL('../../supabase/rollout/staff-return-reader-bridge.sql',import.meta.url),'utf8'));
+sql.push(await readFile(new URL('../../supabase/rollout/staff-return-reader-bridge.sql',import.meta.url),'utf8'));
+sql.push(`
+ insert into role_permissions values ('${id(20)}','pos_fnb.view_orders');set role authenticated;
+ do $$begin
+  if has_function_privilege('anon','public.staff_returnable_invoice_items(uuid)','execute') then raise exception 'bridge exposed to anon';end if;
+  if (select count(*) from invoice_items_scoped)<>2 then raise exception 'bridge changed legacy view';end if;
+  if (select count(*) from public.staff_returnable_invoice_items('${id(50)}'))<>1 then raise exception 'bridge blocked own return';end if;
+  begin perform public.staff_returnable_invoice_items('${id(51)}');raise exception 'bridge exposed another order';
+  exception when insufficient_privilege then if sqlerrm<>'RETURN_READ_DENIED' then raise;end if;end;
+  begin perform public.staff_returnable_invoice_items('${id(52)}');raise exception 'bridge exposed foreign tenant';
+  exception when insufficient_privilege then if sqlerrm<>'RETURN_READ_DENIED' then raise;end if;end;
+ end$$;
+ reset role;delete from role_permissions where permission_code='pos_fnb.view_orders';
+ insert into invoices values ('${id(54)}','${id(1)}','${id(10)}','fnb','${id(100)}');
+ insert into invoice_items values ('${id(64)}','${id(54)}',1,0);
+ set role authenticated;
+ do $$begin
+  begin perform public.staff_returnable_invoice_items('${id(54)}');raise exception 'bridge allowed missing checkout';
+  exception when insufficient_privilege then if sqlerrm<>'RETURN_READ_DENIED' then raise;end if;end;
+ end$$;
+ reset role;insert into role_permissions values ('${id(20)}','pos_fnb.checkout');set role authenticated;
+ do $$begin if (select count(*) from public.staff_returnable_invoice_items('${id(54)}'))<>1 then raise exception 'bridge blocked F&B checkout return';end if;end$$;
+ reset role;update invoices set status='draft' where id='${id(54)}';set role authenticated;
+ do $$begin
+  begin perform public.staff_returnable_invoice_items('${id(54)}');raise exception 'bridge allowed draft';
+  exception when invalid_parameter_value then if sqlerrm<>'INVOICE_NOT_COMPLETED' then raise;end if;end;
+ end$$;
+ reset role;delete from role_permissions where permission_code='pos_fnb.checkout';
+ delete from invoice_items where id='${id(64)}';delete from invoices where id='${id(54)}';
+`);
 sql.push(await migration('20261112172924_staff_invoice_item_view_scope.sql'));
 sql.push(await migration('20261113004524_staff_own_order_scope.sql'));
 sql.push(`
