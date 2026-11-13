@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -88,6 +88,9 @@ export function CreateReturnDialog({
   const [invoiceLookupMessage, setInvoiceLookupMessage] = useState<string | null>(null);
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceResult | null>(null);
   const [invoiceItems, setInvoiceItems] = useState<InvoiceLineItem[]>([]);
+  const [invoiceItemsMessage, setInvoiceItemsMessage] = useState<string | null>(null);
+  const [invoiceItemsLoading, setInvoiceItemsLoading] = useState(false);
+  const invoiceItemsRequest = useRef(0);
   const [reason, setReason] = useState("");
   const [notes, setNotes] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -97,6 +100,16 @@ export function CreateReturnDialog({
   const [refundPaymentMethod, setRefundPaymentMethod] = useState<RefundPaymentMethod>("cash");
 
   useEffect(() => {
+    // Do not retain a previous branch's selected invoice or late response.
+    invoiceItemsRequest.current += 1;
+    setSelectedInvoice(null);
+    setInvoiceItems([]);
+    setInvoiceItemsMessage(null);
+    setInvoiceItemsLoading(false);
+  }, [activeBranchId]);
+
+  useEffect(() => {
+    invoiceItemsRequest.current += 1;
     if (!open) return;
 
     setCode("TH...");
@@ -106,6 +119,8 @@ export function CreateReturnDialog({
     setInvoiceLookupMessage(null);
     setSelectedInvoice(null);
     setInvoiceItems([]);
+    setInvoiceItemsMessage(null);
+    setInvoiceItemsLoading(false);
     setReason("");
     setNotes("");
     setErrors({});
@@ -164,13 +179,27 @@ export function CreateReturnDialog({
   }, [activeBranchId, invoiceSearch]);
 
   async function loadInvoiceItems(invoiceId: string) {
-    const supabase = getClient();
-    // BATCH 3R: select thêm returned_qty (cột mới 00144) để clamp chống trả vượt.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data } = await (supabase as any)
-      .from("invoice_items_scoped")
-      .select("id, product_id, product_name, unit, quantity, unit_price, total, returned_qty")
-      .eq("invoice_id", invoiceId);
+    const request = ++invoiceItemsRequest.current;
+    setInvoiceItems([]);
+    setInvoiceItemsMessage(null);
+    setInvoiceItemsLoading(true);
+    let data: unknown[] | null;
+    try {
+      const supabase = getClient();
+      // The server checks the selected invoice and the actual return capability.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (supabase as any).rpc("staff_returnable_invoice_items", { p_invoice_id: invoiceId });
+      if (result.error) throw result.error;
+      data = result.data;
+    } catch {
+      if (request !== invoiceItemsRequest.current) return;
+      setInvoiceItemsLoading(false);
+      setInvoiceItemsMessage("Không thể tải hàng để trả. Kiểm tra quyền tại chi nhánh và thử lại.");
+      return;
+    }
+    if (request !== invoiceItemsRequest.current) return;
+    setInvoiceItemsLoading(false);
+    if (!data?.length) setInvoiceItemsMessage("Hóa đơn không có dòng hàng để trả. Vui lòng kiểm tra lại hóa đơn.");
 
     setInvoiceItems(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -494,9 +523,9 @@ export function CreateReturnDialog({
                   <div className="flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
                     <Icon name="assignment_return" size={24} />
                   </div>
-                  <div className="mt-3 font-semibold">Chưa chọn hóa đơn</div>
+                  <div className="mt-3 font-semibold">{invoiceItemsLoading ? "Đang tải hàng" : selectedInvoice ? "Chưa tải được hàng" : "Chưa chọn hóa đơn"}</div>
                   <div className="mt-1 text-sm text-muted-foreground">
-                    Chọn hóa đơn đã hoàn thành để lấy danh sách hàng có thể trả.
+                    {invoiceItemsMessage ?? (selectedInvoice ? "Đang chuẩn bị danh sách hàng có thể trả." : "Chọn hóa đơn đã hoàn thành để lấy danh sách hàng có thể trả.")}
                   </div>
                 </div>
               ) : (

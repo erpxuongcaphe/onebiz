@@ -56,7 +56,12 @@ try {
  await db.exec('rollback');
  await db.exec('alter view invoice_items_scoped set (security_barrier=true)');
  await db.exec(migration);
+ await db.exec(`alter table invoices add column status text default 'completed';
+  alter table invoice_items add column if not exists product_id uuid,add column if not exists product_name text,
+   add column if not exists unit text,add column if not exists unit_price numeric,add column if not exists total numeric,
+   add column if not exists returned_qty numeric;`);
  await db.exec(await sql('20261113004524_staff_own_order_scope.sql'));
+ assert.equal((await db.query("select has_function_privilege('anon','public.staff_returnable_invoice_items(uuid)','execute') allowed")).rows[0].allowed,false,'anonymous callers cannot execute return reader');
  assert.equal((await db.query("select reloptions @> array['security_barrier=true'] kept from pg_class where oid='public.invoice_items_scoped'::regclass")).rows[0].kept,true,'security barrier is preserved');
  assert.equal((await db.query("select has_table_privilege('authenticated','public.invoice_items_scoped','select') allowed")).rows[0].allowed,true,'view grant is preserved');
  await db.exec('set role authenticated');
@@ -120,6 +125,23 @@ try {
   insert into role_permissions values ('${id(20)}','invoices.print'); set role authenticated;`);
  assert.deepEqual(await ids('invoice_items_scoped'),[id(60),id(61),id(63),id(64)],'invoice print retains document lines in assigned branches');
  await db.exec(`reset role; delete from role_permissions where permission_code='invoices.print';
+  insert into role_permissions values ('${id(20)}','pos_fnb.view_orders'); set role authenticated;`);
+ assert.deepEqual((await db.query(`select id from staff_returnable_invoice_items('${id(53)}')`)).rows.map(x=>x.id),[id(63)],'F&B worker can prepare permitted Retail return without broad Retail line access');
+ assert.equal((await ids('invoice_items_scoped')).includes(id(63)),false,'return capability does not grant general Retail line reads');
+ await assert.rejects(db.query(`select * from staff_returnable_invoice_items('${id(50)}')`),/RETURN_READ_DENIED/,'F&B return requires checkout permission');
+ await assert.rejects(db.query(`select * from staff_returnable_invoice_items('${id(52)}')`),/RETURN_READ_DENIED/,'foreign tenant invoice cannot be read');
+ await db.exec(`reset role; insert into staff_branch_permission_catalog values ('pos_fnb.view_orders',1);
+  insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+   values ('${id(1)}','${id(101)}','${id(10)}','pos_fnb.view_orders','revoke','${id(100)}'); set role authenticated;`);
+ await assert.rejects(db.query(`select * from staff_returnable_invoice_items('${id(53)}')`),/RETURN_READ_DENIED/,'branch revoke blocks the return reader');
+ await db.exec(`reset role; insert into role_permissions values ('${id(20)}','pos_fnb.checkout'); set role authenticated;`);
+ assert.deepEqual((await db.query(`select id from staff_returnable_invoice_items('${id(50)}')`)).rows.map(x=>x.id),[id(60)],'F&B checkout permits F&B return preparation');
+ await db.exec(`reset role; update invoices set status='draft' where id='${id(50)}'; set role authenticated;`);
+ await assert.rejects(db.query(`select * from staff_returnable_invoice_items('${id(50)}')`),/INVOICE_NOT_COMPLETED/,'unfinished invoice cannot be returned');
+ await db.exec(`reset role; update invoices set status='completed' where id='${id(50)}';
+  delete from role_permissions where permission_code='pos_fnb.checkout';
+  delete from user_branch_permission_overrides where permission_code='pos_fnb.view_orders';
+  delete from role_permissions where permission_code='pos_fnb.view_orders';
   insert into role_permissions values ('${id(20)}','pos_fnb.view_sales_summary'); set role authenticated;`);
  assert.deepEqual(await ids('invoice_items_scoped'),[],'F&B sales summary alone does not authorize raw item lines even without overrides');
  await db.exec(`reset role; delete from role_permissions where permission_code='pos_fnb.view_sales_summary';
@@ -141,6 +163,10 @@ try {
  const orderIds=async()=>(await db.query("select id from invoices where source='order' order by id")).rows.map(x=>x.id);
  assert.deepEqual(await orderIds(),[id(55)],'own-only order viewer cannot read another person’s order header');
  assert.deepEqual((await ids('invoice_items_scoped')).filter(x=>[id(64),id(65)].includes(x)),[id(65)],'owner-backed item view honors the same order constraint');
+ await db.exec(`reset role; insert into role_permissions values ('${id(20)}','pos_fnb.view_orders'); set role authenticated;`);
+ await assert.rejects(db.query(`select * from staff_returnable_invoice_items('${id(54)}')`),/RETURN_READ_DENIED/,'return reader preserves own-order scope');
+ assert.deepEqual((await db.query(`select id from staff_returnable_invoice_items('${id(55)}')`)).rows.map(x=>x.id),[id(65)],'return reader permits owned order');
+ await db.exec(`reset role; delete from role_permissions where permission_code='pos_fnb.view_orders'; set role authenticated;`);
  await db.exec(`reset role; insert into role_permissions values ('${id(20)}','orders.create'),('${id(20)}','orders.cancel'); set role authenticated;`);
  assert.deepEqual(await orderIds(),[id(55)],'creating or cancelling orders does not by itself bypass own-only viewing');
  await db.exec(`reset role; insert into role_permissions values ('${id(20)}','invoices.view'); set role authenticated;`);
@@ -160,5 +186,6 @@ try {
  assert.deepEqual(await orderIds(),[id(54),id(55)],'owner remains unrestricted even though owner has all permission codes');
  await db.exec(`reset role; select set_config('request.jwt.claim.sub','${id(101)}',false); update profiles set is_active=false where id='${id(101)}'; set role authenticated;`);
  assert.deepEqual(await ids('invoice_items_scoped'),[],'inactive account cannot use owner-backed view');
+ await assert.rejects(db.query(`select * from staff_returnable_invoice_items('${id(50)}')`),/RETURN_READ_DENIED/,'inactive account cannot read return items');
  console.log('PASS invoice line raw/view scope, independent checkout and inactive account');
 } catch(e) {console.error(e.message,e.where??'');process.exitCode=1;} finally {await db.close();}

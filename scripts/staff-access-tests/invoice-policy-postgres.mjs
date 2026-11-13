@@ -12,8 +12,8 @@ sql.push(await migration('20261111052704_staff_branch_access.sql'));
 sql.push(await functionFromMigration('20261111070229_staff_branch_checkout_permissions.sql','_staff_permission_at_scope'));
 sql.push(await functionFromMigration('20261111095224_staff_branch_kitchen_permissions.sql','_staff_permission_any_branch'));
 sql.push(`
- create table invoices(id uuid,tenant_id uuid,branch_id uuid,source text,created_by uuid);
- create table invoice_items(id uuid,invoice_id uuid,quantity numeric,unit_cost numeric);
+ create table invoices(id uuid,tenant_id uuid,branch_id uuid,source text,created_by uuid,status text default 'completed');
+ create table invoice_items(id uuid,invoice_id uuid,quantity numeric,unit_cost numeric,product_id uuid,product_name text,unit text,unit_price numeric,total numeric,returned_qty numeric);
  insert into invoices values ('${id(50)}','${id(1)}','${id(10)}','order','${id(101)}'),('${id(51)}','${id(1)}','${id(11)}','order','${id(100)}'),('${id(52)}','${id(2)}','${id(12)}','order','${id(102)}');
  insert into invoice_items values ('${id(60)}','${id(50)}',2,100),('${id(61)}','${id(51)}',3,200),('${id(62)}','${id(52)}',4,300);
  alter function public.get_user_tenant_id() security definer;
@@ -42,6 +42,15 @@ sql.push(`
   if (select count(*) from invoices)<>1 or (select count(*) from invoice_items_scoped)<>1 or
      (select count(*) from invoice_items)<>1 then raise exception 'own-order scope failed'; end if;
  end$$;
+ reset role;insert into role_permissions values ('${id(20)}','pos_fnb.view_orders');set role authenticated;
+ do $$begin
+  if (select count(*) from public.staff_returnable_invoice_items('${id(50)}'))<>1 then raise exception 'own return blocked';end if;
+  begin perform public.staff_returnable_invoice_items('${id(51)}');raise exception 'other owner return allowed';
+  exception when insufficient_privilege then if sqlerrm<>'RETURN_READ_DENIED' then raise;end if;end;
+  begin perform public.staff_returnable_invoice_items('${id(52)}');raise exception 'foreign tenant return allowed';
+  exception when insufficient_privilege then if sqlerrm<>'RETURN_READ_DENIED' then raise;end if;end;
+ end$$;
+ reset role;delete from role_permissions where permission_code='pos_fnb.view_orders';set role authenticated;
  reset role;insert into role_permissions values ('${id(20)}','invoices.view');set role authenticated;
  do $$begin if (select count(*) from invoices)<>2 or (select count(*) from invoice_items_scoped)<>2 then raise exception 'independent invoice right was lost';end if;end$$;
  reset role;insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type,created_by)
