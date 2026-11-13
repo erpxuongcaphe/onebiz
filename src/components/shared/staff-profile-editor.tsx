@@ -772,6 +772,11 @@ export function StaffProfileEditor({
                                     nhánh đó. Hãy kiểm tra cả hai quyền báo cáo.
                                   </p>
                                 )}
+                                {p.code === "finance.view_reports" && (
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    Quyền báo cáo tài chính cũ có thể cho xem công nợ đầu kỳ chưa gắn chi nhánh khi đi cùng quyền xem toàn công ty. Các báo cáo quản trị vẫn cần quyền báo cáo tương ứng.
+                                  </p>
+                                )}
                                 {branchId && p.code === "finance.view_cash_journal_self_spend" && (
                                   <p className="mt-1 text-xs text-muted-foreground">
                                     Quyền này áp dụng cho khoản chi tự chi và các thao tác đối soát quỹ cần số liệu của quán được chọn. Để mở Nhật ký thu chi, nhân viên chọn chi nhánh đã được cấp. Quyền xem nhật ký toàn công ty là quyền độc lập và vẫn cho xem theo phạm vi của quyền đó.
@@ -795,6 +800,11 @@ export function StaffProfileEditor({
                                 {p.code === "products.manage_prices" && (
                                   <p className="mt-1 text-xs text-amber-800">
                                     Quyền này có thể sửa bảng giá và chương trình khuyến mãi dùng chung. Hiện chưa thể giới hạn riêng cho từng chi nhánh.
+                                  </p>
+                                )}
+                                {["customers.import", "suppliers.import"].includes(p.code) && (
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    Quyền nhập Excel này cũng cho khai báo và xem công nợ đầu kỳ tương ứng tại các chi nhánh được truy cập.
                                   </p>
                                 )}
                                 {p.code === "pos_fnb.void" && (
