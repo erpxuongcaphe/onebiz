@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const state = vi.hoisted(() => ({ queries: [] as Array<{ table: string; filters: Array<[string, string, unknown]>; select: string }> }));
+const state = vi.hoisted(() => ({ queries: [] as Array<{ table: string; filters: Array<[string, string, unknown]>; select: string }>, rpcCalls: [] as Array<{name: string; args: Record<string, unknown>}>, rpcData: [{product_name:"Coffee",quantity:"2",revenue:"112000"}] as unknown }));
 const orders = [
   { id: "served", invoice_id: "invoice-served", status: "served", branch_id: "branch", tenant_id: "tenant", order_type: "delivery", delivery_platform: "Grab", table_id: "table", restaurant_tables: { name: "Table 1" }, invoices: { total: 65000, status: "completed", source: "fnb", ngay_chung_tu: "2026-10-07T08:00:00Z" } },
   { id: "done", invoice_id: "invoice-done", status: "completed", branch_id: "branch", tenant_id: "tenant", order_type: "delivery", delivery_platform: "Grab", table_id: "table", restaurant_tables: { name: "Table 1" }, invoices: { total: 47000, status: "completed", source: "fnb", ngay_chung_tu: "2026-10-07T08:00:00Z" } },
@@ -22,7 +22,10 @@ const itemRows = kitchenRows.map((row) => ({
 vi.mock("@/lib/services/supabase/base", () => ({
   getCurrentTenantId: async () => "tenant",
   handleError: (error: Error) => { throw error; },
-  getClient: () => ({ from: (table: string) => {
+  getClient: () => ({ rpc: async (name: string, args: Record<string, unknown>) => {
+    state.rpcCalls.push({name,args});
+    return {data:state.rpcData,error:null};
+  }, from: (table: string) => {
     const query = { table, filters: [] as Array<[string, string, unknown]>, select: "" };
     state.queries.push(query);
     const value = (row: Record<string, unknown>, key: string): unknown => key.split(".").reduce<unknown>((current, part) => (current as Record<string, unknown>)?.[part], row);
@@ -49,11 +52,10 @@ vi.mock("@/lib/services/supabase/base", () => ({
 
 import { getModifierStats, getRevenueByCategory, getRevenueByMenuItem, getRevenueByOrderType, getRevenueByPlatform, getRevenueByTable } from "@/lib/services/supabase/fnb-analytics";
 
-beforeEach(() => { state.queries.length = 0; });
+beforeEach(() => { state.queries.length = 0; state.rpcCalls.length = 0; state.rpcData = [{product_name:"Coffee",quantity:"2",revenue:"112000"}]; });
 
 describe("F&B revenue uses completed invoices independently of kitchen status", () => {
   it.each([
-    ["menu", () => getRevenueByMenuItem("branch")],
     ["table", () => getRevenueByTable("branch")],
     ["order type", () => getRevenueByOrderType("branch")],
     ["platform", () => getRevenueByPlatform("branch")],
@@ -67,6 +69,22 @@ describe("F&B revenue uses completed invoices independently of kitchen status", 
     expect(query.filters).not.toContainEqual(["eq", "status", "completed"]);
   });
 
+  it("reads menu aggregates without exposing individual orders", async () => {
+    expect(await getRevenueByMenuItem("branch")).toEqual([{productName:"Coffee",quantity:2,revenue:112000}]);
+    expect(state.rpcCalls).toEqual([{name:"staff_fnb_menu_summary",args:{p_branch_id:"branch",p_from:null,p_to:null,p_limit:15}}]);
+    expect(state.queries).toHaveLength(0);
+  });
+
+  it("sends the selected invoice business-day window to the menu aggregate", async () => {
+    await getRevenueByMenuItem("branch",15,{from:"2026-10-07",to:"2026-10-07"});
+    expect(state.rpcCalls[0].args).toMatchObject({p_branch_id:"branch",p_from:"2026-10-06T17:00:00.000Z",p_to:"2026-10-07T17:00:00.000Z"});
+  });
+
+  it("does not show an invalid aggregate as a valid report", async () => {
+    state.rpcData = [{product_name:"Coffee",quantity:null,revenue:"not-a-number"}];
+    await expect(getRevenueByMenuItem("branch")).rejects.toThrow("Dữ liệu tổng hợp món F&B chưa hợp lệ");
+  });
+
   it("includes paid served modifier selections", async () => {
     const rows = await getModifierStats("branch");
     expect(rows).toHaveLength(1);
@@ -74,7 +92,6 @@ describe("F&B revenue uses completed invoices independently of kitchen status", 
   });
 
   it.each([
-    ["menu", () => getRevenueByMenuItem("branch", 15, { from: "2026-10-07", to: "2026-10-07" })],
     ["table", () => getRevenueByTable("branch", { from: "2026-10-07", to: "2026-10-07" })],
     ["modifiers", () => getModifierStats("branch", { from: "2026-10-07", to: "2026-10-07" })],
   ] as const)("filters %s by invoice business date rather than kitchen creation date", async (_name, read) => {

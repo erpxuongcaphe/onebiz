@@ -47,6 +47,7 @@ const RPC = new Set(schema.rpc as string[]);
  * dưới sẽ BẮT XOÁ dòng ngay khi dump đã có (sau `node scripts/dump-db-schema.mjs`).
  */
 const RPC_CHO_MIGRATION = new Map<string, string>([
+  ["staff_fnb_menu_summary", "20261113014411_staff_fnb_menu_summary.sql"],
   ["get_purchase_forecast_order_headers", "20261112175958_staff_purchase_forecast_scoped_orders.sql"],
   ["get_purchase_forecast_remaining_lines", "20261112174832_staff_purchase_forecast_scoped_lines.sql"],
   ["get_stock_work_document_list", "20261112162406_staff_stock_work_documents_safe_projection.sql"],
