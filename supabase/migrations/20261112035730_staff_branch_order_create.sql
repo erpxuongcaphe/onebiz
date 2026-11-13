@@ -27,7 +27,7 @@ begin
      anchor:='if v_source.source=''internal'' and v_source.source_order_id is not null then';
      if position(anchor in patched)=0 then raise exception 'STAFF_ORDER_DUPLICATE_SOURCE_CHANGED';end if;
      patched:=replace(patched,anchor,
-       'if exists(select 1 from public.user_branch_permission_overrides o where o.user_id=v_actor and o.permission_code=''orders.create'') and not coalesce(public.can_read_branch_document_00567(v_tenant_id,v_source.branch_id),false) then raise exception ''SOURCE_INVOICE_BRANCH_DENIED'' using errcode=''42501''; end if; '||anchor);
+       'if not coalesce(public.can_read_branch_document_00567(v_tenant_id,v_source.branch_id),false) then raise exception ''SOURCE_INVOICE_BRANCH_DENIED'' using errcode=''42501''; end if; '||anchor);
    end if;
    execute patched;
  end loop;

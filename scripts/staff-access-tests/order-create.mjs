@@ -124,6 +124,11 @@ export async function verifyOrderCreate(db, id) {
     (sql, args = []) =>
     () =>
       db.query(sql, args);
+  // Source documents are branch-protected even when no exception is configured.
+  await assert.rejects(
+    invoke("select duplicate_invoice_to_order_atomic($1,$2)", [id(216), id(11)]),
+    /SOURCE_INVOICE_BRANCH_DENIED/,
+  );
   await db.exec(`insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
     ('${id(1)}','${id(101)}','${id(10)}','orders.create','revoke','${id(100)}');`);
   for (const [sql, args] of [
