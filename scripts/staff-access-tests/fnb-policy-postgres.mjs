@@ -157,6 +157,45 @@ statements.push(`
  end$$;
  reset role;
 `);
+statements.push(`
+ alter table invoices add column code text,add column customer_name text,add column paid numeric,add column debt numeric,add column payment_method text;
+ alter table sales_returns add column code text,add column refunded numeric;
+ update invoices set code='I-'||right(id::text,3),customer_name='Customer',paid=total,debt=0,payment_method='cash';
+ update sales_returns set code='R-'||right(id::text,3),refunded=total;
+ insert into role_permissions values ('${id(20)}','reports.fnb');
+`);
+statements.push(await readFile(new URL('../../supabase/migrations/20261113020048_staff_fnb_report_detail.sql',import.meta.url),'utf8'));
+statements.push(`
+ set role authenticated;
+ do $$begin
+  begin perform public.staff_fnb_invoice_detail_page('${id(10)}',null,null,0,2);raise exception 'summary access exposed invoice detail';
+  exception when insufficient_privilege then if sqlerrm<>'FNB_REPORT_DETAIL_PERMISSION_REQUIRED' then raise;end if;end;
+  begin perform public.staff_fnb_return_detail_page('${id(10)}',null,null,0,2);raise exception 'summary access exposed return detail';
+  exception when insufficient_privilege then if sqlerrm<>'FNB_REPORT_DETAIL_PERMISSION_REQUIRED' then raise;end if;end;
+ end$$;
+ reset role;insert into role_permissions values ('${id(20)}','reports.view_detail');set role authenticated;
+ do $$begin
+  if (select count(*) from public.staff_fnb_invoice_detail_page('${id(10)}',null,null,0,2))<>2 then raise exception 'invoice detail page mismatch';end if;
+  if (select count(*) from public.staff_fnb_invoice_detail_page('${id(10)}',null,null,1,2))<>1 then raise exception 'invoice detail offset mismatch';end if;
+  if (select count(*) from public.staff_fnb_return_detail_page('${id(10)}',null,null,0,2))<>1 then raise exception 'return detail page mismatch';end if;
+  begin perform public.staff_fnb_invoice_detail_page('${id(11)}',null,null,0,2);raise exception 'unassigned invoice branch allowed';
+  exception when insufficient_privilege then if sqlerrm<>'BRANCH_ACCESS_DENIED' then raise;end if;end;
+ end$$;
+ reset role;insert into role_permissions values ('${id(20)}','reports.view_all_branches');set role authenticated;
+ do $$begin
+  if (select count(*) from public.staff_fnb_invoice_detail_page(null,null,null,0,20))<>3 then raise exception 'all-branch invoice detail mismatch';end if;
+  if (select count(*) from public.staff_fnb_return_detail_page(null,null,null,0,20))<>2 then raise exception 'all-branch return detail mismatch';end if;
+ end$$;
+ reset role;insert into staff_branch_permission_catalog values('reports.view_detail',1);
+ insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+  values ('${id(1)}','${id(101)}','${id(10)}','reports.view_detail','revoke','${id(100)}');
+ set role authenticated;
+ do $$begin
+  begin perform public.staff_fnb_return_detail_page('${id(10)}',null,null,0,2);raise exception 'detail branch revoke ignored';
+  exception when insufficient_privilege then if sqlerrm<>'FNB_REPORT_DETAIL_PERMISSION_REQUIRED' then raise;end if;end;
+ end$$;
+ reset role;
+`);
 if (process.env.ONEBIZ_PGLITE_MODULE) {
  const {PGlite}=await import(pathToFileURL(process.env.ONEBIZ_PGLITE_MODULE).href);
  const db=new PGlite();

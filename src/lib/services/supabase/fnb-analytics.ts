@@ -123,40 +123,30 @@ export async function getFnbReturnDetailPage(
   limit = 50,
 ): Promise<FnbReturnDetailPage> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
   const rangeWindow = toCreatedAtRangeWindow(range);
   const pageSize = Math.min(Math.max(1, limit), 500);
   const start = Math.max(0, offset);
-  let query = supabase
-    .from("sales_returns")
-    .select("id, code, created_at, total, refunded, invoices!sales_returns_invoice_id_fkey!inner(code, source)")
-    .eq("tenant_id", tenantId)
-    .in("status", ["confirmed", "completed"])
-    .eq("invoices.source", "fnb");
-  if (branchId) query = query.eq("branch_id", branchId);
-  if (rangeWindow) {
-    query = query.gte("created_at", rangeWindow.start).lt("created_at", rangeWindow.end);
-  }
-  const { data, error } = await query
-    .order("created_at", { ascending: false })
-    .order("id", { ascending: false })
-    .range(start, start + pageSize);
+  const { data, error } = await (supabase.rpc as any)("staff_fnb_return_detail_page", {
+    p_branch_id:branchId ?? null,p_from:rangeWindow?.start ?? null,p_to:rangeWindow?.end ?? null,
+    p_offset:start,p_limit:pageSize+1,
+  });
   if (error) {
     handleError(error, "[getFnbReturnDetailPage]");
     return { rows: [], hasMore: false };
   }
-  const page = data ?? [];
+  if (!Array.isArray(data)) throw new Error("Không tải được chi tiết phiếu hoàn F&B.");
+  const page = data;
   return {
     rows: page.slice(0, pageSize).map((raw) => {
-      const row = raw as unknown as {
+      const row = raw as {
         id: string; code: string; created_at: string; total: number; refunded: number;
-        invoices: { code: string } | null;
+        invoice_code: string | null;
       };
       return {
       id: row.id,
       code: row.code,
       createdAt: row.created_at,
-      invoiceCode: row.invoices?.code ?? "",
+      invoiceCode: row.invoice_code ?? "",
       total: Number(row.total ?? 0),
       refunded: Number(row.refunded ?? 0),
       };
@@ -185,33 +175,22 @@ export async function getFnbInvoiceDetailPage(
   limit = 50,
 ): Promise<FnbInvoiceDetailPage> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
   const rangeWindow = toCreatedAtRangeWindow(range);
   const pageSize = Math.min(Math.max(1, limit), 500);
   const start = Math.max(0, offset);
 
-  let query = supabase
-    .from("invoices")
-    .select("id, code, ngay_chung_tu, customer_name, status, total, paid, debt, payment_method")
-    .eq("tenant_id", tenantId)
-    .eq("source", "fnb")
-    .not("status", "eq", "cancelled");
-  if (branchId) query = query.eq("branch_id", branchId);
-  if (rangeWindow) {
-    query = query.gte("ngay_chung_tu", rangeWindow.start).lt("ngay_chung_tu", rangeWindow.end);
-  }
-
-  const { data, error } = await query
-    .order("ngay_chung_tu", { ascending: false })
-    .order("id", { ascending: false })
-    .range(start, start + pageSize);
+  const {data,error} = await (supabase.rpc as any)("staff_fnb_invoice_detail_page", {
+    p_branch_id:branchId ?? null,p_from:rangeWindow?.start ?? null,p_to:rangeWindow?.end ?? null,
+    p_offset:start,p_limit:pageSize+1,
+  });
   if (error) {
     handleError(error, "[getFnbInvoiceDetailPage]");
     return { rows: [], hasMore: false };
   }
-  const page = data ?? [];
+  if (!Array.isArray(data)) throw new Error("Không tải được chi tiết hóa đơn F&B.");
+  const page = data;
   return {
-    rows: page.slice(0, pageSize).map((invoice) => ({
+    rows: page.slice(0, pageSize).map((invoice: {id:string;code:string;ngay_chung_tu:string;customer_name:string;status:string;total:number;paid:number;debt:number;payment_method:string}) => ({
       id: invoice.id,
       code: invoice.code,
       issuedAt: invoice.ngay_chung_tu,

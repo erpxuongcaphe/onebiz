@@ -16,6 +16,14 @@ vi.mock("@/lib/services/supabase/base", () => ({
       if (name === "staff_fnb_kpi_summary") return {data:{
         totalRevenue:153000,returnAmount:153000,netRevenue:0,totalOrders:4,avgTicket:38250,avgTurnoverMinutes:0,
       },error:null};
+      if (name === "staff_fnb_invoice_detail_page") return {
+        data:rowsByTable.invoices.slice(Number(args.p_offset),Number(args.p_offset)+Number(args.p_limit)),error:null,
+      };
+      if (name === "staff_fnb_return_detail_page") return {
+        data:rowsByTable.sales_returns.slice(Number(args.p_offset),Number(args.p_offset)+Number(args.p_limit)).map(row => ({
+          ...row,invoice_code:(row.invoices as {code?:string}|null)?.code ?? null,
+        })),error:null,
+      };
       return {data:[{table_name:"Bàn 1",revenue:"120",orders:"1"}],error:null};
     },
     from: (table: "invoices" | "kitchen_orders" | "sales_returns") => {
@@ -59,10 +67,9 @@ describe("F&B report invoice drill-down", () => {
     expect(result.rows).toHaveLength(1);
     expect(result.rows[0]).toMatchObject({ code: "HD1", customerName: "Khách lẻ", debt: 20 });
     expect(result.hasMore).toBe(true);
-    expect(queryCalls).toContainEqual(["eq", ["tenant_id", "tenant-1"]]);
-    expect(queryCalls).toContainEqual(["eq", ["source", "fnb"]]);
-    expect(queryCalls).toContainEqual(["eq", ["branch_id", "branch-1"]]);
-    expect(queryCalls).toContainEqual(["range", [0, 1]]);
+    expect(queryCalls).toContainEqual(["rpc", ["staff_fnb_invoice_detail_page", {
+      p_branch_id:"branch-1",p_from:"2026-09-21T17:00:00.000Z",p_to:"2026-09-22T17:00:00.000Z",p_offset:0,p_limit:2,
+    }]]);
   });
 
   it("maps server-deduplicated table totals", async () => {
@@ -117,7 +124,8 @@ describe("F&B report invoice drill-down", () => {
     const page = await getFnbReturnDetailPage("branch-1", { from: "2026-09-22", to: "2026-09-22" }, 0, 1);
     expect(page.rows).toEqual([{ id: "r1", code: "TH1", createdAt: "2026-09-22T10:00:00Z", invoiceCode: "HD1", total: 30000, refunded: 20000 }]);
     expect(page.hasMore).toBe(true);
-    expect(queryCalls).toContainEqual(["eq", ["invoices.source", "fnb"]]);
-    expect(queryCalls).toContainEqual(["eq", ["branch_id", "branch-1"]]);
+    expect(queryCalls).toContainEqual(["rpc", ["staff_fnb_return_detail_page", {
+      p_branch_id:"branch-1",p_from:"2026-09-21T17:00:00.000Z",p_to:"2026-09-22T17:00:00.000Z",p_offset:0,p_limit:2,
+    }]]);
   });
 });
