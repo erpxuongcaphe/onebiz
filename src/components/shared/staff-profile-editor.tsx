@@ -772,6 +772,11 @@ export function StaffProfileEditor({
                                     nhánh đó. Hãy kiểm tra cả hai quyền báo cáo.
                                   </p>
                                 )}
+                                {p.code === "inventory.lock" && (
+                                  <p className="mt-1 text-xs text-amber-800">
+                                    Khóa tồn đầu kỳ áp dụng toàn công ty. Máy chủ hiện chỉ cho chủ hoặc admin thực hiện; cấp quyền này riêng cho nhân viên chưa đủ để thao tác.
+                                  </p>
+                                )}
                                 {["reports.dashboard", "reports.analytics"].includes(p.code) && (
                                   <p className="mt-1 text-xs text-amber-800">
                                     Quyền báo cáo này có thể cho phép truy cập dữ

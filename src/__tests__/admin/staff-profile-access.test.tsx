@@ -58,6 +58,13 @@ const snapshot: StaffProfileSnapshot = {
   branchPermissionCodes: ["pos_fnb.split_bill", "pos_fnb.transfer_table"],
 };
 describe("staff profile scope", () => {
+  it("explains the current server restriction on the company-wide opening-stock lock", () => {
+    render(<StaffProfileEditor snapshot={snapshot} onSave={vi.fn()} onReload={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Tùy chỉnh quyền" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sửa dữ liệu dùng chung" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Tìm quyền" }), { target: { value: "inventory.lock" } });
+    expect(screen.getByText(/Máy chủ hiện chỉ cho chủ hoặc admin thực hiện/)).toBeVisible();
+  });
   it("allows a cash-book exception for one branch while keeping unrelated rights", async () => {
     const data = structuredClone(snapshot);
     data.branchPermissionCodes.push("finance.view_cash_book");

@@ -36,6 +36,7 @@ export const SHARED_DATA_STAFF_PERMISSIONS = new Set([
   "suppliers.edit",
   "suppliers.delete",
   "suppliers.import",
+  "inventory.lock",
   "system.manage_branches",
   "system.manage_roles",
 ]);
