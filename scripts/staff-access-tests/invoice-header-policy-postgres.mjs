@@ -62,6 +62,10 @@ sql.push(`
   then raise exception 'independent F&B checkout lost';end if;end$$;
  do $$begin if (select count(*) from public.find_invoice_by_session_id('${id(1)}','${id(32)}'))<>1 then raise exception 'F&B checkout session recovery lost';end if;end$$;
  reset role;delete from role_permissions where permission_code='pos_fnb.checkout';
+ insert into role_permissions values ('${id(20)}','pos_retail.checkout');set role authenticated;
+ do $$begin if (select count(*) from public.find_invoice_by_session_id('${id(1)}','${id(34)}'))<>1
+  then raise exception 'retail checkout session recovery lost';end if;end$$;
+ reset role;delete from role_permissions where permission_code='pos_retail.checkout';
  insert into role_permissions values ('${id(20)}','invoices.print');set role authenticated;
  do $$begin if (select count(*) from invoices)<>6 then raise exception 'independent invoice printing lost';end if;end$$;
  reset role;delete from role_permissions where permission_code='invoices.print';
