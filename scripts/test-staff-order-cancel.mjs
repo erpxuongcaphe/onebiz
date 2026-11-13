@@ -30,7 +30,7 @@ try {
   );
   await db.exec(`
     create table invoices(id uuid primary key,tenant_id uuid,branch_id uuid,code text,status text,paid numeric,debt numeric,client_session_id uuid,updated_at timestamptz,note text,deleted_at timestamptz);
-    create table sales_orders(id uuid primary key,tenant_id uuid,branch_id uuid,code text,status text,updated_at timestamptz,note text);
+    create table sales_orders(id uuid primary key,tenant_id uuid,branch_id uuid,code text,status text,updated_at timestamptz,note text,created_by uuid);
     create table shipping_orders(id uuid primary key,tenant_id uuid,invoice_id uuid,status text,code text,partner_id uuid,updated_at timestamptz);
     create table stock_movements(tenant_id uuid,reference_id uuid,reference_type text);
     create table cash_transactions(tenant_id uuid,reference_id uuid,reference_type text,status text);

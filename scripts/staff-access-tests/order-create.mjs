@@ -120,6 +120,7 @@ export async function verifyOrderCreate(db, id) {
     await db.exec(await functionFromMigration("20261113004524_staff_own_order_scope.sql", name));
   }
   await db.exec(await readFile(new URL("../../supabase/migrations/20261113005650_staff_own_order_action_scope.sql", import.meta.url), "utf8"));
+  await db.exec(await readFile(new URL("../../supabase/migrations/20261113012350_staff_legacy_order_owner_guard.sql", import.meta.url), "utf8"));
   const invoke =
     (sql, args = []) =>
     () =>
@@ -246,7 +247,17 @@ export async function verifyOrderCreate(db, id) {
     update invoices set created_by='${id(100)}' where id='${id(215)}';`);
   await assert.rejects(invoke("select close_sales_orders_processing($1,null,false)", [[id(214),id(215)]]), /STAFF_OWN_ORDER_ACTION_DENIED/);
   assert.equal((await db.query("select close_sales_orders_processing($1,null,false) result", [[id(214)]])).rows[0].result.selected_count,1,'own order remains operable');
+  await db.exec(`delete from user_permission_overrides where permission_code='orders.cancel';
+    delete from user_branch_permission_overrides where permission_code='orders.cancel';
+    insert into role_permissions values ('${id(20)}','orders.cancel');
+    insert into sales_orders(id,tenant_id,branch_id,code,status,created_by) values
+      ('${id(222)}','${id(1)}','${id(10)}','OWN','new','${id(101)}'),
+      ('${id(223)}','${id(1)}','${id(10)}','OTHER','new','${id(100)}');`);
+  await assert.rejects(invoke("select cancel_legacy_sales_order_atomic($1,'test reason')",[id(223)]), /STAFF_OWN_ORDER_ACTION_DENIED/);
+  assert.equal((await db.query("select status from sales_orders where id=$1",[id(223)])).rows[0].status,"new",'denied cancellation has no effect');
+  await db.query("select cancel_legacy_sales_order_atomic($1,'test reason')",[id(222)]);
   await db.exec(`insert into role_permissions values ('${id(20)}','pos_retail.checkout');`);
+  await db.query("select cancel_legacy_sales_order_atomic($1,'test reason')",[id(223)]);
   assert.equal((await db.query("select close_sales_orders_processing($1,null,false) result", [[id(215)]])).rows[0].result.selected_count,1,'independent checkout preserves actual order flow');
   console.log(
     "PASS order create: all entry guards, independent retail path, mixed-branch batch and local-only grant.",
