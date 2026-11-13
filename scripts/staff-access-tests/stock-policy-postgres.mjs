@@ -206,6 +206,20 @@ statements.push(`
   then raise exception 'global revoke or independent order access failed';end if;end$$;
  reset role;
 `);
+// Exercise the real legacy reconciliation function through the migration.
+statements.push(`create function auth.role() returns text language sql stable as $$select nullif(current_setting('request.jwt.claim.role',true),'')$$;`);
+statements.push(await functionFromMigration('00513_inventory_operational_read_projections.sql','verify_stock_invariants'));
+statements.push(await migration('20261113095915_staff_stock_invariant_tenant_scope.sql'));
+statements.push(`
+ select set_config('request.jwt.claim.sub','${id(100)}',false);
+ set role authenticated;
+ do $$declare denied boolean:=false;begin
+  begin perform public.verify_stock_invariants('${id(2)}',0.01);
+  exception when raise_exception then if sqlerrm='PERMISSION_DENIED' then denied:=true;else raise;end if;end;
+  if not denied then raise exception 'owner accessed another tenant stock reconciliation';end if;
+ end$$;
+ reset role;
+`);
 if (process.env.ONEBIZ_PGLITE_MODULE) {
  const {PGlite}=await import(pathToFileURL(process.env.ONEBIZ_PGLITE_MODULE).href);
  const db=new PGlite();try { await db.exec(statements.join('\n')); } finally { await db.close(); }
