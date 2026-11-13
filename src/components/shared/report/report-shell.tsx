@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useAuth } from "@/lib/contexts/auth-context";
+import { AuthBranchPermissionScope, useAuth } from "@/lib/contexts/auth-context";
 import { ReportScopeProvider } from "@/lib/contexts/report-scope-context";
 import { useReportScope } from "@/lib/hooks/use-report-scope";
 import { ReportScopeSelector } from "./report-scope-selector";
@@ -28,8 +28,15 @@ import { rememberRecentReportPath } from "@/lib/reports/preferences";
 
 export function ReportShell({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<ReportScopeLoading />}>
-    <ReportScopeProvider><ScopedReportShell>{children}</ScopedReportShell></ReportScopeProvider>
+    <ReportScopeProvider><ReportPermissionScope>{children}</ReportPermissionScope></ReportScopeProvider>
   </Suspense>;
+}
+
+function ReportPermissionScope({ children }: { children: React.ReactNode }) {
+  const { activeBranchId, isReady } = useReportScope();
+  return <AuthBranchPermissionScope branchId={activeBranchId ?? null} ready={isReady}>
+    <ScopedReportShell>{children}</ScopedReportShell>
+  </AuthBranchPermissionScope>;
 }
 
 function ReportScopeLoading() {

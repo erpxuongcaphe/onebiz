@@ -13,7 +13,7 @@ const state = vi.hoisted(() => ({
 vi.mock("next/navigation", () => ({ usePathname: () => state.pathname,
   useSearchParams: () => { if (state.suspendScope) throw state.pendingUrl; return new URLSearchParams(window.location.search); } }));
 vi.mock("next/link", () => ({ default: ({ children, ...props }: { children: ReactNode }) => <a {...props}>{children}</a> }));
-vi.mock("@/lib/contexts/auth-context", () => ({ useAuth: () => ({ ...state,
+vi.mock("@/lib/contexts/auth-context", () => ({ AuthBranchPermissionScope: ({children}: {children: ReactNode}) => children, useAuth: () => ({ ...state,
   currentBranch: state.branches.find(branch => branch.id === state.activeBranchId) ?? null,
   hasPermission: (permission: string) => state.permissions.has(permission) }) }));
 vi.mock("@/components/shared/report/report-scope-selector", () => ({ ReportScopeSelector: () => {
