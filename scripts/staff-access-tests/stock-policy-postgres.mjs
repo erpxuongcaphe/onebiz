@@ -10,6 +10,9 @@ const id=n=>`00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
 const statements=[];
 const migration=async name=>readFile(new URL(`../../supabase/migrations/${name}`,import.meta.url),'utf8');
 await initializeStaffAccessFixture({exec:async s=>statements.push(s)},id);
+// Production branches have a code column: exercise PL/pgSQL name resolution
+// against the real schema shape rather than a simplified fixture.
+statements.push('alter table public.branches add column code text;');
 statements.push(await migration('20261111052704_staff_branch_access.sql'));
 for(const [file,name] of [
  ['20261111070229_staff_branch_checkout_permissions.sql','_staff_permission_at_scope'],
@@ -47,6 +50,7 @@ statements.push(`
 for(const [file,name] of [['00315_disposal_export_list_workspace.sql','get_disposal_export_list_workspace'],['00316_warehouse_list_workspaces_batch.sql','get_internal_export_list_workspace']])
  statements.push(await functionFromMigration(file,name));
 statements.push(await migration('20261112162406_staff_stock_work_documents_safe_projection.sql'));
+statements.push(await migration('20261114010000_stock_work_list_code_ambiguity.sql'));
 statements.push(await migration('20261112165047_staff_stock_work_cost_column_protection.sql'));
 statements.push(`
  set role authenticated;
@@ -225,7 +229,7 @@ if (process.env.ONEBIZ_PGLITE_MODULE) {
  const db=new PGlite();try { await db.exec(statements.join('\n')); } finally { await db.close(); }
  console.log('PASS local stock fixture rehearsal (PGlite)');process.exit(0);
 }
-const args=['-Xq','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p','55433','-U','staff_test','-d','onebiz_staff_access_test'];
+const args=['-Xq','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p',process.env.STAFF_TEST_PG_PORT ?? '55433','-U','staff_test','-d','onebiz_staff_access_test'];
 const child=spawn('psql',args,{env:{PATH:process.env.PATH,PGPASSWORD:'ephemeral-test-only',PGSSLMODE:'disable',PGCONNECT_TIMEOUT:'5'},stdio:['pipe','pipe','pipe']});
 let err='';child.stderr.on('data',x=>err+=x);child.stdout.resume();
 const completed=new Promise((resolve,reject)=>{child.on('error',reject);child.on('close',code=>code===0?resolve():reject(new Error(err)));});
