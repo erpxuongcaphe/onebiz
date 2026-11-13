@@ -52,8 +52,9 @@ function useSalesQuery(scope: string, branchId: string | undefined, from: string
     }
   }, [branchId, enabled, from, grain, key, to]);
   useEffect(() => {
-    void refresh();
-    return () => { request.current += 1; };
+    let active = true;
+    void Promise.resolve().then(() => { if (active) return refresh(); });
+    return () => { active = false; request.current += 1; };
   }, [refresh]);
   const error = enabled && failure?.key === key ? failure.message : null;
   return { data: enabled && !error && result?.key === key ? result.data : null, error, at: !error && result?.key === key ? result.at : null, loading: enabled && loading, refresh };
@@ -150,9 +151,13 @@ export default function OperationalSalesOverview() {
       {data && <>
         <section aria-labelledby="sales-title" className="overflow-hidden rounded-md border border-border/80 bg-card shadow-sm">
           <div className="border-l-4 border-primary bg-primary/5 p-4 sm:p-5">
-            <div className="flex items-center justify-between gap-2"><h2 id="sales-title" className="text-sm font-semibold text-primary">Doanh số thực tế</h2><span className="text-xs text-muted-foreground">Đồng</span></div>
+            <div className="flex items-center justify-between gap-2"><h2 id="sales-title" className="text-sm font-semibold text-primary">{activeBranchId ? "Doanh số thực tế" : "Doanh số toàn chuỗi · đã loại nội bộ"}</h2><span className="text-xs text-muted-foreground">Đồng</span></div>
             <p className="mt-1 text-[28px] font-semibold leading-tight tabular-nums text-primary sm:text-[32px]" data-testid="net-sales">{formatCurrency(data.sales)}</p>
             <p className="mt-1 text-xs text-foreground/70">Sau giảm giá và hàng trả</p>
+            {!activeBranchId && <div className="mt-3 grid grid-cols-1 gap-2 rounded-md border border-primary/20 bg-background/80 p-3 text-sm sm:grid-cols-2">
+              <div><p className="text-xs text-muted-foreground">Cộng doanh số các chi nhánh · gồm nội bộ</p><p className="font-semibold tabular-nums" data-testid="all-branch-sales">{data.internal_net === undefined ? "—" : `${formatCurrency(data.sales + data.internal_net)} đ`}</p></div>
+              <div><p className="text-xs text-muted-foreground">Bán nội bộ được loại khỏi doanh số chuỗi</p><p className="font-semibold tabular-nums">{data.internal_net === undefined ? "—" : `${formatCurrency(data.internal_net)} đ`}</p></div>
+            </div>}
             <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
               <span><strong className="text-foreground">{formatNumber(data.orders)}</strong> hóa đơn hoàn tất</span>
               <span title="Giá trị hóa đơn hoàn tất sau giảm giá, trước hàng trả phát sinh trong ngày.">Bình quân / HĐ <strong className="text-foreground tabular-nums" data-testid="average-order-value">{data.orders > 0 ? formatCurrency((data.sales + data.returns) / data.orders) : "—"}</strong></span>

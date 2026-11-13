@@ -4,7 +4,7 @@ import type { SalesDashboard, SalesGrain } from '@/lib/dashboard-sales';
 
 const amount = z.number().finite();
 const schema = z.object({
-  sales: amount, discounts: amount, returns: amount, orders: amount,
+  sales: amount, discounts: amount, returns: amount, orders: amount, internal_net: amount.optional(),
   received: amount, refunded: amount, collected: amount,
   methods: z.record(z.string(), amount),
   buckets: z.array(z.object({ key: z.string(), sales: amount, orders: amount })),
@@ -28,11 +28,12 @@ export async function getSalesDayReceivable(branchId: string | undefined, day: s
 export async function getSalesDashboard(
   branchId: string | undefined, from: string, to: string, grain: SalesGrain,
 ): Promise<SalesDashboard> {
-  const { data, error } = await getClient().rpc('get_operational_sales_dashboard' as never, {
-    p_branch_id: branchId ?? null, p_from: from, p_to: to, p_grain: grain,
-  } as never);
+  const allBranchDay = !branchId && from === to && grain === 'hour';
+  const { data, error } = allBranchDay
+    ? await getClient().rpc('get_dashboard_all_branch_day' as never, { p_day: from } as never)
+    : await getClient().rpc('get_operational_sales_dashboard' as never, { p_branch_id: branchId ?? null, p_from: from, p_to: to, p_grain: grain } as never);
   if (error) handleError(error, 'getSalesDashboard');
   const result = schema.safeParse(data);
-  if (!result.success) throw new Error('Dữ liệu tổng quan chưa đầy đủ.');
+  if (!result.success || (allBranchDay && result.data.internal_net === undefined)) throw new Error('Dữ liệu tổng quan chưa đầy đủ.');
   return result.data;
 }
