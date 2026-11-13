@@ -7,6 +7,31 @@ on:
       - 'scripts/test-staff-profile-access.mjs'
       - '.github/workflows/staff-access-database.yml'
 jobs:
+  print-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: onebiz_staff_access_test
+          POSTGRES_USER: staff_test
+          POSTGRES_PASSWORD: ephemeral-test-only
+        ports: ['55433:5432']
+        options: >-
+          --health-cmd "pg_isready -U staff_test -d onebiz_staff_access_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify branch print authorization on PostgreSQL
+        env:
+          STAFF_EPHEMERAL_DB: onebiz_staff_access_test
+        run: node scripts/staff-access-tests/print-policy-postgres.mjs
   migration-selection:
     runs-on: ubuntu-latest
     timeout-minutes: 5
