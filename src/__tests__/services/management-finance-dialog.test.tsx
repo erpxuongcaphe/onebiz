@@ -2,7 +2,7 @@ import {beforeEach, describe, expect, it, vi} from 'vitest';
 import {fireEvent, render, screen, waitFor} from '@testing-library/react';
 import type {ReactNode} from 'react';
 const mocks = vi.hoisted(() => ({save: vi.fn(), settle: vi.fn(), success: vi.fn(), close: vi.fn()}));
-vi.mock('@/lib/contexts', () => ({useAuth: () => ({tenant: {id: 'tenant'}, user: {id: 'user'}, currentBranch: {id: 'xtb'}, branches: [{id: 'xtb', name: 'XTB'}]})}));
+vi.mock('@/lib/contexts', () => ({useAuth: () => ({tenant: {id: 'tenant'}, user: {id: 'user'}, currentBranch: {id: 'xtb'}, branches: [{id: 'xtb', name: 'XTB'}, {id: 'premium', name: 'Premium'}]})}));
 vi.mock('@/lib/hooks/use-durable-form-draft', () => ({useDurableFormDraft: () => ({clearDraft: vi.fn()})}));
 vi.mock('@/lib/services/supabase/cash-timing', () => ({getCashPerformers: async () => [{id: 'person', name: 'Employee'}]}));
 vi.mock('@/lib/services/supabase/management-finance', async importOriginal => ({...(await importOriginal<object>()), saveFinanceDocument: mocks.save, settleFinanceDocument: mocks.settle}));
@@ -25,6 +25,15 @@ async function fillUnpaid() {
   fireEvent.change(screen.getByLabelText('Đối tượng'), {target: {value: 'Utility'}});
 }
 describe('management finance dialog', () => {
+  it('defaults the allocation to the branch selected in the finance workspace',async()=>{
+    render(<ManagementFinanceDialog {...props} preferredBranchId="premium"/>);
+    fireEvent.change(screen.getByLabelText('Khoản mục'),{target:{value:'leaf'}});
+    fireEvent.change(screen.getByLabelText('Tổng số tiền'),{target:{value:'100'}});
+    fireEvent.change(screen.getByLabelText('Đối tượng'),{target:{value:'Supplier'}});
+    fireEvent.click(screen.getByRole('button',{name:'Lưu'}));
+    await waitFor(()=>expect(mocks.save).toHaveBeenCalled());
+    expect(mocks.save.mock.calls[0][1]).toMatchObject({allocations:[{branchId:'premium',amount:100}]});
+  });
   it('follows the business date for a default single allocation but preserves explicit recognition dates',()=>{
     render(<ManagementFinanceDialog {...props}/>);
     fireEvent.change(screen.getByLabelText('Ngày phát sinh'),{target:{value:'2026-09-15'}});

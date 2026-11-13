@@ -20,10 +20,11 @@ import {FinanceRpcError, saveFinanceDocument, settleFinanceDocument,
 type AllocationDraft = {branchId: string; recognitionDate: string; amount: string};
 type Attempt = {requestId: string; payload: FinanceDocumentInput | FinancePayment};
 
-export function ManagementFinanceDialog({open, onOpenChange, categories, event, onSuccess, recordKind = 'expense', onCreateCategory}: {
+export function ManagementFinanceDialog({open, onOpenChange, categories, event, onSuccess, recordKind = 'expense', onCreateCategory, preferredBranchId}: {
   open: boolean; onOpenChange: (open: boolean) => void; categories: FinanceCategory[];
   event?: FinanceEvent; onSuccess: () => void;
   recordKind?: FinanceKind; onCreateCategory?: (kind: FinanceKind, selectCreated: (id: string) => void) => void;
+  preferredBranchId?: string;
 }) {
   const {branches, currentBranch, tenant, user} = useAuth();
   const submissionLock = useRef(false);
@@ -60,8 +61,8 @@ export function ManagementFinanceDialog({open, onOpenChange, categories, event, 
     if (!open) return;
     const date = cashDateTimeInput().slice(0, 10);
     setCategoryId(''); setBusinessDate(date); setAmount(''); setCounterparty(''); setNote('');
-    setAllocations([{branchId: currentBranch?.id ?? '', recognitionDate: date, amount: ''}]);
-    setCashBranch(currentBranch?.id ?? ''); setPaymentMode(event ? 'partial' : 'unpaid');
+    setAllocations([{branchId: preferredBranchId ?? currentBranch?.id ?? '', recognitionDate: date, amount: ''}]);
+    setCashBranch(preferredBranchId ?? currentBranch?.id ?? ''); setPaymentMode(event ? 'partial' : 'unpaid');
     setPaymentAmount(''); setMoneyAccountId(''); setAttempt(null); setError('');
     unreadableRequest.current = false;
     if (requestKey) {
@@ -74,7 +75,7 @@ export function ManagementFinanceDialog({open, onOpenChange, categories, event, 
         }
       } catch {unreadableRequest.current = true; setError('Không đọc được yêu cầu đang chờ. Chưa gửi phiếu mới.');}
     }
-  }, [open, event, currentBranch?.id, requestKey]);
+  }, [open, event, currentBranch?.id, preferredBranchId, requestKey]);
 
   useEffect(() => {
     if (!open || !cashBranch) return;
