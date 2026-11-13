@@ -47,6 +47,12 @@ const RPC = new Set(schema.rpc as string[]);
  * dưới sẽ BẮT XOÁ dòng ngay khi dump đã có (sau `node scripts/dump-db-schema.mjs`).
  */
 const RPC_CHO_MIGRATION = new Map<string, string>([
+  // The additive projection migration must be applied before this client is deployed.
+  ["get_cash_flow_category_summary", "20261113074601_staff_cash_flow_summary_projection.sql"],
+  ["get_cash_flow_alert_totals", "20261113074601_staff_cash_flow_summary_projection.sql"],
+  ["get_cash_flow_created_month_totals", "20261113074601_staff_cash_flow_summary_projection.sql"],
+  ["get_cash_expense_report_totals", "20261113074601_staff_cash_flow_summary_projection.sql"],
+  ["get_cash_dashboard_totals", "20261113074601_staff_cash_flow_summary_projection.sql"],
   ["staff_returnable_invoice_items", "20261113041930_staff_return_reader_bridge.sql"],
   // Applied and verified on ONEBIZ 02/11; remove after the next full schema dump.
   ["delete_money_account", "20261102045002_money_account_edit_delete.sql"],
