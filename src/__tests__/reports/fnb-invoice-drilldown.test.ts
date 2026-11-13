@@ -11,6 +11,10 @@ vi.mock("@/lib/services/supabase/base", () => ({
   getCurrentTenantId: async () => "tenant-1",
   handleError: (error: Error) => { throw error; },
   getClient: () => ({
+    rpc: async (name: string, args: Record<string, unknown>) => {
+      queryCalls.push(["rpc", [name, args]]);
+      return {data:[{table_name:"Bàn 1",revenue:"120",orders:"1"}],error:null};
+    },
     from: (table: "invoices" | "kitchen_orders" | "sales_returns") => {
       let offset = 0;
       const query = {
@@ -58,7 +62,7 @@ describe("F&B report invoice drill-down", () => {
     expect(queryCalls).toContainEqual(["range", [0, 1]]);
   });
 
-  it("counts a completed invoice only once when multiple kitchen sends exist", async () => {
+  it("maps server-deduplicated table totals", async () => {
     rowsByTable.kitchen_orders = [
       { id: "k1", table_id: "t1", invoice_id: "i1", restaurant_tables: { name: "Bàn 1" }, invoices: { total: 120, status: "completed" } },
       { id: "k2", table_id: "t1", invoice_id: "i1", restaurant_tables: { name: "Bàn 1" }, invoices: { total: 120, status: "completed" } },
@@ -71,13 +75,9 @@ describe("F&B report invoice drill-down", () => {
   it("filters table revenue by invoice document date, matching the KPI period", async () => {
     await getRevenueByTable("branch-1", { from: "2026-09-22", to: "2026-09-22" });
 
-    expect(queryCalls).toContainEqual(["select", [expect.stringContaining("invoices!inner(total, status, ngay_chung_tu)")]]);
-    expect(queryCalls).toContainEqual(["eq", ["invoices.source", "fnb"]]);
-    expect(queryCalls).toContainEqual(["eq", ["invoices.status", "completed"]]);
-    expect(queryCalls).not.toContainEqual(["eq", ["status", "completed"]]);
-    expect(queryCalls).toContainEqual(["gte", ["invoices.ngay_chung_tu", "2026-09-21T17:00:00.000Z"]]);
-    expect(queryCalls).toContainEqual(["lt", ["invoices.ngay_chung_tu", "2026-09-22T17:00:00.000Z"]]);
-    expect(queryCalls).not.toContainEqual(["gte", ["created_at", expect.anything()]]);
+    expect(queryCalls).toContainEqual(["rpc", ["staff_fnb_table_summary", {
+      p_branch_id:"branch-1",p_from:"2026-09-21T17:00:00.000Z",p_to:"2026-09-22T17:00:00.000Z",
+    }]]);
   });
 
   it("uses the invoice creator FK for the cashier report", async () => {
