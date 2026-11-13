@@ -777,6 +777,16 @@ export function StaffProfileEditor({
                                     Khóa tồn đầu kỳ áp dụng toàn công ty. Máy chủ hiện chỉ cho chủ hoặc admin thực hiện; cấp quyền này riêng cho nhân viên chưa đủ để thao tác.
                                   </p>
                                 )}
+                                {p.code === "pos_fnb.void" && (
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    Quyền cũ có thể cấp quyền hủy bill và hủy món. Dùng các quyền hủy chi tiết để chỉnh riêng theo chi nhánh.
+                                  </p>
+                                )}
+                                {p.code === "pos_fnb.edit_sent_order" && (
+                                  <p className="mt-1 text-xs text-amber-800">
+                                    Đây là mã quyền cũ; luồng duyệt hiện tại chưa hỗ trợ yêu cầu sửa món đã gửi bếp. Hủy món dùng quyền hủy bill hoặc hủy món chưa thanh toán.
+                                  </p>
+                                )}
                                 {["reports.dashboard", "reports.analytics"].includes(p.code) && (
                                   <p className="mt-1 text-xs text-amber-800">
                                     Quyền báo cáo này có thể cho phép truy cập dữ

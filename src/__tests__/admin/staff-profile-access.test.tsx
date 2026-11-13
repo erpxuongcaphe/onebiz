@@ -58,6 +58,12 @@ const snapshot: StaffProfileSnapshot = {
   branchPermissionCodes: ["pos_fnb.split_bill", "pos_fnb.transfer_table"],
 };
 describe("staff profile scope", () => {
+  it("identifies the legacy sent-order edit permission as unsupported by the current approval flow", () => {
+    render(<StaffProfileEditor snapshot={snapshot} onSave={vi.fn()} onReload={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Tùy chỉnh quyền" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Tìm quyền" }), { target: { value: "pos_fnb.edit_sent_order" } });
+    expect(screen.getByText(/luồng duyệt hiện tại chưa hỗ trợ yêu cầu sửa món đã gửi bếp/)).toBeVisible();
+  });
   it("explains the current server restriction on the company-wide opening-stock lock", () => {
     render(<StaffProfileEditor snapshot={snapshot} onSave={vi.fn()} onReload={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "Tùy chỉnh quyền" }));
