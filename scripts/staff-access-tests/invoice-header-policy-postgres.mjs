@@ -92,6 +92,10 @@ sql.push(`
   values('${id(1)}','${id(101)}','${id(10)}','orders.view','revoke','${id(100)}');set role authenticated;
  do $$begin if (select count(*) from invoices)<>5 or exists(select 1 from invoices where id='${id(30)}')
   then raise exception 'order view scope changed unrelated sources';end if;end$$;
+ reset role;insert into role_permissions values ('${id(20)}','pos_fnb.view_orders');set role authenticated;
+ do $$begin if exists(select 1 from invoices where id='${id(30)}') or not exists(select 1 from invoices where id='${id(32)}')
+  then raise exception 'F&B view bypassed a denied retail order';end if;end$$;
+ reset role;delete from role_permissions where permission_code='pos_fnb.view_orders';set role authenticated;
  reset role;delete from user_branch_permission_overrides where permission_code='orders.view';
  delete from role_permissions where permission_code='orders.view';
  insert into role_permissions values ('${id(20)}','pos_fnb.view_orders');
@@ -99,6 +103,10 @@ sql.push(`
   values('${id(1)}','${id(101)}','${id(10)}','pos_fnb.view_orders','revoke','${id(100)}');set role authenticated;
  do $$begin if (select count(*) from invoices)<>5 or exists(select 1 from invoices where id='${id(32)}')
   then raise exception 'F&B view scope changed unrelated sources';end if;end$$;
+ reset role;insert into role_permissions values ('${id(20)}','orders.view');set role authenticated;
+ do $$begin if exists(select 1 from invoices where id='${id(32)}') or not exists(select 1 from invoices where id='${id(30)}')
+  then raise exception 'retail order view bypassed denied F&B order';end if;end$$;
+ reset role;delete from role_permissions where permission_code='orders.view';set role authenticated;
  reset role;delete from role_permissions where permission_code='pos_fnb.view_orders';
  insert into role_permissions values ('${id(20)}','pos_fnb.view_sales_summary'),('${id(20)}','reports.fnb');set role authenticated;
  do $$begin if (select count(*) from invoices where source='fnb')<>0

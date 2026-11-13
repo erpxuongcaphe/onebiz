@@ -34,8 +34,11 @@ begin
  if member then
   -- These pre-existing capabilities also read invoice headers for returns,
   -- payment history, customer debt, reporting or F&B order lookup.
-  foreach code in array array['orders.view','pos_fnb.view_orders','finance.view_cash_book',
-   'finance.create_transaction','finance.void_transaction','customers.view_debt'] loop
+  -- Viewing F&B orders must not grant visibility of retail orders, or vice versa.
+  if p_source='order' and public._staff_permission_at_scope(actor,'orders.view',p_branch) then return true;end if;
+  if p_source='fnb' and public._staff_permission_at_scope(actor,'pos_fnb.view_orders',p_branch) then return true;end if;
+  foreach code in array array['finance.view_cash_book','finance.create_transaction',
+   'finance.void_transaction','customers.view_debt'] loop
    if public._staff_permission_at_scope(actor,code,p_branch) then return true;end if;
   end loop;
  end if;

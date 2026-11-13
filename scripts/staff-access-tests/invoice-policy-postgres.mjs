@@ -260,6 +260,17 @@ sql.push(`
    then raise exception 'F&B exception changed unrelated legacy order reads';end if;
  end$$;
  reset role;
+ delete from role_permissions where role_id='${id(20)}';
+ delete from user_branch_permission_overrides where user_id='${id(101)}';
+ insert into staff_branch_permission_catalog values ('orders.view',1) on conflict do nothing;
+ insert into role_permissions values ('${id(20)}','orders.view'),('${id(20)}','pos_fnb.view_orders');
+ insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+ values ('${id(1)}','${id(101)}','${id(10)}','orders.view','revoke','${id(100)}');set role authenticated;
+ do $$begin if exists(select 1 from sales_orders where branch_id='${id(10)}')
+  or exists(select 1 from sales_order_items where order_id in ('${id(70)}','${id(73)}'))
+  or not exists(select 1 from sales_orders where branch_id='${id(11)}')
+  then raise exception 'F&B view bypassed legacy retail order branch denial';end if;end$$;
+ reset role;
 `);
 if(process.env.ONEBIZ_PGLITE_MODULE){const {PGlite}=await import(pathToFileURL(process.env.ONEBIZ_PGLITE_MODULE).href);const db=new PGlite();try{await db.exec(sql.join('\n'));}catch(e){console.error(e.message,e.where||'');process.exitCode=1;}finally{await db.close();}if(process.exitCode)process.exit(process.exitCode);console.log('PASS local invoice fixture rehearsal (PGlite)');process.exit(0);}
 const args=['-Xq','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p','55433','-U','staff_test','-d','onebiz_staff_access_test'];
