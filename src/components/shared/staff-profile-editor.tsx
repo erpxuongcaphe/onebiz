@@ -792,6 +792,11 @@ export function StaffProfileEditor({
                                     Khóa tồn đầu kỳ áp dụng toàn công ty. Chủ/admin được phép; để nhân viên thao tác, chọn “Cho phép thêm” cho người đó. Quyền từ mẫu chức vụ không tự mở quyền này.
                                   </p>
                                 )}
+                                {p.code === "products.manage_prices" && (
+                                  <p className="mt-1 text-xs text-amber-800">
+                                    Quyền này có thể sửa bảng giá và chương trình khuyến mãi dùng chung. Hiện chưa thể giới hạn riêng cho từng chi nhánh.
+                                  </p>
+                                )}
                                 {p.code === "pos_fnb.void" && (
                                   <p className="mt-1 text-xs text-muted-foreground">
                                     Quyền cũ có thể cấp quyền hủy bill và hủy món. Dùng các quyền hủy chi tiết để chỉnh riêng theo chi nhánh.

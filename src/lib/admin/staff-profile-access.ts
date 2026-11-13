@@ -30,6 +30,7 @@ export const SHARED_DATA_STAFF_PERMISSIONS = new Set([
   "products.edit",
   "products.delete",
   "products.import",
+  "products.manage_prices",
   "products.duplicate",
   "customers.create",
   "customers.edit",

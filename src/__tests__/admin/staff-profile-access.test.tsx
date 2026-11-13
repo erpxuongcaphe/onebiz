@@ -58,6 +58,13 @@ const snapshot: StaffProfileSnapshot = {
   branchPermissionCodes: ["pos_fnb.split_bill", "pos_fnb.transfer_table"],
 };
 describe("staff profile scope", () => {
+  it("marks price management as shared because it also changes shared promotions", () => {
+    render(<StaffProfileEditor snapshot={snapshot} onSave={vi.fn()} onReload={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Tùy chỉnh quyền" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sửa dữ liệu dùng chung" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Tìm quyền" }), { target: { value: "products.manage_prices" } });
+    expect(screen.getByText(/có thể sửa bảng giá và chương trình khuyến mãi dùng chung/)).toBeVisible();
+  });
   it("explains that cashiers retain their own shift closing when reconciliation is scoped", () => {
     const data = structuredClone(snapshot);
     data.branchPermissionCodes.push("shifts.reconcile_own_branch");
