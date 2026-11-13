@@ -28,25 +28,31 @@ end $$;
 
 create or replace function public._staff_floor_readable_branches()
 returns uuid[] language sql stable security definer set search_path = '' as $$
+ with actor as materialized (
+  select p.id,p.tenant_id,
+   (public.user_has_permission(p.id,'reports.view_all_branches')
+    or public.user_has_permission(p.id,'floor_plan.edit_global')) as all_branches,
+   (public.user_has_permission(p.id,'orders.print')
+    or public.user_has_permission(p.id,'invoices.print')
+    or public.user_has_permission(p.id,'system.manage_branches')
+    or public.user_has_permission(p.id,'products.view')
+    or public.user_has_permission(p.id,'products.edit')) as assigned_branches
+  from public.profiles p
+  where p.id=auth.uid() and p.tenant_id=public.get_user_tenant_id() and coalesce(p.is_active,true)
+ )
  select coalesce(array_agg(b.id),'{}'::uuid[])
  from public.branches b
- join public.profiles p on p.id=auth.uid() and p.tenant_id=b.tenant_id and coalesce(p.is_active,true)
- where b.tenant_id=public.get_user_tenant_id()
-   and (public.user_has_permission(p.id,'reports.view_all_branches')
-     or public.user_has_permission(p.id,'floor_plan.edit_global')
-     or (public.user_has_branch_access(p.id,b.id) and (
-       public._staff_permission_at_scope(p.id,'floor_plan.view',b.id)
-       or public._staff_permission_at_scope(p.id,'floor_plan.edit_branch',b.id)
-       or public._staff_permission_at_scope(p.id,'pos_fnb.send_kitchen',b.id)
-       or public._staff_permission_at_scope(p.id,'pos_fnb.checkout',b.id)
-       or public._staff_permission_at_scope(p.id,'pos_fnb.view_orders',b.id)
-       or public._staff_permission_at_scope(p.id,'pos_fnb.manage_tables',b.id)
-       or public.user_has_permission(p.id,'orders.print')
-       or public.user_has_permission(p.id,'invoices.print')
-       or public.user_has_permission(p.id,'system.manage_branches')
-       or public.user_has_permission(p.id,'products.view')
-       or public.user_has_permission(p.id,'products.edit')
-     )))
+ join actor a on a.tenant_id=b.tenant_id
+ where a.all_branches
+     or (public.user_has_branch_access(a.id,b.id) and (
+       a.assigned_branches
+       or public._staff_permission_at_scope(a.id,'floor_plan.view',b.id)
+       or public._staff_permission_at_scope(a.id,'floor_plan.edit_branch',b.id)
+       or public._staff_permission_at_scope(a.id,'pos_fnb.send_kitchen',b.id)
+       or public._staff_permission_at_scope(a.id,'pos_fnb.checkout',b.id)
+       or public._staff_permission_at_scope(a.id,'pos_fnb.view_orders',b.id)
+       or public._staff_permission_at_scope(a.id,'pos_fnb.manage_tables',b.id)
+     ))
 $$;
 
 insert into public.staff_branch_permission_catalog(permission_code,enforcement_version)
