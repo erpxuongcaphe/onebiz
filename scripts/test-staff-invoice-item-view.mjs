@@ -109,9 +109,12 @@ try {
    values ('${id(1)}','${id(101)}','${id(11)}','inventory.view','revoke','${id(100)}');
   insert into role_permissions values ('${id(20)}','pos_fnb.view_sales_summary'); set role authenticated;`);
  assert.deepEqual(await ids('invoice_items_scoped'),[],'F&B sales summary alone does not authorize raw item lines');
+ await db.exec(`reset role; delete from role_permissions where permission_code='pos_fnb.view_sales_summary';
+  insert into role_permissions values ('${id(20)}','reports.fnb'); set role authenticated;`);
+ assert.deepEqual(await ids('invoice_items_scoped'),[],'F&B reporting alone does not authorize raw item lines');
  await db.exec(`reset role; insert into role_permissions values ('${id(20)}','pos_fnb.checkout'); set role authenticated;`);
  assert.deepEqual(await ids('invoice_items_scoped'),[id(60),id(61)],'independent F&B checkout retains its invoice lines');
- await db.exec(`reset role; delete from role_permissions where permission_code='pos_fnb.checkout'; set role authenticated;`);
+ await db.exec(`reset role; delete from role_permissions where permission_code in ('pos_fnb.checkout','reports.fnb'); set role authenticated;`);
  await db.exec(`reset role; delete from role_permissions where permission_code='pos_fnb.view_sales_summary';
   insert into role_permissions values ('${id(20)}','reports.view_detail'); set role authenticated;`);
  assert.deepEqual(await ids('invoice_items_scoped'),[],'detail modifier alone does not authorize invoice lines');

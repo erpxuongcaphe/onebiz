@@ -148,6 +148,13 @@ sql.push(`
    or (select count(*) from invoice_items_scoped where invoice_id='${id(53)}')<>0 then
    raise exception 'summary exposed F&B invoice lines';end if;
  end$$;
+ reset role;delete from role_permissions where permission_code='pos_fnb.view_sales_summary';
+ insert into role_permissions values ('${id(20)}','reports.fnb');set role authenticated;
+ do $$begin
+  if (select count(*) from invoice_items where invoice_id='${id(53)}')<>0
+   or (select count(*) from invoice_items_scoped where invoice_id='${id(53)}')<>0 then
+   raise exception 'F&B report exposed invoice lines';end if;
+ end$$;
  reset role;insert into role_permissions values ('${id(20)}','pos_fnb.checkout');set role authenticated;
  do $$begin
   if (select count(*) from invoice_items where invoice_id='${id(53)}')<>1 then
