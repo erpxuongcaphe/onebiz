@@ -46,7 +46,7 @@ begin
   or (p_from is not null and p_to is not null and p_from>=p_to) then
   raise exception 'FNB_REPORT_FILTER_INVALID' using errcode='22023';end if;
  return query select r.id,r.code,r.created_at,i.code,r.total,r.refunded
- from public.sales_returns r join public.invoices i on i.id=r.invoice_id and i.tenant_id=tenant
+ from public.sales_returns r join public.invoices i on i.id=r.invoice_id and i.tenant_id=tenant and i.branch_id=r.branch_id
  where r.tenant_id=tenant and r.branch_id=any(branches) and i.source='fnb'
   and r.status in ('confirmed','completed')
   and (p_from is null or r.created_at>=p_from) and (p_to is null or r.created_at<p_to)
@@ -70,7 +70,7 @@ begin
  with scoped as (
   select k.delivery_staff_id,k.delivery_fee,i.total,
    extract(epoch from (date_trunc('milliseconds',k.delivery_completed_at)-date_trunc('milliseconds',k.delivery_assigned_at))) as seconds
-  from public.kitchen_orders k left join public.invoices i on i.id=k.invoice_id and i.tenant_id=tenant and i.branch_id=any(branches)
+  from public.kitchen_orders k left join public.invoices i on i.id=k.invoice_id and i.tenant_id=tenant and i.branch_id=k.branch_id
   where k.tenant_id=tenant and k.branch_id=any(branches) and k.delivery_staff_id is not null
    and (p_from is null or k.created_at>=p_from) and (p_to is null or k.created_at<p_to)
  )
@@ -99,7 +99,7 @@ begin
   case when k.delivery_assigned_at is not null and k.delivery_completed_at is not null then
    floor(extract(epoch from (date_trunc('milliseconds',k.delivery_completed_at)-date_trunc('milliseconds',k.delivery_assigned_at)))+0.5)
   else null end,k.created_at
- from public.kitchen_orders k left join public.invoices i on i.id=k.invoice_id and i.tenant_id=tenant and i.branch_id=any(branches)
+ from public.kitchen_orders k left join public.invoices i on i.id=k.invoice_id and i.tenant_id=tenant and i.branch_id=k.branch_id
  where k.tenant_id=tenant and k.branch_id=any(branches) and k.delivery_staff_id=p_staff_id
   and (p_from is null or k.created_at>=p_from) and (p_to is null or k.created_at<p_to)
  order by k.created_at desc nulls first,k.id desc offset p_offset limit p_limit;

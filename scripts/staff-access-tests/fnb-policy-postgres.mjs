@@ -249,6 +249,22 @@ statements.push(`
   begin perform public.staff_fnb_invoice_detail_page('${id(11)}',null,null,0,2);raise exception 'unassigned invoice branch allowed';
   exception when insufficient_privilege then if sqlerrm<>'BRANCH_ACCESS_DENIED' then raise;end if;end;
  end$$;
+ reset role;
+ insert into sales_returns(id,tenant_id,branch_id,invoice_id,status,total,created_at,code,refunded)
+  values ('${id(513)}','${id(1)}','${id(10)}','${id(501)}','completed',999,'2026-10-07 08:00Z','bad-branch',999);
+ insert into kitchen_orders(id,tenant_id,branch_id,invoice_id,delivery_staff_id,order_number)
+  values ('${id(35)}','${id(1)}','${id(10)}','${id(501)}','${id(101)}','bad-branch');
+ set role authenticated;
+ do $$begin
+  if exists(select 1 from public.staff_fnb_return_detail_page('${id(10)}',null,null,0,20) where id='${id(513)}')
+   then raise exception 'cross-branch return exposed invoice';end if;
+  if (public.staff_fnb_kpi_summary('${id(10)}',null,null)->>'returnAmount')::numeric<>30
+   then raise exception 'cross-branch return affected KPI';end if;
+  if not exists(select 1 from public.staff_fnb_delivery_detail_page('${id(101)}','${id(10)}',null,null,0,20)
+    where kitchen_order_id='${id(35)}' and invoice_id is null and total=0)
+   then raise exception 'cross-branch delivery exposed invoice';end if;
+ end$$;
+ reset role;delete from sales_returns where id='${id(513)}';delete from kitchen_orders where id='${id(35)}';
  reset role;insert into role_permissions values ('${id(20)}','reports.view_all_branches');set role authenticated;
  do $$begin
   if (select count(*) from public.staff_fnb_invoice_detail_page(null,null,null,0,20))<>3 then raise exception 'all-branch invoice detail mismatch';end if;

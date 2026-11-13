@@ -90,7 +90,7 @@ begin
   and (p_from is null or i.ngay_chung_tu>=p_from)
   and (p_to is null or i.ngay_chung_tu<p_to);
  select coalesce(sum(r.total),0) into return_total from public.sales_returns r
- join public.invoices i on i.id=r.invoice_id and i.tenant_id=tenant
+ join public.invoices i on i.id=r.invoice_id and i.tenant_id=tenant and i.branch_id=r.branch_id
  where r.tenant_id=tenant and r.branch_id=any(branches) and i.source='fnb'
   and r.status in ('confirmed','completed')
   and (p_from is null or r.created_at>=p_from)
