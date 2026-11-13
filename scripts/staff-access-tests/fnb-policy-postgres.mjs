@@ -71,6 +71,27 @@ statements.push(`
  do $$begin if (select count(*) from kitchen_orders)<>0 then raise exception 'inactive account retained order access'; end if; end$$;
  reset role;
 `);
+// The public payment endpoint separately enforces checkout. Its internal
+// legacy view prerequisite must accept independently granted checkout.
+statements.push(`
+ update profiles set is_active=true where id='${id(101)}';
+ insert into staff_branch_permission_catalog values ('pos_fnb.checkout',1) on conflict do nothing;
+ insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
+ ('${id(1)}','${id(101)}','${id(10)}','pos_fnb.view_orders','revoke','${id(100)}'),
+ ('${id(1)}','${id(101)}','${id(10)}','pos_fnb.checkout','grant','${id(100)}');
+ create function public._fnb_complete_payment_impl_00343(p_kitchen_order_id uuid,p_customer_id uuid,p_customer_name text,p_method text,p_breakdown jsonb,p_paid numeric,p_debt boolean,p_discount numeric,p_promo uuid,p_coupon text,p_note text,p_shift uuid,p_tip numeric,p_otp uuid,p_reason text)
+ returns boolean language plpgsql security definer set search_path=public as $$declare v_actor uuid:=auth.uid();begin
+ if not public.user_has_permission(v_actor,'pos_fnb.view_orders') then raise exception 'FNB_PAYMENT_DENIED';end if;return true;end$$;
+`);
+statements.push(await readFile(new URL('../../supabase/migrations/20261112045533_staff_branch_fnb_order_view.sql',import.meta.url),'utf8'));
+statements.push(`
+ do $$begin if not public._fnb_complete_payment_impl_00343('${id(30)}',null,null,null,null,0,false,0,null,null,null,null,0,null,null) then raise exception 'checkout grant lost';end if;end$$;
+ update user_branch_permission_overrides set override_type='revoke' where user_id='${id(101)}' and permission_code='pos_fnb.checkout';
+ do $$declare denied boolean:=false;begin begin perform public._fnb_complete_payment_impl_00343('${id(30)}',null,null,null,null,0,false,0,null,null,null,null,0,null,null);
+ exception when raise_exception then if sqlerrm='FNB_PAYMENT_DENIED' then denied:=true;else raise;end if;end;
+ if not denied then raise exception 'both payment permissions revoked but allowed';end if;end$$;
+ delete from user_branch_permission_overrides where user_id='${id(101)}' and permission_code in ('pos_fnb.view_orders','pos_fnb.checkout');
+`);
 statements.push(`
  alter table kitchen_orders add column invoice_id uuid;
  alter table kitchen_orders add column table_id uuid;

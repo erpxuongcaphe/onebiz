@@ -59,6 +59,15 @@ statements.push(`
   perform public.fnb_print_enqueue_v1('${id(10)}','${id(76)}','cashier','Synthetic','80mm',encode(decode('1b401b6101' || repeat('00',20),'hex'),'base64'));
   if (select count(*) from fnb_print_jobs) <> 2 then raise exception 'Checkout user lost cashier printing'; end if;
  end$$;
+ insert into staff_branch_permission_catalog values ('pos_fnb.view_orders',1);
+ insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+ values ('${id(1)}','${id(101)}','${id(10)}','pos_fnb.view_orders','revoke','${id(100)}');
+ do $$begin
+  perform public.fnb_print_enqueue_v1('${id(10)}','${id(77)}','cashier','Synthetic','80mm',encode(decode('1b401b6101' || repeat('00',20),'hex'),'base64'));
+  perform public.fnb_print_enqueue_v1('${id(10)}','${id(78)}','kitchen','Synthetic','80mm',encode(decode('1b401b6101' || repeat('00',20),'hex'),'base64'));
+  perform public.fnb_print_enqueue_v1('${id(10)}','${id(78)}','kitchen','Synthetic','80mm',encode(decode('1b401b6101' || repeat('00',20),'hex'),'base64'));
+  if (select count(*) from fnb_print_jobs) <> 4 then raise exception 'view denial blocked independent printing or duplicated a job';end if;
+ end$$;
 `);
 if (process.env.ONEBIZ_PGLITE_MODULE) {
  const { PGlite } = await import(pathToFileURL(process.env.ONEBIZ_PGLITE_MODULE).href);

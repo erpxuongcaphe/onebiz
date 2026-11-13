@@ -324,6 +324,41 @@ sql.push(`
  values ('${id(1)}','${id(101)}','invoices.view','revoke','${id(100)}');
  do $$begin if public.user_has_permission_at_branch('${id(101)}','invoices.view','${id(11)}') then raise exception 'invoice local grant bypassed global revoke';end if;end$$;
 `);
+// Install the same protected F&B readers and payment prerequisite before
+// exposing its view exception in the editor.
+sql.push(`
+ delete from user_branch_permission_overrides where permission_code='pos_fnb.view_orders';
+ delete from staff_branch_permission_catalog where permission_code='pos_fnb.view_orders';
+ create table kitchen_order_items(id uuid,kitchen_order_id uuid);
+ alter table kitchen_orders enable row level security;alter table kitchen_order_items enable row level security;
+ create policy fixture_kitchen_read on kitchen_orders for select to authenticated using (true);
+ create policy fixture_kitchen_item_read on kitchen_order_items for select to authenticated using (true);
+ create function public._fnb_complete_payment_impl_00343(p_kitchen_order_id uuid,p_customer_id uuid,p_customer_name text,p_method text,p_breakdown jsonb,p_paid numeric,p_debt boolean,p_discount numeric,p_promo uuid,p_coupon text,p_note text,p_shift uuid,p_tip numeric,p_otp uuid,p_reason text)
+ returns boolean language plpgsql security definer set search_path=public as $$declare v_actor uuid:=auth.uid();begin
+ if not public.user_has_permission(v_actor,'pos_fnb.view_orders') then raise exception 'FNB_PAYMENT_DENIED';end if;return true;end$$;
+ create function public.fnb_print_enqueue_v1(p_branch uuid,p_id uuid,p_route text,p_label text,p_paper text,p_bytes text)
+ returns jsonb language sql security definer as $$select jsonb_build_object('bill',public._staff_permission_at_scope(auth.uid(),'pos_fnb.checkout',p_branch),'kitchen',public._staff_permission_at_scope(auth.uid(),'pos_fnb.send_kitchen',p_branch))$$;
+`);
+for(const name of ['20261112065630_staff_branch_fnb_view_direct_reads.sql','20261112122122_staff_fnb_view_global_revoke_guard.sql','20261112165952_staff_fnb_legacy_branch_read_guard.sql','20261112045533_staff_branch_fnb_order_view.sql']) sql.push(await migration(name));
+sql.push(await functionFromMigration('20261112062412_staff_branch_fnb_view_invoices.sql','_staff_my_fnb_order_view'));
+sql.push(await migration('20261113121957_staff_fnb_order_view_catalog.sql'));
+sql.push(`
+ do $$declare snap jsonb; d jsonb; saved jsonb;begin
+  snap:=public.get_staff_profile_access('${id(101)}');
+  if not (snap->'branchPermissionCodes') ? 'pos_fnb.view_orders' then raise exception 'F&B view missing from editor';end if;
+  d:=jsonb_build_object('roleId',snap->'user'->'roleId','branchIds',snap->'user'->'branchIds',
+   'assignments','[]'::jsonb,'exceptions',(snap->'exceptions')||jsonb_build_array(
+    jsonb_build_object('branchId','${id(10)}','permissionCode','pos_fnb.view_orders','choice','revoke'),
+    jsonb_build_object('branchId','${id(11)}','permissionCode','pos_fnb.view_orders','choice','grant')));
+  saved:=public.save_staff_profile_access('${id(101)}',snap->>'fingerprint',d);
+  if public.user_has_permission_at_branch('${id(101)}','pos_fnb.view_orders','${id(10)}')
+   or not public.user_has_permission_at_branch('${id(101)}','pos_fnb.view_orders','${id(11)}')
+   then raise exception 'F&B view branch grant/revoke failed';end if;
+ end$$;
+ insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type,created_by)
+ values ('${id(1)}','${id(101)}','pos_fnb.view_orders','revoke','${id(100)}');
+ do $$begin if public.user_has_permission_at_branch('${id(101)}','pos_fnb.view_orders','${id(11)}') then raise exception 'F&B local grant bypassed global revoke';end if;end$$;
+`);
 if(process.env.ONEBIZ_PGLITE_MODULE){const {PGlite}=await import(pathToFileURL(process.env.ONEBIZ_PGLITE_MODULE).href);const db=new PGlite();try{await db.exec(sql.join('\n'));}catch(e){console.error(e.message,e.where||'');process.exitCode=1;}finally{await db.close();}if(process.exitCode)process.exit(process.exitCode);console.log('PASS local invoice fixture rehearsal (PGlite)');process.exit(0);}
 const args=['-Xq','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p','55433','-U','staff_test','-d','onebiz_staff_access_test'];
 const child=spawn('psql',args,{env:{PATH:process.env.PATH,PGPASSWORD:'ephemeral-test-only',PGSSLMODE:'disable',PGCONNECT_TIMEOUT:'5'},stdio:['pipe','pipe','pipe']});
