@@ -797,6 +797,11 @@ export function StaffProfileEditor({
                                     Quyền này cho đối chiếu ca của quán được chọn. Thu ngân vẫn có thể đóng ca của mình; quyền đối chiếu mọi chi nhánh là quyền độc lập.
                                   </p>
                                 )}
+                                {branchId && p.code === "floor_plan.view" && (
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    Quyền này mở trang xem sơ đồ tại chi nhánh đã chọn. Quyền bán hàng F&amp;B, in đơn hoặc hóa đơn, quản lý bàn, xem hoặc sửa sản phẩm và một số quyền toàn công ty vẫn cho đọc dữ liệu bàn để phục vụ công việc; kiểm tra các quyền đó nếu cần giới hạn dữ liệu.
+                                  </p>
+                                )}
                                 {branchId && p.code === "invoices.adjust_issued_at" && (
                                   <p className="mt-1 text-xs text-muted-foreground">
                                     Cho phép chỉnh ngày giờ hóa đơn tại chi nhánh được chọn. Không cấp quyền này vẫn thanh toán bình thường với thời gian tự động.

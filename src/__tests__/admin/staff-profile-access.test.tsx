@@ -58,6 +58,25 @@ const snapshot: StaffProfileSnapshot = {
   branchPermissionCodes: ["pos_fnb.split_bill", "pos_fnb.transfer_table"],
 };
 describe("staff profile scope", () => {
+  it("saves floor-view scope without changing other rights and explains independent table readers", async () => {
+    const data = structuredClone(snapshot);
+    data.branchPermissionCodes.push("floor_plan.view");
+    data.exceptions.push({ branchId: "tubua", permissionCode: "pos_fnb.transfer_table", choice: "grant" });
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<StaffProfileEditor snapshot={data} onSave={onSave} onReload={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Tùy chỉnh quyền" }));
+    fireEvent.click(screen.getByRole("button", { name: "Premium" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Tìm quyền" }), { target: { value: "floor_plan.view" } });
+    expect(screen.getByText(/Quyền này mở trang xem sơ đồ tại chi nhánh đã chọn/)).toBeVisible();
+    expect(screen.getByText(/vẫn cho đọc dữ liệu bàn để phục vụ công việc/)).toBeVisible();
+    fireEvent.change(screen.getByRole("combobox", { name: "Quyền Xem sơ đồ bàn" }), { target: { value: "grant" } });
+    fireEvent.click(screen.getByRole("button", { name: "Lưu phân công" }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+    expect(onSave.mock.calls[0][0].exceptions).toEqual(expect.arrayContaining([
+      { branchId: "premium", permissionCode: "floor_plan.view", choice: "grant" },
+      { branchId: "tubua", permissionCode: "pos_fnb.transfer_table", choice: "grant" },
+    ]));
+  });
   it("explains that importing customers also permits opening debt work", () => {
     render(<StaffProfileEditor snapshot={snapshot} onSave={vi.fn()} onReload={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "Tùy chỉnh quyền" }));

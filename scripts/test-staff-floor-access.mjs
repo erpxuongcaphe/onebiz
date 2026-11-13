@@ -14,6 +14,19 @@ const file = (n) =>
   readFile(new URL("../supabase/migrations/" + n, import.meta.url), "utf8");
 try {
   await initializeStaffAccessFixture(db, id);
+  await db.exec(`create function public.get_user_effective_permissions_before_account_hierarchy(p_user uuid)
+    returns table(permission_code text) language sql stable as $$
+      select c.code from (select rp.permission_code as code from public.profiles p
+        join public.role_permissions rp on rp.role_id=p.role_id where p.id=p_user
+        union select o.permission_code from public.user_permission_overrides o
+        where o.user_id=p_user and o.override_type='grant') c
+      where not exists(select 1 from public.user_permission_overrides r
+        where r.user_id=p_user and r.permission_code=c.code and r.override_type='revoke')
+    $$`);
+  await db.exec(`create function public.get_user_effective_permissions(p_user uuid)
+    returns table(permission_code text) language sql stable as $$
+      select x.permission_code from public.get_user_effective_permissions_before_account_hierarchy(p_user) x
+    $$`);
   await db.exec(await file("20261111052704_staff_branch_access.sql"));
   for (const [f, n] of [
     [
@@ -253,6 +266,88 @@ try {
     `insert into restaurant_tables(id,tenant_id,branch_id,table_number,name) values('${id(851)}','${id(1)}','${id(10)}',99,'Direct')`,
     `insert into floor_plan_decorations(id,tenant_id,branch_id,zone_id,kind) values('${id(852)}','${id(1)}','${id(10)}','${id(800)}','plant')`,
   ]) await assert.rejects(db.query(sql),/row-level security/);
+  await db.exec('reset role');
+  await db.exec('alter policy staff_floor_branch_read on floor_plan_zones rename to synthetic_changed_read_policy');
+  await assert.rejects(db.exec(await file('20261114033000_staff_floor_view_scope.sql')),/STAFF_FLOOR_READ_POLICY_CHANGED/,
+    'the new migration must fail closed if an existing read policy has drifted');
+  await db.exec('rollback; alter policy synthetic_changed_read_policy on floor_plan_zones rename to staff_floor_branch_read');
+  await db.exec(await file('20261114033000_staff_floor_view_scope.sql'));
+  const permissionParity = async () => {
+    const result = await db.query(`select c.code from unnest(array[
+      'reports.view_all_branches','floor_plan.edit_global','orders.print','invoices.print',
+      'system.manage_branches','products.view','products.edit','floor_plan.view','floor_plan.edit_branch',
+      'pos_fnb.send_kitchen','pos_fnb.checkout','pos_fnb.view_orders','pos_fnb.manage_tables']::text[]) c(code)
+      join public.profiles p on p.id=$1
+      where public.user_has_permission(p.id,c.code) is distinct from
+       (p.role='owner' or exists(select 1 from public.get_user_effective_permissions(p.id) x where x.permission_code=c.code))`,[id(101)]);
+    assert.deepEqual(result.rows, [], 'bulk permission set must match the existing permission helper');
+  };
+  await permissionParity();
+  await db.exec('set role authenticated');
+  assert.deepEqual((await db.query('select id from restaurant_tables')).rows, [],
+    'without floor or an independent operational permission, direct reads are denied');
+  await db.exec(`reset role;
+    insert into user_branches(user_id,branch_id) values('${id(101)}','${id(11)}');
+    insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+      values('${id(1)}','${id(101)}','${id(11)}','floor_plan.view','grant','${id(100)}');
+    set role authenticated;`);
+  assert.deepEqual((await db.query('select distinct branch_id from restaurant_tables order by branch_id')).rows.map(row=>row.branch_id),[id(11)],
+    'a branch-only view grant does not give floor data at other assigned branches');
+  await db.exec(`reset role;
+    delete from user_branches where user_id='${id(101)}' and branch_id='${id(11)}';
+    set role authenticated;`);
+  assert.deepEqual((await db.query('select id from restaurant_tables')).rows, [],
+    'a stale branch grant cannot give access after the branch assignment is removed');
+  await db.exec(`reset role;
+    insert into user_branches(user_id,branch_id) values('${id(101)}','${id(11)}');
+    insert into role_permissions values('${id(20)}','floor_plan.view');
+    insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+      values('${id(1)}','${id(101)}','${id(10)}','floor_plan.view','revoke','${id(100)}');
+    set role authenticated;`);
+  assert.deepEqual((await db.query('select distinct branch_id from restaurant_tables order by branch_id')).rows.map(row=>row.branch_id),[id(11)],
+    'branch revocation overrides the view permission inherited from a role');
+  await db.exec(`reset role;
+    insert into staff_branch_permission_catalog(permission_code,enforcement_version) values('pos_fnb.send_kitchen',1);
+    insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+      values('${id(1)}','${id(101)}','${id(10)}','pos_fnb.send_kitchen','grant','${id(100)}');
+    set role authenticated;`);
+  assert.deepEqual((await db.query('select distinct branch_id from restaurant_tables order by branch_id')).rows.map(row=>row.branch_id),[id(10),id(11)],
+    'POS keeps its table data independently of a floor view grant');
+  await db.exec(`reset role;
+    insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type)
+      values('${id(1)}','${id(101)}','floor_plan.view','revoke');
+    set role authenticated;`);
+  assert.deepEqual((await db.query('select distinct branch_id from restaurant_tables order by branch_id')).rows.map(row=>row.branch_id),[id(10)],
+    'a global view revoke overrides a branch view grant but does not revoke POS');
+  for (const table of ['floor_plan_zones','floor_plan_decorations']) {
+    assert.deepEqual((await db.query(`select distinct branch_id from ${table} order by branch_id`)).rows.map(row=>row.branch_id),[id(10)],
+      `${table}: global view revoke and the POS alternative follow the same branch scope`);
+  }
+  await db.exec('reset role');
+  await permissionParity();
+  await db.exec(`
+    delete from user_branch_permission_overrides where user_id='${id(101)}' and permission_code='pos_fnb.send_kitchen';
+    insert into role_permissions values('${id(20)}','products.view');
+    set role authenticated;`);
+  assert.deepEqual((await db.query('select distinct branch_id from restaurant_tables order by branch_id')).rows.map(row=>row.branch_id),[id(10),id(11)],
+    'product setup keeps its independent assigned-branch table reads');
+  for (const printCode of ['orders.print','invoices.print']) {
+    await db.exec(`reset role;
+      delete from role_permissions where role_id='${id(20)}' and permission_code in ('products.view','orders.print','invoices.print');`);
+    await db.query('insert into role_permissions values($1,$2)',[id(20),printCode]);
+    await db.exec('set role authenticated');
+    assert.deepEqual((await db.query('select distinct branch_id from restaurant_tables order by branch_id')).rows.map(row=>row.branch_id),[id(10),id(11)],
+      `${printCode}: legacy printing retains assigned-branch table reads even if view is revoked`);
+  }
+  await db.exec(`reset role;
+    delete from user_branch_permission_overrides where user_id='${id(101)}' and permission_code in ('floor_plan.view','pos_fnb.send_kitchen');
+    delete from user_permission_overrides where user_id='${id(101)}' and permission_code='floor_plan.view';
+    delete from role_permissions where role_id='${id(20)}' and permission_code='products.view';
+    delete from role_permissions where role_id='${id(20)}' and permission_code='orders.print';
+    delete from role_permissions where role_id='${id(20)}' and permission_code='invoices.print';
+    delete from role_permissions where role_id='${id(20)}' and permission_code='floor_plan.view';
+    delete from user_branches where user_id='${id(101)}' and branch_id='${id(11)}';
+    set role authenticated;`);
   await db.exec(`reset role; insert into role_permissions values('${id(20)}','floor_plan.edit_global'); set role authenticated;`);
   assert.ok((await db.query('select id from restaurant_tables order by id')).rows.some(row=>row.id===id(811)),
     'existing global floor editor can read the other branch');
@@ -269,6 +364,32 @@ try {
   const branchRpc=(await db.query("select fnb_floor_zone_config_atomic('create',$1,'{\"name\":\"Branch RPC\"}') v",[id(10)])).rows[0].v;
   assert.ok(branchRpc.ok,'branch editor retains the checked RPC at their assigned branch');
   await assert.rejects(db.query("select fnb_floor_zone_config_atomic('create',$1,'{\"name\":\"Other branch\"}')",[id(11)]),denied);
+  // Compare the optimized candidate filter with the authoritative scope helper
+  // for every relevant role/global/branch grant and revoke combination.
+  await db.exec(`reset role;
+    delete from role_permissions where role_id='${id(20)}' and permission_code='floor_plan.edit_branch';
+    insert into user_branches(user_id,branch_id) values('${id(101)}','${id(11)}');
+    insert into staff_branch_permission_catalog(permission_code,enforcement_version)
+      select c,1 from unnest(array['floor_plan.view','floor_plan.edit_branch','pos_fnb.send_kitchen',
+        'pos_fnb.checkout','pos_fnb.view_orders','pos_fnb.manage_tables']) c on conflict do nothing;`);
+  const scopedCodes=['floor_plan.view','floor_plan.edit_branch','pos_fnb.send_kitchen',
+    'pos_fnb.checkout','pos_fnb.view_orders','pos_fnb.manage_tables'];
+  for (const code of scopedCodes) for (const roleGrant of [false,true])
+    for (const globalChoice of ['inherit','grant','revoke']) for (const branchChoice of ['inherit','grant','revoke']) {
+      await db.query('delete from role_permissions where role_id=$1 and permission_code=$2',[id(20),code]);
+      await db.query('delete from user_permission_overrides where user_id=$1 and permission_code=$2',[id(101),code]);
+      await db.query('delete from user_branch_permission_overrides where user_id=$1 and permission_code=$2',[id(101),code]);
+      if(roleGrant) await db.query('insert into role_permissions values($1,$2)',[id(20),code]);
+      if(globalChoice!=='inherit') await db.query('insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type) values($1,$2,$3,$4)',[id(1),id(101),code,globalChoice]);
+      if(branchChoice!=='inherit') await db.query('insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values($1,$2,$3,$4,$5,$6)',[id(1),id(101),id(10),code,branchChoice,id(100)]);
+      const expected=(await db.query('select public._staff_permission_at_scope($1,$2,$3) as ok',[id(101),code,id(10)])).rows[0].ok;
+      const actual=(await db.query('select $1::uuid=any(public._staff_floor_readable_branches()) as ok',[id(10)])).rows[0].ok;
+      assert.equal(actual,expected,`${code}: role=${roleGrant}, global=${globalChoice}, branch=${branchChoice}`);
+    }
+  await db.exec(`delete from role_permissions where role_id='${id(20)}' and permission_code=any(array['floor_plan.view','floor_plan.edit_branch','pos_fnb.send_kitchen','pos_fnb.checkout','pos_fnb.view_orders','pos_fnb.manage_tables']);
+    delete from user_permission_overrides where user_id='${id(101)}' and permission_code=any(array['floor_plan.view','floor_plan.edit_branch','pos_fnb.send_kitchen','pos_fnb.checkout','pos_fnb.view_orders','pos_fnb.manage_tables']);
+    delete from user_branch_permission_overrides where user_id='${id(101)}' and permission_code=any(array['floor_plan.view','floor_plan.edit_branch','pos_fnb.send_kitchen','pos_fnb.checkout','pos_fnb.view_orders','pos_fnb.manage_tables']);
+    set role authenticated;`);
   await db.exec(`reset role; update profiles set is_active=false where id='${id(101)}'; set role authenticated;`);
   assert.deepEqual((await db.query('select id from restaurant_tables')).rows,[],'inactive user cannot read floor data');
   await db.exec('reset role');
