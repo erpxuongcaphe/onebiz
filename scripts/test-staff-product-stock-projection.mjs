@@ -33,8 +33,11 @@ try {
    from products p where tenant_id=get_user_tenant_id();
   grant usage on schema public,auth to authenticated;grant select on products_scoped to authenticated;
   select set_config('request.jwt.claim.sub','${id(101)}',false);`);
+ const viewMetadata=async()=>(await db.query("select relowner,relacl::text acl,reloptions from pg_class where oid='public.products_scoped'::regclass")).rows[0];
+ const beforeViewMetadata=await viewMetadata();
  await db.exec(await file('20261112104703_staff_inventory_branch_stock_reads.sql'));
  await db.exec(await file('20261112110113_staff_product_stock_projection.sql'));
+ assert.deepEqual(await viewMetadata(),beforeViewMetadata,'product view retains barrier, owner and grants');
  await db.exec(`create function public._staff_lot_has_no_view_exception() returns boolean language sql as $$select true$$;
   create function public._staff_inventory_row_visible(uuid) returns boolean language sql as $$select true$$;`);
  await db.exec(await file('20261112121837_staff_inventory_global_revoke_guard.sql'));

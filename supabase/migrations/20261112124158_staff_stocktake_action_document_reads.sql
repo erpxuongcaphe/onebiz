@@ -24,7 +24,7 @@ revoke all on function public._staff_stocktake_action_branches(),public._staff_s
 grant execute on function public._staff_stocktake_action_branches(),public._staff_stocktake_document_view(uuid) to authenticated;
 
 do $migration$
-declare source text; entry_anchor text; row_anchor text;
+declare source text; entry_anchor text; row_anchor text; old_acl text; old_owner oid; old_options text[];
 begin
  source:=pg_get_functiondef('public.get_inventory_check_list_workspace(integer,integer,text,text,text[],timestamptz,timestamptz,uuid,uuid)'::regprocedure);
  entry_anchor:='public._staff_my_inventory_view(p_branch_id)';
@@ -42,11 +42,18 @@ begin
   raise exception 'STAFF_STOCKTAKE_DOCUMENT_DETAIL_CHANGED';end if;
  execute replace(replace(source,entry_anchor,'public._staff_stocktake_document_view(null::uuid)'),row_anchor,'public._staff_stocktake_document_view(c.branch_id)');
 
- source:=pg_get_viewdef('public.inventory_check_items_scoped'::regclass,true);
+ select pg_get_viewdef(c.oid,true),c.relacl::text,c.relowner,c.reloptions into source,old_acl,old_owner,old_options
+  from pg_class c join pg_namespace n on n.oid=c.relnamespace
+  where n.nspname='public' and c.relname='inventory_check_items_scoped' and c.relkind='v';
  row_anchor:='_staff_inventory_row_visible(o.branch_id)';
  if position(row_anchor in source)=0 then raise exception 'STAFF_STOCKTAKE_DOCUMENT_VIEW_CHANGED';end if;
- execute 'create or replace view public.inventory_check_items_scoped as ' || replace(source,row_anchor,
-  '('||row_anchor||' or coalesce(o.branch_id=any((select public._staff_stocktake_action_branches())::uuid[]),false))');
+ execute format('create or replace view public.inventory_check_items_scoped %s as %s',
+  case when old_options is null then '' else 'with ('||array_to_string(old_options,',')||')' end,
+  replace(source,row_anchor,'('||row_anchor||' or coalesce(o.branch_id=any((select public._staff_stocktake_action_branches())::uuid[]),false))'));
+ if exists(select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace
+  where n.nspname='public' and c.relname='inventory_check_items_scoped'
+   and (c.relacl::text is distinct from old_acl or c.relowner<>old_owner or c.reloptions is distinct from old_options)) then
+  raise exception 'STAFF_STOCKTAKE_VIEW_METADATA_CHANGED';end if;
 
  alter policy staff_inventory_document_read on public.inventory_checks using (
   (select public._staff_lot_has_no_view_exception())

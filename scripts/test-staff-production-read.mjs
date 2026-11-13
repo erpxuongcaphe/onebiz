@@ -49,7 +49,7 @@ try {
     create view production_orders_scoped as select t.* from production_orders t
       join branches b on b.id=t.branch_id
       where _can_read_branch_inventory_00476(auth.uid(),t.tenant_id,t.branch_id);
-    create view production_order_materials_scoped as select t.* from production_order_materials t
+    create view production_order_materials_scoped with (security_barrier=true) as select t.* from production_order_materials t
       where exists(select 1 from production_orders o where o.id=t.production_order_id
         and _can_read_branch_inventory_00476(auth.uid(),o.tenant_id,o.branch_id));
     insert into user_branches values ('${id(101)}','${id(11)}',null);
@@ -90,9 +90,14 @@ try {
       await db.exec(match.definition);
     }
   }
+  const viewMetadata = async () => (await db.query(`select c.relname,c.relowner,c.relacl::text acl,c.reloptions
+    from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public'
+    and c.relname in ('production_orders_scoped','production_order_materials_scoped') order by c.relname`)).rows;
+  const beforeViewMetadata = await viewMetadata();
   await db.exec(
     await migration("20261112010015_staff_branch_production_read.sql"),
   );
+  assert.deepEqual(await viewMetadata(),beforeViewMetadata,'production views retain barrier, owner and grants');
 
   const list = async (branch = null) =>
     (

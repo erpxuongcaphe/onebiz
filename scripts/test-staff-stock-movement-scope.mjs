@@ -50,9 +50,12 @@ try {
   grant usage on schema public,auth to authenticated;grant select on stock_movements_scoped to authenticated;
   grant select(id,tenant_id,branch_id) on stock_movements to authenticated;
   select set_config('request.jwt.claim.sub','${id(101)}',false);`);
+  const viewMetadata=async()=>(await db.query("select relowner,relacl::text acl,reloptions from pg_class where oid='public.stock_movements_scoped'::regclass")).rows[0];
+  const beforeViewMetadata=await viewMetadata();
   await db.exec(
     await file("20261112104123_staff_inventory_direct_stock_scope.sql"),
   );
+  assert.deepEqual(await viewMetadata(),beforeViewMetadata,'stock movement view retains barrier, owner and grants');
   for (const name of ['_staff_lot_has_no_view_exception','_staff_inventory_row_visible'])
     await db.exec(await functionFromMigration('20261112121837_staff_inventory_global_revoke_guard.sql',name));
   await db.exec(await file('20261113063835_staff_stock_movements_direct_scope.sql'));

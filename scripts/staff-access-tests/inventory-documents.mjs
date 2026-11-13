@@ -78,7 +78,7 @@ export async function verifyInventoryDocumentReads(db, id) {
     `);
   }
   await db.exec(`
-    create view inventory_check_items_scoped as select t.* from inventory_check_items t
+    create view inventory_check_items_scoped with (security_barrier=true) as select t.* from inventory_check_items t
       where exists(select 1 from inventory_checks o where o.id=t.check_id
         and _can_read_branch_inventory_00476(auth.uid(),o.tenant_id,o.branch_id));
     grant select on inventory_check_items_scoped to authenticated;
@@ -87,6 +87,9 @@ export async function verifyInventoryDocumentReads(db, id) {
       ('${id(721)}','${id(711)}','${id(600)}','Coffee',0,90,90,10);
     insert into role_permissions values ('${id(20)}','inventory.edit_check');
   `);
+  const viewMetadata = async () => (await db.query(`select c.relowner,c.relacl::text acl,c.reloptions from pg_class c
+    where c.oid='public.inventory_check_items_scoped'::regclass`)).rows[0];
+  const beforeViewMetadata = await viewMetadata();
   const sourceName = "get_inventory_check_change_source";
   const dir = new URL("../../supabase/migrations/", import.meta.url);
   if (process.env.ONEBIZ_INVENTORY_LOT_AUDIT_FILE) {
@@ -123,6 +126,7 @@ export async function verifyInventoryDocumentReads(db, id) {
       "utf8",
     ),
   );
+  assert.deepEqual(await viewMetadata(),beforeViewMetadata,'inventory view retains barrier, owner and grants');
   // Match chronological production order: the later global guard replaces the
   // earlier predicate before batched document policies are installed.
   await db.exec(await functionFromMigration('20261112121837_staff_inventory_global_revoke_guard.sql','_staff_inventory_row_visible'));
@@ -211,6 +215,7 @@ export async function verifyInventoryDocumentReads(db, id) {
     returns boolean language plpgsql as $$ declare actor uuid:=auth.uid(); begin
     return public._staff_permission_at_scope(actor,'inventory.view',(select ic.branch_id from public.inventory_checks ic where ic.id=p_check_id and ic.tenant_id=public.get_user_tenant_id())); end $$;`);
   await db.exec(await readFile(new URL('20261112124158_staff_stocktake_action_document_reads.sql',dir),'utf8'));
+  assert.deepEqual(await viewMetadata(),beforeViewMetadata,'stocktake view retains barrier, owner and grants');
   for (const code of ['inventory.check','inventory.edit_check','inventory.cancel_check']) {
     await db.exec(`reset role;
       insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)

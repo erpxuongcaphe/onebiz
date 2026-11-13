@@ -21,6 +21,9 @@ declare
   source text;
   permission_anchor text;
   row_anchor text;
+  old_acl text;
+  old_owner oid;
+  old_options text[];
   scope_anchor constant text := '_can_read_branch_inventory_00476(auth.uid(), o.tenant_id, o.branch_id)';
 begin
   for item in select * from (values
@@ -56,12 +59,19 @@ begin
     row_anchor, 'if not public._staff_my_inventory_view(c.branch_id) or not public.user_has_branch_access(actor,c.branch_id)'
   );
 
-  source := pg_get_viewdef('public.inventory_check_items_scoped'::regclass, true);
+  select pg_get_viewdef(c.oid,true),c.relacl::text,c.relowner,c.reloptions into source,old_acl,old_owner,old_options
+   from pg_class c join pg_namespace n on n.oid=c.relnamespace
+   where n.nspname='public' and c.relname='inventory_check_items_scoped' and c.relkind='v';
   if position(scope_anchor in source) = 0 then
     raise exception 'STAFF_INVENTORY_CHECK_ITEM_VIEW_CHANGED';
   end if;
-  execute 'create or replace view public.inventory_check_items_scoped as ' ||
-    replace(source, scope_anchor, '(' || scope_anchor || ' and public._staff_inventory_row_visible(o.branch_id))');
+  execute format('create or replace view public.inventory_check_items_scoped %s as %s',
+    case when old_options is null then '' else 'with ('||array_to_string(old_options,',')||')' end,
+    replace(source,scope_anchor,'('||scope_anchor||' and public._staff_inventory_row_visible(o.branch_id))'));
+  if exists(select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace
+   where n.nspname='public' and c.relname='inventory_check_items_scoped'
+    and (c.relacl::text is distinct from old_acl or c.relowner<>old_owner or c.reloptions is distinct from old_options)) then
+    raise exception 'STAFF_INVENTORY_CHECK_VIEW_METADATA_CHANGED';end if;
 
   for item in select * from (values
     ('disposal_exports', 'disposal_export_items', 'disposal_id'),
