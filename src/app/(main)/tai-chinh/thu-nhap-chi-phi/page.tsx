@@ -23,11 +23,11 @@ import {getFinanceCategories, getFinanceWorkspace, getAllFinanceRows, saveFinanc
   type FinanceKind, type CashFlowActivity, type FinanceCategory, type FinanceEvent, type FinanceFilters, type FinanceWorkspace} from '@/lib/services/supabase/management-finance';
 
 export default function ManagementFinancePage() {
-  const {activeBranchId:globalBranchId, branches, hasPermission, isLoading} = useAuth();
+  const {activeBranchId:globalBranchId, branches, hasPermissionAtBranch, hasAssignedBranchAccess, isLoading} = useAuth();
   const [localBranch,setLocalBranch]=useState<string>();
   const [urlReady,setUrlReady]=useState(false);
-  const branchDenied=!!localBranch && localBranch!=='all' && !branches?.some(branch=>branch.id===localBranch);
   const activeBranchId=localBranch==='all'?undefined:localBranch??globalBranchId;
+  const branchDenied=!!activeBranchId && (!branches?.some(branch=>branch.id===activeBranchId) || !hasAssignedBranchAccess(activeBranchId));
   const cashBranchName = (id: string) => branches?.find(branch => branch.id === id)?.name ?? 'Chưa xác định';
   const today = cashDateTimeInput().slice(0, 10);
   const [filters, setFilters] = useState<FinanceFilters>({from: today.slice(0, 7) + '-01', to: today, kind: 'expense'});
@@ -67,10 +67,11 @@ export default function ManagementFinancePage() {
   const [reason, setReason] = useState('');
   const [actionSaving, setActionSaving] = useState(false);
   const [actionError, setActionError] = useState('');
-  const canRead = urlReady && !branchDenied && hasPermission('finance.view_cash_book');
-  const canCreate = hasPermission('finance.create_transaction');
-  const canCancel = hasPermission('finance.void_transaction');
-  const canExport = hasPermission('reports.export');
+  const scopePermission = (code: string) => hasPermissionAtBranch(code, activeBranchId ?? null);
+  const canRead = urlReady && !branchDenied && scopePermission('finance.view_cash_book');
+  const canCreate = !branchDenied && scopePermission('finance.create_transaction');
+  const canCancel = !branchDenied && scopePermission('finance.void_transaction');
+  const canExport = !branchDenied && scopePermission('reports.export');
   const scoped = {...filters, branchId: activeBranchId};
   const reportPeriod = new URLSearchParams({preset:'custom',from:filters.from,to:filters.to,view:'table',branch:activeBranchId??'all'}).toString();
   const rangeError = financeReportRangeError(filters.from, filters.to);
@@ -230,8 +231,8 @@ export default function ManagementFinancePage() {
     {view === 'documents' && <><ReportTableFrame tablePreferenceKey="finance.recognition.documents" allowColumnSelection={false}><div className="overflow-x-auto border rounded-md">
       <table className="w-full min-w-[1000px] text-sm"><thead className="bg-muted"><tr>{['Khoản ghi nhận','Ngày phát sinh',...(internalView?['Đơn nội bộ','Mã hàng / tên hàng','Số lượng','ĐVT','Đơn giá','Chi nhánh ghi nhận']:['Khoản mục / đối tượng']),'Ghi nhận trong bộ lọc','Đã thanh toán toàn khoản','Trạng thái',''].map((h, i) => <th key={i} className="p-3 text-left whitespace-nowrap">{h}</th>)}</tr></thead>
         <tbody>{data?.items.map(r => <FinanceRow key={r.id} row={r} internalView={internalView} cashBranchName={cashBranchName} expanded={expanded === r.id} onExpand={() => setExpanded(expanded === r.id ? undefined : r.id)}
-          canSettle={canCreate && r.status === 'posted'} onSettle={() => {setSettling(r); setOpen(true);}}
-          canCancel={canCancel && r.status === 'posted'} onCancel={() => {setCancelling(r); setReason(''); setActionError('');}}/>)}</tbody>
+          canSettle={canCreate && r.status === 'posted' && r.allocations.every(a => hasPermissionAtBranch('finance.create_transaction', a.branch_id))} onSettle={() => {setSettling(r); setOpen(true);}}
+          canCancel={canCancel && r.status === 'posted' && r.allocations.every(a => hasPermissionAtBranch('finance.void_transaction', a.branch_id))} onCancel={() => {setCancelling(r); setReason(''); setActionError('');}}/>)}</tbody>
       </table>
       {loading && <p className="p-6 text-center">Đang tải số liệu…</p>}
       {!loading && data?.items.length === 0 && <p className="p-6 text-center text-muted-foreground">Không có khoản ghi nhận trong bộ lọc.</p>}
@@ -240,8 +241,8 @@ export default function ManagementFinancePage() {
       <Button variant="outline" size="icon" aria-label="Trang trước" title="Trang trước" disabled={loading || page === 0} onClick={() => setPage(p => p - 1)}><Icon name="chevron_left"/></Button>
       <Button variant="outline" size="icon" aria-label="Trang sau" title="Trang sau" disabled={loading || !data || (page + 1) * 50 >= data.total} onClick={() => setPage(p => p + 1)}><Icon name="chevron_right"/></Button>
     </div></div></>}
-    <ManagementFinanceDialog key={settling?.id ?? filters.kind} open={open} onOpenChange={setOpen} categories={categories} event={settling} recordKind={filters.kind ?? 'expense'} onCreateCategory={openCategory} onSuccess={() => setRevision(r => r + 1)}/>
-    <FinanceImportDialog open={importOpen} onOpenChange={setImportOpen} categories={categories} onFinished={()=>setRevision(r=>r+1)}/>
+    <ManagementFinanceDialog key={settling?.id ?? filters.kind} open={open} onOpenChange={setOpen} categories={categories} event={settling} recordKind={filters.kind ?? 'expense'} preferredBranchId={activeBranchId} onCreateCategory={openCategory} onSuccess={() => setRevision(r => r + 1)}/>
+    <FinanceImportDialog branchId={activeBranchId ?? null} open={importOpen} onOpenChange={setImportOpen} categories={categories} onFinished={()=>setRevision(r=>r+1)}/>
     <Dialog open={categoryOpen} onOpenChange={value => {if (!actionSaving) setCategoryOpen(value);}}><DialogContent><DialogHeader><DialogTitle>Thêm khoản mục {categoryKind === 'income' ? 'thu nhập' : categoryKind === 'expense' ? 'chi phí' : 'ngoài KQKD'}</DialogTitle></DialogHeader>
       <label className="grid gap-1 text-sm">Nhóm khoản mục<SearchableSelect disabled={actionSaving} value={parentId} onValueChange={setParentId} options={categories.filter(c => c.is_group && c.kind === categoryKind).map(c => ({value: c.id, label: c.name, meta: c.code}))} placeholder="Chọn nhóm"/></label>
       <label className="grid gap-1 text-sm">Mã khoản mục<Input value={categoryCode} maxLength={32} onChange={e => setCategoryCode(e.target.value.toUpperCase())}/></label>

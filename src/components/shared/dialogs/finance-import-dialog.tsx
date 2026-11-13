@@ -9,25 +9,27 @@ import {getCashPerformers} from '@/lib/services/supabase/cash-timing';
 import {commitFinanceImport,prepareFinanceImport,previewFinanceImport,type FinanceImportRequest} from '@/lib/services/supabase/finance-import';
 import type {FinanceCategory} from '@/lib/services/supabase/management-finance';
 
-interface FinanceImportDialogProps {open:boolean;onOpenChange:(open:boolean)=>void;categories:FinanceCategory[];onFinished:()=>void}
+interface FinanceImportDialogProps {open:boolean;onOpenChange:(open:boolean)=>void;categories:FinanceCategory[];onFinished:()=>void;branchId?:string|null}
 export function FinanceImportDialog(props:FinanceImportDialogProps) {
   const {activeBranchId}=useAuth();
-  return <FinanceImportSession key={`${activeBranchId}:${props.open}`} {...props}/>;
+  const branchId=props.branchId === undefined ? activeBranchId : props.branchId;
+  return <FinanceImportSession key={`${branchId}:${props.open}`} {...props} branchId={branchId}/>;
 }
-function FinanceImportSession({open,onOpenChange,categories,onFinished}:FinanceImportDialogProps) {
-  const {activeBranchId,branches,hasPermission}=useAuth();
+function FinanceImportSession({open,onOpenChange,categories,onFinished,branchId}:FinanceImportDialogProps) {
+  const {branches,hasPermissionAtBranch,hasAssignedBranchAccess}=useAuth();
   const [performers,setPerformers]=useState<Array<{id:string;name:string}>>([]);
   const [performer,setPerformer]=useState('');
   const [error,setError]=useState('');
   const [prepared,setPrepared]=useState<FinanceImportRequest[]>([]);
   const [preview,setPreview]=useState<Array<{sourceCode:string;state:string}>>([]);
+  const canImport=!!branchId && hasAssignedBranchAccess(branchId) && hasPermissionAtBranch('finance.create_transaction',branchId) && hasPermissionAtBranch('finance.view_cash_book',branchId);
   useEffect(()=>{
-    if(!open || !activeBranchId) return;
+    if(!open || !branchId || !canImport) return;
     let active=true;
-    getCashPerformers(activeBranchId).then(rows=>{if(active)setPerformers(rows);}).catch(e=>{if(active)setError(e instanceof Error?e.message:'Không tải được người thu/chi.');});
+    getCashPerformers(branchId).then(rows=>{if(active)setPerformers(rows);}).catch(e=>{if(active)setError(e instanceof Error?e.message:'Không tải được người thu/chi.');});
     return ()=>{active=false;};
-  },[activeBranchId,open]);
-  if(!hasPermission('finance.create_transaction') || !hasPermission('finance.view_cash_book')) return null;
+  },[branchId,open,canImport]);
+  if(!branchId || !canImport) return null;
   return <ImportExcelDialog open={open} onOpenChange={onOpenChange} title="Nhập tài chính từ file" schema={financeImportSchema} retryOnFailure
     instructions={<ul className="list-disc pl-4 space-y-1">
       <li>Dùng file mẫu, chọn đúng chi nhánh và người thực hiện nếu có thu/chi.</li>
@@ -37,12 +39,12 @@ function FinanceImportSession({open,onOpenChange,categories,onFinished}:FinanceI
       <li>Xem trước và xác nhận mới ghi dữ liệu. Nếu mất kết nối, kiểm tra trạng thái hoặc nhập lại đúng file với cùng ngữ cảnh và mã nguồn, không đổi mã để gửi lại.</li>
     </ul>}
     confirmDisabled={!prepared.length || preview.some(row=>row.state==='conflict')}
-    uploadContent={<div className="grid gap-3 text-sm"><p>Chi nhánh: <strong>{branches.find(b=>b.id===activeBranchId)?.name??'Chưa chọn'}</strong></p>
+    uploadContent={<div className="grid gap-3 text-sm"><p>Chi nhánh: <strong>{branches.find(b=>b.id===branchId)?.name??'Chưa chọn'}</strong></p>
       <label className="grid gap-1">Người thực hiện thu/chi<SearchableSelect value={performer} onValueChange={value=>{setPerformer(value);setPrepared([]);setPreview([]);}} options={performers.map(p=>({value:p.id,label:p.name}))} placeholder="Chọn người thu/chi"/></label>
       {error && <p role="alert" className="text-destructive">{error}</p>}</div>}
     preparePreview={async rows=>{
       setPrepared([]);setPreview([]);
-      const requests=prepareFinanceImport(rows,activeBranchId??'',performer,categories);
+      const requests=prepareFinanceImport(rows,branchId,performer,categories);
       const result=await previewFinanceImport(requests);
       setPreview(result);
       if(result.some(row=>row.state==='conflict')) throw new Error(`Mã nguồn đã nhập nhưng nội dung khác: ${result.filter(row=>row.state==='conflict').map(row=>row.sourceCode).join(', ')}. Không tạo phiếu thay thế.`);

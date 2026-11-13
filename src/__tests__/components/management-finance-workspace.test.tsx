@@ -1,9 +1,9 @@
 import {beforeEach,describe,expect,it,vi} from 'vitest';
 import {act,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import type {ReactNode} from 'react';
-const mocks = vi.hoisted(() => ({workspace:vi.fn(),all:vi.fn(),categories:vi.fn(),excel:vi.fn()}));
+const mocks = vi.hoisted(() => ({workspace:vi.fn(),all:vi.fn(),categories:vi.fn(),excel:vi.fn(),permission:vi.fn(),assigned:vi.fn()}));
 vi.mock('@/lib/utils/export', () => ({exportToExcel:mocks.excel}));
-vi.mock('@/lib/contexts',() => ({useAuth:() => ({activeBranchId:'xtb',branches:[{id:'xtb',name:'XTB - Thu ngân'}],hasPermission:() => true,isLoading:false})}));
+vi.mock('@/lib/contexts',() => ({useAuth:() => ({activeBranchId:'xtb',branches:[{id:'xtb',name:'XTB - Thu ngân'},{id:'premium',name:'Premium'}],hasPermissionAtBranch:mocks.permission,hasAssignedBranchAccess:mocks.assigned,isLoading:false})}));
 vi.mock('@/components/shared/report',() => ({ReportTableFrame:({children}:{children:ReactNode}) => <div>{children}</div>}));
 vi.mock('@/components/shared/page-header',() => ({PageHeader:({title}:{title:string}) => <h1>{title}</h1>}));
 vi.mock('@/components/shared/dialogs/management-finance-dialog',() => ({ManagementFinanceDialog:() => null}));
@@ -19,12 +19,43 @@ const row = {id:'e',code:'CP001',kind:'expense',category_code:'CP1',category_nam
     amount:300,status:'cancelled',payment_method:'bank_transfer',branch_id:'xtb'}]};
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.permission.mockReturnValue(true);
+  mocks.assigned.mockReturnValue(true);
   window.history.replaceState({},'','/');
   mocks.categories.mockResolvedValue([]);
   mocks.workspace.mockResolvedValue({items:[row],total:1,summary:{income:0,expense:600,non_pnl:0},basis:'recognition_date'});
   mocks.all.mockResolvedValue([row]);
 });
 describe('management finance reporting workspace',() => {
+  it('uses the selected branch for financial permissions instead of the header branch',async()=>{
+    mocks.permission.mockImplementation((_code:string, branch:string|null) => branch !== 'premium');
+    window.history.replaceState({},'','/?branch=premium');
+    render(<Page/>);
+    await waitFor(()=>expect(mocks.permission).toHaveBeenCalledWith('finance.view_cash_book','premium'));
+    expect(mocks.workspace).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button',{name:'Ghi nhận chi phí'})).not.toBeInTheDocument();
+  });
+  it('allows a branch-specific finance grant when that branch is selected',async()=>{
+    mocks.permission.mockImplementation((_code:string, branch:string|null) => branch === 'premium');
+    window.history.replaceState({},'','/?branch=premium');
+    render(<Page/>);
+    await waitFor(()=>expect(mocks.workspace).toHaveBeenCalledWith(expect.objectContaining({branchId:'premium'}),0));
+    expect(screen.getByRole('button',{name:'Ghi nhận chi phí'})).toBeInTheDocument();
+  });
+  it('does not read finance data for a visible branch that is not assigned',async()=>{
+    mocks.assigned.mockImplementation((branch:string)=>branch!=='premium');
+    window.history.replaceState({},'','/?branch=premium');
+    render(<Page/>);
+    await waitFor(()=>expect(mocks.assigned).toHaveBeenCalledWith('premium'));
+    expect(mocks.workspace).not.toHaveBeenCalled();
+  });
+  it('does not offer cancellation when any allocation belongs to a branch without the right',async()=>{
+    mocks.permission.mockImplementation((code:string, branch:string|null) => !(code==='finance.void_transaction' && branch==='premium'));
+    mocks.workspace.mockResolvedValue({items:[{...row,allocations:[...row.allocations,{branch_id:'premium',branch_name:'Premium',recognition_date:'2026-10-02',amount:400}]}],total:1,summary:{income:0,expense:1000,non_pnl:0}});
+    render(<Page/>);
+    fireEvent.click(await screen.findByRole('button',{name:'CP001'}));
+    expect(screen.queryByRole('button',{name:'Hủy ghi nhận'})).not.toBeInTheDocument();
+  });
   it('discards an in-flight Excel result when the branch changes',async()=>{
     let finish!: (rows: typeof row[]) => void;
     mocks.all.mockReturnValueOnce(new Promise<typeof row[]>(resolve => {finish = resolve;}));
