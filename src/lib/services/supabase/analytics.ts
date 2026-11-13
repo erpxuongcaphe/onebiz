@@ -2962,6 +2962,7 @@ export async function getCashFlowDetailed(
   months: number = 6,
   branchId?: string,
   dateRange?: { from: string; to: string },
+  options?: { summaryOnly?: boolean },
 ): Promise<CashFlowDetailedRow[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
@@ -2970,15 +2971,24 @@ export async function getCashFlowDetailed(
   const toDate = dateRange?.to ?? new Date(Date.parse(fallbackRange.end) - 86_400_000).toISOString().slice(0, 10);
   const monthKeys = monthKeysForRange(dateRange, months);
 
-  let query = supabase
-    .from("cash_transactions")
-    .select("transaction_date, type, amount, category")
-    .eq("tenant_id", tenantId)
-    .eq("status", "completed")
-    .gte("transaction_date", fromDate)
-    .lte("transaction_date", toDate);
-  if (branchId) query = query.eq("branch_id", branchId);
-  const data = await fetchAllPostgrestRows(() => query.order("transaction_date", { ascending: true }), "[getCashFlowDetailed]");
+  let data: Array<{ transaction_date: string; type: string; amount: number | string | null; category: string | null }>;
+  if (options?.summaryOnly) {
+    // The report viewer gets monthly category totals, not cash-book rows.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    data = await fetchAllPostgrestRows(() => (supabase as any)
+      .rpc("get_cash_flow_category_summary", { p_from: fromDate, p_to: toDate, p_branch: branchId ?? null })
+      .order("transaction_date", { ascending: true }).order("type", { ascending: true }).order("category", { ascending: true }), "[getCashFlowDetailed.summary]");
+  } else {
+    let query = supabase
+      .from("cash_transactions")
+      .select("transaction_date, type, amount, category")
+      .eq("tenant_id", tenantId)
+      .eq("status", "completed")
+      .gte("transaction_date", fromDate)
+      .lte("transaction_date", toDate);
+    if (branchId) query = query.eq("branch_id", branchId);
+    data = await fetchAllPostgrestRows(() => query.order("transaction_date", { ascending: true }), "[getCashFlowDetailed]");
+  }
 
   // P1-3B-R4: key kèm year.
 

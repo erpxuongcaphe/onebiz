@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-const { from, chain } = vi.hoisted(() => {
+const { from, rpc, chain } = vi.hoisted(() => {
   const query: Record<string, ReturnType<typeof vi.fn>> = {};
   for (const method of ["select", "eq", "gte", "lte", "order"]) {
     query[method] = vi.fn(() => query);
@@ -24,11 +24,11 @@ const { from, chain } = vi.hoisted(() => {
     ],
     error: null,
   }));
-  return { from: vi.fn(() => query), chain: query };
+  return { from: vi.fn(() => query), rpc: vi.fn(() => query), chain: query };
 });
 
 vi.mock("@/lib/services/supabase/base", () => ({
-  getClient: () => ({ from }),
+  getClient: () => ({ from, rpc }),
   getCurrentTenantId: async () => "tenant-1",
   handleError: (error: { message: string }) => { throw new Error(error.message); },
 }));
@@ -52,6 +52,20 @@ describe("cash-flow detail", () => {
     expect(rows).toMatchObject([
       { month: "T8/2026", totalReceipt: 150000, totalPayment: 0, cumulativeBalance: 150000 },
       { month: "T9/2026", totalReceipt: 0, totalPayment: 25000, cumulativeBalance: 125000 },
+    ]);
+  });
+  it("uses only the summary RPC when the viewer lacks cash-book access", async () => {
+    from.mockClear();
+    const rows = await getCashFlowDetailed(2, "branch-1", {
+      from: "2026-08-01", to: "2026-09-30",
+    }, { summaryOnly: true });
+    expect(from).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith("get_cash_flow_category_summary", {
+      p_from: "2026-08-01", p_to: "2026-09-30", p_branch: "branch-1",
+    });
+    expect(rows).toMatchObject([
+      { month: "T8/2026", totalReceipt: 150000, totalPayment: 0 },
+      { month: "T9/2026", totalReceipt: 0, totalPayment: 25000 },
     ]);
   });
 });
