@@ -569,7 +569,7 @@ export default function BusinessOverview() {
         {canViewCash && <ManagementCashSummary rows={cashRows} error={cashError} branchId={activeBranchId} range={range} />}
         {canViewDebt && <ManagementDebtSummary workspace={debtWorkspace} error={debtError} branchId={activeBranchId} />}
 
-        {!activeBranchId && <p className="border-l-2 border-border pl-3 text-xs leading-5 text-muted-foreground">Chi tiết bán hàng gồm nội bộ; cách tính theo tiêu đề từng bảng.</p>}
+        {!activeBranchId && <p className="border-l-2 border-border pl-3 text-xs leading-5 text-muted-foreground">Giá trị hóa đơn theo ngày gồm nội bộ. Danh mục và sản phẩm bên dưới đã loại nội bộ.</p>}
 
         {/* CEO 13/05: 2 mode — Biểu đồ (chart) vs Bảng số liệu kế toán (table) */}
         {viewMode === "chart" ? (
