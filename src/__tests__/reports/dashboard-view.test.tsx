@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({ ready: true, branchId: "b1" as string | undefined, permissions: new Set<string>(), fetch: vi.fn() }));
 const openBills = vi.hoisted(() => vi.fn());
 const receivable = vi.hoisted(() => vi.fn());
+const reconciliation = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/hooks/use-fnb-open-orders", () => ({ useFnbOpenOrders: openBills }));
 vi.mock("next/dynamic", () => ({ default: () => () => <div data-testid="dynamic-view" /> }));
 vi.mock("@/lib/contexts", () => ({
@@ -12,14 +13,27 @@ vi.mock("@/lib/contexts", () => ({
 vi.mock("@/lib/hooks/use-report-scope", () => ({ useReportScope: () => ({ isReady: state.ready }) }));
 vi.mock("@/lib/hooks/use-live-data-refresh", () => ({ useLiveDataRefresh: () => false }));
 vi.mock("@/lib/hooks/use-receiving-view-memory", () => ({ useReceivingVietnamDay: () => "2026-10-20" }));
-vi.mock("@/lib/services/supabase/dashboard-sales", () => ({ getSalesDashboard: state.fetch, getSalesDayReceivable: receivable }));
+vi.mock("@/lib/services/supabase/dashboard-sales", () => ({ getSalesDashboard: state.fetch, getSalesDayReceivable: receivable, getCollectionReconciliation: reconciliation }));
 import Dashboard from "@/app/(main)/page";
 const sample = { sales: 111111, discounts: 5000, returns: 0, orders: 3, received: 121111, refunded: 10000, collected: 111111, methods: { cash: 100000, transfer: 11111 }, buckets: [], modes: [] };
 beforeEach(() => { state.ready = true; state.branchId = "b1"; state.permissions = new Set(["pos_fnb.view_sales_summary", "reports.analytics", "reports.view_detail", "reports.view_profit"]); state.fetch.mockReset().mockResolvedValue(sample); });
 afterEach(cleanup);
 beforeEach(() => openBills.mockReset().mockReturnValue({ orders: [], loading: false, error: null, refresh: vi.fn() }));
 beforeEach(() => receivable.mockReset().mockResolvedValue({ amount: 12345, invoice_count: 2, missing_count: 0 }));
+beforeEach(() => reconciliation.mockReset().mockResolvedValue({
+  internal: { net: 300, received: 350, refunded: 50, methods: { cash: 300 } },
+  external: { net: 400, received: 400, refunded: 0, methods: { transfer: 400 } },
+  total: { net: 700, received: 750, refunded: 50 },
+}));
 describe("sales dashboard permission and scope", () => {
+  it("separates internal collections and refunds from outside collections", async () => {
+    render(<Dashboard />);
+    expect(await screen.findByText("700 đ")).toBeInTheDocument();
+    expect(screen.getByText("300 đ")).toBeInTheDocument();
+    expect(screen.getByText("400 đ")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Xem tiền mặt, chuyển khoản và tiền hoàn"));
+    expect(screen.getByText(/Đã thu 350 đ · Đã hoàn 50 đ/)).toBeInTheDocument();
+  });
   it("shows both consolidated and summed-branch sales with the internal deduction", async () => {
     state.branchId = undefined;
     state.permissions.add('reports.view_all_branches'); state.permissions.add('reports.dashboard');
@@ -27,14 +41,27 @@ describe("sales dashboard permission and scope", () => {
     render(<Dashboard />);
     expect(await screen.findByTestId('net-sales')).toHaveTextContent('1,000');
     expect(screen.getByTestId('all-branch-sales')).toHaveTextContent('1,350');
-    expect(screen.getByText('Bán nội bộ được loại khỏi doanh số chuỗi')).toBeInTheDocument();
+    expect(screen.getByText('Doanh số không gồm nội bộ')).toBeInTheDocument();
+  });
+  it("loads each branch only when details are opened and shows its own sales", async () => {
+    state.branchId = undefined;
+    state.permissions.add("reports.view_all_branches"); state.permissions.add("reports.dashboard");
+    state.fetch.mockImplementation(async (branch: string | undefined) => branch
+      ? { ...sample, sales: branch === "b1" ? 150 : 250 }
+      : { ...sample, sales: 300, internal_net: 100 });
+    render(<Dashboard />);
+    await screen.findByTestId("all-branch-sales");
+    fireEvent.click(screen.getByRole("button", { name: "Doanh số từng chi nhánh" }));
+    expect(await screen.findByText("Quán A")).toBeInTheDocument();
+    expect(screen.getByText("150 đ")).toBeInTheDocument();
+    expect(screen.getByText("250 đ")).toBeInTheDocument();
   });
   it("shows current outstanding invoice debt separately from cash and old debt collections", async () => {
     state.permissions.add("customers.view_debt");
     render(<Dashboard />);
     expect(await screen.findByTestId("invoice-receivable")).toHaveTextContent("12,345");
     expect(receivable).toHaveBeenCalledWith("b1", "2026-10-20");
-    expect(screen.getByText("HĐ ngày này còn nợ")).toBeInTheDocument();
+    expect(screen.getByText("Chưa thanh toán")).toBeInTheDocument();
     expect(screen.getByText("Thực thu sau hoàn")).toBeInTheDocument();
   });
   it("does not fetch or show debt without permission", async () => {

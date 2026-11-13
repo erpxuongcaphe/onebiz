@@ -15,6 +15,23 @@ const receivableSchema = z.object({
   amount, invoice_count: amount, missing_count: amount,
 });
 
+const collectionPart = z.object({ net: amount, received: amount, refunded: amount, methods: z.record(z.string(), amount) });
+const collectionSchema = z.object({
+  internal: collectionPart, external: collectionPart,
+  total: z.object({ net: amount, received: amount, refunded: amount }),
+});
+export type CollectionReconciliation = z.infer<typeof collectionSchema>;
+
+export async function getCollectionReconciliation(branchId: string | undefined, day: string): Promise<CollectionReconciliation> {
+  const { data, error } = await getClient().rpc('get_dashboard_collection_reconciliation' as never, {
+    p_branch_id: branchId ?? null, p_day: day,
+  } as never);
+  if (error) handleError(error, 'getCollectionReconciliation');
+  const result = collectionSchema.safeParse(data);
+  if (!result.success) throw new Error('Dữ liệu đối chiếu tiền thu chưa đầy đủ.');
+  return result.data;
+}
+
 export async function getSalesDayReceivable(branchId: string | undefined, day: string) {
   const { data, error } = await getClient().rpc('get_sales_day_invoice_receivable' as never, {
     p_branch_id: branchId ?? null, p_day: day,

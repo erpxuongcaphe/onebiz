@@ -49,6 +49,7 @@ const RPC = new Set(schema.rpc as string[]);
 const RPC_CHO_MIGRATION = new Map<string, string>([
   ["get_sales_day_invoice_receivable", "20261113124451_dashboard_debt_refund_source.sql"],
   ["get_dashboard_all_branch_day", "20261113135122_dashboard_all_branches_sales.sql"],
+  ["get_dashboard_collection_reconciliation", "20261113235900_dashboard_internal_collections.sql"],
   ["get_dashboard_product_lines", "20261113135220_dashboard_product_lines.sql"],
   // The additive projection migration must be applied before this client is deployed.
   ["get_cash_flow_category_summary", "20261113074601_staff_cash_flow_summary_projection.sql"],
