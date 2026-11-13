@@ -3,6 +3,7 @@ import {spawn} from 'node:child_process';
 import {readFile} from 'node:fs/promises';
 import {pathToFileURL} from 'node:url';
 import {initializeStaffAccessFixture} from './fixture.mjs';
+import {functionFromMigration} from './inventory.mjs';
 if(process.env.STAFF_EPHEMERAL_DB!=='onebiz_staff_access_test')throw new Error('Dedicated disposable database required');
 const id=n=>`00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
 const read=n=>readFile(new URL(`../../supabase/migrations/${n}`,import.meta.url),'utf8');
@@ -53,6 +54,27 @@ sql.push(`
   if position('_staff_production_row_visible' in pg_get_viewdef('production_order_materials_scoped'::regclass,true))=0
    or position('_staff_stocktake_action_branches' in pg_get_viewdef('inventory_check_items_scoped'::regclass,true))=0
    then raise exception 'expected scope change missing';end if;
+ end$$;
+`);
+sql.push(await functionFromMigration('00223_stock_card_read_rpc.sql','get_stock_card_v2'));
+sql.push(`
+ revoke all on function public.get_stock_card_v2(uuid,uuid) from public,anon;
+ grant execute on function public.get_stock_card_v2(uuid,uuid) to authenticated;
+ create temp table original_stock_card_metadata as select proowner,proacl::text acl,proconfig,prosecdef,provolatile
+  from pg_proc where oid='public.get_stock_card_v2(uuid,uuid)'::regprocedure;
+`);
+sql.push(await read('20261113073019_staff_stock_card_cost_guard.sql'));
+sql.push(await read('20261113073019_staff_stock_card_cost_guard.sql'));
+sql.push(`
+ do $$declare source text;begin
+  select pg_get_functiondef('public.get_stock_card_v2(uuid,uuid)'::regprocedure) into source;
+  if position('case when v_can_view_cost then sm.unit_cost else null end as unit_cost' in source)=0
+   or position('case when v_can_view_cost then sm.unit_price else null end as unit_price' in source)=0
+   then raise exception 'stock card cost mask missing';end if;
+  if exists(select 1 from original_stock_card_metadata x join pg_proc p on p.oid='public.get_stock_card_v2(uuid,uuid)'::regprocedure
+   where p.proowner<>x.proowner or p.proacl::text is distinct from x.acl or p.proconfig is distinct from x.proconfig
+    or p.prosecdef is distinct from x.prosecdef or p.provolatile is distinct from x.provolatile)
+   then raise exception 'stock card security metadata changed';end if;
  end$$;
 `);
 if(process.env.ONEBIZ_PGLITE_MODULE){const {PGlite}=await import(pathToFileURL(process.env.ONEBIZ_PGLITE_MODULE).href);const db=new PGlite();try{await db.exec(sql.join('\n'));}catch(e){console.error(e.message,e.where||'');process.exitCode=1;}finally{await db.close();}if(process.exitCode)process.exit(process.exitCode);console.log('PASS view metadata rehearsal (PGlite)');process.exit(0);}

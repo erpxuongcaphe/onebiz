@@ -231,6 +231,57 @@ try {
   assert.equal(Number(invoiceSummary.gia_tri_hoan_thanh), 100);
   checks++;
   await db.exec("reset role");
+  // Stock card checks inventory.view indirectly through assert_report_access.
+  // Exercise the real caller, not only its generic authorization helper.
+  await db.exec(`alter table branches add column code text;
+   create table products(id uuid,tenant_id uuid);
+   create table stock_movements(id uuid,tenant_id uuid,product_id uuid,branch_id uuid,type text,quantity numeric,created_at timestamptz,note text,created_by uuid,reference_type text,reference_id uuid,unit_cost numeric,unit_price numeric);
+   create table branch_stock(tenant_id uuid,product_id uuid,branch_id uuid,variant_id uuid,quantity numeric);
+   insert into products values('${id(500)}','${id(1)}');
+   insert into stock_movements values ('${id(510)}','${id(1)}','${id(500)}','${id(10)}','in',8,now(),null,'${id(101)}',null,null,31,40),
+    ('${id(511)}','${id(1)}','${id(500)}','${id(11)}','in',3,now(),null,'${id(101)}',null,null,20,25);
+   insert into branch_stock values ('${id(1)}','${id(500)}','${id(10)}',null,8),('${id(1)}','${id(500)}','${id(11)}',null,3);
+   insert into staff_branch_permission_catalog values ('inventory.view',1);
+   insert into role_permissions values ('${id(20)}','inventory.view');`);
+  let stockCard=await functionFromMigration('00223_stock_card_read_rpc.sql','get_stock_card_v2');
+  if(process.env.ONEBIZ_REPORT_AUDIT_FILE){
+    const definitions=JSON.parse(await readFile(process.env.ONEBIZ_REPORT_AUDIT_FILE,'utf8'));
+    const actual=definitions.find(row=>row.proname==='get_stock_card_v2');assert.ok(actual,'stock card definition');stockCard=actual.definition;
+  }
+  await db.exec(stockCard);
+  await db.exec(`revoke all on function public.get_stock_card_v2(uuid,uuid) from public,anon;
+   grant execute on function public.get_stock_card_v2(uuid,uuid) to authenticated;`);
+  const stockCardMeta=async()=>(await db.query(`select proowner,proacl::text acl,proconfig,prosecdef,provolatile
+   from pg_proc where oid='public.get_stock_card_v2(uuid,uuid)'::regprocedure`)).rows[0];
+  const beforeStockCardMeta=await stockCardMeta();
+  const beforeStockCardBody=(await db.query("select pg_get_functiondef('public.get_stock_card_v2(uuid,uuid)'::regprocedure) def")).rows[0].def;
+  await db.exec(await sqlFile('20261113073019_staff_stock_card_cost_guard.sql'));
+  await db.exec(await sqlFile('20261113073019_staff_stock_card_cost_guard.sql'));
+  assert.deepEqual(await stockCardMeta(),beforeStockCardMeta,'stock-card owner, grants and security metadata preserved');checks++;
+  if(process.env.ONEBIZ_REPORT_AUDIT_FILE){
+    assert.equal((await db.query("select pg_get_functiondef('public.get_stock_card_v2(uuid,uuid)'::regprocedure) def")).rows[0].def,beforeStockCardBody,'current production body remains unchanged');checks++;
+  }
+  const guardedStockCard=(await db.query("select pg_get_functiondef('public.get_stock_card_v2(uuid,uuid)'::regprocedure) def")).rows[0].def;
+  const mask='case when v_can_view_cost then sm.unit_cost else null end as unit_cost';
+  assert.ok(guardedStockCard.includes(mask));
+  await db.exec(guardedStockCard.replace(mask,'sm.unit_cost as unit_cost'));
+  await assert.rejects(db.exec(await sqlFile('20261113073019_staff_stock_card_cost_guard.sql')),/STAFF_STOCK_CARD_COST_MASK_CHANGED/);checks++;
+  await db.exec('rollback');await db.exec(guardedStockCard);
+  await db.exec(`
+   insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+    values ('${id(1)}','${id(101)}','${id(10)}','inventory.view','revoke','${id(100)}');set role authenticated;`);
+  await assert.rejects(db.query('select get_stock_card_v2($1,$2)',[id(500),id(10)]),/REPORT_PERMISSION_DENIED/);checks++;
+  let card=(await db.query('select get_stock_card_v2($1,$2) value',[id(500),id(11)])).rows[0].value;
+  assert.equal(card.total,1);assert.equal(Number(card.system_stock),3);assert.equal(card.rows[0].unit_cost,null);checks+=3;
+  await db.exec(`reset role;delete from role_permissions where permission_code='inventory.view';
+   insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+    values ('${id(1)}','${id(101)}','${id(11)}','inventory.view','grant','${id(100)}');set role authenticated;`);
+  card=(await db.query('select get_stock_card_v2($1,$2) value',[id(500),id(11)])).rows[0].value;
+  assert.equal(card.total,1);checks++;
+  await db.exec(`reset role;insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type,created_by)
+    values ('${id(1)}','${id(101)}','inventory.view','revoke','${id(100)}');set role authenticated;`);
+  await assert.rejects(db.query('select get_stock_card_v2($1,$2)',[id(500),id(11)]),/REPORT_PERMISSION_DENIED/);checks++;
+  await db.exec('reset role');
   console.log(
     `PASS ${checks} report scope checks (${process.env.ONEBIZ_REPORT_AUDIT_FILE ? "actual exported bodies" : "public bodies and six private contract fixtures"})`,
   );
