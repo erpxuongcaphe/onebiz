@@ -23,7 +23,6 @@ import { getVariantsByProduct, getVariantsByProductIds } from "@/lib/services/su
 import {
   resolveAppliedTier,
   resolveTierPrice,
-  type TierPriceRule,
 } from "@/lib/services/supabase/pricing";
 import {
   resolvePlatformPrice,
@@ -223,6 +222,19 @@ type ShiftState =
 // lần mở món kế tiếp phải đọc lại thay vì giữ cấu hình cũ suốt cả phiên.
 const MODIFIER_CACHE_TTL_MS = 60_000;
 
+interface FnbCatalog {
+  scope: string;
+  status: "cache_ready" | "fresh_ready";
+  categories: FnbCategory[];
+  products: FnbProduct[];
+  appliedTier: Awaited<ReturnType<typeof resolveAppliedTier>>;
+  platformPrices: Record<string, ProductPlatformPriceBookEntry>;
+}
+
+const EMPTY_CATEGORIES: FnbCategory[] = [];
+const EMPTY_PRODUCTS: FnbProduct[] = [];
+const EMPTY_PLATFORM_PRICES: FnbCatalog["platformPrices"] = {};
+
 function FnbPosPageInner() {
   const { user, tenant, currentBranch, branches, isLoading: authLoading, hasPermission } = useAuth();
   const { toast } = useToast();
@@ -231,8 +243,8 @@ function FnbPosPageInner() {
   const pos = useFnbPosState(currentBranch?.id);
 
   // ── Data state ──
-  const [categories, setCategories] = useState<FnbCategory[]>([]);
-  const [products, setProducts] = useState<FnbProduct[]>([]);
+  const [catalog, setCatalog] = useState<FnbCatalog | null>(null);
+  const [catalogErrorScope, setCatalogErrorScope] = useState<string | null>(null);
   const [tables, setTables] = useState<RestaurantTable[]>([]);
   // POS-FIX-C2: Map orderId → createdAt cho TableFloorPlan timer.
   // Fetch khi showFloorPlan mở (lazy) để không block initial load.
@@ -241,7 +253,6 @@ function FnbPosPageInner() {
   // Sprint UI-4: sub-filter brand trong active category. null = "Tất cả".
   // Reset khi đổi category để không carry filter sai sang nhóm khác.
   const [activeSubFilter, setActiveSubFilter] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
 
   // ── Dialog state ──
   const [selectedProduct, setSelectedProduct] = useState<FnbProduct | null>(null);
@@ -280,7 +291,6 @@ function FnbPosPageInner() {
   const [shiftState, setShiftState] = useState<ShiftState>({ status: "loading" });
   // Dẫn xuất — mọi nơi đang dùng `currentShift` không phải sửa logic.
   const currentShift = shiftState.status === "open" ? shiftState.shift : null;
-  const [catalogStatus, setCatalogStatus] = useState<CatalogStatus>("loading");
   // Tăng 1 để bắt effect tải ca chạy lại (nút "Thử lại" khi trạng thái error).
   const [shiftReloadToken, setShiftReloadToken] = useState(0);
   const [openShiftDialogOpen, setOpenShiftDialogOpen] = useState(false);
@@ -337,12 +347,6 @@ function FnbPosPageInner() {
   const pendingDiscountInput = useRef<import("@/lib/types/fnb").FnbDiscountInput | undefined>(undefined);
   const pendingDiscountRef = useRef<(() => void) | null>(null);
 
-  // CEO 13/05 (Fabi/iPos): platform price override map.
-  // Key: productId, value: { shopee_food?: number, grab_food?: number, ... }
-  // Load 1 lần khi mount + theo tab.deliveryPlatform → resolve giá đúng.
-  const [platformPriceMap, setPlatformPriceMap] = useState<
-    Record<string, ProductPlatformPriceBookEntry>
-  >({});
   // Sprint POS-FNB-EXT-1 (CEO 08/05): platform commission settings + discount presets
   const [platformSettings, setPlatformSettings] = useState<DeliveryPlatformSettings | null>(null);
   const [discountPresets, setDiscountPresets] = useState<DiscountPreset[]>([]);
@@ -367,6 +371,17 @@ function FnbPosPageInner() {
   useEffect(() => { setTableBillsId(null); setMergeIntent(null); }, [branchId]);
   useEffect(() => setMenuSearch(""), [branchId]);
   const tenantId = tenant?.id ?? "";
+  const catalogScope = JSON.stringify([tenantId, branchId]);
+  const isOnline = networkStatus.isOnline;
+  const currentCatalog = catalog?.scope === catalogScope &&
+    (catalog.status === "fresh_ready" || !isOnline || catalogErrorScope === catalogScope) ? catalog : null;
+  const categories = currentCatalog?.categories ?? EMPTY_CATEGORIES;
+  const products = currentCatalog?.products ?? EMPTY_PRODUCTS;
+  const appliedTier = currentCatalog?.appliedTier ?? null;
+  const platformPriceMap = currentCatalog?.platformPrices ?? EMPTY_PLATFORM_PRICES;
+  const catalogStatus: CatalogStatus = currentCatalog?.status ??
+    (catalogErrorScope === catalogScope ? "error" : "loading");
+  const loading = catalogStatus === "loading";
   const branchLayout = useFnbPosLayout(tenantId, branchId, networkStatus.isOnline);
   const isBlockingLoad = authLoading || (!!branchId && loading);
 
@@ -447,15 +462,6 @@ function FnbPosPageInner() {
     window.location.reload();
   }, []);
 
-  // Sprint 2: Tier áp dụng cho POS FnB của chi nhánh này.
-  // Resolve khi branchId hoặc products đổi → priceMap + override sell_price.
-  const [appliedTier, setAppliedTier] = useState<{
-    tierId: string;
-    tierName: string;
-    tierCode: string;
-    priceMap: Map<string, number>;
-    rulesMap: Map<string, TierPriceRule[]>;
-  } | null>(null);
   const userId = user?.id ?? "";
   const { save: saveOrderNote, resolve: resolveOrderNote, status: orderNoteStatus } = useFnbOrderNoteSync({
     scope: `${tenantId}:${branchId}:${userId}`,
@@ -492,8 +498,13 @@ function FnbPosPageInner() {
   useLiveDataRefresh(refreshLiveTables, tenantId, branchId, ["restaurant_tables", "kitchen_orders"], Boolean(tenantId && branchId));
   useEffect(() => {
     void refreshLiveTables();
+    if (tenantId && branchId && isOnline) {
+      void prefetchTableData(tenantId, branchId).catch((error) =>
+        console.warn("[FnB] prefetchTableData failed:", error),
+      );
+    }
     return () => { tableRefreshGeneration.current += 1; };
-  }, [refreshLiveTables]);
+  }, [refreshLiveTables, tenantId, branchId, isOnline]);
   const canCancelUnpaidOrder =
     hasPermission(PERMISSIONS.POS_FNB_CANCEL_UNPAID_ORDER) ||
     hasPermission(PERMISSIONS.POS_FNB_VOID);
@@ -513,7 +524,6 @@ function FnbPosPageInner() {
     hasPermission(PERMISSIONS.POS_FNB_VOID);
 
   const [catalogRefreshRevision, setCatalogRefreshRevision] = useState(0);
-  const catalogScopeRef = useRef<string | null>(null);
   const refreshLiveCatalog = useCallback(() => setCatalogRefreshRevision(value => value + 1), []);
   // Catalog changes arrive through Realtime; order edits do not invalidate prices/menu.
   // Keep a two-minute fallback for missed events, plus focus/reconnect recovery.
@@ -523,231 +533,155 @@ function FnbPosPageInner() {
     "price_tiers", "branch_price_tier_assignments", "branches",
   ], Boolean(tenantId && networkStatus.isOnline), 120_000, { refreshOnOrderChange: false });
 
-  // ── Load data (cache-first, then network refresh) ──
+  // Publish the menu and its prices together for the selected branch.
   useEffect(() => {
-    if (!tenantId) return;
+    if (!tenantId || !branchId) return;
     let cancelled = false;
-    const scope = `${tenantId}:${branchId ?? ""}`;
-    const backgroundRefresh = catalogScopeRef.current === scope && catalogRefreshRevision > 0;
-    catalogScopeRef.current = scope;
     (async () => {
-      if (!backgroundRefresh) setLoading(true);
+      setCatalogErrorScope(null);
       try {
-        // Step 1: Load from IndexedDB cache instantly
-        try {
-          // 08/08: cache topping có dấu phạm vi (phiên bản nguồn + chi
-          // nhánh) — cache đời NVL-TOP hoặc của quán khác thì toppings về
-          // RỖNG, thà thiếu còn hơn hiện topping nguyên liệu giá túi/hộp.
-          const cached = backgroundRefresh ? null : await getMenuFromCache(tenantId, branchId);
+        if (!networkStatus.isOnline) {
+          const [cached, cachedTables] = await Promise.all([
+            getMenuFromCache(tenantId, branchId),
+            getTablesFromCache(tenantId, branchId).catch(() => []),
+          ]);
           if (cancelled) return;
-          if (cached) {
           const cachedProducts = cached.products.filter(
             (product) =>
               isFnbMenuSaleItem(product) && Number.isFinite(product.sell_price) &&
               (product.sell_price > 0 || product.allow_free_sale === true),
           );
-          if (cachedProducts.length > 0) {
-            const categoryIds = new Set(
-              cachedProducts
-                .map((product) => product.category_id)
-                .filter((id): id is string => Boolean(id)),
-            );
-            setCategories(
-              cached.categories.filter((category) => categoryIds.has(category.id)),
-            );
-            setProducts(cachedProducts);
-            // Cờ topping SKU đang tắt thì không đưa cache SKU-TPP vào state.
-            // Luồng hiện tại vẫn dùng nhóm tuỳ chọn legacy; đọc cache mới ở đây
-            // vừa thừa vừa dễ làm người bảo trì hiểu nhầm hai cơ chế cùng chạy.
-            setToppingProducts(CHE_DO_TOPPING_SKU ? cached.toppings : []);
-            setLoading(false); // Show cached data immediately
-            // 06/08: cache đã đủ để DÙNG, nhưng chưa chắc là mới nhất.
-            // `loading` tắt ở đây chính là lý do KHÔNG được dùng
-            // `loading === false` làm điều kiện lọc nhóm rỗng.
-            setCatalogStatus("cache_ready");
-          }
-          if (branchId) {
-            const cachedTables = await getTablesFromCache(tenantId, branchId);
-            if (cancelled) return;
-            if (cachedTables.length > 0) {
-              setTables(cachedTables as RestaurantTable[]);
-            }
-          }
-          }
-        } catch {
-          // IndexedDB not available — continue with network
+          const categoryIds = new Set(cachedProducts.map((product) => product.category_id));
+          setCatalog((previous) => previous?.scope === catalogScope && previous.status === "fresh_ready"
+            ? previous
+            : {
+                scope: catalogScope,
+                status: "cache_ready",
+                categories: cached.categories.filter((category) => categoryIds.has(category.id)),
+                products: cachedProducts,
+                appliedTier: null,
+                platformPrices: EMPTY_PLATFORM_PRICES,
+              });
+          setToppingProducts(CHE_DO_TOPPING_SKU ? cached.toppings : []);
+          if (cachedTables.length > 0) setTables(cachedTables as RestaurantTable[]);
+          return;
         }
 
-        // Step 2: Background refresh from Supabase (if online) — PARALLEL
-        if (networkStatus.isOnline) {
-          // Menu whitelist is a branch safety boundary, not a cosmetic
-          // filter. Its compact fingerprint is checked on every POS load so
-          // a cached catalog cannot stay valid after an admin isolates a SKU
-          // to another branch.
-          const [menuScopes, orderRevision] = await Promise.all([
-            listFnbProductBranchMenuScopes(tenantId),
-            readFnbMenuOrderRevision().catch(() => undefined),
-          ]);
-          if (cancelled) return;
-          const supabase = getClient();
+        const supabase = getClient();
+        const scopePromise = listFnbProductBranchMenuScopes(tenantId);
+        const orderRevisionPromise = readFnbMenuOrderRevision().catch(() => undefined);
+        const catalogPromise = Promise.all([
+          getProductCategoriesAsync("sku", "fnb"),
+          supabase
+            .from("products_scoped")
+            .select("id, name, code, sell_price, image_url, stock, category_id, brand, allow_free_sale, sort_order, inventory_role")
+            .eq("tenant_id", tenantId)
+            .eq("is_active", true)
+            .eq("allow_sale", true)
+            .eq("product_type", "sku")
+            .eq("channel", "fnb")
+            .eq("inventory_role", "fnb_menu_item")
+            .order("sort_order")
+            .order("name")
+            .order("id")
+            .limit(5000),
+          supabase
+            .from("product_platform_prices")
+            .select("product_id, variant_id, platform, override_price")
+            .eq("tenant_id", tenantId),
+        ]);
 
-          // Parallel fetch: catalog (cats + products + platform_prices) + branch-scoped (tables + shift)
-          const catalogPromise = Promise.all([
-                // CEO 04/05: chỉ load categories có SP FnB → POS FnB không
-                // còn thấy category retail (Cốc giấy, Bột cacao đóng gói...).
-                getProductCategoriesAsync("sku", "fnb"),
-                supabase
-                  .from("products_scoped")
-                  .select("id, name, code, sell_price, image_url, stock, category_id, brand, allow_free_sale, sort_order, inventory_role")
-                  .eq("tenant_id", tenantId)
-                  .eq("is_active", true)
-                  .eq("allow_sale", true)
-                  .eq("product_type", "sku")
-                  .eq("channel", "fnb")
-                  .eq("inventory_role", "fnb_menu_item")
-                  .order("sort_order")
-                  .order("name")
-                  .order("id")
-                  .limit(5000), // CEO 12/05: bỏ giới hạn 200 SP — product grid đã virtualize (@tanstack/react-virtual) nên DOM safe; payload ~1MB cho 5000 SP, mạng 4G ~1-2s, chấp nhận được. Cap 5000 để tránh Supabase PostgREST default cap.
-                // CEO 13/05: load platform price overrides để resolve giá theo
-                // tab.deliveryPlatform. Map sang Record<productId, Record<platform, price>>.
-                supabase
-                  .from("product_platform_prices")
-                  .select("product_id, variant_id, platform, override_price")
-                  .eq("tenant_id", tenantId),
-              ]);
-
-          // 08/08 Giai đoạn 2 topping (CEO): SKU-TPP bán theo phần, BOM áp
-          // dụng ĐÚNG chi nhánh — nên KHÔNG nấp sau cổng stale 30 phút của
-          // menu: đổi chi nhánh là topping phải khác ngay dù menu chưa stale.
-          // Lỗi mạng → null: GIỮ topping đang hiện, không xoá thành rỗng.
-          const toppingsPromise = CHE_DO_TOPPING_SKU
-            ? getToppingPhanHopLe(tenantId, branchId).catch((err) => {
-                console.warn("[FnB] tải topping thất bại:", err);
-                return null;
-              })
-            : Promise.resolve(null);
-
-          const tablesPromise = branchId && !backgroundRefresh
-            ? getTablesByBranch(branchId).catch(() => null)
-            : Promise.resolve(null);
-
-          // 06/08: TẢI CA ĐÃ TÁCH RA EFFECT RIÊNG (xem bên dưới). Trước đây
-          // nằm chung Promise.all này nên lỗi mạng bị `.catch(() => null)`
-          // nuốt thành "chưa mở ca", và ca phải chờ cả catalog + bàn xong
-          // mới biết kết quả.
-          const [catalogResult, toppingsMoi, tbls] = await Promise.all([
-            catalogPromise,
-            toppingsPromise,
-            tablesPromise,
-          ]);
-          if (cancelled) return;
+        const productsPromise = Promise.all([catalogPromise, scopePromise]).then(([catalogResult, menuScopes]) => {
           if (catalogResult[1].error) throw catalogResult[1].error;
           if (catalogResult[2].error) throw catalogResult[2].error;
+          return filterFnbProductsForBranch(
+            // Generated DB types are refreshed after migration 00391.
+            (catalogResult[1].data ?? []) as any[],
+            menuScopes,
+            branchId,
+          ).filter(
+            (product) => isFnbMenuSaleItem(product) && (product.sell_price > 0 || product.allow_free_sale === true),
+          );
+        });
 
-          if (toppingsMoi) {
-            // Đã là {id, name, price} với price = giá MỘT PHẦN.
-            setToppingProducts(toppingsMoi);
-            // Ghi cache topping theo (phiên bản nguồn + chi nhánh) — cache
-            // đời NVL-TOP bị thay/vô hiệu ngay từ bản build này.
-            saveToppingsToCache(tenantId, branchId, toppingsMoi).catch((err) =>
-              console.warn("[FnB] saveToppingsToCache failed:", err),
-            );
-          }
+        const tierPromise = resolveAppliedTier({
+          channel: "fnb",
+          branchId,
+          productIds: productsPromise.then((rows) => rows.map((product) => product.id)),
+        });
+        const toppingsPromise = CHE_DO_TOPPING_SKU
+          ? getToppingPhanHopLe(tenantId, branchId).catch((error) => {
+              console.warn("[FnB] tải topping thất bại:", error);
+              return null;
+            })
+          : Promise.resolve(null);
 
-          if (catalogResult) {
-            const [cats, prodsResp, ppResp] = catalogResult;
-            // CEO 13/05: build platform price map → resolve nhanh trong POS
-            const ppMap: Record<string, ProductPlatformPriceBookEntry> = {};
-            for (const row of ppResp?.data ?? []) {
-              const r = row as Record<string, unknown>;
-              const pid = String(r.product_id);
-              if (!ppMap[pid]) ppMap[pid] = { product: {}, variants: {} };
-              const platform = String(r.platform) as keyof ProductPlatformPriceBookEntry["product"];
-              const variantId = r.variant_id ? String(r.variant_id) : null;
-              if (variantId) {
-                if (!ppMap[pid].variants[variantId]) {
-                  ppMap[pid].variants[variantId] = {};
-                }
-                ppMap[pid].variants[variantId][platform] = Number(r.override_price);
-              } else {
-                ppMap[pid].product[platform] = Number(r.override_price);
-              }
-            }
-            setPlatformPriceMap(ppMap);
-            const prods = filterFnbProductsForBranch(
-              // Generated DB types are refreshed after migration 00391.
-              (prodsResp.data ?? []) as any[],
-              menuScopes,
-              branchId,
-            ).filter(
-              (product) => isFnbMenuSaleItem(product) && (product.sell_price > 0 || product.allow_free_sale === true),
-            );
-            const categoryIds = new Set(
-              prods
-                .map((product) => product.category_id)
-                .filter((id): id is string => Boolean(id)),
-            );
-            const mappedCats = cats
-              .map((category, index) => ({
-                id: category.value,
-                name: category.label,
-                code: category.value,
-                sort_order: index,
-              }))
-              .filter((category) => categoryIds.has(category.id));
-            setCategories(mappedCats);
-            setProducts(
-              prods.map((p) => ({
-                id: p.id,
-                sort_order: p.sort_order,
-                name: p.name,
-                code: p.code,
-                sell_price: p.sell_price,
-                image_url: (p as Record<string, unknown>).image_url as string | undefined,
-                stock: p.stock,
-                category_id: p.category_id,
-                brand: ((p as Record<string, unknown>).brand as string | null) ?? null,
-                allow_free_sale: (p as Record<string, unknown>).allow_free_sale === true,
-                inventory_role: p.inventory_role,
-              }))
-            );
-
-            // Update cache in background — fail OK, retry next session.
-            prefetchMenuData(tenantId, branchId, menuScopes, orderRevision).catch((err) =>
-              console.warn("[FnB] prefetchMenuData failed:", err),
-            );
-          }
-
-          if (branchId && tbls) {
-            setTables(tbls);
-            prefetchTableData(tenantId, branchId).catch((err) =>
-              console.warn("[FnB] prefetchTableData failed:", err),
-            );
-          }
-          // Mạng đã trả về đủ → danh sách món là bản MỚI NHẤT.
-          setCatalogStatus("fresh_ready");
-        }
-      } catch (err) {
+        const [[cats, , platformResponse], menuScopes, orderRevision, prods, tier, toppingsMoi] = await Promise.all([
+          catalogPromise, scopePromise, orderRevisionPromise, productsPromise, tierPromise, toppingsPromise,
+        ]);
         if (cancelled) return;
-        // 06/08: chỉ báo LỖI khi không có gì để hiển thị. Nếu cache đã đổ
-        // được thì giữ `cache_ready` — danh sách vẫn dùng được, chỉ là cũ.
-        if (!backgroundRefresh) setCatalogStatus((truoc) =>
-          truoc === "cache_ready" ? "cache_ready" : "error",
+
+        const platformPrices: FnbCatalog["platformPrices"] = {};
+        for (const row of platformResponse.data ?? []) {
+          const price = row as Record<string, unknown>;
+          const productId = String(price.product_id);
+          const entry = platformPrices[productId] ??= { product: {}, variants: {} };
+          const platform = String(price.platform) as keyof ProductPlatformPriceBookEntry["product"];
+          if (price.variant_id) {
+            const variant = entry.variants[String(price.variant_id)] ??= {};
+            variant[platform] = Number(price.override_price);
+          } else {
+            entry.product[platform] = Number(price.override_price);
+          }
+        }
+
+        const categoryIds = new Set(prods.map((product) => product.category_id));
+        setCatalog({
+          scope: catalogScope,
+          status: "fresh_ready",
+          categories: cats
+            .map((category, index) => ({
+              id: category.value,
+              name: category.label,
+              code: category.value,
+              sort_order: index,
+            }))
+            .filter((category) => categoryIds.has(category.id)),
+          products: prods.map((product) => ({
+            id: product.id,
+            name: product.name,
+            code: product.code,
+            sell_price: product.sell_price,
+            image_url: product.image_url,
+            stock: product.stock,
+            category_id: product.category_id,
+            brand: product.brand ?? null,
+            allow_free_sale: product.allow_free_sale === true,
+            inventory_role: product.inventory_role,
+            sort_order: product.sort_order,
+          })),
+          appliedTier: tier,
+          platformPrices,
+        });
+
+        if (toppingsMoi) {
+          setToppingProducts(toppingsMoi);
+          void saveToppingsToCache(tenantId, branchId, toppingsMoi).catch((error) =>
+            console.warn("[FnB] saveToppingsToCache failed:", error),
+          );
+        }
+        void prefetchMenuData(tenantId, branchId, menuScopes, orderRevision).catch((error) =>
+          console.warn("[FnB] prefetchMenuData failed:", error),
         );
-        // Nếu đã có cached data → chỉ cảnh báo nhẹ, không block UI.
-        // Nếu chưa có gì → toast lỗi để nhân viên biết menu có thể cũ.
-        console.error("FnB data load error:", err);
-        if (!backgroundRefresh) toast({
-          title: "Không tải được dữ liệu mới",
-          description:
-            networkStatus.isOnline
-              ? "Đang dùng menu đã lưu. Thử tải lại trang nếu thiếu món."
-              : "Đang offline — dùng menu đã cache.",
+      } catch (error) {
+        if (cancelled) return;
+        console.error("[FnB] menu load failed:", error);
+        setCatalogErrorScope(catalogScope);
+        toast({
+          title: "Không tải được menu và bảng giá chi nhánh",
+          description: "Kiểm tra kết nối rồi thử tải lại.",
           variant: "warning",
         });
-      } finally {
-        if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; };
@@ -979,10 +913,7 @@ function FnbPosPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branchId]);
 
-  // productsWithTier: products với sell_price override theo tier áp dụng cho
-  // chi nhánh hiện tại. Mọi UI render menu (grid + search modal + item dialog
-  // nếu base product) dùng list này thay vì products thô.
-  // Variant prices KHÔNG override (variant có giá riêng từ DB).
+  // Menu and quick search display the branch's price for one unit.
   const productsWithTier = useMemo(() => {
     if (!appliedTier) return products;
     return products.map((p) => {
@@ -1412,34 +1343,6 @@ function FnbPosPageInner() {
     };
   }, [products, networkStatus.isOnline, tenantId, variantCacheRef]);
 
-  // ── Sprint 2: Resolve tier áp dụng cho POS FnB của chi nhánh ──
-  // Khi branchId + products đã load → fetch tier mặc định của chi nhánh +
-  // priceMap. Dùng để override sell_price khi render menu (qua displayProducts
-  // useMemo dưới). Tier change → cart lines hiện tại KHÔNG re-price (đơn
-  // đã thêm giữ giá cũ — pattern POS chuẩn để cashier không bị bất ngờ).
-  useEffect(() => {
-    if (!branchId || products.length === 0) {
-      setAppliedTier(null);
-      return;
-    }
-    let cancelled = false;
-    const productIds = products.map((p) => p.id);
-    resolveAppliedTier({
-      channel: "fnb",
-      branchId,
-      productIds,
-    })
-      .then((tier) => {
-        if (!cancelled) setAppliedTier(tier);
-      })
-      .catch(() => {
-        if (!cancelled) setAppliedTier(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [branchId, products]);
-
   const resolveConfiguredFnbPrice = useCallback(
     (params: {
       productId: string;
@@ -1481,6 +1384,9 @@ function FnbPosPageInner() {
       })),
     [resolveConfiguredFnbPrice],
   );
+  const pricedItemVariants = useMemo(() => selectedProduct
+    ? priceVariantsForActiveTab(selectedProduct.id, itemVariants)
+    : itemVariants, [itemVariants, priceVariantsForActiveTab, selectedProduct]);
 
   // ── Product select → quick-add hoặc open item dialog ──
   // Sprint POS-FNB-3 (CEO 06/05): SP đơn giản (không variant) → 1-tap add
@@ -1491,10 +1397,11 @@ function FnbPosPageInner() {
     async (product: FnbProduct) => {
       hapticTap();
       const requestId = ++itemLoadRequestRef.current;
+      const catalogProduct = products.find((item) => item.id === product.id) ?? product;
       // Phase 1A.2: clear edit-mode trước khi mở dialog cho add mới,
       // tránh confirm rơi nhầm nhánh updateLine.
       setEditingLineId(null);
-      setSelectedProduct(product);
+      setSelectedProduct(catalogProduct);
       setItemModifierData(undefined);
       setItemVariantsFailed(false);
 
@@ -1508,17 +1415,15 @@ function FnbPosPageInner() {
         entry: platformPriceMap[product.id],
         platform,
       });
-      const catalogPrice = products.find((item) => item.id === product.id)?.sell_price
-        ?? product.sell_price;
       const resolvedPrice = resolveConfiguredFnbPrice({
         productId: product.id,
-        catalogPrice,
+        catalogPrice: catalogProduct.sell_price,
       });
 
       const quickAdd = () => {
         if (itemLoadRequestRef.current !== requestId) return;
         const giaBan = kiemTraGiaBanThemNhanhFnb({
-          catalogPrice: product.sell_price,
+          catalogPrice: catalogProduct.sell_price,
           resolvedPrice,
           allowFreeSale: product.allow_free_sale === true,
         });
@@ -1582,7 +1487,7 @@ function FnbPosPageInner() {
           return;
         }
         // SP có ≥1 biến thể → mở dialog cho user chọn size
-        setItemVariants(priceVariantsForActiveTab(product.id, cached));
+        setItemVariants(cached);
         setItemDialogOpen(true);
         return;
       }
@@ -1621,7 +1526,7 @@ function FnbPosPageInner() {
             return;
           }
         }
-        setItemVariants(priceVariantsForActiveTab(product.id, mapped));
+        setItemVariants(mapped);
       } catch (err) {
         console.error("getVariantsByProduct error:", err);
         if (itemLoadRequestRef.current !== requestId) return;
@@ -1648,7 +1553,6 @@ function FnbPosPageInner() {
       platformPriceMap,
       products,
       resolveConfiguredFnbPrice,
-      priceVariantsForActiveTab,
     ],
   );
 
@@ -1729,7 +1633,7 @@ function FnbPosPageInner() {
 
       const cached = variantCacheRef.get(line.productId);
       if (cached) {
-        setItemVariants(priceVariantsForActiveTab(line.productId, cached));
+        setItemVariants(cached);
         setItemDialogOpen(true);
         return;
       }
@@ -1746,7 +1650,7 @@ function FnbPosPageInner() {
         }));
         variantCacheRef.set(line.productId, mapped);
         if (itemLoadRequestRef.current === requestId) {
-          setItemVariants(priceVariantsForActiveTab(line.productId, mapped));
+          setItemVariants(mapped);
         }
       } catch (err) {
         console.error("getVariantsByProduct error (edit):", err);
@@ -1756,7 +1660,7 @@ function FnbPosPageInner() {
         }
       }
     },
-    [products, toast, variantCacheRef, loadModifierForProduct, priceVariantsForActiveTab]
+    [products, toast, variantCacheRef, loadModifierForProduct]
   );
 
   // Compute initial selection for dialog when editing.
@@ -3897,12 +3801,21 @@ function FnbPosPageInner() {
                 </div>
               </div>
               <div className="flex-1 min-h-0">
-                <FnbProductGrid
-                  products={filteredProducts}
-                  displayMode={productDisplayMode}
-                  onSelectProduct={handleSelectProduct}
-                  cartQtyByProductId={cartQtyByProductId}
-                />
+                {catalogStatus === "error" ? (
+                  <div role="status" className="flex flex-wrap items-center justify-center gap-3 p-6">
+                    <span>Chưa tải được menu và bảng giá chi nhánh.</span>
+                    <button type="button" className="min-h-11 px-2 text-primary underline" onClick={refreshLiveCatalog}>
+                      Thử lại
+                    </button>
+                  </div>
+                ) : (
+                  <FnbProductGrid
+                    products={filteredProducts}
+                    displayMode={productDisplayMode}
+                    onSelectProduct={handleSelectProduct}
+                    cartQtyByProductId={cartQtyByProductId}
+                  />
+                )}
               </div>
             </>
           )}
@@ -3988,7 +3901,7 @@ function FnbPosPageInner() {
               }
             }}
             product={selectedProductForActiveTab}
-            variants={itemVariants.length > 0 ? itemVariants : undefined}
+            variants={pricedItemVariants.length > 0 ? pricedItemVariants : undefined}
             variantsLoading={itemVariantsLoading}
             variantsFailed={itemVariantsFailed}
             // 08/08 (CEO): HAI cơ chế topping không được cùng hiện. Cờ TẮT

@@ -426,7 +426,7 @@ export async function resolveAppliedTier(context: {
   channel: "retail" | "fnb";
   customerId?: string;
   branchId?: string;
-  productIds: string[];
+  productIds: string[] | Promise<string[]>;
 }): Promise<{
   tierId: string;
   tierName: string;
@@ -434,26 +434,27 @@ export async function resolveAppliedTier(context: {
   priceMap: Map<string, number>;
   rulesMap: Map<string, TierPriceRule[]>;
 } | null> {
-  const tierId = await getApplicableTier({
-    channel: context.channel,
-    customerId: context.customerId,
-    branchId: context.branchId,
-  });
+  const tierIdPromise = getApplicableTier(context);
+  const [tierId, productIds] = await Promise.all([tierIdPromise, context.productIds]);
   if (!tierId) return null;
 
   const tenantId = await getCurrentTenantId();
+  const strict = context.channel === "fnb";
 
-  // Get tier info
-  const { data: tier } = await supabase
-    .from("price_tiers")
-    .select("id, name, code")
-    .eq("tenant_id", tenantId)
-    .eq("id", tierId)
-    .single();
+  const [{ data: tier, error }, tierPrices] = await Promise.all([
+    supabase
+      .from("price_tiers")
+      .select("id, name, code")
+      .eq("tenant_id", tenantId)
+      .eq("id", tierId)
+      .single(),
+    getTierPricesBatch(tierId, productIds, { strict }),
+  ]);
+  if (strict && (error || !tier)) {
+    throw error ?? new Error("Không tải được bảng giá chi nhánh.");
+  }
   if (!tier) return null;
 
-  // Batch lookup prices
-  const tierPrices = await getTierPricesBatch(tierId, context.productIds);
   const priceMap = new Map<string, number>();
   const rulesMap = new Map<string, TierPriceRule[]>();
   for (const [productId, entry] of tierPrices.entries()) {
@@ -526,7 +527,8 @@ export async function getApplicableTier(context: {
       .eq("tenant_id", tenantId)
       .eq("id", context.branchId)
       .maybeSingle();
-    if (error || !data) return null;
+    if (error) throw error;
+    if (!data) throw new Error("Không tải được chi nhánh để xác định bảng giá.");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return ((data as any).price_tier_id as string | null) ?? null;
   }
@@ -706,7 +708,8 @@ export async function getProductPriceForCustomer(
 // Batch tier prices — tenant-scoped via inner join.
 export async function getTierPricesBatch(
   tierId: string,
-  productIds: string[]
+  productIds: string[],
+  { strict = false } = {},
 ): Promise<Map<string, TierPriceBatchEntry>> {
   if (productIds.length === 0) return new Map();
   const tenantId = await getCurrentTenantId();
@@ -720,6 +723,7 @@ export async function getTierPricesBatch(
     .eq("price_tier_id", tierId)
     .in("product_id", productIds);
 
+  if (strict && error) throw error;
   if (error || !data) return new Map();
 
   const result = new Map<string, TierPriceBatchEntry>();
