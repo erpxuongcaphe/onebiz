@@ -17,9 +17,11 @@ export function BulkInvoiceCancelDialog({ ids, permissions, onClose, onDone }: {
   const [reason, setReason] = useState(""), [acknowledged, setAcknowledged] = useState(false);
   const [running, setRunning] = useState(false), [results, setResults] = useState<InvoiceCancelResult[]>([]);
   const locked = useRef(false);
+  const permissionsRef = useRef(permissions);
+  useEffect(() => { permissionsRef.current = permissions; }, [permissions]);
   useEffect(() => {
     let disposed = false;
-    previewInvoiceBulkCancel(ids).then(data => { if (!disposed) setRows(data); })
+    previewInvoiceBulkCancel(ids, permissionsRef.current).then(data => { if (!disposed) setRows(data); })
       .catch(err => { if (!disposed) setError(err instanceof Error ? err.message : "Không tải được tác động."); })
       .finally(() => { if (!disposed) setLoading(false); });
     return () => { disposed = true; };
@@ -55,7 +57,7 @@ export function BulkInvoiceCancelDialog({ ids, permissions, onClose, onDone }: {
           </tr></thead><tbody>{rows.map(row => {
             const result = results.find(item => item.id === row.id);
             return <tr className="border-t" key={row.id}><td className="p-2 whitespace-nowrap">{row.code}</td>
-              <td className="p-2 text-right tabular-nums whitespace-nowrap">{formatCurrency(row.status === "completed" ? row.refund : 0)}</td>
+              <td className="p-2 text-right tabular-nums whitespace-nowrap">{canCancelInvoice(row, permissions) ? formatCurrency(row.status === "completed" ? row.refund : 0) : "—"}</td>
               <td className="p-2">{result ? result.message : !canCancelInvoice(row, permissions) ? "Không có quyền — bỏ qua" : row.status === "cancelled" ? "Đã hủy — bỏ qua" : row.status === "completed" ? "Đã thanh toán · hoàn tác" : "Chưa hoàn thành"}</td></tr>;
           })}</tbody></table>
         </div>

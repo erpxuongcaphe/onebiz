@@ -244,7 +244,7 @@ function PurchaseOrderDetail({
 }: {
   order: PurchaseOrder;
   onClose: () => void;
-  onRequestPartialReceive: () => void;
+  onRequestPartialReceive?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
 }) {
@@ -357,7 +357,7 @@ function PurchaseOrderDetail({
                       {items.length} mặt hàng · Đã nhập {formatNumber(totalReceivedQty)} / {formatNumber(totalOrderedQty)}
                     </div>
                   </div>
-                  {canPartialReceive && (
+                  {canPartialReceive && onRequestPartialReceive && (
                     <Button size="sm" variant="outline" onClick={onRequestPartialReceive}>
                       <Icon name="call_received" size={14} />
                       <span className="ml-1">Nhận hàng</span>
@@ -980,11 +980,11 @@ export default function NhapHangPage() {
     <PurchaseOrderDetail
       order={order}
       onClose={onClose}
-      onRequestPartialReceive={() => setPartialReceiveOrder(order)}
+      onRequestPartialReceive={txPerms.forBranch(order.branchId).canEdit ? () => setPartialReceiveOrder(order) : undefined}
       onEdit={
         // Phase 1.5 (CEO 01/06/2026): cho sửa cả status='ordered' nhưng dialog
         // chỉ enable paid + note (không đụng tồn). Items thay đổi → Huỷ phiếu.
-        txPerms.canEdit && (order.status === "draft" || order.status === "ordered")
+        txPerms.forBranch(order.branchId).canEdit && (order.status === "draft" || order.status === "ordered")
           ? () => {
               setEditingPO({
                 id: order.id,
@@ -1002,7 +1002,7 @@ export default function NhapHangPage() {
           : undefined
       }
       onDelete={
-        txPerms.canCancel && order.status !== "cancelled"
+        txPerms.forBranch(order.branchId).canCancel && order.status !== "cancelled"
           ? () => handleCancelPO(order)
           : undefined
       }
@@ -1421,13 +1421,13 @@ export default function NhapHangPage() {
         rowActions={(row) => {
           // Sprint UX-1 Stage 4: standardized transaction row actions
           const workflowActions: Array<{ label: string; icon?: React.ReactNode; onClick: () => void }> = [];
-          if (row.status === "draft") {
+          if (row.status === "draft" && txPerms.forBranch(row.branchId).canEdit) {
             workflowActions.push({
               label: "Xác nhận đặt hàng",
               icon: <Icon name="arrow_forward" size={16} />,
               onClick: () => handleAdvanceStatus(row, "ordered"),
             });
-          } else if (row.status === "ordered") {
+          } else if (row.status === "ordered" && txPerms.forBranch(row.branchId).canEdit) {
             workflowActions.push({
               label: "Nhập một phần",
               icon: <Icon name="arrow_forward" size={16} />,
@@ -1446,7 +1446,7 @@ export default function NhapHangPage() {
                 setCloseShortReason("");
               },
             });
-          } else if (row.status === "partial") {
+          } else if (row.status === "partial" && txPerms.forBranch(row.branchId).canEdit) {
             workflowActions.push({
               label: "Hoàn thành nhập",
               icon: <Icon name="arrow_forward" size={16} />,
@@ -1465,7 +1465,7 @@ export default function NhapHangPage() {
           return buildTransactionRowActions({
             row,
             kind: "goods_receipt",
-            permissions: txPerms,
+            permissions: txPerms.forBranch(row.branchId),
             // Phase 1.5 (CEO 01/06/2026): cho sửa cả draft + ordered. Dialog
             // sẽ tự khoá items/qty khi status='ordered' (chỉ sửa paid+note).
             onEdit:

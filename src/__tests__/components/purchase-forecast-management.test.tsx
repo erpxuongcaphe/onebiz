@@ -1,10 +1,11 @@
 import React from 'react';
 import {beforeEach,describe,it,expect,vi} from 'vitest';
 import {render,screen,fireEvent,waitFor,cleanup} from '@testing-library/react';
-const f=vi.hoisted(()=>({forecast:vi.fn(),customers:vi.fn(),groups:vi.fn(),excel:vi.fn(),toast:vi.fn()}));
+const f=vi.hoisted(()=>({forecast:vi.fn(),customers:vi.fn(),groups:vi.fn(),excel:vi.fn(),toast:vi.fn(),canViewCost:true}));
 vi.mock('@/lib/services',()=>({getPurchaseForecast:f.forecast,getCustomerGroupsAsync:f.groups}));
 vi.mock('@/lib/services/supabase/order-management-reads',()=>({getForecastCustomerOptions:f.customers}));
 vi.mock('@/lib/contexts',()=>({useBranchFilter:()=>({activeBranchId:'warehouse',branchLabel:'Kho tổng',isReady:true}),useToast:()=>({toast:f.toast})}));
+vi.mock('@/lib/permissions/use-permission',()=>({usePermissions:()=>({hasPermission:(code:string)=>code==='products.view_cost'&&f.canViewCost,isLoading:false})}));
 vi.mock('@/lib/hooks/use-report-state',()=>({useReportState:()=>({preset:'thisMonth',range:{from:'2026-10-01',to:'2026-10-26'},viewMode:'table',setPreset:vi.fn(),setCustomRange:vi.fn(),setViewMode:vi.fn()})}));
 vi.mock('@/lib/utils/excel-export',()=>({exportReportToExcel:f.excel,buildReportTitleRows:()=>['Dự kiến mua hàng','Kho tổng']}));
 vi.mock('@/components/shared/report',()=>({ReportPageHeader:({onExportFull,exportDisabled}:{onExportFull:()=>void;exportDisabled:boolean})=><button disabled={exportDisabled} onClick={onExportFull}>Xuất báo cáo</button>}));
@@ -16,7 +17,7 @@ async function pickCustomer(){
   fireEvent.click(screen.getByRole('combobox',{name:'Khách hàng cụ thể'}));
   fireEvent.click(await screen.findByRole('option',{name:/NB: Tư Búa/}));
 }
-beforeEach(()=>{cleanup();vi.clearAllMocks();f.forecast.mockResolvedValue(report('SUA'));f.customers.mockResolvedValue([{id:'nb',code:'NB1',name:'NB: Tư Búa',phone:'0901'},{id:'ws',code:'WS1',name:'Khách Sỉ',phone:null}]);f.groups.mockResolvedValue([{value:'g',label:'Nhóm sỉ'}]);f.excel.mockResolvedValue(undefined);});
+beforeEach(()=>{cleanup();vi.clearAllMocks();f.canViewCost=true;f.forecast.mockResolvedValue(report('SUA'));f.customers.mockResolvedValue([{id:'nb',code:'NB1',name:'NB: Tư Búa',phone:'0901'},{id:'ws',code:'WS1',name:'Khách Sỉ',phone:null}]);f.groups.mockResolvedValue([{value:'g',label:'Nhóm sỉ'}]);f.excel.mockResolvedValue(undefined);});
 describe('forecast filters and workbook scope',()=>{
  it('uses one editable customer field inside the aligned filter group, with no separate search box',async()=>{
   render(<Page/>);
@@ -38,6 +39,17 @@ describe('forecast filters and workbook scope',()=>{
   fireEvent.click(screen.getByRole('button',{name:'Xuất báo cáo'}));await waitFor(()=>expect(f.excel).toHaveBeenCalledOnce());
   expect(f.excel.mock.calls[0][0].sheets).toHaveLength(1);expect(f.excel.mock.calls[0][0].sheets[0].rows.map((r:{code:string})=>r.code)).toEqual(['SUA']);
   expect(f.excel.mock.calls[0][0].sheets[0].footer.amount).toBe(3000);
+ });
+ it('does not display or export fabricated zero cost when cost access is absent',async()=>{
+  f.canViewCost=false;render(<Page/>);
+  await waitFor(()=>expect((screen.getByRole('button',{name:'Xuất báo cáo'}) as HTMLButtonElement).disabled).toBe(false));
+  expect(screen.getAllByText('Không có quyền').length).toBeGreaterThan(0);
+  fireEvent.click(screen.getByRole('button',{name:'Xuất báo cáo'}));await waitFor(()=>expect(f.excel).toHaveBeenCalledOnce());
+  const sheet=f.excel.mock.calls[0][0].sheets[0];
+  expect(sheet.columns.map((c:{key:string})=>c.key)).not.toContain('cost');
+  expect(sheet.columns.map((c:{key:string})=>c.key)).not.toContain('amount');
+  expect(sheet.rows[0]).not.toHaveProperty('cost');expect(sheet.rows[0]).not.toHaveProperty('amount');
+  expect(sheet.titleRows.join(' ')).toContain('chưa có quyền');
  });
  it('loads internal customers and searches without accents by code/name/phone',async()=>{
   render(<Page/>);await waitFor(()=>expect((screen.getByRole('combobox',{name:'Khách hàng cụ thể'}) as HTMLButtonElement).disabled).toBe(false));

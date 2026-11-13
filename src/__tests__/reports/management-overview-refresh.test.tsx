@@ -5,11 +5,11 @@ import type { ReactNode } from "react";
 const state = vi.hoisted(() => ({
   userId: "user-a",
   branchId: "branch-a", refresh: undefined as (() => void) | undefined,
-  getOverviewKpis: vi.fn(), getDebtWorkspace: vi.fn(), getCashFlowDetailed: vi.fn(), getDashboardProductBreakdown: vi.fn(), exportReportToExcel: vi.fn(), denied: new Set<string>(), range: { from: "2026-09-01", to: "2026-09-30" },
+  getOverviewKpis: vi.fn(), getDebtWorkspace: vi.fn(), getCashFlowDetailed: vi.fn(), getDashboardProductBreakdown: vi.fn(), exportReportToExcel: vi.fn(), denied: new Set<string>(), branchDenied: new Set<string>(), range: { from: "2026-09-01", to: "2026-09-30" },
 }));
 vi.mock("@/lib/contexts", () => ({
   useBranchFilter: () => ({ activeBranchId: state.branchId, branchLabel: state.branchId, isReady: true }),
-  useAuth: () => ({ user: { id: state.userId }, tenant: { id: "tenant-1", name: "OneBiz" }, hasPermission: (key: string) => !state.denied.has(key) }),
+  useAuth: () => ({ user: { id: state.userId }, tenant: { id: "tenant-1", name: "OneBiz" }, hasPermissionAtBranch: (key: string, branch: string | null) => !state.denied.has(key) && !state.branchDenied.has(`${key}:${branch}`) }),
   useToast: () => ({ toast: vi.fn() }),
 }));
 vi.mock("@/lib/hooks/use-report-state", () => ({
@@ -48,7 +48,7 @@ function deferred<T>() {
   const promise = new Promise<T>(done => { resolve = done; });
   return { promise, resolve };
 }
-beforeEach(() => { state.branchId = "branch-a"; state.denied = new Set(); state.getOverviewKpis.mockReset(); state.getDashboardProductBreakdown.mockReset().mockResolvedValue({category: [], products: []}); state.getDebtWorkspace.mockReset().mockResolvedValue({ receivables: [], payables: [], generatedAt: "2026-10-19T07:00:00Z" }); state.getCashFlowDetailed.mockReset().mockResolvedValue([]); state.exportReportToExcel.mockReset().mockResolvedValue(undefined); });
+beforeEach(() => { state.branchId = "branch-a"; state.denied = new Set(); state.branchDenied = new Set(); state.getOverviewKpis.mockReset(); state.getDashboardProductBreakdown.mockReset().mockResolvedValue({category: [], products: []}); state.getDebtWorkspace.mockReset().mockResolvedValue({ receivables: [], payables: [], generatedAt: "2026-10-19T07:00:00Z" }); state.getCashFlowDetailed.mockReset().mockResolvedValue([]); state.exportReportToExcel.mockReset().mockResolvedValue(undefined); });
 afterEach(cleanup);
 
 describe("overview refresh safety", () => {
@@ -125,6 +125,14 @@ describe("overview refresh safety", () => {
     expect(screen.queryByRole("region", { name: "Thu chi trong kỳ" })).not.toBeInTheDocument();
     await act(async () => { screen.getByRole("button", { name: "Xuất bảng" }).click(); });
     expect(state.exportReportToExcel.mock.calls[0][0].sheets.some((sheet: { name: string }) => sheet.name === "Thu chi")).toBe(false);
+  });
+  it("resolves cash permission for the branch selected in the report", async () => {
+    state.branchDenied.add("finance.view_cash_book:branch-a");
+    state.getOverviewKpis.mockResolvedValue(result(444444));
+    render(<Overview />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Xuất bảng" })).toBeEnabled());
+    expect(state.getCashFlowDetailed).not.toHaveBeenCalled();
+    expect(screen.queryByRole("region", { name: "Thu chi trong kỳ" })).not.toBeInTheDocument();
   });
 
   it("exports cash independently of profit permission", async () => {

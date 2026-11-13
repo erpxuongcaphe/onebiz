@@ -1,0 +1,127 @@
+// Disposable PostgreSQL only; this never connects to production.
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { pathToFileURL } from 'node:url';
+import { initializeStaffAccessFixture } from './staff-access-tests/fixture.mjs';
+import { functionFromMigration } from './staff-access-tests/inventory.mjs';
+const {PGlite}=await import(process.env.ONEBIZ_PGLITE_MODULE ? pathToFileURL(process.env.ONEBIZ_PGLITE_MODULE).href : '@electric-sql/pglite');
+const db=new PGlite();
+const id=n=>`00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
+const sql=name=>readFile(new URL(`../supabase/migrations/${name}`,import.meta.url),'utf8');
+try {
+ await initializeStaffAccessFixture(db,id);
+ await db.exec(await sql('20261111052704_staff_branch_access.sql'));
+ await db.exec(await functionFromMigration('20261111070229_staff_branch_checkout_permissions.sql','_staff_permission_at_scope'));
+ await db.exec(await functionFromMigration('20261111095224_staff_branch_kitchen_permissions.sql','_staff_permission_any_branch'));
+ await db.exec(await functionFromMigration('20261112011209_staff_branch_inventory_lot_read.sql','_staff_my_inventory_view'));
+ await db.exec(await functionFromMigration('20261112121837_staff_inventory_global_revoke_guard.sql','_staff_lot_has_no_view_exception'));
+ await db.exec(await functionFromMigration('20261112121837_staff_inventory_global_revoke_guard.sql','_staff_inventory_row_visible'));
+ await db.exec(`
+  create table disposal_exports(id uuid,tenant_id uuid,branch_id uuid,code text,status text,created_at timestamptz,created_by uuid,reason text,note text,total_amount numeric);
+  create table products(id uuid,tenant_id uuid,code text);
+  insert into products values ('${id(400)}','${id(1)}','MILK-001');
+  create table disposal_export_items(id uuid,disposal_id uuid,product_id uuid,product_name text,unit text,quantity numeric,unit_price numeric,total numeric,unit_cost numeric);
+  create table internal_exports(id uuid,tenant_id uuid,branch_id uuid,code text,status text,created_at timestamptz,created_by uuid,department text,note text,total_amount numeric);
+  create table internal_export_items(id uuid,export_id uuid,product_id uuid,product_name text,unit text,quantity numeric,unit_price numeric,total numeric);
+  insert into disposal_exports values ('${id(200)}','${id(1)}','${id(10)}','A','draft',now(),'${id(101)}','breakage','note',999),('${id(201)}','${id(1)}','${id(11)}','B','draft',now(),'${id(101)}',null,null,999),('${id(202)}','${id(2)}','${id(12)}','foreign','draft',now(),'${id(101)}',null,null,999);
+  insert into disposal_export_items values ('${id(300)}','${id(200)}','${id(400)}','Milk','box',2,333,666,333);
+  insert into internal_exports values ('${id(210)}','${id(1)}','${id(10)}','I','draft',now(),'${id(101)}','Bar','note',999);
+  insert into internal_export_items values ('${id(310)}','${id(210)}','${id(400)}','Milk','box',2,333,666);
+  alter table disposal_exports add column updated_at timestamptz;
+  alter table internal_exports add column updated_at timestamptz;
+  alter table disposal_exports enable row level security; alter table disposal_export_items enable row level security;
+  alter table internal_exports enable row level security; alter table internal_export_items enable row level security;
+  alter function public.get_user_tenant_id() security definer;
+  create policy disposal_legacy on disposal_exports for select to authenticated using (tenant_id=get_user_tenant_id());
+  create policy internal_legacy on internal_exports for select to authenticated using (tenant_id=get_user_tenant_id());
+  create policy disposal_scope on disposal_exports as restrictive for select to authenticated using (_staff_inventory_row_visible(branch_id));
+  create policy internal_scope on internal_exports as restrictive for select to authenticated using (_staff_inventory_row_visible(branch_id));
+  create policy disposal_item_legacy on disposal_export_items for select to authenticated using (exists(select 1 from disposal_exports d where d.id=disposal_id));
+  create policy internal_item_legacy on internal_export_items for select to authenticated using (exists(select 1 from internal_exports d where d.id=export_id));
+  grant usage on schema public,auth to authenticated;
+  grant select on disposal_exports,disposal_export_items,internal_exports,internal_export_items to authenticated;
+  insert into staff_branch_permission_catalog values ('inventory.dispose',1),('inventory.internal_export',1),('inventory.view',1);
+  insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+    values ('${id(1)}','${id(101)}','${id(10)}','inventory.dispose','grant','${id(100)}');
+  select set_config('request.jwt.claim.sub','${id(101)}',false);
+ `);
+ const captured=process.env.ONEBIZ_STOCK_WORK_AUDIT_FILE ? JSON.parse(await readFile(process.env.ONEBIZ_STOCK_WORK_AUDIT_FILE,'utf8')) : null;
+ for (const [file,name] of [['00315_disposal_export_list_workspace.sql','get_disposal_export_list_workspace'],['00316_warehouse_list_workspaces_batch.sql','get_internal_export_list_workspace']]) {
+  const actual=captured?.find(x=>x.proname===name);
+  if (captured) assert.ok(actual,`${name} must be captured`);
+  await db.exec(actual ? actual.definition : await functionFromMigration(file,name));
+ }
+ await db.exec(await sql('20261112162406_staff_stock_work_documents_safe_projection.sql'));
+ await db.exec(await sql('20261112165047_staff_stock_work_cost_column_protection.sql'));
+ await db.exec('set role authenticated');
+ const grants=(await db.query("select has_table_privilege('authenticated','public.disposal_exports','select') table_grant, has_column_privilege('authenticated','public.disposal_exports','id','select') id_grant, has_column_privilege('authenticated','public.disposal_exports','code','select') code_grant, has_column_privilege('authenticated','public.disposal_exports','total_amount','select') cost_grant")).rows[0];
+ assert.deepEqual(grants,{table_grant:false,id_grant:true,code_grant:true,cost_grant:false},'preflight checks required code columns without granting cost');
+ await assert.rejects(db.query('select total_amount from disposal_exports'), /permission denied/);
+ await assert.rejects(db.query('select unit_cost from disposal_export_items'), /permission denied/);
+ await assert.rejects(db.query('select total_amount from internal_exports'), /permission denied/);
+ await assert.rejects(db.query('select unit_price from internal_export_items'), /permission denied/);
+ await assert.rejects(db.query('select get_disposal_export_list_workspace()'), /STOCK_WORK_REFRESH_REQUIRED/);
+ const detail=async(kind,n)=>(await db.query('select get_stock_work_document_detail($1,$2) result',[kind,id(n)])).rows[0].result;
+ const result=await detail('disposal_export',200);
+ assert.equal(result.code,'A'); assert.equal(result.items[0].quantity,2);
+ const list=async(kind,branch=null,search=null)=>(await db.query('select get_stock_work_document_list($1,$2,0,20,$3) result',[kind,branch,search])).rows[0].result;
+ const listed=await list('disposal_export');
+ assert.equal(listed.total,1); assert.equal(listed.items[0].id,id(200));
+ assert.equal(listed.costVisible,false); assert.equal(listed.items[0].total_amount,null);
+ assert.equal((await list('disposal_export',null,'Milk')).total,1);
+ assert.equal((await list('disposal_export',null,'MILK-001')).total,1);
+ assert.equal((await db.query('select get_stock_work_document_list($1,null,0,20,$2,$3) result',['disposal_export','MILK-001','product'])).rows[0].result.total,1);
+ assert.equal((await list('disposal_export',null,'missing')).total,0);
+ await assert.rejects(list('disposal_export',id(11)),/STOCK_WORK_DOCUMENT_DENIED/);
+ assert.ok(!JSON.stringify(listed).match(/999|333|666|unitPrice|unitCost/),'list omits all cost values');
+ await db.exec(`reset role; insert into role_permissions values('${id(20)}','reports.view_all_branches');
+  insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+   values('${id(1)}','${id(101)}','${id(11)}','inventory.dispose','grant','${id(100)}'); set role authenticated;`);
+ assert.equal((await list('disposal_export')).total,1,'all-branch reporting cannot turn an unassigned action grant into access');
+ await assert.rejects(detail('disposal_export',201),/STOCK_WORK_DOCUMENT_DENIED/);
+ await db.exec(`reset role; insert into user_branches values('${id(101)}','${id(11)}',null);
+  update user_branch_permission_overrides set override_type='revoke' where user_id='${id(101)}' and branch_id='${id(11)}' and permission_code='inventory.dispose';
+  insert into role_permissions values('${id(20)}','inventory.dispose'); set role authenticated;`);
+ assert.equal((await list('disposal_export')).total,1,'branch revoke takes precedence over role action');
+ await assert.rejects(detail('disposal_export',201),/STOCK_WORK_DOCUMENT_DENIED/);
+ assert.ok(!JSON.stringify(result).match(/999|333|666|unitPrice|unitCost|totalAmount/),'price and total never leave the server');
+ assert.equal((await db.query('select count(*)::int n from disposal_exports')).rows[0].n,0,'no direct table access is added');
+ assert.equal((await db.query('select count(*)::int n from disposal_export_items')).rows[0].n,0,'no direct access to cost-bearing item rows is added');
+ await assert.rejects(detail('disposal_export',201),/STOCK_WORK_DOCUMENT_DENIED/);
+ await assert.rejects(detail('disposal_export',202),/STOCK_WORK_DOCUMENT_DENIED/);
+ await assert.rejects(detail('internal_export',210),/STOCK_WORK_DOCUMENT_DENIED/);
+ await assert.rejects(list('internal_export'),/STOCK_WORK_DOCUMENT_DENIED/);
+ await assert.rejects(detail('other',200),/STOCK_WORK_KIND_INVALID/);
+ await db.exec(`reset role; insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+  values ('${id(1)}','${id(101)}','${id(10)}','inventory.internal_export','grant','${id(100)}'); set role authenticated;`);
+ assert.equal((await detail('internal_export',210)).items[0].quantity,2);
+ assert.equal((await list('internal_export')).items[0].id,id(210));
+ await db.exec(`reset role;
+  insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+   values ('${id(1)}','${id(101)}','${id(11)}','inventory.view','grant','${id(100)}'); set role authenticated;`);
+ const mixed=await list('disposal_export');
+ assert.equal(mixed.total,2,'combined list includes view-only and action-only branches');
+ assert.deepEqual((await db.query('select id from disposal_exports order by id')).rows.map(x=>x.id),[id(201)],'non-cost columns retain independently granted branch viewing');
+ await assert.rejects(db.query('select total_amount from disposal_exports'), /permission denied/);
+ assert.equal(mixed.items.find(x=>x.id===id(200)).total_amount,null);
+ assert.equal(mixed.items.find(x=>x.id===id(201)).total_amount,null,'inventory view alone does not reveal cost');
+ assert.equal(mixed.costVisible,false); assert.equal(mixed.summary.completedValue,null);
+ await assert.rejects(db.query('select get_stock_work_document_list($1,null,0,20,null,$2,null,null,null,null,$3,null)', ['disposal_export','all',1]),/STOCK_WORK_VALUE_FILTER_DENIED/);
+ assert.equal((await list('disposal_export',id(11))).costVisible,false,'view does not override the cost revoke');
+ await db.exec(`reset role; insert into role_permissions values('${id(20)}','products.view_cost'); set role authenticated;`);
+ assert.equal((await list('disposal_export')).costVisible,false,'global cost revoke wins over role grant');
+ await db.exec(`reset role; delete from user_permission_overrides where user_id='${id(101)}' and permission_code='products.view_cost'; set role authenticated;`);
+ const withCost=await list('disposal_export');
+ assert.equal(withCost.costVisible,true); assert.equal(withCost.items.find(x=>x.id===id(201)).total_amount,999);
+ assert.equal((await db.query('select get_disposal_export_list_workspace() result')).rows[0].result.costVisible,true);
+ await assert.rejects(db.query('select total_amount from disposal_exports'), /permission denied/);
+ const withCostDetail=await detail('disposal_export',200);
+ assert.equal(withCostDetail.totalAmount,999); assert.equal(withCostDetail.items[0].unitPrice,333);
+ assert.equal((await detail('disposal_export',201)).code,'B','independent inventory viewing retains document detail');
+ assert.equal((await db.query('select get_stock_work_document_list($1,null,0,20,null,$2,null,null,null,null,$3,null) result', ['disposal_export','all',1000])).rows[0].result.total,0);
+ await db.exec(`reset role; insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type,created_by)
+  values ('${id(1)}','${id(101)}','inventory.dispose','revoke','${id(100)}'); set role authenticated;`);
+ await assert.rejects(detail('disposal_export',200),/STOCK_WORK_DOCUMENT_DENIED/);
+ assert.equal((await list('disposal_export')).total,1,'global action revoke leaves independent inventory viewing intact');
+ console.log('PASS stock work detail: action scope, global revoke, tenant isolation, no direct rows or cost fields');
+} catch(e) {console.error(e.message,e.where??'');process.exitCode=1;} finally {await db.close();}

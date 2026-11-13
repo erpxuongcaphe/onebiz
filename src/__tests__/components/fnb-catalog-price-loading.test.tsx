@@ -23,6 +23,7 @@ vi.mock("@/lib/contexts", () => ({
     currentBranch: fixture.branches.find((branch) => branch.id === fixture.branch),
     isLoading: false,
     hasPermission: () => false,
+    hasPermissionWithLegacy: () => false,
     switchBranch: vi.fn(),
   }),
   useToast: () => ({ toast: fixture.toast }),

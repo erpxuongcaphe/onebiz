@@ -171,25 +171,71 @@ const PERMISSION_MAP: Record<
   },
 };
 
-export function useTxRowPermissions(kind: TxKind): TxRowPermissions {
-  const { hasPermission } = usePermissions();
+export function useTxRowPermissions(kind: TxKind): TxRowPermissions & {
+  forBranch: (branchId: string | null | undefined) => TxRowPermissions;
+} {
+  const { hasPermission, hasPermissionAtBranch, hasAssignedBranchAccess } =
+    usePermissions();
   const map = PERMISSION_MAP[kind];
 
-  const check = (code: string | string[] | undefined, fallback = true): boolean => {
-    if (code === undefined) return fallback;
-    if (Array.isArray(code)) return code.every((c) => hasPermission(c));
-    return hasPermission(code);
+  const resolve = (checkPermission: (code: string) => boolean): TxRowPermissions => {
+    const check = (
+      code: string | string[] | undefined,
+      fallback = true,
+    ): boolean => {
+      if (code === undefined) return fallback;
+      if (Array.isArray(code)) return code.every((c) => checkPermission(c));
+      return checkPermission(code);
+    };
+    return {
+      canView: check(map.canView),
+      canDuplicate: check(map.canDuplicate),
+      canEdit: check(map.canEdit),
+      canPrint: check(map.canPrint),
+      canExport: check(map.canExport),
+      canReturn: check(map.canReturn),
+      canPayment: check(map.canPayment),
+      canAuditLog: check(map.canAuditLog),
+      canCancel: check(map.canCancel),
+    };
   };
-
   return {
-    canView: check(map.canView),
-    canDuplicate: check(map.canDuplicate),
-    canEdit: check(map.canEdit),
-    canPrint: check(map.canPrint),
-    canExport: check(map.canExport),
-    canReturn: check(map.canReturn),
-    canPayment: check(map.canPayment),
-    canAuditLog: check(map.canAuditLog),
-    canCancel: check(map.canCancel),
+    ...resolve(hasPermission),
+    forBranch: (branchId) => {
+      const permissions = resolve((code) =>
+        hasPermissionAtBranch(code, branchId ?? null),
+      );
+      if (hasAssignedBranchAccess(branchId ?? null)) {
+        // Preserve separately granted print capabilities even if the view
+        // permission is restricted for this branch.
+        if (kind === "sales_order" || kind === "invoice") {
+          const code = kind === "sales_order" ? PERMISSIONS.ORDERS_PRINT : PERMISSIONS.INVOICES_PRINT;
+          return { ...permissions, canPrint: permissions.canPrint || hasPermissionAtBranch(code, branchId ?? null) };
+        }
+        if (kind === "disposal" || kind === "internal_export") {
+          const code = kind === "disposal" ? "inventory.dispose" : "inventory.internal_export";
+          const canReadForWork = hasPermissionAtBranch(code, branchId ?? null);
+          return { ...permissions, canView: permissions.canView || canReadForWork, canPrint: permissions.canPrint || canReadForWork };
+        }
+        if (kind === "stock_transfer") {
+          const canReadForWork = hasPermissionAtBranch("inventory.transfer", branchId ?? null);
+          return { ...permissions, canView: permissions.canView || canReadForWork, canPrint: permissions.canPrint || canReadForWork };
+        }
+        if (kind === "inventory_check") {
+          const canReadForWork = ["inventory.check", "inventory.edit_check", "inventory.cancel_check"]
+            .some((code) => hasPermissionAtBranch(code, branchId ?? null));
+          return { ...permissions, canView: permissions.canView || canReadForWork, canPrint: permissions.canPrint || canReadForWork };
+        }
+        return permissions;
+      }
+      return {
+        ...permissions,
+        canDuplicate: false,
+        canEdit: false,
+        canReturn: false,
+        canPayment: false,
+        canCancel: false,
+      };
+    },
   };
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { usePermissions } from "@/lib/permissions/use-permission";
 import { printDocumentWithTemplate } from "@/lib/print-apply-template";
@@ -126,7 +126,7 @@ function DisposalExportDetail({
                 label: "Tổng giá trị",
                 value: (
                   <span className="font-semibold text-primary">
-                    {formatCurrency(item.totalAmount)}
+                    {item.costVisible === false ? "Không có quyền" : formatCurrency(item.totalAmount)}
                   </span>
                 ),
               },
@@ -198,7 +198,9 @@ export default function XuatHuyPage() {
   const [dateTo, setDateTo] = useState("");
   const [amountMin, setAmountMin] = useState("");
   const [amountMax, setAmountMax] = useState("");
-  const [summary, setSummary] = useState({ completedCount: 0, draftCount: 0, cancelledCount: 0, completedValue: 0 });
+  const [summary, setSummary] = useState({ completedCount: 0, draftCount: 0, cancelledCount: 0, completedValue: 0, costVisible: false });
+  const [listError, setListError] = useState(false);
+  const fetchVersion = useRef(0);
   const [filterOpen, setFilterOpen] = useState(false);
   // CEO 08/07: xem tất cả chi nhánh (cục bộ) khi bảng trống vì lọc chi nhánh.
   const [viewAllBranches, setViewAllBranches] = useState(false);
@@ -259,7 +261,7 @@ export default function XuatHuyPage() {
       size: 140,
       cell: ({ row }) => (
         <span className="text-right block">
-          {formatCurrency(row.original.totalAmount)}
+          {row.original.costVisible === false ? "Không có quyền" : formatCurrency(row.original.totalAmount)}
         </span>
       ),
     },
@@ -276,9 +278,11 @@ export default function XuatHuyPage() {
 
   /* ---- Fetch data ---- */
   const fetchData = useCallback(async () => {
+    const request = ++fetchVersion.current;
     if (permissionsLoading) return;
-    if (!activeBranchId && !duocXemToanChuoi) { setData([]); setTotal(0); setOtherBranchCount(0); setLoading(false); return; }
+    if (!activeBranchId && !duocXemToanChuoi) { setData([]); setTotal(0); setOtherBranchCount(0); setSummary({ completedCount: 0, draftCount: 0, cancelledCount: 0, completedValue: 0, costVisible: false }); setLoading(false); return; }
     setLoading(true);
+    setListError(false);
     // Không có try/finally thì truy vấn lỗi là cờ loading không bao giờ tắt →
     // trang treo mãi ở vòng xoay, người dùng không biết vì sao.
     try {
@@ -293,6 +297,7 @@ export default function XuatHuyPage() {
       amountMax: amountMax ? Number(amountMax) : undefined,
       branchId: branchScope,
     });
+    if (request !== fetchVersion.current) return;
     setData(result.data);
     setTotal(result.total);
     setSummary(result.summary);
@@ -306,23 +311,29 @@ export default function XuatHuyPage() {
         amountMax: amountMax ? Number(amountMax) : undefined,
         branchId: undefined,
       });
+      if (request !== fetchVersion.current) return;
       setOtherBranchCount(all.total);
     } else {
       setOtherBranchCount(0);
     }
     } catch (e) {
+      if (request !== fetchVersion.current) return;
+      setListError(true);
+      setData([]); setTotal(0); setOtherBranchCount(0);
+      setSummary({ completedCount: 0, draftCount: 0, cancelledCount: 0, completedValue: 0, costVisible: false });
       toast({
         variant: "error",
         title: "Không tải được danh sách phiếu xuất huỷ",
         description: e instanceof Error ? e.message : "Lỗi không xác định",
       });
     } finally {
-      setLoading(false);
+      if (request === fetchVersion.current) setLoading(false);
     }
   }, [page, pageSize, search, searchField, selectedStatuses, datePreset, dateFrom, dateTo, amountMin, amountMax, activeBranchId, viewAllBranches, toast, duocXemToanChuoi, permissionsLoading]);
 
   useEffect(() => {
     fetchData();
+    return () => { fetchVersion.current++; };
   }, [fetchData]);
 
   useEffect(() => {
@@ -344,7 +355,7 @@ export default function XuatHuyPage() {
       { header: "Thời gian", key: "date", width: 18, format: (v: string) => formatDate(v) },
       { header: "Chi nhánh", key: "branchName", width: 22 },
       { header: "Người tạo", key: "createdByName", width: 20 },
-      { header: "Tổng giá trị", key: "totalAmount", width: 15, format: (v: number) => v },
+      ...(rows.every((row) => row.costVisible !== false) ? [{ header: "Tổng giá trị", key: "totalAmount", width: 15, format: (v: number) => v }] : []),
       { header: "Lý do", key: "reason", width: 25 },
       { header: "Ghi chú", key: "note", width: 30 },
       { header: "Trạng thái", key: "status", width: 15, format: (v: DisposalExport["status"]) => statusMap[v]?.label ?? v },
@@ -424,17 +435,17 @@ export default function XuatHuyPage() {
         searchField={searchField}
         onSearchFieldChange={(value) => { setSearchField(value); setPage(0); }}
         onExport={{
-            excel: () => void handleExport("excel"),
-            csv: () => void handleExport("csv"),
+            excel: () => void handleExport("excel").catch((error) => toast({ title: "Không xuất được phiếu", description: error instanceof Error ? error.message : undefined, variant: "error" })),
+            csv: () => void handleExport("csv").catch((error) => toast({ title: "Không xuất được phiếu", description: error instanceof Error ? error.message : undefined, variant: "error" })),
         }}
-        actions={[
+        actions={activeBranchId && txPerms.forBranch(activeBranchId).canCancel ? [
           {
             label: "Xuất hủy",
             icon: <Icon name="add" size={16} />,
             variant: "default",
             onClick: () => setCreateOpen(true),
           },
-        ]}
+        ] : []}
       />
 
       {viewAllBranches && (
@@ -456,7 +467,7 @@ export default function XuatHuyPage() {
             <ListMetric icon={<Icon name="delete_sweep" size={15} />} label="Kết quả" value={total.toString()} hint="Tổng số phiếu theo bộ lọc" />
             <ListMetric icon={<Icon name="drafts" size={15} />} label="Phiếu tạm" value={summary.draftCount.toString()} hint="Toàn bộ kết quả lọc" tone={summary.draftCount > 0 ? "danger" : "default"} />
             <ListMetric icon={<Icon name="check_circle" size={15} />} label="Hoàn thành" value={summary.completedCount.toString()} hint="Toàn bộ kết quả lọc" />
-            <ListMetric icon={<Icon name="trending_down" size={15} />} label="Giá trị tổn thất" value={formatCurrency(summary.completedValue)} hint={`${summary.cancelledCount} phiếu đã hủy không tính vào tổn thất`} tone={summary.completedValue > 0 ? "danger" : "default"} />
+            <ListMetric icon={<Icon name="trending_down" size={15} />} label="Giá trị tổn thất" value={loading ? "Đang tải" : listError ? "Không tải được" : summary.costVisible ? formatCurrency(summary.completedValue) : "Không có quyền"} hint={`${summary.cancelledCount} phiếu đã hủy không tính vào tổn thất`} tone={summary.costVisible && summary.completedValue > 0 ? "danger" : "default"} />
           </>
         }
         toolbarActions={
@@ -509,12 +520,12 @@ export default function XuatHuyPage() {
                   format: (v: string) => formatDate(v),
                 },
                 { header: "Người tạo", key: "createdBy", width: 15 },
-                {
+                ...(selectedRows.every((row) => row.costVisible !== false) ? [{
                   header: "Tổng giá trị",
                   key: "totalAmount",
                   width: 15,
                   format: (v: number) => v,
-                },
+                }] : []),
                 { header: "Lý do", key: "reason", width: 25 },
                 {
                   header: "Trạng thái",
@@ -597,7 +608,7 @@ export default function XuatHuyPage() {
           buildTransactionRowActions({
             row,
             kind: "disposal",
-            permissions: txPerms,
+            permissions: txPerms.forBranch(row.branchId),
             onPrint: () =>
               printDocumentWithTemplate({
                 channel: "backoffice",

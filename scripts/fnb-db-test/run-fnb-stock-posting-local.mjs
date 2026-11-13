@@ -4,7 +4,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
-const { PGlite } = await import(pathToFileURL(path.resolve(process.argv[2])).href);
+const { PGlite } = await import(process.argv[2] ? pathToFileURL(path.resolve(process.argv[2])).href : '@electric-sql/pglite');
 const dir=fs.mkdtempSync(path.join(os.tmpdir(),'onebiz-fnb-posting-'));
 const generated=new Map();
 for (const [script,file,args] of [
@@ -42,7 +42,11 @@ try {
  values('00000000-0000-0000-0000-000000000032','00000000-0000-0000-0000-000000000011','kg',.02,0);
  insert into kitchen_order_items(kitchen_order_id,product_id,product_name,quantity,unit_price)
  values('00000000-0000-0000-0000-000000000005','00000000-0000-0000-0000-000000000031','Free cup',3,0);`);
- const first=(await db.query('select test_pay() result')).rows[0].result;
+ const staffCheckout = process.env.ONEBIZ_STAFF_CHECKOUT_TEST === '1'
+   ? await import('../staff-access-tests/checkout-posting.mjs') : null;
+ if (staffCheckout) await staffCheckout.installCheckoutTest(db);
+ const first=staffCheckout ? await staffCheckout.payAsAuthenticated(db) : (await db.query('select test_pay() result')).rows[0].result;
+ if (staffCheckout) await staffCheckout.verifyCheckoutCashActor(db, first.invoice_id);
  const snapshot=async()=>JSON.stringify((await db.query(`select
  (select jsonb_agg(b order by product_id) from branch_stock b) stock,
  (select count(*) from stock_movements) movements,

@@ -6,13 +6,8 @@
 // Ngày chứng từ (migration 00335): bảng `invoices` dùng cột sinh tự động
 // `ngay_chung_tu` = coalesce(issued_at, created_at). Toàn bộ `kitchen_orders`
 // giữ `created_at` — đó là thời gian vận hành/giao dịch thật của đơn bếp.
-// Generated types chưa khai báo cột này → cast `InvoiceDocRow` tại chỗ đọc.
-
 import { getClient, getCurrentTenantId, handleError } from "./base";
-import { formatShortDate } from "@/lib/format";
 import { toCreatedAtRangeWindow } from "@/lib/utils/list-date-preset-range";
-
-type InvoiceDocRow = { ngay_chung_tu: string; total: number | null };
 
 const FNB_REPORT_PAGE_SIZE = 1000;
 
@@ -123,40 +118,30 @@ export async function getFnbReturnDetailPage(
   limit = 50,
 ): Promise<FnbReturnDetailPage> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
   const rangeWindow = toCreatedAtRangeWindow(range);
   const pageSize = Math.min(Math.max(1, limit), 500);
   const start = Math.max(0, offset);
-  let query = supabase
-    .from("sales_returns")
-    .select("id, code, created_at, total, refunded, invoices!sales_returns_invoice_id_fkey!inner(code, source)")
-    .eq("tenant_id", tenantId)
-    .in("status", ["confirmed", "completed"])
-    .eq("invoices.source", "fnb");
-  if (branchId) query = query.eq("branch_id", branchId);
-  if (rangeWindow) {
-    query = query.gte("created_at", rangeWindow.start).lt("created_at", rangeWindow.end);
-  }
-  const { data, error } = await query
-    .order("created_at", { ascending: false })
-    .order("id", { ascending: false })
-    .range(start, start + pageSize);
+  const { data, error } = await (supabase.rpc as any)("staff_fnb_return_detail_page", {
+    p_branch_id:branchId ?? null,p_from:rangeWindow?.start ?? null,p_to:rangeWindow?.end ?? null,
+    p_offset:start,p_limit:pageSize+1,
+  });
   if (error) {
     handleError(error, "[getFnbReturnDetailPage]");
     return { rows: [], hasMore: false };
   }
-  const page = data ?? [];
+  if (!Array.isArray(data)) throw new Error("Không tải được chi tiết phiếu hoàn F&B.");
+  const page = data;
   return {
     rows: page.slice(0, pageSize).map((raw) => {
-      const row = raw as unknown as {
+      const row = raw as {
         id: string; code: string; created_at: string; total: number; refunded: number;
-        invoices: { code: string } | null;
+        invoice_code: string | null;
       };
       return {
       id: row.id,
       code: row.code,
       createdAt: row.created_at,
-      invoiceCode: row.invoices?.code ?? "",
+      invoiceCode: row.invoice_code ?? "",
       total: Number(row.total ?? 0),
       refunded: Number(row.refunded ?? 0),
       };
@@ -185,33 +170,22 @@ export async function getFnbInvoiceDetailPage(
   limit = 50,
 ): Promise<FnbInvoiceDetailPage> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
   const rangeWindow = toCreatedAtRangeWindow(range);
   const pageSize = Math.min(Math.max(1, limit), 500);
   const start = Math.max(0, offset);
 
-  let query = supabase
-    .from("invoices")
-    .select("id, code, ngay_chung_tu, customer_name, status, total, paid, debt, payment_method")
-    .eq("tenant_id", tenantId)
-    .eq("source", "fnb")
-    .not("status", "eq", "cancelled");
-  if (branchId) query = query.eq("branch_id", branchId);
-  if (rangeWindow) {
-    query = query.gte("ngay_chung_tu", rangeWindow.start).lt("ngay_chung_tu", rangeWindow.end);
-  }
-
-  const { data, error } = await query
-    .order("ngay_chung_tu", { ascending: false })
-    .order("id", { ascending: false })
-    .range(start, start + pageSize);
+  const {data,error} = await (supabase.rpc as any)("staff_fnb_invoice_detail_page", {
+    p_branch_id:branchId ?? null,p_from:rangeWindow?.start ?? null,p_to:rangeWindow?.end ?? null,
+    p_offset:start,p_limit:pageSize+1,
+  });
   if (error) {
     handleError(error, "[getFnbInvoiceDetailPage]");
     return { rows: [], hasMore: false };
   }
-  const page = data ?? [];
+  if (!Array.isArray(data)) throw new Error("Không tải được chi tiết hóa đơn F&B.");
+  const page = data;
   return {
-    rows: page.slice(0, pageSize).map((invoice) => ({
+    rows: page.slice(0, pageSize).map((invoice: {id:string;code:string;ngay_chung_tu:string;customer_name:string;status:string;total:number;paid:number;debt:number;payment_method:string}) => ({
       id: invoice.id,
       code: invoice.code,
       issuedAt: invoice.ngay_chung_tu,
@@ -249,68 +223,18 @@ export async function getFnbKpis(
   range?: { from: string; to: string },
 ): Promise<FnbKpis> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
   const rangeWindow = toCreatedAtRangeWindow(range);
-
-  let query = supabase
-    .from("invoices")
-    .select("id, total, ngay_chung_tu")
-    .eq("tenant_id", tenantId)
-    .eq("source", "fnb")
-    .not("status", "eq", "cancelled");
-
-  if (branchId) query = query.eq("branch_id", branchId);
-  if (rangeWindow) {
-    query = query.gte("ngay_chung_tu", rangeWindow.start).lt("ngay_chung_tu", rangeWindow.end);
+  const {data,error} = await (supabase.rpc as any)("staff_fnb_kpi_summary", {
+    p_branch_id: branchId ?? null, p_from: rangeWindow?.start ?? null, p_to: rangeWindow?.end ?? null,
+  });
+  if (error) handleError(error, "[getFnbKpis]");
+  if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("Không tải được tổng hợp F&B.");
+  const keys = ["totalRevenue","returnAmount","netRevenue","totalOrders","avgTicket","avgTurnoverMinutes"] as const;
+  const values = Object.fromEntries(keys.map(key => [key, Number(data[key])])) as unknown as FnbKpis;
+  if (keys.some(key => data[key] == null || !Number.isFinite(values[key]))) {
+    throw new Error("Dữ liệu tổng hợp F&B chưa hợp lệ. Vui lòng tải lại.");
   }
-
-  const invoices = await fetchAllFnbRows(() => query.order("id", { ascending: true }), "[getFnbKpis.invoices]");
-  const rows = (invoices ?? []) as unknown as InvoiceDocRow[];
-
-  const totalRevenue = rows.reduce((s, r) => s + Number(r.total ?? 0), 0);
-  const totalOrders = rows.length;
-  const avgTicket = totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0;
-
-  let returnQuery = supabase
-    .from("sales_returns")
-    .select("id, total, invoices!sales_returns_invoice_id_fkey!inner(source)")
-    .eq("tenant_id", tenantId)
-    .in("status", ["confirmed", "completed"])
-    .eq("invoices.source", "fnb");
-  if (branchId) returnQuery = returnQuery.eq("branch_id", branchId);
-  if (rangeWindow) {
-    returnQuery = returnQuery.gte("created_at", rangeWindow.start).lt("created_at", rangeWindow.end);
-  }
-  const returns = await fetchAllFnbRows(
-    () => returnQuery.order("id", { ascending: true }),
-    "[getFnbKpis.returns]",
-  );
-  const returnAmount = returns.reduce((sum, row) => sum + Number(row.total ?? 0), 0);
-  const netRevenue = totalRevenue - returnAmount;
-
-  // Avg turnover from kitchen_orders (time from created_at to status='completed')
-  let koQuery = supabase
-    .from("kitchen_orders")
-    .select("created_at, updated_at")
-    .eq("tenant_id", tenantId)
-    .eq("status", "completed")
-    .not("table_id", "is", null);
-  if (branchId) koQuery = koQuery.eq("branch_id", branchId);
-  if (rangeWindow) {
-    koQuery = koQuery.gte("created_at", rangeWindow.start).lt("created_at", rangeWindow.end);
-  }
-
-  const koRows = await fetchAllFnbRows(() => koQuery.order("id", { ascending: true }), "[fnb.kitchenOrders]");
-  let avgTurnoverMinutes = 0;
-  if (koRows && koRows.length > 0) {
-    const totalMinutes = koRows.reduce((sum, r) => {
-      const diff = new Date(r.updated_at).getTime() - new Date(r.created_at).getTime();
-      return sum + diff / 60000;
-    }, 0);
-    avgTurnoverMinutes = Math.round(totalMinutes / koRows.length);
-  }
-
-  return { totalRevenue, returnAmount, netRevenue, totalOrders, avgTicket, avgTurnoverMinutes };
+  return values;
 }
 
 /**
@@ -322,64 +246,22 @@ export async function getRevenueByMenuItem(
   range?: { from: string; to: string },
 ): Promise<MenuItemRevenue[]> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-  // P1-3B-R1 12/06/2026: thêm range — trước đây all-time mạo danh "kỳ này".
   const rangeWindow = toCreatedAtRangeWindow(range);
-
-  // Payment is an invoice fact, independent of preparation/serving status.
-  let koQuery = supabase
-    .from("kitchen_orders")
-    .select("id, invoice_id, invoices!inner(status, source, ngay_chung_tu)")
-    .eq("tenant_id", tenantId)
-    .eq("invoices.source", "fnb")
-    .eq("invoices.status", "completed");
-  if (branchId) koQuery = koQuery.eq("branch_id", branchId);
-  if (rangeWindow) {
-    koQuery = koQuery.gte("invoices.ngay_chung_tu", rangeWindow.start).lt("invoices.ngay_chung_tu", rangeWindow.end);
-  }
-
-  const koRows = await fetchAllFnbRows(() => koQuery.order("id", { ascending: true }), "[fnb.kitchenOrders]");
-  const koIds = (koRows ?? [])
-    .filter((order) => {
-      const invoice = (order as Record<string, unknown>).invoices as { status: string } | null;
-      return Boolean(order.invoice_id && invoice?.status === "completed");
-    })
-    .map((order) => order.id);
-  if (koIds.length === 0) return [];
-
-  // Get items for those orders — scope qua kitchen_order_id (đã filter tenant ở koQuery)
-  const items: Array<{
-    product_name: string;
-    quantity: number;
-    unit_price: number;
-  }> = [];
-  for (let offset = 0; offset < koIds.length; offset += 200) {
-    const chunkIds = koIds.slice(offset, offset + 200);
-    const chunk = await fetchAllFnbRows(
-      () => supabase
-        .from("kitchen_order_items")
-        .select("product_name, quantity, unit_price")
-        .in("kitchen_order_id", chunkIds)
-        .order("id", { ascending: true }),
-      "[getRevenueByMenuItem.items]",
-    );
-    items.push(...chunk);
-  }
-
-  // Aggregate by product_name
-  const map = new Map<string, { quantity: number; revenue: number }>();
-  for (const item of items ?? []) {
-    const key = item.product_name;
-    const prev = map.get(key) ?? { quantity: 0, revenue: 0 };
-    prev.quantity += item.quantity;
-    prev.revenue += item.quantity * Number(item.unit_price);
-    map.set(key, prev);
-  }
-
-  return Array.from(map.entries())
-    .map(([productName, data]) => ({ productName, ...data }))
-    .sort((a, b) => b.revenue - a.revenue)
-    .slice(0, limit);
+  // Only aggregates cross the API boundary; per-bill rows stay protected.
+  const {data,error} = await (supabase.rpc as any)("staff_fnb_menu_summary", {
+    p_branch_id: branchId ?? null, p_from: rangeWindow?.start ?? null,
+    p_to: rangeWindow?.end ?? null, p_limit: limit,
+  });
+  if (error) handleError(error, "[getRevenueByMenuItem]");
+  if (!Array.isArray(data)) throw new Error("Không tải được tổng hợp món F&B.");
+  return data.map((row: {product_name: string; quantity: number | string; revenue: number | string}) => {
+    const quantity = Number(row.quantity), revenue = Number(row.revenue);
+    if (typeof row.product_name !== "string" || row.quantity == null || row.revenue == null ||
+        !Number.isFinite(quantity) || !Number.isFinite(revenue)) {
+      throw new Error("Dữ liệu tổng hợp món F&B chưa hợp lệ. Vui lòng tải lại.");
+    }
+    return {productName: row.product_name, quantity, revenue};
+  });
 }
 
 /**
@@ -390,39 +272,20 @@ export async function getRevenueByTable(
   range?: { from: string; to: string },
 ): Promise<TableRevenue[]> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
   const rangeWindow = toCreatedAtRangeWindow(range);
-
-  let query = supabase
-    .from("kitchen_orders")
-    .select("table_id, restaurant_tables!kitchen_orders_table_id_fkey(name), invoice_id, invoices!inner(total, status, ngay_chung_tu)")
-    .eq("tenant_id", tenantId)
-    .eq("invoices.source", "fnb")
-    .eq("invoices.status", "completed")
-    .not("table_id", "is", null);
-  if (branchId) query = query.eq("branch_id", branchId);
-  if (rangeWindow) {
-    query = query.gte("invoices.ngay_chung_tu", rangeWindow.start).lt("invoices.ngay_chung_tu", rangeWindow.end);
-  }
-
-  const rows = await fetchAllFnbRows(() => query.order("id", { ascending: true }), "[fnb.report]");
-
-  const map = new Map<string, { tableName: string; revenue: number; orders: number }>();
-  const countedInvoices = new Set<string>();
-  for (const row of rows ?? []) {
-    const tbl = (row as Record<string, unknown>).restaurant_tables as { name: string } | null;
-    const inv = (row as Record<string, unknown>).invoices as { total: number; status: string } | null;
-    if (!row.invoice_id || !inv || inv.status === "cancelled" || countedInvoices.has(row.invoice_id)) continue;
-    countedInvoices.add(row.invoice_id);
-    const tableName = tbl?.name ?? `Bàn ${row.table_id?.slice(0, 4)}`;
-    const key = row.table_id!;
-    const prev = map.get(key) ?? { tableName, revenue: 0, orders: 0 };
-    prev.revenue += Number(inv?.total ?? 0);
-    prev.orders += 1;
-    map.set(key, prev);
-  }
-
-  return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
+  const {data,error} = await (supabase.rpc as any)("staff_fnb_table_summary", {
+    p_branch_id: branchId ?? null, p_from: rangeWindow?.start ?? null, p_to: rangeWindow?.end ?? null,
+  });
+  if (error) handleError(error, "[getRevenueByTable]");
+  if (!Array.isArray(data)) throw new Error("Không tải được tổng hợp bàn F&B.");
+  return data.map((row: {table_name: string; revenue: number | string; orders: number | string}) => {
+    const revenue = Number(row.revenue), orders = Number(row.orders);
+    if (typeof row.table_name !== "string" || row.revenue == null || row.orders == null ||
+        !Number.isFinite(revenue) || !Number.isFinite(orders)) {
+      throw new Error("Dữ liệu tổng hợp bàn F&B chưa hợp lệ. Vui lòng tải lại.");
+    }
+    return {tableName: row.table_name, revenue, orders};
+  });
 }
 
 /**
@@ -433,42 +296,19 @@ export async function getRevenueByHourFnb(
   range?: { from: string; to: string },
 ): Promise<HourlyRevenue[]> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-  // P1-3B-R1: range filter.
   const rangeWindow = toCreatedAtRangeWindow(range);
-
-  let query = supabase
-    .from("invoices")
-    .select("total, ngay_chung_tu")
-    .eq("tenant_id", tenantId)
-    .eq("source", "fnb")
-    .not("status", "eq", "cancelled");
-  if (branchId) query = query.eq("branch_id", branchId);
-  if (rangeWindow) {
-    query = query.gte("ngay_chung_tu", rangeWindow.start).lt("ngay_chung_tu", rangeWindow.end);
-  }
-
-  const rows = await fetchAllFnbRows(() => query.order("id", { ascending: true }), "[fnb.report]");
-
-  const hourMap = new Map<number, { revenue: number; orders: number }>();
-  for (let h = 0; h < 24; h++) {
-    hourMap.set(h, { revenue: 0, orders: 0 });
-  }
-
-  for (const row of (rows ?? []) as unknown as InvoiceDocRow[]) {
-    const hour = new Date(row.ngay_chung_tu).getHours();
-    const prev = hourMap.get(hour)!;
-    prev.revenue += Number(row.total ?? 0);
-    prev.orders += 1;
-  }
-
-  return Array.from(hourMap.entries())
-    .map(([hour, data]) => ({
-      hour,
-      label: `${hour}h`,
-      ...data,
-    }))
-    .sort((a, b) => a.hour - b.hour);
+  const {data,error} = await (supabase.rpc as any)("staff_fnb_hour_summary", {
+    p_branch_id:branchId ?? null,p_from:rangeWindow?.start ?? null,p_to:rangeWindow?.end ?? null,
+  });
+  if (error) handleError(error, "[getRevenueByHourFnb]");
+  if (!Array.isArray(data) || data.length !== 24) throw new Error("Không tải đủ tổng hợp theo giờ F&B.");
+  return data.map((row: {hour:number;revenue:number|string;orders:number|string}, index:number) => {
+    const hour=Number(row.hour),revenue=Number(row.revenue),orders=Number(row.orders);
+    if (hour!==index || row.revenue==null || row.orders==null || !Number.isFinite(revenue) || !Number.isFinite(orders)) {
+      throw new Error("Dữ liệu tổng hợp theo giờ F&B chưa hợp lệ. Vui lòng tải lại.");
+    }
+    return {hour,label:`${hour}h`,revenue,orders};
+  });
 }
 
 /**
@@ -479,37 +319,20 @@ export async function getCashierPerformance(
   range?: { from: string; to: string },
 ): Promise<CashierPerformance[]> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-  // P1-3B-R1: range filter.
   const rangeWindow = toCreatedAtRangeWindow(range);
-
-  let query = supabase
-    .from("invoices")
-    .select("total, created_by, profiles!invoices_created_by_fkey(full_name)")
-    .eq("tenant_id", tenantId)
-    .eq("source", "fnb")
-    .not("status", "eq", "cancelled");
-  if (branchId) query = query.eq("branch_id", branchId);
-  if (rangeWindow) {
-    query = query.gte("ngay_chung_tu", rangeWindow.start).lt("ngay_chung_tu", rangeWindow.end);
-  }
-
-  const rows = await fetchAllFnbRows(() => query.order("id", { ascending: true }), "[fnb.report]");
-
-  const map = new Map<string, { cashierName: string; revenue: number; orders: number }>();
-  for (const row of rows ?? []) {
-    const profile = (row as Record<string, unknown>).profiles as { full_name: string } | null;
-    const name = profile?.full_name ?? "Không rõ";
-    const key = row.created_by;
-    const prev = map.get(key) ?? { cashierName: name, revenue: 0, orders: 0 };
-    prev.revenue += Number(row.total ?? 0);
-    prev.orders += 1;
-    map.set(key, prev);
-  }
-
-  return Array.from(map.values())
-    .map((c) => ({ ...c, avgTicket: c.orders > 0 ? Math.round(c.revenue / c.orders) : 0 }))
-    .sort((a, b) => b.revenue - a.revenue);
+  const {data,error} = await (supabase.rpc as any)("staff_fnb_cashier_summary", {
+    p_branch_id:branchId ?? null,p_from:rangeWindow?.start ?? null,p_to:rangeWindow?.end ?? null,
+  });
+  if (error) handleError(error, "[getCashierPerformance]");
+  if (!Array.isArray(data)) throw new Error("Không tải được tổng hợp nhân viên F&B.");
+  return data.map((row: {cashier_name:string;revenue:number|string;orders:number|string;avg_ticket:number|string}) => {
+    const revenue=Number(row.revenue),orders=Number(row.orders),avgTicket=Number(row.avg_ticket);
+    if (typeof row.cashier_name!=="string" || row.revenue==null || row.orders==null || row.avg_ticket==null ||
+        !Number.isFinite(revenue) || !Number.isFinite(orders) || !Number.isFinite(avgTicket)) {
+      throw new Error("Dữ liệu tổng hợp nhân viên F&B chưa hợp lệ. Vui lòng tải lại.");
+    }
+    return {cashierName:row.cashier_name,revenue,orders,avgTicket};
+  });
 }
 
 // === New report types ===
@@ -527,16 +350,6 @@ export interface PlatformRevenue {
   orders: number;
 }
 
-interface FnbCategoryItemRow {
-  product_id: string | null;
-  product_name: string;
-  quantity: number;
-  unit_price: number;
-  products: {
-    category_id: string;
-    product_categories: { name: string } | null;
-  } | null;
-}
 export interface CategoryRevenue {
   categoryName: string;
   revenue: number;
@@ -565,35 +378,17 @@ export async function getRevenueByOrderType(
   branchId?: string,
 ): Promise<OrderTypeRevenue[]> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-
-  let query = supabase
-    .from("kitchen_orders")
-    .select("order_type, invoice_id, invoices!inner(total, status, source)")
-    .eq("tenant_id", tenantId)
-    .eq("invoices.source", "fnb")
-    .eq("invoices.status", "completed");
-  if (branchId) query = query.eq("branch_id", branchId);
-
-  const rows = await fetchAllFnbRows(() => query.order("id", { ascending: true }), "[fnb.report]");
-
-  const map = new Map<string, { revenue: number; orders: number }>();
-  for (const row of rows ?? []) {
-    const type = row.order_type ?? "unknown";
-    const inv = (row as Record<string, unknown>).invoices as { total: number } | null;
-    const prev = map.get(type) ?? { revenue: 0, orders: 0 };
-    prev.revenue += Number(inv?.total ?? 0);
-    prev.orders += 1;
-    map.set(type, prev);
-  }
-
-  return Array.from(map.entries())
-    .map(([orderType, data]) => ({
-      orderType,
-      orderTypeLabel: ORDER_TYPE_LABELS[orderType] ?? orderType,
-      ...data,
-    }))
-    .sort((a, b) => b.revenue - a.revenue);
+  const {data,error}=await (supabase.rpc as any)("staff_fnb_channel_summary",{
+    p_branch_id:branchId ?? null,p_dimension:"order_type",
+  });
+  if(error) handleError(error,"[getRevenueByOrderType]");
+  if(!Array.isArray(data)) throw new Error("Không tải được tổng hợp loại đơn F&B.");
+  return data.map((row: {dimension:string;revenue:number|string;orders:number|string})=>{
+    const revenue=Number(row.revenue),orders=Number(row.orders);
+    if(typeof row.dimension!=="string" || row.revenue==null || row.orders==null ||
+      !Number.isFinite(revenue) || !Number.isFinite(orders)) throw new Error("Dữ liệu loại đơn F&B chưa hợp lệ.");
+    return {orderType:row.dimension,orderTypeLabel:ORDER_TYPE_LABELS[row.dimension] ?? row.dimension,revenue,orders};
+  });
 }
 
 /**
@@ -603,33 +398,17 @@ export async function getRevenueByPlatform(
   branchId?: string,
 ): Promise<PlatformRevenue[]> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-
-  let query = supabase
-    .from("kitchen_orders")
-    .select("delivery_platform, invoice_id, invoices!inner(total, status, source)")
-    .eq("tenant_id", tenantId)
-    .eq("invoices.source", "fnb")
-    .eq("invoices.status", "completed")
-    .eq("order_type", "delivery")
-    .not("delivery_platform", "is", null);
-  if (branchId) query = query.eq("branch_id", branchId);
-
-  const rows = await fetchAllFnbRows(() => query.order("id", { ascending: true }), "[fnb.report]");
-
-  const map = new Map<string, { revenue: number; orders: number }>();
-  for (const row of rows ?? []) {
-    const platform = row.delivery_platform ?? "Khác";
-    const inv = (row as Record<string, unknown>).invoices as { total: number } | null;
-    const prev = map.get(platform) ?? { revenue: 0, orders: 0 };
-    prev.revenue += Number(inv?.total ?? 0);
-    prev.orders += 1;
-    map.set(platform, prev);
-  }
-
-  return Array.from(map.entries())
-    .map(([platform, data]) => ({ platform, ...data }))
-    .sort((a, b) => b.revenue - a.revenue);
+  const {data,error}=await (supabase.rpc as any)("staff_fnb_channel_summary",{
+    p_branch_id:branchId ?? null,p_dimension:"platform",
+  });
+  if(error) handleError(error,"[getRevenueByPlatform]");
+  if(!Array.isArray(data)) throw new Error("Không tải được tổng hợp kênh giao F&B.");
+  return data.map((row: {dimension:string;revenue:number|string;orders:number|string})=>{
+    const revenue=Number(row.revenue),orders=Number(row.orders);
+    if(typeof row.dimension!=="string" || row.revenue==null || row.orders==null ||
+      !Number.isFinite(revenue) || !Number.isFinite(orders)) throw new Error("Dữ liệu kênh giao F&B chưa hợp lệ.");
+    return {platform:row.dimension,revenue,orders};
+  });
 }
 
 /**
@@ -639,49 +418,15 @@ export async function getRevenueByCategory(
   branchId?: string,
 ): Promise<CategoryRevenue[]> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-
-  // Include paid orders even when kitchen work is still marked served.
-  let koQuery = supabase
-    .from("kitchen_orders")
-    .select("id, invoices!inner(status, source)")
-    .eq("tenant_id", tenantId)
-    .eq("invoices.source", "fnb")
-    .eq("invoices.status", "completed");
-  if (branchId) koQuery = koQuery.eq("branch_id", branchId);
-
-  const koRows = await fetchAllFnbRows(() => koQuery.order("id", { ascending: true }), "[fnb.kitchenOrders]");
-  const koIds = (koRows ?? []).map((r) => r.id);
-  if (koIds.length === 0) return [];
-
-  // Get items with product category — scope qua kitchen_order_id
-  const items: FnbCategoryItemRow[] = [];
-  for (let offset = 0; offset < koIds.length; offset += 200) {
-    const chunkIds = koIds.slice(offset, offset + 200);
-    const chunk = await fetchAllFnbRows<FnbCategoryItemRow>(
-      () => supabase
-        .from("kitchen_order_items")
-        .select("product_id, product_name, quantity, unit_price, products:products_scoped(category_id, product_categories(name))")
-        .in("kitchen_order_id", chunkIds)
-        .order("id", { ascending: true }) as unknown as FnbPagedQuery<FnbCategoryItemRow>,
-      "[getRevenueByCategory.items]",
-    );
-    items.push(...chunk);
-  }
-
-  const map = new Map<string, { categoryName: string; revenue: number; orders: number; quantity: number }>();
-  for (const item of items ?? []) {
-    const prod = item.products;
-    const catName = prod?.product_categories?.name ?? "Chưa phân loại";
-    const key = prod?.category_id ?? "unknown";
-    const prev = map.get(key) ?? { categoryName: catName, revenue: 0, orders: 0, quantity: 0 };
-    prev.revenue += item.quantity * Number(item.unit_price);
-    prev.quantity += item.quantity;
-    prev.orders += 1;
-    map.set(key, prev);
-  }
-
-  return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
+  const {data,error}=await (supabase.rpc as any)("staff_fnb_category_summary",{p_branch_id:branchId ?? null});
+  if(error) handleError(error,"[getRevenueByCategory]");
+  if(!Array.isArray(data)) throw new Error("Không tải được tổng hợp nhóm món F&B.");
+  return data.map((row:{category_name:string;revenue:number|string;orders:number|string;quantity:number|string})=>{
+    const revenue=Number(row.revenue),orders=Number(row.orders),quantity=Number(row.quantity);
+    if(typeof row.category_name!=="string" || row.revenue==null || row.orders==null || row.quantity==null ||
+      ![revenue,orders,quantity].every(Number.isFinite)) throw new Error("Dữ liệu tổng hợp nhóm món F&B chưa hợp lệ.");
+    return {categoryName:row.category_name,revenue,orders,quantity};
+  });
 }
 
 /**
@@ -692,37 +437,19 @@ export async function getDailyRevenueFnb(
   days = 30,
 ): Promise<DailyRevenue[]> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
   const since = new Date();
   since.setDate(since.getDate() - days);
-
-  let query = supabase
-    .from("invoices")
-    .select("total, ngay_chung_tu")
-    .eq("tenant_id", tenantId)
-    .eq("source", "fnb")
-    .not("status", "eq", "cancelled")
-    .gte("ngay_chung_tu", since.toISOString());
-  if (branchId) query = query.eq("branch_id", branchId);
-
-  const rows = await fetchAllFnbRows(() => query.order("id", { ascending: true }), "[fnb.report]");
-
-  const map = new Map<string, { revenue: number; orders: number }>();
-  for (const row of (rows ?? []) as unknown as InvoiceDocRow[]) {
-    const date = formatShortDate(row.ngay_chung_tu);
-    const prev = map.get(date) ?? { revenue: 0, orders: 0 };
-    prev.revenue += Number(row.total ?? 0);
-    prev.orders += 1;
-    map.set(date, prev);
-  }
-
-  return Array.from(map.entries())
-    .map(([date, data]) => ({ date, ...data }))
-    .sort((a, b) => {
-      const [dA, mA, yA] = a.date.split("/").map(Number);
-      const [dB, mB, yB] = b.date.split("/").map(Number);
-      return new Date(yA, mA - 1, dA).getTime() - new Date(yB, mB - 1, dB).getTime();
-    });
+  const {data,error}=await (supabase.rpc as any)("staff_fnb_daily_summary",{
+    p_branch_id:branchId ?? null,p_since:since.toISOString(),
+  });
+  if(error) handleError(error,"[getDailyRevenueFnb]");
+  if(!Array.isArray(data)) throw new Error("Không tải được tổng hợp doanh thu theo ngày.");
+  return data.map((row:{day_label:string;revenue:number|string;orders:number|string})=>{
+    const revenue=Number(row.revenue),orders=Number(row.orders);
+    if(typeof row.day_label!=="string" || row.revenue==null || row.orders==null ||
+      !Number.isFinite(revenue) || !Number.isFinite(orders)) throw new Error("Dữ liệu doanh thu theo ngày chưa hợp lệ.");
+    return {date:row.day_label,revenue,orders};
+  });
 }
 
 /**
@@ -732,37 +459,15 @@ export async function getTableTurnover(
   branchId?: string,
 ): Promise<{ tableName: string; avgMinutes: number; orders: number }[]> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-
-  let query = supabase
-    .from("kitchen_orders")
-    .select("table_id, restaurant_tables!kitchen_orders_table_id_fkey(name), created_at, updated_at")
-    .eq("tenant_id", tenantId)
-    .eq("status", "completed")
-    .not("table_id", "is", null);
-  if (branchId) query = query.eq("branch_id", branchId);
-
-  const rows = await fetchAllFnbRows(() => query.order("id", { ascending: true }), "[fnb.report]");
-
-  const map = new Map<string, { tableName: string; totalMinutes: number; orders: number }>();
-  for (const row of rows ?? []) {
-    const tbl = (row as Record<string, unknown>).restaurant_tables as { name: string } | null;
-    const tableName = tbl?.name ?? `Bàn ${row.table_id?.slice(0, 4)}`;
-    const key = row.table_id!;
-    const diff = (new Date(row.updated_at).getTime() - new Date(row.created_at).getTime()) / 60000;
-    const prev = map.get(key) ?? { tableName, totalMinutes: 0, orders: 0 };
-    prev.totalMinutes += diff;
-    prev.orders += 1;
-    map.set(key, prev);
-  }
-
-  return Array.from(map.values())
-    .map((t) => ({
-      tableName: t.tableName,
-      avgMinutes: t.orders > 0 ? Math.round(t.totalMinutes / t.orders) : 0,
-      orders: t.orders,
-    }))
-    .sort((a, b) => a.avgMinutes - b.avgMinutes);
+  const {data,error}=await (supabase.rpc as any)("staff_fnb_turnover_summary",{p_branch_id:branchId ?? null});
+  if(error) handleError(error,"[getTableTurnover]");
+  if(!Array.isArray(data)) throw new Error("Không tải được tổng hợp thời gian phục vụ.");
+  return data.map((row:{table_name:string;avg_minutes:number|string;orders:number|string})=>{
+    const avgMinutes=Number(row.avg_minutes),orders=Number(row.orders);
+    if(typeof row.table_name!=="string" || row.avg_minutes==null || row.orders==null ||
+       !Number.isFinite(avgMinutes) || !Number.isFinite(orders)) throw new Error("Dữ liệu thời gian phục vụ chưa hợp lệ.");
+    return {tableName:row.table_name,avgMinutes,orders};
+  });
 }
 
 /**
@@ -844,116 +549,30 @@ export async function getDeliveryStaffPerformance(
   branchId?: string,
   range?: { from: string; to: string },
 ): Promise<DeliveryStaffPerformance[]> {
-  const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-
-  // Cast as any vì Supabase generated types chưa reflect column delivery_*
-  // (migration 00108 chưa được codegen). Sau khi `pnpm gen-types` thì xoá cast.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let query: any = supabase
-    .from("kitchen_orders")
-    .select(
-      "delivery_staff_id, delivery_fee, delivery_assigned_at, delivery_completed_at, invoice_id, invoices(total)",
-    )
-    .eq("tenant_id", tenantId)
-    .not("delivery_staff_id", "is", null);
-  if (branchId) query = query.eq("branch_id", branchId);
-  const rangeWindow = toCreatedAtRangeWindow(range);
-  if (rangeWindow) {
-    query = query
-      .gte("created_at", rangeWindow.start)
-      .lt("created_at", rangeWindow.end);
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rows = await fetchAllFnbRows<any>(() => query, "[fnb.delivery]");
-  const staffIds = Array.from(
-    new Set(
-      (rows ?? [])
-        .map((row) => String(row.delivery_staff_id ?? ""))
-        .filter(Boolean),
-    ),
-  );
-  const profiles = staffIds.length
-    ? await fetchAllFnbRows<{ id: string; full_name: string | null }>(
-        () =>
-          supabase
-            .from("profiles")
-            .select("id, full_name")
-            .eq("tenant_id", tenantId)
-            .in("id", staffIds)
-            .order("id", { ascending: true }),
-        "[fnb.deliveryProfiles]",
-      )
-    : [];
-  const staffNames = new Map(
-    profiles.map((profile) => [profile.id, profile.full_name ?? "Không rõ"]),
-  );
-
-  const map = new Map<
-    string,
-    {
-      staffName: string;
-      totalOrders: number;
-      totalRevenue: number;
-      totalDeliveryFee: number;
-      totalSec: number;
-      completedCount: number;
+  const supabase=getClient(),window=toCreatedAtRangeWindow(range);
+  const {data,error}=await (supabase.rpc as any)("staff_fnb_delivery_summary",{
+    p_branch_id:branchId ?? null,p_from:window?.start ?? null,p_to:window?.end ?? null,
+  });
+  if(error) handleError(error,"[getDeliveryStaffPerformance]");
+  if(!Array.isArray(data)) throw new Error("Không tải được tổng hợp nhân viên giao hàng.");
+  return data.map((row:{staff_id:string;staff_name:string;total_orders:number|string;total_revenue:number|string;
+    total_delivery_fee:number|string;avg_delivery_seconds:number|string;completed_count:number|string})=>{
+    const totalOrders=Number(row.total_orders),totalRevenue=Number(row.total_revenue);
+    const totalDeliveryFee=Number(row.total_delivery_fee),avgDeliverySeconds=Number(row.avg_delivery_seconds),completedCount=Number(row.completed_count);
+    if(typeof row.staff_id!=="string" || typeof row.staff_name!=="string" ||
+      [row.total_orders,row.total_revenue,row.total_delivery_fee,row.avg_delivery_seconds,row.completed_count].some(v=>v==null) ||
+      ![totalOrders,totalRevenue,totalDeliveryFee,avgDeliverySeconds,completedCount].every(Number.isFinite)) {
+      throw new Error("Dữ liệu tổng hợp giao hàng chưa hợp lệ.");
     }
-  >();
-  for (const row of rows ?? []) {
-    const staffId = row.delivery_staff_id as string;
-    if (!staffId) continue;
-    const name = staffNames.get(staffId) ?? "Không rõ";
-    const inv = row.invoices as { total?: number } | null;
-    const revenue = Number(inv?.total ?? 0);
-    const fee = Number(row.delivery_fee ?? 0);
-
-    const prev = map.get(staffId) ?? {
-      staffName: name,
-      totalOrders: 0,
-      totalRevenue: 0,
-      totalDeliveryFee: 0,
-      totalSec: 0,
-      completedCount: 0,
-    };
-    prev.totalOrders += 1;
-    prev.totalRevenue += revenue;
-    prev.totalDeliveryFee += fee;
-
-    if (row.delivery_assigned_at && row.delivery_completed_at) {
-      const sec =
-        (new Date(row.delivery_completed_at).getTime() -
-          new Date(row.delivery_assigned_at).getTime()) /
-        1000;
-      if (sec > 0) {
-        prev.totalSec += sec;
-        prev.completedCount += 1;
-      }
-    }
-    map.set(staffId, prev);
-  }
-
-  return Array.from(map.entries())
-    .map(([staffId, v]) => ({
-      staffId,
-      staffName: v.staffName,
-      totalOrders: v.totalOrders,
-      totalRevenue: v.totalRevenue,
-      totalDeliveryFee: v.totalDeliveryFee,
-      avgDeliverySeconds:
-        v.completedCount > 0 ? Math.round(v.totalSec / v.completedCount) : 0,
-      completedCount: v.completedCount,
-    }))
-    .sort((a, b) => b.totalOrders - a.totalOrders);
+    return {staffId:row.staff_id,staffName:row.staff_name,totalOrders,totalRevenue,totalDeliveryFee,avgDeliverySeconds,completedCount};
+  });
 }
 
 // ============================================================
 // Modifier analytics (CEO 01/06/2026 — Bước 2 Sprint 2.5)
 // ============================================================
 // Phân tích doanh thu theo modifier choices (Mức đường 70%, Topping Trân châu...).
-// Parse modifier_selections JSONB client-side vì hợp lệ cho data size hiện tại
-// (~1000 lines / ngày). Khi scale lên 50k+ lines → cần SQL function aggregate.
+// Máy chủ tổng hợp JSONB theo chi nhánh; trình duyệt chỉ nhận số liệu nhóm.
 
 export interface ModifierStatRow {
   groupId: string;
@@ -972,106 +591,33 @@ export interface ModifierStatRow {
 
 /**
  * Lấy thống kê chọn modifier theo branch + date range.
- * Đọc kitchen_order_items.modifier_selections (JSONB) từ các đơn đã thanh toán.
+ * Chỉ nhận tổng hợp tùy chọn từ các đơn đã thanh toán.
  */
 export async function getModifierStats(
   branchId?: string,
   range?: { from: string; to: string },
 ): Promise<ModifierStatRow[]> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
   const rangeWindow = toCreatedAtRangeWindow(range);
-
-  // 1. Select paid invoices, not kitchen preparation status.
-  let koQuery = supabase
-    .from("kitchen_orders")
-    .select("id, invoices!inner(status, source, ngay_chung_tu)")
-    .eq("tenant_id", tenantId)
-    .eq("invoices.source", "fnb")
-    .eq("invoices.status", "completed");
-  if (branchId) koQuery = koQuery.eq("branch_id", branchId);
-  if (rangeWindow) {
-    koQuery = koQuery
-      .gte("invoices.ngay_chung_tu", rangeWindow.start)
-      .lt("invoices.ngay_chung_tu", rangeWindow.end);
-  }
-  const koRows = await fetchAllFnbRows(() => koQuery.order("id", { ascending: true }), "[fnb.kitchenOrders]");
-  const koIds = (koRows ?? []).map((r) => r.id);
-  if (koIds.length === 0) return [];
-
-  // 2. Lấy kitchen_order_items với modifier_selections
-  const items: Array<Record<string, unknown>> = [];
-  /* eslint-disable @typescript-eslint/no-explicit-any -- generated DB types do not expose modifier_selections yet */
-  for (let offset = 0; offset < koIds.length; offset += 200) {
-    const chunkIds = koIds.slice(offset, offset + 200);
-    const chunk = await fetchAllFnbRows<any>(
-      () => (supabase
-        .from("kitchen_order_items")
-        .select("quantity, modifier_selections") as any)
-        .in("kitchen_order_id", chunkIds)
-        .not("modifier_selections", "is", null)
-        .order("id", { ascending: true }),
-      "[getModifierStats.items]",
-    );
-    items.push(...chunk);
-  }
-  /* eslint-enable @typescript-eslint/no-explicit-any */
-
-  // 3. Aggregate client-side
-  const map = new Map<
-    string, // key = `${groupId}::${optionId}`
-    ModifierStatRow
-  >();
-
-  for (const item of (items ?? []) as Array<{
-    quantity: number;
-    modifier_selections: Array<{
-      groupId: string;
-      groupName: string;
-      options: Array<{
-        optionId: string;
-        label: string;
-        priceDelta: number;
-      }>;
-    }>;
-  }>) {
-    const qty = Number(item.quantity ?? 0);
-    if (qty <= 0 || !Array.isArray(item.modifier_selections)) continue;
-    for (const sel of item.modifier_selections) {
-      for (const opt of sel.options ?? []) {
-        const key = `${sel.groupId}::${opt.optionId}`;
-        const prev = map.get(key) ?? {
-          groupId: sel.groupId,
-          groupName: sel.groupName,
-          optionId: opt.optionId,
-          optionLabel: opt.label,
-          count: 0,
-          totalQuantity: 0,
-          totalPriceDelta: 0,
-        };
-        prev.count += 1;
-        prev.totalQuantity += qty;
-        prev.totalPriceDelta += Number(opt.priceDelta ?? 0) * qty;
-        map.set(key, prev);
-      }
+  const {data,error} = await (supabase.rpc as any)("staff_fnb_modifier_summary", {
+    p_branch_id:branchId ?? null,p_from:rangeWindow?.start ?? null,p_to:rangeWindow?.end ?? null,
+  });
+  if (error) handleError(error, "[getModifierStats]");
+  if (!Array.isArray(data)) throw new Error("Không tải được tổng hợp tùy chọn F&B.");
+  const rows = data.map((row: {group_id:string;group_name:string;option_id:string;option_label:string;
+    selection_count:number|string;total_quantity:number|string;total_price_delta:number|string;percent_in_group:number|string}) => {
+    const count=Number(row.selection_count),totalQuantity=Number(row.total_quantity);
+    const totalPriceDelta=Number(row.total_price_delta),percentInGroup=Number(row.percent_in_group);
+    if ([row.group_id,row.group_name,row.option_id,row.option_label].some(value=>typeof value!=="string") ||
+        [row.selection_count,row.total_quantity,row.total_price_delta,row.percent_in_group].some(value=>value==null) ||
+        ![count,totalQuantity,totalPriceDelta,percentInGroup].every(Number.isFinite)) {
+      throw new Error("Dữ liệu tổng hợp tùy chọn F&B chưa hợp lệ. Vui lòng tải lại.");
     }
-  }
-
-  // 4. Tính % count trong cùng group
-  const rows = Array.from(map.values());
-  const totalByGroup = new Map<string, number>();
-  for (const r of rows) {
-    totalByGroup.set(r.groupId, (totalByGroup.get(r.groupId) ?? 0) + r.count);
-  }
-  for (const r of rows) {
-    const tot = totalByGroup.get(r.groupId) ?? 0;
-    r.percentInGroup = tot > 0 ? Math.round((r.count / tot) * 100) : 0;
-  }
-
-  // Sort: group name asc, then count desc (option phổ biến nhất trên cùng)
+    return {groupId:row.group_id,groupName:row.group_name,optionId:row.option_id,
+      optionLabel:row.option_label,count,totalQuantity,totalPriceDelta,percentInGroup};
+  });
   return rows.sort((a, b) => {
-    if (a.groupName !== b.groupName)
-      return a.groupName.localeCompare(b.groupName, "vi");
+    if (a.groupName !== b.groupName) return a.groupName.localeCompare(b.groupName, "vi");
     return b.count - a.count;
   });
 }
@@ -1084,61 +630,26 @@ export async function getOrdersByDeliveryStaff(
   branchId?: string,
   range?: { from: string; to: string },
 ): Promise<ShipperOrderRow[]> {
-  const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-
-  // Cast as any vì Supabase generated types chưa reflect column delivery_*
-  // (migration 00108 chưa được codegen). Sau khi `pnpm gen-types` thì xoá cast.
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  let query: any = (supabase.from("kitchen_orders") as any)
-    .select(
-      // kitchen_orders KHÔNG có cột customer_name → để trong select là query
-      // lỗi 42703, cả báo cáo shipper trắng. Tên khách lấy từ hoá đơn kèm.
-      "id, order_number, delivery_fee, delivery_distance_tier, delivery_assigned_at, delivery_completed_at, created_at, invoice_id, invoices(id, code, total, customer_name)",
-    )
-    .eq("tenant_id", tenantId)
-    .eq("delivery_staff_id", staffId);
-  if (branchId) query = query.eq("branch_id", branchId);
-  const rangeWindow = toCreatedAtRangeWindow(range);
-  if (rangeWindow) {
-    query = query
-      .gte("created_at", rangeWindow.start)
-      .lt("created_at", rangeWindow.end);
+  const supabase=getClient(),window=toCreatedAtRangeWindow(range),rows:ShipperOrderRow[]=[];
+  for(let offset=0;;offset+=500) {
+    const {data,error}=await (supabase.rpc as any)("staff_fnb_delivery_detail_page",{
+      p_staff_id:staffId,p_branch_id:branchId ?? null,p_from:window?.start ?? null,p_to:window?.end ?? null,
+      p_offset:offset,p_limit:500,
+    });
+    if(error) handleError(error,"[getOrdersByDeliveryStaff]");
+    if(!Array.isArray(data)) throw new Error("Không tải được danh sách đơn giao hàng.");
+    for(const row of data) {
+      const total=Number(row.total),deliveryFee=Number(row.delivery_fee);
+      const durationSeconds=row.duration_seconds==null ? null : Number(row.duration_seconds);
+      if(typeof row.kitchen_order_id!=="string" || typeof row.order_number!=="string" ||
+        typeof row.customer_name!=="string" || typeof row.created_at!=="string" ||
+        row.total==null || row.delivery_fee==null || !Number.isFinite(total) || !Number.isFinite(deliveryFee) ||
+        (durationSeconds!==null && !Number.isFinite(durationSeconds))) throw new Error("Dữ liệu đơn giao hàng chưa hợp lệ.");
+      rows.push({kitchenOrderId:row.kitchen_order_id,orderNumber:row.order_number,invoiceId:row.invoice_id ?? null,
+        invoiceCode:row.invoice_code ?? null,customerName:row.customer_name,total,deliveryFee,
+        deliveryTier:row.delivery_tier ?? null,assignedAt:row.assigned_at ?? null,completedAt:row.completed_at ?? null,
+        durationSeconds,createdAt:row.created_at});
+    }
+    if(data.length<500) return rows;
   }
-  query = query.order("created_at", { ascending: false });
-  /* eslint-enable @typescript-eslint/no-explicit-any */
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rows = await fetchAllFnbRows<any>(() => query, "[fnb.delivery]");
-
-  return (rows ?? []).map((row) => {
-    const inv = row.invoices as
-      | { id?: string; code?: string; total?: number; customer_name?: string }
-      | null;
-    const durationSec =
-      row.delivery_assigned_at && row.delivery_completed_at
-        ? Math.round(
-            (new Date(row.delivery_completed_at).getTime() -
-              new Date(row.delivery_assigned_at).getTime()) /
-              1000,
-          )
-        : null;
-    return {
-      kitchenOrderId: row.id as string,
-      orderNumber: row.order_number as string,
-      invoiceId: (inv?.id as string) ?? null,
-      invoiceCode: (inv?.code as string) ?? null,
-      customerName:
-        (inv?.customer_name as string) ??
-        (row.customer_name as string) ??
-        "Khách lẻ",
-      total: Number(inv?.total ?? 0),
-      deliveryFee: Number(row.delivery_fee ?? 0),
-      deliveryTier: (row.delivery_distance_tier as string) ?? null,
-      assignedAt: (row.delivery_assigned_at as string) ?? null,
-      completedAt: (row.delivery_completed_at as string) ?? null,
-      durationSeconds: durationSec,
-      createdAt: row.created_at as string,
-    };
-  });
 }

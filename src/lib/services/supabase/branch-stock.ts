@@ -423,50 +423,28 @@ export async function getProductStockBreakdown(
   available: number;
   updatedAt: string;
 }>> {
-  const tenantId = await getCurrentTenantId();
-
-  // P1-3C-K6 12/06/2026: list TẤT CẢ chi nhánh active (kể cả qty=0 chưa từng
-  // nhập SP này). Trước đây chỉ trả branch_stock đã tồn tại → user thấy
-  // "có ở 3/5 CN" mà thực ra 2 CN còn lại là "chưa từng nhập" ≠ "hết hàng".
-  const [stockRes, branchRes] = await Promise.all([
-    supabase
-      .from("branch_stock")
-      .select("branch_id, quantity, reserved, updated_at")
-      .eq("tenant_id", tenantId)
-      .eq("product_id", productId),
-    supabase
-      .from("branches")
-      .select("id, name, code")
-      .eq("tenant_id", tenantId)
-      .eq("is_active", true),
-  ]);
-  if (stockRes.error) throw stockRes.error;
-  if (branchRes.error) throw branchRes.error;
-
-  const stockByBranch = new Map<string, { quantity: number; reserved: number; updated_at: string }>();
-  for (const r of stockRes.data ?? []) {
-    const row = r as { branch_id: string; quantity?: number; reserved?: number; updated_at?: string };
-    const current = stockByBranch.get(row.branch_id) ?? { quantity: 0, reserved: 0, updated_at: "" };
-    stockByBranch.set(row.branch_id, {
-      quantity: current.quantity + Number(row.quantity ?? 0),
-      reserved: current.reserved + Number(row.reserved ?? 0),
-      updated_at: latestIso(current.updated_at, row.updated_at),
-    });
-  }
-
+  // Build zero rows only after the server has resolved the visible branches.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rows = (branchRes.data ?? []).map((b: any) => {
-    const s = stockByBranch.get(b.id);
-    const qty = Number(s?.quantity ?? 0);
-    const reserved = Number(s?.reserved ?? 0);
+  const { data, error } = await (supabase as any).rpc("get_inventory_product_breakdown_scoped", { p_product: productId });
+  if (error) throw error;
+  if (!Array.isArray(data)) throw new Error("Chưa xác nhận được tồn kho theo chi nhánh.");
+  const rows = data.map((row: { branch_id: string; branch_name: string; branch_code: string | null; quantity: number | string; reserved: number | string; updated_at: string | null }) => {
+    const qty = Number(row.quantity);
+    const reserved = Number(row.reserved);
+    if (!row.branch_id || row.quantity == null || row.reserved == null ||
+      (typeof row.quantity === "string" && row.quantity.trim() === "") ||
+      (typeof row.reserved === "string" && row.reserved.trim() === "") ||
+      !Number.isFinite(qty) || !Number.isFinite(reserved)) {
+      throw new Error("Dữ liệu tồn kho theo chi nhánh chưa đầy đủ.");
+    }
     return {
-      branchId: b.id as string,
-      branchName: (b.name as string) ?? "—",
-      branchCode: (b.code as string) ?? undefined,
+      branchId: row.branch_id,
+      branchName: row.branch_name ?? "—",
+      branchCode: row.branch_code ?? undefined,
       quantity: qty,
       reserved,
       available: qty - reserved,
-      updatedAt: s?.updated_at ?? "",
+      updatedAt: row.updated_at ?? "",
     };
   });
 

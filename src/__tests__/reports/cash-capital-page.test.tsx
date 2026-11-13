@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-const state = vi.hoisted(() => ({ branch: "b", from: "2026-10-01", to: "2026-10-18", canView: true, entries: vi.fn(), links: vi.fn(), accounts: vi.fn(), fallback: vi.fn(), excel: vi.fn(), toast: vi.fn(), refresh: undefined as (() => void) | undefined }));
-vi.mock("@/lib/contexts", () => ({ useAuth: () => ({ tenant: { id: "t", name: "Test" }, hasPermission: () => state.canView }), useBranchFilter: () => ({ activeBranchId: state.branch, branchLabel: state.branch, branches: [{ id: "b", name: "Branch" }], isReady: true }), useToast: () => ({ toast: state.toast }) }));
+const state = vi.hoisted(() => ({ branch: "b", blockedBranch: "", from: "2026-10-01", to: "2026-10-18", canView: true, entries: vi.fn(), links: vi.fn(), accounts: vi.fn(), fallback: vi.fn(), excel: vi.fn(), toast: vi.fn(), refresh: undefined as (() => void) | undefined }));
+vi.mock("@/lib/contexts", () => ({ useAuth: () => ({ tenant: { id: "t", name: "Test" }, hasPermissionAtBranch: (_code: string, branch: string | null) => state.canView && branch !== state.blockedBranch }), useBranchFilter: () => ({ activeBranchId: state.branch, branchLabel: state.branch, branches: [{ id: "b", name: "Branch" }], isReady: true }), useToast: () => ({ toast: state.toast }) }));
 vi.mock("@/lib/hooks/use-report-state", () => ({ useReportState: () => ({ preset: "custom", range: { from: state.from, to: state.to }, setPreset: vi.fn(), setCustomRange: vi.fn(), viewMode: "table", setViewMode: vi.fn() }) }));
 vi.mock("@/lib/hooks/use-live-data-refresh", () => ({ useLiveDataRefresh: (callback: () => void) => { state.refresh = callback; } }));
 vi.mock("@/lib/services/supabase/cash-book", () => ({ getAllCashBookEntries: state.entries }));
@@ -17,7 +17,7 @@ import Page from "@/app/(main)/phan-tich/luong-tien/page";
 const entry = (id: string, type: "receipt" | "payment", amount: number) => ({ id, code: id, type, amount, date: "2026-10-05", status: "completed", category: "customer_advance", branchId: "b", moneyAccountId: "cash", counterparty: "Khách", note: "Nội dung rõ", createdBy: "user" });
 const register = { accounts: [{ id: "cash", branch_id: "b", branchName: "Branch", code: "TM", name: "Quỹ", kind: "cash", opening_balance: 50, receipts: 300, payments: 25, closing_balance: 325 }], failures: [], unassignedCount: 0 };
 beforeEach(() => {
-  window.history.replaceState(null, "", "/?cashLayout=stacked"); state.branch = "b"; state.from = "2026-10-01"; state.to = "2026-10-18"; state.canView = true;
+  window.history.replaceState(null, "", "/?cashLayout=stacked"); state.branch = "b"; state.blockedBranch = ""; state.from = "2026-10-01"; state.to = "2026-10-18"; state.canView = true;
   state.entries.mockReset().mockResolvedValue([entry("PT1", "receipt", 100), entry("PT2", "receipt", 200), entry("PC1", "payment", 25)]);
   state.links.mockReset().mockResolvedValue([]); state.accounts.mockReset().mockResolvedValue(register); state.excel.mockReset().mockResolvedValue(undefined); state.toast.mockReset(); state.fallback.mockReset().mockResolvedValue([]);
 });
@@ -78,6 +78,12 @@ describe("cash capital report workflow", () => {
   it("does not call finance detail or money account sources without the existing permission", async () => {
     state.canView = false; render(<Page />); await waitFor(() => expect(screen.getByRole("button", { name: "Xuất đầy đủ" })).toBeEnabled());
     expect(state.fallback).toHaveBeenCalledWith(6, "b", { from: "2026-10-01", to: "2026-10-18" }, { summaryOnly: true }); expect(state.entries).not.toHaveBeenCalled(); expect(state.accounts).not.toHaveBeenCalled(); expect(screen.queryByRole("textbox", { name: "Tìm chứng từ thu chi" })).not.toBeInTheDocument();
+  });
+  it("uses the selected report branch rather than the operating branch for cash detail", async () => {
+    state.blockedBranch = "b"; render(<Page />);
+    await waitFor(() => expect(state.fallback).toHaveBeenCalled());
+    expect(state.fallback).toHaveBeenCalledWith(6, "b", { from: "2026-10-01", to: "2026-10-18" }, { summaryOnly: true });
+    expect(state.entries).not.toHaveBeenCalled(); expect(state.accounts).not.toHaveBeenCalled();
   });
   it("refreshes live data and reports export failure without a success toast", async () => {
     render(<Page />); await screen.findByText("PT1", { exact: true }); state.entries.mockResolvedValueOnce([entry("Fresh", "receipt", 300), entry("PC1", "payment", 25)]);

@@ -77,7 +77,7 @@ describe("Màn đơn gốc — khối đơn bán con", () => {
       ],
       rows: [],
     });
-    render(<ChildSalesBlock orderId="dh-1" />);
+    render(<ChildSalesBlock canCreateSale canProcess orderId="dh-1" />);
 
     await waitFor(() => expect(screen.getByText("NH000201")).toBeTruthy());
     expect(screen.getByRole("link", { name: "Mở hóa đơn NH000201" })).toHaveAttribute(
@@ -95,7 +95,7 @@ describe("Màn đơn gốc — khối đơn bán con", () => {
       children: [donCon("c1", "NH000201", "completed")],
       rows: [dong("Cà phê sữa", 5, 8), dong("Bạc xỉu", 3, 3)],
     });
-    render(<ChildSalesBlock orderId="dh-1" />);
+    render(<ChildSalesBlock canCreateSale canProcess orderId="dh-1" />);
 
     await waitFor(() => expect(screen.getByText("+3")).toBeTruthy());
     expect(screen.getByText(/không chặn lưu, thanh toán hay chốt hoàn tất/)).toBeTruthy();
@@ -106,7 +106,7 @@ describe("Màn đơn gốc — khối đơn bán con", () => {
       children: [donCon("c1", "NH000201", "completed")],
       rows: [dong("Cà phê sữa", 5, 3)],
     });
-    render(<ChildSalesBlock orderId="dh-1" />);
+    render(<ChildSalesBlock canCreateSale canProcess orderId="dh-1" />);
 
     await waitFor(() => expect(screen.getByText("-2")).toBeTruthy());
     expect(screen.getByText("Có điều chỉnh")).toBeTruthy();
@@ -118,7 +118,7 @@ describe("Màn đơn gốc — khối đơn bán con", () => {
       children: [donCon("c1", "NH000201", "completed")],
       rows: [dong("Cà phê sữa", 5, 5)],
     });
-    render(<ChildSalesBlock orderId="dh-1" />);
+    render(<ChildSalesBlock canCreateSale canProcess orderId="dh-1" />);
 
     await waitFor(() => expect(screen.getByText("Cà phê sữa")).toBeTruthy());
     expect(screen.queryByText("Có điều chỉnh")).toBeNull();
@@ -135,7 +135,7 @@ describe("Màn đơn gốc — khối đơn bán con", () => {
       sourceOrderId: "dh-1",
       sourceOrderCode: "DH000042",
     });
-    render(<ChildSalesBlock orderId="dh-1" />);
+    render(<ChildSalesBlock canCreateSale canProcess orderId="dh-1" />);
     await waitFor(() => expect(screen.getByText("Tạo thêm đơn bán")).toBeTruthy());
 
     fireEvent.click(screen.getByText("Tạo thêm đơn bán"));
@@ -154,7 +154,7 @@ describe("Màn đơn gốc — khối đơn bán con", () => {
       rows: [],
     });
     markOrderProcessed.mockResolvedValue(undefined);
-    render(<ChildSalesBlock orderId="dh-1" />);
+    render(<ChildSalesBlock canCreateSale canProcess orderId="dh-1" />);
     await waitFor(() => expect(screen.getByText("Hoàn tất xử lý")).toBeTruthy());
 
     fireEvent.click(screen.getByText("Hoàn tất xử lý"));
@@ -172,7 +172,7 @@ describe("Màn đơn gốc — khối đơn bán con", () => {
 
   it("chưa có đơn con nào: nút Hoàn tất bị khoá", async () => {
     getOrderReconciliation.mockResolvedValue({ children: [], rows: [] });
-    render(<ChildSalesBlock orderId="dh-1" />);
+    render(<ChildSalesBlock canCreateSale canProcess orderId="dh-1" />);
     await waitFor(() => expect(screen.getByText("Hoàn tất xử lý")).toBeTruthy());
     const nut = screen.getByText("Hoàn tất xử lý").closest("button")!;
     expect(nut.disabled).toBe(true);
@@ -184,7 +184,7 @@ describe("Màn đơn gốc — khối đơn bán con", () => {
       rows: [],
     });
     markOrderProcessed.mockResolvedValue(undefined);
-    render(<ChildSalesBlock orderId="dh-1" fulfilledById="hd-cu" />);
+    render(<ChildSalesBlock canCreateSale canProcess orderId="dh-1" fulfilledById="hd-cu" />);
     await waitFor(() => expect(screen.getByText("Mở lại xử lý")).toBeTruthy());
     // Đã hoàn tất vẫn tạo thêm được — không mất nút.
     expect(screen.getByText("Tạo thêm đơn bán")).toBeTruthy();
@@ -198,7 +198,7 @@ describe("Màn đơn gốc — khối đơn bán con", () => {
 
   it("máy chủ chưa bật 00331 (null): khối tự ẩn, không vẽ gì", async () => {
     getOrderReconciliation.mockResolvedValue(null);
-    const { container } = render(<ChildSalesBlock orderId="dh-1" />);
+    const { container } = render(<ChildSalesBlock canCreateSale canProcess orderId="dh-1" />);
     await waitFor(() => expect(getOrderReconciliation).toHaveBeenCalled());
     expect(container.textContent).toBe("");
   });
@@ -261,7 +261,7 @@ describe("Giao từng phần từ đơn kho tổng", () => {
       rows: [dong("Dưa hấu", 3, 2.2), dong("Chanh", 10, 0)],
     });
     createChildSaleFromOrder.mockResolvedValue({ childId: "draft", childCode: "NH-UAT" });
-    render(<ChildSalesBlock orderId="dh-goc" />);
+    render(<ChildSalesBlock canCreateSale canProcess orderId="dh-goc" />);
     expect(await screen.findByText("Còn phải xuất")).toBeTruthy();
     expect(screen.getByText("2 mặt hàng còn thiếu")).toBeTruthy();
     expect(screen.getByRole("columnheader", { name: "Đã xuất giao" })).toBeTruthy();
@@ -276,7 +276,7 @@ describe("Giao từng phần từ đơn kho tổng", () => {
       children: [donCon("draft", "NH-UAT", "draft")],
       rows: [dong("Dưa hấu", 3, 2.2)],
     });
-    render(<ChildSalesBlock orderId="dh-goc" />);
+    render(<ChildSalesBlock canCreateSale canProcess orderId="dh-goc" />);
     expect(await screen.findByRole("link", { name: "Mở hóa đơn NH-UAT" }))
       .toHaveAttribute("href", "/pos?draftId=draft");
     expect(screen.getByRole("button", { name: "Giao phần còn thiếu" })).toBeEnabled();

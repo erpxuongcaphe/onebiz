@@ -1,6 +1,7 @@
 "use client";
 import { useProductUom } from "@/lib/hooks/use-product-uom";
 import { operationalUnits } from "@/lib/operational-uom";
+import { createPosSessionId } from "@/lib/pos-session-id";
 import type { UOMConversion } from "@/lib/types";
 import { PosUnitQuantityDialog } from "./components/unit-quantity-dialog";
 import { requestPageLeave, useUnsavedWork } from "@/lib/hooks/use-unsaved-work";
@@ -212,9 +213,7 @@ function nextTabId() {
 }
 
 function nextClientSessionId() {
-  return typeof crypto !== "undefined" && crypto.randomUUID
-    ? crypto.randomUUID()
-    : "sess-" + Date.now() + "-" + Math.random().toString(36).slice(2);
+  return createPosSessionId();
 }
 
 // ============================================================
@@ -233,6 +232,7 @@ function PosPageInner() {
     switchBranch,
     logout,
     hasPermission,
+    hasPermissionAtBranch,
   } = useAuth();
 
   // 00335 — NGÀY HÓA ĐƠN của TAB ĐANG HOẠT ĐỘNG. null = để máy chủ tự lấy giờ
@@ -255,7 +255,9 @@ function PosPageInner() {
     setNgayHoaDon(iso);
     setLyDoNgayHoaDon(lyDo);
   }, []);
-  const coQuyenChinhNgay = hasPermission(PERMISSIONS.INVOICES_ADJUST_ISSUED_AT);
+  const coQuyenChinhNgay = hasPermissionAtBranch
+    ? hasPermissionAtBranch(PERMISSIONS.INVOICES_ADJUST_ISSUED_AT, currentBranch?.id ?? null)
+    : hasPermission(PERMISSIONS.INVOICES_ADJUST_ISSUED_AT);
 
   // Multi-tab invoice management (KiotViet parity).
   // Cart/customer/payment and server auto-save session must move together.
@@ -1115,11 +1117,7 @@ function PosPageInner() {
       // phản ứng và dialog không đóng được (thu ngân kẹt).
       state.setLoadedDraftId(null);
       state.setLoadedDraftRevision(null);
-      setClientSessionId(
-        typeof crypto !== "undefined" && crypto.randomUUID
-          ? crypto.randomUUID()
-          : "sess-" + Date.now(),
-      );
+      setClientSessionId(nextClientSessionId());
       setDraftConflict(null);
       return;
     }
@@ -1128,10 +1126,7 @@ function PosPageInner() {
       if (!detail) throw new Error("POS_DRAFT_NOT_FOUND");
 
       if (detail.clientSessionId !== clientSessionId) {
-        const takeoverSession =
-          typeof crypto !== "undefined" && crypto.randomUUID
-            ? crypto.randomUUID()
-            : "sess-" + Date.now();
+        const takeoverSession = nextClientSessionId();
         detail.revision = await adoptDraftSession(
           detail.id,
           takeoverSession,
@@ -1159,11 +1154,7 @@ function PosPageInner() {
   const handleDetachConflictedCart = useCallback(() => {
     state.setLoadedDraftId(null);
     state.setLoadedDraftRevision(null);
-    setClientSessionId(
-      typeof crypto !== "undefined" && crypto.randomUUID
-        ? crypto.randomUUID()
-        : "sess-" + Date.now(),
-    );
+    setClientSessionId(nextClientSessionId());
     setDraftConflict(null);
     toast({
       title: "\u0110\u00e3 t\u00e1ch th\u00e0nh \u0111\u01a1n m\u1edbi",
@@ -2015,11 +2006,7 @@ function PosPageInner() {
       // Auto bump draft count badge (lấy bên dưới qua useEffect refresh)
       setDraftCountTrigger((t) => t + 1);
       // Regen sessionId — đơn nháp đã lưu, cashier mở cart mới = session mới
-      setClientSessionId(
-        typeof crypto !== "undefined" && crypto.randomUUID
-          ? crypto.randomUUID()
-          : `sess-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      );
+      setClientSessionId(nextClientSessionId());
     } catch (err: any) {
       // CEO 10/06/2026 — FIX mất đơn: lưu nháp thất bại (token lỗi/mạng rớt)
       // trước đây chỉ toast thoáng 4s → cashier bỏ lỡ → tưởng đã lưu → mất đơn
@@ -2836,11 +2823,7 @@ function PosPageInner() {
       setChangeDialog({ open: false, excess: 0 });
       // Regen sessionId cho đơn tiếp theo — đơn vừa xong đã có invoice
       // với key này, đơn mới phải có key mới để không bị idempotent reject.
-      setClientSessionId(
-        typeof crypto !== "undefined" && crypto.randomUUID
-          ? crypto.randomUUID()
-          : `sess-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      );
+      setClientSessionId(nextClientSessionId());
     } catch (err: any) {
       // CEO 10/06/2026 — FIX mất đơn: thanh toán thất bại trước đây chỉ toast
       // thoáng 4s → cashier bỏ lỡ → tưởng xong → mất đơn. Giờ persistent +

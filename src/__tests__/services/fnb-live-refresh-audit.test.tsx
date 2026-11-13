@@ -209,7 +209,7 @@ describe("F&B live data wiring", () => {
     const parent = readFileSync("src/app/pos/fnb/components/fnb-order-history-dialog.tsx", "utf8");
     const source = readFileSync("src/app/pos/fnb/components/fnb-sales-history-view.tsx", "utf8");
     expect(parent).toContain("open && branchId && <FnbSalesHistoryView");
-    expect(source).toContain('["invoices","kitchen_orders","cash_transactions"]');
+    expect(source).toContain('["invoices","kitchen_orders","dashboard_live_signals"]');
     expect(source).toContain("gen===generation.current");
     expect(source).toContain("generation.current+=1");
     expect(source).not.toContain(".then(setHistory)");

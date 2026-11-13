@@ -3,18 +3,19 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_ROLE_TEMPLATES, PERMISSIONS } from "@/lib/permissions/constants";
 import { FnbOpenOrdersDialog } from "@/app/pos/fnb/components/fnb-open-orders-dialog";
+import { permissionWithLegacyFallback } from "@/lib/permissions/branch-permissions";
 
-const state = vi.hoisted(() => ({ active: true, loading: false, permissions: new Set<string>() }));
+const state = vi.hoisted(() => ({ active: true, loading: false, permissions: new Set<string>(), adjustments: [] as {branchId:string;code:string;allowed:boolean}[] }));
 vi.mock("@/lib/contexts", () => ({ useAuth: () => ({ user: { isActive: state.active, role: "cashier" }, isLoading: state.loading, permissions: state.permissions }) }));
 import { usePermissions } from "@/lib/permissions/use-permission";
 
 function CashierOrders({ onMerge }: { onMerge: () => void }) {
   const { hasPermission } = usePermissions();
-  const canMergeBills = hasPermission(PERMISSIONS.POS_FNB_MANAGE_TABLES) || hasPermission(PERMISSIONS.POS_FNB_MERGE_BILLS);
+  const canMergeBills = (hasPermission(PERMISSIONS.POS_FNB_MANAGE_TABLES) || hasPermission(PERMISSIONS.POS_FNB_MERGE_BILLS)) && permissionWithLegacyFallback(state.permissions,state.adjustments,"premium",PERMISSIONS.POS_FNB_MERGE_BILLS,PERMISSIONS.POS_FNB_MANAGE_TABLES);
   return <FnbOpenOrdersDialog open orders={[]} drafts={[]} loading={false} error={null} connected busy={false} updatedAt={null}
     onOpenChange={() => {}} onOpenOrder={() => {}} onOpenDraft={() => {}} onRefresh={() => {}} onMerge={canMergeBills ? onMerge : undefined} />;
 }
-beforeEach(() => { state.active = true; state.loading = false; state.permissions = new Set([PERMISSIONS.POS_FNB_MERGE_BILLS]); });
+beforeEach(() => { state.active = true; state.loading = false; state.permissions = new Set([PERMISSIONS.POS_FNB_MERGE_BILLS]); state.adjustments=[]; });
 afterEach(cleanup);
 
 describe("cashier merge-only permission", () => {
@@ -40,9 +41,15 @@ describe("cashier merge-only permission", () => {
     render(<CashierOrders onMerge={vi.fn()} />);
     expect(screen.getByRole("button", { name: "Gộp 2 hoặc nhiều bill…" })).toBeEnabled();
   });
+  it("hides merge for a local denial even if table management is allowed", () => {
+    state.permissions=new Set([PERMISSIONS.POS_FNB_MANAGE_TABLES]);
+    state.adjustments=[{branchId:"premium",code:PERMISSIONS.POS_FNB_MERGE_BILLS,allowed:false}];
+    render(<CashierOrders onMerge={vi.fn()} />);
+    expect(screen.queryByRole("button",{name:"Gộp 2 hoặc nhiều bill…"})).not.toBeInTheDocument();
+  });
   it("wires every POS merge entry and server call to merge access while keeping table creation separate", () => {
     const page = readFileSync("src/app/pos/fnb/page.tsx", "utf8");
-    expect(page).toContain("const canMergeBills = canManageTables || hasPermission(PERMISSIONS.POS_FNB_MERGE_BILLS)");
+    expect(page).toContain("const canMergeBills = hasPermissionWithLegacy(PERMISSIONS.POS_FNB_MERGE_BILLS, PERMISSIONS.POS_FNB_MANAGE_TABLES)");
     expect(page.match(/onMergeTable=\{canMergeBills \?/g)).toHaveLength(2);
     expect(page).toMatch(/onMergeTable=\{\s+canMergeBills && networkStatus.isOnline/);
     expect(page).toContain("onMerge={canMergeBills ?");

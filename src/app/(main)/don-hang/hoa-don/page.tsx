@@ -526,10 +526,11 @@ export default function HoaDonPage() {
   const { printWithPicker, printerDialog } = usePrintWithPicker();
   const { printRetailInvoice, printerDialog: retailPrinterDialog } = useRetailInvoicePrint();
   const txPerms = useTxRowPermissions("invoice");
+  const draftOrderPerms = useTxRowPermissions("sales_order");
   // K2 08/08: nút "Xem tất cả chi nhánh" trước đây KHÔNG kiểm quyền — nhân
   // viên chỉ được gán 1 chi nhánh vẫn bấm được và danh sách chạy toàn tenant.
   // Branch administration does not grant company-wide data access.
-  const { hasAny, hasPermission } = usePermissions();
+  const { hasAny, hasPermission, hasPermissionAtBranch, hasPermissionAtBranchWithLegacy, hasAssignedBranchAccess } = usePermissions();
   const duocXemToanChuoi = hasAny([
     "reports.view_all_branches",
   ]);
@@ -556,6 +557,11 @@ export default function HoaDonPage() {
   const [bulkCancelIds, setBulkCancelIds] = useState<string[]>([]);
   const canVoidFnb = hasPermission("pos_fnb.void_paid_bill");
   const canVoidRetail = hasPermission("pos_retail.void");
+  const canVoidInvoice = (source: string | undefined, branchId: string | null) =>
+    hasAssignedBranchAccess(branchId) &&
+    (source === "fnb"
+      ? hasPermissionAtBranchWithLegacy("pos_fnb.void_paid_bill", "pos_fnb.void", branchId)
+      : hasPermissionAtBranch("pos_retail.void", branchId));
   const [payingItem, setPayingItem] = useState<Invoice | null>(null);
   // Sprint UX-1 Stage 4: Audit log dialog + duplicating state
   const [auditDialogTarget, setAuditDialogTarget] = useState<Invoice | null>(null);
@@ -1391,16 +1397,16 @@ export default function HoaDonPage() {
                 // với cart đã load từ draft → cashier sửa được tất cả
                 // (dòng hàng, giá, số lượng, KH, KM) → checkout cập nhật
                 // in-place (không tạo HĐ mới).
-                invoice.status === "processing"
+                txPerms.forBranch(invoice.branchId).canEdit && invoice.status === "processing"
                   ? () => router.push(`/pos?draftId=${invoice.id}`)
                   : undefined
               }
               onDelete={
                 invoice.status === "completed"
-                  ? txPerms.canCancel
+                  ? canVoidInvoice(invoice.source, invoice.branchId ?? null)
                     ? () => setCancellingItem(invoice)
                     : undefined
-                  : invoice.status !== "cancelled"
+                  : invoice.status !== "cancelled" && draftOrderPerms.forBranch(invoice.branchId).canCancel
                     ? () => setCancellingItem(invoice)
                     : undefined
               }
@@ -1413,7 +1419,10 @@ export default function HoaDonPage() {
             buildTransactionRowActions({
               row,
               kind: "invoice",
-              permissions: txPerms,
+              permissions: {
+                ...txPerms.forBranch(row.branchId),
+                canCancel: draftOrderPerms.forBranch(row.branchId).canCancel,
+              },
               // Sửa — chỉ status processing → mở POS Retail (CEO 05/06/2026)
               onEdit:
                 row.status === "processing"
@@ -1476,7 +1485,7 @@ export default function HoaDonPage() {
               // Hủy + HOÀN TÁC — chỉ HĐ đã hoàn thành (giữ bản ghi), gate quyền
               // POS_RETAIL_VOID. Gọi RPC atomic đảo kho/lô/tiền/nợ/điểm.
               extraActions: [
-                ...(row.status === "processing"
+                ...(row.status === "processing" && txPerms.forBranch(row.branchId).canEdit
                   ? [
                       {
                         label: "Hoàn thành đơn (POS)",
@@ -1485,7 +1494,7 @@ export default function HoaDonPage() {
                       },
                     ]
                   : []),
-                ...(row.status === "completed" && (row.source === "fnb" ? canVoidFnb : canVoidRetail)
+                ...(row.status === "completed" && canVoidInvoice(row.source, row.branchId ?? null)
                   ? [
                       {
                         label: "Hủy & hoàn tác",
@@ -1583,7 +1592,17 @@ export default function HoaDonPage() {
       {bulkCancelIds.length > 0 && (
         <BulkInvoiceCancelDialog
           ids={bulkCancelIds}
-          permissions={{ fnb: canVoidFnb, retail: canVoidRetail }}
+          permissions={{
+            fnb: canVoidFnb,
+            retail: canVoidRetail,
+            forInvoice: (row) => {
+              const branchId = row.branchId || null;
+              if (!hasAssignedBranchAccess(branchId)) return false;
+              return row.status === "completed"
+                ? canVoidInvoice(row.source, branchId)
+                : hasPermissionAtBranch("orders.cancel", branchId);
+            },
+          }}
           onClose={() => setBulkCancelIds([])}
           onDone={async () => { await taiLaiSauKhiDoiDuLieu(); }}
         />

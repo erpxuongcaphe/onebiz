@@ -11,6 +11,8 @@ export interface AuthBootstrap {
   branches: Branch[];
   permissions: string[];
   scope: { branch_id: string }[];
+  branchPermissionAdjustments?: { branchId: string; code: string; allowed: boolean }[];
+  legacyPermissionDenials?: string[];
 }
 
 /** One fresh server snapshot; never persist permission grants in browser storage. */
@@ -27,6 +29,14 @@ export async function readAuthBootstrap(client: SupabaseClient<Database>, userId
       || snapshot.permissions.some(p => typeof p !== "string") || !Array.isArray(snapshot.scope)
       || snapshot.scope.some(row => !row || typeof row.branch_id !== "string")) throw new Error("Dữ liệu quyền chưa đầy đủ.");
   const profile = snapshot.profile;
+  if (snapshot.legacyPermissionDenials !== undefined && (!Array.isArray(snapshot.legacyPermissionDenials)
+      || snapshot.legacyPermissionDenials.some(code => typeof code !== 'string'))) {
+    throw new Error('Dữ liệu quyền chặn không hợp lệ.');
+  }
+  if (snapshot.branchPermissionAdjustments !== undefined && (!Array.isArray(snapshot.branchPermissionAdjustments)
+    || snapshot.branchPermissionAdjustments.some(row => !row || typeof row.branchId !== 'string' || typeof row.code !== 'string' || typeof row.allowed !== 'boolean'))) {
+    throw new Error('Dữ liệu quyền chi nhánh không hợp lệ.');
+  }
   if (profile !== null && (!profile || profile.id !== userId || typeof profile.is_active !== "boolean"
       || typeof profile.tenant_id !== "string" || typeof profile.role !== "string")) throw new Error("Phiên đăng nhập không khớp.");
   if ((!profile || !profile.is_active) && (snapshot.tenant !== null || snapshot.branches.length || snapshot.permissions.length || snapshot.scope.length)) {

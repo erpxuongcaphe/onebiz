@@ -129,13 +129,13 @@ describe("CancelImpactDialog", () => {
     getPurchaseCancelImpact.mockResolvedValue({ ...completedInvoiceImpact,
       docType: "purchase", debtAmount: 50, cashAmount: 70,
       cashDirection: "collect_from_supplier", refundMethods: undefined,
-      negativeStock: [{ productName: "Synthetic product", available: 2, needed: 5, unit: "unit" }],
+      negativeStock: [{ productName: "Synthetic product", available: null, needed: 5, unit: "unit" }],
     });
     const onConfirm = vi.fn().mockResolvedValue(undefined);
     render(<CancelImpactDialog target={{ type: "purchase", id: "purchase-test", code: "TEST-PO" }} onClose={vi.fn()} onConfirm={onConfirm} />);
     expect(await screen.findByText("Xóa nợ 50")).toBeInTheDocument();
-    expect(screen.getByText("Tồn sẽ ÂM sau khi hoàn nhập")).toBeInTheDocument();
-    expect(screen.getByText(/Synthetic product: còn 2 unit, hoàn 5 unit/)).toBeInTheDocument();
+    expect(screen.getByText("Có nguy cơ tồn âm khi hoàn nhập")).toBeInTheDocument();
+    expect(screen.getByText(/Synthetic product: không đủ tồn để hoàn 5 unit/)).toBeInTheDocument();
     expect(screen.queryByText(/NCC còn nợ/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Xác nhận hủy & hoàn tiền" }));
     await waitFor(() => expect(onConfirm).toHaveBeenCalledWith({ refundMethod: "cash", allowNegativeStock: true, reason: "" }));

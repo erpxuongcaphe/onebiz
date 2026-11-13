@@ -18,7 +18,7 @@ const labels={sent:'Chờ Kho Tổng nhận',partial:'Đã nhận một phần',
 type PendingReturn={key:string;action:'send'|'receive';id:string;items:{itemId:string;quantity:number}[];note:string};
 export default function Page(){return <Suspense fallback={<p className="p-4">Đang tải…</p>}><Workspace/></Suspense>;}
 function Workspace(){
-  const params=useSearchParams();const scope=useBranchFilter();const {hasPermission}=usePermissions();
+  const params=useSearchParams();const scope=useBranchFilter();const {hasPermissionAtBranch}=usePermissions();
   const {user}=useAuth();
   const [chosen,setChosen]=useState<string>();
   const requestedBranch=params.get('branch');
@@ -50,7 +50,7 @@ function Workspace(){
     request.current=value;
     try{if(pendingKey){if(value)sessionStorage.setItem(pendingKey,JSON.stringify(value));else sessionStorage.removeItem(pendingKey);}}catch{/* Do not lose the in-memory request. */}
   };
-  const canSend=hasPermission('inventory.internal_return_send');
+  const canSend=hasPermissionAtBranch('inventory.internal_return_send',branch||null);
   const refresh=useCallback(async()=>{
     const version=++generation.current;
     if(!scope.isReady||!allowed){setRows([]);setSource(undefined);return;}
@@ -65,8 +65,8 @@ function Workspace(){
   useEffect(()=>{setSelected(undefined);setQuantities({});setPreview(false);void refresh();const version=generation.current;return()=>{if(generation.current===version)generation.current=version+1;};},[refresh]);
   const current=rows.find(r=>r.id===selected);
   const action=current?'receive':'send';
-  const canAct=!loading&&(current?current.to_branch_id===branch&&current.status!=='received'&&hasPermission('inventory.internal_return_receive'):
-    !!source&&source.status==='completed'&&hasPermission('inventory.internal_return_send'));
+  const canAct=!loading&&(current?current.to_branch_id===branch&&current.status!=='received'&&hasPermissionAtBranch('inventory.internal_return_receive',branch||null):
+    !!source&&source.status==='completed'&&canSend);
   const items=current?current.items.map(i=>({id:i.id,name:i.product_name,code:i.product_code,unit:i.unit,limit:Number(i.quantity)-Number(i.received),factor:1,stockUnit:i.unit,unsupported:false})):
     source?.items.map(i=>({id:i.id,name:i.name,code:i.code,unit:i.unit,limit:Math.max(0,i.received-rows.flatMap(r=>r.items).filter(r=>r.sale_item_id===i.id).reduce((sum,r)=>sum+Number(r.quantity),0)),factor:i.receivingFactor??1,stockUnit:i.receivingUnit??i.unit,unsupported:i.treatment==='expense'||i.treatment==='review'}))??[];
   const eligibleItems=items.filter(i=>!i.unsupported&&i.limit>0);
@@ -171,7 +171,7 @@ function Workspace(){
             <Button disabled={busy||!valid||loading} onClick={()=>preview?void submit():setPreview(true)}>{busy?'Đang ghi nhận…':preview?(current?'Xác nhận thực nhận':'Xác nhận gửi trả'):'Xem trước'}</Button></div>}
         </>}
         {current&&<details className="border-t pt-3"><summary className="cursor-pointer text-sm font-medium">Lịch sử · {current.events.length} lần</summary><ol className="mt-2 space-y-2 text-sm">{current.events.map(e=><li key={e.id} className="rounded bg-muted/30 p-2"><p>{e.action==='sent'?'Gửi trả':'Nhận trả'} · {e.actor_name} · {formatDate(e.created_at)}</p>{e.action==='received'&&<p>Giảm nợ {formatNumber(e.debt_reduced)}đ · Chờ hoàn/cấn trừ {formatNumber(e.refund_pending)}đ</p>}<p className="whitespace-pre-wrap">{e.note}</p></li>)}</ol></details>}
-        {current&&user?.id&&current.to_branch_id===branch&&hasPermission('inventory.internal_return_settle')&&<InternalReturnFinancePanel key={current.id} returnId={current.id} userId={user.id} canRefund={hasPermission('finance.create_transaction')}/>}
+        {current&&user?.id&&current.to_branch_id===branch&&hasPermissionAtBranch('inventory.internal_return_settle',branch||null)&&<InternalReturnFinancePanel key={current.id} returnId={current.id} userId={user.id} canRefund={hasPermissionAtBranch('finance.create_transaction',branch||null)}/>}
       </section>}
     </>}
   </main>;

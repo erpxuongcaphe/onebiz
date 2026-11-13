@@ -47,9 +47,9 @@ export interface Product {
   status?: ProductStatus;
   sellPrice: number;
   costPrice: number;
-  stock: number;
-  /** Tồn của chi nhánh đang chọn (branch-scope). undefined = xem toàn chuỗi. */
-  branchStock?: number;
+  stock: number | null;
+  /** undefined = không chọn chi nhánh; null = không được xem số tồn. */
+  branchStock?: number | null;
   ordered: number;
   categoryId: string;
   categoryName: string;
@@ -234,6 +234,7 @@ export interface DisposalExport {
   date: string;
   totalProducts: number;
   totalAmount: number;
+  costVisible?: boolean;
   reason: string;
   /** 06/08: ghi chú (khác Lý do) — form tạo có ô này nhưng chi tiết không hiện. */
   note?: string;
@@ -253,6 +254,7 @@ export interface InternalExport {
   date: string;
   totalProducts: number;
   totalAmount: number;
+  costVisible?: boolean;
   status: "completed" | "draft" | "cancelled";
   statusName: string;
   note?: string;

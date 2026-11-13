@@ -64,19 +64,18 @@ describe("inventory list status filters", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     rpcCalls.length = 0;
-    rpcResponse = { data: { ok: true }, error: null };
+    rpcResponse = { data: { items: [], total: 0, costVisible: false, summary: { completedCount: 0, draftCount: 0, cancelledCount: 0, completedValue: null } }, error: null };
   });
 
-  it("uses .in() when disposal status filter has multiple checked values", async () => {
+  it("sends disposal status filters to the scoped list", async () => {
     await getDisposalExports({
       page: 0,
       pageSize: 15,
       filters: { status: ["draft", "completed"] },
     });
 
-    expect(mockFrom).toHaveBeenCalledWith("disposal_exports");
-    expect(mockChain.in).toHaveBeenCalledWith("status", ["draft", "completed"]);
-    expect(mockChain.eq).not.toHaveBeenCalledWith("status", ["draft", "completed"]);
+    expect(rpcCalls[0]).toMatchObject({ fn: "get_stock_work_document_list", params: { p_kind: "disposal_export", p_statuses: ["draft", "completed"] } });
+    expect(mockFrom).not.toHaveBeenCalledWith("disposal_exports");
   });
 
   it("keeps the same multi-status behavior for internal exports and inventory checks", async () => {
@@ -91,7 +90,7 @@ describe("inventory list status filters", () => {
       filters: { status: ["draft", "in_progress"] },
     });
 
-    expect(mockChain.in).toHaveBeenCalledWith("status", ["draft", "completed"]);
+    expect(rpcCalls[0]).toMatchObject({ fn: "get_stock_work_document_list", params: { p_kind: "internal_export", p_statuses: ["draft", "completed"] } });
     expect(mockChain.in).toHaveBeenCalledWith("status", ["draft", "in_progress"]);
   });
 
@@ -106,8 +105,7 @@ describe("inventory list status filters", () => {
       },
     });
 
-    expect(mockChain.gte).toHaveBeenCalledWith("created_at", "2026-06-30T17:00:00.000Z");
-    expect(mockChain.lt).toHaveBeenCalledWith("created_at", "2026-07-04T17:00:00.000Z");
+    expect(rpcCalls[0]).toMatchObject({ params: { p_from: "2026-06-30T17:00:00.000Z", p_to: "2026-07-04T17:00:00.000Z" } });
   });
 });
 describe("cancelInventoryCheck", () => {

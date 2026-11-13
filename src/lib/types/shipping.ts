@@ -42,6 +42,8 @@ export interface DeliveryPartner {
 // Đơn giao hàng trong danh sách
 export interface ShippingOrder {
   id: string;
+  /** Chi nhánh lấy từ hóa đơn liên kết. */
+  branchId?: string;
   code: string;
   invoiceCode: string;
   deliveryPartner: string;

@@ -18,7 +18,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
       range(from: number, to: number) { entry.calls.push(["range", from, to]); entry.range = [from, to]; return this; },
       then(resolve: (result: unknown) => unknown) {
         const start = entry.range?.[0] ?? 0;
-        const data = state.exportRows && entry.range ? Array.from({ length: Math.max(0, Math.min(entry.range[1] + 1, 1501) - start) }, (_, index) => ({ id: `test-${start + index}`, code: `TEST-${start + index}`, status: "pending" })) : [];
+        const data = state.exportRows && entry.range ? Array.from({ length: Math.max(0, Math.min(entry.range[1] + 1, 1501) - start) }, (_, index) => ({ id: `test-${start + index}`, code: `TEST-${start + index}`, status: "pending", invoices: { code: "HD-1", branch_id: "branch-b" } })) : [];
         const count = state.exportRows ? (state.changeCount && start > 0 ? 1500 : 1501) : entry.status === "pending" ? 1501 : 7;
         return Promise.resolve({ data, count, error: state.fail || (state.failLaterPage && start > 0) ? new Error("Synthetic query failure") : null }).then(resolve);
       },
@@ -62,6 +62,7 @@ describe("shipping list and exact status counts", () => {
     const rows = await getAllShippingOrders(params);
     expect(rows).toHaveLength(1501);
     expect(rows[0].id).toBe("test-0");
+    expect(rows[0].branchId).toBe("branch-b");
     expect(rows[1500].id).toBe("test-1500");
     expect(state.queries).toHaveLength(8);
     for (const query of state.queries) {

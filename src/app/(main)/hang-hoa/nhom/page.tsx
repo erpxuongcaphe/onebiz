@@ -108,7 +108,7 @@ function CategoryProductsPanel({
       id: string;
       code: string;
       name: string;
-      stock: number;
+      stock: number | null;
       unit?: string;
     }>
   >([]);
@@ -195,12 +195,12 @@ function CategoryProductsPanel({
                 className={`row-start-2 text-right font-mono @md:row-start-auto ${
                   p.stock === 0
                     ? "text-destructive"
-                    : p.stock <= 5
+                    : p.stock !== null && p.stock <= 5
                       ? "text-status-warning"
                       : ""
                 }`}
               >
-                {formatNumber(p.stock)}
+                {p.stock === null ? "—" : formatNumber(p.stock)}
               </span>
               <span className="row-start-2 text-xs text-muted-foreground @md:row-start-auto">
                 {p.unit ?? "—"}

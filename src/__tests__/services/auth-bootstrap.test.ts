@@ -5,6 +5,11 @@ import type { Database } from "@/lib/supabase/types";
 const fixture = () => ({version:1,profile:{id:"user",tenant_id:"tenant",is_active:true,role:"staff"},tenant:{id:"tenant"},branches:[{id:"branch",tenant_id:"tenant",is_active:true}],permissions:["pos_fnb.send_kitchen"],scope:[{branch_id:"branch"}]});
 function client(data:unknown,error:unknown=null){const rpc=vi.fn().mockResolvedValue({data,error});return {rpc,client:{rpc} as unknown as SupabaseClient<Database>};}
 describe("fresh current-user bootstrap",()=>{
+  it("keeps explicit legacy-operation denies in the same snapshot and rejects malformed values",async()=>{
+    const data={...fixture(),legacyPermissionDenials:["pos_fnb.cancel_unpaid_order"]};
+    expect((await readAuthBootstrap(client(data).client,"user"))?.legacyPermissionDenials).toEqual(data.legacyPermissionDenials);
+    await expect(readAuthBootstrap(client({...fixture(),legacyPermissionDenials:[null]}).client,"user")).rejects.toThrow();
+  });
   it("uses exactly one RPC without accepting a caller-supplied user ID",async()=>{
     const c=client(fixture());expect((await readAuthBootstrap(c.client,"user"))?.permissions).toEqual(["pos_fnb.send_kitchen"]);
     expect(c.rpc).toHaveBeenCalledExactlyOnceWith("get_my_auth_bootstrap");

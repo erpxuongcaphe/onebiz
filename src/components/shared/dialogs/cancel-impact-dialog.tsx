@@ -238,12 +238,12 @@ export function CancelImpactDialog({
               <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-2.5 text-sm">
                 <div className="flex items-center gap-1.5 font-medium text-destructive">
                   <Icon name="warning" size={15} />
-                  Tồn sẽ ÂM sau khi hoàn nhập
+                  Có nguy cơ tồn âm khi hoàn nhập
                 </div>
                 <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
                   {impact.negativeStock.slice(0, 4).map((n, i) => (
                     <li key={i}>
-                      {n.productName}: còn {formatNumber(n.available)} {n.unit}, hoàn{" "}
+                      {n.productName}: {n.available === null ? "không đủ tồn để hoàn" : `còn ${formatNumber(n.available)} ${n.unit}, hoàn`}{" "}
                       {formatNumber(n.needed)} {n.unit}
                     </li>
                   ))}
@@ -252,7 +252,7 @@ export function CancelImpactDialog({
                   )}
                 </ul>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Đã bán/dùng bớt. Vẫn cho hủy — cân nhắc <strong>Trả hàng một phần</strong>.
+                  Đã bán hoặc dùng bớt. Việc tiếp tục có thể cần quyền điều chỉnh tồn; anh/chị cũng có thể cân nhắc <strong>Trả hàng một phần</strong>.
                 </p>
               </div>
             )}

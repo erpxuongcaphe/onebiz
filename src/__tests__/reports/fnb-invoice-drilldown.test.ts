@@ -11,6 +11,24 @@ vi.mock("@/lib/services/supabase/base", () => ({
   getCurrentTenantId: async () => "tenant-1",
   handleError: (error: Error) => { throw error; },
   getClient: () => ({
+    rpc: async (name: string, args: Record<string, unknown>) => {
+      queryCalls.push(["rpc", [name, args]]);
+      if (name === "staff_fnb_kpi_summary") return {data:{
+        totalRevenue:153000,returnAmount:153000,netRevenue:0,totalOrders:4,avgTicket:38250,avgTurnoverMinutes:0,
+      },error:null};
+      if (name === "staff_fnb_cashier_summary") return {data:[
+        {cashier_name:"Thu ngân",revenue:"120",orders:"1",avg_ticket:"120"},
+      ],error:null};
+      if (name === "staff_fnb_invoice_detail_page") return {
+        data:rowsByTable.invoices.slice(Number(args.p_offset),Number(args.p_offset)+Number(args.p_limit)),error:null,
+      };
+      if (name === "staff_fnb_return_detail_page") return {
+        data:rowsByTable.sales_returns.slice(Number(args.p_offset),Number(args.p_offset)+Number(args.p_limit)).map(row => ({
+          ...row,invoice_code:(row.invoices as {code?:string}|null)?.code ?? null,
+        })),error:null,
+      };
+      return {data:[{table_name:"Bàn 1",revenue:"120",orders:"1"}],error:null};
+    },
     from: (table: "invoices" | "kitchen_orders" | "sales_returns") => {
       let offset = 0;
       const query = {
@@ -52,13 +70,12 @@ describe("F&B report invoice drill-down", () => {
     expect(result.rows).toHaveLength(1);
     expect(result.rows[0]).toMatchObject({ code: "HD1", customerName: "Khách lẻ", debt: 20 });
     expect(result.hasMore).toBe(true);
-    expect(queryCalls).toContainEqual(["eq", ["tenant_id", "tenant-1"]]);
-    expect(queryCalls).toContainEqual(["eq", ["source", "fnb"]]);
-    expect(queryCalls).toContainEqual(["eq", ["branch_id", "branch-1"]]);
-    expect(queryCalls).toContainEqual(["range", [0, 1]]);
+    expect(queryCalls).toContainEqual(["rpc", ["staff_fnb_invoice_detail_page", {
+      p_branch_id:"branch-1",p_from:"2026-09-21T17:00:00.000Z",p_to:"2026-09-22T17:00:00.000Z",p_offset:0,p_limit:2,
+    }]]);
   });
 
-  it("counts a completed invoice only once when multiple kitchen sends exist", async () => {
+  it("maps server-deduplicated table totals", async () => {
     rowsByTable.kitchen_orders = [
       { id: "k1", table_id: "t1", invoice_id: "i1", restaurant_tables: { name: "Bàn 1" }, invoices: { total: 120, status: "completed" } },
       { id: "k2", table_id: "t1", invoice_id: "i1", restaurant_tables: { name: "Bàn 1" }, invoices: { total: 120, status: "completed" } },
@@ -71,22 +88,20 @@ describe("F&B report invoice drill-down", () => {
   it("filters table revenue by invoice document date, matching the KPI period", async () => {
     await getRevenueByTable("branch-1", { from: "2026-09-22", to: "2026-09-22" });
 
-    expect(queryCalls).toContainEqual(["select", [expect.stringContaining("invoices!inner(total, status, ngay_chung_tu)")]]);
-    expect(queryCalls).toContainEqual(["eq", ["invoices.source", "fnb"]]);
-    expect(queryCalls).toContainEqual(["eq", ["invoices.status", "completed"]]);
-    expect(queryCalls).not.toContainEqual(["eq", ["status", "completed"]]);
-    expect(queryCalls).toContainEqual(["gte", ["invoices.ngay_chung_tu", "2026-09-21T17:00:00.000Z"]]);
-    expect(queryCalls).toContainEqual(["lt", ["invoices.ngay_chung_tu", "2026-09-22T17:00:00.000Z"]]);
-    expect(queryCalls).not.toContainEqual(["gte", ["created_at", expect.anything()]]);
+    expect(queryCalls).toContainEqual(["rpc", ["staff_fnb_table_summary", {
+      p_branch_id:"branch-1",p_from:"2026-09-21T17:00:00.000Z",p_to:"2026-09-22T17:00:00.000Z",
+    }]]);
   });
 
-  it("uses the invoice creator FK for the cashier report", async () => {
+  it("uses branch-scoped server totals for the cashier report", async () => {
     rowsByTable.invoices = [
       { total: 120, created_by: "user-1", profiles: { full_name: "Thu ngân" } },
     ];
     const result = await getCashierPerformance("branch-1", { from: "2026-09-22", to: "2026-09-22" });
     expect(result).toEqual([{ cashierName: "Thu ngân", revenue: 120, orders: 1, avgTicket: 120 }]);
-    expect(queryCalls).toContainEqual(["select", ["total, created_by, profiles!invoices_created_by_fkey(full_name)"]]);
+    expect(queryCalls).toContainEqual(["rpc", ["staff_fnb_cashier_summary", {
+      p_branch_id:"branch-1",p_from:"2026-09-21T17:00:00.000Z",p_to:"2026-09-22T17:00:00.000Z",
+    }]]);
   });
 
   it("reconciles invoice gross, F&B returns and net without changing source data", async () => {
@@ -101,10 +116,9 @@ describe("F&B report invoice drill-down", () => {
 
     const kpis = await getFnbKpis("branch-1", { from: "2026-09-22", to: "2026-09-22" });
     expect(kpis).toMatchObject({ totalRevenue: 153000, returnAmount: 153000, netRevenue: 0, totalOrders: 4 });
-    expect(queryCalls).toContainEqual(["eq", ["invoices.source", "fnb"]]);
-    expect(queryCalls).toContainEqual(["in", ["status", ["confirmed", "completed"]]]);
-    expect(queryCalls).toContainEqual(["gte", ["created_at", "2026-09-21T17:00:00.000Z"]]);
-    expect(queryCalls).toContainEqual(["lt", ["created_at", "2026-09-22T17:00:00.000Z"]]);
+    expect(queryCalls).toContainEqual(["rpc", ["staff_fnb_kpi_summary", {
+      p_branch_id:"branch-1",p_from:"2026-09-21T17:00:00.000Z",p_to:"2026-09-22T17:00:00.000Z",
+    }]]);
   });
 
   it("pages only F&B return documents and preserves the original invoice reference", async () => {
@@ -115,7 +129,8 @@ describe("F&B report invoice drill-down", () => {
     const page = await getFnbReturnDetailPage("branch-1", { from: "2026-09-22", to: "2026-09-22" }, 0, 1);
     expect(page.rows).toEqual([{ id: "r1", code: "TH1", createdAt: "2026-09-22T10:00:00Z", invoiceCode: "HD1", total: 30000, refunded: 20000 }]);
     expect(page.hasMore).toBe(true);
-    expect(queryCalls).toContainEqual(["eq", ["invoices.source", "fnb"]]);
-    expect(queryCalls).toContainEqual(["eq", ["branch_id", "branch-1"]]);
+    expect(queryCalls).toContainEqual(["rpc", ["staff_fnb_return_detail_page", {
+      p_branch_id:"branch-1",p_from:"2026-09-21T17:00:00.000Z",p_to:"2026-09-22T17:00:00.000Z",p_offset:0,p_limit:2,
+    }]]);
   });
 });

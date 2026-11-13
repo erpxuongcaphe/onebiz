@@ -44,6 +44,9 @@ try {
  await db.exec(`do $$declare d text; begin d:=pg_get_functiondef('public._fnb_complete_payment_impl_00343(uuid,uuid,text,text,jsonb,numeric,boolean,numeric,uuid,text,text,uuid,numeric,uuid,text)'::regprocedure);
  execute replace(d,'v_manual_discount_approver := public.verify_otp_authorization(','perform public._check_discount_approval_00566(p_manual_discount_otp_id,''fnb.discount_override'',v_order.branch_id,v_order.id,v_manual_discount,(select jsonb_agg(to_jsonb(x)) from public._fnb_active_kitchen_items_00454 x where x.kitchen_order_id=v_order.id)); v_manual_discount_approver := public.verify_otp_authorization(');end $$;`);
  await db.exec(fs.readFileSync('supabase/migrations/202610200002_fnb_selected_item_discount.sql','utf8'));
+ const staffDiscount = process.env.ONEBIZ_STAFF_DISCOUNT_TEST === '1'
+   ? await import('../staff-access-tests/discount-posting.mjs') : null;
+ if (staffDiscount) await staffDiscount.installDiscountScope(db);
  const id=n=>`00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
  const assert=(ok,msg)=>{if(!ok)throw Error(msg);};
  const item=(idNo,qty,price,selected,note='')=>({kitchen_item_id:id(idNo),productId:id(10),productName:'Drink',variantId:null,quantity:qty,unitPrice:price,toppings:[],modifierSelections:[],discount_selected:selected,note});
@@ -58,8 +61,10 @@ try {
  assert(saved.items[0].productName.startsWith('[Giảm món này]'),'approver sees selected item');
  assert(!saved.items[1].productName.startsWith('[Giảm món này]'),'unselected item is not mislabeled');
  await db.query("update manager_approval_requests set status='authorized',otp_id=$2 where id=$1",[req.id,id(203)]);
+ if (staffDiscount) await staffDiscount.verifyDiscountDenial(db, `select fnb_complete_payment_atomic_v3('${id(200)}',null,'TEST','cash',null,150000,false,17500,'${id(203)}','Approved selected rows',null,'${id(7)}');`);
  await db.exec(`select fnb_complete_payment_atomic_v3('${id(200)}',null,'TEST','cash',null,150000,false,17500,'${id(203)}','Approved selected rows',null,'${id(7)}');`);
  const invoice=(await db.query('select invoice_id from kitchen_orders where id=$1',[id(200)])).rows[0].invoice_id;
+ if (staffDiscount) await staffDiscount.verifyDiscountAudit(db, invoice);
  const lines=(await db.query('select s.kitchen_order_item_id,i.discount,i.total,i.note from invoice_items i join fnb_invoice_kitchen_line_sources s on s.invoice_item_id=i.id where i.invoice_id=$1 order by s.kitchen_order_item_id',[invoice])).rows;
  assert(Number(lines[0].discount)===17500 && Number(lines[0].total)===52500,'selected row receives exactly its approved discount');
  assert(Number(lines[1].discount)===0 && Number(lines[1].total)===50000,'unselected row keeps full refundable value');

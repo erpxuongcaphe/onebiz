@@ -53,6 +53,12 @@ describe("atomic shipping status", () => {
     });
   });
 
+  it("explains a temporary invoice lock without repeating the transition", async () => {
+    rpc.mockResolvedValue({data: null, error: {code: "55P03", message: "lock not available"}});
+    await expect(updateShippingOrderStatus("ship-1", "in_transit")).rejects.toThrow("Đơn đang được xử lý");
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
+
   it("checks permission, branch, state and audit in SQL", () => {
     expect(migration).toContain("for update of so");
     expect(migration).toContain("orders.cancel");

@@ -488,6 +488,9 @@ function UsersPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>Thao tác</DropdownMenuLabel>
+                          {isCurrentUserOwner && user.role !== 'owner' && <DropdownMenuItem onSelect={() => { window.location.href = `/he-thong/users/${user.id}/phan-quyen`; }}>
+                            <Icon name="supervisor_account" size={16} className="mr-2" />Phân công & quyền truy cập
+                          </DropdownMenuItem>}
                           <DropdownMenuItem
                             disabled={!management?.targets[user.id]?.edit}
                             onSelect={() => {

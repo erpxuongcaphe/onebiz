@@ -71,5 +71,9 @@ await db.exec(original);
 assert.equal(JSON.stringify((await db.query('select * from purchase_orders order by id')).rows),allSaved);
 assert.deepEqual((await metadata()).rows,before);
 console.log('PASS purchase VND: screenshot 96000, .02/.99 boundaries, half-VND, quantities, discount/VAT/fees, UOM, old browser, replay, overpayment, matched payable/payment/debt via mocks, historical rows and function OID/ACL preserved, rollback. No production connection.');
+if (process.env.ONEBIZ_STAFF_PURCHASE_POSTING_TEST === '1') {
+ const {verifyPurchasePostingScope}=await import('../staff-access-tests/purchase-posting.mjs');
+ await verifyPurchasePostingScope(db,{id,save,line});
+}
 await db.close();
 

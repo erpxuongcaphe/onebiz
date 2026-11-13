@@ -434,8 +434,8 @@ export default function HangHoaPage() {
     totalCount: number;
     stockValue: number;
     stockValueComplete?: boolean;
-    outOfStock: number;
-    lowStock: number;
+    outOfStock: number | null;
+    lowStock: number | null;
   } | null>(null);
   const [search, setSearch] = useState("");
   // CEO 28/05/2026: debounce search 300ms — tránh gọi getProducts mỗi keystroke.
@@ -1312,6 +1312,10 @@ export default function HangHoaPage() {
   };
 
   const stockTotalsByUnit = summarizePhysicalStock(data, branchStockView);
+  const hasHiddenStock = data.some(product =>
+    !(product.channel === "fnb" && !product.isFnbStockItem) &&
+    (branchStockView ? product.branchStock === null : product.stock === null),
+  );
   const totalOrdered = data.reduce((sum, p) => sum + p.ordered, 0);
 
   /**
@@ -1351,6 +1355,12 @@ export default function HangHoaPage() {
         toast({ title: "Không có dòng nào để xuất", variant: "warning" });
         return;
       }
+      if (rows.some(p => exportBranchId ? p.branchStock === null : p.stock === null)) {
+        throw new Error("Không thể xuất tồn kho vì anh/chị chưa có quyền xem tồn trong phạm vi này.");
+      }
+      if (type === "import" && rows.some(p => p.stock === null)) {
+        throw new Error("Không thể xuất mẫu nhập lại khi chưa có quyền xem tổng tồn.");
+      }
       const scopeLabel = scope === "nvl" ? "nguyen-vat-lieu" : "hang-ban";
       if (!catalogDownload.isCurrent(exportScope)) return;
 
@@ -1376,7 +1386,7 @@ export default function HangHoaPage() {
           [
             { header: "Nhóm hàng", key: "group", width: 30 },
             { header: "Số mã", key: "skuCount", width: 10 },
-            { header: "Tổng tồn", key: "stock", width: 14 },
+            { header: "Tồn trong phạm vi được xem", key: "stock", width: 22 },
             { header: "Giá trị tồn", key: "value", width: 18 },
           ],
           `tong-hop-nhom-${scopeLabel}`,
@@ -1429,7 +1439,7 @@ export default function HangHoaPage() {
               { header: "Thành phần cần đối soát", key: "costIssues" as const, width: 48 },
             ] : []),
             { header: "Giá bán", key: "sellPrice", width: 14 },
-            { header: "Tồn kho", key: "stock", width: 12 },
+            { header: "Tồn trong phạm vi được xem", key: "stock", width: 22 },
             { header: "Giá trị tồn", key: "stockValue", width: 16 },
           ],
           `bao-cao-${scopeLabel}`,
@@ -1455,7 +1465,7 @@ export default function HangHoaPage() {
         unit: p.unit,
         sellPrice: p.sellPrice,
         costPrice: p.costPrice,
-        stock: p.stock,
+        stock: p.stock ?? undefined,
         minStock: p.minStock,
         maxStock: p.maxStock,
         vatRate: p.vatRate,
@@ -1599,13 +1609,13 @@ export default function HangHoaPage() {
       : []),
     {
       accessorKey: "stock",
-      header: "Tồn kho",
+      header: branchStockView ? "Tồn kho" : "Tồn trong phạm vi được xem",
       size: 150,
       cell: ({ row }) => {
         if (
           isFnbOutletView &&
           row.original.channel === "retail" &&
-          row.original.branchStock == null
+          row.original.branchStock === undefined
         ) {
           return (
             <span
@@ -1643,8 +1653,9 @@ export default function HangHoaPage() {
         }
         // Branch-scope: hiện tồn của chi nhánh đang chọn; toàn chuỗi → tồn tổng.
         const stock = branchStockView
-          ? row.original.branchStock ?? 0
+          ? (row.original.branchStock === undefined ? 0 : row.original.branchStock)
           : row.original.stock;
+        if (stock === null) return <span title="Không có quyền xem tồn kho trong phạm vi này">—</span>;
         return (
           <span
             className={
@@ -1789,7 +1800,7 @@ export default function HangHoaPage() {
       : []),
     {
       accessorKey: "stock",
-      header: isFnbOutletView ? "Có thể pha" : "Tồn kho",
+      header: isFnbOutletView ? "Có thể pha" : branchStockView ? "Tồn kho" : "Tồn trong phạm vi được xem",
       size: 150,
       cell: ({ row }) => {
         // Phương án B: SKU có BOM ở chế độ CN → "≈ khả dụng" từ tồn nguyên liệu.
@@ -1821,8 +1832,9 @@ export default function HangHoaPage() {
         }
         // Branch-scope: hiện tồn của chi nhánh đang chọn; toàn chuỗi → tồn tổng.
         const stock = branchStockView
-          ? row.original.branchStock ?? 0
+          ? (row.original.branchStock === undefined ? 0 : row.original.branchStock)
           : row.original.stock;
+        if (stock === null) return <span title="Không có quyền xem tồn kho trong phạm vi này">—</span>;
         return (
           <span
             className={
@@ -2177,8 +2189,30 @@ export default function HangHoaPage() {
           getDetailTitle={product => "Sản phẩm " + product.code}
           renderMobileRow={product=>{
             const available=branchStockView&&product.hasBom&&!product.isFnbStockItem?bomAvailability.get(product.id):undefined;
-            const quantity=branchStockView?(product.branchStock??0):product.stock;
-            return <div className="min-w-0 space-y-1.5 text-sm"><b className="block break-words">{product.name}</b><div className="flex flex-wrap justify-between gap-2 text-xs"><span className="break-all text-primary">{product.code}</span>{scope==="sku"&&<span>Giá bán: {formatCurrency(product.sellPrice)}</span>}</div><div className="flex flex-wrap justify-between gap-2 text-xs"><span>{product.categoryName}</span><span>{available?<>≈ {formatNumber(available.available)} {product.unit} có thể pha</>:branchStockView&&product.channel==="fnb"&&!product.hasBom?"Không giữ tồn":<StockWithConversion quantity={quantity} unit={product.unit??""} conversions={conversionsMap.get(product.id)??null} variant="cell"/>}</span></div>{canViewCost&&<div className="flex items-start justify-between gap-2 text-xs"><span className="text-muted-foreground">{isFnbOutletView&&scope==="sku"?"Dự toán BOM":"Giá vốn"}</span><PreparedCost product={product} cost={preparedCosts.get(product.id)} estimate={menuEstimates.get(product.id)} loading={isFnbMenuRecipe(product)?menuEstimatesLoading:preparedCostsLoading}/></div>}{scope==="sku"&&product.hasBom&&!productsWithActiveBom.has(product.id)&&<p className="text-xs text-status-warning">Chưa setup BOM</p>}</div>;
+            const quantity = branchStockView
+              ? (product.branchStock === undefined ? 0 : product.branchStock)
+              : product.stock;
+            return (
+              <div className="min-w-0 space-y-1.5 text-sm">
+                <b className="block break-words">{product.name}</b>
+                <div className="flex flex-wrap justify-between gap-2 text-xs">
+                  <span className="break-all text-primary">{product.code}</span>
+                  {scope === "sku" && <span>Giá bán: {formatCurrency(product.sellPrice)}</span>}
+                </div>
+                <div className="flex flex-wrap justify-between gap-2 text-xs">
+                  <span>{product.categoryName}</span>
+                  <span>{available ? <>≈ {formatNumber(available.available)} {product.unit} có thể pha</>
+                    : branchStockView && product.channel === "fnb" && !product.hasBom ? "Không giữ tồn"
+                    : quantity === null ? <span title="Không có quyền xem tồn kho trong phạm vi này">—</span>
+                    : <StockWithConversion quantity={quantity} unit={product.unit ?? ""} conversions={conversionsMap.get(product.id) ?? null} variant="cell" />}</span>
+                </div>
+                {canViewCost && <div className="flex items-start justify-between gap-2 text-xs">
+                  <span className="text-muted-foreground">{isFnbOutletView && scope === "sku" ? "Dự toán BOM" : "Giá vốn"}</span>
+                  <PreparedCost product={product} cost={preparedCosts.get(product.id)} estimate={menuEstimates.get(product.id)} loading={isFnbMenuRecipe(product) ? menuEstimatesLoading : preparedCostsLoading} />
+                </div>}
+                {scope === "sku" && product.hasBom && !productsWithActiveBom.has(product.id) && <p className="text-xs text-status-warning">Chưa setup BOM</p>}
+              </div>
+            );
           }}
           columns={columns}
           data={data}
@@ -2216,14 +2250,14 @@ export default function HangHoaPage() {
               <ListMetric
                 icon={<Icon name="remove_shopping_cart" size={15} />}
                 label="Hết hàng"
-                value={stats ? formatNumber(stats.outOfStock) : "—"}
+                value={!stats ? "—" : stats.outOfStock === null ? "Chưa đủ dữ liệu" : formatNumber(stats.outOfStock)}
                 loading={!stats}
                 tone={(stats?.outOfStock ?? 0) > 0 ? "danger" : "default"}
               />
               <ListMetric
                 icon={<Icon name="warning" size={15} />}
                 label="Sắp hết (≤ 5)"
-                value={stats ? formatNumber(stats.lowStock) : "—"}
+                value={!stats ? "—" : stats.lowStock === null ? "Chưa đủ dữ liệu" : formatNumber(stats.lowStock)}
                 loading={!stats}
                 tone={(stats?.lowStock ?? 0) > 0 ? "danger" : "default"}
               />
@@ -2267,12 +2301,13 @@ export default function HangHoaPage() {
                 filters={filterChips}
                 onClearAll={filterChips.length > 1 ? clearListFilters : undefined}
               />
+              {hasHiddenStock && <p className="px-3 py-1 text-xs text-muted-foreground">Không hiện tổng tồn vì anh/chị chưa có quyền xem đủ số tồn trong phạm vi này.</p>}
               {stockTotalsByUnit.length > 0 && (
                 <details key={`${activeBranchId ?? "all"}:${scope}`} className="min-w-0 px-3 py-1 text-sm">
                   <summary className="w-fit max-w-full cursor-pointer rounded py-1 text-xs font-medium text-primary outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary pointer-coarse:min-h-11 pointer-coarse:py-3">
                     Xem tổng tồn theo đơn vị
                   </summary>
-                  <p className="mb-2 text-xs text-muted-foreground">Cộng các mã trên trang đang xem, tách riêng từng đơn vị.</p>
+                  <p className="mb-2 text-xs text-muted-foreground">Cộng các mã trên trang đang xem trong phạm vi được phép, tách riêng từng đơn vị.</p>
                   <dl className="mb-1 flex min-w-0 flex-wrap gap-2">
                     {stockTotalsByUnit.map(({ unit, quantity }) => (
                       <div key={unit} className="flex max-w-full items-baseline gap-2 rounded-md border bg-background px-2 py-1">

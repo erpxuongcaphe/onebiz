@@ -17,8 +17,8 @@ const STATES={all:"Tất cả",completed:"Đã thanh toán",pending:"Chờ thanh
 const TYPES:Record<string,string>={dine_in:"Tại quán",takeaway:"Mang về",delivery:"Giao hàng"};
 const PAGE_SIZE=20;
 export function FnbSalesHistoryView({branchId,tenantId,revision,onReprint,onVoid,reprinting,voiding,canVoidPaidBill}:{branchId:string;tenantId?:string;revision:number;onReprint:(id:string)=>Promise<void>;onVoid:(row:FnbSaleRow)=>void;reprinting:string|null;voiding:boolean;canVoidPaidBill:boolean}) {
-  const {hasPermission}=useAuth();
-  const canViewCash=hasPermission(PERMISSIONS.POS_FNB_VIEW_SALES_SUMMARY);
+  const {hasPermissionAtBranch}=useAuth();
+  const canViewCash=hasPermissionAtBranch(PERMISSIONS.POS_FNB_VIEW_SALES_SUMMARY,branchId);
   const [day,setDay]=useState(todayFnb),[search,setSearch]=useState(""),[status,setStatus]=useState<keyof typeof STATES>("all"),[method,setMethod]=useState("all"),[page,setPage]=useState(0);
   const [table,setTable]=useState(""),[area,setArea]=useState("");
   const [history,setHistory]=useState<FnbDayHistory|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState("");
@@ -35,7 +35,7 @@ export function FnbSalesHistoryView({branchId,tenantId,revision,onReprint,onVoid
     finally{await money;if(gen===generation.current)setLoading(false);}
   },[branchId,day,canViewCash]);
   useEffect(()=>{setHistory(null);setCash(null);setSelected(null);setPage(0);setTable("");setArea("");void refresh();return()=>{generation.current+=1;};},[refresh,revision]);
-  useLiveDataRefresh(refresh,tenantId,branchId,["invoices","kitchen_orders","cash_transactions"],true);
+  useLiveDataRefresh(refresh,tenantId,branchId,["invoices","kitchen_orders","dashboard_live_signals"],true);
   useEffect(()=>{
     let stale=false;setItems([]);setItemError("");
     if(!selected)return;

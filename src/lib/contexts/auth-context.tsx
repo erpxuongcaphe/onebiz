@@ -7,6 +7,7 @@ import {
   useCallback,
   useEffect,
   useRef,
+  useMemo,
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
@@ -20,6 +21,12 @@ import { readDeviceBinding } from "@/lib/hooks/use-device-binding";
 import { isInternalAuthEmail } from "@/lib/auth/user-identifiers";
 import { canViewAllBranches, parseAccessibleBranchIds } from "@/lib/auth/branch-scope";
 import { readAuthBootstrap } from "@/lib/auth/bootstrap";
+import {
+  hasPermissionForBranch,
+  permissionsForBranch,
+  permissionWithLegacyAtBranch,
+  permissionWithLegacyFallback,
+} from "@/lib/permissions/branch-permissions";
 
 // --- Types ---
 
@@ -45,6 +52,12 @@ interface AuthContextValue extends AuthState {
   activeBranchId: string | undefined;
   /** Check if current user has a specific permission */
   hasPermission: (code: string) => boolean;
+  /** Resolve permissions for a row's branch, independently of the selected branch. */
+  hasPermissionAtBranch: (code: string, branchId: string | null) => boolean;
+  hasPermissionAtBranchWithLegacy: (code: string, legacyCode: string, branchId: string | null) => boolean;
+  /** Whether a branch is assigned for operational actions (reporting may be broader). */
+  hasAssignedBranchAccess: (branchId: string | null) => boolean;
+  hasPermissionWithLegacy: (code: string, legacyCode: string) => boolean;
   /** Re-fetch profile + tenant + branches. Dùng sau khi user update /ho-so. */
   refreshProfile: () => Promise<void>;
   logout: () => Promise<void>;
@@ -79,8 +92,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [assignedBranchIds, setAssignedBranchIds] = useState<Set<string>>(
+    new Set(),
+  );
   const [currentBranch, setCurrentBranch] = useState<Branch | null>(null);
   const [permissions, setPermissions] = useState<Set<string>>(new Set());
+  const [branchPermissionAdjustments, setBranchPermissionAdjustments] = useState<{branchId:string;code:string;allowed:boolean}[]>([]);
+  const [legacyPermissionDenials, setLegacyPermissionDenials] = useState<string[]>([]);
+  const effectiveBranchPermissions = useMemo(() => permissionsForBranch(permissions,branchPermissionAdjustments,currentBranch?.id ?? null),[permissions,branchPermissionAdjustments,currentBranch?.id]);
   const [isLoading, setIsLoading] = useState(true);
   const [authDataError, setAuthDataError] = useState<string | null>(null);
   const [failedReadVersion, setFailedReadVersion] = useState(0);
@@ -96,8 +115,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAuthDataError(null);
       setTenant(null);
       setBranches([]);
+      setAssignedBranchIds(new Set());
       setCurrentBranch(null);
       setPermissions(new Set());
+      setBranchPermissionAdjustments([]);
+      setLegacyPermissionDenials([]);
       clearProfileCache();
       const timeout = setTimeout(() => {
         if (request !== profileRequestRef.current) return;
@@ -199,8 +221,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           throw new Error("Không tải được quyền chi nhánh.");
         }
         const accessibleIds = parseAccessibleBranchIds(scopeRes.data);
+        setAssignedBranchIds(accessibleIds);
 
         setPermissions(perms);
+        setBranchPermissionAdjustments(bootstrap?.branchPermissionAdjustments ?? []);
+        setLegacyPermissionDenials(bootstrap?.legacyPermissionDenials ?? []);
 
         const tenantData = tenantRes.data;
         if (tenantData) {
@@ -276,6 +301,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(buildFallbackProfile(authUser));
         setPermissions(new Set());
         setBranches([]);
+        setAssignedBranchIds(new Set());
         setCurrentBranch(null);
         setTenant(null);
         clearProfileCache();
@@ -531,8 +557,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
         setTenant(null);
         setBranches([]);
+        setAssignedBranchIds(new Set());
         setCurrentBranch(null);
         setPermissions(new Set());
+        setBranchPermissionAdjustments([]);
+        setLegacyPermissionDenials([]);
         // Reset dedup ref để lần sign-in tiếp theo sẽ load lại
         loadedUserIdRef.current = null;
         // PERF F11: Clear profile cache trong base.ts để service không trả
@@ -667,14 +696,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const activeBranchId = currentBranch?.id;
 
   // Permission check helper
-  const hasPermission = useCallback(
-    (code: string): boolean => {
+  const hasPermissionWithLegacy = useCallback(
+    (code: string, legacyCode?: string): boolean => {
       if (isLoading || authDataError || !user?.isActive) return false;
       if (user?.role === "owner") return true;
-      if (permissions.has("*")) return true;
-      return permissions.has(code);
+      if (effectiveBranchPermissions.has("*")) return true;
+      return permissionWithLegacyFallback(
+        effectiveBranchPermissions, branchPermissionAdjustments,
+        currentBranch?.id ?? null, code, legacyCode, legacyPermissionDenials,
+      );
     },
-    [user?.role, user?.isActive, permissions, isLoading, authDataError]
+    [user?.role, user?.isActive, effectiveBranchPermissions, branchPermissionAdjustments, legacyPermissionDenials, currentBranch?.id, isLoading, authDataError]
+  );
+  // Preserve the single-argument API for Array.some/every callers.
+  const hasPermission = useCallback(
+    (code: string) => hasPermissionWithLegacy(code),
+    [hasPermissionWithLegacy],
+  );
+  const hasPermissionAtBranch = useCallback(
+    (code: string, branchId: string | null): boolean => {
+      if (isLoading || authDataError || !user?.isActive) return false;
+      if (user.role === "owner" || permissions.has("*")) return true;
+      return hasPermissionForBranch(
+        permissions, branchPermissionAdjustments, branchId, code,
+      );
+    },
+    [permissions, branchPermissionAdjustments, user?.role, user?.isActive, isLoading, authDataError],
+  );
+  const hasPermissionAtBranchWithLegacy = useCallback(
+    (code: string, legacyCode: string, branchId: string | null): boolean => {
+      if (isLoading || authDataError || !user?.isActive) return false;
+      if (user.role === "owner" || permissions.has("*")) return true;
+      return permissionWithLegacyAtBranch(permissions, branchPermissionAdjustments, branchId, code, legacyCode, legacyPermissionDenials);
+    },
+    [permissions, branchPermissionAdjustments, legacyPermissionDenials, user?.role, user?.isActive, isLoading, authDataError],
+  );
+  const hasAssignedBranchAccess = useCallback(
+    (branchId: string | null): boolean => {
+      if (isLoading || authDataError || !user?.isActive) return false;
+      return user.role === "owner" ||
+        (branchId !== null && assignedBranchIds.has(branchId));
+    },
+    [assignedBranchIds, user?.role, user?.isActive, isLoading, authDataError],
   );
 
   const logout = useCallback(async () => {
@@ -708,8 +771,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAuthUser(null);
         setUser(null);
         setPermissions(new Set());
+        setBranchPermissionAdjustments([]);
+        setLegacyPermissionDenials([]);
         setTenant(null);
         setBranches([]);
+        setAssignedBranchIds(new Set());
         setCurrentBranch(null);
         clearProfileCache();
         setIsLoading(false);
@@ -750,13 +816,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         tenant,
         branches,
         currentBranch,
-        permissions,
+        permissions: effectiveBranchPermissions,
         isLoading,
         authDataError,
         isAuthenticated: !!authUser,
         switchBranch,
         activeBranchId,
         hasPermission,
+        hasPermissionAtBranch,
+        hasPermissionAtBranchWithLegacy,
+        hasAssignedBranchAccess,
+        hasPermissionWithLegacy,
         refreshProfile,
         logout,
       }}

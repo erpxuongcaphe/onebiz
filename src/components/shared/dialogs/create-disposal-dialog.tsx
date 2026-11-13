@@ -16,7 +16,9 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
+import { usePermissions } from "@/lib/permissions/use-permission";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
+import { getVisibleBranchStock } from "@/lib/services/supabase/product-stock-read";
 import { createDisposalExport } from "@/lib/services/supabase/inventory";
 import { useProductUom } from "@/lib/hooks/use-product-uom";
 import { OperationalQuantityInput, type UnitEntry } from "@/components/shared/operational-quantity-input";
@@ -57,6 +59,8 @@ export function CreateDisposalDialog({
   onSuccess,
 }: CreateDisposalDialogProps) {
   const { toast } = useToast();
+  const { hasPermission } = usePermissions();
+  const canViewCost = hasPermission("products.view_cost");
   const fnbCatalog = useFnbCatalogScope();
   const [code, setCode] = useState("");
   const [productSearch, setProductSearch] = useState("");
@@ -100,29 +104,37 @@ export function CreateDisposalDialog({
     }
 
     const timer = setTimeout(async () => {
-      const supabase = getClient();
-      const ctx = await getCurrentContext();
-      const { data } = await applyFnbCatalogScope(supabase
-        .from("products_scoped")
-        .select("id, code, name, unit, stock, cost_price")
-        .or(`name.ilike.%${productSearch}%,code.ilike.%${productSearch}%`)
-        .eq("tenant_id", currentTenantId ?? ctx.tenantId)
-        .eq("is_active", true), fnbCatalog)
-        .limit(8);
+      try {
+        const supabase = getClient();
+        const ctx = await getCurrentContext();
+        const { data, error } = await applyFnbCatalogScope(supabase
+          .from("products_scoped")
+          .select("id, code, name, unit, cost_price")
+          .or(`name.ilike.%${productSearch}%,code.ilike.%${productSearch}%`)
+          .eq("tenant_id", currentTenantId ?? ctx.tenantId)
+          .eq("is_active", true), fnbCatalog)
+          .limit(8);
 
-      if (cancelled) return;
-      setFilteredProducts((data ?? []).map((p) => ({
-        id: p.id,
-        code: p.code ?? "",
-        name: p.name,
-        unit: p.unit ?? "Cái",
-        stock: Number(p.stock ?? 0),
-        cost_price: Number(p.cost_price ?? 0),
-      })));
+        if (error) throw error;
+        if (cancelled || !data?.length) return;
+        const visible = await getVisibleBranchStock(ctx.branchId, data.map(p => p.id));
+        if (!visible.allowed) throw new Error("Không có quyền xem tồn kho của chi nhánh để tạo phiếu.");
+        if (cancelled) return;
+        setFilteredProducts((data ?? []).map((p) => ({
+          id: p.id,
+          code: p.code ?? "",
+          name: p.name,
+          unit: p.unit ?? "Cái",
+          stock: visible.quantities.get(p.id) ?? 0,
+          cost_price: Number(p.cost_price ?? 0),
+        })));
+      } catch (error) {
+        if (!cancelled) toast({ title: "Không tải được tồn kho", description: error instanceof Error ? error.message : "Vui lòng thử lại.", variant: "error" });
+      }
     }, 300);
 
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [productSearch, currentTenantId, fnbCatalog]);
+  }, [productSearch, currentTenantId, fnbCatalog, toast]);
 
   function addProduct(product: ProductResult) {
     if (items.some((item) => item.product_id === product.id)) return;
@@ -335,10 +347,10 @@ export function CreateDisposalDialog({
                       </div>
                       <OperationalQuantityInput productId={item.product_id} disabled={saving} quantity={item.quantity} unit={item.unit} conversions={units.map.get(item.product_id)} max={item.stock} label={`Số lượng ${item.product_name}`} onChange={(value, entry) => updateQuantity(item.product_id,value,entry)} />
                       <div className="text-right text-sm tabular-nums">
-                        {formatCurrency(item.cost_price)}
+                        {canViewCost ? formatCurrency(item.cost_price) : "Không có quyền"}
                       </div>
                       <div className="text-right text-sm font-bold tabular-nums text-primary">
-                        {formatCurrency(item.quantity * item.cost_price)}
+                        {canViewCost ? formatCurrency(item.quantity * item.cost_price) : "Không có quyền"}
                       </div>
                       <Button
                         variant="ghost"
@@ -372,7 +384,7 @@ export function CreateDisposalDialog({
           <div className="mx-auto grid w-full max-w-[1380px] grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto]">
             <div className="grid gap-2 text-sm sm:grid-cols-3 xl:grid-cols-4">
               <FooterMetric label="Dòng" value={formatNumber(items.length)} />
-              <FooterMetric label="Giá trị hủy" value={formatCurrency(totalValue)} strong />
+              <FooterMetric label="Giá trị hủy" value={canViewCost ? formatCurrency(totalValue) : "Không có quyền"} strong />
               <FooterMetric label="Trạng thái" value="Ghi sổ khi tạo" />
             </div>
             <div className="flex justify-end gap-2">

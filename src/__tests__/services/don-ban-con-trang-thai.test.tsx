@@ -60,7 +60,7 @@ function con(
 async function dung(children: ChildSaleInfo[], fulfilledById?: string) {
   getOrderReconciliation.mockResolvedValue({ children, rows: [] });
   render(
-    <ChildSalesBlock orderId="dh-1" fulfilledById={fulfilledById} />,
+    <ChildSalesBlock orderId="dh-1" fulfilledById={fulfilledById} canCreateSale canProcess />,
   );
   await waitFor(() => expect(getOrderReconciliation).toHaveBeenCalled());
 }
@@ -85,6 +85,13 @@ describe("donConDungDuoc — quy tắc gốc", () => {
 });
 
 describe("Nút Hoàn tất xử lý chỉ bật khi có đơn con dùng được", () => {
+  it("hides creation and processing actions when the branch does not allow them", async () => {
+    getOrderReconciliation.mockResolvedValue({ children: [con("c1", "HD001", "completed")], rows: [] });
+    render(<ChildSalesBlock orderId="dh-1" canCreateSale={false} canProcess={false} />);
+    await waitFor(() => expect(getOrderReconciliation).toHaveBeenCalled());
+    expect(screen.queryByRole("button", { name: /Tạo thêm đơn bán/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Hoàn tất xử lý/ })).not.toBeInTheDocument();
+  });
   it("chỉ có đơn NHÁP: nút TẮT, không gọi RPC", async () => {
     await dung([con("c1", "NH001", "draft")]);
     expect(nutHoanTat().disabled).toBe(true);

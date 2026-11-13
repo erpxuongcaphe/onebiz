@@ -41,9 +41,9 @@ function ReportPanel({ enabled, value, children }: { enabled: boolean; value: st
 
 export default function LuongTienPage() {
   const { activeBranchId, branchLabel, branches, isReady } = useBranchFilter();
-  const { tenant, hasPermission, activeBranchId: operatingBranchId } = useAuth();
+  const { tenant, hasPermissionAtBranch, activeBranchId: operatingBranchId } = useAuth();
   const { toast } = useToast();
-  const canViewCashBook = hasPermission(PERMISSIONS.FINANCE_VIEW_CASH_BOOK);
+  const canViewCashBook = hasPermissionAtBranch(PERMISSIONS.FINANCE_VIEW_CASH_BOOK, activeBranchId ?? null);
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } = useReportState({ defaultPreset: "thisYear", defaultViewMode: "table" });
   const [data, setData] = useState<CashWorkspace | null>(null);
   const [loadedScope, setLoadedScope] = useState("");

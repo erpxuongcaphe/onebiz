@@ -1,5 +1,4 @@
 import { getClient, getCurrentContext, handleError } from "./base";
-import { readHistoryPages } from "./read-history-pages";
 import { cancelInvoice, voidCompletedInvoice } from "./invoices";
 
 export interface InvoiceCancelPreview {
@@ -8,8 +7,20 @@ export interface InvoiceCancelPreview {
   refund: number; stockMovements: number;
 }
 export interface InvoiceCancelResult { id: string; code: string; ok: boolean; message: string }
-export interface InvoiceCancelPermissions { fnb: boolean; retail: boolean }
-export function canCancelInvoice(row: Pick<InvoiceCancelPreview, "source">, permissions: InvoiceCancelPermissions) {
+export interface InvoiceCancelPermissions {
+  fnb: boolean;
+  retail: boolean;
+  forInvoice?: (
+    row: Pick<InvoiceCancelPreview, "source"> &
+      Partial<Pick<InvoiceCancelPreview, "branchId" | "status">>,
+  ) => boolean;
+}
+export function canCancelInvoice(
+  row: Pick<InvoiceCancelPreview, "source"> &
+    Partial<Pick<InvoiceCancelPreview, "branchId" | "status">>,
+  permissions: InvoiceCancelPermissions,
+) {
+  if (permissions.forInvoice) return permissions.forInvoice(row);
   return row.source === "fnb" ? permissions.fnb : permissions.retail;
 }
 function selection(ids: string[]) {
@@ -18,36 +29,41 @@ function selection(ids: string[]) {
   return unique;
 }
 /** Tenant/RLS scoped, original ledgers rather than current BOM estimates. */
-export async function previewInvoiceBulkCancel(ids: string[]): Promise<InvoiceCancelPreview[]> {
+export async function previewInvoiceBulkCancel(ids: string[], permissions: InvoiceCancelPermissions): Promise<InvoiceCancelPreview[]> {
   const selected = selection(ids), db = getClient(), ctx = await getCurrentContext();
   const { data, error } = await db.from("invoices")
     .select("id,code,status,source,branch_id,total,paid,debt,payment_method")
     .eq("tenant_id", ctx.tenantId).is("deleted_at", null).in("id", selected);
   if (error) handleError(error, "previewInvoiceBulkCancel");
   if (!data || data.length !== selected.length) throw new Error("Có hóa đơn đã thay đổi hoặc ngoài phạm vi được xem. Tải lại danh sách.");
-  const [cash, movements] = await Promise.all([
-    readHistoryPages<{ id: string; reference_id: string | null; amount: number }>(async (offset, size) => {
-      const result = await db.from("cash_transactions").select("id,reference_id,amount", { count: "exact" })
-        .eq("tenant_id", ctx.tenantId).in("reference_id", selected)
-        .eq("reference_type", "invoice").eq("type", "receipt").eq("status", "completed")
-        .order("id").range(offset, offset + size - 1);
-      return { ...result, data: result.data as { id: string; reference_id: string | null; amount: number }[] | null };
-    }),
-    readHistoryPages<{ id: string; reference_id: string | null }>(async (offset, size) => {
-      return await db.from("stock_movements_scoped").select("id,reference_id", { count: "exact" })
-        .eq("tenant_id", ctx.tenantId).in("reference_id", selected).eq("type", "out")
-        .in("reference_type", ["invoice", "bom_consume", "modifier_topping"])
-        .order("id").range(offset, offset + size - 1);
-    }),
-  ]);
+  const authorizedIds = data.filter(row => ["completed", "draft", "confirmed"].includes(row.status) && canCancelInvoice({
+    source: row.source ?? "", branchId: row.branch_id ?? "", status: row.status,
+  }, permissions)).map(row => row.id);
+  type Totals = { invoice_id: string; refund: number | string | null; stock_movements: number | string | null };
+  let totals: Totals[] = [];
+  if (authorizedIds.length) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await (db as any).rpc("get_invoice_cancel_preview_totals", { p_invoice_ids: authorizedIds });
+    if (result.error) handleError(result.error, "previewInvoiceBulkCancel:totals");
+    const rows = result.data as Totals[] | null;
+    if (!Array.isArray(rows) || rows.length !== authorizedIds.length ||
+      new Set(rows.map(row => row.invoice_id)).size !== authorizedIds.length ||
+      rows.some(row => !authorizedIds.includes(row.invoice_id) || row.refund == null || row.stock_movements == null ||
+        (typeof row.refund !== "number" && (typeof row.refund !== "string" || row.refund.trim() === "")) ||
+        (typeof row.stock_movements !== "number" && (typeof row.stock_movements !== "string" || row.stock_movements.trim() === "")) ||
+        !Number.isFinite(Number(row.refund)) || !Number.isSafeInteger(Number(row.stock_movements)) || Number(row.stock_movements) < 0)) {
+      throw new Error("Chưa xác nhận được tổng khoản thu và xuất kho. Vui lòng tải lại.");
+    }
+    totals = rows;
+  }
   const byId = new Map(data.map(row => [row.id, row]));
   return selected.map(id => {
     const row = byId.get(id)!;
     return { id, code: row.code, status: row.status, source: row.source ?? "",
       branchId: row.branch_id ?? "", total: Number(row.total ?? 0),
       paid: Number(row.paid ?? 0), debt: Number(row.debt ?? 0), paymentMethod: row.payment_method ?? "cash",
-      refund: cash.filter(item => item.reference_id === id).reduce((sum, item) => sum + Number(item.amount), 0),
-      stockMovements: movements.filter(item => item.reference_id === id).length };
+      refund: Number(totals.find(item => item.invoice_id === id)?.refund ?? 0),
+      stockMovements: Number(totals.find(item => item.invoice_id === id)?.stock_movements ?? 0) };
   });
 }
 export function invoiceCancelFingerprint(row: InvoiceCancelPreview) {
@@ -63,7 +79,7 @@ export async function executeInvoiceBulkCancel(
   selection(preview.map(row => row.id));
   if (reason.trim().length < 3) throw new Error("Nhập lý do hủy ít nhất 3 ký tự.");
   if (new Set(preview.map(row => row.id)).size !== preview.length) throw new Error("Danh sách có hóa đơn trùng.");
-  const current = await dependencies.preview(preview.map(row => row.id));
+  const current = await dependencies.preview(preview.map(row => row.id), permissions);
   if (current.length !== preview.length || preview.some(row => {
     const fresh = current.find(item => item.id === row.id);
     return !fresh || invoiceCancelFingerprint(fresh) !== invoiceCancelFingerprint(row);

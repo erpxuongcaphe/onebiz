@@ -109,7 +109,10 @@ function ShippingOrderDetail({
   onStatusChanged: () => void;
 }) {
   const status = statusMap[order.status];
-  const nextStatuses = getNextShippingStatuses(order.status);
+  const rowPermissions = useTxRowPermissions("shipping").forBranch(order.branchId);
+  const nextStatuses = getNextShippingStatuses(order.status).filter((next) =>
+    next === "cancelled" ? rowPermissions.canCancel : rowPermissions.canEdit,
+  );
   const [busy, setBusy] = useState(false);
   const [logs, setLogs] = useState<AuditLogEntry[] | null>(null);
   const [logsLoading, setLogsLoading] = useState(true);
@@ -134,7 +137,7 @@ function ShippingOrderDetail({
   }, [loadLogs]);
 
   const executeTransition = async (next: ShippingStatus) => {
-    if (busy) return;
+    if (busy || !nextStatuses.includes(next)) return;
     setBusy(true);
     try {
       await updateShippingOrderStatus(order.id, next);
@@ -801,7 +804,7 @@ export default function VanDonPage() {
           buildTransactionRowActions({
             row,
             kind: "shipping",
-            permissions: txPerms,
+            permissions: txPerms.forBranch(row.branchId),
             // Xem chi tiết — toggle inline detail
             onView: () => {
               const idx = data.findIndex((d) => d.id === row.id);

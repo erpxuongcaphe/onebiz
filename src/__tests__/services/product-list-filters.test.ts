@@ -2,14 +2,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   rows: [] as Record<string, unknown>[], queries: [] as { table: string; calls: [string, unknown[]][] }[],
-  failOffset: -1, changedCountOffset: -1,
+  failOffset: -1, changedCountOffset: -1, stockAllowed: true, stockRows: [] as { product_id: string; quantity: number }[],
 }));
 vi.mock("@/lib/services/supabase/stock-valuation", () => ({ getStockValuations: vi.fn().mockResolvedValue([]) }));
 vi.mock("@/lib/services/supabase/base", () => ({
   getCurrentTenantId: vi.fn().mockResolvedValue("test-tenant"),
   getPaginationRange: ({ page = 0, pageSize = 50 }) => ({ from: page * pageSize, to: (page + 1) * pageSize - 1 }),
   handleError: (error: { message: string }) => { throw new Error(error.message); },
-  getClient: () => ({ from: (table: string) => {
+  getClient: () => ({ rpc: async () => ({ data: { allowed: state.stockAllowed, rows: state.stockRows }, error: null }), from: (table: string) => {
     const record = { table, calls: [] as [string, unknown[]][] };
     state.queries.push(record);
     let from = 0, to = 49;
@@ -27,7 +27,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
     return query;
   } }),
 }));
-import { getAllMatchingProductIds, getProducts, getProductsForExport } from "@/lib/services/supabase/products";
+import { getAllMatchingProductIds, getProducts, getProductsForExport, getProductStats } from "@/lib/services/supabase/products";
 
 const params = {
   page: 0, pageSize: 50, branchId: "test-branch", search: "TEST", searchField: "code" as const,
@@ -39,9 +39,34 @@ beforeEach(() => {
   state.queries = [];
   state.failOffset = -1;
   state.changedCountOffset = -1;
+  state.stockAllowed = true;
+  state.stockRows = [];
 });
 
 describe("product list filters", () => {
+  it("does not turn hidden branch stock into false out-of-stock counts or valuation", async () => {
+    state.rows = [{ id: "one", stock: null, cost_price: 1, branch_stock: [], inventory_role: "retail_stock_item" }];
+    state.stockAllowed = false;
+    expect(await getProductStats("sku", { branchId: "test-branch" })).toMatchObject({ outOfStock: null, lowStock: null, stockValueComplete: false });
+    state.stockAllowed = true;
+    expect(await getProductStats("sku", { branchId: "test-branch" })).toMatchObject({ outOfStock: 1, lowStock: 0 });
+    expect(await getProductStats("sku")).toMatchObject({ outOfStock: null, lowStock: null, stockValueComplete: false });
+  });
+  it("distinguishes hidden stock from an authorized missing row", async () => {
+    state.rows = [{ id: "one", code: "A", name: "A", stock: null }];
+    state.stockAllowed = false;
+    expect((await getProducts(params)).data[0].branchStock).toBeNull();
+    state.stockAllowed = true;
+    expect((await getProducts(params)).data[0].branchStock).toBeUndefined();
+    state.stockRows = [{ product_id: "one", quantity: 12 }];
+    expect((await getProducts(params)).data[0].branchStock).toBe(12);
+  });
+  it("refuses branch stock filters when that branch is hidden", async () => {
+    state.stockAllowed = false;
+    const filtered = { ...params, filters: { ...params.filters, stock: "out_of_stock" } };
+    await expect(getProducts(filtered)).rejects.toThrow("không có quyền lọc tồn kho");
+    await expect(getAllMatchingProductIds(filtered)).rejects.toThrow("không có quyền lọc tồn kho");
+  });
   it("uses the same linked supplier, search, branch and Vietnam dates for list and selection", async () => {
     await getProducts(params);
     await getAllMatchingProductIds(params);

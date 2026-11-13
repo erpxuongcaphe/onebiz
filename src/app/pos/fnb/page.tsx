@@ -236,7 +236,7 @@ const EMPTY_PRODUCTS: FnbProduct[] = [];
 const EMPTY_PLATFORM_PRICES: FnbCatalog["platformPrices"] = {};
 
 function FnbPosPageInner() {
-  const { user, tenant, currentBranch, branches, isLoading: authLoading, hasPermission } = useAuth();
+  const { user, tenant, currentBranch, branches, isLoading: authLoading, hasPermission, hasPermissionWithLegacy } = useAuth();
   const { toast } = useToast();
   const { settings } = useSettings();
   const networkStatus = useNetworkStatus();
@@ -506,12 +506,11 @@ function FnbPosPageInner() {
     return () => { tableRefreshGeneration.current += 1; };
   }, [refreshLiveTables, tenantId, branchId, isOnline]);
   const canCancelUnpaidOrder =
-    hasPermission(PERMISSIONS.POS_FNB_CANCEL_UNPAID_ORDER) ||
-    hasPermission(PERMISSIONS.POS_FNB_VOID);
+    hasPermissionWithLegacy(PERMISSIONS.POS_FNB_CANCEL_UNPAID_ORDER, PERMISSIONS.POS_FNB_VOID);
   // Day 1 16/05: Tách permission void bill ĐÃ thanh toán riêng — không gộp với
   // "cancel_unpaid_order" vì void paid phải hoàn kho + tạo phiếu chi.
   const canManageTables = hasPermission(PERMISSIONS.POS_FNB_MANAGE_TABLES);
-  const canMergeBills = canManageTables || hasPermission(PERMISSIONS.POS_FNB_MERGE_BILLS);
+  const canMergeBills = hasPermissionWithLegacy(PERMISSIONS.POS_FNB_MERGE_BILLS, PERMISSIONS.POS_FNB_MANAGE_TABLES);
   const canTransferTables = hasPermission(PERMISSIONS.POS_FNB_TRANSFER_TABLE);
   const canCheckout = hasPermission(PERMISSIONS.POS_FNB_CHECKOUT);
   const canSplitBill = hasPermission(PERMISSIONS.POS_FNB_SPLIT_BILL);
@@ -520,8 +519,7 @@ function FnbPosPageInner() {
     ? billAuditHref(branchId, pos.activeTab?.kitchenOrderId, openOrders.orders.find(order => order.id === pos.activeTab?.kitchenOrderId)?.orderNumber ?? pos.activeTab?.label ?? "Bill đang xem")
     : undefined;
   const canVoidPaidBill =
-    hasPermission(PERMISSIONS.POS_FNB_VOID_PAID_BILL) ||
-    hasPermission(PERMISSIONS.POS_FNB_VOID);
+    hasPermissionWithLegacy(PERMISSIONS.POS_FNB_VOID_PAID_BILL, PERMISSIONS.POS_FNB_VOID);
 
   const [catalogRefreshRevision, setCatalogRefreshRevision] = useState(0);
   const refreshLiveCatalog = useCallback(() => setCatalogRefreshRevision(value => value + 1), []);

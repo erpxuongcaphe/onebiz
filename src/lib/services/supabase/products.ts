@@ -13,6 +13,7 @@ import { getRecordedMovementPrices } from "@/lib/stock-movement-values";
 import { getStockValuations } from "./stock-valuation";
 import { readHistoryPages } from "./read-history-pages";
 import { getFnbUnavailableProductIds, listFnbProductBranchMenuScopes } from "./fnb-product-branch-menu";
+import { getVisibleBranchStock } from "./product-stock-read";
 
 // Apply branch menu status in SQL before count/range, never after pagination.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -133,6 +134,9 @@ export async function getProducts(params: QueryParams): Promise<QueryResult<Prod
   const unavailable = branchId && params.filters?.channel === "fnb"
     ? getFnbUnavailableProductIds(await listFnbProductBranchMenuScopes(tenantId), branchId) : [];
   const hasStockFilter = Boolean(params.filters?.stock);
+  if (branchId && hasStockFilter && !(await getVisibleBranchStock(branchId, [])).allowed) {
+    throw new Error("Anh/chị không có quyền lọc tồn kho tại chi nhánh này.");
+  }
   const supplierJoin = supplierNameFilter(params.filters) ? "!inner" : "";
   const selectCols =
     `*, categories!products_category_id_fkey(name, code), suppliers!products_supplier_id_fkey${supplierJoin}(name)` +
@@ -236,12 +240,27 @@ export async function getProducts(params: QueryParams): Promise<QueryResult<Prod
     return product;
   });
   if (branchId) {
-    const values = new Map((await getStockValuations(products.map(product => product.id), [branchId]))
+    const missing = products.filter(product => product.branchStock === undefined);
+    const stockBatches: Array<Promise<{ allowed: boolean; quantities: Map<string, number> }>> = [];
+    for (let offset = 0; offset < missing.length; offset += 1000) {
+      const batch = missing.slice(offset, offset + 1000);
+      stockBatches.push(getVisibleBranchStock(branchId, batch.map(product => product.id)));
+    }
+    const [visibleBatches, valuations] = await Promise.all([
+      Promise.all(stockBatches),
+      getStockValuations(products.map(product => product.id), [branchId]),
+    ]);
+    for (const [index, visible] of visibleBatches.entries()) {
+      for (const product of missing.slice(index * 1000, (index + 1) * 1000)) {
+        product.branchStock = visible.allowed ? visible.quantities.get(product.id) : null;
+      }
+    }
+    const values = new Map(valuations
       .map(value => [value.productId, value]));
     for (const product of products) {
       const value = values.get(product.id);
       if (value?.complete && value.unitCost != null) product.costPrice = value.unitCost;
-      product.stockValue = value?.value ?? ((product.branchStock ?? 0) === 0 ? 0 : null);
+      product.stockValue = product.branchStock === null ? null : value?.value ?? ((product.branchStock ?? 0) === 0 ? 0 : null);
       product.stockValuationComplete = product.stockValue !== null;
     }
   }
@@ -273,6 +292,9 @@ export async function getAllMatchingProductIds(params: QueryParams): Promise<str
   const unavailable = branchId && params.filters?.channel === "fnb"
     ? getFnbUnavailableProductIds(await listFnbProductBranchMenuScopes(tenantId), branchId) : [];
   const hasStockFilter = Boolean(params.filters?.stock);
+  if (branchId && hasStockFilter && !(await getVisibleBranchStock(branchId, [])).allowed) {
+    throw new Error("Anh/chị không có quyền lọc tồn kho tại chi nhánh này.");
+  }
   const supplierJoin = supplierNameFilter(params.filters)
     ? ", suppliers!products_supplier_id_fkey!inner(name)" : "";
   const industryScope = branchId ? await getBranchIndustryScope(supabase, tenantId, branchId) : undefined;
@@ -378,8 +400,8 @@ export async function getProductStats(
   totalCount: number;
   stockValue: number;
   stockValueComplete: boolean;
-  outOfStock: number;
-  lowStock: number;
+  outOfStock: number | null;
+  lowStock: number | null;
 }> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
@@ -418,8 +440,24 @@ export async function getProductStats(
   let outOfStock = 0;
   let lowStock = 0;
   let stockValueComplete = true;
-  const values = branchId ? new Map((await getStockValuations((data ?? []).map((row: { id: string }) => row.id), [branchId]))
-    .map(value => [value.productId, value])) : null;
+  let countsComplete = true;
+  const missing = branchId ? (data ?? []).filter((row: { inventory_role?: string; branch_stock?: Array<{ quantity: number | null }> }) =>
+    row.inventory_role !== "fnb_menu_item" && row.branch_stock?.[0]?.quantity == null) : [];
+  const requests: Array<Promise<{ allowed: boolean; quantities: Map<string, number> }>> = [];
+  if (branchId) for (let offset = 0; offset < missing.length; offset += 1000) {
+    requests.push(getVisibleBranchStock(branchId, missing.slice(offset, offset + 1000).map((row: { id: string }) => row.id)));
+  }
+  const [visibility, valuations] = await Promise.all([
+    Promise.all(requests),
+    branchId ? getStockValuations((data ?? []).map((row: { id: string }) => row.id), [branchId]) : Promise.resolve(null),
+  ]);
+  const missingValues = new Map<string, number | null>();
+  for (const [index, result] of visibility.entries()) {
+    for (const row of missing.slice(index * 1000, (index + 1) * 1000) as Array<{ id: string }>) {
+      missingValues.set(row.id, result.allowed ? result.quantities.get(row.id) ?? 0 : null);
+    }
+  }
+  const values = valuations ? new Map(valuations.map(value => [value.productId, value])) : null;
 
   for (const row of data ?? []) {
     // A2 (07/07): món menu F&B (fnb_menu_item) KHÔNG giữ tồn → bỏ khỏi giá trị
@@ -429,12 +467,19 @@ export async function getProductStats(
       continue;
     }
     const typedRow = row as {
+      id: string;
       stock: number | null;
       branch_stock?: Array<{ quantity: number | null }>;
     };
-    const stock = branchId
-      ? Number(typedRow.branch_stock?.[0]?.quantity ?? 0)
-      : Number(typedRow.stock ?? 0);
+    const rawStock = branchId
+      ? typedRow.branch_stock?.[0]?.quantity ?? missingValues.get(typedRow.id) ?? null
+      : typedRow.stock;
+    if (rawStock == null || !Number.isFinite(Number(rawStock))) {
+      countsComplete = false;
+      stockValueComplete = false;
+      continue;
+    }
+    const stock = Number(rawStock);
     const cost = Number((row as { cost_price: number | null }).cost_price ?? 0);
     const valuation = values?.get((row as { id: string }).id);
     stockValue += values ? valuation?.value ?? 0 : stock * cost;
@@ -447,8 +492,8 @@ export async function getProductStats(
     totalCount: count ?? 0,
     stockValue,
     stockValueComplete,
-    outOfStock,
-    lowStock,
+    outOfStock: countsComplete ? outOfStock : null,
+    lowStock: countsComplete ? lowStock : null,
   };
 }
 
@@ -1192,22 +1237,18 @@ export async function getStockCard(
   // 3) Tồn hệ thống hiện tại để đối soát drift.
   let systemStock = 0;
   if (branchId) {
-    const { data: bs } = await supabase
-      .from("branch_stock")
-      .select("quantity")
-      .eq("tenant_id", tenantId)
-      .eq("product_id", productId)
-      .eq("branch_id", branchId)
-      .is("variant_id", null)
-      .maybeSingle();
-    systemStock = Number((bs as { quantity?: number } | null)?.quantity ?? 0);
+    const visible = await getVisibleBranchStock(branchId, [productId]);
+    if (!visible.allowed) throw new Error("Không có quyền xem tồn kho tại chi nhánh này.");
+    systemStock = visible.quantities.get(productId) ?? 0;
   } else {
-    const { data: pr } = await supabase
+    const { data: pr, error } = await supabase
       .from("products_scoped")
       .select("stock")
       .eq("id", productId)
       .maybeSingle();
-    systemStock = Number((pr as { stock?: number } | null)?.stock ?? 0);
+    if (error) handleError(error, "getStockCard.stock");
+    if (pr?.stock == null) throw new Error("Không có quyền xem tổng tồn trong phạm vi này.");
+    systemStock = Number(pr.stock);
   }
 
   // 4) Enrich (đối tác + mã chứng từ thật) + đảo MỚI TRÊN CÙNG cho hiển thị.

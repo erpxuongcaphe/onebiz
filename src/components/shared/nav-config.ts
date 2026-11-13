@@ -163,12 +163,12 @@ export const sidebarNavGroups: SidebarGroup[] = [
       { label: "Tồn kho", href: "/hang-hoa/ton-kho", icon: "warehouse", permission: "inventory.view" },
       { label: "Lịch sử kho", href: "/hang-hoa/lich-su-kho", icon: "history", permission: "inventory.view" },
       // ── Weekly ──
-      { label: "Kiểm kho", href: "/hang-hoa/kiem-kho", icon: "fact_check", permission: "inventory.view" },
+      { label: "Kiểm kho", href: "/hang-hoa/kiem-kho", icon: "fact_check", permissions: ["inventory.view", "inventory.check", "inventory.edit_check", "inventory.cancel_check"] },
       { label: "Hạn sử dụng", href: "/hang-hoa/hsd", icon: "event_note", permission: "inventory.view" },
-      { label: "Chuyển kho", href: "/hang-hoa/chuyen-kho", icon: "swap_horiz", permission: "inventory.view" },
+      { label: "Chuyển kho", href: "/hang-hoa/chuyen-kho", icon: "swap_horiz", permissions: ["inventory.view", "inventory.transfer"] },
       // ── Occasionally / Rare ──
-      { label: "Xuất dùng nội bộ", href: "/hang-hoa/xuat-dung-noi-bo", icon: "inventory", permission: "inventory.view" },
-      { label: "Xuất hủy", href: "/hang-hoa/xuat-huy", icon: "delete", permission: "inventory.view" },
+      { label: "Xuất dùng nội bộ", href: "/hang-hoa/xuat-dung-noi-bo", icon: "inventory", permissions: ["inventory.view", "inventory.internal_export"] },
+      { label: "Xuất hủy", href: "/hang-hoa/xuat-huy", icon: "delete", permissions: ["inventory.view", "inventory.dispose"] },
     ],
   },
 

@@ -1,0 +1,293 @@
+import { readFile } from "node:fs/promises";
+import { pathToFileURL } from "node:url";
+import assert from "node:assert/strict";
+import { initializeStaffAccessFixture } from "./staff-access-tests/fixture.mjs";
+import { functionFromMigration } from "./staff-access-tests/inventory.mjs";
+const { PGlite } = await import(
+  process.env.ONEBIZ_PGLITE_MODULE
+    ? pathToFileURL(process.env.ONEBIZ_PGLITE_MODULE).href
+    : "@electric-sql/pglite"
+);
+const db = new PGlite();
+const id = (n) => `00000000-0000-0000-0000-${String(n).padStart(12, "0")}`;
+const sqlFile = (name) =>
+  readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), "utf8");
+let checks = 0;
+try {
+  await initializeStaffAccessFixture(db, id);
+  await db.exec(await sqlFile("20261111052704_staff_branch_access.sql"));
+  await db.exec(
+    await functionFromMigration(
+      "20261111070229_staff_branch_checkout_permissions.sql",
+      "_staff_permission_at_scope",
+    ),
+  );
+  await db.exec(`alter table branches add column branch_type text default 'store',add column legal_tax_code text;
+ create schema private;
+ create function private.store_branch_legal_key(text) returns text language sql immutable as $$select $1$$;
+ create function _can_read_branch_inventory_00476(p_user uuid,p_tenant uuid,p_branch uuid) returns boolean language sql as $$select public.user_has_branch_access(p_user,p_branch) or public.user_has_permission(p_user,'reports.view_all_branches')$$;
+ create function can_read_branch_document_00567(p_tenant uuid,p_branch uuid) returns boolean language sql as $$select public._can_read_branch_inventory_00476(auth.uid(),p_tenant,p_branch)$$;
+ insert into user_branches(user_id,branch_id) values('${id(101)}','${id(11)}');
+ select set_config('request.jwt.claim.sub','${id(101)}',false);`);
+  for (const [file, name] of [
+    [
+      "00513_inventory_operational_read_projections.sql",
+      "assert_report_access",
+    ],
+    [
+      "202610200007_operational_sales_dashboard.sql",
+      "get_operational_sales_dashboard",
+    ],
+    [
+      "202610200006_fnb_sales_summary_permission.sql",
+      "get_fnb_day_sales_summary",
+    ],
+    ["00342_invoice_list_only_sales_documents.sql", "get_invoice_list_summary"],
+    [
+      "202610230005_fnb_invoice_service_filters.sql",
+      "get_invoice_list_summary_fnb_context_20261023",
+    ],
+    [
+      "202610230008_fnb_invoice_option_filters.sql",
+      "get_invoice_list_summary_fnb_choices_20261023",
+    ],
+  ])
+    await db.exec(await functionFromMigration(file, name));
+  const summaryGuard = await sqlFile(
+    "202610200006_fnb_sales_summary_permission.sql",
+  );
+  await db.exec(summaryGuard.slice(summaryGuard.indexOf("do $guard$")));
+  await db.exec(
+    await readFile(
+      new URL(
+        "./staff-access-tests/report-contract-fixtures.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  );
+  // Optional local private audit export; never checked into the public repository.
+  if (process.env.ONEBIZ_REPORT_AUDIT_FILE) {
+    const names = new Set([
+      "assert_report_access",
+      "get_operational_sales_dashboard",
+      "report_cogs_by_bom",
+      "get_delivery_invoice_management_v1",
+      "get_store_direct_bank_cash_links",
+      "get_store_finance_reporting_source",
+      "get_company_cash_receipt_audit_v1",
+      "get_store_sales_day_collections",
+      "get_fnb_day_sales_summary",
+      "get_invoice_list_summary",
+      "get_invoice_list_summary_fnb_context_20261023",
+      "get_invoice_list_summary_fnb_choices_20261023",
+    ]);
+    const rows = JSON.parse(
+      await readFile(process.env.ONEBIZ_REPORT_AUDIT_FILE, "utf8"),
+    ).filter((f) => names.has(f.proname));
+    assert.equal(rows.length, names.size);
+    for (const row of rows) await db.exec(row.definition + ";");
+  }
+  await db.exec(
+    await sqlFile("20261111094222_staff_branch_report_permissions.sql"),
+  );
+  const codes = [
+    "reports.dashboard",
+    "reports.analytics",
+    "reports.fnb",
+    "reports.view_profit",
+    "reports.view_detail",
+    "reports.export",
+    "reports.export_detail",
+    "pos_fnb.view_sales_summary",
+  ];
+  await db.exec(
+    `insert into role_permissions values('${id(20)}','reports.view_all_branches'),('${id(20)}','pos_fnb.view_sales_summary'),('${id(20)}','products.view_cost'),('${id(20)}','finance.view_cash_book'),('${id(20)}','finance.view_cash_journal_company');`,
+  );
+  for (const code of codes) {
+    await db.query("insert into role_permissions values($1,$2)", [
+      id(20),
+      code,
+    ]);
+    await db.query("select assert_report_access($1,null)", [code]);
+    checks++;
+    await db.query(
+      "insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values($1,$2,$3,$4,'revoke',$5)",
+      [id(1), id(101), id(10), code, id(100)],
+    );
+    await assert.rejects(
+      db.query("select assert_report_access($1,$2)", [code, id(10)]),
+      /REPORT_PERMISSION_DENIED/,
+    );
+    checks++;
+    await assert.rejects(
+      db.query("select assert_report_access($1,null)", [code]),
+      /REPORT_PERMISSION_DENIED/,
+    );
+    checks++;
+    await db.query("select assert_report_access($1,$2)", [code, id(11)]);
+    checks++;
+    await db.query("delete from role_permissions where permission_code=$1", [
+      code,
+    ]);
+    await db.query(
+      "insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values($1,$2,$3,$4,'grant',$5)",
+      [id(1), id(101), id(11), code, id(100)],
+    );
+    await db.query("select assert_report_access($1,$2)", [code, id(11)]);
+    checks++;
+    await assert.rejects(
+      db.query("select assert_report_access($1,$2)", [code, id(12)]),
+      /REPORT_(PERMISSION|BRANCH)_DENIED/,
+    );
+    checks++;
+  }
+  for (const sql of [
+    `select get_operational_sales_dashboard('${id(10)}',null,null)`,
+    `select get_delivery_invoice_management_v1('${id(10)}',current_date,current_date)`,
+    `select get_store_direct_bank_cash_links('{}')`,
+    `select get_store_finance_reporting_source('fund',current_date,current_date,'${id(10)}')`,
+    `select get_company_cash_receipt_audit_v1('${id(10)}',current_date,current_date)`,
+    `select get_store_sales_day_collections('${id(10)}',current_date)`,
+    `select get_fnb_day_sales_summary('${id(10)}',current_date)`,
+    `select get_invoice_list_summary('${id(10)}')`,
+    `select get_invoice_list_summary_fnb_context_20261023('${id(10)}')`,
+    `select get_invoice_list_summary_fnb_choices_20261023('${id(10)}')`,
+    `select * from report_cogs_by_bom(current_date,current_date,'${id(10)}')`,
+  ]) {
+    await assert.rejects(db.query(sql), (e) => e.code === "42501");
+    checks++;
+  }
+  await assert.rejects(
+    db.query(`select get_operational_sales_dashboard('${id(11)}',null,null)`),
+    /DASHBOARD_RANGE_INVALID/,
+  );
+  checks++;
+  await db.exec(`create table invoices(id uuid,tenant_id uuid,branch_id uuid,source text,deleted_at timestamptz,status text,total numeric,ngay_chung_tu timestamptz);
+ create table cash_transactions(tenant_id uuid,branch_id uuid,reference_id uuid,reference_type text,status text,type text,payment_method text,amount numeric,transaction_date date);
+ alter table kitchen_orders add column status text,add column invoice_id uuid,add column merged_into_id uuid,add column created_at timestamptz;
+ insert into invoices values('${id(80)}','${id(1)}','${id(10)}','fnb',null,'completed',999,current_timestamp),('${id(81)}','${id(1)}','${id(11)}','fnb',null,'completed',100,current_timestamp);`);
+  const summary = (
+    await db.query(
+      `select get_fnb_day_sales_summary('${id(11)}',(now() at time zone 'Asia/Ho_Chi_Minh')::date) value`,
+    )
+  ).rows[0].value;
+  assert.equal(summary.invoiceValue, 100);
+  assert.equal(summary.completed, 1);
+  checks += 2;
+  await db.query(
+    "insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type) values($1,$2,'reports.analytics','revoke')",
+    [id(1), id(101)],
+  );
+  await assert.rejects(
+    db.query("select assert_report_access($1,$2)", [
+      "reports.analytics",
+      id(11),
+    ]),
+    /REPORT_PERMISSION_DENIED/,
+  );
+  checks++;
+  // Exercise actual browser DB privileges, not only the database owner used
+  // for fixture setup. Invoice summary functions deliberately remain invoker.
+  await db.exec(`alter table invoices add column code text,add column created_at timestamptz,add column customer_name text,add column discount_amount numeric,add column promotion_discount numeric,add column issued_at timestamptz,add column order_code text;
+   alter table kitchen_orders add column order_type text;
+   create table shipping_orders(invoice_id uuid,tenant_id uuid);
+   create function get_user_accessible_branches(uuid) returns table(branch_id uuid) language sql set search_path=public as $$select b.id from public.branches b where public.user_has_branch_access($1,b.id)$$;`);
+  await db.exec(
+    "grant usage on schema auth to authenticated; grant select on all tables in schema public to authenticated; set role authenticated",
+  );
+  assert.equal(
+    (
+      await db.query(
+        `select _staff_report_permission('${id(101)}','pos_fnb.view_sales_summary','${id(11)}') allowed`,
+      )
+    ).rows[0].allowed,
+    true,
+  );
+  checks++;
+  assert.equal(
+    (
+      await db.query(
+        `select _staff_report_permission('${id(100)}','pos_fnb.view_sales_summary','${id(11)}') allowed`,
+      )
+    ).rows[0].allowed,
+    false,
+  );
+  checks++;
+  for (const name of [
+    "get_invoice_list_summary",
+    "get_invoice_list_summary_fnb_context_20261023",
+    "get_invoice_list_summary_fnb_choices_20261023",
+  ]) {
+    await assert.rejects(
+      db.query(`select ${name}('${id(10)}')`),
+      /FNB_SALES_SUMMARY_PERMISSION_DENIED/,
+    );
+    checks++;
+  }
+  const invoiceSummary = (
+    await db.query(`select * from get_invoice_list_summary('${id(11)}')`)
+  ).rows[0];
+  assert.equal(Number(invoiceSummary.gia_tri_hoan_thanh), 100);
+  checks++;
+  await db.exec("reset role");
+  // Stock card checks inventory.view indirectly through assert_report_access.
+  // Exercise the real caller, not only its generic authorization helper.
+  await db.exec(`alter table branches add column code text;
+   create table products(id uuid,tenant_id uuid);
+   create table stock_movements(id uuid,tenant_id uuid,product_id uuid,branch_id uuid,type text,quantity numeric,created_at timestamptz,note text,created_by uuid,reference_type text,reference_id uuid,unit_cost numeric,unit_price numeric);
+   create table branch_stock(tenant_id uuid,product_id uuid,branch_id uuid,variant_id uuid,quantity numeric);
+   insert into products values('${id(500)}','${id(1)}');
+   insert into stock_movements values ('${id(510)}','${id(1)}','${id(500)}','${id(10)}','in',8,now(),null,'${id(101)}',null,null,31,40),
+    ('${id(511)}','${id(1)}','${id(500)}','${id(11)}','in',3,now(),null,'${id(101)}',null,null,20,25);
+   insert into branch_stock values ('${id(1)}','${id(500)}','${id(10)}',null,8),('${id(1)}','${id(500)}','${id(11)}',null,3);
+   insert into staff_branch_permission_catalog values ('inventory.view',1);
+   insert into role_permissions values ('${id(20)}','inventory.view');`);
+  let stockCard=await functionFromMigration('00223_stock_card_read_rpc.sql','get_stock_card_v2');
+  if(process.env.ONEBIZ_REPORT_AUDIT_FILE){
+    const definitions=JSON.parse(await readFile(process.env.ONEBIZ_REPORT_AUDIT_FILE,'utf8'));
+    const actual=definitions.find(row=>row.proname==='get_stock_card_v2');assert.ok(actual,'stock card definition');stockCard=actual.definition;
+  }
+  await db.exec(stockCard);
+  await db.exec(`revoke all on function public.get_stock_card_v2(uuid,uuid) from public,anon;
+   grant execute on function public.get_stock_card_v2(uuid,uuid) to authenticated;`);
+  const stockCardMeta=async()=>(await db.query(`select proowner,proacl::text acl,proconfig,prosecdef,provolatile
+   from pg_proc where oid='public.get_stock_card_v2(uuid,uuid)'::regprocedure`)).rows[0];
+  const beforeStockCardMeta=await stockCardMeta();
+  const beforeStockCardBody=(await db.query("select pg_get_functiondef('public.get_stock_card_v2(uuid,uuid)'::regprocedure) def")).rows[0].def;
+  await db.exec(await sqlFile('20261113073019_staff_stock_card_cost_guard.sql'));
+  await db.exec(await sqlFile('20261113073019_staff_stock_card_cost_guard.sql'));
+  assert.deepEqual(await stockCardMeta(),beforeStockCardMeta,'stock-card owner, grants and security metadata preserved');checks++;
+  if(process.env.ONEBIZ_REPORT_AUDIT_FILE){
+    assert.equal((await db.query("select pg_get_functiondef('public.get_stock_card_v2(uuid,uuid)'::regprocedure) def")).rows[0].def,beforeStockCardBody,'current production body remains unchanged');checks++;
+  }
+  const guardedStockCard=(await db.query("select pg_get_functiondef('public.get_stock_card_v2(uuid,uuid)'::regprocedure) def")).rows[0].def;
+  const mask='case when v_can_view_cost then sm.unit_cost else null end as unit_cost';
+  assert.ok(guardedStockCard.includes(mask));
+  await db.exec(guardedStockCard.replace(mask,'sm.unit_cost as unit_cost'));
+  await assert.rejects(db.exec(await sqlFile('20261113073019_staff_stock_card_cost_guard.sql')),/STAFF_STOCK_CARD_COST_MASK_CHANGED/);checks++;
+  await db.exec('rollback');await db.exec(guardedStockCard);
+  await db.exec(`
+   insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+    values ('${id(1)}','${id(101)}','${id(10)}','inventory.view','revoke','${id(100)}');set role authenticated;`);
+  await assert.rejects(db.query('select get_stock_card_v2($1,$2)',[id(500),id(10)]),/REPORT_PERMISSION_DENIED/);checks++;
+  let card=(await db.query('select get_stock_card_v2($1,$2) value',[id(500),id(11)])).rows[0].value;
+  assert.equal(card.total,1);assert.equal(Number(card.system_stock),3);assert.equal(card.rows[0].unit_cost,null);checks+=3;
+  await db.exec(`reset role;delete from role_permissions where permission_code='inventory.view';
+   insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+    values ('${id(1)}','${id(101)}','${id(11)}','inventory.view','grant','${id(100)}');set role authenticated;`);
+  card=(await db.query('select get_stock_card_v2($1,$2) value',[id(500),id(11)])).rows[0].value;
+  assert.equal(card.total,1);checks++;
+  await db.exec(`reset role;insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type,created_by)
+    values ('${id(1)}','${id(101)}','inventory.view','revoke','${id(100)}');set role authenticated;`);
+  await assert.rejects(db.query('select get_stock_card_v2($1,$2)',[id(500),id(11)]),/REPORT_PERMISSION_DENIED/);checks++;
+  await db.exec('reset role');
+  console.log(
+    `PASS ${checks} report scope checks (${process.env.ONEBIZ_REPORT_AUDIT_FILE ? "actual exported bodies" : "public bodies and six private contract fixtures"})`,
+  );
+} catch (e) {
+  console.error(e.message, e.where);
+  process.exitCode = 1;
+} finally {
+  await db.close();
+}

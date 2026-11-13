@@ -1,14 +1,14 @@
 import {beforeEach,describe,expect,it,vi} from 'vitest';
 import {fireEvent,render,screen,waitFor} from '@testing-library/react';
-const mocks=vi.hoisted(()=>({get:vi.fn(),source:vi.fn(),submit:vi.fn(),branch:'outlet',params:'sale=sale'}));
+const mocks=vi.hoisted(()=>({get:vi.fn(),source:vi.fn(),submit:vi.fn(),branch:'outlet',params:'sale=sale',denySend:false}));
 vi.mock('next/navigation',()=>({useSearchParams:()=>new URLSearchParams(mocks.params)}));
 vi.mock('@/lib/contexts',()=>({useAuth:()=>({user:{id:'actor'}}),useBranchFilter:()=>({isReady:true,activeBranchId:mocks.branch,branches:[{id:'outlet',name:'Quán'},{id:'warehouse',name:'Kho Tổng'}]})}));
-vi.mock('@/lib/permissions/use-permission',()=>({usePermissions:()=>({hasPermission:()=>true})}));
+vi.mock('@/lib/permissions/use-permission',()=>({usePermissions:()=>({hasPermissionAtBranch:(code:string,branch:string|null)=>!(mocks.denySend&&code==='inventory.internal_return_send'&&branch==='outlet')})}));
 vi.mock('@/lib/services/supabase/internal-returns',()=>({getInternalReturns:mocks.get,submitInternalReturn:mocks.submit}));
 vi.mock('@/lib/services/supabase/internal-receiving',()=>({getInternalReceivingWorkspace:mocks.source}));
 import Page from '@/app/(main)/hang-hoa/nhap-hang/tra-noi-bo/page';
 beforeEach(()=>{
- vi.clearAllMocks();sessionStorage.clear();mocks.branch='outlet';mocks.params='sale=sale';mocks.get.mockResolvedValue([]);
+ vi.clearAllMocks();sessionStorage.clear();mocks.branch='outlet';mocks.params='sale=sale';mocks.denySend=false;mocks.get.mockResolvedValue([]);
  mocks.source.mockResolvedValue([{id:'sale',code:'NB001',status:'completed',items:[
   {id:'line',name:'Trà Ô Long',code:'SKU-001',unit:'Túi',received:5,receivingFactor:500,receivingUnit:'G',treatment:'stock'},
   {id:'other',name:'Đường',code:'SKU-002',unit:'Kg',received:4,treatment:'stock'},
@@ -17,6 +17,12 @@ beforeEach(()=>{
  mocks.submit.mockResolvedValue({id:'return'});
 });
 describe('internal returns confirmation',()=>{
+ it('does not load a source for sending when that branch is denied',async()=>{
+  mocks.denySend=true;render(<Page/>);
+  await waitFor(()=>expect(mocks.get).toHaveBeenCalledWith('outlet','sale'));
+  expect(mocks.source).not.toHaveBeenCalled();
+  expect(screen.queryByRole('button',{name:'Xem trước'})).not.toBeInTheDocument();
+ });
  it('restores an uncertain request after reload without creating another return',async()=>{
   const pending={key:'same-request',action:'send',id:'sale',items:[{itemId:'line',quantity:2}],note:'Hàng dư chưa dùng'};
   sessionStorage.setItem('onebiz:internal-return:actor:outlet',JSON.stringify(pending));

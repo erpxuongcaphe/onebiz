@@ -59,15 +59,17 @@ describe("FnB employee navigation permissions", () => {
     for (const href of [
       "/hang-hoa/ton-kho",
       "/hang-hoa/lich-su-kho",
-      "/hang-hoa/kiem-kho",
       "/hang-hoa/hsd",
-      "/hang-hoa/chuyen-kho",
-      "/hang-hoa/xuat-dung-noi-bo",
-      "/hang-hoa/xuat-huy",
     ]) {
       expect(navConfig).toMatch(
         new RegExp(`href: "${href.replaceAll("/", "\\/")}"[^\\n]+permission: "inventory\\.view"`),
       );
     }
+    expect(navConfig).toMatch(/href: "\/hang-hoa\/kiem-kho"[^\n]+permissions: \["inventory\.view", "inventory\.check", "inventory\.edit_check", "inventory\.cancel_check"\]/);
+    expect(navConfig).toMatch(/href: "\/hang-hoa\/chuyen-kho"[^\n]+permissions: \["inventory\.view", "inventory\.transfer"\]/);
+    expect(navConfig).toMatch(/href: "\/hang-hoa\/xuat-huy"[^\n]+permissions: \["inventory\.view", "inventory\.dispose"\]/);
+    expect(navConfig).toMatch(/href: "\/hang-hoa\/xuat-dung-noi-bo"[^\n]+permissions: \["inventory\.view", "inventory\.internal_export"\]/);
+    const cashier = DEFAULT_ROLE_TEMPLATES.find((item) => item.legacyRole === "cashier");
+    expect(cashier?.permissions.some((p) => ["inventory.view", "inventory.check", "inventory.edit_check", "inventory.cancel_check", "inventory.transfer", "inventory.dispose", "inventory.internal_export"].includes(p))).toBe(false);
   });
 });

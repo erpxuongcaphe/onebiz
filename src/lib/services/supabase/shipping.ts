@@ -39,7 +39,7 @@ export async function getShippingOrders(params: QueryParams): Promise<QueryResul
     .from("shipping_orders")
     .select(`
       *,
-      invoices!shipping_orders_invoice_id_fkey(code),
+      invoices!shipping_orders_invoice_id_fkey(code,branch_id),
       delivery_partners!shipping_orders_partner_id_fkey(name)
     `, { count: "exact" })
     .eq("tenant_id", tenantId);
@@ -68,7 +68,7 @@ export async function getAllShippingOrders(params: Pick<QueryParams, "search" | 
   const tenantId = await getCurrentTenantId();
   const rows = await readHistoryPages(async (offset, size) => {
     const query = supabase.from("shipping_orders").select(`
-      *, invoices!shipping_orders_invoice_id_fkey(code),
+      *, invoices!shipping_orders_invoice_id_fkey(code,branch_id),
       delivery_partners!shipping_orders_partner_id_fkey(name)
     `, { count: "exact" }).eq("tenant_id", tenantId);
     return await applyShippingListFilters(query, params)
@@ -125,7 +125,7 @@ export async function getShippingOrderByInvoice(
   const { data, error } = await supabase
     .from("shipping_orders")
     .select(
-      `*, invoices!shipping_orders_invoice_id_fkey(code), delivery_partners!shipping_orders_partner_id_fkey(name)`,
+      `*, invoices!shipping_orders_invoice_id_fkey(code,branch_id), delivery_partners!shipping_orders_partner_id_fkey(name)`,
     )
     .eq("tenant_id", tenantId)
     .eq("invoice_id", invoiceId)
@@ -234,7 +234,7 @@ export async function createShipmentForInvoice(
   const { data, error } = await supabase
     .from("shipping_orders")
     .select(
-      `*, invoices!shipping_orders_invoice_id_fkey(code), delivery_partners!shipping_orders_partner_id_fkey(name)`,
+      `*, invoices!shipping_orders_invoice_id_fkey(code,branch_id), delivery_partners!shipping_orders_partner_id_fkey(name)`,
     )
     .eq("id", result.shipment_id)
     .single();
@@ -713,6 +713,9 @@ export async function updateShippingOrderStatus(
       p_note: note ?? null,
     },
   );
+  if (error?.code === "55P03") {
+    throw new Error("Đơn đang được xử lý ở thao tác khác. Anh/chị tải lại và thử cập nhật vận đơn lần nữa.");
+  }
   if (error) handleError(error, "updateShippingOrderStatus.rpc");
   if (!data) throw new Error("Máy chủ không trả về vận đơn đã cập nhật.");
   return mapShippingOrder(data);
@@ -769,6 +772,7 @@ function mapShippingOrder(row: any): ShippingOrder {
   const status = (row.status ?? "pending") as ShippingStatus;
   return {
     id: row.id,
+    branchId: (row.invoices as { branch_id?: string } | null)?.branch_id ?? undefined,
     code: row.code,
     invoiceCode: (row.invoices as { code: string } | null)?.code ?? "---",
     deliveryPartner: (row.delivery_partners as { name: string } | null)?.name ?? "---",

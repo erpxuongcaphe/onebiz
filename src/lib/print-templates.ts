@@ -67,7 +67,7 @@ export function toPrintLines(
   }));
 }
 
-export function buildInventoryCheckPrintData(row: InventoryCheck): DocumentPrintData {
+export function buildInventoryCheckPrintData(row: InventoryCheck, canViewCost = true): DocumentPrintData {
   const user = formatUser(row.createdByName, row.createdBy);
   return {
     documentType: "PHIẾU KIỂM KHO",
@@ -81,9 +81,11 @@ export function buildInventoryCheckPrintData(row: InventoryCheck): DocumentPrint
     summaryRows: [
       { label: "SL lệch tăng", value: formatNumber(row.increaseQty) },
       { label: "SL lệch giảm", value: formatNumber(row.decreaseQty) },
-      { label: "GT tăng", value: formatCurrency(row.increaseAmount) },
-      { label: "GT giảm", value: formatCurrency(row.decreaseAmount) },
-      { label: "Tổng chênh lệch", value: formatCurrency(row.increaseAmount - row.decreaseAmount), bold: true },
+      ...(canViewCost ? [
+        { label: "GT tăng", value: formatCurrency(row.increaseAmount) },
+        { label: "GT giảm", value: formatCurrency(row.decreaseAmount) },
+        { label: "Tổng chênh lệch", value: formatCurrency(row.increaseAmount - row.decreaseAmount), bold: true },
+      ] : []),
     ],
     note: row.note,
     createdBy: user,
@@ -102,7 +104,7 @@ export function buildDisposalPrintData(row: DisposalExport): DocumentPrintData {
       { label: "Tổng sản phẩm", value: String(row.totalProducts) },
       { label: "Lý do", value: row.reason || "" },
     ],
-    summaryRows: [
+    summaryRows: row.costVisible === false ? [] : [
       { label: "Tổng giá trị", value: formatCurrency(row.totalAmount), bold: true },
     ],
     note: row.reason,
@@ -158,7 +160,7 @@ export function buildInternalExportPrintData(row: InternalExport): DocumentPrint
       { label: "Trạng thái", value: row.statusName || row.status },
       { label: "Tổng sản phẩm", value: String(row.totalProducts) },
     ],
-    summaryRows: [
+    summaryRows: row.costVisible === false ? [] : [
       { label: "Tổng giá trị", value: formatCurrency(row.totalAmount), bold: true },
     ],
     note: row.note,

@@ -516,7 +516,7 @@ export default function DatHangNhapPage() {
             item={item}
             onClose={onClose}
             onDelete={
-              txPerms.canCancel && (canChangeWarehouseOrder(item) || (item.status === "pending" && !item.warehouseOrder))
+              txPerms.forBranch(item.branchId).canCancel && (canChangeWarehouseOrder(item) || (item.status === "pending" && !item.warehouseOrder))
                 ? () => item.warehouseOrder ? setCancelWarehouseOrderId(item.id) : setCancellingItem(item)
                 : undefined
             }
@@ -527,7 +527,7 @@ export default function DatHangNhapPage() {
             row,
             kind: "purchase_order",
             onDuplicate: () => { if (!activeBranchId || row.branchId !== activeBranchId) { toast({title:"Chọn đúng chi nhánh của phiếu để sao chép.",variant:"error"}); return; } setCopySource(row); setCreateOpen(true); },
-            permissions: txPerms,
+            permissions: txPerms.forBranch(row.branchId),
             onEdit: canChangeWarehouseOrder(row) ? () => setEditingWarehouseOrder(row) : undefined,
             onView: () => {
               const idx = data.findIndex((d) => d.id === row.id);

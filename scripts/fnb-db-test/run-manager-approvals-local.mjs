@@ -95,4 +95,8 @@ await actor(1);await db.exec('set role authenticated');
 await rejects('select verify_otp_authorization($1,$2,$3,$4) v',[issued.otp_id,'fnb.discount_override',id(2),id(40)],/permission denied/);
 await db.exec('reset role');
 console.log('PASS: migration, request dedup, permission/tenant/branch, scoped OTP, exact amount/items, >60s authorization, rollback, replay, rejection, private execution helper');
+if(process.env.ONEBIZ_STAFF_APPROVAL_TEST==='1') {
+ const {verifyApprovalScope}=await import('../staff-access-tests/approval.mjs');
+ await verifyApprovalScope(db,{id,actor,call});
+}
 await db.close();

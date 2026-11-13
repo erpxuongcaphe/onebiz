@@ -6,7 +6,7 @@ import type {ReactNode} from 'react';
 const mocks=vi.hoisted(()=>({read:vi.fn(),receive:vi.fn(),params:'branch=xtb&sale=sale-source'}));
 vi.mock('next/navigation',()=>({useSearchParams:()=>new URLSearchParams(mocks.params)}));
 vi.mock('@/lib/contexts',()=>({useAuth:()=>({user:{id:'user',tenantId:'tenant'}}),useBranchFilter:()=>({activeBranchId:'warehouse',currentBranch:{id:'warehouse',name:'Kho Tổng'},isReady:true,branches:[{id:'warehouse',name:'Kho Tổng'},{id:'xtb',name:'Tư Búa'}]})}));
-vi.mock('@/lib/permissions/use-permission',()=>({usePermissions:()=>({hasPermission:()=>true})}));
+vi.mock('@/lib/permissions/use-permission',()=>({usePermissions:()=>({hasPermission:()=>true,hasPermissionAtBranch:()=>true})}));
 vi.mock('@/lib/hooks/use-product-uom',()=>({useProductUom:()=>({map:new Map(),error:null})}));
 vi.mock('@/lib/services/supabase/internal-receiving',()=>({getInternalReceivingWorkspace:mocks.read,receiveInternalSale:mocks.receive}));
 vi.mock('@/components/shared/data-table',()=>({DataTable:({data,expandedRow,renderDetail}:{data:InternalReceivingOrder[];expandedRow:number|null;renderDetail:(row:InternalReceivingOrder,onClose:()=>void)=>ReactNode})=><div>{data.map(row=><div key={row.id}>{row.code}</div>)}{expandedRow!=null&&expandedRow>=0&&renderDetail(data[expandedRow],()=>{})}</div>}));

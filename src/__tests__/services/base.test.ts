@@ -39,6 +39,10 @@ describe("isAscending", () => {
 });
 
 describe("handleError", () => {
+  it("explains missing F&B detail permission without exposing an internal code", () => {
+    expect(() => handleError({message:"FNB_REPORT_DETAIL_PERMISSION_REQUIRED",code:"42501"},"report"))
+      .toThrow("chưa có quyền xem chi tiết báo cáo F&B tại chi nhánh này");
+  });
   it("throws error with context and message", () => {
     expect(() => handleError({ message: "not found", code: "PGRST116" }, "getSupplier")).toThrow(
       "[getSupplier] not found (code: PGRST116)"

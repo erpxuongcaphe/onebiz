@@ -5,6 +5,7 @@ import { ChartCard } from "../../phan-tich/_components";
 import { ReportPageHeader } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
 import { useBranchFilter, useToast } from "@/lib/contexts";
+import { usePermissions } from "@/lib/permissions/use-permission";
 import { formatCurrency, formatNumber, formatShortDate } from "@/lib/format";
 // getCustomerGroups() (đồng bộ) luôn trả mảng RỖNG — phải dùng bản Async,
 // nếu không ô chọn nhóm khách sẽ trống mãi mà không báo lỗi gì.
@@ -33,6 +34,9 @@ export default function DuKienMuaHangPage() {
     useReportState({ defaultPreset: "thisMonth", forceTable: true });
   const { activeBranchId, branchLabel, isReady } = useBranchFilter();
   const { toast } = useToast();
+  const { hasPermission, isLoading: permissionsLoading } = usePermissions();
+  const canViewCost = !permissionsLoading && hasPermission("products.view_cost");
+  const costUnavailableText = permissionsLoading ? "Đang kiểm tra quyền" : "Không có quyền";
 
   const [loaded, setLoaded] = useState<{key:string;value:PurchaseForecastResult} | null>(null);
   const [loading, setLoading] = useState(true);
@@ -56,7 +60,7 @@ export default function DuKienMuaHangPage() {
   useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
   const queryKey=JSON.stringify([range.from,range.to,activeBranchId,customerId,groupId]);
   const data=loaded?.key===queryKey && isReady ? loaded.value : null;
-  const exportKey=JSON.stringify([queryKey,itemView,itemQuery]);
+  const exportKey=JSON.stringify([queryKey,itemView,itemQuery,canViewCost,permissionsLoading]);
   const currentExportKey=useRef(exportKey);currentExportKey.current=exportKey;
   useEffect(()=>{
     if(!isReady)return;
@@ -110,7 +114,7 @@ export default function DuKienMuaHangPage() {
   }, [filteredSkuRows]);
 
   const handleExport = useCallback(async () => {
-    if (!data || loading || exportLock.current) return;
+    if (!data || loading || permissionsLoading || exportLock.current) return;
     exportLock.current=true;setExporting(true); const key=exportKey;
     try {
     const title = buildReportTitleRows({
@@ -131,6 +135,7 @@ export default function DuKienMuaHangPage() {
           "DỰ KIẾN MUA NGUYÊN VẬT LIỆU",
           ...title.slice(1),
           `Tồn lấy tại: ${data.khoTongName ?? "Kho Tổng"} · Số đơn tính: ${data.orderCount}`,
+          ...(!canViewCost ? ["Giá vốn không được hiển thị do tài khoản chưa có quyền."] : []),
         ],
         columns: [
           { label: "Mã NVL", key: "code", width: 16 },
@@ -139,8 +144,10 @@ export default function DuKienMuaHangPage() {
           { label: "SL cần", key: "req", width: 12, format: "number" },
           { label: "Tồn Kho Tổng", key: "stock", width: 14, format: "number" },
           { label: "Cần mua", key: "buy", width: 12, format: "number" },
-          { label: "Đơn giá", key: "cost", width: 12, format: "currency" },
-          { label: "Thành tiền", key: "amount", width: 16, format: "currency" },
+          ...(canViewCost ? [
+            { label: "Đơn giá", key: "cost", width: 12, format: "currency" as const },
+            { label: "Thành tiền", key: "amount", width: 16, format: "currency" as const },
+          ] : []),
         ],
         rows: filteredMaterials.map((m) => ({
           code: m.code,
@@ -149,10 +156,9 @@ export default function DuKienMuaHangPage() {
           req: m.required,
           stock: m.stockKhoTong,
           buy: m.toBuy,
-          cost: m.unitCost,
-          amount: m.amount,
+          ...(canViewCost ? { cost: m.unitCost, amount: m.amount } : {}),
         })),
-        footer: { code: "TỔNG", amount: filteredToBuyAmount },
+        footer: canViewCost ? { code: "TỔNG", amount: filteredToBuyAmount } : { code: "TỔNG" },
       });
     }
     if (itemView !== "materials") {
@@ -192,7 +198,7 @@ export default function DuKienMuaHangPage() {
     });
     } catch(e) { if(mounted.current)toast({title:"Không xuất được file",description:e instanceof Error?e.message:"Vui lòng thử lại.",variant:"error"}); }
     finally {exportLock.current=false;if(mounted.current)setExporting(false);}
-  }, [data, loading, exportKey, range, branchLabel, itemView, itemQuery, dsKhach, dsNhom, customerId, groupId, filteredMaterials, filteredSkuRows, filteredToBuyAmount, toast]);
+  }, [data, loading, permissionsLoading, canViewCost, exportKey, range, branchLabel, itemView, itemQuery, dsKhach, dsNhom, customerId, groupId, filteredMaterials, filteredSkuRows, filteredToBuyAmount, toast]);
 
   return (
     <div className="space-y-4">
@@ -206,7 +212,7 @@ export default function DuKienMuaHangPage() {
         viewMode={viewMode}
         onViewModeChange={setViewMode}
         onExportFull={handleExport}
-        exportDisabled={loading || !data || exporting || optionsLoading}
+        exportDisabled={loading || !data || exporting || optionsLoading || permissionsLoading}
       />
 
       <section aria-label="Bộ lọc dự kiến mua hàng" className="rounded-xl border bg-background p-4 lg:p-5">
@@ -272,18 +278,20 @@ export default function DuKienMuaHangPage() {
           <Icon name="inventory_2" size={16} className="text-primary" />
           Tồn lấy tại: <strong className="text-foreground">{data?.khoTongName ?? "Kho Tổng"}</strong>
         </span>
-        <span>· Đơn còn hàng chưa xuất: <strong className="text-foreground">{data?.orderCount ?? 0}</strong></span>
-        <span>· Đơn giá = giá vốn</span>
+        <span>· Đơn còn hàng chưa xuất: <strong className="text-foreground">{data ? data.orderCount : "—"}</strong></span>
+        <span>· {canViewCost ? "Đơn giá = giá vốn" : permissionsLoading ? "Đang kiểm tra quyền xem giá vốn" : "Chưa có quyền xem giá vốn"}</span>
       </div>
 
       {/* ① Dự kiến mua NVL */}
       {itemView !== "sku" && <ChartCard
         title="Dự kiến mua nguyên vật liệu"
-        subtitle={`${filteredMaterials.length} loại NVL · Tổng cần mua: ${formatCurrency(filteredToBuyAmount)}`}
+        subtitle={`${filteredMaterials.length} loại NVL · Tổng cần mua: ${canViewCost ? formatCurrency(filteredToBuyAmount) : costUnavailableText}`}
       >
         {loading ? (
           <div className="py-12 text-center text-sm text-muted-foreground">Đang tính...</div>
-        ) : !data || filteredMaterials.length === 0 ? (
+        ) : !data ? (
+          <div className="py-12 text-center text-sm text-muted-foreground">Chưa tải được dữ liệu dự kiến mua hàng.</div>
+        ) : filteredMaterials.length === 0 ? (
           <div className="py-12 text-center text-sm text-muted-foreground">
             Không có hàng còn phải xuất trong các đơn phù hợp (hoặc SKU chưa có công thức).
           </div>
@@ -316,15 +324,15 @@ export default function DuKienMuaHangPage() {
                     <td className={"py-2 pr-3 text-right tabular-nums font-semibold " + (m.toBuy > 0 ? "text-status-warning" : "text-status-success")}>
                       {formatNumber(m.toBuy)}
                     </td>
-                    <td className="py-2 pr-3 text-right tabular-nums text-muted-foreground">{formatCurrency(m.unitCost)}</td>
-                    <td className="py-2 text-right tabular-nums font-medium">{formatCurrency(m.amount)}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums text-muted-foreground">{canViewCost ? formatCurrency(m.unitCost) : costUnavailableText}</td>
+                    <td className="py-2 text-right tabular-nums font-medium">{canViewCost ? formatCurrency(m.amount) : costUnavailableText}</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
                 <tr className="font-bold border-t-2">
                   <td className="py-2 pr-3" colSpan={7}>TỔNG TIỀN CẦN MUA</td>
-                  <td className="py-2 text-right tabular-nums text-primary">{formatCurrency(filteredToBuyAmount)}</td>
+                  <td className="py-2 text-right tabular-nums text-primary">{canViewCost ? formatCurrency(filteredToBuyAmount) : costUnavailableText}</td>
                 </tr>
               </tfoot>
             </table>
@@ -336,6 +344,8 @@ export default function DuKienMuaHangPage() {
       {itemView !== "materials" && <ChartCard title="Hàng còn phải xuất theo chi nhánh" subtitle="Đối chiếu số đặt, số đã xuất và số còn phải chuẩn bị cho dự kiến mua">
         {loading ? (
           <div className="py-10 text-center text-sm text-muted-foreground">Đang tải...</div>
+        ) : !data ? (
+          <div className="py-10 text-center text-sm text-muted-foreground">Chưa tải được dữ liệu đơn hàng.</div>
         ) : skuByBranch.length === 0 ? (
           <div className="py-10 text-center text-sm text-muted-foreground">Chưa có đơn đặt hàng phù hợp</div>
         ) : (

@@ -11,14 +11,14 @@
  */
 
 import { getClient, getCurrentContext, handleError } from "./base";
-import { readHistoryPages } from "./read-history-pages";
+import { getPaymentHistory } from "./payments";
 
 export type CancelDocType = "invoice" | "purchase";
 export type RefundMethod = "cash" | "transfer" | "card";
 
 export interface NegativeStockRow {
   productName: string;
-  available: number;
+  available: number | null;
   needed: number;
   unit: string;
 }
@@ -139,19 +139,16 @@ export async function getInvoiceCancelImpact(
   return base;
 }
 
-async function readInvoiceReceipts(invoiceId: string, tenantId: string, branchId: string | null) {
+async function readInvoiceReceipts(invoiceId: string, _tenantId: string, branchId: string | null) {
   if (!branchId) throw new Error("Hóa đơn chưa xác định chi nhánh. Kiểm tra trước khi hủy.");
-  const rows = await readHistoryPages<{ id: string; amount: number; payment_method: string | null }>(async (offset, size) => {
-    const result = await getClient().from("cash_transactions")
-      .select("id,amount,payment_method", { count: "exact" })
-      .eq("tenant_id", tenantId).eq("reference_id", invoiceId)
-      .eq("reference_type", "invoice").eq("type", "receipt").eq("status", "completed")
-      .eq("branch_id", branchId).order("id").range(offset, offset + size - 1);
-    return { ...result, data: result.data as { id: string; amount: number; payment_method: string | null }[] | null };
-  });
+  const rows = await getPaymentHistory("invoice", invoiceId);
   const methods: Partial<Record<RefundMethod, number>> = {};
   for (const row of rows) {
-    const method = normalizeMethod(row.payment_method);
+    if (typeof row.status !== "string" || !Number.isFinite(Number(row.amount))) {
+      throw new Error("Chưa xác nhận được khoản thu của hóa đơn. Vui lòng tải lại.");
+    }
+    if (row.type !== "receipt" || row.status !== "completed") continue;
+    const method = normalizeMethod(row.paymentMethod);
     methods[method] = (methods[method] ?? 0) + Number(row.amount);
   }
   return methods;
@@ -279,24 +276,19 @@ export async function getPurchaseCancelImpact(
   base.branchName = branchName;
   base.stockLineCount = items.filter((i) => i.received > 0).length;
 
-  // Cảnh báo tồn âm: mirror guard RPC — products.stock < received_quantity
-  // (đã bán/dùng bớt → hoàn nhập sẽ đẩy tồn âm). Cảnh báo nhưng vẫn cho hủy.
-  const stockMap = await fetchProductStocks(
-    items.map((i) => i.productId),
-    ctx.tenantId,
-  );
-  for (const it of items) {
-    if (it.received <= 0) continue;
-    const onHand = stockMap.get(it.productId) ?? 0;
-    if (onHand < it.received) {
-      base.negativeStock.push({
-        productName: it.productName,
-        available: onHand,
-        needed: it.received,
-        unit: it.unit,
-      });
+  // The server returns only shortage indicators for this authorized document.
+  // Never infer zero from a hidden products_scoped balance.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: risks, error: riskError } = await (supabase as any).rpc("get_purchase_cancel_stock_risks", { p_order_id: purchaseOrderId });
+  if (riskError) handleError(riskError, "getPurchaseCancelImpact.stock");
+  if (!Array.isArray(risks)) throw new Error("Không xác định được cảnh báo tồn kho của phiếu nhập.");
+  base.negativeStock = risks.map((risk: { product_name?: unknown; unit?: unknown; needed?: unknown }) => {
+    const needed = Number(risk.needed);
+    if (typeof risk.product_name !== "string" || risk.needed == null || !Number.isFinite(needed) || needed <= 0) {
+      throw new Error("Cảnh báo tồn kho của phiếu nhập chưa hợp lệ.");
     }
-  }
+    return { productName: risk.product_name, available: null, needed, unit: typeof risk.unit === "string" ? risk.unit : "" };
+  });
 
   if (paid > 0) {
     base.cashDirection = "collect_from_supplier";
@@ -325,23 +317,4 @@ async function fetchPurchaseItems(
     received: Number((r as { received_quantity?: number }).received_quantity ?? 0),
     unit: (r.unit as string) ?? "",
   }));
-}
-
-async function fetchProductStocks(
-  productIds: string[],
-  tenantId: string,
-): Promise<Map<string, number>> {
-  const map = new Map<string, number>();
-  const ids = productIds.filter(Boolean);
-  if (ids.length === 0) return map;
-  const supabase = getClient();
-  for (let i = 0; i < ids.length; i += 200) {
-    const { data } = await supabase
-      .from("products_scoped")
-      .select("id, stock")
-      .eq("tenant_id", tenantId)
-      .in("id", ids.slice(i, i + 200));
-    for (const r of data ?? []) map.set(r.id as string, Number((r as { stock?: number }).stock ?? 0));
-  }
-  return map;
 }

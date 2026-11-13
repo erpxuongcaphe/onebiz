@@ -45,7 +45,7 @@ const DOCUMENT_CONFIG: Record<string, DocumentConfig> = {
   purchase_order: { headerTable: "purchase_orders", itemTable: "purchase_order_items", itemForeignKey: "purchase_order_id", itemSectionLabel: "Hàng hóa trên phiếu nhập" },
   input_invoice: { headerTable: "input_invoices", itemSectionLabel: "Hàng hóa theo phiếu nhập liên kết" },
   production_order: { headerTable: "production_orders", itemTable: "production_order_materials", itemForeignKey: "production_order_id", itemSectionLabel: "Nguyên vật liệu của lệnh sản xuất" },
-  inventory_check: { headerTable: "inventory_checks", itemTable: "inventory_check_items", itemForeignKey: "check_id", itemSectionLabel: "Kết quả kiểm kê" },
+  inventory_check: { headerTable: "inventory_checks", itemTable: "inventory_check_items_scoped", itemForeignKey: "check_id", itemSectionLabel: "Kết quả kiểm kê" },
   disposal_export: { headerTable: "disposal_exports", itemTable: "disposal_export_items", itemForeignKey: "disposal_id", itemSectionLabel: "Hàng hóa xuất hủy" },
   sales_return: { headerTable: "sales_returns", itemTable: "return_items", itemForeignKey: "return_id", itemSectionLabel: "Hàng hóa trả lại" },
   internal_sale: { headerTable: "internal_sales", itemTable: "internal_sale_items", itemForeignKey: "internal_sale_id", itemSectionLabel: "Hàng hóa bán nội bộ" },
@@ -86,6 +86,41 @@ export async function getStockDocumentDetail(
   // Several warehouse tables were introduced after generated Supabase types.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = supabase as any;
+  if (kind === "disposal_export" || kind === "internal_export") {
+    // The server applies branch/action and cost permissions before returning
+    // fields, without widening access to the cost-bearing tables.
+    const { data: safe, error } = await db.rpc("get_stock_work_document_detail", { p_kind: kind, p_id: referenceId });
+    if (error?.code === "42501") return null;
+    if (error) handleError(error, "getStockDocumentDetail.workProjection");
+    if (!safe || safe.id !== referenceId || !Array.isArray(safe.items) ||
+      (safe.totalAmount != null && !Number.isFinite(Number(safe.totalAmount))) ||
+      safe.items.some((row: Record<string, unknown>) => !row || typeof row.id !== "string" ||
+        row.quantity == null || !Number.isFinite(Number(row.quantity)) ||
+        (row.unitPrice != null && !Number.isFinite(Number(row.unitPrice))) ||
+        (row.amount != null && !Number.isFinite(Number(row.amount))))) {
+      throw new Error("Dữ liệu chi tiết phiếu không hợp lệ.");
+    }
+    return {
+      id: safe.id,
+      code: firstText(safe.code) ?? "—",
+      kindLabel: getStockDocumentLabel(referenceType),
+      status: STATUS_LABELS[String(safe.status ?? "")] ?? String(safe.status ?? "—"),
+      date: firstText(safe.createdAt) ?? "",
+      branchName: firstText(safe.branchName),
+      creatorName: firstText(safe.createdByName),
+      totalAmount: safe.totalAmount == null ? undefined : asNumber(safe.totalAmount),
+      counterparty: firstText(safe.department),
+      note: firstText(safe.note),
+      reason: firstText(safe.reason),
+      itemSectionLabel: config.itemSectionLabel ?? "Chi tiết hàng hóa",
+      items: safe.items.map((row: Record<string, unknown>) => ({
+        id: String(row.id), productCode: firstText(row.productCode) ?? "—", productName: firstText(row.productName) ?? "—",
+        unit: firstText(row.unit) ?? "—", quantity: asNumber(row.quantity),
+        unitPrice: row.unitPrice == null ? undefined : asNumber(row.unitPrice),
+        amount: row.amount == null ? undefined : asNumber(row.amount),
+      })),
+    };
+  }
   const { data: header, error: headerError } = await db
     .from(config.headerTable).select("*").eq("tenant_id", tenantId)
     .eq("id", referenceId).maybeSingle();
