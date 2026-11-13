@@ -58,6 +58,24 @@ const snapshot: StaffProfileSnapshot = {
   branchPermissionCodes: ["pos_fnb.split_bill", "pos_fnb.transfer_table"],
 };
 describe("staff profile scope", () => {
+  it("saves a branch inventory exception without changing other branch permissions", async () => {
+    const data = structuredClone(snapshot);
+    data.branchPermissionCodes.push("inventory.view");
+    data.exceptions.push({ branchId: "tubua", permissionCode: "pos_fnb.transfer_table", choice: "grant" });
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<StaffProfileEditor snapshot={data} onSave={onSave} onReload={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Tùy chỉnh quyền" }));
+    fireEvent.click(screen.getByRole("button", { name: "Premium" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Tìm quyền" }), { target: { value: "inventory.view" } });
+    expect(screen.getByText(/Quyền bán lẻ vẫn cần nhận số lượng tồn/)).toBeVisible();
+    fireEvent.change(screen.getByRole("combobox", { name: "Quyền Xem tồn kho" }), { target: { value: "revoke" } });
+    fireEvent.click(screen.getByRole("button", { name: "Lưu phân công" }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+    expect(onSave.mock.calls[0][0].exceptions).toEqual(expect.arrayContaining([
+      { branchId: "premium", permissionCode: "inventory.view", choice: "revoke" },
+      { branchId: "tubua", permissionCode: "pos_fnb.transfer_table", choice: "grant" },
+    ]));
+  });
   it("explains when independent rights permit viewing another person's order", () => {
     render(<StaffProfileEditor snapshot={snapshot} onSave={vi.fn()} onReload={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", {name:"Tùy chỉnh quyền"}));
