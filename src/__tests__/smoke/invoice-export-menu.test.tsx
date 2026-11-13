@@ -16,5 +16,6 @@ it("page shares one query for listing and full export while keeping selected exp
   expect(source).toMatch(/useInvoiceListExport\(\{[\s\S]*?query:\s*listQuery/);
   expect(source).not.toMatch(/exportTo(?:Excel|Csv)\(data,/);
   expect(source).toContain("Xuất Excel chi tiết đã chọn");
-  expect(source).toMatch(/exportToExcel\(\s*selectedRows,/);
+  expect(source).toMatch(/readSelectedInvoiceExport\(phamViHienTai,listQuery,selectedRows\.map/);
+  expect(source).toMatch(/exportToExcel\(\s*rows,/);
 });

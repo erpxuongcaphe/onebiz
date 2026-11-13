@@ -1355,18 +1355,22 @@ export default function HoaDonPage() {
                       statusMap[v]?.label ?? v,
                   },
                 ];
-                if(!branchScopeReady || selectedExportActive.current)return;
+                if(!branchScopeReady || !listQuery || selectedExportActive.current)return;
                 const controller=new AbortController();selectedExportActive.current=controller;
                 const snapshot=selectedExportContext.current;
                 try {
-                  const details=await getFnbInvoiceExportDetails(selectedRows,controller.signal,fnbChoices);
                   const valid=()=>!controller.signal.aborted && selectedExportContext.current===snapshot;
+                  const rows=await readSelectedInvoiceExport(phamViHienTai,listQuery,selectedRows.map(row=>row.id),controller.signal);
                   if(!valid())return;
-                  await exportToExcel(selectedRows, cols, "hoa-don-da-chon",{shouldSave:valid,additionalSheets:details.items.length?[{name:fnbChoiceJson?"Món khớp bộ lọc":"Chi tiết món",data:details.items,columns:fnbInvoiceItemExportColumns}]:[]});
+                  if(!documentRowsExportable(rows,exportableInvoiceBranches))
+                    throw new Error("Có hóa đơn thuộc chi nhánh chưa được cấp quyền xuất. Hãy chọn lại.");
+                  const details=await getFnbInvoiceExportDetails(rows,controller.signal,fnbChoices);
+                  if(!valid())return;
+                  await exportToExcel(rows, cols, "hoa-don-da-chon",{shouldSave:valid,additionalSheets:details.items.length?[{name:fnbChoiceJson?"Món khớp bộ lọc":"Chi tiết món",data:details.items,columns:fnbInvoiceItemExportColumns}]:[]});
                   if(!valid())return;
                 toast({
                   title: "Đã xuất Excel",
-                  description: `${selectedRows.length} hoá đơn`,
+                  description: `${rows.length} hoá đơn`,
                   variant: "success",
                 });
                 } catch(error) {
