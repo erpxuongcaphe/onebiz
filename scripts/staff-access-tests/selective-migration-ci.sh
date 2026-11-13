@@ -34,3 +34,27 @@ do $$begin
 end$$;
 SQL
 echo 'PASS disposable PostgreSQL: only the selected older migration is applied and its version preserved'
+
+# A multi-migration push can fail after an earlier migration has committed.
+# Exercise that failure mode so rollout and rollback never assume all-or-nothing.
+printf 'create table public.stage_one_marker(id integer);\n' > "$scratch/supabase/migrations/20260401000000_stage_one.sql"
+cat > "$scratch/supabase/migrations/20260501000000_stage_failure.sql" <<'SQL'
+begin;
+create table public.stage_failed_marker(id integer);
+do $$begin raise exception 'EXPECTED_STAGE_FAILURE';end$$;
+commit;
+SQL
+printf 'create table public.stage_three_marker(id integer);\n' > "$scratch/supabase/migrations/20260601000000_stage_three.sql"
+if supabase db push --remote="$db" --profile supabase --skip-vault --include-all --yes --workdir "$scratch" > "$scratch/expected-failure.log" 2>&1; then
+  echo 'Expected failing migration was unexpectedly accepted' >&2; exit 1
+fi
+grep -Fq 'EXPECTED_STAGE_FAILURE' "$scratch/expected-failure.log"
+psql "$db" -Xq -v ON_ERROR_STOP=1 <<'SQL'
+do $$begin
+ if to_regclass('public.stage_one_marker') is null then raise exception 'earlier successful migration missing'; end if;
+ if not exists(select 1 from supabase_migrations.schema_migrations where version='20260401000000') then raise exception 'earlier version missing'; end if;
+ if to_regclass('public.stage_failed_marker') is not null or to_regclass('public.stage_three_marker') is not null then raise exception 'failed or later stage persisted'; end if;
+ if exists(select 1 from supabase_migrations.schema_migrations where version in ('20260501000000','20260601000000')) then raise exception 'failed or later version recorded'; end if;
+end$$;
+SQL
+echo 'PASS disposable PostgreSQL: a failed stage leaves earlier committed stages visible and skips later stages'
