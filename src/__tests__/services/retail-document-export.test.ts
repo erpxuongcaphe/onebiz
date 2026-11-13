@@ -60,9 +60,9 @@ describe('scope-checked Retail export reads',()=>{
  });
 });
 
-const header={id:'a',code:'NH-THU',date:'2026-10-27T03:00:00Z',branchName:'Kho thử',source:'pos',customerId:'c',customerCode:'KHA-THU',customerName:'Khách thử',customerPhone:'0900123456',customerAddress:'Địa chỉ thử',totalAmount:3000,discount:0,shippingFee:0,taxAmount:0,paid:0,debt:3000,status:'processing',note:'Ghi chú đơn'} as Invoice;
+const header={id:'a',code:'NH-THU',date:'2026-10-27T03:00:00Z',branchId:'warehouse',branchName:'Kho thử',source:'pos',customerId:'c',customerCode:'KHA-THU',customerName:'Khách thử',customerPhone:'0900123456',customerAddress:'Địa chỉ thử',totalAmount:3000,discount:0,shippingFee:0,taxAmount:0,paid:0,debt:3000,status:'processing',note:'Ghi chú đơn'} as Invoice;
 const validLine={id:'l',invoice_id:'a',products:{code:'SKU-THU'},product_name:'Hàng thử',unit:'Kg',quantity:0.5,unit_price:6000,discount:0,total:3000,note:'Ghi chú mã'};
-function options(){return {scope,query:{filters:{status:['processing'],dateFrom:'2026-10-01',dateTo:'2026-10-27'}},ready:true,allowed:true,fnb:false,onError:vi.fn(),onSuccess:vi.fn()};}
+function options(){return {scope,query:{filters:{status:['processing'],dateFrom:'2026-10-01',dateTo:'2026-10-27'}},ready:true,allowed:true,fnb:false,exportableBranches:['warehouse'],accountScope:'tenant/user',onError:vi.fn(),onSuccess:vi.fn()};}
 describe('Retail full-filter export interaction',()=>{
  it('exports page two by exact visible IDs, preserving their order and all item details',async()=>{
   const second={...header,id:'b',code:'HD-PAGE-2'};

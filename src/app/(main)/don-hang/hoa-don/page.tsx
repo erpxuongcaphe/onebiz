@@ -82,6 +82,7 @@ import { readSelectedInvoiceExport, readRetailDocumentExportLines } from "@/lib/
 import { buildRetailDocumentSheets, retailDocumentExportRange, retailDocumentStatusLabel } from "@/lib/utils/retail-document-export";
 import { exportReportToExcel } from "@/lib/utils/excel-export";
 import { exportToExcel } from "@/lib/utils/export";
+import { invoiceExportableBranches, invoiceRowsExportable } from "@/lib/permissions/invoice-export-scope";
 import {
   khoaChiSoHoaDon,
   taoBoNhoChiSo,
@@ -643,6 +644,12 @@ export default function HoaDonPage() {
     () => phamViChiNhanhHoaDon({ activeBranchId, viewAllBranches, duocXemToanChuoi }),
     [activeBranchId, viewAllBranches, duocXemToanChuoi],
   );
+  // Invoice export is a separate, existing grant; the reporting export grant
+  // is retained as a compatible alternative. Resolve both for each branch.
+  const exportableInvoiceBranches = invoiceExportableBranches(branches,hasPermissionAtBranch);
+  const canExportInvoices = phamViHienTai.mode === "branch"
+    ? exportableInvoiceBranches.includes(phamViHienTai.branchId)
+    : phamViHienTai.mode === "all" && exportableInvoiceBranches.length > 0;
   useEffect(()=>{setServiceOptions({tables:[],areas:[]});setFnbTable("");setFnbArea("");setFnbChoices({});},[showFnbTypes,branchScopeReady,phamViHienTai]);
   useEffect(()=>{
     let stale=false;
@@ -727,7 +734,7 @@ export default function HoaDonPage() {
     return {search:debouncedSearch,searchField,sortBy:sorting[0]?.id,sortOrder:sorting[0]?.desc?"desc":"asc",filters:commonFilters};
   },[dateRange,selectedStatuses,showFnbTypes,retailSaleType,fnbOrderType,fnbTable,fnbArea,fnbChoiceJson,debouncedSearch,searchField,sorting]);
 
-  const selectedExportKey=JSON.stringify([phamViHienTai,listQuery,txPerms.canExport]);
+  const selectedExportKey=JSON.stringify([tenant?.id,user?.id,phamViHienTai,listQuery,canExportInvoices,exportableInvoiceBranches]);
   const pageExportKey=JSON.stringify([phamViHienTai,listQuery,page,pageSize]);
   const [loadedPageExportKey,setLoadedPageExportKey]=useState('');
   const selectedExportContext=useRef(selectedExportKey);selectedExportContext.current=selectedExportKey;
@@ -929,7 +936,7 @@ export default function HoaDonPage() {
       : "Tài khoản chưa được phân quyền chi nhánh. Vui lòng liên hệ quản trị viên.";
 
   const invoiceExport=useInvoiceListExport({scope:phamViHienTai,query:listQuery,
-    ready:branchScopeReady&&deepLinkReady&&search===debouncedSearch,allowed:txPerms.canExport,fnb:showFnbTypes,
+    ready:branchScopeReady&&deepLinkReady&&search===debouncedSearch,allowed:canExportInvoices,fnb:showFnbTypes,exportableBranches:exportableInvoiceBranches,accountScope:JSON.stringify([tenant?.id,user?.id]),
     currentPage:{ids:data.map(row=>row.id),number:page+1,ready:!loading&&loadedPageExportKey===pageExportKey},
     onError:message=>toast({title:"Chưa xuất được hóa đơn",description:message,variant:"error"}),
     onSuccess:(count,scopeLabel)=>toast({title:"Đã xuất hóa đơn",description:`Đã xuất ${formatNumber(count)} hóa đơn — ${scopeLabel}.`}),
@@ -1099,7 +1106,7 @@ export default function HoaDonPage() {
             setSearchField(v);
             setPage(0);
           }}
-          onExport={txPerms.canExport ? {items:[
+          onExport={canExportInvoices ? {items:[
             {label:"Excel — theo bộ lọc",hint:"Xuất toàn bộ kết quả, không chỉ trang đang xem",onClick:()=>void invoiceExport.start("excel")},
             {label:"CSV — theo bộ lọc",hint:"Xuất toàn bộ kết quả, không chỉ trang đang xem",onClick:()=>void invoiceExport.start("csv")},
             {label:`Excel — trang ${page+1}`,hint:`Chỉ ${data.length} chứng từ trên trang đang xem, đủ chi tiết hàng`,onClick:()=>void invoiceExport.start("excel","page")},
@@ -1291,15 +1298,19 @@ export default function HoaDonPage() {
             {
               label: "Xuất Excel chi tiết đã chọn",
               icon: <Icon name="download" size={16} />,
+              disabled: !canExportInvoices,
               onClick: async (selectedRows) => {
                 try {
+                if(!canExportInvoices || !invoiceRowsExportable(selectedRows,exportableInvoiceBranches))
+                  throw new Error("Có hóa đơn thuộc chi nhánh chưa được cấp quyền xuất. Hãy chọn hóa đơn tại chi nhánh được phép.");
                 if(selectedRows.every(row=>row.source!=="fnb")){
-                  if(!txPerms.canExport)throw new Error("Anh/chị chưa có quyền xuất chứng từ.");
                   if(!listQuery || !branchScopeReady || selectedExportActive.current)return;
                   const controller=new AbortController();selectedExportActive.current=controller;setSelectedExportStage("Đang đọc chứng từ đã chọn…");
                   const snapshot=selectedExportContext.current;
                   try{
                     const rows=await readSelectedInvoiceExport(phamViHienTai,listQuery,selectedRows.map(row=>row.id),controller.signal);
+                    if(!invoiceRowsExportable(rows,exportableInvoiceBranches))
+                      throw new Error("Có hóa đơn thuộc chi nhánh chưa được cấp quyền xuất. Hãy chọn lại.");
                     setSelectedExportStage("Đang tải chi tiết hàng và ghi chú…");
                     const lines=await readRetailDocumentExportLines(rows,controller.signal);
                     const range=retailDocumentExportRange(rows,listQuery);
@@ -1344,13 +1355,23 @@ export default function HoaDonPage() {
                       statusMap[v]?.label ?? v,
                   },
                 ];
-                const details=await getFnbInvoiceExportDetails(selectedRows,undefined,fnbChoices);
-                await exportToExcel(selectedRows, cols, "hoa-don-da-chon",{additionalSheets:details.items.length?[{name:fnbChoiceJson?"Món khớp bộ lọc":"Chi tiết món",data:details.items,columns:fnbInvoiceItemExportColumns}]:[]});
+                if(!branchScopeReady || selectedExportActive.current)return;
+                const controller=new AbortController();selectedExportActive.current=controller;
+                const snapshot=selectedExportContext.current;
+                try {
+                  const details=await getFnbInvoiceExportDetails(selectedRows,controller.signal,fnbChoices);
+                  const valid=()=>!controller.signal.aborted && selectedExportContext.current===snapshot;
+                  if(!valid())return;
+                  await exportToExcel(selectedRows, cols, "hoa-don-da-chon",{shouldSave:valid,additionalSheets:details.items.length?[{name:fnbChoiceJson?"Món khớp bộ lọc":"Chi tiết món",data:details.items,columns:fnbInvoiceItemExportColumns}]:[]});
+                  if(!valid())return;
                 toast({
                   title: "Đã xuất Excel",
                   description: `${selectedRows.length} hoá đơn`,
                   variant: "success",
                 });
+                } catch(error) {
+                  if(!controller.signal.aborted && selectedExportContext.current===snapshot)throw error;
+                } finally {if(selectedExportActive.current===controller)selectedExportActive.current=null;}
                 }catch(error){toast({title:"Chưa xuất được hóa đơn",description:error instanceof Error?error.message:"Vui lòng thử lại.",variant:"error"});}
               },
             },
