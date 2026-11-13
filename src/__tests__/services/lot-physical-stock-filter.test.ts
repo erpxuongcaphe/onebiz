@@ -15,6 +15,7 @@ import path from "node:path";
 const doc = (f: string) => fs.readFileSync(path.join(process.cwd(), f), "utf8");
 const DASHBOARD = doc("src/lib/services/supabase/production-dashboard.ts");
 const REPORTS = doc("src/lib/services/supabase/reports.ts");
+const ALERT_LOTS_SQL = doc("supabase/migrations/20261113102711_staff_financial_alert_lots_compat.sql");
 const PRODUCTION = doc("src/lib/services/supabase/production.ts");
 
 /** Cắt lấy khối truy vấn bắt đầu từ .from("product_lots") */
@@ -32,31 +33,29 @@ describe("cảnh báo hạn dùng — chỉ đếm lô còn tồn vật lý", ()
   });
 
   it("báo cáo hạn dùng loại lô huỷ/đã dùng hết/đã huỷ bỏ", () => {
-    const k = khoiTruyVan(REPORTS);
-    expect(k).toContain('.in("status", ["active", "expired"])');
-    expect(k).toContain('.gt("current_qty", 0)');
+    expect(REPORTS).toContain('rpc("get_financial_alert_lots"');
+    expect(ALERT_LOTS_SQL).toContain("l.status in ('active','expired')");
+    expect(ALERT_LOTS_SQL).toContain("l.current_qty>0");
   });
 
   it("chỉ nhận 'active' và 'expired' — không nhận cancelled/consumed/disposed", () => {
-    for (const src of [DASHBOARD, REPORTS]) {
-      const k = khoiTruyVan(src);
-      for (const xau of ["cancelled", "consumed", "disposed"]) {
-        expect(k, `không được liệt kê ${xau} là tồn vật lý`).not.toContain(`"${xau}"`);
-      }
+    const k = khoiTruyVan(DASHBOARD);
+    for (const xau of ["cancelled", "consumed", "disposed"]) {
+      expect(k, `không được liệt kê ${xau} là tồn vật lý`).not.toContain(`"${xau}"`);
+      expect(ALERT_LOTS_SQL).not.toContain(`'${xau}'`);
     }
   });
 
   it("lô đã huỷ mà còn số lượng vẫn KHÔNG lọt vào (điều kiện là VÀ, không phải HOẶC)", () => {
     // Cả hai điều kiện phải cùng nằm trong một chuỗi truy vấn: còn số lượng
     // là chưa đủ, trạng thái phải hợp lệ.
-    for (const src of [DASHBOARD, REPORTS]) {
-      const k = khoiTruyVan(src);
-      const iQty = k.indexOf('.gt("current_qty", 0)');
-      const iStatus = k.indexOf('.in("status", ["active", "expired"])');
-      expect(iQty).toBeGreaterThan(-1);
-      expect(iStatus).toBeGreaterThan(-1);
-      expect(Math.abs(iStatus - iQty)).toBeLessThan(400);
-    }
+    const k = khoiTruyVan(DASHBOARD);
+    const iQty = k.indexOf('.gt("current_qty", 0)');
+    const iStatus = k.indexOf('.in("status", ["active", "expired"])');
+    expect(iQty).toBeGreaterThan(-1);
+    expect(iStatus).toBeGreaterThan(-1);
+    expect(Math.abs(iStatus - iQty)).toBeLessThan(400);
+    expect(ALERT_LOTS_SQL).toMatch(/l\.current_qty>0\s+and l\.status in \('active','expired'\)/);
   });
 });
 

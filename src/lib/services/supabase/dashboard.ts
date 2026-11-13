@@ -459,6 +459,7 @@ export async function getLowStockProducts(limit: number = 5, branchId?: string):
     .eq("tenant_id", tenantId)
     .eq("is_active", true)
     .gt("min_stock", 0)
+    .not("stock", "is", null)
     .order("stock", { ascending: true })
     .limit(limit * 2); // Fetch more, filter in JS
 

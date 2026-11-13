@@ -55,12 +55,12 @@ const mockProducts = [
 
 const mockLots = [
   {
-    id: "lot1", lot_code: "L001", product_id: "p1",
+    id: "lot1", lot_number: "L001", product_id: "p1",
     expiry_date: new Date(Date.now() - 86400000).toISOString(),
     current_qty: 10, products: { name: "SP A" },
   },
   {
-    id: "lot2", lot_code: "L002", product_id: "p2",
+    id: "lot2", lot_number: "L002", product_id: "p2",
     expiry_date: new Date(Date.now() + 15 * 86400000).toISOString(),
     current_qty: 5, products: { name: "SP B" },
   },
@@ -309,6 +309,10 @@ vi.mock("@/lib/services/supabase/base", () => ({
     rpc: vi.fn((fn: string, params?: Record<string, unknown>) => {
       rpcHistory.push({ fn, params });
       if (fn === "get_cash_flow_alert_totals") return tableDataMap.cash_transactions ?? { data: [], error: null };
+      if (fn === "get_financial_alert_lots") {
+        const result = tableDataMap.product_lots as { data: Array<Record<string, unknown>> | null; error: unknown } | undefined;
+        return { ...result, data: result?.data?.map(row => ({ ...row, product_name: (row.products as { name?: string } | null)?.name })) ?? (result?.error ? null : []) };
+      }
       if (fn === "get_profit_and_loss_report_v2") {
         return params?.p_exclude_internal
           ? buildConsolidatedProfitAndLossRpc()
@@ -563,17 +567,29 @@ describe("getDSO", () => {
 });
 
 describe("getFinancialAlerts", () => {
-  it("does not turn failed or malformed cash totals into a healthy balance", async () => {
+  it("does not hide a failed or malformed cash summary as a healthy balance", async () => {
     tableDataMap = { ...defaultTableData(), cash_transactions: { data: null, error: { message: "CASH_SUMMARY_FAILED" } } };
     await expect(getFinancialAlerts()).rejects.toThrow("CASH_SUMMARY_FAILED");
     tableDataMap = { ...defaultTableData(), cash_transactions: { data: [{ type: "receipt", amount: null }], error: null } };
     await expect(getFinancialAlerts()).rejects.toThrow("Không xác định được số liệu cảnh báo thu chi");
   });
-  it("adds database numeric totals without concatenating strings", async () => {
+  it("handles database numeric totals without concatenating strings", async () => {
     tableDataMap = { ...defaultTableData(), cash_transactions: { data: [
-      { type: "receipt", amount: "1000000" }, { type: "receipt", amount: "500000" }, { type: "payment", amount: "2500000" },
+      { type: "receipt", amount: "1000000" }, { type: "receipt", amount: "500000" },
+      { type: "payment", amount: "2500000" },
     ], error: null } };
-    expect((await getFinancialAlerts()).find(row => row.id === "negative_cashflow")?.value).toBe(1_000_000);
+    const alerts = await getFinancialAlerts();
+    expect(alerts.find(row => row.id === "negative_cashflow")?.value).toBe(1_000_000);
+  });
+  it("does not present an incomplete expiry projection as no alerts", async () => {
+    tableDataMap = { ...defaultTableData(), product_lots: { data: [{ id: "broken", expiry_date: null }], error: null } };
+    await expect(getFinancialAlerts()).rejects.toThrow("Không xác định được danh sách cảnh báo lô hàng");
+  });
+  it("does not turn hidden product stock into a false shortage", async () => {
+    tableDataMap = { ...defaultTableData(), products: { data: [{ id: "hidden", name: "Ẩn", stock: null, min_stock: 5 }], error: null } };
+    const alerts = await getFinancialAlerts();
+    expect(alerts.find(row => row.id === "low_stock_summary")).toBeUndefined();
+    expect(alerts.find(row => row.id === "stock_scope_unavailable")?.title).toContain("Chưa đủ quyền");
   });
   it.each(["customers", "product_lots"])("does not interpret a failed %s source as no alerts", async table => {
     tableDataMap = { ...defaultTableData(), [table]: { data: null, error: { message: "SOURCE_UNAVAILABLE" } } };
@@ -588,7 +604,9 @@ describe("getFinancialAlerts", () => {
       tableDataMap = defaultTableData();
       await getFinancialAlerts("synthetic-branch");
       expect(queryHistory.some(row => row.table === "cash_transactions")).toBe(false);
-      expect(rpcHistory).toContainEqual({ fn: "get_cash_flow_alert_totals", params: { p_branch: "synthetic-branch", p_from: "2026-11-01", p_to: "2026-11-01" } });
+      expect(rpcHistory).toContainEqual({ fn: "get_cash_flow_alert_totals", params: {
+        p_branch: "synthetic-branch", p_from: "2026-11-01", p_to: "2026-11-01",
+      } });
     } finally { vi.useRealTimers(); }
   });
 
