@@ -5,6 +5,10 @@
 begin;
 set local lock_timeout='3s';
 set local statement_timeout='30s';
+do $bridge$
+begin
+ if to_regprocedure('public._staff_permission_at_scope(uuid,text,uuid)') is null then
+ execute $create$
 create or replace function public.staff_returnable_invoice_items(p_invoice_id uuid)
 returns table(id uuid,product_id uuid,product_name text,unit text,quantity numeric,
  unit_price numeric,total numeric,returned_qty numeric)
@@ -35,7 +39,12 @@ begin
  end if;
  return query select ii.id,ii.product_id,ii.product_name,ii.unit,ii.quantity,ii.unit_price,ii.total,ii.returned_qty
   from public.invoice_items ii where ii.invoice_id=p_invoice_id order by ii.id;
-end $$;
+end $$
+$create$;
+ elsif to_regprocedure('public.staff_returnable_invoice_items(uuid)') is null then
+  raise exception 'STAFF_BRIDGE_SCOPED_READER_MISSING';
+ end if;
+end $bridge$;
 revoke all on function public.staff_returnable_invoice_items(uuid) from public,anon;
 grant execute on function public.staff_returnable_invoice_items(uuid) to authenticated;
 notify pgrst,'reload schema';

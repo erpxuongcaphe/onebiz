@@ -9,7 +9,6 @@ const id=n=>`00000000-0000-0000-0000-${String(n).padStart(12,'0')}`;
 const sql=[];const migration=async n=>readFile(new URL(`../../supabase/migrations/${n}`,import.meta.url),'utf8');
 await initializeStaffAccessFixture({exec:async s=>sql.push(s)},id);
 sql.push(await migration('20261111052704_staff_branch_access.sql'));
-sql.push(await functionFromMigration('20261111070229_staff_branch_checkout_permissions.sql','_staff_permission_at_scope'));
 sql.push(await functionFromMigration('20261111095224_staff_branch_kitchen_permissions.sql','_staff_permission_any_branch'));
 sql.push(`
  create table invoices(id uuid,tenant_id uuid,branch_id uuid,source text,created_by uuid,status text default 'completed');
@@ -67,8 +66,11 @@ sql.push(`
  reset role;delete from role_permissions where permission_code='pos_fnb.checkout';
  delete from invoice_items where id='${id(64)}';delete from invoices where id='${id(54)}';
 `);
+sql.push(await functionFromMigration('20261111070229_staff_branch_checkout_permissions.sql','_staff_permission_at_scope'));
 sql.push(await migration('20261112172924_staff_invoice_item_view_scope.sql'));
 sql.push(await migration('20261113004524_staff_own_order_scope.sql'));
+// Replaying phase one after the final migration must never weaken the reader.
+sql.push(await readFile(new URL('../../supabase/rollout/staff-return-reader-bridge.sql',import.meta.url),'utf8'));
 sql.push(`
  set role authenticated;
  do $$begin
@@ -83,7 +85,15 @@ sql.push(`
   begin perform public.staff_returnable_invoice_items('${id(52)}');raise exception 'foreign tenant return allowed';
   exception when insufficient_privilege then if sqlerrm<>'RETURN_READ_DENIED' then raise;end if;end;
  end$$;
- reset role;delete from role_permissions where permission_code='pos_fnb.view_orders';set role authenticated;
+ reset role;insert into staff_branch_permission_catalog values ('pos_fnb.view_orders',1);
+ insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+  values ('${id(1)}','${id(101)}','${id(10)}','pos_fnb.view_orders','revoke','${id(100)}');set role authenticated;
+ do $$begin
+  begin perform public.staff_returnable_invoice_items('${id(50)}');raise exception 'bridge replay weakened scoped revoke';
+  exception when insufficient_privilege then if sqlerrm<>'RETURN_READ_DENIED' then raise;end if;end;
+ end$$;
+ reset role;delete from user_branch_permission_overrides where permission_code='pos_fnb.view_orders';
+ delete from role_permissions where permission_code='pos_fnb.view_orders';set role authenticated;
  reset role;insert into role_permissions values ('${id(20)}','invoices.view');set role authenticated;
  do $$begin if (select count(*) from invoices)<>2 or (select count(*) from invoice_items_scoped)<>2 then raise exception 'independent invoice right was lost';end if;end$$;
  reset role;insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type,created_by)
