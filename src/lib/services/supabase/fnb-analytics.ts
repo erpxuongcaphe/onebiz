@@ -526,37 +526,15 @@ export async function getTableTurnover(
   branchId?: string,
 ): Promise<{ tableName: string; avgMinutes: number; orders: number }[]> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-
-  let query = supabase
-    .from("kitchen_orders")
-    .select("table_id, restaurant_tables!kitchen_orders_table_id_fkey(name), created_at, updated_at")
-    .eq("tenant_id", tenantId)
-    .eq("status", "completed")
-    .not("table_id", "is", null);
-  if (branchId) query = query.eq("branch_id", branchId);
-
-  const rows = await fetchAllFnbRows(() => query.order("id", { ascending: true }), "[fnb.report]");
-
-  const map = new Map<string, { tableName: string; totalMinutes: number; orders: number }>();
-  for (const row of rows ?? []) {
-    const tbl = (row as Record<string, unknown>).restaurant_tables as { name: string } | null;
-    const tableName = tbl?.name ?? `Bàn ${row.table_id?.slice(0, 4)}`;
-    const key = row.table_id!;
-    const diff = (new Date(row.updated_at).getTime() - new Date(row.created_at).getTime()) / 60000;
-    const prev = map.get(key) ?? { tableName, totalMinutes: 0, orders: 0 };
-    prev.totalMinutes += diff;
-    prev.orders += 1;
-    map.set(key, prev);
-  }
-
-  return Array.from(map.values())
-    .map((t) => ({
-      tableName: t.tableName,
-      avgMinutes: t.orders > 0 ? Math.round(t.totalMinutes / t.orders) : 0,
-      orders: t.orders,
-    }))
-    .sort((a, b) => a.avgMinutes - b.avgMinutes);
+  const {data,error}=await (supabase.rpc as any)("staff_fnb_turnover_summary",{p_branch_id:branchId ?? null});
+  if(error) handleError(error,"[getTableTurnover]");
+  if(!Array.isArray(data)) throw new Error("Không tải được tổng hợp thời gian phục vụ.");
+  return data.map((row:{table_name:string;avg_minutes:number|string;orders:number|string})=>{
+    const avgMinutes=Number(row.avg_minutes),orders=Number(row.orders);
+    if(typeof row.table_name!=="string" || row.avg_minutes==null || row.orders==null ||
+       !Number.isFinite(avgMinutes) || !Number.isFinite(orders)) throw new Error("Dữ liệu thời gian phục vụ chưa hợp lệ.");
+    return {tableName:row.table_name,avgMinutes,orders};
+  });
 }
 
 /**

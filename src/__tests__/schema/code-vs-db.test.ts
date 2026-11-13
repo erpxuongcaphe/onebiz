@@ -54,6 +54,7 @@ const RPC_CHO_MIGRATION = new Map<string, string>([
   ["staff_fnb_cashier_summary", "20261113014411_staff_fnb_menu_summary.sql"],
   ["staff_fnb_modifier_summary", "20261113014411_staff_fnb_menu_summary.sql"],
   ["staff_fnb_channel_summary", "20261113014411_staff_fnb_menu_summary.sql"],
+  ["staff_fnb_turnover_summary", "20261113014411_staff_fnb_menu_summary.sql"],
   ["staff_fnb_invoice_detail_page", "20261113020048_staff_fnb_report_detail.sql"],
   ["staff_fnb_return_detail_page", "20261113020048_staff_fnb_report_detail.sql"],
   ["get_purchase_forecast_order_headers", "20261112175958_staff_purchase_forecast_scoped_orders.sql"],

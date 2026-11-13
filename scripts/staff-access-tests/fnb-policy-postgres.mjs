@@ -128,6 +128,8 @@ statements.push(`
    then raise exception 'modifier totals mismatch';end if;
   select * into x from public.staff_fnb_channel_summary('${id(10)}','platform');
   if x.dimension<>'Grab' or x.orders<>2 or x.revenue<>400 then raise exception 'delivery channel totals mismatch';end if;
+  select * into x from public.staff_fnb_turnover_summary('${id(10)}');
+  if x.table_name<>'Table A' or x.avg_minutes<>20 or x.orders<>1 then raise exception 'table turnover mismatch';end if;
   if public.staff_fnb_kpi_summary('${id(10)}','2025-01-01','2025-01-02')
    <> '{"totalRevenue":0,"returnAmount":0,"netRevenue":0,"totalOrders":0,"avgTicket":0,"avgTurnoverMinutes":0}'::jsonb
    then raise exception 'empty KPI period mismatch';end if;
@@ -183,6 +185,8 @@ statements.push(`
   begin perform public.staff_fnb_modifier_summary(null,null,null);raise exception 'unpermitted modifier report allowed';
   exception when insufficient_privilege then if sqlerrm<>'FNB_REPORT_PERMISSION_REQUIRED' then raise;end if;end;
   begin perform public.staff_fnb_channel_summary(null,'platform');raise exception 'unpermitted channel report allowed';
+  exception when insufficient_privilege then if sqlerrm<>'FNB_REPORT_PERMISSION_REQUIRED' then raise;end if;end;
+  begin perform public.staff_fnb_turnover_summary(null);raise exception 'unpermitted turnover report allowed';
   exception when insufficient_privilege then if sqlerrm<>'FNB_REPORT_PERMISSION_REQUIRED' then raise;end if;end;
  end$$;
  reset role;

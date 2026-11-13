@@ -206,5 +206,21 @@ begin
 end $$;
 revoke all on function public.staff_fnb_channel_summary(uuid,text) from public,anon;
 grant execute on function public.staff_fnb_channel_summary(uuid,text) to authenticated;
+create function public.staff_fnb_turnover_summary(p_branch_id uuid)
+returns table(table_name text,avg_minutes numeric,orders bigint)
+language plpgsql stable security definer set search_path='' as $$
+declare tenant uuid:=public.get_user_tenant_id();branches uuid[];
+begin
+ branches:=public._staff_fnb_report_branches(p_branch_id);
+ return query
+ select coalesce(t.name,'Bàn '||left(k.table_id::text,4)),
+  floor(avg(extract(epoch from (date_trunc('milliseconds',k.updated_at)-date_trunc('milliseconds',k.created_at)))/60)+0.5)::numeric,
+  count(*)::bigint
+ from public.kitchen_orders k left join public.restaurant_tables t on t.id=k.table_id
+ where k.tenant_id=tenant and k.branch_id=any(branches) and k.status='completed' and k.table_id is not null
+ group by k.table_id,t.name order by 2,k.table_id;
+end $$;
+revoke all on function public.staff_fnb_turnover_summary(uuid) from public,anon;
+grant execute on function public.staff_fnb_turnover_summary(uuid) to authenticated;
 notify pgrst,'reload schema';
 commit;
