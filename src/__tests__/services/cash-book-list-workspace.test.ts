@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 
-const rpc = vi.fn();
+const rpcResult = vi.fn();
+const setHeader = vi.fn(() => rpcResult());
+const rpc = vi.fn(() => ({ setHeader }));
 
 vi.mock("@/lib/services/supabase/base", () => ({
   getClient: () => ({ rpc }),
@@ -19,7 +21,8 @@ const { getCashBookListWorkspace, getAllCashBookEntries } =
 
 beforeEach(() => {
   vi.clearAllMocks();
-  rpc.mockResolvedValue({
+  rpcResult.mockReset();
+  rpcResult.mockResolvedValue({
     data: {
       items: [
         {
@@ -56,6 +59,7 @@ beforeEach(() => {
 describe("getCashBookListWorkspace", () => {
   it("maps accounting date, branch, creator and full-result metrics", async () => {
     const result = await getCashBookListWorkspace({ page: 0, pageSize: 15 });
+    expect(setHeader).toHaveBeenCalledWith("x-client-info", "onebiz-cash-scope/1");
 
     expect(result.data[0]).toMatchObject({
       date: "2026-08-10",
@@ -116,7 +120,7 @@ describe("getCashBookListWorkspace", () => {
   });
 
   it("loads all export rows in bounded 200-row pages", async () => {
-    rpc
+    rpcResult
       .mockResolvedValueOnce({
         data: { items: Array.from({ length: 200 }, (_, i) => ({
           id: `cash-${i}`, code: `PT${i}`, transaction_date: "2026-08-10",
@@ -138,20 +142,20 @@ describe("getCashBookListWorkspace", () => {
     );
   });
   it("stops if export paging returns no rows before advertised total", async () => {
-    rpc.mockResolvedValueOnce({ data: { items: [], total: 2 }, error: null });
+    rpcResult.mockResolvedValueOnce({ data: { items: [], total: 2 }, error: null });
     await expect(getAllCashBookEntries({})).rejects.toThrow("Chưa tải đủ sổ quỹ");
     expect(rpc).toHaveBeenCalledTimes(1);
   });
   it("rejects a moving result count instead of mixing two cash snapshots", async () => {
-    rpc.mockResolvedValueOnce({ data: { items: [{ id: "a" }], total: 2 }, error: null });
-    rpc.mockResolvedValueOnce({ data: { items: [{ id: "b" }], total: 3 }, error: null });
+    rpcResult.mockResolvedValueOnce({ data: { items: [{ id: "a" }], total: 2 }, error: null });
+    rpcResult.mockResolvedValueOnce({ data: { items: [{ id: "b" }], total: 3 }, error: null });
     await expect(getAllCashBookEntries({})).rejects.toThrow("Sổ quỹ đã thay đổi");
   });
   it("rejects duplicate pages and invalid advertised totals", async () => {
-    rpc.mockResolvedValueOnce({ data: { items: [{ id: "a" }], total: 2 }, error: null });
-    rpc.mockResolvedValueOnce({ data: { items: [{ id: "a" }], total: 2 }, error: null });
+    rpcResult.mockResolvedValueOnce({ data: { items: [{ id: "a" }], total: 2 }, error: null });
+    rpcResult.mockResolvedValueOnce({ data: { items: [{ id: "a" }], total: 2 }, error: null });
     await expect(getAllCashBookEntries({})).rejects.toThrow("Phiếu sổ quỹ bị trùng");
-    rpc.mockResolvedValueOnce({ data: { items: [], total: -1 }, error: null });
+    rpcResult.mockResolvedValueOnce({ data: { items: [], total: -1 }, error: null });
     await expect(getAllCashBookEntries({})).rejects.toThrow("Số dòng sổ quỹ không hợp lệ");
   });
 });

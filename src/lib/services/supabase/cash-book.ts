@@ -126,7 +126,7 @@ export async function getCashBookListWorkspace(
       p_amount_max: Number.isFinite(params.amountMax) ? params.amountMax : null,
       p_branch_id: params.branchId ?? null,
     },
-  );
+  ).setHeader("x-client-info", "onebiz-cash-scope/1");
   if (error) handleError(error, "getCashBookListWorkspace");
 
   const payload = (data ?? {}) as Record<string, any>;
@@ -190,6 +190,7 @@ export async function getCashBookEntries(params: QueryParams): Promise<QueryResu
       "*, profiles!cash_transactions_created_by_fkey(full_name), branches!cash_transactions_branch_id_fkey(name)",
       { count: "exact" },
     )
+    .setHeader("x-client-info", "onebiz-cash-scope/1")
     // Defense-in-depth: tenant filter ngay cả khi RLS bật. Trước đây service
     // không filter → demo có 4-5 tenant data trộn trong DB → user thấy phiếu
     // của tenant khác khi RLS tạm tắt.
@@ -299,6 +300,7 @@ export async function getCashBookSummaryAsync(params?: {
     let totalPayment = 0;
     for (let offset = 0; ; offset += 1000) {
       let query = supabase.from("cash_transactions").select("id, type, amount")
+        .setHeader("x-client-info", "onebiz-cash-scope/1")
         .eq("tenant_id", tenantId);
       if (params?.branchId) query = query.eq("branch_id", params.branchId);
       if (beforePeriod) query = query.lt("transaction_date", cashBookDate(params!.dateFrom!));
