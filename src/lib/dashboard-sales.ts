@@ -4,6 +4,7 @@ export interface SalesBucket { key: string; sales: number; orders: number }
 export interface SalesMode { mode: string; sales: number; orders: number }
 export interface SalesDashboard {
   sales: number; discounts: number; returns: number; orders: number;
+  internal_net?: number;
   received: number; refunded: number; collected: number;
   methods: Record<string, number>; buckets: SalesBucket[]; modes: SalesMode[];
 }

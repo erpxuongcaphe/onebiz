@@ -494,6 +494,38 @@ export async function getDailyRevenue(
   return Array.from(grouped.entries()).map(([date, revenue]) => ({ date, revenue }));
 }
 
+/** Dashboard-only shared input for category and product charts. */
+export async function getDashboardProductBreakdown(branchId?: string, range?: { from: string; to: string }): Promise<{category: CategoryRevenue[]; products: TopProductRevenue[]}> {
+  const resolved = resolveRange(range, thisMonthRange());
+  const lines: import('@/lib/reports/product-sales-aggregation').ProductSaleLine[] = [];
+  const categories = new Map<string, number>();
+  let after: string | null = null;
+  while (true) {
+    const {data, error} = await getClient().rpc('get_dashboard_product_lines' as never, {
+      p_from: resolved.start, p_to: resolved.end, p_branch: branchId ?? null, p_after: after,
+    } as never);
+    if (error) handleError(error, 'getDashboardProductBreakdown');
+    const page = (data ?? []) as Array<Record<string, unknown>>;
+    for (const item of page) {
+      if (item.product_present) {
+        const name = String(item.category_name ?? 'Khác');
+        categories.set(name, (categories.get(name) ?? 0) + Number(item.total ?? 0));
+      }
+      lines.push({id: String(item.id), invoiceId: String(item.invoice_id), productId: String(item.product_id ?? ''),
+        name: String(item.product_name ?? ''), code: item.product_code == null ? undefined : String(item.product_code),
+        unit: String(item.unit ?? ''), category: item.category_name == null ? undefined : String(item.category_name),
+        quantity: Number(item.quantity ?? 0), total: Number(item.total ?? 0), lineDiscount: Number(item.discount ?? 0),
+        invoiceDiscount: Number(item.invoice_discount ?? 0)});
+    }
+    if (page.length < 1000) break;
+    const next = String(page[page.length - 1].id);
+    if (!next || next === after) throw new Error('Không thể tải đầy đủ chi tiết sản phẩm.');
+    after = next;
+  }
+  return {category: [...categories].map(([category, revenue]) => ({category, revenue})).sort((a,b) => b.revenue-a.revenue),
+    products: aggregateProductSaleLines(lines).slice(0,10)};
+}
+
 export async function getRevenueByCategory(
   branchId?: string,
   range?: { from: string; to: string },

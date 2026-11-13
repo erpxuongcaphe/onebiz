@@ -20,6 +20,15 @@ afterEach(cleanup);
 beforeEach(() => openBills.mockReset().mockReturnValue({ orders: [], loading: false, error: null, refresh: vi.fn() }));
 beforeEach(() => receivable.mockReset().mockResolvedValue({ amount: 12345, invoice_count: 2, missing_count: 0 }));
 describe("sales dashboard permission and scope", () => {
+  it("shows both consolidated and summed-branch sales with the internal deduction", async () => {
+    state.branchId = undefined;
+    state.permissions.add('reports.view_all_branches'); state.permissions.add('reports.dashboard');
+    state.fetch.mockResolvedValue({...sample, sales: 1000, internal_net: 350});
+    render(<Dashboard />);
+    expect(await screen.findByTestId('net-sales')).toHaveTextContent('1,000');
+    expect(screen.getByTestId('all-branch-sales')).toHaveTextContent('1,350');
+    expect(screen.getByText('Bán nội bộ được loại khỏi doanh số chuỗi')).toBeInTheDocument();
+  });
   it("shows current outstanding invoice debt separately from cash and old debt collections", async () => {
     state.permissions.add("customers.view_debt");
     render(<Dashboard />);
