@@ -37,7 +37,8 @@ import {
   DetailItemsTable,
   AuditHistoryTab,
 } from "@/components/shared/inline-detail-panel";
-import { useToast, useBranchFilter } from "@/lib/contexts";
+import { useToast, useBranchFilter, useAuth } from "@/lib/contexts";
+import { documentExportableBranches, documentRowsExportable } from "@/lib/permissions/document-export-scope";
 import { DocumentNoteBox } from "@/components/shared/document-note-box";
 import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
 import { buildSalesOrderPrintData, toPrintLines } from "@/lib/print-templates";
@@ -445,6 +446,7 @@ function OrderDetail({
 
 export default function DatHangPage() {
   const { toast } = useToast();
+  const {user,tenant} = useAuth();
   const router = useRouter();
   const {
     activeBranchId,
@@ -523,6 +525,10 @@ export default function DatHangPage() {
       }),
     [activeBranchId, viewAllBranches, duocXemToanChuoi],
   );
+  const exportableOrderBranches = documentExportableBranches(branches,hasPermissionAtBranch,"orders.export");
+  const canExportOrders = phamViHienTai.mode === "branch"
+    ? exportableOrderBranches.includes(phamViHienTai.branchId)
+    : phamViHienTai.mode === "all" && exportableOrderBranches.length > 0;
   const chuaCoPhamVi = branchScopeReady && phamViHienTai.mode === "none";
   // Đổi chi nhánh ở global switcher → về lại chế độ lọc theo chi nhánh.
   useEffect(() => {
@@ -951,11 +957,11 @@ export default function DatHangPage() {
   const exportLock = useRef(false);
   const exportMounted = useRef(true);
   useEffect(() => { exportMounted.current = true; return () => { exportMounted.current = false; }; }, []);
-  const exportKey = JSON.stringify([orderListKey,search,deliveryArea,txPerms.canExport]);
+  const exportKey = JSON.stringify([tenant?.id,user?.id,orderListKey,search,deliveryArea,canExportOrders,exportableOrderBranches]);
   const currentExportKey = useRef(exportKey); currentExportKey.current = exportKey;
   const handleExport = async (type: "excel" | "csv", selected?: SalesOrder[], target:"filtered"|"page"="filtered") => {
     if (exportLock.current) return;
-    if(!txPerms.canExport){toast({title:'Anh/chị chưa có quyền xuất đơn đặt hàng.',variant:'error'});return;}
+    if(!canExportOrders){toast({title:'Anh/chị chưa có quyền xuất đơn đặt hàng.',variant:'error'});return;}
     if (!branchScopeReady || loading || search !== debouncedSearch || deliveryArea !== debouncedDeliveryArea || loadedListKey!==orderListKey) {
       toast({title:'Chờ danh sách tải xong trước khi xuất.',variant:'info'}); return;
     }
@@ -965,7 +971,10 @@ export default function DatHangPage() {
     try {
       const scopeLabel=selected?'các đơn đã chọn':target==='page'?`trang ${page+1} đang xem`:'toàn bộ theo bộ lọc';
       const chosen=selected??(target==='page'?data:undefined);
-      const {orders,lines} = await readOrdersForExport(phamViHienTai, {search:debouncedSearch,searchField,filters:buildFilters()},chosen?.map(o=>o.id));
+      const {orders,lines} = await readOrdersForExport(phamViHienTai, {search:debouncedSearch,searchField,filters:buildFilters()},chosen?.map(o=>o.id), rows => {
+        if (!valid()) throw new Error('Bộ lọc hoặc quyền đã thay đổi. Xuất lại theo phạm vi mới.');
+        if (!documentRowsExportable(rows,exportableOrderBranches)) throw new Error('Có đơn thuộc chi nhánh chưa được cấp quyền xuất. Hãy lọc chi nhánh được phép rồi xuất lại.');
+      });
       if (!valid()) throw new Error('Bộ lọc hoặc chi nhánh đã thay đổi. Xuất lại theo phạm vi mới.');
       if (!orders.length) throw new Error('Không có đơn phù hợp để xuất.');
       const details=buildOrderExportRows(orders,lines);
@@ -1086,7 +1095,7 @@ export default function DatHangPage() {
           setSearchField(v);
           setPage(0);
         }}
-        onExport={txPerms.canExport?{items:[
+        onExport={canExportOrders?{items:[
           {label:'Excel — theo bộ lọc',hint:'Tất cả các trang, đủ chi tiết hàng và bảng theo khách',onClick:()=>void handleExport('excel')},
           {label:`Excel — trang ${page+1}`,hint:`Chỉ ${data.length} đơn trên trang đang xem, đủ chi tiết hàng`,onClick:()=>void handleExport('excel',undefined,'page')},
           {label:'CSV — theo bộ lọc',hint:'Tất cả các trang; mỗi dòng là một mã hàng đặt',onClick:()=>void handleExport('csv')},
@@ -1248,7 +1257,7 @@ export default function DatHangPage() {
           {
             label: "Xuất Excel",
             icon: <Icon name="download" size={16} />,
-            disabled: exporting,
+            disabled: exporting || !canExportOrders,
             onClick: (selectedRows) => { void handleExport("excel", selectedRows); },
           },
           {

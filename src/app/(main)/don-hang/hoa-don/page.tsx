@@ -82,7 +82,7 @@ import { readSelectedInvoiceExport, readRetailDocumentExportLines } from "@/lib/
 import { buildRetailDocumentSheets, retailDocumentExportRange, retailDocumentStatusLabel } from "@/lib/utils/retail-document-export";
 import { exportReportToExcel } from "@/lib/utils/excel-export";
 import { exportToExcel } from "@/lib/utils/export";
-import { invoiceExportableBranches, invoiceRowsExportable } from "@/lib/permissions/invoice-export-scope";
+import { invoiceExportableBranches, documentRowsExportable } from "@/lib/permissions/document-export-scope";
 import {
   khoaChiSoHoaDon,
   taoBoNhoChiSo,
@@ -1301,7 +1301,7 @@ export default function HoaDonPage() {
               disabled: !canExportInvoices,
               onClick: async (selectedRows) => {
                 try {
-                if(!canExportInvoices || !invoiceRowsExportable(selectedRows,exportableInvoiceBranches))
+                if(!canExportInvoices || !documentRowsExportable(selectedRows,exportableInvoiceBranches))
                   throw new Error("Có hóa đơn thuộc chi nhánh chưa được cấp quyền xuất. Hãy chọn hóa đơn tại chi nhánh được phép.");
                 if(selectedRows.every(row=>row.source!=="fnb")){
                   if(!listQuery || !branchScopeReady || selectedExportActive.current)return;
@@ -1309,7 +1309,7 @@ export default function HoaDonPage() {
                   const snapshot=selectedExportContext.current;
                   try{
                     const rows=await readSelectedInvoiceExport(phamViHienTai,listQuery,selectedRows.map(row=>row.id),controller.signal);
-                    if(!invoiceRowsExportable(rows,exportableInvoiceBranches))
+                    if(!documentRowsExportable(rows,exportableInvoiceBranches))
                       throw new Error("Có hóa đơn thuộc chi nhánh chưa được cấp quyền xuất. Hãy chọn lại.");
                     setSelectedExportStage("Đang tải chi tiết hàng và ghi chú…");
                     const lines=await readRetailDocumentExportLines(rows,controller.signal);

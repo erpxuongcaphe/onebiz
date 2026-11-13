@@ -11,7 +11,7 @@ import {buildRetailDocumentSheets,buildRetailDocumentExport,retailDocumentLineCo
 import {exportReportToExcel} from "@/lib/utils/excel-export";
 import {formatDate} from "@/lib/format";
 import {invoiceFnbTypeLabel,invoiceRetailTypeLabel} from "@/lib/utils/invoice-list-filters";
-import {invoiceRowsExportable} from "@/lib/permissions/invoice-export-scope";
+import {documentRowsExportable} from "@/lib/permissions/document-export-scope";
 
 export function useInvoiceListExport(options:{
   scope: PhamViChiNhanh; query: InvoiceExportQuery|null; ready:boolean; allowed:boolean; fnb:boolean;
@@ -41,7 +41,7 @@ export function useInvoiceListExport(options:{
       if(target==='page')setProgress({loaded:rows.length,total:rows.length});
       if(!valid())return;
       if(!rows.length){options.onError("Không có hóa đơn theo bộ lọc đã chọn.");return;}
-      if(!invoiceRowsExportable(rows,options.exportableBranches)) {
+      if(!documentRowsExportable(rows,options.exportableBranches)) {
         options.onError("Có hóa đơn thuộc chi nhánh chưa được cấp quyền xuất. Hãy lọc chi nhánh được phép rồi xuất lại.");
         return;
       }

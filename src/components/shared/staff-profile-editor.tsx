@@ -782,6 +782,11 @@ export function StaffProfileEditor({
                                     Trên danh sách hóa đơn, quyền này cho xuất tại các chi nhánh người này được xem. Quyền xuất báo cáo tại một chi nhánh cũng cho xuất hóa đơn của chi nhánh đó; kiểm tra cả hai quyền khi phân công.
                                   </p>
                                 )}
+                                {p.code === "orders.export" && (
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    Trên danh sách đơn đặt hàng, quyền này cho xuất tại các chi nhánh người này được xem. Quyền xuất báo cáo tại một chi nhánh cũng cho xuất đơn tại chi nhánh đó; kiểm tra cả hai quyền khi phân công.
+                                  </p>
+                                )}
                                 {branchId && p.code === "finance.view_cash_journal_self_spend" && (
                                   <p className="mt-1 text-xs text-muted-foreground">
                                     Quyền này áp dụng cho khoản chi tự chi và các thao tác đối soát quỹ cần số liệu của quán được chọn. Để mở Nhật ký thu chi, nhân viên chọn chi nhánh đã được cấp. Quyền xem nhật ký toàn công ty là quyền độc lập và vẫn cho xem theo phạm vi của quyền đó.

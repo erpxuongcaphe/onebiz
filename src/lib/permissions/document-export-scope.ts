@@ -4,11 +4,19 @@ export function invoiceExportableBranches(
   branches: readonly {id:string}[],
   hasAtBranch: (code:string, branchId:string) => boolean,
 ) {
-  return branches.filter(branch => hasAtBranch("invoices.export", branch.id)
+  return documentExportableBranches(branches,hasAtBranch,"invoices.export");
+}
+
+export function documentExportableBranches(
+  branches: readonly {id:string}[],
+  hasAtBranch: (code:string, branchId:string) => boolean,
+  documentPermission: "invoices.export" | "orders.export",
+) {
+  return branches.filter(branch => hasAtBranch(documentPermission, branch.id)
     || hasAtBranch("reports.export", branch.id)).map(branch => branch.id).sort();
 }
 
-export function invoiceRowsExportable(
+export function documentRowsExportable(
   rows: readonly {branchId?:string | null}[],
   branches: readonly string[],
 ) {

@@ -22,7 +22,7 @@ export interface OrderExportLine {
 }
 
 /** All matching orders, or an exact set of visible/selected IDs, in the same authorized scope. */
-export async function readOrdersForExport(scope: PhamViDonDatHang, params: Omit<QueryParams, 'branchId' | 'page' | 'pageSize'>, selectedIds?: string[]) {
+export async function readOrdersForExport(scope: PhamViDonDatHang, params: Omit<QueryParams, 'branchId' | 'page' | 'pageSize'>, selectedIds?: string[], authorize?: (orders: SalesOrder[]) => void) {
   if (scope.mode === 'none') throw new Error('Chọn phạm vi chi nhánh trước khi xuất.');
   const ids = selectedIds ? [...new Set(selectedIds)] : undefined;
   if (ids && !ids.length) throw new Error('Chọn ít nhất một đơn đặt hàng.');
@@ -34,6 +34,7 @@ export async function readOrdersForExport(scope: PhamViDonDatHang, params: Omit<
   if (ids && (orders.length !== ids.length || orders.some(o => !ids.includes(o.id)))) {
     throw new Error('Đơn được chọn đã thay đổi hoặc không còn trong phạm vi. Tải lại trước khi xuất.');
   }
+  authorize?.(orders);
   // Preserve the visible/selected order without trusting cached document data.
   if (ids) orders.sort((a,b) => ids.indexOf(a.id) - ids.indexOf(b.id));
   const client = getClient();

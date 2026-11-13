@@ -37,6 +37,13 @@ describe('read-only management exports',()=>{
   await expect(readOrdersForExport({mode:'none',duocDemChiNhanhKhac:false},{})).rejects.toThrow('phạm vi');
   await expect(readOrdersForExport(scope,{},['gone'])).rejects.toThrow('đã thay đổi');
  });
+ it('checks branch authorization before reading any order lines',async()=>{
+  f.orders=[{id:'a',branchId:'branch'},{id:'b',branchId:'other'}];
+  await expect(readOrdersForExport(scope,{},undefined,rows=>{
+   if(rows.some(row=>row.branchId!=='branch'))throw new Error('chi nhánh chưa được cấp quyền xuất');
+  })).rejects.toThrow('chi nhánh chưa được cấp quyền xuất');
+  expect(f.queries).toEqual([]);
+ });
  it('loads every line and surfaces page errors instead of silently exporting empty details',async()=>{
   f.orders=[{id:'a'}];f.lines=Array.from({length:451},(_,i)=>({id:String(i),invoice_id:'a'}));
   expect((await readOrdersForExport(scope,{})).lines).toHaveLength(451);
