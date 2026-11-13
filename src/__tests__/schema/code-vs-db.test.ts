@@ -47,6 +47,7 @@ const RPC = new Set(schema.rpc as string[]);
  * dưới sẽ BẮT XOÁ dòng ngay khi dump đã có (sau `node scripts/dump-db-schema.mjs`).
  */
 const RPC_CHO_MIGRATION = new Map<string, string>([
+  ["staff_returnable_invoice_items", "20261113041930_staff_return_reader_bridge.sql"],
   // Applied and verified on ONEBIZ 02/11; remove after the next full schema dump.
   ["delete_money_account", "20261102045002_money_account_edit_delete.sql"],
   ["close_sales_orders_processing", "20261030161847_sales_order_processing_bulk_close.sql"],
