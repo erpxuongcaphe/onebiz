@@ -596,31 +596,16 @@ export async function getFinancialAlerts(branchId?: string): Promise<FinancialAl
         .eq("tenant_id", tenantId)
         .filter("is_active", "eq", true);
 
-  // CEO 26/05/2026: Fix column name `lot_code` → `lot_number` (đúng schema
-  // migration 00104). Query này từng trả về 400 → dashboard cảnh báo lot
-  // sắp hết hạn không hoạt động được.
-  let lotQuery = (supabase as any)
-    .from("product_lots")
-    .select("id, lot_number, product_id, expiry_date, current_qty, products:products_scoped(name)")
-    .eq("tenant_id", tenantId)
-    .gt("current_qty", 0)
-    // CEO 16/08/2026: chỉ tính lô còn TỒN VẬT LÝ. Lô 'cancelled' (phiếu nhập
-    // bị huỷ) và 'consumed'/'disposed' vẫn giữ current_qty làm dấu vết lịch sử
-    // → cộng vào là báo thừa hàng không có thật.
-    .in("status", ["active", "expired"])
-    .not("expiry_date", "is", null)
-    .order("expiry_date", { ascending: true })
-    .limit(20);
+  // A bounded report projection keeps expiry alerts available without granting
+  // the report viewer direct access to complete inventory lot records.
+  const lotQuery = (supabase as any).rpc("get_financial_alert_lots", { p_branch: branchId ?? null });
 
   const cashToday = cashBookDate(new Date().toISOString());
   const cashPeriod = { from: `${cashToday.slice(0, 7)}-01`, to: cashToday };
+  // Alert viewers need totals, not access to individual cash-book rows.
   const cashQuery = (supabase as any).rpc("get_cash_flow_alert_totals", {
     p_from: cashPeriod.from, p_to: cashPeriod.to, p_branch: branchId ?? null,
   });
-
-  if (branchId) {
-    lotQuery = lotQuery.eq("branch_id", branchId);
-  }
 
   // Query all needed data in parallel
   const [debtors, lowStockProducts, lotsData, cashFlowResult] = await Promise.all([
@@ -642,6 +627,13 @@ export async function getFinancialAlerts(branchId?: string): Promise<FinancialAl
     return !["receipt", "payment"].includes(String(item.type)) || item.amount == null || !Number.isFinite(Number(item.amount));
   })) throw new Error("Không xác định được số liệu cảnh báo thu chi.");
   const cashFlowData = cashFlowResult.data as Array<{ type: string; amount: number | string }>;
+  if (!Array.isArray(lotsData.data) || lotsData.data.some((lot: unknown) => {
+    if (!lot || typeof lot !== "object") return true;
+    const row = lot as Record<string, unknown>;
+    return typeof row.id !== "string" || typeof row.lot_number !== "string" ||
+      typeof row.expiry_date !== "string" || !Number.isFinite(Date.parse(row.expiry_date)) ||
+      row.current_qty == null || !Number.isFinite(Number(row.current_qty)) || Number(row.current_qty) <= 0;
+  })) throw new Error("Không xác định được danh sách cảnh báo lô hàng.");
 
   // --- 1. Overdue debt alerts ---
   const debtorRows = (debtors.data ?? []).map((c: any) => ({
@@ -680,7 +672,15 @@ export async function getFinancialAlerts(branchId?: string): Promise<FinancialAl
 
   // --- 2. Low stock alerts ---
   // Normalize stock data: branch_stock vs products have different shapes
-  const stockRows = lowStockProducts.map((p: any) => {
+  if (!branchId && lowStockProducts.some((p: any) => p.stock == null)) {
+    alerts.push({
+      id: "stock_scope_unavailable", type: "low_stock", severity: "info",
+      title: "Chưa đủ quyền xem toàn bộ cảnh báo tồn",
+      description: "Một số số tồn không thuộc phạm vi được xem, nên danh sách cảnh báo có thể chưa đầy đủ.",
+      value: 0, link: "/hang-hoa",
+    });
+  }
+  const stockRows = lowStockProducts.filter((p: any) => branchId ? p.quantity != null : p.stock != null).map((p: any) => {
     const product = p.products as Record<string, unknown> | null;
     return {
       id: (product?.id ?? p.id) as string,
@@ -764,8 +764,7 @@ export async function getFinancialAlerts(branchId?: string): Promise<FinancialAl
       description: expiredLots
         .slice(0, 3)
         .map((l) => {
-          const product = l.products as { name: string } | null;
-          return `${product?.name ?? "SP"} (${l.lot_number})`;
+          return `${l.product_name ?? "SP"} (${l.lot_number})`;
         })
         .join(", "),
       value: expiredLots.length,
@@ -787,8 +786,7 @@ export async function getFinancialAlerts(branchId?: string): Promise<FinancialAl
       description: soonExpiring
         .slice(0, 3)
         .map((l) => {
-          const product = l.products as { name: string } | null;
-          return `${product?.name ?? "SP"} (${l.lot_number})`;
+          return `${l.product_name ?? "SP"} (${l.lot_number})`;
         })
         .join(", "),
       value: soonExpiring.length,
@@ -1078,6 +1076,7 @@ export async function getStockAlerts(): Promise<StockAlert[]> {
   const alerts: StockAlert[] = [];
 
   for (const p of data ?? []) {
+    if (p.stock == null) continue;
     const stock = Number(p.stock ?? 0);
     const minStock = Number(p.min_stock ?? 0);
     const maxStock = Number(p.max_stock ?? 0);

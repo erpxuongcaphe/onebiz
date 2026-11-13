@@ -50,6 +50,7 @@ const RPC_CHO_MIGRATION = new Map<string, string>([
   // The additive projection migration must be applied before this client is deployed.
   ["get_cash_flow_category_summary", "20261113074601_staff_cash_flow_summary_projection.sql"],
   ["get_cash_flow_alert_totals", "20261113074601_staff_cash_flow_summary_projection.sql"],
+  ["get_financial_alert_lots", "20261113102711_staff_financial_alert_lots_compat.sql"],
   ["get_cash_flow_created_month_totals", "20261113074601_staff_cash_flow_summary_projection.sql"],
   ["get_cash_expense_report_totals", "20261113074601_staff_cash_flow_summary_projection.sql"],
   ["get_cash_dashboard_totals", "20261113074601_staff_cash_flow_summary_projection.sql"],
