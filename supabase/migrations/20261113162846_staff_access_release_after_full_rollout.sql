@@ -26,7 +26,7 @@ do $$declare missing text[];begin
    '20261113073019','20261113080848','20261113081722','20261113094600','20261113120241',
    '20261113121110','20261113121957','20261113123618','20261113125437','20261113131259',
    '20261113133613','20261113134553','20261113135408','20261113141904','20261113143542',
-   '20261113145809','20261113154135'
+   '20261113145809','20261113154135','20261113162734'
  ]::text[]) required(version)
  where not exists(select 1 from supabase_migrations.schema_migrations m where m.version=required.version);
  if missing is not null then raise exception 'STAFF_ROLLOUT_INCOMPLETE: %',missing;end if;

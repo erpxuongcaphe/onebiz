@@ -8,10 +8,10 @@ try {
  await initializeStaffAccessFixture(db,id);
  await db.exec(await readFile('supabase/migrations/20261111052704_staff_branch_access.sql','utf8'));
  const hold=await readFile('supabase/migrations/20261113154135_staff_access_hold_partial_rollout.sql','utf8');
- const release=await readFile('supabase/migrations/20261113154146_staff_access_release_after_full_rollout.sql','utf8');
+ const release=await readFile('supabase/migrations/20261113162846_staff_access_release_after_full_rollout.sql','utf8');
  const versions=[...release.matchAll(/'(\d{14})'/g)].map(x=>x[1]);
  const files=await readdir('supabase/migrations');
- assert.equal(versions.length,107);assert.equal(new Set(versions).size,107);
+ assert.equal(versions.length,108);assert.equal(new Set(versions).size,108);
  for(const version of versions)assert.equal(files.filter(x=>x.startsWith(version+'_')).length,1,`missing or duplicate migration ${version}`);
  await db.exec(hold);
  const canSave=async()=> (await db.query("select has_function_privilege('authenticated','public.save_staff_profile_access(uuid,text,jsonb)','execute') ok")).rows[0].ok;
