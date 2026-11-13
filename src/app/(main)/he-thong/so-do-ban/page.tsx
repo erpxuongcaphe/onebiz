@@ -11,6 +11,7 @@
 
 import { useEffect, useState } from "react";
 import { FloorPlanEditor } from "@/components/shared/floor-plan/floor-plan-editor";
+import { FloorPlanReadOnly } from "@/components/shared/floor-plan/floor-plan-read-only";
 import { getBranches, type BranchDetail } from "@/lib/services";
 import {
   Select,
@@ -24,7 +25,7 @@ import { usePermissions } from "@/lib/permissions";
 import { Icon } from "@/components/ui/icon";
 
 export default function SoDoBanPage() {
-  const { currentBranch } = useAuth();
+  const { currentBranch, hasAssignedBranchAccess } = useAuth();
   const { toast } = useToast();
   const { hasPermission, isLoading: isAuthLoading } = usePermissions();
   const [branches, setBranches] = useState<BranchDetail[]>([]);
@@ -34,6 +35,7 @@ export default function SoDoBanPage() {
   const canEditGlobal = hasPermission("floor_plan.edit_global");
   const canEditBranch = hasPermission("floor_plan.edit_branch");
   const canEdit = canEditGlobal || canEditBranch;
+  const canView = hasPermission("floor_plan.view");
 
   // Load chi nhánh — global thấy hết, branch chỉ thấy chi nhánh của họ
   useEffect(() => {
@@ -70,6 +72,13 @@ export default function SoDoBanPage() {
   ]);
 
   // Auth đã xong + không có quyền nào → chặn
+  if (!isAuthLoading && !canEdit && canView && currentBranch &&
+      (hasAssignedBranchAccess(currentBranch.id) || hasPermission("reports.view_all_branches"))) {
+    return <FloorPlanReadOnly key={currentBranch.id} branchId={currentBranch.id} branchName={currentBranch.name}/>;
+  }
+  if (!isAuthLoading && !canEdit && canView && !currentBranch) {
+    return <p className="p-6">Chọn một chi nhánh trên thanh phía trên để xem sơ đồ bàn.</p>;
+  }
   if (!isAuthLoading && !canEdit) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-3">
