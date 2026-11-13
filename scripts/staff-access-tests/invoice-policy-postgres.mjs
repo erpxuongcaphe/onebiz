@@ -10,6 +10,7 @@ const sql=[];const migration=async n=>readFile(new URL(`../../supabase/migration
 await initializeStaffAccessFixture({exec:async s=>sql.push(s)},id);
 sql.push(await migration('20261111052704_staff_branch_access.sql'));
 sql.push(await functionFromMigration('20261111070229_staff_branch_checkout_permissions.sql','_staff_permission_at_scope'));
+sql.push(await functionFromMigration('20261111095224_staff_branch_kitchen_permissions.sql','_staff_permission_any_branch'));
 sql.push(`
  create table invoices(id uuid,tenant_id uuid,branch_id uuid,source text,created_by uuid);
  create table invoice_items(id uuid,invoice_id uuid,quantity numeric,unit_cost numeric);
@@ -48,6 +49,29 @@ sql.push(`
  do $$begin if (select count(*) from invoices)<>1 or (select count(*) from invoice_items_scoped)<>1 then raise exception 'global revoke ignored';end if;end$$;
  reset role;insert into role_permissions values ('${id(20)}','pos_retail.checkout');set role authenticated;
  do $$begin if (select count(*) from invoices)<>2 then raise exception 'independent checkout was lost';end if;end$$;
+ reset role;
+`);
+for(const [name,param] of [
+ ['close_sales_order_processing','p_order_id'],['reopen_sales_order_processing','p_order_id'],
+ ['create_child_sale_from_order','p_order_id'],['mark_order_processed','p_order_id'],
+ ['save_sales_order_atomic','p_order_id'],['attach_invoice_shipment_atomic','p_invoice_id'],
+ ['update_draft_invoice_atomic','p_invoice_id'],['cancel_draft_invoice_atomic','p_invoice_id'],
+ ['duplicate_invoice_to_order_atomic','p_source_invoice_id'],
+]) sql.push(`create function public.${name}(${param} uuid) returns boolean language plpgsql security definer set search_path='' as $$\nbegin\n return true; end $$;`);
+sql.push(`create function public.close_sales_orders_processing(p_order_ids uuid[],p_reason text default null,p_apply boolean default false) returns boolean language plpgsql security definer set search_path='' as $$\nbegin\n return true; end $$;`);
+sql.push(await migration('20261113005650_staff_own_order_action_scope.sql'));
+sql.push(`
+ delete from role_permissions where permission_code='pos_retail.checkout';
+ set role authenticated;
+ do $$begin
+  begin perform public.close_sales_order_processing('${id(51)}'); raise exception 'own action guard missing';
+  exception when insufficient_privilege then if sqlerrm<>'STAFF_OWN_ORDER_ACTION_DENIED' then raise; end if; end;
+  if not public.close_sales_order_processing('${id(50)}') then raise exception 'own action blocked'; end if;
+  begin perform public.close_sales_orders_processing(array['${id(50)}','${id(51)}']::uuid[],null,false); raise exception 'batch guard missing';
+  exception when insufficient_privilege then if sqlerrm<>'STAFF_OWN_ORDER_ACTION_DENIED' then raise; end if; end;
+ end$$;
+ reset role; insert into role_permissions values ('${id(20)}','pos_retail.checkout'); set role authenticated;
+ do $$begin if not public.close_sales_order_processing('${id(51)}') then raise exception 'independent checkout lost'; end if;end$$;
  reset role;
 `);
 if(process.env.ONEBIZ_PGLITE_MODULE){const {PGlite}=await import(pathToFileURL(process.env.ONEBIZ_PGLITE_MODULE).href);const db=new PGlite();try{await db.exec(sql.join('\n'));}finally{await db.close();}console.log('PASS local invoice fixture rehearsal (PGlite)');process.exit(0);}
