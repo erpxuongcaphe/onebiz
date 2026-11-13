@@ -73,7 +73,7 @@ try {
       add column payload_hash bytea,add column status text default 'queued';
     create function public.digest(bytea,text) returns bytea language sql immutable as $$select decode(md5(encode($1,'hex')),'hex')$$;
     insert into fnb_print_points values('${id(70)}','${id(1)}','${id(10)}',true,
-      '[{"key":"cashier","paper":"80mm","printer":"Synthetic","label":"Cashier"}]');
+      '[{"key":"cashier","paper":"80mm","printer":"Synthetic","label":"Cashier"},{"key":"kitchen","paper":"80mm","printer":"Synthetic","label":"Kitchen"}]');
     insert into staff_branch_permission_catalog values('pos_fnb.view_orders',1);
     select set_config('request.jwt.claim.sub','${id(101)}',false);
     insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
@@ -136,6 +136,20 @@ try {
     2,
     "denied print creates no job",
   );
+  // Sending to the kitchen remains an independent everyday staff capability.
+  await db.exec(`insert into role_permissions values ('${id(20)}','pos_fnb.send_kitchen');`);
+  assert.equal((await db.query(`select _fnb_print_access_v1('${id(10)}') value`)).rows[0].value,id(1),
+    'kitchen staff retain access even when cashier and order-view rights are revoked');
+  const enqueueKitchen=()=>db.query(`select fnb_print_enqueue_v1('${id(10)}','${id(74)}','kitchen','Test','80mm',encode(decode('1b401b6101' || repeat('00',20),'hex'),'base64'))`);
+  await enqueueKitchen(); await enqueueKitchen();
+  assert.equal((await db.query("select count(*)::int n from fnb_print_jobs")).rows[0].n,3,
+    'retrying the same kitchen job does not create another job');
+  await assert.rejects(enqueue(75), /Không có quyền in bill/, 'kitchen-only permission does not silently grant cashier bills');
+  await db.exec(`delete from user_branches where user_id='${id(101)}' and branch_id='${id(11)}';`);
+  await assert.rejects(db.query(`select _fnb_print_access_v1('${id(11)}')`),/Không có quyền/,
+    'kitchen permission cannot print in an unassigned branch');
+  await db.exec(`insert into user_branches values('${id(101)}','${id(11)}',null);
+    delete from role_permissions where role_id='${id(20)}' and permission_code='pos_fnb.send_kitchen';`);
   await db.exec(`delete from user_branch_permission_overrides where user_id='${id(101)}' and permission_code in ('pos_fnb.view_orders','pos_fnb.checkout');
     delete from staff_branch_permission_catalog where permission_code='pos_fnb.view_orders';`);
   console.log(
