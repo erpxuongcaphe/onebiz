@@ -142,6 +142,70 @@ statements.push(`
  do $$begin if (select count(*) from inventory_opening_batches)<>0 then raise exception 'inactive account retained opening access';end if;end$$;
  reset role;
 `);
+statements.push(await functionFromMigration('20261112072555_staff_branch_invoice_order_view_consumers.sql','_staff_my_document_view'));
+statements.push(await functionFromMigration('20261112172924_staff_invoice_item_view_scope.sql','_staff_invoice_item_read'));
+statements.push(`
+ update profiles set is_active=true where id='${id(101)}';
+ delete from user_permission_overrides where user_id='${id(101)}' and permission_code in ('inventory.view','orders.view');
+ delete from user_branch_permission_overrides where user_id='${id(101)}' and permission_code in ('inventory.view','orders.view');
+ insert into role_permissions values ('${id(20)}','inventory.view'),('${id(20)}','orders.view');
+ insert into staff_branch_permission_catalog values ('orders.view',1);
+ create function public._can_read_branch_inventory_00476(u uuid,t uuid,b uuid) returns boolean language sql stable security definer set search_path=public
+  as $$select t=get_user_tenant_id() and user_has_branch_access(u,b)$$;
+ create table internal_sale_receipts(id uuid,tenant_id uuid,branch_id uuid);
+ create table operational_uom_requests(id uuid,tenant_id uuid,branch_id uuid,to_branch_id uuid,reference_type text);
+ create table purchase_orders(id uuid,tenant_id uuid,branch_id uuid);
+ create table invoices(id uuid,tenant_id uuid,branch_id uuid,source text default 'order');
+ create table fnb_purchase_sales_order_links(id uuid,tenant_id uuid,purchase_order_id uuid,sales_order_id uuid);
+ create table warehouse_order_quantity_adjustments(id uuid,order_id uuid);
+ insert into internal_sale_receipts values ('${id(610)}','${id(1)}','${id(10)}'),('${id(611)}','${id(1)}','${id(11)}');
+ insert into operational_uom_requests values ('${id(620)}','${id(1)}','${id(10)}','${id(11)}','transfer'),('${id(621)}','${id(1)}','${id(10)}','${id(10)}','transfer'),('${id(622)}','${id(1)}','${id(11)}',null,'purchase');
+ insert into purchase_orders values ('${id(630)}','${id(1)}','${id(10)}'),('${id(631)}','${id(1)}','${id(11)}');
+ insert into invoices(id,tenant_id,branch_id) values ('${id(640)}','${id(1)}','${id(10)}'),('${id(641)}','${id(1)}','${id(11)}');
+ insert into fnb_purchase_sales_order_links values ('${id(650)}','${id(1)}','${id(630)}','${id(641)}'),('${id(651)}','${id(1)}','${id(630)}','${id(640)}'),('${id(652)}','${id(1)}','${id(631)}','${id(640)}'),('${id(653)}','${id(2)}','${id(631)}','${id(641)}');
+ insert into warehouse_order_quantity_adjustments values ('${id(660)}','${id(640)}'),('${id(661)}','${id(641)}');
+ alter table invoices enable row level security;
+ create policy invoice_legacy on invoices for select to authenticated using
+  (tenant_id=get_user_tenant_id() and user_has_branch_access(auth.uid(),branch_id));
+ alter table internal_sale_receipts enable row level security;alter table operational_uom_requests enable row level security;
+ alter table fnb_purchase_sales_order_links enable row level security;alter table warehouse_order_quantity_adjustments enable row level security;
+ create policy receipts_read_scope on internal_sale_receipts for select to authenticated using
+  (tenant_id=get_user_tenant_id() and user_has_permission(auth.uid(),'inventory.view') and user_has_branch_access(auth.uid(),branch_id));
+ create policy operational_uom_read on operational_uom_requests for select to authenticated using
+  (user_has_permission(auth.uid(),'inventory.view') and (_can_read_branch_inventory_00476(auth.uid(),tenant_id,branch_id)
+   or (reference_type='transfer' and _can_read_branch_inventory_00476(auth.uid(),tenant_id,to_branch_id))));
+ create policy fnb_order_link_read on fnb_purchase_sales_order_links for select to authenticated using
+  (tenant_id=get_user_tenant_id() and (exists(select 1 from purchase_orders p where p.id=purchase_order_id and user_has_branch_access(auth.uid(),p.branch_id) and user_has_permission(auth.uid(),'inventory.view'))
+   or exists(select 1 from invoices i where i.id=sales_order_id and user_has_branch_access(auth.uid(),i.branch_id) and user_has_permission(auth.uid(),'orders.view'))));
+ create policy warehouse_order_adjustments_read on warehouse_order_quantity_adjustments for select to authenticated using
+  (exists(select 1 from invoices i where i.id=order_id and i.tenant_id=get_user_tenant_id() and user_has_branch_access(auth.uid(),i.branch_id) and user_has_permission(auth.uid(),'orders.view')));
+ grant select on internal_sale_receipts,operational_uom_requests,fnb_purchase_sales_order_links,warehouse_order_quantity_adjustments,purchase_orders,invoices to authenticated;
+`);
+statements.push(await migration('20261113065814_staff_invoice_header_branch_scope.sql'));
+statements.push(await migration('20261113071036_staff_inventory_linked_policy_scope.sql'));
+statements.push(`
+ set role authenticated;
+ do $$begin if (select count(*) from internal_sale_receipts)<>2 or (select count(*) from operational_uom_requests)<>3
+  or (select count(*) from fnb_purchase_sales_order_links)<>3 or (select count(*) from warehouse_order_quantity_adjustments)<>2
+  then raise exception 'legacy linked inventory access changed';end if;end$$;
+ reset role;insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
+  ('${id(1)}','${id(101)}','${id(10)}','inventory.view','revoke','${id(100)}'),
+  ('${id(1)}','${id(101)}','${id(10)}','orders.view','revoke','${id(100)}');set role authenticated;
+ do $$begin if (select count(*) from internal_sale_receipts)<>1 or (select count(*) from operational_uom_requests)<>2
+  or (select count(*) from fnb_purchase_sales_order_links)<>2 or (select count(*) from warehouse_order_quantity_adjustments)<>1
+  then raise exception 'linked branch exception or two-sided transfer scope failed';end if;end$$;
+ reset role;delete from role_permissions where permission_code in ('inventory.view','orders.view');
+ update user_branch_permission_overrides set branch_id='${id(11)}',override_type='grant' where permission_code in ('inventory.view','orders.view');set role authenticated;
+ do $$begin if (select count(*) from internal_sale_receipts)<>1 or (select count(*) from operational_uom_requests)<>2
+  or (select count(*) from fnb_purchase_sales_order_links)<>2 or (select count(*) from warehouse_order_quantity_adjustments)<>1
+  then raise exception 'linked local grants failed';end if;end$$;
+ reset role;insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type,created_by)
+  values ('${id(1)}','${id(101)}','inventory.view','revoke','${id(100)}');set role authenticated;
+ do $$begin if (select count(*) from internal_sale_receipts)<>0 or (select count(*) from operational_uom_requests)<>0
+  or (select count(*) from fnb_purchase_sales_order_links)<>1 or (select count(*) from warehouse_order_quantity_adjustments)<>1
+  then raise exception 'global revoke or independent order access failed';end if;end$$;
+ reset role;
+`);
 if (process.env.ONEBIZ_PGLITE_MODULE) {
  const {PGlite}=await import(pathToFileURL(process.env.ONEBIZ_PGLITE_MODULE).href);
  const db=new PGlite();try { await db.exec(statements.join('\n')); } finally { await db.close(); }
