@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 const state = vi.hoisted(() => ({
   userId: "user-a",
   branchId: "branch-a", refresh: undefined as (() => void) | undefined,
-  getOverviewKpis: vi.fn(), getDebtWorkspace: vi.fn(), getCashFlowDetailed: vi.fn(), exportReportToExcel: vi.fn(), denied: new Set<string>(), range: { from: "2026-09-01", to: "2026-09-30" },
+  getOverviewKpis: vi.fn(), getDebtWorkspace: vi.fn(), getCashFlowDetailed: vi.fn(), getDashboardProductBreakdown: vi.fn(), exportReportToExcel: vi.fn(), denied: new Set<string>(), range: { from: "2026-09-01", to: "2026-09-30" },
 }));
 vi.mock("@/lib/contexts", () => ({
   useBranchFilter: () => ({ activeBranchId: state.branchId, branchLabel: state.branchId, isReady: true }),
@@ -25,6 +25,7 @@ vi.mock("@/lib/services", () => ({
   getTopProductsByRevenue: async () => [],
   getCashFlowDetailed: state.getCashFlowDetailed,
 }));
+vi.mock("@/lib/services/supabase/analytics", () => ({getDashboardProductBreakdown: state.getDashboardProductBreakdown}));
 vi.mock("@/lib/services/supabase/reports", () => ({ getBranchPnLComparison: async () => [] }));
 vi.mock("@/lib/services/supabase/debt-workspace", () => ({ getDebtWorkspace: state.getDebtWorkspace }));
 vi.mock("@/components/shared/report", () => ({
@@ -47,11 +48,18 @@ function deferred<T>() {
   const promise = new Promise<T>(done => { resolve = done; });
   return { promise, resolve };
 }
-beforeEach(() => { state.branchId = "branch-a"; state.denied = new Set(); state.getOverviewKpis.mockReset(); state.getDebtWorkspace.mockReset().mockResolvedValue({ receivables: [], payables: [], generatedAt: "2026-10-19T07:00:00Z" }); state.getCashFlowDetailed.mockReset().mockResolvedValue([]); state.exportReportToExcel.mockReset().mockResolvedValue(undefined); });
+beforeEach(() => { state.branchId = "branch-a"; state.denied = new Set(); state.getOverviewKpis.mockReset(); state.getDashboardProductBreakdown.mockReset().mockResolvedValue({category: [], products: []}); state.getDebtWorkspace.mockReset().mockResolvedValue({ receivables: [], payables: [], generatedAt: "2026-10-19T07:00:00Z" }); state.getCashFlowDetailed.mockReset().mockResolvedValue([]); state.exportReportToExcel.mockReset().mockResolvedValue(undefined); });
 afterEach(cleanup);
 
 describe("overview refresh safety", () => {
   beforeEach(() => { state.userId = "user-a"; });
+  it('keeps core revenue visible while explicitly flagging failed product details', async () => {
+    state.getOverviewKpis.mockResolvedValue(result(777777));
+    state.getDashboardProductBreakdown.mockRejectedValue(new Error('timeout'));
+    render(<Overview />);
+    await waitFor(() => expect(screen.getAllByText('777,777đ').length).toBeGreaterThan(0));
+    expect(screen.getAllByText('Chưa tải được chi tiết sản phẩm. Vui lòng thử lại.').length).toBeGreaterThan(0);
+  });
   it("discards an old account response even when the branch and permissions are unchanged", async () => {
     const old = deferred<ReturnType<typeof result>>();
     state.getOverviewKpis.mockReturnValueOnce(old.promise).mockResolvedValue(result(777777));

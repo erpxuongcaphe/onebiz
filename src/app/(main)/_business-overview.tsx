@@ -28,10 +28,9 @@ import { useAuth } from "@/lib/contexts";
 import {
   getOverviewKpis,
   getSalesReportDailyRows,
-  getRevenueByCategory,
-  getTopProductsByRevenue,
   getCashFlowDetailed,
 } from "@/lib/services";
+import { getDashboardProductBreakdown } from "@/lib/services/supabase/analytics";
 import type {
   SalesReportDailyRow,
   CategoryRevenue,
@@ -145,6 +144,7 @@ export default function BusinessOverview() {
   }));
   const [categoryRevenue, setCategoryRevenue] = useState<CategoryRevenue[]>([]);
   const [topProducts, setTopProducts] = useState<TopProductRevenue[]>([]);
+  const [productBreakdownError, setProductBreakdownError] = useState<string | null>(null);
 
   // CEO 13/05: helper resolve tên branch để in title row Excel
   const tenantName = tenant?.name;
@@ -420,11 +420,12 @@ export default function BusinessOverview() {
       setLoading(true);
       setLoadError(null);
       try {
-        const [kpiData, daily, category, products, branchResult, cashResult, debtResult] = await Promise.all([
+        const [kpiData, daily, breakdown, branchResult, cashResult, debtResult] = await Promise.all([
           getOverviewKpis(activeBranchId, range),
           getSalesReportDailyRows(activeBranchId, range),
-          getRevenueByCategory(activeBranchId, range),
-          getTopProductsByRevenue(10, activeBranchId, range),
+          getDashboardProductBreakdown(activeBranchId, range)
+            .then(value => ({...value, error: null as string | null}))
+            .catch(() => ({category: [] as CategoryRevenue[], products: [] as TopProductRevenue[], error: 'Chưa tải được chi tiết sản phẩm. Vui lòng thử lại.'})),
           !activeBranchId && canViewProfit
             ? getBranchPnLComparison(range).then(rows => ({ rows, error: null })).catch((error: unknown) => ({ rows: [] as BranchPnLRow[], error: error instanceof Error ? error.message : "Không thể đối chiếu chi nhánh" }))
             : Promise.resolve({ rows: [] as BranchPnLRow[], error: null }),
@@ -439,8 +440,9 @@ export default function BusinessOverview() {
         if (!isCurrentRequest) return;
         setKpis(kpiData);
         setDailyRows(daily);
-        setCategoryRevenue(category);
-        setTopProducts(products);
+        setCategoryRevenue(breakdown.category);
+        setTopProducts(breakdown.products);
+        setProductBreakdownError(breakdown.error);
         setBranchRows(branchResult.rows);
         setBranchError(branchResult.error);
         setCashRows(cashResult.rows);
@@ -635,7 +637,7 @@ export default function BusinessOverview() {
                 </Link>
               }
             >
-              {categoryRevenue.length === 0 ? (
+              {productBreakdownError ? <p role="alert" className="p-4 text-sm text-destructive">{productBreakdownError}</p> : categoryRevenue.length === 0 ? (
                 <div className="flex items-center justify-center h-[280px] text-sm text-muted-foreground">
                   Chưa có dữ liệu doanh thu theo danh mục
                 </div>
@@ -760,7 +762,7 @@ export default function BusinessOverview() {
                 </Link>
               }
             >
-              {categoryRevenue.length === 0 ? (
+              {productBreakdownError ? <p role="alert" className="p-4 text-sm text-destructive">{productBreakdownError}</p> : categoryRevenue.length === 0 ? (
                 <div className="flex items-center justify-center h-32 text-sm text-muted-foreground">
                   Chưa có dữ liệu doanh thu theo danh mục
                 </div>
@@ -822,7 +824,7 @@ export default function BusinessOverview() {
 
         {/* Top 10 products table */}
         <ChartCard title="Top 10 sản phẩm bán chạy" subtitle={`Theo doanh số gộp · ${selectedPeriodLabel}`}>
-          {topProducts.length === 0 ? (
+          {productBreakdownError ? <p role="alert" className="p-4 text-sm text-destructive">{productBreakdownError}</p> : topProducts.length === 0 ? (
             <div className="flex items-center justify-center h-32 text-sm text-muted-foreground">
               Chưa có dữ liệu sản phẩm bán chạy
             </div>
