@@ -77,7 +77,7 @@ describe("cash capital report workflow", () => {
   });
   it("does not call finance detail or money account sources without the existing permission", async () => {
     state.canView = false; render(<Page />); await waitFor(() => expect(screen.getByRole("button", { name: "Xuất đầy đủ" })).toBeEnabled());
-    expect(state.fallback).toHaveBeenCalledWith(6, "b", { from: "2026-10-01", to: "2026-10-18" }); expect(state.entries).not.toHaveBeenCalled(); expect(state.accounts).not.toHaveBeenCalled(); expect(screen.queryByRole("textbox", { name: "Tìm chứng từ thu chi" })).not.toBeInTheDocument();
+    expect(state.fallback).toHaveBeenCalledWith(6, "b", { from: "2026-10-01", to: "2026-10-18" }, { summaryOnly: true }); expect(state.entries).not.toHaveBeenCalled(); expect(state.accounts).not.toHaveBeenCalled(); expect(screen.queryByRole("textbox", { name: "Tìm chứng từ thu chi" })).not.toBeInTheDocument();
   });
   it("refreshes live data and reports export failure without a success toast", async () => {
     render(<Page />); await screen.findByText("PT1", { exact: true }); state.entries.mockResolvedValueOnce([entry("Fresh", "receipt", 300), entry("PC1", "payment", 25)]);

@@ -146,9 +146,9 @@ describe("finance dashboard consistency", () => {
       detailedStart,
     );
 
-    expect(service.slice(cashFlowStart, cashFlowEnd)).toContain(
-      '.eq("status", "completed")',
-    );
+    expect(service.slice(cashFlowStart, cashFlowEnd)).toContain("get_cash_flow_created_month_totals");
+    const cashSummaryMigration = readFileSync("supabase/migrations/20261113074601_staff_cash_flow_summary_projection.sql", "utf8");
+    expect(cashSummaryMigration).toContain("c.status='completed'");
     expect(service.slice(detailedStart, detailedEnd)).toContain(
       '.eq("status", "completed")',
     );
