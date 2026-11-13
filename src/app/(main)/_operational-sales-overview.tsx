@@ -30,6 +30,40 @@ const WORK = [
   { permission: "ops.view", href: "/hub", icon: "task_alt", label: "Công việc" },
 ];
 
+function BranchSalesDetails({ branches, day }: { branches: { id: string; name: string }[]; day: string }) {
+  const [open, setOpen] = useState<"sales" | "payments" | null>(null);
+  const [result, setResult] = useState<{ day: string; rows: { name: string; data: SalesDashboard }[] } | null>(null);
+  const [error, setError] = useState(false);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    setLoading(true);
+    setError(false);
+    Promise.all(branches.map(async branch => ({ name: branch.name, data: await getSalesDashboard(branch.id, day, day, "hour") })))
+      .then(rows => { if (active) setResult({ day, rows }); })
+      .catch(() => { if (active) { setResult(null); setError(true); } })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [open, branches, day]);
+  return <div className="space-y-2 px-4 pb-4 sm:px-5">
+    {(["sales", "payments"] as const).map(kind => <div key={kind} className="rounded-md border">
+      <button type="button" aria-expanded={open === kind} className="flex w-full items-center justify-between gap-2 p-3 text-left text-sm font-medium" onClick={() => setOpen(open === kind ? null : kind)}>
+        {kind === "sales" ? "Doanh số từng chi nhánh" : "Thanh toán từng chi nhánh"}<Icon name={open === kind ? "expand_less" : "expand_more"} size={20} />
+      </button>
+      {open === kind && <div className="space-y-2 border-t p-3 text-sm">
+        {loading && <p role="status">Đang tải...</p>}
+        {!loading && error && <p role="alert">Chưa tải được chi tiết chi nhánh. Đóng và mở lại để thử lại.</p>}
+        {!loading && !error && result?.day === day && result.rows.map(row => <div key={row.name} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b py-2 last:border-0">
+          <span className="font-medium">{row.name}</span>
+          {kind === "sales" ? <span className="tabular-nums">{formatCurrency(row.data.sales)} đ</span> : <span className="text-right tabular-nums">Tiền mặt: {formatCurrency(row.data.methods.cash ?? 0)} đ · Chuyển khoản: {formatCurrency(row.data.methods.transfer ?? 0)} đ · Thực thu sau hoàn: {formatCurrency(row.data.collected)} đ</span>}
+        </div>)}
+        {kind === "payments" && <p className="text-xs text-muted-foreground">Tiền thu theo ngày ghi sổ, có thể gồm thu nợ cũ; thực thu đã trừ tiền hoàn.</p>}
+      </div>}
+    </div>)}
+  </div>;
+}
+
 function useSalesQuery(scope: string, branchId: string | undefined, from: string, to: string, grain: SalesGrain, enabled: boolean) {
   const key = `${scope}:${branchId ?? "all"}:${from}:${to}:${grain}:${enabled}`;
   const [result, setResult] = useState<{ key: string; data: SalesDashboard; at: string } | null>(null);
@@ -86,6 +120,7 @@ function useSalesReceivable(scope: string, branchId: string | undefined, day: st
 export default function OperationalSalesOverview() {
   const { activeBranchId, isReady } = useBranchFilter();
   const { tenant, user, branches, hasPermission } = useAuth();
+  const detailBranches = useMemo(() => branches.map(item => ({ id: item.id, name: item.name })), [branches]);
   const branch = branches.find(item => item.id === activeBranchId);
   const canViewOpenBills = isReady && !!tenant?.id && !!user?.id && hasPermission("pos_fnb.view_orders")
     && (activeBranchId ? branch?.branchType === "store" : hasPermission("reports.view_all_branches"));
@@ -150,26 +185,35 @@ export default function OperationalSalesOverview() {
       {!data && !error && <div role="status" aria-label="Đang tải doanh số" className="h-56 animate-pulse rounded-md bg-muted" />}
       {data && <>
         <section aria-labelledby="sales-title" className="overflow-hidden rounded-md border border-border/80 bg-card shadow-sm">
-          <div className="border-l-4 border-primary bg-primary/5 p-4 sm:p-5">
+          {!activeBranchId && <div className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5">
+            <div className="min-w-0 rounded-md border bg-background p-4">
+              <h2 id="sales-title" className="text-sm font-semibold">Tổng doanh số các chi nhánh</h2>
+              <p className="mt-1 break-words text-2xl font-semibold tabular-nums sm:text-3xl" data-testid="all-branch-sales">{data.internal_net === undefined ? "—" : `${formatCurrency(data.sales + data.internal_net)} đ`}</p>
+              <p className="mt-1 text-xs text-muted-foreground">Trong đó bán nội bộ: {data.internal_net === undefined ? "—" : `${formatCurrency(data.internal_net)} đ`}</p>
+            </div>
+            <div className="min-w-0 rounded-md border border-primary/40 border-l-4 border-l-primary bg-primary/5 p-4">
+              <h2 className="text-sm font-semibold text-primary">Doanh số không gồm nội bộ</h2>
+              <p className="mt-1 break-words text-[28px] font-bold leading-tight tabular-nums text-primary sm:text-[32px]" data-testid="net-sales">{formatCurrency(data.sales)} đ</p>
+              <p className="mt-1 text-xs text-muted-foreground">Sau khi trừ phần bán nội bộ</p>
+            </div>
+          </div>}
+          {!activeBranchId && <BranchSalesDetails branches={detailBranches} day={summaryDay} />}
+          {activeBranchId && <div className="border-l-4 border-primary bg-primary/5 p-4 sm:p-5">
             <div className="flex items-center justify-between gap-2"><h2 id="sales-title" className="text-sm font-semibold text-primary">{activeBranchId ? "Doanh số thực tế" : "Doanh số toàn chuỗi · đã loại nội bộ"}</h2><span className="text-xs text-muted-foreground">Đồng</span></div>
             <p className="mt-1 text-[28px] font-semibold leading-tight tabular-nums text-primary sm:text-[32px]" data-testid="net-sales">{formatCurrency(data.sales)}</p>
             <p className="mt-1 text-xs text-foreground/70">Sau giảm giá và hàng trả</p>
-            {!activeBranchId && <div className="mt-3 grid grid-cols-1 gap-2 rounded-md border border-primary/20 bg-background/80 p-3 text-sm sm:grid-cols-2">
-              <div><p className="text-xs text-muted-foreground">Cộng doanh số các chi nhánh · gồm nội bộ</p><p className="font-semibold tabular-nums" data-testid="all-branch-sales">{data.internal_net === undefined ? "—" : `${formatCurrency(data.sales + data.internal_net)} đ`}</p></div>
-              <div><p className="text-xs text-muted-foreground">Bán nội bộ được loại khỏi doanh số chuỗi</p><p className="font-semibold tabular-nums">{data.internal_net === undefined ? "—" : `${formatCurrency(data.internal_net)} đ`}</p></div>
-            </div>}
             <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
               <span><strong className="text-foreground">{formatNumber(data.orders)}</strong> hóa đơn hoàn tất</span>
               <span title="Giá trị hóa đơn hoàn tất sau giảm giá, trước hàng trả phát sinh trong ngày.">Bình quân / HĐ <strong className="text-foreground tabular-nums" data-testid="average-order-value">{data.orders > 0 ? formatCurrency((data.sales + data.returns) / data.orders) : "—"}</strong></span>
               <span className="text-amber-700 dark:text-amber-400">Giảm giá {formatCurrency(data.discounts)}</span>
               {data.returns !== 0 && <span className="text-rose-700 dark:text-rose-400">Hàng trả {formatCurrency(data.returns)}</span>}
             </div>
-          </div>
+          </div>}
           <dl className="grid grid-cols-2 border-t bg-muted/30 sm:grid-cols-2 lg:grid-cols-4">
             {Array.from(new Set(["cash", "transfer", ...Object.keys(data.methods).filter(method => data.methods[method] !== 0)])).map(method => (
               <div key={method} className={`min-w-0 border-b p-3 sm:px-5 ${method === "cash" ? "border-l-2 border-l-teal-500 bg-teal-500/5" : method === "transfer" ? "border-l-2 border-l-violet-500 bg-violet-500/5" : ""}`}><dt className={`text-xs font-medium ${method === "cash" ? "text-teal-700 dark:text-teal-400" : method === "transfer" ? "text-violet-700 dark:text-violet-400" : "text-foreground/70"}`}>{METHODS[method] ?? method}</dt><dd className="mt-1 break-words text-base font-semibold tabular-nums">{formatCurrency(data.methods[method] ?? 0)}</dd></div>
             ))}
-            {hasPermission("customers.view_debt") && <div className="min-w-0 border-b border-l-2 border-l-amber-500 bg-amber-500/5 p-3 sm:px-5"><dt className="text-xs font-medium text-amber-800 dark:text-amber-300">HĐ ngày này còn nợ</dt><dd className="mt-1 break-words text-base font-semibold tabular-nums" data-testid="invoice-receivable">{receivable.data && receivable.data.missing_count === 0 ? formatCurrency(receivable.data.amount) : "—"}</dd><p className="mt-1 text-xs text-muted-foreground">{receivable.error ? "Chưa tải được công nợ." : receivable.data?.missing_count ? "Có hóa đơn chưa đủ số nợ." : "Số còn nợ hiện tại của hóa đơn hoàn tất trong ngày."}</p></div>}
+            {hasPermission("customers.view_debt") && <div className="min-w-0 border-b border-l-2 border-l-amber-500 bg-amber-500/5 p-3 sm:px-5"><dt className="text-xs font-medium text-amber-800 dark:text-amber-300">Chưa thanh toán</dt><dd className="mt-1 break-words text-base font-semibold tabular-nums" data-testid="invoice-receivable">{receivable.data && receivable.data.missing_count === 0 ? formatCurrency(receivable.data.amount) : "—"}</dd><p className="mt-1 text-xs text-muted-foreground">{receivable.error ? "Chưa tải được công nợ." : receivable.data?.missing_count ? "Có hóa đơn chưa đủ số nợ." : "Số còn phải thu hiện tại của hóa đơn hoàn tất trong ngày đã chọn."}</p></div>}
             <div className="col-span-2 flex min-w-0 items-center justify-between gap-2 border-b bg-primary/5 p-3 sm:col-span-1 sm:block sm:px-5"><dt className="text-xs font-medium text-foreground/70">Thực thu sau hoàn</dt><dd className="break-words text-base font-semibold tabular-nums sm:mt-1">{formatCurrency(data.collected)}</dd></div>
           </dl>
           <details className="p-3 text-xs sm:px-5">
