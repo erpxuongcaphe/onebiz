@@ -24,7 +24,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
   handleError: (error: Error) => { throw error; },
   getClient: () => ({ rpc: async (name: string, args: Record<string, unknown>) => {
     state.rpcCalls.push({name,args});
-    return {data:state.rpcData,error:null};
+    return {data:name === "staff_fnb_table_summary" ? [{table_name:"Table 1",revenue:"112000",orders:"2"}] : state.rpcData,error:null};
   }, from: (table: string) => {
     const query = { table, filters: [] as Array<[string, string, unknown]>, select: "" };
     state.queries.push(query);
@@ -56,7 +56,6 @@ beforeEach(() => { state.queries.length = 0; state.rpcCalls.length = 0; state.rp
 
 describe("F&B revenue uses completed invoices independently of kitchen status", () => {
   it.each([
-    ["table", () => getRevenueByTable("branch")],
     ["order type", () => getRevenueByOrderType("branch")],
     ["platform", () => getRevenueByPlatform("branch")],
     ["category", () => getRevenueByCategory("branch")],
@@ -75,8 +74,19 @@ describe("F&B revenue uses completed invoices independently of kitchen status", 
     expect(state.queries).toHaveLength(0);
   });
 
+  it("reads table aggregates without exposing individual bills", async () => {
+    expect(await getRevenueByTable("branch")).toEqual([{tableName:"Table 1",revenue:112000,orders:2}]);
+    expect(state.rpcCalls).toEqual([{name:"staff_fnb_table_summary",args:{p_branch_id:"branch",p_from:null,p_to:null}}]);
+    expect(state.queries).toHaveLength(0);
+  });
+
   it("sends the selected invoice business-day window to the menu aggregate", async () => {
     await getRevenueByMenuItem("branch",15,{from:"2026-10-07",to:"2026-10-07"});
+    expect(state.rpcCalls[0].args).toMatchObject({p_branch_id:"branch",p_from:"2026-10-06T17:00:00.000Z",p_to:"2026-10-07T17:00:00.000Z"});
+  });
+
+  it("sends the selected invoice business-day window to the table aggregate", async () => {
+    await getRevenueByTable("branch",{from:"2026-10-07",to:"2026-10-07"});
     expect(state.rpcCalls[0].args).toMatchObject({p_branch_id:"branch",p_from:"2026-10-06T17:00:00.000Z",p_to:"2026-10-07T17:00:00.000Z"});
   });
 
@@ -92,7 +102,6 @@ describe("F&B revenue uses completed invoices independently of kitchen status", 
   });
 
   it.each([
-    ["table", () => getRevenueByTable("branch", { from: "2026-10-07", to: "2026-10-07" })],
     ["modifiers", () => getModifierStats("branch", { from: "2026-10-07", to: "2026-10-07" })],
   ] as const)("filters %s by invoice business date rather than kitchen creation date", async (_name, read) => {
     await read();

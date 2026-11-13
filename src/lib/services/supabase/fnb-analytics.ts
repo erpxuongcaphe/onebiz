@@ -348,39 +348,20 @@ export async function getRevenueByTable(
   range?: { from: string; to: string },
 ): Promise<TableRevenue[]> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
   const rangeWindow = toCreatedAtRangeWindow(range);
-
-  let query = supabase
-    .from("kitchen_orders")
-    .select("table_id, restaurant_tables!kitchen_orders_table_id_fkey(name), invoice_id, invoices!inner(total, status, ngay_chung_tu)")
-    .eq("tenant_id", tenantId)
-    .eq("invoices.source", "fnb")
-    .eq("invoices.status", "completed")
-    .not("table_id", "is", null);
-  if (branchId) query = query.eq("branch_id", branchId);
-  if (rangeWindow) {
-    query = query.gte("invoices.ngay_chung_tu", rangeWindow.start).lt("invoices.ngay_chung_tu", rangeWindow.end);
-  }
-
-  const rows = await fetchAllFnbRows(() => query.order("id", { ascending: true }), "[fnb.report]");
-
-  const map = new Map<string, { tableName: string; revenue: number; orders: number }>();
-  const countedInvoices = new Set<string>();
-  for (const row of rows ?? []) {
-    const tbl = (row as Record<string, unknown>).restaurant_tables as { name: string } | null;
-    const inv = (row as Record<string, unknown>).invoices as { total: number; status: string } | null;
-    if (!row.invoice_id || !inv || inv.status === "cancelled" || countedInvoices.has(row.invoice_id)) continue;
-    countedInvoices.add(row.invoice_id);
-    const tableName = tbl?.name ?? `Bàn ${row.table_id?.slice(0, 4)}`;
-    const key = row.table_id!;
-    const prev = map.get(key) ?? { tableName, revenue: 0, orders: 0 };
-    prev.revenue += Number(inv?.total ?? 0);
-    prev.orders += 1;
-    map.set(key, prev);
-  }
-
-  return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
+  const {data,error} = await (supabase.rpc as any)("staff_fnb_table_summary", {
+    p_branch_id: branchId ?? null, p_from: rangeWindow?.start ?? null, p_to: rangeWindow?.end ?? null,
+  });
+  if (error) handleError(error, "[getRevenueByTable]");
+  if (!Array.isArray(data)) throw new Error("Không tải được tổng hợp bàn F&B.");
+  return data.map((row: {table_name: string; revenue: number | string; orders: number | string}) => {
+    const revenue = Number(row.revenue), orders = Number(row.orders);
+    if (typeof row.table_name !== "string" || row.revenue == null || row.orders == null ||
+        !Number.isFinite(revenue) || !Number.isFinite(orders)) {
+      throw new Error("Dữ liệu tổng hợp bàn F&B chưa hợp lệ. Vui lòng tải lại.");
+    }
+    return {tableName: row.table_name, revenue, orders};
+  });
 }
 
 /**
