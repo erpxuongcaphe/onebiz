@@ -76,4 +76,13 @@ describe("sơ đồ bàn chỉ xem",()=>{
     await act(async()=>finish([{id:"zone-a",name:"Khu cũ"}]));
     expect(screen.queryByText("Khu cũ")).not.toBeInTheDocument();
   });
+  it("gỡ sơ đồ cũ khi chuyển sang chi nhánh không được cấp quyền xem",async()=>{
+    const {rerender}=render(<Page/>);
+    expect(await screen.findByText("Bàn A")).toBeInTheDocument();
+    s.branch={id:"b",name:"Quán B"};s.view=false;
+    rerender(<Page/>);
+    expect(screen.getByText("Không có quyền truy cập")).toBeInTheDocument();
+    expect(screen.queryByText("Bàn A")).not.toBeInTheDocument();
+    expect(s.zones).not.toHaveBeenCalledWith("b");
+  });
 });

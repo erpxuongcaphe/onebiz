@@ -331,17 +331,20 @@ try {
     set role authenticated;`);
   assert.deepEqual((await db.query('select distinct branch_id from restaurant_tables order by branch_id')).rows.map(row=>row.branch_id),[id(10),id(11)],
     'product setup keeps its independent assigned-branch table reads');
-  await db.exec(`reset role;
-    delete from role_permissions where role_id='${id(20)}' and permission_code='products.view';
-    insert into role_permissions values('${id(20)}','orders.print');
-    set role authenticated;`);
-  assert.deepEqual((await db.query('select distinct branch_id from restaurant_tables order by branch_id')).rows.map(row=>row.branch_id),[id(10),id(11)],
-    'legacy printing retains assigned-branch table reads even if view is revoked');
+  for (const printCode of ['orders.print','invoices.print']) {
+    await db.exec(`reset role;
+      delete from role_permissions where role_id='${id(20)}' and permission_code in ('products.view','orders.print','invoices.print');`);
+    await db.query('insert into role_permissions values($1,$2)',[id(20),printCode]);
+    await db.exec('set role authenticated');
+    assert.deepEqual((await db.query('select distinct branch_id from restaurant_tables order by branch_id')).rows.map(row=>row.branch_id),[id(10),id(11)],
+      `${printCode}: legacy printing retains assigned-branch table reads even if view is revoked`);
+  }
   await db.exec(`reset role;
     delete from user_branch_permission_overrides where user_id='${id(101)}' and permission_code in ('floor_plan.view','pos_fnb.send_kitchen');
     delete from user_permission_overrides where user_id='${id(101)}' and permission_code='floor_plan.view';
     delete from role_permissions where role_id='${id(20)}' and permission_code='products.view';
     delete from role_permissions where role_id='${id(20)}' and permission_code='orders.print';
+    delete from role_permissions where role_id='${id(20)}' and permission_code='invoices.print';
     delete from role_permissions where role_id='${id(20)}' and permission_code='floor_plan.view';
     delete from user_branches where user_id='${id(101)}' and branch_id='${id(11)}';
     set role authenticated;`);
