@@ -35,7 +35,7 @@ export function FnbSalesHistoryView({branchId,tenantId,revision,onReprint,onVoid
     finally{await money;if(gen===generation.current)setLoading(false);}
   },[branchId,day,canViewCash]);
   useEffect(()=>{setHistory(null);setCash(null);setSelected(null);setPage(0);setTable("");setArea("");void refresh();return()=>{generation.current+=1;};},[refresh,revision]);
-  useLiveDataRefresh(refresh,tenantId,branchId,["invoices","kitchen_orders","cash_transactions"],true);
+  useLiveDataRefresh(refresh,tenantId,branchId,["invoices","kitchen_orders","dashboard_live_signals"],true);
   useEffect(()=>{
     let stale=false;setItems([]);setItemError("");
     if(!selected)return;

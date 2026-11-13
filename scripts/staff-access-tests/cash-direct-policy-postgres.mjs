@@ -96,6 +96,24 @@ statements.push(`
  do $$begin if (select count(*) from money_accounts)<>2 then raise exception 'payment account access lost'; end if; end$$;
  reset role;
 `);
+statements.push(`create table dashboard_live_signals(id uuid,tenant_id uuid,branch_id uuid,created_at timestamptz);
+ alter table dashboard_live_signals enable row level security;
+ grant select on dashboard_live_signals to authenticated;
+ insert into dashboard_live_signals values
+ ('${id(201)}','${id(1)}','${id(10)}',now()),('${id(202)}','${id(1)}','${id(11)}',now()),
+ ('${id(203)}','${id(2)}','${id(12)}',now()),('${id(204)}','${id(1)}',null,now());
+ insert into role_permissions values ('${id(20)}','pos_fnb.view_sales_summary');
+ insert into staff_branch_permission_catalog values ('pos_fnb.view_sales_summary',1);`);
+await migration('20261113080848_staff_fnb_history_refresh_signal.sql');
+statements.push(`set role authenticated;
+ do $$begin if (select count(*) from dashboard_live_signals)<>2 then raise exception 'SIGNAL_BRANCH_SCOPE_MISMATCH';end if;end$$;
+ reset role; insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+ values('${id(1)}','${id(101)}','${id(10)}','pos_fnb.view_sales_summary','revoke','${id(100)}'); set role authenticated;
+ do $$begin if (select count(*) from dashboard_live_signals)<>1 then raise exception 'SIGNAL_BRANCH_REVOKE_BYPASS';end if;end$$;
+ reset role; insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type,created_by)
+ values('${id(1)}','${id(101)}','pos_fnb.view_sales_summary','revoke','${id(100)}'); set role authenticated;
+ do $$begin if (select count(*) from dashboard_live_signals)<>0 then raise exception 'SIGNAL_GLOBAL_REVOKE_BYPASS';end if;end$$;
+ reset role;`);
 if (process.env.ONEBIZ_PGLITE_MODULE) {
  const {PGlite}=await import(pathToFileURL(process.env.ONEBIZ_PGLITE_MODULE).href);
  const db=new PGlite();
