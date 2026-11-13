@@ -7,7 +7,7 @@ import { useAuth, useBranchFilter } from "@/lib/contexts";
 import { useLiveDataRefresh } from "@/lib/hooks/use-live-data-refresh";
 import { useReceivingVietnamDay } from "@/lib/hooks/use-receiving-view-memory";
 import { canViewSalesDashboard, salesRange, type SalesDashboard, type SalesGrain } from "@/lib/dashboard-sales";
-import { getSalesDashboard, getSalesDayReceivable } from "@/lib/services/supabase/dashboard-sales";
+import { getSalesDashboard, getSalesDayReceivable, getCollectionReconciliation, type CollectionReconciliation } from "@/lib/services/supabase/dashboard-sales";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,40 @@ const WORK = [
   { permission: "production.view", href: "/san-xuat", icon: "factory", label: "Sản xuất" },
   { permission: "ops.view", href: "/hub", icon: "task_alt", label: "Công việc" },
 ];
+
+function CollectionDetails({ branchId, day }: { branchId: string | undefined; day: string }) {
+  const [data, setData] = useState<CollectionReconciliation | null>(null);
+  const [error, setError] = useState(false);
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    let active = true;
+    setData(null); setError(false);
+    getCollectionReconciliation(branchId, day).then(value => { if (active) setData(value); })
+      .catch(() => { if (active) setError(true); });
+    return () => { active = false; };
+  }, [branchId, day, revision]);
+  const methodName = (key: string) => METHODS[key] ?? key;
+  return <section className="border-t p-4 sm:p-5" aria-label="Đối chiếu tiền thu">
+    <h3 className="font-semibold">Tiền thu trong ngày</h3>
+    <p className="mt-1 text-xs text-muted-foreground">Theo ngày ghi sổ, sau tiền hoàn; có thể gồm thu nợ cũ.</p>
+    {error && <p role="alert" className="mt-2 text-sm">Chưa tải được đối chiếu tiền thu. <button className="underline" onClick={() => setRevision(value => value + 1)}>Thử lại</button></p>}
+    {!data && !error && <p role="status" className="mt-2 text-sm">Đang tải tiền thu...</p>}
+    {data && <>
+      <dl className="mt-3 grid gap-2 sm:grid-cols-3">
+        <div className="rounded-md border p-3"><dt className="text-xs text-muted-foreground">Tổng tiền thu</dt><dd className="mt-1 font-semibold tabular-nums">{formatCurrency(data.total.net)} đ</dd></div>
+        <div className="rounded-md border p-3"><dt className="text-xs text-muted-foreground">Trong đó: thu nội bộ</dt><dd className="mt-1 font-semibold tabular-nums">{formatCurrency(data.internal.net)} đ</dd></div>
+        <div className="rounded-md border border-primary/40 border-l-4 border-l-primary bg-primary/5 p-3"><dt className="text-xs font-medium text-primary">Tiền thu không gồm nội bộ</dt><dd className="mt-1 font-semibold tabular-nums text-primary">{formatCurrency(data.external.net)} đ</dd></div>
+      </dl>
+      <details className="mt-3 text-sm"><summary className="cursor-pointer font-medium">Xem tiền mặt, chuyển khoản và tiền hoàn</summary>
+        {([["Khách ngoài", data.external], ["Nội bộ", data.internal]] as const).map(([label, part]) => <div key={label} className="mt-3 rounded-md border p-3">
+          <p className="font-medium">{label}</p>
+          <p className="mt-1 text-xs text-muted-foreground">Đã thu {formatCurrency(part.received)} đ · Đã hoàn {formatCurrency(part.refunded)} đ</p>
+          {Object.entries(part.methods).map(([method, value]) => <p className="mt-1 text-xs" key={method}>{methodName(method)} sau hoàn: {formatCurrency(value)} đ</p>)}
+        </div>)}
+      </details>
+    </>}
+  </section>;
+}
 
 function BranchSalesDetails({ branches, day }: { branches: { id: string; name: string }[]; day: string }) {
   const [open, setOpen] = useState<"sales" | "payments" | null>(null);
@@ -209,7 +243,9 @@ export default function OperationalSalesOverview() {
               {data.returns !== 0 && <span className="text-rose-700 dark:text-rose-400">Hàng trả {formatCurrency(data.returns)}</span>}
             </div>
           </div>}
-          <dl className="grid grid-cols-2 border-t bg-muted/30 sm:grid-cols-2 lg:grid-cols-4">
+          <CollectionDetails key={`${scope}:${activeBranchId ?? "all"}:${summaryDay}`} branchId={activeBranchId} day={summaryDay} />
+          <p className="border-t px-4 pt-3 text-xs text-muted-foreground">{activeBranchId ? "Phương thức thanh toán · gồm nội bộ" : "Phương thức thanh toán · không gồm nội bộ"}</p>
+          <dl className="grid grid-cols-2 bg-muted/30 sm:grid-cols-2 lg:grid-cols-4">
             {Array.from(new Set(["cash", "transfer", ...Object.keys(data.methods).filter(method => data.methods[method] !== 0)])).map(method => (
               <div key={method} className={`min-w-0 border-b p-3 sm:px-5 ${method === "cash" ? "border-l-2 border-l-teal-500 bg-teal-500/5" : method === "transfer" ? "border-l-2 border-l-violet-500 bg-violet-500/5" : ""}`}><dt className={`text-xs font-medium ${method === "cash" ? "text-teal-700 dark:text-teal-400" : method === "transfer" ? "text-violet-700 dark:text-violet-400" : "text-foreground/70"}`}>{METHODS[method] ?? method}</dt><dd className="mt-1 break-words text-base font-semibold tabular-nums">{formatCurrency(data.methods[method] ?? 0)}</dd></div>
             ))}
