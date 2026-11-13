@@ -51,7 +51,8 @@ begin
   if public._staff_permission_at_scope(actor,'reports.analytics',p_branch)
    and public._staff_permission_at_scope(actor,'reports.view_detail',p_branch) then return true; end if;
   if p_source='fnb' then
-   foreach code in array array['reports.fnb','pos_fnb.view_sales_summary'] loop
+   -- Summary grants aggregate totals, not raw per-bill item rows.
+   foreach code in array array['reports.fnb'] loop
     if public._staff_permission_at_scope(actor,code,p_branch) then return true; end if;
    end loop;
   end if;
