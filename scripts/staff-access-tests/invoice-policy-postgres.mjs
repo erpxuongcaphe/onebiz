@@ -214,6 +214,29 @@ sql.push(`
  end$$;
  reset role;
 `);
+sql.push(`
+ delete from role_permissions where role_id='${id(20)}';
+ delete from user_branch_permission_overrides where user_id='${id(101)}';
+ delete from user_permission_overrides where user_id='${id(101)}' and permission_code in ('invoices.view','orders.view','pos_fnb.view_orders');
+ insert into staff_branch_permission_catalog values ('invoices.view',1) on conflict do nothing;
+ insert into role_permissions values ('${id(20)}','invoices.view');
+ insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+  values ('${id(1)}','${id(101)}','${id(10)}','invoices.view','revoke','${id(100)}');
+`);
+sql.push(await migration('20261113065814_staff_invoice_header_branch_scope.sql'));
+sql.push(`
+ set role authenticated;
+ do $$begin
+  if exists(select 1 from invoices where branch_id='${id(10)}') or not exists(select 1 from invoices where id='${id(51)}')
+   then raise exception 'header scope did not compose with legacy and own-order policies';end if;
+ end$$;
+ reset role;insert into role_permissions values ('${id(20)}','pos_fnb.checkout');set role authenticated;
+ do $$begin
+  if not exists(select 1 from invoices where id='${id(53)}') or not exists(select 1 from invoice_items where invoice_id='${id(53)}')
+   then raise exception 'independent checkout lost header or lines';end if;
+ end$$;
+ reset role;
+`);
 if(process.env.ONEBIZ_PGLITE_MODULE){const {PGlite}=await import(pathToFileURL(process.env.ONEBIZ_PGLITE_MODULE).href);const db=new PGlite();try{await db.exec(sql.join('\n'));}finally{await db.close();}console.log('PASS local invoice fixture rehearsal (PGlite)');process.exit(0);}
 const args=['-Xq','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p','55433','-U','staff_test','-d','onebiz_staff_access_test'];
 const child=spawn('psql',args,{env:{PATH:process.env.PATH,PGPASSWORD:'ephemeral-test-only',PGSSLMODE:'disable',PGCONNECT_TIMEOUT:'5'},stdio:['pipe','pipe','pipe']});
