@@ -5,7 +5,7 @@ set local lock_timeout='3s';
 set local statement_timeout='30s';
 do $$declare item record;begin
  for item in select * from (values
-  ('_party_directory_scope_private','efef07f4313e7e969705b549739cfae7'),
+  ('_party_directory_scope_private','578d5bdcab481859617640148801e8a3'),
   ('_staff_party_directory_scope_v2_private','d60815d91887f9749bbea9ca602e7235'),
   ('get_customer_list_workspace_scoped_v2','821290dd568b878c9c89924a6c3b6fc1'),
   ('get_supplier_list_workspace_scoped_v2','99696e806b85e1f1ef91e34f3a2c51f9'),

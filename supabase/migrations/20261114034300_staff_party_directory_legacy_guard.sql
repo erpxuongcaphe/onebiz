@@ -21,12 +21,16 @@ begin
   or (length(source)-length(replace(source,debt_anchor,'')))/length(debt_anchor)<>1 then
   raise exception 'PARTY_LEGACY_SCOPE_ANCHOR_CHANGED';
  end if;
- patched:=replace(source,activity_anchor,activity_anchor||$guard$ and not exists(
-  select 1 from public.user_branch_permission_overrides o where o.tenant_id=tenant and o.user_id=actor
-   and o.permission_code=prefix||case p_mode when 'customer' then '.view_sales' else '.view_purchases' end)$guard$);
- patched:=replace(patched,debt_anchor,debt_anchor||$guard$ and not exists(
-  select 1 from public.user_branch_permission_overrides o where o.tenant_id=tenant and o.user_id=actor
-   and o.permission_code=prefix||'.view_debt')$guard$);
+ patched:=replace(source,activity_anchor,$guard$'canViewActivity',cardinality(ids)>0 and case when p_branch is not null then
+  public._staff_permission_at_scope(actor,prefix||case p_mode when 'customer' then '.view_sales' else '.view_purchases' end,p_branch)
+  else public.user_has_permission(actor,prefix||case p_mode when 'customer' then '.view_sales' else '.view_purchases' end) and not exists(
+   select 1 from public.user_branch_permission_overrides o where o.tenant_id=tenant and o.user_id=actor
+    and o.permission_code=prefix||case p_mode when 'customer' then '.view_sales' else '.view_purchases' end) end$guard$);
+ patched:=replace(patched,debt_anchor,$guard$'canViewDebt',cardinality(ids)>0 and case when p_branch is not null then
+  public._staff_permission_at_scope(actor,prefix||'.view_debt',p_branch)
+  else public.user_has_permission(actor,prefix||'.view_debt') and not exists(
+   select 1 from public.user_branch_permission_overrides o where o.tenant_id=tenant and o.user_id=actor
+    and o.permission_code=prefix||'.view_debt') end$guard$);
  execute patched;
 end$$;
 commit;

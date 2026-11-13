@@ -39,6 +39,12 @@ try {
   let legacy=(await db.query("select public._party_directory_scope_private('customer',null,false) as result")).rows[0].result;
   assert.equal(legacy.canViewActivity,false,'old clients mask a metric with branch exceptions');
   assert.equal(legacy.canViewDebt,false,'old clients also mask independently scoped debt');
+  legacy=(await db.query("select public._party_directory_scope_private('customer',$1,false) as result",[id(10)])).rows[0].result;
+  assert.equal(legacy.canViewActivity,false,'old selected-branch client respects a revoke');
+  assert.equal(legacy.canViewDebt,true,'old selected-branch client continues to work with a grant');
+  legacy=(await db.query("select public._party_directory_scope_private('customer',$1,false) as result",[id(11)])).rows[0].result;
+  assert.equal(legacy.canViewActivity,true,'old selected-branch client keeps unrelated branch access');
+  assert.equal(legacy.canViewDebt,false,'old selected-branch client does not inherit another branch grant');
   await db.exec(`delete from user_branch_permission_overrides where user_id='${id(101)}' and permission_code='customers.view_debt';
     insert into role_permissions values('${id(20)}','customers.view_debt');`);
   legacy=(await db.query("select public._party_directory_scope_private('customer',null,false) as result")).rows[0].result;
