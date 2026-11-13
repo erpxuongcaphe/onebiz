@@ -774,7 +774,12 @@ export function StaffProfileEditor({
                                 )}
                                 {branchId && p.code === "finance.view_cash_journal_self_spend" && (
                                   <p className="mt-1 text-xs text-muted-foreground">
-                                    Quyền này áp dụng cho khoản chi tự chi và các thao tác đối soát quỹ cần số liệu của quán được chọn. Quyền xem nhật ký toàn công ty là quyền độc lập và vẫn cho xem theo phạm vi của quyền đó.
+                                    Quyền này áp dụng cho khoản chi tự chi và các thao tác đối soát quỹ cần số liệu của quán được chọn. Để mở Nhật ký thu chi, nhân viên chọn chi nhánh đã được cấp. Quyền xem nhật ký toàn công ty là quyền độc lập và vẫn cho xem theo phạm vi của quyền đó.
+                                  </p>
+                                )}
+                                {branchId && p.code === "shifts.reconcile_own_branch" && (
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    Quyền này cho đối chiếu ca của quán được chọn. Thu ngân vẫn có thể đóng ca của mình; quyền đối chiếu mọi chi nhánh là quyền độc lập.
                                   </p>
                                 )}
                                 {["finance.submit_cash_spend_review", "finance.approve_cash_spend_review"].includes(p.code) && (

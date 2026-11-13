@@ -58,6 +58,15 @@ const snapshot: StaffProfileSnapshot = {
   branchPermissionCodes: ["pos_fnb.split_bill", "pos_fnb.transfer_table"],
 };
 describe("staff profile scope", () => {
+  it("explains that cashiers retain their own shift closing when reconciliation is scoped", () => {
+    const data = structuredClone(snapshot);
+    data.branchPermissionCodes.push("shifts.reconcile_own_branch");
+    render(<StaffProfileEditor snapshot={data} onSave={vi.fn()} onReload={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Tùy chỉnh quyền" }));
+    fireEvent.click(screen.getByRole("button", { name: "Premium" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Tìm quyền" }), { target: { value: "shifts.reconcile_own_branch" } });
+    expect(screen.getByText(/Thu ngân vẫn có thể đóng ca của mình/)).toBeVisible();
+  });
   it("explains the independent company-wide journal right when changing self-spend access", () => {
     const data = structuredClone(snapshot);
     data.branchPermissionCodes.push("finance.view_cash_journal_self_spend");
