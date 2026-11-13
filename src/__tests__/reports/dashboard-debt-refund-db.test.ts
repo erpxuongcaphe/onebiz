@@ -82,6 +82,12 @@ describe('debt and internal-return report behavior', () => {
     const {rows} = await db.query(`select * from private.report_cash_operating_expenses_v1('${tenant}','2026-11-01','2026-11-14','${branch}')`);
     expect(rows).toHaveLength(0);
   });
+  it('also recognizes a refund after a partial return has been received', async () => {
+    await db.exec(`update internal_stock_returns set status='partial' where id='${ret}'`);
+    const {rows} = await db.query(`select * from private.report_cash_operating_expenses_v1('${tenant}','2026-11-01','2026-11-14','${branch}')`);
+    expect(rows).toHaveLength(0);
+    await db.exec(`update internal_stock_returns set status='received' where id='${ret}'`);
+  });
   it('still rejects a refund with mismatched evidence rather than silently dropping it', async () => {
     await db.exec(`update internal_return_settlements set amount=734999 where id='${settlement}'`);
     await expect(db.query(`select * from private.report_cash_operating_expenses_v1('${tenant}','2026-11-01','2026-11-14','${branch}')`)).rejects.toThrow('unresolved expense');

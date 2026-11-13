@@ -39,7 +39,7 @@ begin
       join public.internal_stock_return_events e on e.id=s.event_id and e.action='received'
       join public.internal_stock_returns r on r.id=e.return_id and r.tenant_id=c.tenant_id
       where s.id=c.reference_id and s.cash_id=c.id and s.tenant_id=c.tenant_id
-       and s.kind='refund' and s.amount=c.amount and r.to_branch_id=c.branch_id and r.status='received'
+       and s.kind='refund' and s.amount=c.amount and r.to_branch_id=c.branch_id and r.status in ('partial','received')
     )
     else false end as settlement_link
   from cash c
