@@ -239,7 +239,29 @@ sql.push(`
  end$$;
  reset role;
 `);
-if(process.env.ONEBIZ_PGLITE_MODULE){const {PGlite}=await import(pathToFileURL(process.env.ONEBIZ_PGLITE_MODULE).href);const db=new PGlite();try{await db.exec(sql.join('\n'));}finally{await db.close();}console.log('PASS local invoice fixture rehearsal (PGlite)');process.exit(0);}
+sql.push(await migration('20261113071420_staff_legacy_order_view_scope.sql'));
+sql.push(`
+ set role authenticated;
+ do $$begin
+  if (select count(*) from sales_orders)<>1 or (select count(*) from sales_order_items)<>1
+   then raise exception 'legacy order branch scope failed';end if;
+ end$$;
+ reset role;insert into role_permissions values ('${id(20)}','orders.create');set role authenticated;
+ do $$begin
+  if (select count(*) from sales_orders)<>3 or (select count(*) from sales_order_items)<>2
+   then raise exception 'independent order creation lost legacy document reads';end if;
+ end$$;
+ reset role;delete from role_permissions where permission_code='orders.create';
+ delete from user_branch_permission_overrides where permission_code='invoices.view';
+ insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+  values ('${id(1)}','${id(101)}','${id(10)}','pos_fnb.view_orders','revoke','${id(100)}');set role authenticated;
+ do $$begin
+  if (select count(*) from sales_orders)<>3 or (select count(*) from sales_order_items)<>2
+   then raise exception 'F&B exception changed unrelated legacy order reads';end if;
+ end$$;
+ reset role;
+`);
+if(process.env.ONEBIZ_PGLITE_MODULE){const {PGlite}=await import(pathToFileURL(process.env.ONEBIZ_PGLITE_MODULE).href);const db=new PGlite();try{await db.exec(sql.join('\n'));}catch(e){console.error(e.message,e.where||'');process.exitCode=1;}finally{await db.close();}if(process.exitCode)process.exit(process.exitCode);console.log('PASS local invoice fixture rehearsal (PGlite)');process.exit(0);}
 const args=['-Xq','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p','55433','-U','staff_test','-d','onebiz_staff_access_test'];
 const child=spawn('psql',args,{env:{PATH:process.env.PATH,PGPASSWORD:'ephemeral-test-only',PGSSLMODE:'disable',PGCONNECT_TIMEOUT:'5'},stdio:['pipe','pipe','pipe']});
 let err='';child.stderr.on('data',x=>err+=x);child.stdout.resume();
