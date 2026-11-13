@@ -217,8 +217,63 @@ try {
     );
     await db.exec("reset role");
   }
+  // Reproduce the previous no-exception bypass with synthetic rows only.
+  await db.exec(`delete from user_branch_permission_overrides where permission_code='floor_plan.edit_branch';
+    delete from user_permission_overrides where permission_code='floor_plan.edit_branch';
+    delete from role_permissions where permission_code in ('floor_plan.edit_branch','floor_plan.edit_global');
+    delete from user_branches where user_id='${id(101)}' and branch_id='${id(11)}';
+    insert into floor_plan_decorations(id,tenant_id,branch_id,zone_id,kind) values('${id(821)}','${id(1)}','${id(11)}','${id(801)}','plant');
+    create function public._staff_direct_table_write_allowed() returns boolean language sql stable security definer set search_path='' as $$ select not exists(select 1 from public.user_branch_permission_overrides where user_id=auth.uid() and permission_code='pos_fnb.manage_tables') $$;
+    create policy staff_table_insert_rpc_only on restaurant_tables as restrictive for insert to authenticated
+      with check ((select public._staff_direct_table_write_allowed()));
+    create policy staff_table_update_rpc_only on restaurant_tables as restrictive for update to authenticated
+      using ((select public._staff_direct_table_write_allowed())) with check ((select public._staff_direct_table_write_allowed()));
+    create policy staff_table_delete_rpc_only on restaurant_tables as restrictive for delete to authenticated
+      using ((select public._staff_direct_table_write_allowed()));
+    set role authenticated;`);
+  assert.ok((await db.query("update restaurant_tables set name=name returning id")).rows.length>=2,
+    "the old no-exception path permits a direct write without floor rights");
+  await db.exec("reset role");
+  await db.exec('alter policy staff_floor_update on floor_plan_zones rename to synthetic_changed_policy');
+  await assert.rejects(db.exec(await file("20261114032000_staff_floor_branch_direct_guard.sql")),/FLOOR_WRITE_POLICIES_CHANGED/,
+    'the migration must stop if existing write policies have changed');
+  await db.exec('rollback; alter policy synthetic_changed_policy on floor_plan_zones rename to staff_floor_update');
+  await db.exec(await file("20261114032000_staff_floor_branch_direct_guard.sql"));
+  await db.exec("set role authenticated");
+  for (const [table, allowed] of [["restaurant_tables",id(810)],["floor_plan_zones",id(800)],["floor_plan_decorations",id(820)]]) {
+    assert.deepEqual((await db.query(`select id from ${table} order by id`)).rows.map(row=>row.id),[allowed],
+      `${table}: assigned branch remains readable, other branch hidden`);
+    assert.equal((await db.query(`update ${table} set id=id returning id`)).rows.length,0,
+      `${table}: direct writes are denied even without branch exceptions`);
+    assert.equal((await db.query(`delete from ${table} returning id`)).rows.length,0,
+      `${table}: direct deletes are denied even without branch exceptions`);
+  }
+  for (const sql of [
+    `insert into floor_plan_zones(id,tenant_id,branch_id,name) values('${id(850)}','${id(1)}','${id(10)}','Direct')`,
+    `insert into restaurant_tables(id,tenant_id,branch_id,table_number,name) values('${id(851)}','${id(1)}','${id(10)}',99,'Direct')`,
+    `insert into floor_plan_decorations(id,tenant_id,branch_id,zone_id,kind) values('${id(852)}','${id(1)}','${id(10)}','${id(800)}','plant')`,
+  ]) await assert.rejects(db.query(sql),/row-level security/);
+  await db.exec(`reset role; insert into role_permissions values('${id(20)}','floor_plan.edit_global'); set role authenticated;`);
+  assert.ok((await db.query('select id from restaurant_tables order by id')).rows.some(row=>row.id===id(811)),
+    'existing global floor editor can read the other branch');
+  assert.equal((await db.query('update restaurant_tables set name=name returning id')).rows.length,0,
+    'global editor writes through the checked RPC, not raw tables');
+  const viaRpc=(await db.query("select fnb_floor_zone_config_atomic('create',$1,'{\"name\":\"RPC after guard\"}') v",[id(10)])).rows[0].v;
+  assert.ok(viaRpc.ok,'global editor can still save using the existing checked RPC');
+  await db.exec(`reset role; delete from role_permissions where permission_code='floor_plan.edit_global';
+    insert into role_permissions values('${id(20)}','reports.view_all_branches'); set role authenticated;`);
+  assert.ok((await db.query('select id from restaurant_tables order by id')).rows.some(row=>row.id===id(811)),
+    'existing company reporting read remains available');
+  await db.exec(`reset role; delete from role_permissions where permission_code='reports.view_all_branches';
+    insert into role_permissions values('${id(20)}','floor_plan.edit_branch'); set role authenticated;`);
+  const branchRpc=(await db.query("select fnb_floor_zone_config_atomic('create',$1,'{\"name\":\"Branch RPC\"}') v",[id(10)])).rows[0].v;
+  assert.ok(branchRpc.ok,'branch editor retains the checked RPC at their assigned branch');
+  await assert.rejects(db.query("select fnb_floor_zone_config_atomic('create',$1,'{\"name\":\"Other branch\"}')",[id(11)]),denied);
+  await db.exec(`reset role; update profiles set is_active=false where id='${id(101)}'; set role authenticated;`);
+  assert.deepEqual((await db.query('select id from restaurant_tables')).rows,[],'inactive user cannot read floor data');
+  await db.exec('reset role');
   console.log(
-    "PASS: six floor-plan consumers, seven denied operations, mixed-branch rollback, real local-only layout/zone/table/decoration/reorder, storage path isolation, global denial/company permission and nine DML policies.",
+    "PASS: floor RPC authorization, branch-isolated reads, direct DML denial, global editor/report scope and compatibility.",
   );
 } finally {
   await db.close();
