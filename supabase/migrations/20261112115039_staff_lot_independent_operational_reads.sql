@@ -4,7 +4,7 @@
 begin;
 set local lock_timeout='3s';
 set local statement_timeout='30s';
-create function public.get_financial_alert_lots(p_branch uuid default null)
+create or replace function public.get_financial_alert_lots(p_branch uuid default null)
 returns table(id uuid,lot_number text,product_id uuid,expiry_date date,current_qty numeric,product_name text)
 language plpgsql stable security definer set search_path='' as $$
 declare actor uuid:=auth.uid(); tenant uuid; allowed uuid[];
