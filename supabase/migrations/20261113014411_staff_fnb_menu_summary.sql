@@ -186,5 +186,25 @@ begin
 end $$;
 revoke all on function public.staff_fnb_modifier_summary(uuid,timestamptz,timestamptz) from public,anon;
 grant execute on function public.staff_fnb_modifier_summary(uuid,timestamptz,timestamptz) to authenticated;
+create function public.staff_fnb_channel_summary(p_branch_id uuid,p_dimension text)
+returns table(dimension text,revenue numeric,orders bigint)
+language plpgsql stable security definer set search_path='' as $$
+declare tenant uuid:=public.get_user_tenant_id();branches uuid[];
+begin
+ branches:=public._staff_fnb_report_branches(p_branch_id);
+ if p_dimension is null or p_dimension not in ('order_type','platform') then
+  raise exception 'FNB_REPORT_FILTER_INVALID' using errcode='22023';end if;
+ return query
+ select case when p_dimension='order_type' then coalesce(k.order_type,'unknown')
+  else coalesce(k.delivery_platform,'Khác') end,
+  sum(coalesce(i.total,0))::numeric,count(*)::bigint
+ from public.kitchen_orders k
+ join public.invoices i on i.id=k.invoice_id and i.tenant_id=tenant and i.branch_id=k.branch_id
+ where k.tenant_id=tenant and k.branch_id=any(branches) and i.source='fnb' and i.status='completed'
+  and (p_dimension='order_type' or (k.order_type='delivery' and k.delivery_platform is not null))
+ group by 1 order by sum(coalesce(i.total,0)) desc,1;
+end $$;
+revoke all on function public.staff_fnb_channel_summary(uuid,text) from public,anon;
+grant execute on function public.staff_fnb_channel_summary(uuid,text) to authenticated;
 notify pgrst,'reload schema';
 commit;

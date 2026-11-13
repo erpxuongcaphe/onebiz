@@ -70,6 +70,7 @@ statements.push(`
  alter table kitchen_orders add column invoice_id uuid;
  alter table kitchen_orders add column table_id uuid;
  alter table kitchen_orders add column status text,add column created_at timestamptz,add column updated_at timestamptz;
+ alter table kitchen_orders add column order_type text,add column delivery_platform text;
  alter table kitchen_order_items add column product_name text,add column quantity numeric,add column unit_price numeric;
  create table invoices(id uuid primary key,tenant_id uuid,branch_id uuid,source text,status text,ngay_chung_tu timestamptz,total numeric);
  create table restaurant_tables(id uuid primary key,name text);
@@ -94,6 +95,7 @@ statements.push(`
   updated_at=case when id='${id(31)}' then '2026-10-07 08:40Z'::timestamptz else '2026-10-07 08:20Z'::timestamptz end;
  insert into kitchen_orders(id,tenant_id,branch_id,invoice_id) values ('${id(33)}','${id(1)}','${id(10)}','${id(503)}');
  insert into kitchen_orders(id,tenant_id,branch_id,invoice_id,table_id) values ('${id(34)}','${id(1)}','${id(10)}','${id(500)}','${id(900)}');
+ update kitchen_orders set order_type='delivery',delivery_platform='Grab' where id in ('${id(30)}','${id(31)}','${id(34)}');
  update kitchen_order_items set product_name='Coffee',quantity=2,unit_price=100 where id='${id(40)}';
  update kitchen_order_items set product_name='Coffee',quantity=1,unit_price=300 where id='${id(41)}';
  insert into kitchen_order_items values ('${id(42)}','${id(33)}','Coffee',10,999);
@@ -124,6 +126,8 @@ statements.push(`
   select * into x from public.staff_fnb_modifier_summary('${id(10)}',null,null);
   if x.group_id<>'sugar' or x.option_id<>'less' or x.selection_count<>1 or x.total_quantity<>2 or x.total_price_delta<>10 or x.percent_in_group<>100
    then raise exception 'modifier totals mismatch';end if;
+  select * into x from public.staff_fnb_channel_summary('${id(10)}','platform');
+  if x.dimension<>'Grab' or x.orders<>2 or x.revenue<>400 then raise exception 'delivery channel totals mismatch';end if;
   if public.staff_fnb_kpi_summary('${id(10)}','2025-01-01','2025-01-02')
    <> '{"totalRevenue":0,"returnAmount":0,"netRevenue":0,"totalOrders":0,"avgTicket":0,"avgTurnoverMinutes":0}'::jsonb
    then raise exception 'empty KPI period mismatch';end if;
@@ -177,6 +181,8 @@ statements.push(`
   begin perform public.staff_fnb_cashier_summary(null,null,null);raise exception 'unpermitted cashier report allowed';
   exception when insufficient_privilege then if sqlerrm<>'FNB_REPORT_PERMISSION_REQUIRED' then raise;end if;end;
   begin perform public.staff_fnb_modifier_summary(null,null,null);raise exception 'unpermitted modifier report allowed';
+  exception when insufficient_privilege then if sqlerrm<>'FNB_REPORT_PERMISSION_REQUIRED' then raise;end if;end;
+  begin perform public.staff_fnb_channel_summary(null,'platform');raise exception 'unpermitted channel report allowed';
   exception when insufficient_privilege then if sqlerrm<>'FNB_REPORT_PERMISSION_REQUIRED' then raise;end if;end;
  end$$;
  reset role;

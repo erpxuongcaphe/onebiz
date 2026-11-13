@@ -393,35 +393,17 @@ export async function getRevenueByOrderType(
   branchId?: string,
 ): Promise<OrderTypeRevenue[]> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-
-  let query = supabase
-    .from("kitchen_orders")
-    .select("order_type, invoice_id, invoices!inner(total, status, source)")
-    .eq("tenant_id", tenantId)
-    .eq("invoices.source", "fnb")
-    .eq("invoices.status", "completed");
-  if (branchId) query = query.eq("branch_id", branchId);
-
-  const rows = await fetchAllFnbRows(() => query.order("id", { ascending: true }), "[fnb.report]");
-
-  const map = new Map<string, { revenue: number; orders: number }>();
-  for (const row of rows ?? []) {
-    const type = row.order_type ?? "unknown";
-    const inv = (row as Record<string, unknown>).invoices as { total: number } | null;
-    const prev = map.get(type) ?? { revenue: 0, orders: 0 };
-    prev.revenue += Number(inv?.total ?? 0);
-    prev.orders += 1;
-    map.set(type, prev);
-  }
-
-  return Array.from(map.entries())
-    .map(([orderType, data]) => ({
-      orderType,
-      orderTypeLabel: ORDER_TYPE_LABELS[orderType] ?? orderType,
-      ...data,
-    }))
-    .sort((a, b) => b.revenue - a.revenue);
+  const {data,error}=await (supabase.rpc as any)("staff_fnb_channel_summary",{
+    p_branch_id:branchId ?? null,p_dimension:"order_type",
+  });
+  if(error) handleError(error,"[getRevenueByOrderType]");
+  if(!Array.isArray(data)) throw new Error("Không tải được tổng hợp loại đơn F&B.");
+  return data.map((row: {dimension:string;revenue:number|string;orders:number|string})=>{
+    const revenue=Number(row.revenue),orders=Number(row.orders);
+    if(typeof row.dimension!=="string" || row.revenue==null || row.orders==null ||
+      !Number.isFinite(revenue) || !Number.isFinite(orders)) throw new Error("Dữ liệu loại đơn F&B chưa hợp lệ.");
+    return {orderType:row.dimension,orderTypeLabel:ORDER_TYPE_LABELS[row.dimension] ?? row.dimension,revenue,orders};
+  });
 }
 
 /**
@@ -431,33 +413,17 @@ export async function getRevenueByPlatform(
   branchId?: string,
 ): Promise<PlatformRevenue[]> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-
-  let query = supabase
-    .from("kitchen_orders")
-    .select("delivery_platform, invoice_id, invoices!inner(total, status, source)")
-    .eq("tenant_id", tenantId)
-    .eq("invoices.source", "fnb")
-    .eq("invoices.status", "completed")
-    .eq("order_type", "delivery")
-    .not("delivery_platform", "is", null);
-  if (branchId) query = query.eq("branch_id", branchId);
-
-  const rows = await fetchAllFnbRows(() => query.order("id", { ascending: true }), "[fnb.report]");
-
-  const map = new Map<string, { revenue: number; orders: number }>();
-  for (const row of rows ?? []) {
-    const platform = row.delivery_platform ?? "Khác";
-    const inv = (row as Record<string, unknown>).invoices as { total: number } | null;
-    const prev = map.get(platform) ?? { revenue: 0, orders: 0 };
-    prev.revenue += Number(inv?.total ?? 0);
-    prev.orders += 1;
-    map.set(platform, prev);
-  }
-
-  return Array.from(map.entries())
-    .map(([platform, data]) => ({ platform, ...data }))
-    .sort((a, b) => b.revenue - a.revenue);
+  const {data,error}=await (supabase.rpc as any)("staff_fnb_channel_summary",{
+    p_branch_id:branchId ?? null,p_dimension:"platform",
+  });
+  if(error) handleError(error,"[getRevenueByPlatform]");
+  if(!Array.isArray(data)) throw new Error("Không tải được tổng hợp kênh giao F&B.");
+  return data.map((row: {dimension:string;revenue:number|string;orders:number|string})=>{
+    const revenue=Number(row.revenue),orders=Number(row.orders);
+    if(typeof row.dimension!=="string" || row.revenue==null || row.orders==null ||
+      !Number.isFinite(revenue) || !Number.isFinite(orders)) throw new Error("Dữ liệu kênh giao F&B chưa hợp lệ.");
+    return {platform:row.dimension,revenue,orders};
+  });
 }
 
 /**
