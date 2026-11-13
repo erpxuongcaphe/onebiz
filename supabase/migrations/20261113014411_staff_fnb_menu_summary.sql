@@ -222,5 +222,24 @@ begin
 end $$;
 revoke all on function public.staff_fnb_turnover_summary(uuid) from public,anon;
 grant execute on function public.staff_fnb_turnover_summary(uuid) to authenticated;
+create function public.staff_fnb_category_summary(p_branch_id uuid)
+returns table(category_name text,revenue numeric,orders bigint,quantity numeric)
+language plpgsql stable security definer set search_path='' as $$
+declare tenant uuid:=public.get_user_tenant_id();branches uuid[];
+begin
+ branches:=public._staff_fnb_report_branches(p_branch_id);
+ return query
+ select coalesce(c.name,'Chưa phân loại'),sum(ki.quantity*coalesce(ki.unit_price,0))::numeric,
+  count(*)::bigint,sum(ki.quantity)::numeric
+ from public.kitchen_orders k
+ join public.invoices i on i.id=k.invoice_id and i.tenant_id=tenant and i.branch_id=k.branch_id
+ join public.kitchen_order_items ki on ki.kitchen_order_id=k.id
+ left join public.products p on p.id=ki.product_id and p.tenant_id=tenant
+ left join public.categories c on c.id=p.category_id and c.tenant_id=tenant
+ where k.tenant_id=tenant and k.branch_id=any(branches) and i.source='fnb' and i.status='completed'
+ group by p.category_id,c.name order by sum(ki.quantity*coalesce(ki.unit_price,0)) desc,p.category_id;
+end $$;
+revoke all on function public.staff_fnb_category_summary(uuid) from public,anon;
+grant execute on function public.staff_fnb_category_summary(uuid) to authenticated;
 notify pgrst,'reload schema';
 commit;

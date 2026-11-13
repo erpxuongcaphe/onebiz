@@ -28,6 +28,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
       name === "staff_fnb_hour_summary" ? Array.from({length:24},(_,hour)=>({hour,revenue:hour===15?"112000":"0",orders:hour===15?"2":"0"})) :
       name === "staff_fnb_channel_summary" ? [{dimension:args.p_dimension==="platform"?"Grab":"delivery",revenue:"112000",orders:"2"}] :
       name === "staff_fnb_turnover_summary" ? [{table_name:"Table 1",avg_minutes:"20",orders:"2"}] :
+      name === "staff_fnb_category_summary" ? [{category_name:"Drinks",revenue:"112000",orders:"2",quantity:"2"}] :
       name === "staff_fnb_modifier_summary" ? [{group_id:"sugar",group_name:"Sugar",option_id:"less",option_label:"Less",selection_count:"2",total_quantity:"2",total_price_delta:"0",percent_in_group:"100"}] : state.rpcData,error:null};
   }, from: (table: string) => {
     const query = { table, filters: [] as Array<[string, string, unknown]>, select: "" };
@@ -59,15 +60,10 @@ import { getModifierStats, getRevenueByCategory, getRevenueByHourFnb, getRevenue
 beforeEach(() => { state.queries.length = 0; state.rpcCalls.length = 0; state.rpcData = [{product_name:"Coffee",quantity:"2",revenue:"112000"}]; });
 
 describe("F&B revenue uses completed invoices independently of kitchen status", () => {
-  it.each([
-    ["category", () => getRevenueByCategory("branch")],
-  ] as const)("includes paid served orders in %s and excludes drafts, voids, Retail and other scopes", async (_name, read) => {
-    const rows = await read();
-    expect(rows.reduce((sum, row) => sum + row.revenue, 0)).toBe(112000);
-    const query = state.queries.find(q => q.table === "kitchen_orders")!;
-    expect(query.select).toContain("invoices!inner");
-    expect(query.filters).toContainEqual(["eq", "invoices.status", "completed"]);
-    expect(query.filters).not.toContainEqual(["eq", "status", "completed"]);
+  it("reads product category totals without individual orders", async () => {
+    expect(await getRevenueByCategory("branch")).toEqual([{categoryName:"Drinks",revenue:112000,orders:2,quantity:2}]);
+    expect(state.rpcCalls[0]).toEqual({name:"staff_fnb_category_summary",args:{p_branch_id:"branch"}});
+    expect(state.queries).toHaveLength(0);
   });
 
   it("reads order type and delivery platform as scoped totals", async () => {

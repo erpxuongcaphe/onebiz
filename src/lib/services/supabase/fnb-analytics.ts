@@ -355,16 +355,6 @@ export interface PlatformRevenue {
   orders: number;
 }
 
-interface FnbCategoryItemRow {
-  product_id: string | null;
-  product_name: string;
-  quantity: number;
-  unit_price: number;
-  products: {
-    category_id: string;
-    product_categories: { name: string } | null;
-  } | null;
-}
 export interface CategoryRevenue {
   categoryName: string;
   revenue: number;
@@ -433,49 +423,15 @@ export async function getRevenueByCategory(
   branchId?: string,
 ): Promise<CategoryRevenue[]> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-
-  // Include paid orders even when kitchen work is still marked served.
-  let koQuery = supabase
-    .from("kitchen_orders")
-    .select("id, invoices!inner(status, source)")
-    .eq("tenant_id", tenantId)
-    .eq("invoices.source", "fnb")
-    .eq("invoices.status", "completed");
-  if (branchId) koQuery = koQuery.eq("branch_id", branchId);
-
-  const koRows = await fetchAllFnbRows(() => koQuery.order("id", { ascending: true }), "[fnb.kitchenOrders]");
-  const koIds = (koRows ?? []).map((r) => r.id);
-  if (koIds.length === 0) return [];
-
-  // Get items with product category — scope qua kitchen_order_id
-  const items: FnbCategoryItemRow[] = [];
-  for (let offset = 0; offset < koIds.length; offset += 200) {
-    const chunkIds = koIds.slice(offset, offset + 200);
-    const chunk = await fetchAllFnbRows<FnbCategoryItemRow>(
-      () => supabase
-        .from("kitchen_order_items")
-        .select("product_id, product_name, quantity, unit_price, products:products_scoped(category_id, product_categories(name))")
-        .in("kitchen_order_id", chunkIds)
-        .order("id", { ascending: true }) as unknown as FnbPagedQuery<FnbCategoryItemRow>,
-      "[getRevenueByCategory.items]",
-    );
-    items.push(...chunk);
-  }
-
-  const map = new Map<string, { categoryName: string; revenue: number; orders: number; quantity: number }>();
-  for (const item of items ?? []) {
-    const prod = item.products;
-    const catName = prod?.product_categories?.name ?? "Chưa phân loại";
-    const key = prod?.category_id ?? "unknown";
-    const prev = map.get(key) ?? { categoryName: catName, revenue: 0, orders: 0, quantity: 0 };
-    prev.revenue += item.quantity * Number(item.unit_price);
-    prev.quantity += item.quantity;
-    prev.orders += 1;
-    map.set(key, prev);
-  }
-
-  return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
+  const {data,error}=await (supabase.rpc as any)("staff_fnb_category_summary",{p_branch_id:branchId ?? null});
+  if(error) handleError(error,"[getRevenueByCategory]");
+  if(!Array.isArray(data)) throw new Error("Không tải được tổng hợp nhóm món F&B.");
+  return data.map((row:{category_name:string;revenue:number|string;orders:number|string;quantity:number|string})=>{
+    const revenue=Number(row.revenue),orders=Number(row.orders),quantity=Number(row.quantity);
+    if(typeof row.category_name!=="string" || row.revenue==null || row.orders==null || row.quantity==null ||
+      ![revenue,orders,quantity].every(Number.isFinite)) throw new Error("Dữ liệu tổng hợp nhóm món F&B chưa hợp lệ.");
+    return {categoryName:row.category_name,revenue,orders,quantity};
+  });
 }
 
 /**

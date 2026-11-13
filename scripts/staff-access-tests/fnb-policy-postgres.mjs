@@ -77,6 +77,10 @@ statements.push(`
  alter table kitchen_order_items add column product_name text,add column quantity numeric,add column unit_price numeric;
  create table invoices(id uuid primary key,tenant_id uuid,branch_id uuid,source text,status text,ngay_chung_tu timestamptz,total numeric);
  create table restaurant_tables(id uuid primary key,name text);
+ create table categories(id uuid primary key,tenant_id uuid,name text);
+ create table products(id uuid primary key,tenant_id uuid,category_id uuid);
+ insert into categories values ('${id(601)}','${id(1)}','Drinks');
+ insert into products values ('${id(600)}','${id(1)}','${id(601)}');
  create table sales_returns(id uuid primary key,tenant_id uuid,branch_id uuid,invoice_id uuid,status text,total numeric,created_at timestamptz);
  insert into restaurant_tables values ('${id(900)}','Table A'),('${id(901)}','Table B');
  create function public.can_read_branch_document_00567(t uuid,b uuid) returns boolean language sql stable security definer set search_path=public as $$select t=get_user_tenant_id() and (user_has_branch_access(auth.uid(),b) or user_has_permission(auth.uid(),'reports.view_all_branches'))$$;
@@ -108,6 +112,8 @@ statements.push(`
  update kitchen_order_items set product_name='Coffee',quantity=1,unit_price=300 where id='${id(41)}';
  insert into kitchen_order_items values ('${id(42)}','${id(33)}','Coffee',10,999);
  alter table kitchen_order_items add column modifier_selections jsonb;
+ alter table kitchen_order_items add column product_id uuid;
+ update kitchen_order_items set product_id='${id(600)}' where id in ('${id(40)}','${id(41)}','${id(42)}');
  update kitchen_order_items set modifier_selections='[{"groupId":"sugar","groupName":"Sugar","options":[{"optionId":"less","label":"Less","priceDelta":5}]}]'::jsonb
   where id in ('${id(40)}','${id(41)}','${id(42)}');
  update profiles set is_active=true where id='${id(101)}';
@@ -138,6 +144,8 @@ statements.push(`
   if x.dimension<>'Grab' or x.orders<>2 or x.revenue<>400 then raise exception 'delivery channel totals mismatch';end if;
   select * into x from public.staff_fnb_turnover_summary('${id(10)}');
   if x.table_name<>'Table A' or x.avg_minutes<>20 or x.orders<>1 then raise exception 'table turnover mismatch';end if;
+  select * into x from public.staff_fnb_category_summary('${id(10)}');
+  if x.category_name<>'Drinks' or x.revenue<>200 or x.orders<>1 or x.quantity<>2 then raise exception 'category summary mismatch';end if;
   if public.staff_fnb_kpi_summary('${id(10)}','2025-01-01','2025-01-02')
    <> '{"totalRevenue":0,"returnAmount":0,"netRevenue":0,"totalOrders":0,"avgTicket":0,"avgTurnoverMinutes":0}'::jsonb
    then raise exception 'empty KPI period mismatch';end if;
@@ -195,6 +203,8 @@ statements.push(`
   begin perform public.staff_fnb_channel_summary(null,'platform');raise exception 'unpermitted channel report allowed';
   exception when insufficient_privilege then if sqlerrm<>'FNB_REPORT_PERMISSION_REQUIRED' then raise;end if;end;
   begin perform public.staff_fnb_turnover_summary(null);raise exception 'unpermitted turnover report allowed';
+  exception when insufficient_privilege then if sqlerrm<>'FNB_REPORT_PERMISSION_REQUIRED' then raise;end if;end;
+  begin perform public.staff_fnb_category_summary(null);raise exception 'unpermitted category report allowed';
   exception when insufficient_privilege then if sqlerrm<>'FNB_REPORT_PERMISSION_REQUIRED' then raise;end if;end;
  end$$;
  reset role;
