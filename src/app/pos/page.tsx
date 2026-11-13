@@ -233,6 +233,7 @@ function PosPageInner() {
     switchBranch,
     logout,
     hasPermission,
+    hasPermissionAtBranch,
   } = useAuth();
 
   // 00335 — NGÀY HÓA ĐƠN của TAB ĐANG HOẠT ĐỘNG. null = để máy chủ tự lấy giờ
@@ -255,7 +256,9 @@ function PosPageInner() {
     setNgayHoaDon(iso);
     setLyDoNgayHoaDon(lyDo);
   }, []);
-  const coQuyenChinhNgay = hasPermission(PERMISSIONS.INVOICES_ADJUST_ISSUED_AT);
+  const coQuyenChinhNgay = hasPermissionAtBranch
+    ? hasPermissionAtBranch(PERMISSIONS.INVOICES_ADJUST_ISSUED_AT, currentBranch?.id ?? null)
+    : hasPermission(PERMISSIONS.INVOICES_ADJUST_ISSUED_AT);
 
   // Multi-tab invoice management (KiotViet parity).
   // Cart/customer/payment and server auto-save session must move together.

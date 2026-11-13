@@ -787,6 +787,11 @@ export function StaffProfileEditor({
                                     Quyền này cho đối chiếu ca của quán được chọn. Thu ngân vẫn có thể đóng ca của mình; quyền đối chiếu mọi chi nhánh là quyền độc lập.
                                   </p>
                                 )}
+                                {branchId && p.code === "invoices.adjust_issued_at" && (
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    Cho phép chỉnh ngày giờ hóa đơn tại chi nhánh được chọn. Không cấp quyền này vẫn thanh toán bình thường với thời gian tự động.
+                                  </p>
+                                )}
                                 {["finance.submit_cash_spend_review", "finance.approve_cash_spend_review"].includes(p.code) && (
                                   <p className="mt-1 text-xs text-muted-foreground">
                                     Chức năng này hiện áp dụng toàn công ty và còn cần quyền xem nhật ký thu chi toàn công ty.
