@@ -25,7 +25,8 @@ vi.mock("@/lib/services/supabase/base", () => ({
   getClient: () => ({ rpc: async (name: string, args: Record<string, unknown>) => {
     state.rpcCalls.push({name,args});
     return {data:name === "staff_fnb_table_summary" ? [{table_name:"Table 1",revenue:"112000",orders:"2"}] :
-      name === "staff_fnb_hour_summary" ? Array.from({length:24},(_,hour)=>({hour,revenue:hour===15?"112000":"0",orders:hour===15?"2":"0"})) : state.rpcData,error:null};
+      name === "staff_fnb_hour_summary" ? Array.from({length:24},(_,hour)=>({hour,revenue:hour===15?"112000":"0",orders:hour===15?"2":"0"})) :
+      name === "staff_fnb_modifier_summary" ? [{group_id:"sugar",group_name:"Sugar",option_id:"less",option_label:"Less",selection_count:"2",total_quantity:"2",total_price_delta:"0",percent_in_group:"100"}] : state.rpcData,error:null};
   }, from: (table: string) => {
     const query = { table, filters: [] as Array<[string, string, unknown]>, select: "" };
     state.queries.push(query);
@@ -98,6 +99,13 @@ describe("F&B revenue uses completed invoices independently of kitchen status", 
     expect(state.rpcCalls[0].args).toMatchObject({p_branch_id:"branch",p_from:"2026-10-06T17:00:00.000Z",p_to:"2026-10-07T17:00:00.000Z"});
   });
 
+  it("sends invoice business-day bounds to modifier aggregation", async () => {
+    await getModifierStats("branch",{from:"2026-10-07",to:"2026-10-07"});
+    expect(state.rpcCalls[0]).toEqual({name:"staff_fnb_modifier_summary",args:{
+      p_branch_id:"branch",p_from:"2026-10-06T17:00:00.000Z",p_to:"2026-10-07T17:00:00.000Z",
+    }});
+  });
+
   it("does not show an invalid aggregate as a valid report", async () => {
     state.rpcData = [{product_name:"Coffee",quantity:null,revenue:"not-a-number"}];
     await expect(getRevenueByMenuItem("branch")).rejects.toThrow("Dữ liệu tổng hợp món F&B chưa hợp lệ");
@@ -107,10 +115,11 @@ describe("F&B revenue uses completed invoices independently of kitchen status", 
     const rows = await getModifierStats("branch");
     expect(rows).toHaveLength(1);
     expect(rows[0].count).toBe(2);
+    expect(state.rpcCalls[0].name).toBe("staff_fnb_modifier_summary");
+    expect(state.queries).toHaveLength(0);
   });
 
   it.each([
-    ["modifiers", () => getModifierStats("branch", { from: "2026-10-07", to: "2026-10-07" })],
   ] as const)("filters %s by invoice business date rather than kitchen creation date", async (_name, read) => {
     await read();
     const filters = state.queries.find(q => q.table === "kitchen_orders")!.filters;

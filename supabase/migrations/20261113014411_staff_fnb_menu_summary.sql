@@ -148,5 +148,43 @@ revoke all on function public.staff_fnb_hour_summary(uuid,timestamptz,timestampt
  public.staff_fnb_cashier_summary(uuid,timestamptz,timestamptz) from public,anon;
 grant execute on function public.staff_fnb_hour_summary(uuid,timestamptz,timestamptz),
  public.staff_fnb_cashier_summary(uuid,timestamptz,timestamptz) to authenticated;
+create function public.staff_fnb_modifier_summary(
+ p_branch_id uuid default null,p_from timestamptz default null,p_to timestamptz default null
+) returns table(group_id text,group_name text,option_id text,option_label text,
+ selection_count bigint,total_quantity numeric,total_price_delta numeric,percent_in_group numeric)
+language plpgsql stable security definer set search_path='' as $$
+declare tenant uuid:=public.get_user_tenant_id();branches uuid[];
+begin
+ branches:=public._staff_fnb_report_branches(p_branch_id);
+ if p_from is not null and p_to is not null and p_from>=p_to then
+  raise exception 'FNB_REPORT_FILTER_INVALID' using errcode='22023';end if;
+ return query
+ with expanded as (
+  select ki.id as item_id,g.pos as group_pos,o.pos as option_pos,
+   g.value->>'groupId' as gid,g.value->>'groupName' as gname,
+   o.value->>'optionId' as oid,o.value->>'label' as label,
+   ki.quantity::numeric as qty,coalesce((o.value->>'priceDelta')::numeric,0) as delta
+  from public.kitchen_orders ko
+  join public.invoices i on i.id=ko.invoice_id and i.tenant_id=tenant and i.branch_id=ko.branch_id
+  join public.kitchen_order_items ki on ki.kitchen_order_id=ko.id
+  cross join lateral jsonb_array_elements(case when jsonb_typeof(ki.modifier_selections)='array'
+   then ki.modifier_selections else '[]'::jsonb end) with ordinality as g(value,pos)
+  cross join lateral jsonb_array_elements(case when g.value->'options' is null or jsonb_typeof(g.value->'options')='null'
+   then '[]'::jsonb else g.value->'options' end) with ordinality as o(value,pos)
+  where ko.tenant_id=tenant and ko.branch_id=any(branches) and i.source='fnb' and i.status='completed'
+   and ki.quantity>0 and (p_from is null or i.ngay_chung_tu>=p_from)
+   and (p_to is null or i.ngay_chung_tu<p_to)
+ ), grouped as (
+  select e.gid,e.oid,(array_agg(e.gname order by e.item_id,e.group_pos,e.option_pos))[1] as gn,
+   (array_agg(e.label order by e.item_id,e.group_pos,e.option_pos))[1] as ol,
+   count(*)::bigint as n,sum(e.qty)::numeric as q,sum(e.qty*e.delta)::numeric as amount
+  from expanded e group by e.gid,e.oid
+ )
+ select x.gid,x.gn,x.oid,x.ol,x.n,x.q,x.amount,
+  floor(x.n::numeric*100/nullif(sum(x.n) over(partition by x.gid),0)+0.5)::numeric
+ from grouped x order by x.gid,x.n desc,x.oid;
+end $$;
+revoke all on function public.staff_fnb_modifier_summary(uuid,timestamptz,timestamptz) from public,anon;
+grant execute on function public.staff_fnb_modifier_summary(uuid,timestamptz,timestamptz) to authenticated;
 notify pgrst,'reload schema';
 commit;

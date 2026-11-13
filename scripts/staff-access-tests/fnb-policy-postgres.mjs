@@ -97,6 +97,9 @@ statements.push(`
  update kitchen_order_items set product_name='Coffee',quantity=2,unit_price=100 where id='${id(40)}';
  update kitchen_order_items set product_name='Coffee',quantity=1,unit_price=300 where id='${id(41)}';
  insert into kitchen_order_items values ('${id(42)}','${id(33)}','Coffee',10,999);
+ alter table kitchen_order_items add column modifier_selections jsonb;
+ update kitchen_order_items set modifier_selections='[{"groupId":"sugar","groupName":"Sugar","options":[{"optionId":"less","label":"Less","priceDelta":5}]}]'::jsonb
+  where id in ('${id(40)}','${id(41)}','${id(42)}');
  update profiles set is_active=true where id='${id(101)}';
  delete from role_permissions where role_id='${id(20)}';
  insert into role_permissions values ('${id(20)}','reports.fnb');
@@ -118,6 +121,9 @@ statements.push(`
   select * into x from public.staff_fnb_cashier_summary('${id(10)}',null,null);
   if x.cashier_name<>'Staff A' or x.revenue<>250 or x.orders<>2 or x.avg_ticket<>125
    then raise exception 'cashier summary mismatch';end if;
+  select * into x from public.staff_fnb_modifier_summary('${id(10)}',null,null);
+  if x.group_id<>'sugar' or x.option_id<>'less' or x.selection_count<>1 or x.total_quantity<>2 or x.total_price_delta<>10 or x.percent_in_group<>100
+   then raise exception 'modifier totals mismatch';end if;
   if public.staff_fnb_kpi_summary('${id(10)}','2025-01-01','2025-01-02')
    <> '{"totalRevenue":0,"returnAmount":0,"netRevenue":0,"totalOrders":0,"avgTicket":0,"avgTurnoverMinutes":0}'::jsonb
    then raise exception 'empty KPI period mismatch';end if;
@@ -155,6 +161,8 @@ statements.push(`
    then raise exception 'all-branch KPI mismatch';end if;
   if (select sum(revenue) from public.staff_fnb_cashier_summary(null,null,null))<>550
    or (select count(*) from public.staff_fnb_cashier_summary(null,null,null))<>2 then raise exception 'all-branch cashier mismatch';end if;
+  select * into x from public.staff_fnb_modifier_summary(null,null,null);
+  if x.selection_count<>2 or x.total_quantity<>3 or x.total_price_delta<>15 then raise exception 'all-branch modifier mismatch';end if;
  end$$;
  reset role;delete from role_permissions where permission_code in ('reports.fnb','reports.view_all_branches');set role authenticated;
  do $$begin
@@ -167,6 +175,8 @@ statements.push(`
   begin perform public.staff_fnb_hour_summary(null,null,null);raise exception 'unpermitted hourly report allowed';
   exception when insufficient_privilege then if sqlerrm<>'FNB_REPORT_PERMISSION_REQUIRED' then raise;end if;end;
   begin perform public.staff_fnb_cashier_summary(null,null,null);raise exception 'unpermitted cashier report allowed';
+  exception when insufficient_privilege then if sqlerrm<>'FNB_REPORT_PERMISSION_REQUIRED' then raise;end if;end;
+  begin perform public.staff_fnb_modifier_summary(null,null,null);raise exception 'unpermitted modifier report allowed';
   exception when insufficient_privilege then if sqlerrm<>'FNB_REPORT_PERMISSION_REQUIRED' then raise;end if;end;
  end$$;
  reset role;

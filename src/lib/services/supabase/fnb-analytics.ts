@@ -800,106 +800,33 @@ export interface ModifierStatRow {
 
 /**
  * Lấy thống kê chọn modifier theo branch + date range.
- * Đọc kitchen_order_items.modifier_selections (JSONB) từ các đơn đã thanh toán.
+ * Chỉ nhận tổng hợp tùy chọn từ các đơn đã thanh toán.
  */
 export async function getModifierStats(
   branchId?: string,
   range?: { from: string; to: string },
 ): Promise<ModifierStatRow[]> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
   const rangeWindow = toCreatedAtRangeWindow(range);
-
-  // 1. Select paid invoices, not kitchen preparation status.
-  let koQuery = supabase
-    .from("kitchen_orders")
-    .select("id, invoices!inner(status, source, ngay_chung_tu)")
-    .eq("tenant_id", tenantId)
-    .eq("invoices.source", "fnb")
-    .eq("invoices.status", "completed");
-  if (branchId) koQuery = koQuery.eq("branch_id", branchId);
-  if (rangeWindow) {
-    koQuery = koQuery
-      .gte("invoices.ngay_chung_tu", rangeWindow.start)
-      .lt("invoices.ngay_chung_tu", rangeWindow.end);
-  }
-  const koRows = await fetchAllFnbRows(() => koQuery.order("id", { ascending: true }), "[fnb.kitchenOrders]");
-  const koIds = (koRows ?? []).map((r) => r.id);
-  if (koIds.length === 0) return [];
-
-  // 2. Lấy kitchen_order_items với modifier_selections
-  const items: Array<Record<string, unknown>> = [];
-  /* eslint-disable @typescript-eslint/no-explicit-any -- generated DB types do not expose modifier_selections yet */
-  for (let offset = 0; offset < koIds.length; offset += 200) {
-    const chunkIds = koIds.slice(offset, offset + 200);
-    const chunk = await fetchAllFnbRows<any>(
-      () => (supabase
-        .from("kitchen_order_items")
-        .select("quantity, modifier_selections") as any)
-        .in("kitchen_order_id", chunkIds)
-        .not("modifier_selections", "is", null)
-        .order("id", { ascending: true }),
-      "[getModifierStats.items]",
-    );
-    items.push(...chunk);
-  }
-  /* eslint-enable @typescript-eslint/no-explicit-any */
-
-  // 3. Aggregate client-side
-  const map = new Map<
-    string, // key = `${groupId}::${optionId}`
-    ModifierStatRow
-  >();
-
-  for (const item of (items ?? []) as Array<{
-    quantity: number;
-    modifier_selections: Array<{
-      groupId: string;
-      groupName: string;
-      options: Array<{
-        optionId: string;
-        label: string;
-        priceDelta: number;
-      }>;
-    }>;
-  }>) {
-    const qty = Number(item.quantity ?? 0);
-    if (qty <= 0 || !Array.isArray(item.modifier_selections)) continue;
-    for (const sel of item.modifier_selections) {
-      for (const opt of sel.options ?? []) {
-        const key = `${sel.groupId}::${opt.optionId}`;
-        const prev = map.get(key) ?? {
-          groupId: sel.groupId,
-          groupName: sel.groupName,
-          optionId: opt.optionId,
-          optionLabel: opt.label,
-          count: 0,
-          totalQuantity: 0,
-          totalPriceDelta: 0,
-        };
-        prev.count += 1;
-        prev.totalQuantity += qty;
-        prev.totalPriceDelta += Number(opt.priceDelta ?? 0) * qty;
-        map.set(key, prev);
-      }
+  const {data,error} = await (supabase.rpc as any)("staff_fnb_modifier_summary", {
+    p_branch_id:branchId ?? null,p_from:rangeWindow?.start ?? null,p_to:rangeWindow?.end ?? null,
+  });
+  if (error) handleError(error, "[getModifierStats]");
+  if (!Array.isArray(data)) throw new Error("Không tải được tổng hợp tùy chọn F&B.");
+  const rows = data.map((row: {group_id:string;group_name:string;option_id:string;option_label:string;
+    selection_count:number|string;total_quantity:number|string;total_price_delta:number|string;percent_in_group:number|string}) => {
+    const count=Number(row.selection_count),totalQuantity=Number(row.total_quantity);
+    const totalPriceDelta=Number(row.total_price_delta),percentInGroup=Number(row.percent_in_group);
+    if ([row.group_id,row.group_name,row.option_id,row.option_label].some(value=>typeof value!=="string") ||
+        [row.selection_count,row.total_quantity,row.total_price_delta,row.percent_in_group].some(value=>value==null) ||
+        ![count,totalQuantity,totalPriceDelta,percentInGroup].every(Number.isFinite)) {
+      throw new Error("Dữ liệu tổng hợp tùy chọn F&B chưa hợp lệ. Vui lòng tải lại.");
     }
-  }
-
-  // 4. Tính % count trong cùng group
-  const rows = Array.from(map.values());
-  const totalByGroup = new Map<string, number>();
-  for (const r of rows) {
-    totalByGroup.set(r.groupId, (totalByGroup.get(r.groupId) ?? 0) + r.count);
-  }
-  for (const r of rows) {
-    const tot = totalByGroup.get(r.groupId) ?? 0;
-    r.percentInGroup = tot > 0 ? Math.round((r.count / tot) * 100) : 0;
-  }
-
-  // Sort: group name asc, then count desc (option phổ biến nhất trên cùng)
+    return {groupId:row.group_id,groupName:row.group_name,optionId:row.option_id,
+      optionLabel:row.option_label,count,totalQuantity,totalPriceDelta,percentInGroup};
+  });
   return rows.sort((a, b) => {
-    if (a.groupName !== b.groupName)
-      return a.groupName.localeCompare(b.groupName, "vi");
+    if (a.groupName !== b.groupName) return a.groupName.localeCompare(b.groupName, "vi");
     return b.count - a.count;
   });
 }
