@@ -2900,19 +2900,20 @@ export async function getCashFlow(
   dateRange?: { from: string; to: string },
 ): Promise<CashFlowRow[]> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
   const range = resolveRange(dateRange, lastNMonthsRange(months));
   const monthKeys = monthKeysForRange(dateRange, months);
-
-  let query = supabase
-    .from("cash_transactions")
-    .select("created_at, type, amount")
-    .eq("tenant_id", tenantId)
-    .eq("status", "completed")
-    .gte("created_at", range.start)
-    .lt("created_at", range.end);
-  if (branchId) query = query.eq("branch_id", branchId);
-  const data = await fetchAllPostgrestRows(() => query.order("created_at", { ascending: true }), "[getCashFlow]");
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  const data = await fetchAllPostgrestRows<{ year: number; month: number; type: string; amount: number | string }>(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    () => (supabase as any).rpc("get_cash_flow_created_month_totals", {
+      p_from: range.start, p_to: range.end, p_timezone: timezone, p_branch: branchId ?? null,
+    }).order("year", { ascending: true }).order("month", { ascending: true }).order("type", { ascending: true }),
+    "[getCashFlow]",
+  );
+  if (data.some(row => !Number.isInteger(row.year) || !Number.isInteger(row.month) || row.month < 1 || row.month > 12 ||
+    !["receipt", "payment"].includes(row.type) || row.amount == null || !Number.isFinite(Number(row.amount)))) {
+    throw new Error("Không xác định được số liệu dòng tiền theo tháng.");
+  }
 
   // P1-3B-R4: key kèm year (chống merge T6/2025 + T6/2026 → cumulativeBalance sai).
   const thuMap = new Map<string, number>();
@@ -2923,12 +2924,11 @@ export async function getCashFlow(
   }
 
   (data ?? []).forEach(c => {
-    const d = new Date(c.created_at);
-    const key = `T${d.getMonth() + 1}/${d.getFullYear()}`;
+    const key = `T${c.month}/${c.year}`;
     if (c.type === "receipt") {
-      thuMap.set(key, (thuMap.get(key) ?? 0) + (c.amount ?? 0));
+      thuMap.set(key, (thuMap.get(key) ?? 0) + Number(c.amount ?? 0));
     } else if (c.type === "payment") {
-      chiMap.set(key, (chiMap.get(key) ?? 0) + (c.amount ?? 0));
+      chiMap.set(key, (chiMap.get(key) ?? 0) + Number(c.amount ?? 0));
     }
   });
 

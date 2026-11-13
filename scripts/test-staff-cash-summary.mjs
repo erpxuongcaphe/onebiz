@@ -25,12 +25,19 @@ try {
  ('${id(1)}','${id(10)}','2026-11-03','payment','Bỏ qua',999,'draft'),
  ('${id(1)}','${id(11)}','2026-11-02','receipt','Bán hàng',200,'completed'),
  ('${id(2)}','${id(12)}','2026-11-02','receipt','Bán hàng',9999,'completed');
+ alter table cash_transactions add column created_at timestamptz;
+ update cash_transactions set created_at='2026-10-31T18:00:00Z';
  insert into role_permissions values('${id(20)}','reports.analytics');
  select set_config('request.jwt.claim.sub','${id(101)}',false);`);
  await db.exec(await readFile('supabase/migrations/20261113074601_staff_cash_flow_summary_projection.sql','utf8'));
  let rows=(await db.query(`select transaction_date::text,type,category,amount::text from get_cash_flow_category_summary('2026-11-01','2026-11-30','${id(10)}') order by type`)).rows;
  assert.deepEqual(rows,[{transaction_date:'2026-11-01',type:'payment',category:'Khác',amount:'20'},
   {transaction_date:'2026-11-01',type:'receipt',category:'Bán hàng',amount:'150'}]);
+ rows=(await db.query(`select year,month,type,amount::text from get_cash_flow_created_month_totals('2026-10-01','2026-12-01','Asia/Ho_Chi_Minh','${id(10)}') order by type`)).rows;
+ assert.deepEqual(rows,[{year:2026,month:11,type:'payment',amount:'20'},{year:2026,month:11,type:'receipt',amount:'150'}]);
+ rows=(await db.query(`select month from get_cash_flow_created_month_totals('2026-10-01','2026-12-01','UTC','${id(10)}') limit 1`)).rows;
+ assert.equal(rows[0].month,10);
+ await assert.rejects(db.query(`select * from get_cash_flow_created_month_totals('2026-10-01','2026-12-01','Asia/Ho_Chi_Minh','${id(12)}')`),/REPORT_BRANCH_DENIED/);
  await assert.rejects(db.query(`select * from get_cash_flow_category_summary('2026-11-01','2026-11-30','${id(11)}')`),/REPORT_BRANCH_DENIED/);
  await assert.rejects(db.query(`select * from get_cash_flow_category_summary('2026-11-01','2026-11-30','${id(12)}')`),/REPORT_BRANCH_DENIED/);
  await assert.rejects(db.query(`select * from get_cash_flow_category_summary('2026-11-01','2026-11-30',null)`),/REPORT_ALL_BRANCHES_DENIED/);
@@ -47,6 +54,7 @@ try {
  insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
  values('${id(1)}','${id(101)}','${id(10)}','reports.analytics','revoke','${id(100)}');`);
  await assert.rejects(db.query(`select * from get_cash_flow_category_summary('2026-11-01','2026-11-30','${id(10)}')`),/REPORT_PERMISSION_DENIED/);
+ await assert.rejects(db.query(`select * from get_cash_flow_created_month_totals('2026-10-01','2026-12-01','UTC','${id(10)}')`),/REPORT_PERMISSION_DENIED/);
  await db.exec(`insert into role_permissions values('${id(20)}','reports.view_all_branches');`);
  await assert.rejects(db.query(`select * from get_cash_flow_category_summary('2026-11-01','2026-11-30',null)`),/REPORT_PERMISSION_DENIED/);
  await db.exec(`update profiles set is_active=false where id='${id(101)}'`);
