@@ -61,6 +61,9 @@ statements.push(`
    or (select count(*) from cash_amendments)<>2 or (select count(*) from party_advance_refunds)<>2
    then raise exception 'legacy cash visibility changed'; end if;
  end$$;
+ reset role; delete from role_permissions where permission_code='finance.view_cash_book'; set role authenticated;
+ do $$begin if (select count(*) from cash_transactions)<>0 then raise exception 'missing cash-book permission exposes raw vouchers';end if;end$$;
+ reset role; insert into role_permissions values ('${id(20)}','finance.view_cash_book'); set role authenticated;
  reset role;
  insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
   values('${id(1)}','${id(101)}','${id(10)}','finance.view_cash_book','revoke','${id(100)}');
@@ -135,6 +138,12 @@ statements.push(`set role authenticated; do $$begin
  if (select count(*) from cash_transactions)<>0 then raise exception 'SUMMARY_REVEALED_RAW_VOUCHERS';end if;
  if (select sum(amount) from get_cash_flow_category_summary('2026-11-01','2026-11-30','${id(10)}')) is distinct from 100
  then raise exception 'AUTHORIZED_SUMMARY_MISSING';end if;
+ end$$; reset role;
+ delete from user_permission_overrides where permission_code='finance.view_cash_book';
+ set role authenticated; do $$begin
+ if (select count(*) from cash_transactions)<>0 then raise exception 'REPORT_ONLY_USER_REVEALED_RAW_VOUCHERS';end if;
+ if (select sum(amount) from get_cash_flow_category_summary('2026-11-01','2026-11-30','${id(10)}')) is distinct from 100
+ then raise exception 'REPORT_ONLY_SUMMARY_MISSING';end if;
  end$$; reset role;`);
 if (process.env.ONEBIZ_PGLITE_MODULE) {
  const {PGlite}=await import(pathToFileURL(process.env.ONEBIZ_PGLITE_MODULE).href);

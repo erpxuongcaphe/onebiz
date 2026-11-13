@@ -61,7 +61,10 @@ export async function verifyCashBookReadScope(db, id) {
   await db.exec(await readFile(new URL('../../supabase/migrations/20261113062219_staff_cash_direct_read_scope.sql', import.meta.url), 'utf8'));
   const directCount = async () => Number((await db.query("select count(*) n from cash_transactions where category='synthetic-scope'")).rows[0].n);
   await db.exec('set role authenticated');
-  assert.equal(await directCount(), 2, 'no branch exception preserves legacy direct reads');
+  assert.equal(await directCount(), 2, 'cash-book permission preserves existing branch reads');
+  await db.exec(`reset role; delete from test_staff_permissions where code='finance.view_cash_book'; set role authenticated;`);
+  assert.equal(await directCount(), 0, 'missing cash-book permission hides direct vouchers');
+  await db.exec(`reset role; insert into test_staff_permissions values ('finance.view_cash_book'); set role authenticated;`);
   await db.exec(`reset role;
     insert into user_branch_permission_overrides values
       ('${id(2)}','${id(1)}','${id(3)}','finance.view_cash_book','revoke');
