@@ -58,6 +58,26 @@ export async function verifyCashBookReadScope(db, id) {
       "utf8",
     ),
   );
+  await db.exec(await readFile(new URL('../../supabase/migrations/20261113062219_staff_cash_direct_read_scope.sql', import.meta.url), 'utf8'));
+  const directCount = async () => Number((await db.query("select count(*) n from cash_transactions where category='synthetic-scope'")).rows[0].n);
+  await db.exec('set role authenticated');
+  assert.equal(await directCount(), 2, 'no branch exception preserves legacy direct reads');
+  await db.exec(`reset role;
+    insert into user_branch_permission_overrides values
+      ('${id(2)}','${id(1)}','${id(3)}','finance.view_cash_book','revoke');
+    set role authenticated;`);
+  assert.equal(await directCount(), 1, 'direct REST table read hides the denied branch');
+  await db.exec(`reset role; insert into test_staff_permissions values ('reports.dashboard'); set role authenticated;`);
+  assert.equal(await directCount(), 2, 'independent dashboard permission remains effective');
+  await db.exec(`reset role; delete from test_staff_permissions where code in ('reports.dashboard','finance.view_cash_book');
+    update user_branch_permission_overrides set branch_id='${id(4)}',override_type='grant'
+      where permission_code='finance.view_cash_book'; set role authenticated;`);
+  assert.equal(await directCount(), 1, 'branch-only cash grant exposes just its selected branch');
+  await db.exec(`reset role; insert into user_permission_overrides values ('${id(2)}','${id(1)}','finance.view_cash_book','revoke'); set role authenticated;`);
+  assert.equal(await directCount(), 0, 'global cash-view denial wins over a branch grant');
+  await db.exec(`reset role; delete from user_permission_overrides where permission_code='finance.view_cash_book';
+    insert into test_staff_permissions values ('finance.view_cash_book');
+    delete from user_branch_permission_overrides where permission_code='finance.view_cash_book';`);
   const list = async (branch = null) =>
     (
       await db.query(
