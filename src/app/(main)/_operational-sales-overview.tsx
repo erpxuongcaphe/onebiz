@@ -7,7 +7,7 @@ import { useAuth, useBranchFilter } from "@/lib/contexts";
 import { useLiveDataRefresh } from "@/lib/hooks/use-live-data-refresh";
 import { useReceivingVietnamDay } from "@/lib/hooks/use-receiving-view-memory";
 import { canViewSalesDashboard, salesRange, type SalesDashboard, type SalesGrain } from "@/lib/dashboard-sales";
-import { getSalesDashboard } from "@/lib/services/supabase/dashboard-sales";
+import { getSalesDashboard, getSalesDayReceivable } from "@/lib/services/supabase/dashboard-sales";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
@@ -59,6 +59,29 @@ function useSalesQuery(scope: string, branchId: string | undefined, from: string
   return { data: enabled && !error && result?.key === key ? result.data : null, error, at: !error && result?.key === key ? result.at : null, loading: enabled && loading, refresh };
 }
 
+function useSalesReceivable(scope: string, branchId: string | undefined, day: string, enabled: boolean) {
+  const key = `${scope}:${branchId ?? "all"}:${day}:${enabled}`;
+  const [result, setResult] = useState<{key: string; amount: number; invoice_count: number; missing_count: number} | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+  const request = useRef(0);
+  const refresh = useCallback(async () => {
+    const id = ++request.current;
+    if (!enabled) return;
+    try {
+      const data = await getSalesDayReceivable(branchId, day);
+      if (request.current === id) { setResult({key, ...data}); setFailed(null); }
+    } catch {
+      if (request.current === id) setFailed(key);
+    }
+  }, [branchId, day, enabled, key]);
+  useEffect(() => {
+    let active = true;
+    void Promise.resolve().then(() => { if (active) return refresh(); });
+    return () => { active = false; request.current += 1; };
+  }, [refresh]);
+  return {data: enabled && failed !== key && result?.key === key ? result : null, error: failed === key, refresh};
+}
+
 export default function OperationalSalesOverview() {
   const { activeBranchId, isReady } = useBranchFilter();
   const { tenant, user, branches, hasPermission } = useAuth();
@@ -81,14 +104,16 @@ export default function OperationalSalesOverview() {
   const enabled = isReady && allowed && !!tenant?.id && !!user?.id;
   const scope = `${tenant?.id}:${user?.id}`;
   const daily = useSalesQuery(scope, activeBranchId, summaryDay, summaryDay, "hour", enabled);
+  const receivable = useSalesReceivable(scope, activeBranchId, summaryDay, enabled && hasPermission("customers.view_debt"));
   const samePeriod = grain === "hour" && range.from === summaryDay && to === summaryDay;
   const analysis = useSalesQuery(scope, activeBranchId, range.from, to, grain, enabled && !samePeriod);
   const chart = samePeriod ? daily : analysis;
   const refreshDaily = daily.refresh;
   const refreshAnalysis = analysis.refresh;
+  const refreshReceivable = receivable.refresh;
   const refresh = useCallback(async () => {
-    await Promise.all([refreshDaily(), refreshAnalysis()]);
-  }, [refreshDaily, refreshAnalysis]);
+    await Promise.all([refreshDaily(), refreshAnalysis(), refreshReceivable()]);
+  }, [refreshDaily, refreshAnalysis, refreshReceivable]);
   useLiveDataRefresh(refresh, tenant?.id, activeBranchId, ["dashboard_live_signals", "kitchen_orders"], isReady && allowed);
   const data = daily.data;
   const error = daily.error;
@@ -135,16 +160,17 @@ export default function OperationalSalesOverview() {
               {data.returns !== 0 && <span className="text-rose-700 dark:text-rose-400">Hàng trả {formatCurrency(data.returns)}</span>}
             </div>
           </div>
-          <dl className="grid grid-cols-2 border-t bg-muted/30 sm:grid-cols-3">
+          <dl className="grid grid-cols-2 border-t bg-muted/30 sm:grid-cols-2 lg:grid-cols-4">
             {Array.from(new Set(["cash", "transfer", ...Object.keys(data.methods).filter(method => data.methods[method] !== 0)])).map(method => (
               <div key={method} className={`min-w-0 border-b p-3 sm:px-5 ${method === "cash" ? "border-l-2 border-l-teal-500 bg-teal-500/5" : method === "transfer" ? "border-l-2 border-l-violet-500 bg-violet-500/5" : ""}`}><dt className={`text-xs font-medium ${method === "cash" ? "text-teal-700 dark:text-teal-400" : method === "transfer" ? "text-violet-700 dark:text-violet-400" : "text-foreground/70"}`}>{METHODS[method] ?? method}</dt><dd className="mt-1 break-words text-base font-semibold tabular-nums">{formatCurrency(data.methods[method] ?? 0)}</dd></div>
             ))}
+            {hasPermission("customers.view_debt") && <div className="min-w-0 border-b border-l-2 border-l-amber-500 bg-amber-500/5 p-3 sm:px-5"><dt className="text-xs font-medium text-amber-800 dark:text-amber-300">HĐ ngày này còn nợ</dt><dd className="mt-1 break-words text-base font-semibold tabular-nums" data-testid="invoice-receivable">{receivable.data && receivable.data.missing_count === 0 ? formatCurrency(receivable.data.amount) : "—"}</dd><p className="mt-1 text-xs text-muted-foreground">{receivable.error ? "Chưa tải được công nợ." : receivable.data?.missing_count ? "Có hóa đơn chưa đủ số nợ." : "Số còn nợ hiện tại của hóa đơn hoàn tất trong ngày."}</p></div>}
             <div className="col-span-2 flex min-w-0 items-center justify-between gap-2 border-b bg-primary/5 p-3 sm:col-span-1 sm:block sm:px-5"><dt className="text-xs font-medium text-foreground/70">Thực thu sau hoàn</dt><dd className="break-words text-base font-semibold tabular-nums sm:mt-1">{formatCurrency(data.collected)}</dd></div>
           </dl>
           <details className="p-3 text-xs sm:px-5">
             <summary className="cursor-pointer font-medium">Đối chiếu bán hàng và thu tiền</summary>
             <dl className="mt-3 space-y-2">
-              {[["Tiền đã thu", data.received], ["Tiền đã hoàn", -data.refunded], ["Chênh lệch thực thu và doanh số", data.collected - data.sales]].map(([label, value]) => <div key={String(label)} className="flex justify-between gap-3"><dt>{label}</dt><dd className="shrink-0 text-right tabular-nums">{formatCurrency(Number(value))}</dd></div>)}
+              {[["Tiền đã thu", data.received], ["Tiền đã hoàn", data.refunded === 0 ? 0 : -data.refunded], ["Chênh lệch thực thu và doanh số", data.collected - data.sales]].map(([label, value]) => <div key={String(label)} className="flex justify-between gap-3"><dt>{label}</dt><dd className="shrink-0 text-right tabular-nums">{formatCurrency(Number(value))}</dd></div>)}
             </dl>
             <p className="mt-3 leading-relaxed text-muted-foreground">Doanh số theo ngày hóa đơn và hàng trả, gồm thuế/phí giao nếu có. Thực thu sau hoàn theo ngày ghi sổ, nên có thể gồm thu nợ hoặc hoàn tiền của đơn kỳ trước.</p>
           </details>

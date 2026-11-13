@@ -11,6 +11,20 @@ const schema = z.object({
   modes: z.array(z.object({ mode: z.string(), sales: amount, orders: amount })),
 });
 
+const receivableSchema = z.object({
+  amount, invoice_count: amount, missing_count: amount,
+});
+
+export async function getSalesDayReceivable(branchId: string | undefined, day: string) {
+  const { data, error } = await getClient().rpc('get_sales_day_invoice_receivable' as never, {
+    p_branch_id: branchId ?? null, p_day: day,
+  } as never);
+  if (error) handleError(error, 'getSalesDayReceivable');
+  const result = receivableSchema.safeParse(data);
+  if (!result.success) throw new Error('Dữ liệu công nợ chưa đầy đủ.');
+  return result.data;
+}
+
 export async function getSalesDashboard(
   branchId: string | undefined, from: string, to: string, grain: SalesGrain,
 ): Promise<SalesDashboard> {

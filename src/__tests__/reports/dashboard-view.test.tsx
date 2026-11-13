@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({ ready: true, branchId: "b1" as string | undefined, permissions: new Set<string>(), fetch: vi.fn() }));
 const openBills = vi.hoisted(() => vi.fn());
+const receivable = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/hooks/use-fnb-open-orders", () => ({ useFnbOpenOrders: openBills }));
 vi.mock("next/dynamic", () => ({ default: () => () => <div data-testid="dynamic-view" /> }));
 vi.mock("@/lib/contexts", () => ({
@@ -11,13 +12,36 @@ vi.mock("@/lib/contexts", () => ({
 vi.mock("@/lib/hooks/use-report-scope", () => ({ useReportScope: () => ({ isReady: state.ready }) }));
 vi.mock("@/lib/hooks/use-live-data-refresh", () => ({ useLiveDataRefresh: () => false }));
 vi.mock("@/lib/hooks/use-receiving-view-memory", () => ({ useReceivingVietnamDay: () => "2026-10-20" }));
-vi.mock("@/lib/services/supabase/dashboard-sales", () => ({ getSalesDashboard: state.fetch }));
+vi.mock("@/lib/services/supabase/dashboard-sales", () => ({ getSalesDashboard: state.fetch, getSalesDayReceivable: receivable }));
 import Dashboard from "@/app/(main)/page";
 const sample = { sales: 111111, discounts: 5000, returns: 0, orders: 3, received: 121111, refunded: 10000, collected: 111111, methods: { cash: 100000, transfer: 11111 }, buckets: [], modes: [] };
 beforeEach(() => { state.ready = true; state.branchId = "b1"; state.permissions = new Set(["pos_fnb.view_sales_summary", "reports.analytics", "reports.view_detail", "reports.view_profit"]); state.fetch.mockReset().mockResolvedValue(sample); });
 afterEach(cleanup);
 beforeEach(() => openBills.mockReset().mockReturnValue({ orders: [], loading: false, error: null, refresh: vi.fn() }));
+beforeEach(() => receivable.mockReset().mockResolvedValue({ amount: 12345, invoice_count: 2, missing_count: 0 }));
 describe("sales dashboard permission and scope", () => {
+  it("shows current outstanding invoice debt separately from cash and old debt collections", async () => {
+    state.permissions.add("customers.view_debt");
+    render(<Dashboard />);
+    expect(await screen.findByTestId("invoice-receivable")).toHaveTextContent("12,345");
+    expect(receivable).toHaveBeenCalledWith("b1", "2026-10-20");
+    expect(screen.getByText("HĐ ngày này còn nợ")).toBeInTheDocument();
+    expect(screen.getByText("Thực thu sau hoàn")).toBeInTheDocument();
+  });
+  it("does not fetch or show debt without permission", async () => {
+    render(<Dashboard />);
+    await screen.findByTestId("net-sales");
+    expect(receivable).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("invoice-receivable")).not.toBeInTheDocument();
+  });
+  it("never presents incomplete debt as zero or hides sales when debt fails", async () => {
+    state.permissions.add("customers.view_debt");
+    receivable.mockResolvedValue({ amount: 0, invoice_count: 0, missing_count: 1 });
+    render(<Dashboard />);
+    expect(await screen.findByTestId("net-sales")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("Có hóa đơn chưa đủ số nợ.")).toBeInTheDocument());
+    expect(screen.getByTestId("invoice-receivable")).toHaveTextContent("—");
+  });
   it("uses completed invoice value, not collections or return-adjusted sales, for average order value", async () => {
     state.fetch.mockResolvedValueOnce({ ...sample, sales: 90000, returns: 20000, orders: 2, collected: 5000 });
     render(<Dashboard />);
