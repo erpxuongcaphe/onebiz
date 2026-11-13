@@ -58,6 +58,12 @@ const snapshot: StaffProfileSnapshot = {
   branchPermissionCodes: ["pos_fnb.split_bill", "pos_fnb.transfer_table"],
 };
 describe("staff profile scope", () => {
+  it("explains when independent rights permit viewing another person's order", () => {
+    render(<StaffProfileEditor snapshot={snapshot} onSave={vi.fn()} onReload={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", {name:"Tùy chỉnh quyền"}));
+    fireEvent.change(screen.getByRole("textbox", {name:"Tìm quyền"}), {target:{value:"orders.view_own_only"}});
+    expect(screen.getByText(/Quyền tạo hoặc hủy đơn không tự bỏ giới hạn này/)).toBeVisible();
+  });
   it("explains stock action document access and separate cost rights", () => {
     const data = structuredClone(snapshot); data.branchPermissionCodes.push("inventory.dispose");
     render(<StaffProfileEditor snapshot={data} onSave={vi.fn()} onReload={vi.fn()} />);

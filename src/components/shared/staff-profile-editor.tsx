@@ -756,6 +756,14 @@ export function StaffProfileEditor({
                                     ? "Xem lệnh và số liệu lệnh sản xuất"
                                     : p.label}
                                 </p>
+                                {p.code === "orders.view_own_only" && (
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    Giới hạn đơn của người khác, trừ khi nhân viên có quyền độc lập cần xem chúng,
+                                    như xem hóa đơn, xem kho, thanh toán bán lẻ, xem sổ quỹ hoặc báo cáo phù hợp.
+                                    Quyền tạo hoặc hủy đơn không tự bỏ giới hạn này. Dự kiến mua hàng vẫn tổng hợp
+                                    đơn theo phạm vi được giao khi có quyền mua hàng.
+                                  </p>
+                                )}
                                 {SHARED_DATA_STAFF_PERMISSIONS.has(p.code) && (
                                   <p className="mt-1 text-sm font-medium text-amber-800">
                                     Thay đổi áp dụng cho toàn công ty
