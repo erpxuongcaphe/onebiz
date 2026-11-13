@@ -772,6 +772,16 @@ export function StaffProfileEditor({
                                     nhánh đó. Hãy kiểm tra cả hai quyền báo cáo.
                                   </p>
                                 )}
+                                {branchId && p.code === "finance.view_cash_journal_self_spend" && (
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    Quyền này áp dụng cho khoản chi tự chi và các thao tác đối soát quỹ cần số liệu của quán được chọn. Quyền xem nhật ký toàn công ty là quyền độc lập và vẫn cho xem theo phạm vi của quyền đó.
+                                  </p>
+                                )}
+                                {["finance.submit_cash_spend_review", "finance.approve_cash_spend_review"].includes(p.code) && (
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    Chức năng này hiện áp dụng toàn công ty và còn cần quyền xem nhật ký thu chi toàn công ty.
+                                  </p>
+                                )}
                                 {p.code === "inventory.lock" && (
                                   <p className="mt-1 text-xs text-amber-800">
                                     Khóa tồn đầu kỳ áp dụng toàn công ty. Máy chủ hiện chỉ cho chủ hoặc admin thực hiện; cấp quyền này riêng cho nhân viên chưa đủ để thao tác.

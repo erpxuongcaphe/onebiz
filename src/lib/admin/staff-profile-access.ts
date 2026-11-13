@@ -16,6 +16,8 @@ export const COMPANY_WIDE_STAFF_PERMISSIONS: Readonly<Record<string, string>> =
   {
     "reports.view_all_branches": "Xem báo cáo toàn công ty",
     "finance.view_cash_journal_company": "Xem nhật ký thu chi toàn công ty",
+    "finance.submit_cash_spend_review": "Gửi xác nhận đơn vị thực chi toàn công ty",
+    "finance.approve_cash_spend_review": "Duyệt đơn vị thực chi toàn công ty",
     "floor_plan.edit_global": "Sửa sơ đồ bàn mọi chi nhánh",
   };
 

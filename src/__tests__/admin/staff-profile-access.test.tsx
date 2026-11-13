@@ -58,6 +58,21 @@ const snapshot: StaffProfileSnapshot = {
   branchPermissionCodes: ["pos_fnb.split_bill", "pos_fnb.transfer_table"],
 };
 describe("staff profile scope", () => {
+  it("explains the independent company-wide journal right when changing self-spend access", () => {
+    const data = structuredClone(snapshot);
+    data.branchPermissionCodes.push("finance.view_cash_journal_self_spend");
+    render(<StaffProfileEditor snapshot={data} onSave={vi.fn()} onReload={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Tùy chỉnh quyền" }));
+    fireEvent.click(screen.getByRole("button", { name: "Premium" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Tìm quyền" }), { target: { value: "finance.view_cash_journal_self_spend" } });
+    expect(screen.getByText(/Quyền xem nhật ký toàn công ty là quyền độc lập/)).toBeVisible();
+  });
+  it("explains that spending reviews also require the company cash journal", () => {
+    render(<StaffProfileEditor snapshot={snapshot} onSave={vi.fn()} onReload={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Tùy chỉnh quyền" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Tìm quyền" }), { target: { value: "finance.approve_cash_spend_review" } });
+    expect(screen.getByText(/còn cần quyền xem nhật ký thu chi toàn công ty/)).toBeVisible();
+  });
   it("identifies the legacy sent-order edit permission as unsupported by the current approval flow", () => {
     render(<StaffProfileEditor snapshot={snapshot} onSave={vi.fn()} onReload={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "Tùy chỉnh quyền" }));
