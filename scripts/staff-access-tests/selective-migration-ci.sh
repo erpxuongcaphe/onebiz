@@ -8,7 +8,8 @@ mkdir -p "$scratch/supabase/migrations"
 printf 'project_id = "migration-selection-test"\n' > "$scratch/supabase/config.toml"
 psql "$db" -Xq -v ON_ERROR_STOP=1 <<'SQL'
 create schema supabase_migrations;
-create table supabase_migrations.schema_migrations(version text primary key, statements text[], name text);
+create table supabase_migrations.schema_migrations(version text primary key, statements text[], name text,
+ created_by text, idempotency_key text, rollback text[]);
 insert into supabase_migrations.schema_migrations(version,name) values
  ('20260101000000','existing_older'),('20260301000000','existing_newer');
 SQL
