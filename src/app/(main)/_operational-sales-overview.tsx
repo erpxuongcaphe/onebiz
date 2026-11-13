@@ -30,7 +30,7 @@ const WORK = [
   { permission: "ops.view", href: "/hub", icon: "task_alt", label: "Công việc" },
 ];
 
-function CollectionDetails({ branchId, day }: { branchId: string | undefined; day: string }) {
+function CollectionDetails({ branchId, day, refreshKey }: { branchId: string | undefined; day: string; refreshKey: number }) {
   const [data, setData] = useState<CollectionReconciliation | null>(null);
   const [error, setError] = useState(false);
   const [revision, setRevision] = useState(0);
@@ -40,7 +40,7 @@ function CollectionDetails({ branchId, day }: { branchId: string | undefined; da
     getCollectionReconciliation(branchId, day).then(value => { if (active) setData(value); })
       .catch(() => { if (active) setError(true); });
     return () => { active = false; };
-  }, [branchId, day, revision]);
+  }, [branchId, day, revision, refreshKey]);
   const methodName = (key: string) => METHODS[key] ?? key;
   return <section className="border-t p-4 sm:p-5" aria-label="Đối chiếu tiền thu">
     <h3 className="font-semibold">Tiền thu trong ngày</h3>
@@ -181,7 +181,9 @@ export default function OperationalSalesOverview() {
   const refreshDaily = daily.refresh;
   const refreshAnalysis = analysis.refresh;
   const refreshReceivable = receivable.refresh;
+  const [collectionRefreshKey, setCollectionRefreshKey] = useState(0);
   const refresh = useCallback(async () => {
+    setCollectionRefreshKey(value => value + 1);
     await Promise.all([refreshDaily(), refreshAnalysis(), refreshReceivable()]);
   }, [refreshDaily, refreshAnalysis, refreshReceivable]);
   useLiveDataRefresh(refresh, tenant?.id, activeBranchId, ["dashboard_live_signals", "kitchen_orders"], isReady && allowed);
@@ -243,7 +245,7 @@ export default function OperationalSalesOverview() {
               {data.returns !== 0 && <span className="text-rose-700 dark:text-rose-400">Hàng trả {formatCurrency(data.returns)}</span>}
             </div>
           </div>}
-          <CollectionDetails key={`${scope}:${activeBranchId ?? "all"}:${summaryDay}`} branchId={activeBranchId} day={summaryDay} />
+          <CollectionDetails key={`${scope}:${activeBranchId ?? "all"}:${summaryDay}`} branchId={activeBranchId} day={summaryDay} refreshKey={collectionRefreshKey} />
           <p className="border-t px-4 pt-3 text-xs text-muted-foreground">{activeBranchId ? "Phương thức thanh toán · gồm nội bộ" : "Phương thức thanh toán · không gồm nội bộ"}</p>
           <dl className="grid grid-cols-2 bg-muted/30 sm:grid-cols-2 lg:grid-cols-4">
             {Array.from(new Set(["cash", "transfer", ...Object.keys(data.methods).filter(method => data.methods[method] !== 0)])).map(method => (
