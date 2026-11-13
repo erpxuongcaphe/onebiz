@@ -106,6 +106,22 @@ describe("row permissions across branches", () => {
       expect(result.current.forBranch(undefined).canCancel).toBe(false);
     },
   );
+  it("keeps independently granted order and invoice printing at assigned branches", () => {
+    base.add("orders.print");
+    base.add("invoices.print");
+    try {
+      const order = renderHook(() => useTxRowPermissions("sales_order"));
+      const invoice = renderHook(() => useTxRowPermissions("invoice"));
+      expect(order.result.current.forBranch("premium").canView).toBe(false);
+      expect(order.result.current.forBranch("premium").canPrint).toBe(true);
+      expect(invoice.result.current.forBranch("tubua").canPrint).toBe(true);
+      expect(order.result.current.forBranch("other").canPrint).toBe(false);
+      expect(invoice.result.current.forBranch("other").canPrint).toBe(false);
+    } finally {
+      base.delete("orders.print");
+      base.delete("invoices.print");
+    }
+  });
   it("applies production and stocktake exceptions to the document branch", () => {
     const production = renderHook(() => useTxRowPermissions("production"));
     expect(production.result.current.forBranch("premium").canCancel).toBe(

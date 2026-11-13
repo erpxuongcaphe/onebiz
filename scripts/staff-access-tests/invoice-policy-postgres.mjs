@@ -271,6 +271,11 @@ sql.push(`
   or not exists(select 1 from sales_orders where branch_id='${id(11)}')
   then raise exception 'F&B view bypassed legacy retail order branch denial';end if;end$$;
  reset role;
+ insert into role_permissions values ('${id(20)}','orders.print');set role authenticated;
+ do $$begin if not exists(select 1 from sales_orders where id='${id(70)}')
+  or not exists(select 1 from sales_order_items where order_id='${id(70)}')
+  then raise exception 'independent order printing lost document access';end if;end$$;
+ reset role;
 `);
 if(process.env.ONEBIZ_PGLITE_MODULE){const {PGlite}=await import(pathToFileURL(process.env.ONEBIZ_PGLITE_MODULE).href);const db=new PGlite();try{await db.exec(sql.join('\n'));}catch(e){console.error(e.message,e.where||'');process.exitCode=1;}finally{await db.close();}if(process.exitCode)process.exit(process.exitCode);console.log('PASS local invoice fixture rehearsal (PGlite)');process.exit(0);}
 const args=['-Xq','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p','55433','-U','staff_test','-d','onebiz_staff_access_test'];

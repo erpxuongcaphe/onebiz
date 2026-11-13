@@ -206,6 +206,12 @@ export function useTxRowPermissions(kind: TxKind): TxRowPermissions & {
         hasPermissionAtBranch(code, branchId ?? null),
       );
       if (hasAssignedBranchAccess(branchId ?? null)) {
+        // Preserve separately granted print capabilities even if the view
+        // permission is restricted for this branch.
+        if (kind === "sales_order" || kind === "invoice") {
+          const code = kind === "sales_order" ? PERMISSIONS.ORDERS_PRINT : PERMISSIONS.INVOICES_PRINT;
+          return { ...permissions, canPrint: permissions.canPrint || hasPermissionAtBranch(code, branchId ?? null) };
+        }
         if (kind === "disposal" || kind === "internal_export") {
           const code = kind === "disposal" ? "inventory.dispose" : "inventory.internal_export";
           const canReadForWork = hasPermissionAtBranch(code, branchId ?? null);
