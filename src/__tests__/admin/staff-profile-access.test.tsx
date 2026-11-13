@@ -58,6 +58,24 @@ const snapshot: StaffProfileSnapshot = {
   branchPermissionCodes: ["pos_fnb.split_bill", "pos_fnb.transfer_table"],
 };
 describe("staff profile scope", () => {
+  it("allows a cash-book exception for one branch while keeping unrelated rights", async () => {
+    const data = structuredClone(snapshot);
+    data.branchPermissionCodes.push("finance.view_cash_book");
+    data.exceptions.push({ branchId: "tubua", permissionCode: "pos_fnb.transfer_table", choice: "grant" });
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<StaffProfileEditor snapshot={data} onSave={onSave} onReload={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Tùy chỉnh quyền" }));
+    fireEvent.click(screen.getByRole("button", { name: "Premium" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Tìm quyền" }), { target: { value: "finance.view_cash_book" } });
+    expect(screen.getByText(/không cho xem sổ quỹ chưa chắc ẩn được/)).toBeVisible();
+    fireEvent.change(screen.getByRole("combobox", { name: /Quyền Xem sổ quỹ/ }), { target: { value: "revoke" } });
+    fireEvent.click(screen.getByRole("button", { name: "Lưu phân công" }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+    expect(onSave.mock.calls[0][0].exceptions).toEqual(expect.arrayContaining([
+      { branchId: "premium", permissionCode: "finance.view_cash_book", choice: "revoke" },
+      { branchId: "tubua", permissionCode: "pos_fnb.transfer_table", choice: "grant" },
+    ]));
+  });
   it("saves a branch inventory exception without changing other branch permissions", async () => {
     const data = structuredClone(snapshot);
     data.branchPermissionCodes.push("inventory.view");

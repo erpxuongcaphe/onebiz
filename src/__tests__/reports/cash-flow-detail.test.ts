@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 const { from, rpc, chain } = vi.hoisted(() => {
   const query: Record<string, ReturnType<typeof vi.fn>> = {};
-  for (const method of ["select", "eq", "gte", "lte", "order"]) {
+  for (const method of ["select", "setHeader", "eq", "gte", "lte", "order"]) {
     query[method] = vi.fn(() => query);
   }
   query.range = vi.fn(async () => ({
@@ -44,6 +44,7 @@ describe("cash-flow detail", () => {
 
     expect(from).toHaveBeenCalledWith("cash_transactions");
     expect(chain.select).toHaveBeenCalledWith("transaction_date, type, amount, category");
+    expect(chain.setHeader).toHaveBeenCalledWith("x-client-info", "onebiz-cash-scope/1");
     expect(chain.eq).toHaveBeenCalledWith("status", "completed");
     expect(chain.eq).toHaveBeenCalledWith("branch_id", "branch-1");
     expect(chain.gte).toHaveBeenCalledWith("transaction_date", "2026-08-01");

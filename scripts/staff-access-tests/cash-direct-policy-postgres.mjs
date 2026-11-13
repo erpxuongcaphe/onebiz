@@ -69,6 +69,11 @@ statements.push(`
   values('${id(1)}','${id(101)}','${id(10)}','finance.view_cash_book','revoke','${id(100)}');
  set role authenticated;
  do $$begin
+  begin perform count(*) from cash_transactions; raise exception 'stale client saw partial cash totals';
+  exception when raise_exception then if sqlerrm not like 'Báo cáo đã cập nhật.%' then raise; end if; end;
+ end$$;
+ select set_config('request.headers','{"x-client-info":"onebiz-cash-scope/1"}',false);
+ do $$begin
   if (select count(*) from cash_transactions)<>1 or (select count(*) from money_accounts)<>1
    or (select count(*) from cash_amendments)<>1 or (select count(*) from party_advance_refunds)<>1
    then raise exception 'denied branch exposed'; end if;

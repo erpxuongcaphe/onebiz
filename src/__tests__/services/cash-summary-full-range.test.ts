@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ from: vi.fn(), range: vi.fn(), eq: vi.fn(), lt: vi.fn(), gte: vi.fn(), lte: vi.fn(), neq: vi.fn(), in: vi.fn(), order: vi.fn() }));
+const mocks = vi.hoisted(() => ({ from: vi.fn(), range: vi.fn(), setHeader: vi.fn(), eq: vi.fn(), lt: vi.fn(), gte: vi.fn(), lte: vi.fn(), neq: vi.fn(), in: vi.fn(), order: vi.fn() }));
 vi.mock("@/lib/services/supabase/base", () => ({
   getClient: () => ({ from: mocks.from }),
   getCurrentTenantId: async () => "tenant-1",
@@ -12,7 +12,7 @@ import { getCashBookSummaryAsync } from "@/lib/services/supabase/cash-book";
 beforeEach(() => {
   vi.resetAllMocks();
   const query = { select: vi.fn(), ...mocks };
-  for (const key of ["select", "eq", "lt", "gte", "lte", "neq", "in", "order"] as const) query[key].mockReturnValue(query);
+  for (const key of ["select", "setHeader", "eq", "lt", "gte", "lte", "neq", "in", "order"] as const) query[key].mockReturnValue(query);
   mocks.from.mockReturnValue(query);
 });
 
@@ -26,6 +26,7 @@ describe("cash summary complete result", () => {
       .toEqual({ totalReceipt: 10000, totalPayment: 25, openingBalance: 1997 });
     expect(mocks.range.mock.calls).toEqual([[0, 999], [1000, 1999], [0, 999], [1000, 1999]]);
     expect(mocks.eq).toHaveBeenCalledWith("tenant_id", "tenant-1");
+    expect(mocks.setHeader).toHaveBeenCalledWith("x-client-info", "onebiz-cash-scope/1");
     expect(mocks.eq).toHaveBeenCalledWith("branch_id", "xtb");
     expect(mocks.neq).toHaveBeenCalledWith("status", "cancelled");
     expect(mocks.lt).toHaveBeenCalledWith("transaction_date", "2026-10-01");
