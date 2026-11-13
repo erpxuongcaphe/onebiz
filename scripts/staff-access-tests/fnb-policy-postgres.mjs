@@ -71,6 +71,9 @@ statements.push(`
  alter table kitchen_orders add column table_id uuid;
  alter table kitchen_orders add column status text,add column created_at timestamptz,add column updated_at timestamptz;
  alter table kitchen_orders add column order_type text,add column delivery_platform text;
+ alter table kitchen_orders add column delivery_staff_id uuid,add column delivery_fee numeric,
+  add column delivery_assigned_at timestamptz,add column delivery_completed_at timestamptz,
+  add column delivery_distance_tier text,add column order_number text;
  alter table kitchen_order_items add column product_name text,add column quantity numeric,add column unit_price numeric;
  create table invoices(id uuid primary key,tenant_id uuid,branch_id uuid,source text,status text,ngay_chung_tu timestamptz,total numeric);
  create table restaurant_tables(id uuid primary key,name text);
@@ -96,6 +99,11 @@ statements.push(`
  insert into kitchen_orders(id,tenant_id,branch_id,invoice_id) values ('${id(33)}','${id(1)}','${id(10)}','${id(503)}');
  insert into kitchen_orders(id,tenant_id,branch_id,invoice_id,table_id) values ('${id(34)}','${id(1)}','${id(10)}','${id(500)}','${id(900)}');
  update kitchen_orders set order_type='delivery',delivery_platform='Grab' where id in ('${id(30)}','${id(31)}','${id(34)}');
+ update kitchen_orders set delivery_staff_id='${id(101)}',delivery_fee=10,order_number='K30',
+  delivery_assigned_at='2026-10-07 08:00Z',delivery_completed_at='2026-10-07 08:10Z' where id='${id(30)}';
+ update kitchen_orders set delivery_staff_id='${id(101)}',delivery_fee=5,order_number='K34',created_at='2026-10-07 08:00Z' where id='${id(34)}';
+ update kitchen_orders set delivery_staff_id='${id(100)}',delivery_fee=15,order_number='K31',
+  delivery_assigned_at='2026-10-07 08:00Z',delivery_completed_at='2026-10-07 08:20Z' where id='${id(31)}';
  update kitchen_order_items set product_name='Coffee',quantity=2,unit_price=100 where id='${id(40)}';
  update kitchen_order_items set product_name='Coffee',quantity=1,unit_price=300 where id='${id(41)}';
  insert into kitchen_order_items values ('${id(42)}','${id(33)}','Coffee',10,999);
@@ -206,12 +214,19 @@ statements.push(`
   exception when insufficient_privilege then if sqlerrm<>'FNB_REPORT_DETAIL_PERMISSION_REQUIRED' then raise;end if;end;
   begin perform public.staff_fnb_return_detail_page('${id(10)}',null,null,0,2);raise exception 'summary access exposed return detail';
   exception when insufficient_privilege then if sqlerrm<>'FNB_REPORT_DETAIL_PERMISSION_REQUIRED' then raise;end if;end;
+  begin perform public.staff_fnb_delivery_summary('${id(10)}',null,null);raise exception 'summary access exposed delivery detail';
+  exception when insufficient_privilege then if sqlerrm<>'FNB_REPORT_DETAIL_PERMISSION_REQUIRED' then raise;end if;end;
  end$$;
  reset role;insert into role_permissions values ('${id(20)}','reports.view_detail');set role authenticated;
  do $$begin
   if (select count(*) from public.staff_fnb_invoice_detail_page('${id(10)}',null,null,0,2))<>2 then raise exception 'invoice detail page mismatch';end if;
   if (select count(*) from public.staff_fnb_invoice_detail_page('${id(10)}',null,null,1,2))<>1 then raise exception 'invoice detail offset mismatch';end if;
   if (select count(*) from public.staff_fnb_return_detail_page('${id(10)}',null,null,0,2))<>1 then raise exception 'return detail page mismatch';end if;
+  if not exists(select 1 from public.staff_fnb_delivery_summary('${id(10)}',null,null)
+    where staff_id='${id(101)}' and total_orders=2 and total_revenue=400 and total_delivery_fee=15
+     and avg_delivery_seconds=600 and completed_count=1) then raise exception 'delivery summary mismatch';end if;
+  if (select count(*) from public.staff_fnb_delivery_detail_page('${id(101)}','${id(10)}',null,null,0,10))<>2
+   then raise exception 'delivery detail page mismatch';end if;
   begin perform public.staff_fnb_invoice_detail_page('${id(11)}',null,null,0,2);raise exception 'unassigned invoice branch allowed';
   exception when insufficient_privilege then if sqlerrm<>'BRANCH_ACCESS_DENIED' then raise;end if;end;
  end$$;
@@ -226,6 +241,10 @@ statements.push(`
  set role authenticated;
  do $$begin
   begin perform public.staff_fnb_return_detail_page('${id(10)}',null,null,0,2);raise exception 'detail branch revoke ignored';
+  exception when insufficient_privilege then if sqlerrm<>'FNB_REPORT_DETAIL_PERMISSION_REQUIRED' then raise;end if;end;
+  begin perform public.staff_fnb_delivery_summary('${id(10)}',null,null);raise exception 'delivery branch revoke ignored';
+  exception when insufficient_privilege then if sqlerrm<>'FNB_REPORT_DETAIL_PERMISSION_REQUIRED' then raise;end if;end;
+  begin perform public.staff_fnb_delivery_detail_page('${id(101)}','${id(10)}',null,null,0,2);raise exception 'delivery details branch revoke ignored';
   exception when insufficient_privilege then if sqlerrm<>'FNB_REPORT_DETAIL_PERMISSION_REQUIRED' then raise;end if;end;
  end$$;
  reset role;

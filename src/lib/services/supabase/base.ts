@@ -41,6 +41,9 @@ export function isAscending(params: QueryParams): boolean {
  */
 export function handleError(error: { message: string; code?: string }, context: string): never {
   const unitErrors: Record<string,string> = {
+    FNB_REPORT_DETAIL_PERMISSION_REQUIRED: "Tài khoản chưa có quyền xem chi tiết báo cáo F&B tại chi nhánh này. Liên hệ quản lý để được cấp quyền phù hợp.",
+    FNB_REPORT_PERMISSION_REQUIRED: "Tài khoản chưa có quyền xem báo cáo F&B tại chi nhánh này. Liên hệ quản lý để được cấp quyền phù hợp.",
+    FNB_REPORT_FILTER_INVALID: "Khoảng thời gian hoặc bộ lọc báo cáo chưa hợp lệ. Vui lòng kiểm tra và thử lại.",
     SHIFT_RECONCILED_CASH_LOCKED: "Ca đã chốt đối soát. Tải lại trạng thái ca và mở ca mới trước khi thanh toán; giao dịch này chưa được ghi nhận.",
     SPLIT_QUANTITY_CHANGED: "Số lượng món đã thay đổi ở máy khác. Đóng màn tách, tải lại đơn rồi chọn lại.",
     SPLIT_QUANTITY_INVALID: "Nhập số lượng nguyên từ 1 đến số món còn lại trên bill.",
