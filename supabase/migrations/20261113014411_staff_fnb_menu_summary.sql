@@ -12,17 +12,23 @@ begin
  if actor is null or tenant is null or not exists(
   select 1 from public.profiles p where p.id=actor and p.tenant_id=tenant and coalesce(p.is_active,false)
  ) then raise exception 'AUTH_REQUIRED' using errcode='42501'; end if;
- if not (public.user_has_permission(actor,'reports.fnb') or public.user_has_permission(actor,'reports.analytics')) then
+ if not (public._staff_permission_any_branch(actor,'reports.fnb') or public._staff_permission_any_branch(actor,'reports.analytics')) then
   raise exception 'FNB_REPORT_PERMISSION_REQUIRED' using errcode='42501'; end if;
  if p_limit is null or p_limit<0 or p_limit>1000 or (p_from is not null and p_to is not null and p_from>=p_to) then
   raise exception 'FNB_REPORT_FILTER_INVALID' using errcode='22023'; end if;
  if p_branch_id is not null and not coalesce(public.can_read_branch_document_00567(tenant,p_branch_id),false) then
   raise exception 'BRANCH_ACCESS_DENIED' using errcode='42501'; end if;
+ if p_branch_id is not null and not (
+  public._staff_permission_at_scope(actor,'reports.fnb',p_branch_id)
+  or public._staff_permission_at_scope(actor,'reports.analytics',p_branch_id)
+ ) then raise exception 'FNB_REPORT_PERMISSION_REQUIRED' using errcode='42501'; end if;
  return query
  with allowed_branches as materialized (
   select b.id from public.branches b where b.tenant_id=tenant
    and (p_branch_id is null or b.id=p_branch_id)
    and public.can_read_branch_document_00567(tenant,b.id)
+   and (public._staff_permission_at_scope(actor,'reports.fnb',b.id)
+        or public._staff_permission_at_scope(actor,'reports.analytics',b.id))
  )
  select ki.product_name,sum(ki.quantity)::numeric,sum(ki.quantity*coalesce(ki.unit_price,0))::numeric
  from public.kitchen_orders ko

@@ -12,6 +12,7 @@ await initializeStaffAccessFixture({exec:async s=>statements.push(s)},id);
 for(const name of ['20261111052704_staff_branch_access.sql'])
  statements.push(await readFile(new URL(`../../supabase/migrations/${name}`,import.meta.url),'utf8'));
 statements.push(await functionFromMigration('20261111070229_staff_branch_checkout_permissions.sql','_staff_permission_at_scope'));
+statements.push(await functionFromMigration('20261111095224_staff_branch_kitchen_permissions.sql','_staff_permission_any_branch'));
 statements.push(`
  create table kitchen_order_items(id uuid primary key,kitchen_order_id uuid);
  insert into kitchen_order_items values ('${id(40)}','${id(30)}'),('${id(41)}','${id(31)}');
@@ -94,7 +95,17 @@ statements.push(`
   begin perform public.staff_fnb_menu_summary('${id(11)}',null,null,15);raise exception 'unassigned branch allowed';
   exception when insufficient_privilege then if sqlerrm<>'BRANCH_ACCESS_DENIED' then raise;end if;end;
  end$$;
- reset role;insert into role_permissions values ('${id(20)}','reports.view_all_branches');set role authenticated;
+ reset role;
+ insert into staff_branch_permission_catalog values ('reports.fnb',1);
+ insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+  values ('${id(1)}','${id(101)}','${id(10)}','reports.fnb','revoke','${id(100)}');
+ set role authenticated;
+ do $$begin
+  begin perform public.staff_fnb_menu_summary('${id(10)}',null,null,15);raise exception 'branch revoke ignored';
+  exception when insufficient_privilege then if sqlerrm<>'FNB_REPORT_PERMISSION_REQUIRED' then raise;end if;end;
+ end$$;
+ reset role;delete from user_branch_permission_overrides where permission_code='reports.fnb';
+ insert into role_permissions values ('${id(20)}','reports.view_all_branches');set role authenticated;
  do $$declare x record;begin
   select * into x from public.staff_fnb_menu_summary(null,null,null,15);
   if x.quantity<>3 or x.revenue<>500 then raise exception 'all-branch aggregate mismatch';end if;
