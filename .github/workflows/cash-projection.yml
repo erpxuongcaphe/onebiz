@@ -1,0 +1,33 @@
+name: Cash projection database acceptance
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/20261113074601_staff_cash_flow_summary_projection.sql'
+      - 'scripts/cash-projection-postgres.mjs'
+      - '.github/workflows/cash-projection.yml'
+jobs:
+  cash-projection:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: onebiz_staff_access_test
+          POSTGRES_USER: staff_test
+          POSTGRES_PASSWORD: ephemeral-test-only
+        ports: ['55433:5432']
+        options: >-
+          --health-cmd "pg_isready -U staff_test -d onebiz_staff_access_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify cash projection isolation on PostgreSQL
+        env:
+          STAFF_EPHEMERAL_DB: onebiz_staff_access_test
+        run: node scripts/cash-projection-postgres.mjs
