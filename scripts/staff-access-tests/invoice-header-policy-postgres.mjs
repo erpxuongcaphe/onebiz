@@ -34,15 +34,33 @@ sql.push(`
 `);
 sql.push(await migration('20261113065814_staff_invoice_header_branch_scope.sql'));
 sql.push(`
+ alter table invoices add column code text,add column status text,add column total numeric,add column paid numeric,add column client_session_id uuid;
+ update invoices set client_session_id=id;
+ create function auth.role() returns text language sql stable as $$select nullif(current_setting('request.jwt.claim.role',true),'')$$;
+ create function public.find_invoice_by_session_id(p_tenant_id uuid,p_client_session_id uuid)
+ returns table(id uuid,code text,status text,total numeric,paid numeric) language sql security definer set search_path=public as $$
+ SELECT id,code,status,total,paid FROM public.invoices WHERE tenant_id = p_tenant_id AND client_session_id = p_client_session_id LIMIT 1;
+ $$;
+ grant execute on function public.find_invoice_by_session_id(uuid,uuid) to authenticated,service_role;
+`);
+sql.push(await migration('20261113094600_staff_invoice_session_lookup_scope.sql'));
+
+sql.push(`
  set role authenticated;
  do $$begin if (select count(*) from invoices)<>6 then raise exception 'legacy invoice reads changed';end if;end$$;
  reset role;insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
   values('${id(1)}','${id(101)}','${id(10)}','invoices.view','revoke','${id(100)}');set role authenticated;
  do $$begin if (select count(*) from invoices)<>3 or exists(select 1 from invoices where branch_id='${id(10)}')
   then raise exception 'denied invoice branch exposed';end if;end$$;
+ do $$begin
+  if (select count(*) from public.find_invoice_by_session_id('${id(1)}','${id(30)}'))<>0 then raise exception 'session lookup exposed denied branch';end if;
+  if (select count(*) from public.find_invoice_by_session_id('${id(1)}','${id(31)}'))<>1 then raise exception 'session lookup blocked permitted branch';end if;
+  if (select count(*) from public.find_invoice_by_session_id('${id(2)}','${id(36)}'))<>0 then raise exception 'session lookup exposed other tenant';end if;
+ end$$;
  reset role;insert into role_permissions values ('${id(20)}','pos_fnb.checkout');set role authenticated;
  do $$begin if (select count(*) from invoices)<>4 or not exists(select 1 from invoices where id='${id(32)}')
   then raise exception 'independent F&B checkout lost';end if;end$$;
+ do $$begin if (select count(*) from public.find_invoice_by_session_id('${id(1)}','${id(32)}'))<>1 then raise exception 'F&B checkout session recovery lost';end if;end$$;
  reset role;delete from role_permissions where permission_code='pos_fnb.checkout';
  insert into role_permissions values ('${id(20)}','invoices.print');set role authenticated;
  do $$begin if (select count(*) from invoices)<>6 then raise exception 'independent invoice printing lost';end if;end$$;
@@ -84,6 +102,12 @@ sql.push(`
  reset role;insert into role_permissions values ('${id(20)}','pos_fnb.checkout');set role authenticated;
  do $$begin if (select count(*) from invoices where source='fnb')<>2
   then raise exception 'F&B checkout lost independent invoice access';end if;end$$;
+ reset role;
+ grant usage on schema public,auth to service_role;
+ select set_config('request.jwt.claim.role','service_role',false);
+ set role service_role;
+ do $$begin if (select count(*) from public.find_invoice_by_session_id('${id(2)}','${id(36)}'))<>1
+  then raise exception 'trusted server session lookup lost';end if;end$$;
  reset role;
 `);
 if(process.env.ONEBIZ_PGLITE_MODULE){
