@@ -4,10 +4,10 @@ import { OperationsFilterBar } from "@/components/operations/filter-bar";
 import { initialFilters } from "@/lib/operations/filters";
 import { useHubAccess } from "@/lib/operations/use-hub-access";
 
-const session = vi.hoisted(() => ({ user: { id: "user-a" }, isLoading: false, hasPermission: vi.fn(() => true) }));
+const session = vi.hoisted(() => ({ authUser: { id: "user-a" } as { id: string } | null, user: { id: "user-a" }, isLoading: false, hasPermission: vi.fn(() => true) }));
 vi.mock("@/lib/contexts", () => ({ useAuth: () => session }));
 function Entry() { return <span>{useHubAccess() ? "Cho phép" : "Chặn"}</span>; }
-beforeEach(() => { session.user = { id: "user-a" }; session.isLoading = false; session.hasPermission.mockReturnValue(true); });
+beforeEach(() => { session.authUser = { id: "user-a" }; session.user = { id: "user-a" }; session.isLoading = false; session.hasPermission.mockReturnValue(true); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("Hub filters and permission-dependent entry", () => {
@@ -30,6 +30,12 @@ describe("Hub filters and permission-dependent entry", () => {
   it("never requests access without Hub permission", () => {
     const fetch = vi.fn(); vi.stubGlobal("fetch", fetch); session.hasPermission.mockReturnValue(false);
     render(<Entry />); expect(screen.getByText("Chặn")).toBeInTheDocument(); expect(fetch).not.toHaveBeenCalled();
+  });
+  it("fails closed when the authenticated user is missing or does not match the profile", () => {
+    const fetch = vi.fn(); vi.stubGlobal("fetch", fetch); session.authUser = null;
+    const { rerender } = render(<Entry />); expect(screen.getByText("Chặn")).toBeInTheDocument();
+    session.authUser = { id: "other-user" }; rerender(<Entry />);
+    expect(screen.getByText("Chặn")).toBeInTheDocument(); expect(fetch).not.toHaveBeenCalled();
   });
   it("only shows a shortcut after the server confirms the relationship", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ allowed: true }) }));
