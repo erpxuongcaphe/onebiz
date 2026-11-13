@@ -48,6 +48,8 @@ insert into public.role_permissions(role_id,permission_code) values
  ('44000000-0000-0000-0000-000000000001','reports.view_all_branches'),
  ('44000000-0000-0000-0000-000000000001','finance.view_cash_book');
 do $$declare r jsonb; begin
+ r:=public.get_customer_list_workspace_scoped(p_branch_id=>'33000000-0000-0000-0000-000000000001',p_debt_filter=>'has_debt');
+ if not (r->'summary'->>'canViewDebt')::boolean then raise exception 'LEGACY_PICKER_BRANCH_GRANT_IGNORED %',r;end if;
  r:=public.get_customer_report_balances_v1('33000000-0000-0000-0000-000000000001',false);
  if not (r->>'can_view_debt')::boolean then raise exception 'SELECTED_BRANCH_GRANT_IGNORED %',r;end if;
  r:=public.get_customer_report_balances_v1('33000000-0000-0000-0000-000000000002',false);
