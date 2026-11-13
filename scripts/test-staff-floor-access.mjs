@@ -361,6 +361,32 @@ try {
   const branchRpc=(await db.query("select fnb_floor_zone_config_atomic('create',$1,'{\"name\":\"Branch RPC\"}') v",[id(10)])).rows[0].v;
   assert.ok(branchRpc.ok,'branch editor retains the checked RPC at their assigned branch');
   await assert.rejects(db.query("select fnb_floor_zone_config_atomic('create',$1,'{\"name\":\"Other branch\"}')",[id(11)]),denied);
+  // Compare the optimized candidate filter with the authoritative scope helper
+  // for every relevant role/global/branch grant and revoke combination.
+  await db.exec(`reset role;
+    delete from role_permissions where role_id='${id(20)}' and permission_code='floor_plan.edit_branch';
+    insert into user_branches(user_id,branch_id) values('${id(101)}','${id(11)}');
+    insert into staff_branch_permission_catalog(permission_code,enforcement_version)
+      select c,1 from unnest(array['floor_plan.view','floor_plan.edit_branch','pos_fnb.send_kitchen',
+        'pos_fnb.checkout','pos_fnb.view_orders','pos_fnb.manage_tables']) c on conflict do nothing;`);
+  const scopedCodes=['floor_plan.view','floor_plan.edit_branch','pos_fnb.send_kitchen',
+    'pos_fnb.checkout','pos_fnb.view_orders','pos_fnb.manage_tables'];
+  for (const code of scopedCodes) for (const roleGrant of [false,true])
+    for (const globalChoice of ['inherit','grant','revoke']) for (const branchChoice of ['inherit','grant','revoke']) {
+      await db.query('delete from role_permissions where role_id=$1 and permission_code=$2',[id(20),code]);
+      await db.query('delete from user_permission_overrides where user_id=$1 and permission_code=$2',[id(101),code]);
+      await db.query('delete from user_branch_permission_overrides where user_id=$1 and permission_code=$2',[id(101),code]);
+      if(roleGrant) await db.query('insert into role_permissions values($1,$2)',[id(20),code]);
+      if(globalChoice!=='inherit') await db.query('insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type) values($1,$2,$3,$4)',[id(1),id(101),code,globalChoice]);
+      if(branchChoice!=='inherit') await db.query('insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values($1,$2,$3,$4,$5,$6)',[id(1),id(101),id(10),code,branchChoice,id(100)]);
+      const expected=(await db.query('select public._staff_permission_at_scope($1,$2,$3) as ok',[id(101),code,id(10)])).rows[0].ok;
+      const actual=(await db.query('select $1::uuid=any(public._staff_floor_readable_branches()) as ok',[id(10)])).rows[0].ok;
+      assert.equal(actual,expected,`${code}: role=${roleGrant}, global=${globalChoice}, branch=${branchChoice}`);
+    }
+  await db.exec(`delete from role_permissions where role_id='${id(20)}' and permission_code=any(array['floor_plan.view','floor_plan.edit_branch','pos_fnb.send_kitchen','pos_fnb.checkout','pos_fnb.view_orders','pos_fnb.manage_tables']);
+    delete from user_permission_overrides where user_id='${id(101)}' and permission_code=any(array['floor_plan.view','floor_plan.edit_branch','pos_fnb.send_kitchen','pos_fnb.checkout','pos_fnb.view_orders','pos_fnb.manage_tables']);
+    delete from user_branch_permission_overrides where user_id='${id(101)}' and permission_code=any(array['floor_plan.view','floor_plan.edit_branch','pos_fnb.send_kitchen','pos_fnb.checkout','pos_fnb.view_orders','pos_fnb.manage_tables']);
+    set role authenticated;`);
   await db.exec(`reset role; update profiles set is_active=false where id='${id(101)}'; set role authenticated;`);
   assert.deepEqual((await db.query('select id from restaurant_tables')).rows,[],'inactive user cannot read floor data');
   await db.exec('reset role');
