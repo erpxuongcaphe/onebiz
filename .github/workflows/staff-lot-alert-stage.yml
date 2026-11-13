@@ -1,0 +1,33 @@
+name: Staff lot alert stage
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/20261113102711_staff_financial_alert_lots_compat.sql'
+      - 'scripts/test-staff-lot-alert-stage.mjs'
+      - '.github/workflows/staff-lot-alert-stage.yml'
+jobs:
+  postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: onebiz_lot_alert_test
+          POSTGRES_USER: staff_test
+          POSTGRES_PASSWORD: ephemeral-test-only
+        ports: ['55433:5432']
+        options: >-
+          --health-cmd "pg_isready -U staff_test -d onebiz_lot_alert_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify branch and tenant isolation
+        env:
+          LOT_ALERT_TEST_DB: onebiz_lot_alert_test
+        run: node scripts/test-staff-lot-alert-stage.mjs

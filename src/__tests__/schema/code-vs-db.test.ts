@@ -50,6 +50,7 @@ const RPC_CHO_MIGRATION = new Map<string, string>([
   // The additive projection migration must be applied before this client is deployed.
   ["get_cash_flow_category_summary", "20261113074601_staff_cash_flow_summary_projection.sql"],
   ["get_cash_flow_alert_totals", "20261113074601_staff_cash_flow_summary_projection.sql"],
+  ["get_financial_alert_lots", "20261113102711_staff_financial_alert_lots_compat.sql"],
   ["get_cash_flow_created_month_totals", "20261113074601_staff_cash_flow_summary_projection.sql"],
   ["get_cash_expense_report_totals", "20261113074601_staff_cash_flow_summary_projection.sql"],
   ["get_cash_dashboard_totals", "20261113074601_staff_cash_flow_summary_projection.sql"],
@@ -72,7 +73,6 @@ const RPC_CHO_MIGRATION = new Map<string, string>([
   ["get_purchase_forecast_remaining_lines", "20261112174832_staff_purchase_forecast_scoped_lines.sql"],
   ["get_stock_work_document_list", "20261112162406_staff_stock_work_documents_safe_projection.sql"],
   ["get_stock_work_document_detail", "20261112162406_staff_stock_work_documents_safe_projection.sql"],
-  ["get_financial_alert_lots", "20261112115039_staff_lot_independent_operational_reads.sql"],
   ["get_purchase_cancel_stock_risks", "20261112112659_staff_purchase_cancel_stock_risk.sql"],
   ["get_product_list_branch_stock", "20261112110113_staff_product_stock_projection.sql"],
   ["get_inventory_product_breakdown_scoped", "20261112103125_staff_inventory_product_breakdown_scope.sql"],

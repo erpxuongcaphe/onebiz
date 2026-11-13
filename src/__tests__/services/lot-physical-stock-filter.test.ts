@@ -15,7 +15,10 @@ import path from "node:path";
 const doc = (f: string) => fs.readFileSync(path.join(process.cwd(), f), "utf8");
 const DASHBOARD = doc("src/lib/services/supabase/production-dashboard.ts");
 const REPORTS = doc("src/lib/services/supabase/reports.ts");
-const ALERT_LOTS_SQL = doc("supabase/migrations/20261112115039_staff_lot_independent_operational_reads.sql");
+const ALERT_LOTS_SQLS = [
+  doc("supabase/migrations/20261113102711_staff_financial_alert_lots_compat.sql"),
+  doc("supabase/migrations/20261112115039_staff_lot_independent_operational_reads.sql"),
+];
 const PRODUCTION = doc("src/lib/services/supabase/production.ts");
 
 /** Cắt lấy khối truy vấn bắt đầu từ .from("product_lots") */
@@ -34,15 +37,17 @@ describe("cảnh báo hạn dùng — chỉ đếm lô còn tồn vật lý", ()
 
   it("báo cáo hạn dùng loại lô huỷ/đã dùng hết/đã huỷ bỏ", () => {
     expect(REPORTS).toContain('rpc("get_financial_alert_lots"');
-    expect(ALERT_LOTS_SQL).toContain("l.status in ('active','expired')");
-    expect(ALERT_LOTS_SQL).toContain("l.current_qty>0");
+    for (const sql of ALERT_LOTS_SQLS) {
+      expect(sql).toContain("l.status in ('active','expired')");
+      expect(sql).toContain("l.current_qty>0");
+    }
   });
 
   it("chỉ nhận 'active' và 'expired' — không nhận cancelled/consumed/disposed", () => {
     const k = khoiTruyVan(DASHBOARD);
     for (const xau of ["cancelled", "consumed", "disposed"]) {
       expect(k, `không được liệt kê ${xau} là tồn vật lý`).not.toContain(`"${xau}"`);
-      expect(ALERT_LOTS_SQL).not.toContain(`'${xau}'`);
+      for (const sql of ALERT_LOTS_SQLS) expect(sql).not.toContain(`'${xau}'`);
     }
   });
 
@@ -55,7 +60,7 @@ describe("cảnh báo hạn dùng — chỉ đếm lô còn tồn vật lý", ()
     expect(iQty).toBeGreaterThan(-1);
     expect(iStatus).toBeGreaterThan(-1);
     expect(Math.abs(iStatus - iQty)).toBeLessThan(400);
-    expect(ALERT_LOTS_SQL).toMatch(/l\.current_qty>0\s+and l\.status in \('active','expired'\)/);
+    for (const sql of ALERT_LOTS_SQLS) expect(sql).toMatch(/l\.current_qty>0\s+and l\.status in \('active','expired'\)/);
   });
 });
 
