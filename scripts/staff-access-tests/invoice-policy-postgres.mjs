@@ -240,6 +240,8 @@ sql.push(`
  reset role;
 `);
 sql.push(await migration('20261113071420_staff_legacy_order_view_scope.sql'));
+sql.push(await functionFromMigration('20261112072555_staff_branch_invoice_order_view_consumers.sql','_staff_my_document_view'));
+sql.push(await migration('20261113120241_staff_order_view_catalog.sql'));
 sql.push(`
  set role authenticated;
  do $$begin
@@ -262,7 +264,6 @@ sql.push(`
  reset role;
  delete from role_permissions where role_id='${id(20)}';
  delete from user_branch_permission_overrides where user_id='${id(101)}';
- insert into staff_branch_permission_catalog values ('orders.view',1) on conflict do nothing;
  insert into role_permissions values ('${id(20)}','orders.view'),('${id(20)}','pos_fnb.view_orders');
  insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
  values ('${id(1)}','${id(101)}','${id(10)}','orders.view','revoke','${id(100)}');set role authenticated;
@@ -276,6 +277,16 @@ sql.push(`
   or not exists(select 1 from sales_order_items where order_id='${id(70)}')
   then raise exception 'independent order printing lost document access';end if;end$$;
  reset role;
+ select set_config('request.jwt.claim.sub','${id(100)}',false);
+ do $$declare snap jsonb; d jsonb; saved jsonb;begin
+  snap:=public.get_staff_profile_access('${id(101)}');
+  if not (snap->'branchPermissionCodes') ? 'orders.view' then raise exception 'order view missing from editor';end if;
+  d:=jsonb_build_object('roleId',snap->'user'->'roleId','branchIds',snap->'user'->'branchIds',
+   'assignments','[]'::jsonb,'exceptions',(snap->'exceptions')||jsonb_build_array(jsonb_build_object('branchId','${id(11)}','permissionCode','orders.view','choice','grant')));
+  saved:=public.save_staff_profile_access('${id(101)}',snap->>'fingerprint',d);
+  if not (saved->'exceptions') @> jsonb_build_array(jsonb_build_object('branchId','${id(11)}','permissionCode','orders.view','choice','grant'))
+   then raise exception 'order view local grant not saved';end if;
+ end$$;
 `);
 if(process.env.ONEBIZ_PGLITE_MODULE){const {PGlite}=await import(pathToFileURL(process.env.ONEBIZ_PGLITE_MODULE).href);const db=new PGlite();try{await db.exec(sql.join('\n'));}catch(e){console.error(e.message,e.where||'');process.exitCode=1;}finally{await db.close();}if(process.exitCode)process.exit(process.exitCode);console.log('PASS local invoice fixture rehearsal (PGlite)');process.exit(0);}
 const args=['-Xq','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p','55433','-U','staff_test','-d','onebiz_staff_access_test'];
