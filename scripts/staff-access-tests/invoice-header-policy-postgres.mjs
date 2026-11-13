@@ -114,6 +114,34 @@ sql.push(`
   then raise exception 'trusted server session lookup lost';end if;end$$;
  reset role;
 `);
+// Actual invoice/customer trigger remains usable by checkout after the helper
+// loses direct API execution privileges.
+sql.push(`
+ create table customers(id uuid primary key,last_purchase_at timestamptz,updated_at timestamptz);
+ alter table invoices add column customer_id uuid,add column created_at timestamptz default now();
+`);
+sql.push(await functionFromMigration('00131_customer_segmentation.sql','recompute_customer_last_purchase'));
+sql.push(await functionFromMigration('00131_customer_segmentation.sql','trg_sync_customer_last_purchase'));
+sql.push(`
+ create trigger trg_invoices_sync_last_purchase after insert or update of customer_id,status,created_at or delete on invoices for each row execute function public.trg_sync_customer_last_purchase();
+ grant execute on function public.recompute_customer_last_purchase(uuid) to authenticated,service_role;
+ create function public.test_checkout_with_customer() returns void language sql security definer set search_path=public as $$
+ insert into invoices(id,tenant_id,branch_id,source,status,customer_id) values ('${id(71)}','${id(1)}','${id(10)}','fnb','completed','${id(70)}'); $$;
+ grant execute on function public.test_checkout_with_customer() to authenticated;
+`);
+sql.push(await migration('20261113101200_staff_customer_purchase_trigger_scope.sql'));
+sql.push(`
+ begin;
+ insert into customers(id) values ('${id(70)}');
+ set local role authenticated;
+ do $$begin
+  if has_function_privilege('authenticated','public.recompute_customer_last_purchase(uuid)','execute') then raise exception 'customer internal helper is callable directly';end if;
+  perform public.test_checkout_with_customer();
+ end$$;
+ reset role;
+ do $$begin if (select last_purchase_at from customers where id='${id(70)}') is null then raise exception 'customer purchase trigger broken';end if;end$$;
+ rollback;
+`);
 if(process.env.ONEBIZ_PGLITE_MODULE){
  const {PGlite}=await import(pathToFileURL(process.env.ONEBIZ_PGLITE_MODULE).href);const db=new PGlite();
  try{await db.exec(sql.join('\n'));}catch(e){console.error(e.message,e.where||'');process.exitCode=1;}finally{await db.close();}
