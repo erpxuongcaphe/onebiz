@@ -296,6 +296,34 @@ sql.push(`
  do $$begin if public.user_has_permission_at_branch('${id(101)}','orders.view','${id(11)}')
   then raise exception 'local grant bypassed global revoke';end if;end$$;
 `);
+// Install the actual session guard before enabling invoice branch exceptions.
+sql.push(`
+ delete from user_branch_permission_overrides where permission_code='invoices.view';
+ delete from staff_branch_permission_catalog where permission_code='invoices.view';
+ alter table invoices add column code text,add column total numeric,add column paid numeric,add column client_session_id uuid;
+ create function auth.role() returns text language sql stable as $$select nullif(current_setting('request.jwt.claim.role',true),'')$$;
+ create function public.find_invoice_by_session_id(p_tenant_id uuid,p_client_session_id uuid)
+ returns table(id uuid,code text,status text,total numeric,paid numeric) language sql security definer set search_path=public as $$
+ SELECT id,code,status,total,paid FROM public.invoices WHERE tenant_id = p_tenant_id AND client_session_id = p_client_session_id LIMIT 1;
+ $$;
+`);
+sql.push(await migration('20261113094600_staff_invoice_session_lookup_scope.sql'));
+sql.push(await migration('20261113121110_staff_invoice_view_catalog.sql'));
+sql.push(`
+ do $$declare snap jsonb; d jsonb; saved jsonb;begin
+  snap:=public.get_staff_profile_access('${id(101)}');
+  if not (snap->'branchPermissionCodes') ? 'invoices.view' then raise exception 'invoice view missing from editor';end if;
+  d:=jsonb_build_object('roleId',snap->'user'->'roleId','branchIds',snap->'user'->'branchIds',
+   'assignments','[]'::jsonb,'exceptions',(snap->'exceptions')||jsonb_build_array(jsonb_build_object('branchId','${id(11)}','permissionCode','invoices.view','choice','grant')));
+  saved:=public.save_staff_profile_access('${id(101)}',snap->>'fingerprint',d);
+  if not (saved->'exceptions') @> jsonb_build_array(jsonb_build_object('branchId','${id(11)}','permissionCode','invoices.view','choice','grant')) then raise exception 'invoice branch grant not saved';end if;
+  if not public.user_has_permission_at_branch('${id(101)}','invoices.view','${id(11)}') then raise exception 'invoice local grant unavailable';end if;
+  if public.user_has_permission_at_branch('${id(101)}','invoices.view','${id(10)}') then raise exception 'invoice local grant leaked to another branch';end if;
+ end$$;
+ insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type,created_by)
+ values ('${id(1)}','${id(101)}','invoices.view','revoke','${id(100)}');
+ do $$begin if public.user_has_permission_at_branch('${id(101)}','invoices.view','${id(11)}') then raise exception 'invoice local grant bypassed global revoke';end if;end$$;
+`);
 if(process.env.ONEBIZ_PGLITE_MODULE){const {PGlite}=await import(pathToFileURL(process.env.ONEBIZ_PGLITE_MODULE).href);const db=new PGlite();try{await db.exec(sql.join('\n'));}catch(e){console.error(e.message,e.where||'');process.exitCode=1;}finally{await db.close();}if(process.exitCode)process.exit(process.exitCode);console.log('PASS local invoice fixture rehearsal (PGlite)');process.exit(0);}
 const args=['-Xq','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p','55433','-U','staff_test','-d','onebiz_staff_access_test'];
 const child=spawn('psql',args,{env:{PATH:process.env.PATH,PGPASSWORD:'ephemeral-test-only',PGSSLMODE:'disable',PGCONNECT_TIMEOUT:'5'},stdio:['pipe','pipe','pipe']});
