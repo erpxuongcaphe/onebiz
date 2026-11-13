@@ -22,6 +22,8 @@ sql.push(`
   ('${id(202)}','${id(1)}','${id(10)}','pos','cancelled',null,null,null,null,'${id(200)}'),
   ('${id(203)}','${id(2)}','${id(12)}','order','draft',null,null,null,null,null);
  insert into invoice_items values ('${id(300)}','${id(200)}','${id(400)}',10,1000),('${id(301)}','${id(201)}','${id(400)}',3,300),('${id(302)}','${id(202)}','${id(400)}',5,500);
+ alter table invoices add column created_at timestamptz default now(),add column customer_id uuid;
+ update invoices set customer_id='${id(500)}' where id='${id(200)}';
  insert into staff_branch_permission_catalog values ('inventory.create_po',1);
  insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
   values ('${id(1)}','${id(101)}','${id(10)}','inventory.create_po','grant','${id(100)}');
@@ -29,9 +31,13 @@ sql.push(`
  select set_config('request.jwt.claim.sub','${id(101)}',false);
 `);
 sql.push(await migration('20261112174832_staff_purchase_forecast_scoped_lines.sql'));
+sql.push(await migration('20261112175958_staff_purchase_forecast_scoped_orders.sql'));
 sql.push(`
  set role authenticated;
- do $$declare r jsonb; begin
+ do $$declare r jsonb; h jsonb; begin
+  h:=public.get_purchase_forecast_order_headers(null,null,null,array['${id(500)}'::uuid],0,200);
+  if (h->>'total')::int<>1 or h->'items'->0->>'id'<>'${id(200)}' then raise exception 'forecast order headers not scoped'; end if;
+  if (public.get_purchase_forecast_order_headers(null,null,null,array['${id(501)}'::uuid],0,200)->>'total')::int<>0 then raise exception 'customer filter ignored'; end if;
   r:=public.get_purchase_forecast_remaining_lines(array['${id(200)}'::uuid]);
   if jsonb_array_length(r)<>1 or (r->0->>'orderedQuantity')::numeric<>10 or
    (r->0->>'issuedQuantity')::numeric<>3 or (r->0->>'remainingQuantity')::numeric<>7 or

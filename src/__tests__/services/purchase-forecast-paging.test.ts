@@ -1,6 +1,16 @@
 import {beforeEach,describe,it,expect,vi} from 'vitest';
-const f=vi.hoisted(()=>({tables:{} as Record<string,Record<string,unknown>[]>,fail:'',batches:[] as number[],calls:[] as {table:string;filters:unknown[][];offset:number}[]}));
-vi.mock('@/lib/services/supabase/base',()=>({getCurrentTenantId:async()=> 'tenant',getClient:()=>({rpc:async(fn:string,args?:{p_order_ids:string[]})=>{
+const f=vi.hoisted(()=>({tables:{} as Record<string,Record<string,unknown>[]>,fail:'',batches:[] as number[],headerCalls:[] as unknown[],calls:[] as {table:string;filters:unknown[][];offset:number}[]}));
+vi.mock('@/lib/services/supabase/base',()=>({getCurrentTenantId:async()=> 'tenant',getClient:()=>({rpc:async(fn:string,args?:{p_order_ids?:string[];p_branch?:string|null;p_customer_ids?:string[]|null;p_offset?:number;p_limit?:number})=>{
+ if(fn==='get_purchase_forecast_order_headers'){
+  f.headerCalls.push(args);
+  if(f.fail==='headers_rpc')return {data:null,error:{message:'Synthetic read failed'}};
+  if(f.fail==='headers_malformed')return {data:{items:[],total:null},error:null};
+  const rows=(f.tables.invoices??[]).filter(o=>o.source==='order'&&['draft','confirmed','delivering'].includes(String(o.status))&&!o.deleted_at&&!o.fulfilled_by_id&&
+   !((o.active_processing as {closed_at?:string|null}|null)?.closed_at)&&(!args?.p_branch||o.branch_id===args.p_branch)&&
+   (!args?.p_customer_ids||args.p_customer_ids.includes(String(o.customer_id))));
+  const offset=args?.p_offset??0,size=args?.p_limit??200;
+  return {data:{items:rows.slice(offset,offset+size).map(o=>({id:o.id,branch_id:o.branch_id,branches:o.branches})),total:rows.length},error:null};
+ }
  if(fn!=='get_purchase_forecast_remaining_lines')return {data:[],error:null};
  if(f.fail==='forecast_rpc')return {data:null,error:{message:'Synthetic read failed'}};
  if(f.fail==='forecast_denied')return {data:null,error:{message:'PURCHASE_FORECAST_CHILD_SCOPE_REQUIRED'}};
@@ -30,7 +40,7 @@ vi.mock('@/lib/services/supabase/base',()=>({getCurrentTenantId:async()=> 'tenan
   return Promise.resolve({data:rows.slice(state.offset,state.offset+state.size),count:rows.length,error:f.fail===table?{message:'Synthetic read failed'}:null}).then(resolve);
  }};return q;}})}));
 import {getPurchaseForecast} from '@/lib/services/supabase/purchase-forecast';
-beforeEach(()=>{f.fail='';f.calls=[];f.batches=[];f.tables={branches:[{id:'w',name:'Kho tổng',tenant_id:'tenant',branch_type:'warehouse'}],products_scoped:[{id:'p',tenant_id:'tenant',code:'SKU',name:'Hàng',unit:'Kg',cost_price:100}],branch_stock:[{id:'s',branch_id:'w',variant_id:null,product_id:'p',quantity:0}]};});
+beforeEach(()=>{f.fail='';f.calls=[];f.batches=[];f.headerCalls=[];f.tables={branches:[{id:'w',name:'Kho tổng',tenant_id:'tenant',branch_type:'warehouse'}],products_scoped:[{id:'p',tenant_id:'tenant',code:'SKU',name:'Hàng',unit:'Kg',cost_price:100}],branch_stock:[{id:'s',branch_id:'w',variant_id:null,product_id:'p',quantity:0}]};});
 const order=(id:string,customer='nb')=>({id,code:id,tenant_id:'tenant',source:'order',status:'draft',fulfilled_by_id:null,deleted_at:null,branch_id:'w',customer_id:customer,branches:{name:'Kho tổng'}});
 const line=(id:string,invoice:string,quantity=1)=>({id,invoice_id:invoice,product_id:'p',quantity,total:100*quantity});
 describe('forecast complete reads',()=>{
@@ -43,6 +53,11 @@ describe('forecast complete reads',()=>{
   f.tables.invoices=[order('a'),order('b','other'),{id:'c',tenant_id:'tenant',source:'pos',source_order_id:'a',status:'completed',deleted_at:null,voided_at:null,cancelled_at:null}];
   f.tables.invoice_items_scoped=[line('ia','a',10),line('ib','b',50),line('ic','c',3)];
   const r=await getPurchaseForecast({customerId:'nb'},'w');expect(r.orderCount).toBe(1);expect(r.skuRows[0]).toMatchObject({orderedQuantity:10,issuedQuantity:3,remainingQuantity:7});
+ });
+ it('passes branch, customer and Vietnam day boundaries to the guarded header reader',async()=>{
+  f.tables.invoices=[order('a')];f.tables.invoice_items_scoped=[line('ia','a')];
+  await getPurchaseForecast({dateFrom:'2026-07-01',dateTo:'2026-07-04',customerId:'nb'},'w');
+  expect(f.headerCalls[0]).toMatchObject({p_branch:'w',p_customer_ids:['nb'],p_from:'2026-06-30T17:00:00.000Z',p_to:'2026-07-04T17:00:00.000Z'});
  });
  it('excludes processed orders and counts only the undelivered quantity of a reopened order',async()=>{
   f.tables.invoices=[
@@ -63,11 +78,12 @@ describe('forecast complete reads',()=>{
  });
  it('fails visibly on receipt, stock or BOM read errors instead of reporting incorrect zeroes',async()=>{
   f.tables.invoices=[order('a')];f.tables.invoice_items_scoped=[line('ia','a')];
-  for(const table of ['forecast_rpc','bom_scoped','branch_stock']){f.fail=table;await expect(getPurchaseForecast({},'w')).rejects.toThrow('Synthetic read failed');}
+  for(const table of ['headers_rpc','forecast_rpc','bom_scoped','branch_stock']){f.fail=table;await expect(getPurchaseForecast({},'w')).rejects.toThrow('Synthetic read failed');}
  });
  it('rejects incomplete or out-of-scope forecast results rather than showing misleading totals',async()=>{
   f.tables.invoices=[order('a')];f.tables.invoice_items_scoped=[line('ia','a')];
   f.fail='forecast_malformed';await expect(getPurchaseForecast({},'w')).rejects.toThrow('không hợp lệ');
   f.fail='forecast_denied';await expect(getPurchaseForecast({},'w')).rejects.toThrow('chưa được phép xem');
+  f.fail='headers_malformed';await expect(getPurchaseForecast({},'w')).rejects.toThrow('không hợp lệ');
  });
 });

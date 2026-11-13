@@ -21,11 +21,8 @@
 
 import { getClient, getCurrentTenantId } from "./base";
 import { readHistoryPages } from "./read-history-pages";
-import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
+import { normalizeCreatedAtRange } from "@/lib/utils/list-date-preset-range";
 import {getCustomerIdentityDirectory,customerFamilyIds,expandCustomerFamilyIds} from './customer-identity';
-
-/** Trạng thái đơn đặt hàng coi là "đang mở / chưa hoàn tất". */
-const OPEN_ORDER_STATUSES = ["draft", "confirmed", "delivering"] as const;
 
 export interface ForecastSkuRow {
   productId: string;
@@ -256,23 +253,9 @@ export async function getPurchaseForecast(
     .eq("branch_type", "warehouse"));
   const khoTong = (khoRows ?? [])[0] as { id: string; name: string } | undefined;
 
-  // ── 2) Đơn đặt hàng đang mở ──
-  let orderQ = supabase
-    .from("invoices")
-    .select("id, code, order_code, branch_id, branches!invoices_branch_id_fkey(name), active_processing:sales_order_processing_closures!sales_order_processing_closures_order_id_fkey(closed_at)", {count:"exact"})
-    .eq("tenant_id", tenantId)
-    .eq("source", "order")
-    .is("deleted_at", null)
-    // "Hoàn tất xử lý" là xác nhận không cần dùng đơn này để dự kiến mua nữa.
-    .is("fulfilled_by_id", null)
-    .not("active_processing.closed_at", "is", null)
-    .is("active_processing", null)
-    .in("status", OPEN_ORDER_STATUSES as unknown as string[]);
-  orderQ = applyCreatedAtRangeFilter(orderQ, filters);
-  if (branchId) orderQ = orderQ.eq("branch_id", branchId);
-
-  // Lọc theo khách cụ thể
-  if (filters?.customerId) orderQ = orderQ.in("customer_id", customerFamilyIds(filters.customerId,identityLinks));
+  // ── 2) Phạm vi khách và đơn đặt hàng đang mở ──
+  let customerIds: string[] | undefined = filters?.customerId
+    ? customerFamilyIds(filters.customerId,identityLinks) : undefined;
 
   // Lọc theo NHÓM khách: lấy danh sách khách thuộc nhóm rồi lọc đơn theo đó.
   // Không join thẳng vì đơn có thể là khách vãng lai (customer_id null) —
@@ -284,7 +267,9 @@ export async function getPurchaseForecast(
       .eq("tenant_id", tenantId)
       .eq("group_id", filters.customerGroupId));
     const ids = expandCustomerFamilyIds(((khachTrongNhom ?? []) as AnyRow[]).map((c) => c.id as string),identityLinks);
-    if (ids.length === 0) {
+    const groupIds = new Set(ids);
+    customerIds = customerIds ? customerIds.filter((id) => groupIds.has(id)) : ids;
+    if (customerIds.length === 0) {
       return {
         khoTongName: khoTong?.name ?? null,
         orderCount: 0,
@@ -293,9 +278,24 @@ export async function getPurchaseForecast(
         totalToBuyAmount: 0,
       };
     }
-    orderQ = orderQ.in("customer_id", ids);
   }
-  const orders = await readHistoryPages<{id:string}>(async(offset,size)=>orderQ.order("id").range(offset,offset+size-1));
+  if (customerIds && customerIds.length>5000)
+    throw new Error("Nhóm khách quá lớn để tính một lần. Vui lòng chọn nhóm nhỏ hơn.");
+  const { from: dateFrom, toExclusive: dateTo } = normalizeCreatedAtRange(filters);
+  const orders = await readHistoryPages<{id:string;branch_id:string;branches:{name:string}}>(async(offset,size)=>{
+    const {data,error}=await supabase.rpc("get_purchase_forecast_order_headers",{
+      p_branch:branchId??null,p_from:dateFrom??null,p_to:dateTo??null,
+      p_customer_ids:customerIds??null,p_offset:offset,p_limit:size,
+    });
+    if (error?.message?.includes("PURCHASE_FORECAST_BRANCH_DENIED"))
+      throw new Error("Anh chưa có quyền dự kiến mua hàng tại chi nhánh đã chọn.");
+    if (error) throw new Error(error.message || "Không tải được danh sách đơn dự kiến mua.");
+    if (!data || !Array.isArray(data.items) || !Number.isSafeInteger(data.total) || data.total<0 ||
+      data.items.some((item: AnyRow)=>!item || typeof item.id!=="string" || typeof item.branch_id!=="string" ||
+        !item.branches || typeof item.branches.name!=="string"))
+      throw new Error("Danh sách đơn dự kiến mua không hợp lệ. Vui lòng tải lại.");
+    return {data:data.items,count:data.total,error:null};
+  });
 
   const orderList = (orders ?? []) as AnyRow[];
   const orderBranch = new Map<string, { id: string | null; name: string }>();
