@@ -44,11 +44,18 @@ try {
     from _request_branch_candidates_20261029 where _can_read_branch_inventory_00476((select auth.uid() as uid),_request_branch_candidates_20261029.tenant_id,_request_branch_candidates_20261029.branch_id)
    ) select t.id,t.tenant_id,t.branch_id,case when (select user_has_permission(auth.uid(),'products.view_cost')) then t.unit_cost else 0::numeric end unit_cost
     from stock_movements t where exists(select 1 from _request_allowed_branches_20261029 access where access.tenant_id=t.tenant_id and access.branch_id is not distinct from t.branch_id);
+  alter table stock_movements enable row level security;
+  create policy legacy_movement on stock_movements for select to authenticated using
+    (tenant_id=get_user_tenant_id() and _can_read_branch_inventory_00476(auth.uid(),tenant_id,branch_id));
   grant usage on schema public,auth to authenticated;grant select on stock_movements_scoped to authenticated;
+  grant select(id,tenant_id,branch_id) on stock_movements to authenticated;
   select set_config('request.jwt.claim.sub','${id(101)}',false);`);
   await db.exec(
     await file("20261112104123_staff_inventory_direct_stock_scope.sql"),
   );
+  for (const name of ['_staff_lot_has_no_view_exception','_staff_inventory_row_visible'])
+    await db.exec(await functionFromMigration('20261112121837_staff_inventory_global_revoke_guard.sql',name));
+  await db.exec(await file('20261113063835_staff_stock_movements_direct_scope.sql'));
   await db.exec("set role authenticated");
   const read = async () =>
     (
@@ -56,6 +63,8 @@ try {
         "select id,unit_cost from stock_movements_scoped order by id",
       )
     ).rows;
+  const readDirect = async () => (await db.query('select id from stock_movements order by id')).rows.map(row=>row.id);
+  assert.deepEqual(await readDirect(),[id(40),id(41)],'existing column grants keep their old branch scope');
   assert.deepEqual(await read(), [
     { id: id(40), unit_cost: "0" },
     { id: id(41), unit_cost: "0" },
@@ -63,6 +72,7 @@ try {
   await db.exec(`reset role; insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
   ('${id(1)}','${id(101)}','${id(10)}','inventory.view','revoke','${id(100)}'); set role authenticated;`);
   assert.deepEqual(await read(), [{ id: id(41), unit_cost: "0" }]);
+  assert.deepEqual(await readDirect(),[id(41)],'raw column access respects the denied branch');
   await db.exec(
     `reset role; insert into role_permissions values('${id(20)}','reports.analytics'); set role authenticated;`,
   );
@@ -74,6 +84,7 @@ try {
     ],
     "independent reporting retains its branch data without revealing costs",
   );
+  assert.deepEqual(await readDirect(),[id(40),id(41)],'independent reporting scope is preserved on direct reads');
   await db.exec(`reset role; insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
   ('${id(1)}','${id(101)}','${id(10)}','reports.analytics','revoke','${id(100)}'); set role authenticated;`);
   assert.deepEqual(await read(), [{ id: id(41), unit_cost: "0" }]);
@@ -93,6 +104,11 @@ try {
     [{ id: id(41), unit_cost: "200" }],
     "cost permission remains independent of the branch filter",
   );
+  await db.exec(`reset role; delete from role_permissions where permission_code in ('reports.analytics','inventory.view');
+    delete from user_branch_permission_overrides where permission_code in ('reports.analytics','inventory.view');
+    insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type,created_by)
+      values ('${id(1)}','${id(101)}','inventory.view','revoke','${id(100)}'); set role authenticated;`);
+  assert.deepEqual(await readDirect(),[],'global inventory revoke cannot use the legacy direct read path');
   await assert.rejects(
     db.query("select * from stock_movements"),
     /permission denied/,

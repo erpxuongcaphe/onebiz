@@ -79,6 +79,39 @@ statements.push(`
  end$$;
  reset role;
 `);
+statements.push(await functionFromMigration('20261112104123_staff_inventory_direct_stock_scope.sql','_staff_inventory_movement_visible'));
+statements.push(`
+ create table stock_movements(id uuid,tenant_id uuid,branch_id uuid,unit_cost numeric);
+ insert into stock_movements values ('${id(400)}','${id(1)}','${id(10)}',10),('${id(401)}','${id(1)}','${id(11)}',20),('${id(402)}','${id(2)}','${id(12)}',30);
+ insert into user_branches values ('${id(101)}','${id(11)}',null);
+ insert into role_permissions values ('${id(20)}','inventory.view');
+ alter function public.user_has_branch_access(uuid,uuid) security definer;
+ alter table stock_movements enable row level security;
+ create policy movement_legacy on stock_movements for select to authenticated using
+  (tenant_id=get_user_tenant_id() and user_has_branch_access(auth.uid(),branch_id));
+ grant select(id,tenant_id,branch_id) on stock_movements to authenticated;
+`);
+statements.push(await migration('20261113063835_staff_stock_movements_direct_scope.sql'));
+statements.push(`
+ set role authenticated;
+ do $$begin if (select count(id) from stock_movements)<>2 then raise exception 'legacy raw movement access changed'; end if;
+  if has_column_privilege('authenticated','public.stock_movements','unit_cost','select') then raise exception 'stock cost exposed'; end if; end$$;
+ reset role;insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by)
+  values ('${id(1)}','${id(101)}','${id(10)}','inventory.view','revoke','${id(100)}');set role authenticated;
+ do $$begin if (select count(id) from stock_movements)<>1 then raise exception 'denied stock movement branch exposed'; end if; end$$;
+ reset role;insert into role_permissions values ('${id(20)}','reports.analytics');set role authenticated;
+ do $$begin if (select count(id) from stock_movements)<>2 then raise exception 'independent stock reporting lost'; end if; end$$;
+ reset role;delete from role_permissions where permission_code in ('reports.analytics','inventory.view');
+ update user_branch_permission_overrides set branch_id='${id(11)}',override_type='grant' where permission_code='inventory.view';set role authenticated;
+ do $$begin if (select count(id) from stock_movements)<>1 then raise exception 'local stock grant scope mismatch'; end if; end$$;
+ reset role;
+ insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type,created_by)
+  values ('${id(1)}','${id(101)}','inventory.view','revoke','${id(100)}');set role authenticated;
+ do $$begin if (select count(id) from stock_movements)<>0 then raise exception 'global stock revoke bypassed'; end if; end$$;
+ reset role;delete from user_branch_permission_overrides where permission_code='inventory.view';set role authenticated;
+ do $$begin if (select count(id) from stock_movements)<>0 then raise exception 'global-only stock revoke bypassed'; end if; end$$;
+ reset role;
+`);
 if (process.env.ONEBIZ_PGLITE_MODULE) {
  const {PGlite}=await import(pathToFileURL(process.env.ONEBIZ_PGLITE_MODULE).href);
  const db=new PGlite();try { await db.exec(statements.join('\n')); } finally { await db.close(); }
