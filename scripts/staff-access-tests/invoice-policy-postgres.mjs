@@ -287,6 +287,14 @@ sql.push(`
   if not (saved->'exceptions') @> jsonb_build_array(jsonb_build_object('branchId','${id(11)}','permissionCode','orders.view','choice','grant'))
    then raise exception 'order view local grant not saved';end if;
  end$$;
+ do $$begin
+  if public.user_has_permission_at_branch('${id(101)}','orders.view','${id(10)}') then raise exception 'denied order branch became allowed';end if;
+  if not public.user_has_permission_at_branch('${id(101)}','orders.view','${id(11)}') then raise exception 'granted order branch unavailable';end if;
+ end$$;
+ insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type,created_by)
+ values ('${id(1)}','${id(101)}','orders.view','revoke','${id(100)}');
+ do $$begin if public.user_has_permission_at_branch('${id(101)}','orders.view','${id(11)}')
+  then raise exception 'local grant bypassed global revoke';end if;end$$;
 `);
 if(process.env.ONEBIZ_PGLITE_MODULE){const {PGlite}=await import(pathToFileURL(process.env.ONEBIZ_PGLITE_MODULE).href);const db=new PGlite();try{await db.exec(sql.join('\n'));}catch(e){console.error(e.message,e.where||'');process.exitCode=1;}finally{await db.close();}if(process.exitCode)process.exit(process.exitCode);console.log('PASS local invoice fixture rehearsal (PGlite)');process.exit(0);}
 const args=['-Xq','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p','55433','-U','staff_test','-d','onebiz_staff_access_test'];
