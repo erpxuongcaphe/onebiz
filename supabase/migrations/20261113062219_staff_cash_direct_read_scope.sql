@@ -13,6 +13,15 @@ begin
  if tenant is null then return '{}'::uuid[]; end if;
  select coalesce(array_agg(b.id),'{}'::uuid[]) into result from public.branches b
  where b.tenant_id=tenant and public._staff_my_cash_book_view(b.id);
+ -- A stale report-only client used to read this table directly. Silently
+ -- returning no rows would turn its totals into misleading zeroes. Current
+ -- reports use the scoped summary RPC; the old page already displays errors.
+ if cardinality(result)=0 and (
+  public._staff_permission_any_branch(actor,'reports.dashboard')
+  or public._staff_permission_any_branch(actor,'reports.analytics')
+ ) then
+  raise exception 'Báo cáo đã cập nhật. Vui lòng tải lại trang để xem số liệu.' using errcode='P0001';
+ end if;
  return result;
 end $$;
 revoke all on function public._staff_cash_direct_allowed_branches() from public,anon;

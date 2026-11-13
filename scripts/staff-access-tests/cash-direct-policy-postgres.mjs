@@ -96,7 +96,10 @@ statements.push(`
  reset role; delete from user_branch_permission_overrides where permission_code='finance.view_cash_book'; set role authenticated;
  do $$begin if (select count(*) from cash_transactions)<>0 then raise exception 'global-only revoke bypassed'; end if; end$$;
  reset role; insert into role_permissions values ('${id(20)}','reports.dashboard'),('${id(20)}','reports.analytics'); set role authenticated;
- do $$begin if (select count(*) from cash_transactions)<>0 then raise exception 'report grants bypass global cash revoke';end if;end$$;
+ do $$begin
+  begin perform count(*) from cash_transactions; raise exception 'report grants bypass global cash revoke';
+  exception when raise_exception then if sqlerrm not like 'Báo cáo đã cập nhật.%' then raise; end if; end;
+ end$$;
  reset role; delete from role_permissions where permission_code in ('reports.dashboard','reports.analytics');
  insert into role_permissions values ('${id(20)}','finance.create_transaction'); set role authenticated;
  do $$begin if (select count(*) from money_accounts)<>2 then raise exception 'payment account access lost'; end if; end$$;
@@ -135,13 +138,15 @@ const reportGuard=await functionFromMigration('00513_inventory_operational_read_
 statements.push(reportGuard.replace('public.user_has_permission(v_actor,p_permission_code)','public._staff_report_permission(v_actor,p_permission_code,p_branch_id)'));
 await migration('20261113074601_staff_cash_flow_summary_projection.sql');
 statements.push(`set role authenticated; do $$begin
- if (select count(*) from cash_transactions)<>0 then raise exception 'SUMMARY_REVEALED_RAW_VOUCHERS';end if;
+ begin perform count(*) from cash_transactions; raise exception 'SUMMARY_REVEALED_RAW_VOUCHERS';
+ exception when raise_exception then if sqlerrm not like 'Báo cáo đã cập nhật.%' then raise; end if; end;
  if (select sum(amount) from get_cash_flow_category_summary('2026-11-01','2026-11-30','${id(10)}')) is distinct from 100
  then raise exception 'AUTHORIZED_SUMMARY_MISSING';end if;
  end$$; reset role;
  delete from user_permission_overrides where permission_code='finance.view_cash_book';
  set role authenticated; do $$begin
- if (select count(*) from cash_transactions)<>0 then raise exception 'REPORT_ONLY_USER_REVEALED_RAW_VOUCHERS';end if;
+ begin perform count(*) from cash_transactions; raise exception 'REPORT_ONLY_USER_REVEALED_RAW_VOUCHERS';
+ exception when raise_exception then if sqlerrm not like 'Báo cáo đã cập nhật.%' then raise; end if; end;
  if (select sum(amount) from get_cash_flow_category_summary('2026-11-01','2026-11-30','${id(10)}')) is distinct from 100
  then raise exception 'REPORT_ONLY_SUMMARY_MISSING';end if;
  end$$; reset role;`);
