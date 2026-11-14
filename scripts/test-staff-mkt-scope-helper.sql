@@ -93,6 +93,7 @@ do $$declare created jsonb;begin
   raise exception 'MKT_STATUS_WRONG_BRANCH_ALLOWED';
  exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
 end$$;
+do $$begin if (select count(*) from public.mkt_campaigns where name in ('Synthetic B','Synthetic shared'))<>2 then raise exception 'MKT_DENIED_CAMPAIGN_CREATED';end if;end$$;
 do $$begin if not exists(select 1 from public.mkt_campaigns where id='66000000-0000-0000-0000-000000000002' and name='Synthetic B') then raise exception 'MKT_DENIED_UPDATE_CHANGED_NAME';end if;end$$;
 do $$begin if not exists(select 1 from public.mkt_campaigns where id='66000000-0000-0000-0000-000000000002' and status='planning') then raise exception 'MKT_DENIED_STATUS_CHANGED';end if;end$$;
 update public.user_branch_permission_overrides set override_type='revoke' where user_id='22000000-0000-0000-0000-000000000002' and branch_id='33000000-0000-0000-0000-000000000001' and permission_code='mkt.manage_campaigns';
