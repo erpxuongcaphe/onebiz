@@ -36,6 +36,15 @@ do $$begin
  if not public.ops_can('33000000-0000-0000-0000-000000000001','view') or not public.ops_can('33000000-0000-0000-0000-000000000002','view') then raise exception 'LEGACY_SCOPE_CHANGED'; end if;
  if public.ops_can('33000000-0000-0000-0000-000000000001','close_period') then raise exception 'UNGRANTED_ALLOWED'; end if;
 end$$;
+-- Compare the legacy behavior when all Hub abilities are granted as well.
+insert into public.role_permissions(role_id,permission_code)
+select '44000000-0000-0000-0000-000000000001',code from unnest(array['ops.verify','ops.configure','ops.close_period','ops.cancel_todo','ops.manage_members']) code;
+do $$begin
+ if exists(select 1 from unnest(array['view','work','verify','approve_policy','close_period','cancel_todo','manage_members','unknown']) cap
+  cross join unnest(array['33000000-0000-0000-0000-000000000001'::uuid,'33000000-0000-0000-0000-000000000002'::uuid]) branch
+  where public.ops_can(branch,cap) is distinct from pg_temp.ops_can_baseline(branch,cap)) then raise exception 'LEGACY_FULL_MATRIX_CHANGED';end if;
+end$$;
+delete from public.role_permissions where role_id='44000000-0000-0000-0000-000000000001' and permission_code in ('ops.verify','ops.configure','ops.close_period','ops.cancel_todo','ops.manage_members');
 insert into public.user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
  ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000002','33000000-0000-0000-0000-000000000001','ops.close_period','grant','22000000-0000-0000-0000-000000000002'),
  ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000002','33000000-0000-0000-0000-000000000002','ops.view','revoke','22000000-0000-0000-0000-000000000002');

@@ -88,6 +88,16 @@ describe("staff profile scope", () => {
     await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
     expect(onSave.mock.calls[0][2]).toEqual(["premium"]);
   });
+  it("explains Hub assignment and shared standards when editing a branch right", () => {
+    const data = structuredClone(snapshot);
+    data.branchPermissionCodes.push("ops.configure");
+    render(<StaffProfileEditor snapshot={data} onSave={vi.fn()} onReload={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Tùy chỉnh quyền" }));
+    fireEvent.click(screen.getByRole("button", { name: "Premium" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Tìm quyền" }), { target: { value: "ops.configure" } });
+    expect(screen.getByText(/Quyền Hub tại quán còn kết hợp với phân công Hub hoặc QC/)).toBeVisible();
+    expect(screen.getByText(/Bộ tiêu chuẩn dùng chung toàn công ty do chủ quản lý/)).toBeVisible();
+  });
   it("saves floor-view scope without changing other rights and explains independent table readers", async () => {
     const data = structuredClone(snapshot);
     data.branchPermissionCodes.push("floor_plan.view");
