@@ -93,6 +93,7 @@ do $$declare created jsonb;begin
   raise exception 'MKT_STATUS_WRONG_BRANCH_ALLOWED';
  exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
 end$$;
+do $$begin if not exists(select 1 from public.mkt_campaigns where id='66000000-0000-0000-0000-000000000002' and status='planning') then raise exception 'MKT_DENIED_STATUS_CHANGED';end if;end$$;
 update public.user_branch_permission_overrides set override_type='revoke' where user_id='22000000-0000-0000-0000-000000000002' and branch_id='33000000-0000-0000-0000-000000000001' and permission_code='mkt.manage_campaigns';
 insert into public.user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000002','33000000-0000-0000-0000-000000000001','mkt.split_work_packages','grant','22000000-0000-0000-0000-000000000002');
 do $$begin
