@@ -49,10 +49,12 @@ end$$;
 insert into public.ops_todos(id,tenant_id,branch_id,title,category,priority,assignee_id,collaborators,due_at,original_due_at,created_by) values
  ('55000000-0000-0000-0000-000000000001','11000000-0000-0000-0000-000000000001','33000000-0000-0000-0000-000000000001','Synthetic A','other','normal','22000000-0000-0000-0000-000000000002',array['22000000-0000-0000-0000-000000000002'::uuid],now(),now(),'22000000-0000-0000-0000-000000000002'),
  ('55000000-0000-0000-0000-000000000002','11000000-0000-0000-0000-000000000001','33000000-0000-0000-0000-000000000002','Synthetic B','other','normal','22000000-0000-0000-0000-000000000002',array['22000000-0000-0000-0000-000000000002'::uuid],now(),now(),'22000000-0000-0000-0000-000000000002');
-do $$declare page jsonb; workspace jsonb;begin
+do $$declare page jsonb; workspace jsonb; filtered jsonb;begin
  if not public.ops_todo_visible('55000000-0000-0000-0000-000000000001') or public.ops_todo_visible('55000000-0000-0000-0000-000000000002') then raise exception 'COLLABORATOR_SCOPE_FAILED';end if;
  page:=public.ops_todo_page(null,'',false,null,null,null);
  if jsonb_array_length(page->'rows')<>1 or page->'rows'->0->>'title'<>'Synthetic A' then raise exception 'COLLABORATOR_PAGE_LEAK';end if;
+ filtered:=public.ops_filtered_page('todo',null,'',false,'{}',null,null);
+ if jsonb_array_length(filtered->'rows')<>1 or filtered->'rows'->0->>'title'<>'Synthetic A' then raise exception 'COLLABORATOR_FILTERED_PAGE_LEAK';end if;
  workspace:=public.ops_workspace(null,to_char(now() at time zone 'Asia/Ho_Chi_Minh','YYYY-MM'));
  if jsonb_array_length(workspace->'todos')<>1 or workspace->'todos'->0->>'title'<>'Synthetic A' then raise exception 'COLLABORATOR_WORKSPACE_LEAK';end if;
  perform public.ops_evidence_reserve_before_lifecycle('todo','55000000-0000-0000-0000-000000000001','test.png','image/png',32);
