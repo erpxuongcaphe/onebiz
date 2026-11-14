@@ -133,6 +133,7 @@ do $$begin
  perform public.mkt_create_work_package('66000000-0000-0000-0000-000000000003','other','Legacy shared package',null,null,null,null);
  perform public.mkt_add_readiness_item('66000000-0000-0000-0000-000000000003','Legacy shared readiness','store','33000000-0000-0000-0000-000000000001',null);
  perform public.mkt_change_campaign_status('66000000-0000-0000-0000-000000000003','paused',null);
+ perform public.mkt_update_campaign('66000000-0000-0000-0000-000000000003','{"name":"Legacy shared update"}'::jsonb);
  perform public.mkt_create_campaign('Synthetic legacy shared',null,null,null,0,null,null,'[]');
 end$$;
 insert into public.user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
