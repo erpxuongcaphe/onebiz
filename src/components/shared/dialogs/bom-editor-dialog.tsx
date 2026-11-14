@@ -98,7 +98,7 @@ export function BOMEditorDialog({
   defaultBranchId,
   onSuccess,
 }: BOMEditorDialogProps) {
-  const { hasPermission } = usePermissions();
+  const { hasPermission, hasPermissionAtBranch } = usePermissions();
   const canViewCost = hasPermission("products.view_cost");
   const { toast } = useToast();
   const { branches } = useAuth();
@@ -113,6 +113,7 @@ export function BOMEditorDialog({
   const [productId, setProductId] = useState(initialProductId ?? "");
   // null = BOM global; a product-detail entry point can safely preselect its active outlet.
   const [branchId, setBranchId] = useState<string | null>(defaultBranchId ?? null);
+  const [originalBranchId, setOriginalBranchId] = useState<string | null | undefined>(undefined);
   const [name, setName] = useState("");
   const [batchSize, setBatchSize] = useState("1");
   const [yieldQty, setYieldQty] = useState("1");
@@ -165,6 +166,7 @@ export function BOMEditorDialog({
       // Reset for create mode
       setProductId(initialProductId ?? "");
       setBranchId(defaultBranchId ?? null);
+      setOriginalBranchId(undefined);
       setName("");
       setBatchSize("1");
       setYieldQty("1");
@@ -181,10 +183,12 @@ export function BOMEditorDialog({
       setChangedConversionMaterials([]);
       return;
     }
+    setOriginalBranchId(undefined);
     (async () => {
       const bom = await getBOMById(bomId);
       setProductId(bom.productId);
       setBranchId(bom.branchId ?? null);
+      setOriginalBranchId(bom.branchId ?? null);
       setName(bom.name);
       setBatchSize(String(bom.batchSize));
       setYieldQty(String(bom.yieldQty));
@@ -460,6 +464,13 @@ export function BOMEditorDialog({
   }
 
   async function handleSave() {
+    const hasSharedProductRight = ["products.create", "products.edit", "products.import"]
+      .some((code) => hasPermissionAtBranch(code, null));
+    const canWriteBranch = (id: string | null) => id === null || hasSharedProductRight || hasPermissionAtBranch("production.manage_bom", id);
+    if ((bomId && originalBranchId === undefined) || !canWriteBranch(branchId) || (bomId && !canWriteBranch(originalBranchId ?? null))) {
+      toast({ title: "Chưa thể lưu công thức", description: "Anh/chị không có quyền sửa công thức tại chi nhánh gốc hoặc chi nhánh được chọn. Hãy chọn phạm vi được cấp hoặc liên hệ quản trị.", variant: "error" });
+      return;
+    }
     if (!validate()) return;
     setSaving(true);
     const isEdit = Boolean(bomId);

@@ -22,3 +22,10 @@ Không mặc định coi mọi quyền đang báo “chưa thể chỉnh riêng�
 - Sau triển khai #992: trang nhân sự và danh sách chiến dịch mở được; POS Premium tải danh sách món; ba điểm in gửi tín hiệu. Các lệnh đã bàn giao cho bộ nhận không chứng minh giấy đã in; chưa nghiệm thu giấy thực tế trong đợt này.
 - PR #993 bổ sung quyền `mkt.review_content` theo chi nhánh, đồng bộ đường xem, duyệt và nút thao tác; nội dung dùng chung vẫn theo quyền toàn tài khoản. Máy chủ đã áp dụng; chỉ coi bản phát hành hoàn tất khi giao diện của PR lên production và được kiểm tra lại.
 - Ưu tiên quyền theo nghiệp vụ có dữ liệu chi nhánh; quyền in hiện tại, quyền dùng chung và các quyền cũ không tự đổi. Không làm thêm cơ chế tách giả cho dữ liệu toàn công ty.
+
+## Công thức sản xuất và F&B
+
+- Công thức có thể dùng chung hoặc riêng chi nhánh. Các bảng `bom`, `bom_items` và `bom_modifier_option_quantities` hiện có chính sách ghi kiểm tra tenant; vai trò authenticated có quyền ghi. Vì vậy chưa được đưa `production.manage_bom` vào danh mục điều chỉnh theo quán nếu chưa ràng buộc các đường ghi phía máy chủ.
+- Công thức còn được tạo/sửa từ hộp thoại sản phẩm, nhập Excel, sao chép công thức và lưu định lượng theo tùy chọn F&B. Siết riêng một trang sẽ không đủ và có thể làm sản phẩm đã lưu nhưng công thức lưu dở. Các quyền sản phẩm là quyền dùng chung theo quyết định đã chốt; phải giải thích và giữ rõ quan hệ với quyền sửa công thức.
+- Khảo sát dữ liệu hiện tại: 10 tài khoản hoạt động có quyền quản lý công thức; 10 có các quyền tạo/sửa/nhập sản phẩm, và không có tài khoản đang hoạt động nào có các quyền sản phẩm đó mà thiếu quyền quản lý công thức. Đây là ảnh chụp tại thời điểm kiểm tra, không phải giả định cho quyền hoặc tài khoản tạo sau này.
+- Cần kiểm thử đầy đủ thay đổi quyền với công thức dùng chung, công thức riêng hai quán, thay đổi chi nhánh, nguyên liệu, định lượng size/độ ngọt, nhập Excel và luồng tính nguyên liệu khi thanh toán. Không thay đổi production khi còn thiếu các kiểm thử này.
