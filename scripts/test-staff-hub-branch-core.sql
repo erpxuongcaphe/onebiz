@@ -28,6 +28,23 @@ do $$begin
  if not public.ops_can('33000000-0000-0000-0000-000000000001','close_period') then raise exception 'BRANCH_GRANT_NOT_APPLIED'; end if;
  if public.ops_can('33000000-0000-0000-0000-000000000002','close_period') or public.ops_can('33000000-0000-0000-0000-000000000002','view') then raise exception 'BRANCH_DENY_BYPASSED'; end if;
  if public.ops_manager('33000000-0000-0000-0000-000000000002','22000000-0000-0000-0000-000000000002') then raise exception 'MANAGER_DENY_BYPASSED'; end if;
+ if not public.ops_person_eligible('33000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000002','membership')
+  or public.ops_person_eligible('33000000-0000-0000-0000-000000000002','22000000-0000-0000-0000-000000000002','membership') then raise exception 'ELIGIBLE_PERSON_SCOPE_FAILED';end if;
+end$$;
+insert into public.ops_todos(id,tenant_id,branch_id,title,category,priority,assignee_id,collaborators,due_at,original_due_at,created_by) values
+ ('55000000-0000-0000-0000-000000000001','11000000-0000-0000-0000-000000000001','33000000-0000-0000-0000-000000000001','Synthetic A','other','normal','22000000-0000-0000-0000-000000000002',array['22000000-0000-0000-0000-000000000002'::uuid],now(),now(),'22000000-0000-0000-0000-000000000002'),
+ ('55000000-0000-0000-0000-000000000002','11000000-0000-0000-0000-000000000001','33000000-0000-0000-0000-000000000002','Synthetic B','other','normal','22000000-0000-0000-0000-000000000002',array['22000000-0000-0000-0000-000000000002'::uuid],now(),now(),'22000000-0000-0000-0000-000000000002');
+do $$declare page jsonb; workspace jsonb;begin
+ if not public.ops_todo_visible('55000000-0000-0000-0000-000000000001') or public.ops_todo_visible('55000000-0000-0000-0000-000000000002') then raise exception 'COLLABORATOR_SCOPE_FAILED';end if;
+ page:=public.ops_todo_page(null,'',false,null,null,null);
+ if jsonb_array_length(page->'rows')<>1 or page->'rows'->0->>'title'<>'Synthetic A' then raise exception 'COLLABORATOR_PAGE_LEAK';end if;
+ workspace:=public.ops_workspace(null,to_char(now() at time zone 'Asia/Ho_Chi_Minh','YYYY-MM'));
+ if jsonb_array_length(workspace->'todos')<>1 or workspace->'todos'->0->>'title'<>'Synthetic A' then raise exception 'COLLABORATOR_WORKSPACE_LEAK';end if;
+ perform public.ops_evidence_reserve_before_lifecycle('todo','55000000-0000-0000-0000-000000000001','test.png','image/png',32);
+ begin
+  perform public.ops_evidence_reserve_before_lifecycle('todo','55000000-0000-0000-0000-000000000002','test.png','image/png',32);
+  raise exception 'EVIDENCE_SCOPE_BYPASSED';
+ exception when raise_exception then if sqlerrm<>'OPS_FORBIDDEN' then raise;end if; end;
 end$$;
 update public.ops_members set member_role='reviewer' where branch_id='33000000-0000-0000-0000-000000000002';
 insert into public.ops_q_grants(tenant_id,branch_id,user_id,can_audit,can_correct,can_accounting,active) values
@@ -36,8 +53,26 @@ insert into public.user_branch_permission_overrides(tenant_id,user_id,branch_id,
  ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000002','33000000-0000-0000-0000-000000000002','ops.verify','grant','22000000-0000-0000-0000-000000000002');
 do $$begin if public.ops_q_can('33000000-0000-0000-0000-000000000002','qc') then raise exception 'QC_VIEW_DENY_BYPASSED'; end if; end$$;
 delete from public.user_branch_permission_overrides where branch_id='33000000-0000-0000-0000-000000000002' and permission_code='ops.view';
-do $$begin if not public.ops_q_can('33000000-0000-0000-0000-000000000002','qc') then raise exception 'QC_BRANCH_GRANT_NOT_APPLIED'; end if; end$$;
+do $$begin
+ if not public.ops_q_can('33000000-0000-0000-0000-000000000002','qc') then raise exception 'QC_BRANCH_GRANT_NOT_APPLIED'; end if;
+ begin
+  perform public.ops_quality_execute_core('qc_create',jsonb_build_object('branchId','33000000-0000-0000-0000-000000000002','period','bad'),gen_random_uuid());
+  raise exception 'QC_INVALID_PERIOD_ACCEPTED';
+ exception when raise_exception then if sqlerrm<>'OPS_INVALID_RANGE' then raise;end if; end;
+ begin
+  perform public.ops_quality_execute_core('qc_create',jsonb_build_object('branchId','33000000-0000-0000-0000-000000000001','period','bad'),gen_random_uuid());
+  raise exception 'QC_CROSS_BRANCH_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'OPS_FORBIDDEN' then raise;end if; end;
+end$$;
 insert into public.user_permission_overrides(tenant_id,user_id,permission_code,override_type) values
  ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000002','ops.verify','revoke');
 do $$begin if public.ops_q_can('33000000-0000-0000-0000-000000000002','qc') then raise exception 'GLOBAL_DENY_BYPASSED'; end if; end$$;
+delete from public.role_permissions where role_id='44000000-0000-0000-0000-000000000001' and permission_code='ops.view';
+insert into public.user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
+ ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000002','33000000-0000-0000-0000-000000000001','ops.view','grant','22000000-0000-0000-0000-000000000002');
+do $$declare page jsonb;begin
+ if coalesce((public.ops_access_context()->>'allowed')::boolean,false)=false then raise exception 'BRANCH_ONLY_HUB_ENTRY_DENIED';end if;
+ page:=public.ops_todo_page(null,'',false,null,null,null);
+ if jsonb_array_length(page->'rows')<>1 or page->'rows'->0->>'title'<>'Synthetic A' then raise exception 'BRANCH_ONLY_PAGE_SCOPE_FAILED';end if;
+end$$;
 rollback;

@@ -27,9 +27,10 @@ function checkHubAccess(authUser: User): Promise<boolean> {
 }
 
 export function useHubAccess() {
-  const { authUser, user, hasPermission, isLoading } = useAuth();
+  const { authUser, user, hasPermission, hasPermissionAtBranch, hasAssignedBranchAccess, branches, isLoading } = useAuth();
   const canCheck = !isLoading && authUser !== null && user?.id === authUser.id
-    && hasPermission(PERMISSIONS.OPS_VIEW);
+    && (hasPermission(PERMISSIONS.OPS_VIEW) || branches.some(branch =>
+      hasAssignedBranchAccess(branch.id) && hasPermissionAtBranch(PERMISSIONS.OPS_VIEW, branch.id)));
   const [grant, setGrant] = useState<{ authUser: User; allowed: boolean } | null>(null);
 
   useEffect(() => {

@@ -4,7 +4,7 @@ import { OperationsFilterBar } from "@/components/operations/filter-bar";
 import { initialFilters } from "@/lib/operations/filters";
 import { useHubAccess } from "@/lib/operations/use-hub-access";
 
-const session = vi.hoisted(() => ({ authUser: { id: "user-a" } as { id: string } | null, user: { id: "user-a" }, isLoading: false, hasPermission: vi.fn(() => true) }));
+const session = vi.hoisted(() => ({ authUser: { id: "user-a" } as { id: string } | null, user: { id: "user-a" }, isLoading: false, hasPermission: vi.fn(() => true), branches: [] as { id: string }[], hasPermissionAtBranch: vi.fn(() => false), hasAssignedBranchAccess: vi.fn(() => false) }));
 vi.mock("@/lib/contexts", () => ({ useAuth: () => session }));
 function Entry() { return <span>{useHubAccess() ? "Cho phép" : "Chặn"}</span>; }
 beforeEach(() => { session.authUser = { id: "user-a" }; session.user = { id: "user-a" }; session.isLoading = false; session.hasPermission.mockReturnValue(true); });
