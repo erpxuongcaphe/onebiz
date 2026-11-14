@@ -27,6 +27,9 @@ do $$declare body text; patched text; sig text; begin
  patched:=replace(patched,'public.ops_has_permission(''ops.work'')','public._staff_permission_at_scope(p.id,''ops.work'',b)');
  patched:=replace(patched,'public.user_has_permission(id,''ops.view'')','public._staff_permission_at_scope(id,''ops.view'',b)');
  patched:=replace(patched,'public.user_has_permission(id,''ops.work'')','public._staff_permission_at_scope(id,''ops.work'',b)');
+ if position('public.user_has_permission(pr.id,''ops.view'')' in patched)=0 or position('public.user_has_permission(pr.id,''ops.work'')' in patched)=0 then raise exception 'HUB_QUALITY_COLLABORATOR_PATCH_MISSING';end if;
+ patched:=replace(patched,'public.user_has_permission(pr.id,''ops.view'')','public._staff_permission_at_scope(pr.id,''ops.view'',b)');
+ patched:=replace(patched,'public.user_has_permission(pr.id,''ops.work'')','public._staff_permission_at_scope(pr.id,''ops.work'',b)');
  execute patched;
 
  sig:='public.ops_evidence_reserve_before_lifecycle(text,uuid,text,text,bigint)';

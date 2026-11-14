@@ -1,5 +1,5 @@
 \set ON_ERROR_STOP on
-do $$begin if current_database() not in ('onebiz_hub_scope_20261114','onebiz_hub_scope_v2_20261114') or inet_server_addr()<>'127.0.0.1'::inet or inet_server_port()<>55487 or exists(select 1 from public.tenants) then raise exception 'WRONG_TEST_DATABASE';end if;end$$;
+do $$begin if current_database() not in ('onebiz_hub_scope_20261114','onebiz_hub_scope_v2_20261114','onebiz_hub_scope_v3_20261114') or inet_server_addr()<>'127.0.0.1'::inet or inet_server_port()<>55487 or exists(select 1 from public.tenants) then raise exception 'WRONG_TEST_DATABASE';end if;end$$;
 begin;
 insert into public.tenants(id,name,slug) values ('11000000-0000-0000-0000-000000000001','Synthetic','mkt-scope-a'),('11000000-0000-0000-0000-000000000002','Synthetic 2','mkt-scope-b');
 insert into auth.users(id) values ('22000000-0000-0000-0000-000000000002');
