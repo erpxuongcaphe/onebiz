@@ -10,8 +10,13 @@ Mục tiêu: cho người quản trị chọn đúng quyền theo quán, không 
 
 Không mặc định coi mọi quyền đang báo “chưa thể chỉnh riêng” là lỗi: số này gồm quyền dùng chung và quyền theo cơ chế khác. Không tự chuyển quyền cũ hoặc phân công nhân sự khi phát hành.
 
-## Tiến độ thử nghiệm Hub
+## Tiến độ triển khai
 
-- Đã chuẩn bị ba hàm lõi `ops_can`, `ops_manager`, `ops_q_can`, công việc cộng tác, danh sách Hub, bằng chứng, đường xử lý QC và lối vào giao diện để xét quyền riêng tại chi nhánh. Bản này chỉ ở nhánh thử và chưa đưa các quyền Hub vào danh mục có thể chỉnh.
+- Đã chuẩn bị ba hàm lõi `ops_can`, `ops_manager`, `ops_q_can`, công việc cộng tác, danh sách Hub, bằng chứng, đường xử lý QC và lối vào giao diện để xét quyền riêng tại chi nhánh. Các quyền này đã đưa vào danh mục có thể chỉnh theo chi nhánh.
 - PostgreSQL thử nghiệm đã kiểm tra cấp tại một quán, chặn tại quán khác, so sánh quyền cũ, QC, bằng chứng, bình luận cộng tác và quyền chặn toàn tài khoản; dữ liệu thử đã được hoàn tác. Phân công văn phòng ở quán khác giữ hành vi cũ khi không có ngoại lệ.
-- Chưa phát hành: tiếp tục kiểm tra các đường đọc/ghi khác, quyền MKT và các nhóm còn lại trước khi bật danh mục. Ba migration thử có phiên bản sớm hơn lịch sử production hiện tại; phải dùng thư mục triển khai tách riêng, dry-run đúng danh sách và kiểm tra lịch sử trước khi áp, không chạy `include-all` trên toàn kho.
+- Khi phát hành đã dùng thư mục migration tách riêng và dry-run đúng danh sách; tiếp tục áp dụng nguyên tắc này cho các nhóm còn lại, không chạy `include-all` trên toàn kho.
+
+- PR #990 đã triển khai lên ONEBIZ: 7 quyền Hub theo chi nhánh, có lựa chọn cả nhóm. Không tự gán ngoại lệ cho nhân viên. Trước phát hành đã đối chiếu 994 phép kiểm tra quyền cũ; sau phát hành đã mở hồ sơ và POS, ba điểm in có tín hiệu. Chưa thử in giấy thực tế.
+- Giao diện đang tách rõ các quyền toàn công ty khỏi các quyền chưa hỗ trợ giới hạn theo quán tại PR #991.
+- Nhóm Marketing vẫn đang chuẩn bị trên nhánh thử; chưa mở quyền theo chi nhánh vì còn phải bảo đảm các đường đọc, ghi và liên kết cùng phạm vi. Không áp các migration Marketing riêng lẻ lên production.
+- Ưu tiên quyền theo nghiệp vụ có dữ liệu chi nhánh; quyền in hiện tại, quyền dùng chung và các quyền cũ không tự đổi. Không làm thêm cơ chế tách giả cho dữ liệu toàn công ty.
