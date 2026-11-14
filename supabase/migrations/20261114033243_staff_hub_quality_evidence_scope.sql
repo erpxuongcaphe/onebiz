@@ -37,6 +37,9 @@ do $$declare body text; patched text; sig text; begin
  if position('public.ops_has_permission(''ops.view'')' in body)=0 or position('public.ops_has_permission(''ops.work'')' in body)=0 then raise exception 'HUB_EVIDENCE_PATCH_MISSING';end if;
  patched:=replace(body,'public.ops_has_permission(''ops.view'')','public._staff_hub_any_view(p.id)');
  patched:=replace(patched,'public.ops_has_permission(''ops.work'')','public._staff_permission_at_scope(p.id,''ops.work'',t.branch_id)');
+ if position('or p.id=any(t.collaborators) or public.ops_can(t.branch_id,''verify'')' in patched)=0 then raise exception 'HUB_EVIDENCE_LEGACY_COLLABORATOR_PATCH_MISSING';end if;
+ patched:=replace(patched,'or p.id=any(t.collaborators) or public.ops_can(t.branch_id,''verify'')',
+  'or (p.id=any(t.collaborators) and (not exists(select 1 from public.user_branch_permission_overrides o where o.user_id=p.id and o.branch_id=t.branch_id and o.permission_code=''ops.work'') or public._staff_permission_at_scope(p.id,''ops.work'',t.branch_id))) or public.ops_can(t.branch_id,''verify'')');
  execute patched;
 
  sig:='public.ops_person_eligible(uuid,uuid,text)';

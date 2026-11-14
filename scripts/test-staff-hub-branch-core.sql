@@ -1,5 +1,5 @@
 \set ON_ERROR_STOP on
-do $$begin if current_database() not in ('onebiz_hub_scope_20261114','onebiz_hub_scope_v2_20261114','onebiz_hub_scope_v3_20261114') or inet_server_addr()<>'127.0.0.1'::inet or inet_server_port()<>55487 or exists(select 1 from public.tenants) then raise exception 'WRONG_TEST_DATABASE'; end if; end$$;
+do $$begin if current_database() not in ('onebiz_hub_scope_20261114','onebiz_hub_scope_v2_20261114','onebiz_hub_scope_v3_20261114','onebiz_hub_scope_v4_20261114') or inet_server_addr()<>'127.0.0.1'::inet or inet_server_port()<>55487 or exists(select 1 from public.tenants) then raise exception 'WRONG_TEST_DATABASE'; end if; end$$;
 begin;
 insert into public.tenants(id,name,slug) values ('11000000-0000-0000-0000-000000000001','Synthetic','hub-scope-test');
 insert into auth.users(id) values ('22000000-0000-0000-0000-000000000002');
@@ -15,7 +15,7 @@ insert into public.user_branches(user_id,branch_id) values ('22000000-0000-0000-
 insert into public.ops_members(tenant_id,branch_id,user_id,member_role,capabilities,active) values
  ('11000000-0000-0000-0000-000000000001','33000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000002','manager',array['close_period'],true),
  ('11000000-0000-0000-0000-000000000001','33000000-0000-0000-0000-000000000002','22000000-0000-0000-0000-000000000002','manager',array['close_period'],true);
-insert into public.staff_branch_permission_catalog(permission_code,enforcement_version) values ('ops.view',1),('ops.close_period',1),('ops.verify',1);
+insert into public.staff_branch_permission_catalog(permission_code,enforcement_version) values ('ops.view',1),('ops.work',1),('ops.close_period',1),('ops.verify',1);
 select set_config('request.jwt.claim.sub','22000000-0000-0000-0000-000000000002',true);
 create function pg_temp.ops_can_baseline(p_branch uuid,p_cap text) returns boolean language sql stable as $$
  select exists(select 1 from public.profiles p join public.branches b on b.tenant_id=p.tenant_id
@@ -63,6 +63,19 @@ do $$declare page jsonb; workspace jsonb; filtered jsonb;begin
   raise exception 'EVIDENCE_SCOPE_BYPASSED';
  exception when raise_exception then if sqlerrm<>'OPS_FORBIDDEN' then raise;end if; end;
 end$$;
+-- Existing non-QC collaborators could attach evidence without a global work grant.
+delete from public.role_permissions where role_id='44000000-0000-0000-0000-000000000001' and permission_code='ops.work';
+do $$begin if public.ops_evidence_reserve_before_lifecycle('todo','55000000-0000-0000-0000-000000000001','legacy.png','image/png',32)->>'id' is null then raise exception 'LEGACY_COLLABORATOR_UPLOAD_CHANGED';end if;end$$;
+insert into public.role_permissions(role_id,permission_code) values ('44000000-0000-0000-0000-000000000001','ops.work');
+insert into public.user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
+ ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000002','33000000-0000-0000-0000-000000000001','ops.work','revoke','22000000-0000-0000-0000-000000000002');
+do $$begin
+ begin
+  perform public.ops_evidence_reserve_before_lifecycle('todo','55000000-0000-0000-0000-000000000001','blocked.png','image/png',32);
+  raise exception 'EVIDENCE_WORK_REVOKE_BYPASSED';
+ exception when raise_exception then if sqlerrm<>'OPS_FORBIDDEN' then raise;end if;end;
+end$$;
+delete from public.user_branch_permission_overrides where user_id='22000000-0000-0000-0000-000000000002' and branch_id='33000000-0000-0000-0000-000000000001' and permission_code='ops.work';
 update public.ops_members set member_role='reviewer' where branch_id='33000000-0000-0000-0000-000000000002';
 insert into public.ops_q_grants(tenant_id,branch_id,user_id,can_audit,can_correct,can_accounting,active) values
  ('11000000-0000-0000-0000-000000000001','33000000-0000-0000-0000-000000000002','22000000-0000-0000-0000-000000000002',true,false,false,true);
@@ -99,7 +112,6 @@ do $$declare page jsonb;begin
 end$$;
 insert into auth.users(id) values ('22000000-0000-0000-0000-000000000003');
 insert into public.profiles(id,tenant_id,branch_id,full_name,role) values ('22000000-0000-0000-0000-000000000003','11000000-0000-0000-0000-000000000001','33000000-0000-0000-0000-000000000001','Synthetic branch-only worker','staff');
-insert into public.staff_branch_permission_catalog(permission_code,enforcement_version) values ('ops.work',1);
 insert into public.user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
  ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000003','33000000-0000-0000-0000-000000000001','ops.view','grant','22000000-0000-0000-0000-000000000002'),
  ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000003','33000000-0000-0000-0000-000000000001','ops.work','grant','22000000-0000-0000-0000-000000000002');
