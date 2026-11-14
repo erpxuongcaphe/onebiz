@@ -163,6 +163,7 @@ do $$begin
   raise exception 'MKT_GLOBAL_MANAGE_DENY_BYPASSED';
  exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
 end$$;
+select public.mkt_create_content_item('66000000-0000-0000-0000-000000000001','77000000-0000-0000-0000-000000000001','Independent split content','other','low','88000000-0000-0000-0000-000000000001');
 select public.mkt_create_work_package('66000000-0000-0000-0000-000000000001','other','Independent split access',null,null,null,null);
 insert into public.user_permission_overrides(tenant_id,user_id,permission_code,override_type) values ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000002','mkt.split_work_packages','revoke');
 do $$begin
