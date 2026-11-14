@@ -34,6 +34,7 @@ export interface Invoice extends FnbInvoiceContext {
   shippingFee: number;
   taxAmount: number;
   paid: number;
+  paymentMethod?: string;
   /** 00179: tiền khách đưa thực tế tại POS (>= paid khi có thối). undefined = không ghi nhận. */
   amountTendered?: number;
   debt: number;

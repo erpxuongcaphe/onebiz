@@ -88,16 +88,15 @@ function Workspace(){
     });
   };
   const credit=current?entered.reduce((sum,i)=>sum+Number(quantities[i.id])*Number(current.items.find(x=>x.id===i.id)?.credit_per_unit??0),0):0;
-  const debtReduced=Math.min(current?.invoice_debt??0,credit);
   const submit=async()=>{
     if(lock.current||(!request.current&&(!canAct||!valid||!preview)))return;
     lock.current=true;setBusy(true);setError('');
     const saved=request.current??{key:crypto.randomUUID(),action,id:current?.id??source!.id,items:entered.map(i=>({itemId:i.id,quantity:Number(quantities[i.id])})),note:note.trim()};
     remember(saved);
     try{
-      const result=await submitInternalReturn(saved.action,saved.id,saved.items,saved.note,saved.key);
+      await submitInternalReturn(saved.action,saved.id,saved.items,saved.note,saved.key);
       remember(undefined);setUnresolved(false);setPreview(false);setQuantities({});setNote('');
-      setSuccess(saved.action==='send'?'Đã gửi trả. Hàng đang đi, chờ Kho Tổng xác nhận thực nhận.':`Đã nhận trả. Giảm nợ ${formatNumber(result.debtReduced??0)}đ · Chờ hoàn/cấn trừ ${formatNumber(result.refundPending??0)}đ.`);
+      setSuccess(saved.action==='send'?'Đã gửi trả. Hàng đang đi, chờ Kho Tổng xác nhận thực nhận.':`Đã nhận trả. Đã ghi nhận hàng thực nhận; không phát sinh thu, chi hoặc công nợ.`);
       await refresh();
     }catch(e){
       const rolledBack=e instanceof Error&&'confirmedRollback' in e&&e.confirmedRollback===true;
@@ -166,12 +165,12 @@ function Workspace(){
         </details>}
         {canAct&&(action==='receive'||eligibleItems.length>0)&&<><label className="block space-y-1 text-sm"><span>{action==='send'?'Lý do trả *':'Ghi chú nhận hàng'}</span><textarea className="min-h-16 w-full rounded border bg-background p-2" maxLength={500} value={note} disabled={frozen||preview} onChange={e=>setNote(e.target.value)}/></label>
           {preview&&<div className="rounded border bg-muted/30 p-3 text-sm"><strong>Xem trước</strong>{entered.map(i=><p key={i.id} className="mt-1 break-words">{i.name}: {action==='send'?(i.expense?'gửi vật tư về Kho Tổng':'giảm tồn chi nhánh'):'tăng tồn Kho Tổng'} {formatNumber(Number(quantities[i.id])*i.factor)} {i.stockUnit}</p>)}
-            {current?<p className="mt-2">Dự kiến giảm nợ {formatNumber(debtReduced)}đ; chờ hoàn/cấn trừ {formatNumber(credit-debtReduced)}đ. Tính lại theo công nợ tại lúc xác nhận, không ghi chi tiền.</p>:<p className="mt-2">Kho Tổng chưa tăng tồn hoặc giảm nợ cho đến khi nhân viên kho xác nhận thực nhận.</p>}</div>}
+            {current?<p className="mt-2">Xác nhận để nhập kho theo số thực nhận. Không phát sinh thu, chi hoặc công nợ.</p>:<p className="mt-2">Kho Tổng sẽ tăng tồn khi xác nhận thực nhận.</p>}</div>}
           {!unresolved&&<div className="flex flex-wrap justify-end gap-2">{preview&&<Button variant="outline" disabled={busy} onClick={()=>setPreview(false)}>Sửa lại</Button>}
             <Button disabled={busy||!valid||loading} onClick={()=>preview?void submit():setPreview(true)}>{busy?'Đang ghi nhận…':preview?(current?'Xác nhận thực nhận':'Xác nhận gửi trả'):'Xem trước'}</Button></div>}
         </>}
-        {current&&<details className="border-t pt-3"><summary className="cursor-pointer text-sm font-medium">Lịch sử · {current.events.length} lần</summary><ol className="mt-2 space-y-2 text-sm">{current.events.map(e=><li key={e.id} className="rounded bg-muted/30 p-2"><p>{e.action==='sent'?'Gửi trả':'Nhận trả'} · {e.actor_name} · {formatDate(e.created_at)}</p>{e.action==='received'&&<p>Giảm nợ {formatNumber(e.debt_reduced)}đ · Chờ hoàn/cấn trừ {formatNumber(e.refund_pending)}đ</p>}<p className="whitespace-pre-wrap">{e.note}</p></li>)}</ol></details>}
-        {current&&user?.id&&current.to_branch_id===branch&&hasPermissionAtBranch('inventory.internal_return_settle',branch||null)&&<InternalReturnFinancePanel key={current.id} returnId={current.id} userId={user.id} canRefund={hasPermissionAtBranch('finance.create_transaction',branch||null)}/>}
+        {current&&<details className="border-t pt-3"><summary className="cursor-pointer text-sm font-medium">Lịch sử · {current.events.length} lần</summary><ol className="mt-2 space-y-2 text-sm">{current.events.map(e=><li key={e.id} className="rounded bg-muted/30 p-2"><p>{e.action==='sent'?'Gửi trả':'Nhận trả'} · {e.actor_name} · {formatDate(e.created_at)}</p>{e.action==='received'&&(e.debt_reduced>0||e.refund_pending>0)&&<p>Giảm nợ {formatNumber(e.debt_reduced)}đ · Chờ hoàn/cấn trừ {formatNumber(e.refund_pending)}đ</p>}<p className="whitespace-pre-wrap">{e.note}</p></li>)}</ol></details>}
+        {current&&current.events.some(event=>event.refund_pending>0)&&user?.id&&current.to_branch_id===branch&&hasPermissionAtBranch('inventory.internal_return_settle',branch||null)&&<InternalReturnFinancePanel key={current.id} returnId={current.id} userId={user.id} canRefund={hasPermissionAtBranch('finance.create_transaction',branch||null)}/>}
       </section>}
     </>}
   </main>;

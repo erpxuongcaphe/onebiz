@@ -799,6 +799,7 @@ function mapInvoice(row: any): Invoice {
     // 00331/00332: đơn đặt hàng nằm chung bảng invoices. Hai trường này để màn
     // danh sách phân biệt "nháp chưa bán" với "đơn gốc đã có hóa đơn con".
     source: row.source ?? undefined,
+    paymentMethod: row.payment_method ?? undefined,
     fulfilledById: row.fulfilled_by_id ?? undefined,
     branchId: row.branch_id ?? undefined,
     branchName: branch?.name ?? undefined,
