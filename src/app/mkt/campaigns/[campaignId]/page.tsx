@@ -108,7 +108,7 @@ export default async function CampaignDetailPage({
   const canSplit = campaignPermissions.canSplit;
   const needsMembers =
     (activeTab === "channels" && (canManage || canSplit)) ||
-    (activeTab === "tasks" && Boolean(ctx.isLead));
+    (activeTab === "tasks" && (Boolean(ctx.isLead) || canManage));
   const needsPillars =
     activeTab === "content" ||
     (activeTab === "channels" && (canManage || canSplit));
@@ -118,7 +118,7 @@ export default async function CampaignDetailPage({
       ? getMktMembers(supabase, ctx.tenantId ?? undefined)
       : Promise.resolve([]),
     needsPillars ? getPillars(supabase) : Promise.resolve([]),
-    activeTab === "tasks" && ctx.isLead
+    activeTab === "tasks" && (ctx.isLead || canManage)
       ? getLeaderQueue(supabase).then((items) =>
           items.filter((item) => item.campaignId === campaignId),
         )
@@ -532,7 +532,7 @@ export default async function CampaignDetailPage({
         {/* Bảng công việc */}
         {activeTab === "tasks" ? (
           <section className="space-y-3">
-            {ctx.isLead && campaignQueue.length > 0 ? (
+            {(ctx.isLead || canManage) && campaignQueue.length > 0 ? (
               <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
                 <div className="mb-2 flex items-center gap-2 font-semibold text-amber-800">
                   <Icon name="manage_accounts" size={18} />
