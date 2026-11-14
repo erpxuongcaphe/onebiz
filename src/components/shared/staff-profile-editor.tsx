@@ -123,8 +123,11 @@ export function StaffProfileEditor({
       return false;
     return true;
   });
+  const companyWideOnly = branchId
+    ? catalog.filter((p) => Boolean(COMPANY_WIDE_STAFF_PERMISSIONS[p.code]))
+    : [];
   const notBranchConfigurable = branchId
-    ? catalog.filter((p) => !SHARED_DATA_STAFF_PERMISSIONS.has(p.code) && !snapshot.branchPermissionCodes.includes(p.code))
+    ? catalog.filter((p) => !SHARED_DATA_STAFF_PERMISSIONS.has(p.code) && !COMPANY_WIDE_STAFF_PERMISSIONS[p.code] && !snapshot.branchPermissionCodes.includes(p.code))
     : [];
   const displayed = scopedCatalog.filter((p) => {
     if (group !== "all" && p.group !== group) return false;
@@ -628,6 +631,27 @@ export function StaffProfileEditor({
                       ? `Đang chỉnh riêng tại ${branchName(branchId)}. Chỉ các quyền đã hỗ trợ phạm vi chi nhánh xuất hiện bên dưới. Quyền sửa danh mục chung nằm ở mục Sửa dữ liệu dùng chung.`
                       : "Quyền chung là mặc định cho tài khoản; quyền nghiệp vụ vẫn chịu giới hạn chi nhánh được truy cập. Chặn chung được ưu tiên trước quyền cấp riêng tại chi nhánh. Các quyền xem toàn công ty được ghi rõ theo tên quyền."}
                 </p>
+                {branchId && companyWideOnly.length > 0 && (
+                  <details className="rounded-lg border bg-muted/30 p-3 text-sm">
+                    <summary className="cursor-pointer font-medium">
+                      {companyWideOnly.length} quyền áp dụng toàn công ty
+                    </summary>
+                    <p className="mt-2">Các quyền này có phạm vi toàn công ty theo chức năng. Muốn xem hoặc chỉnh, mở quyền chung của tài khoản.</p>
+                    <ul className="mt-2 list-disc space-y-1 pl-5">
+                      {companyWideOnly.map((p) => (
+                        <li key={p.code}>
+                          {p.label} · {p.group}{" "}
+                          <button type="button" className="font-medium underline" onClick={() => {
+                            setScope("company");
+                            setGroup("all");
+                            setFilter("all");
+                            setSearch(p.code);
+                          }}>Xem quyền chung: {p.label}</button>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
                 {branchId && notBranchConfigurable.length > 0 && (
                   <details className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
                     <summary className="cursor-pointer font-medium">
