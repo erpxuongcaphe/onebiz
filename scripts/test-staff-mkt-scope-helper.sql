@@ -69,6 +69,7 @@ do $$declare created jsonb;begin
   perform public.mkt_update_campaign('66000000-0000-0000-0000-000000000003','{"name":"Changed shared"}'::jsonb);
   raise exception 'MKT_BRANCH_GRANT_SHARED_UPDATE_ALLOWED';
  exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ perform public.mkt_update_campaign('66000000-0000-0000-0000-000000000001','{"branchId":"33000000-0000-0000-0000-000000000001"}'::jsonb);
  perform public.mkt_update_campaign('66000000-0000-0000-0000-000000000001','{"name":"Changed A"}'::jsonb);
  begin
   perform public.mkt_update_campaign('66000000-0000-0000-0000-000000000001','{"branchId":"33000000-0000-0000-0000-000000000002"}'::jsonb);
