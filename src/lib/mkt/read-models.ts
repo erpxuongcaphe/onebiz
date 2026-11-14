@@ -48,6 +48,14 @@ export async function getMktManageableCampaignIds(supabase: MktSupabaseClient, i
   return data ?? [];
 }
 
+export async function getMktReviewableContentIds(supabase: MktSupabaseClient, ids: string[]): Promise<string[]> {
+  if (ids.length === 0) return [];
+  const db = getMktDatabaseClient(supabase);
+  const { data, error } = await db.rpc<string[]>("mkt_reviewable_content_ids", { p_content_ids: ids });
+  if (error) throw new Error(`MKT_READ_FAILED:reviewable_content:${error.message}`);
+  return data ?? [];
+}
+
 /** Danh sách nhân sự cùng tenant để chọn assignee/owner/reviewer. */
 export async function getMktMembers(
   supabase: MktSupabaseClient,
