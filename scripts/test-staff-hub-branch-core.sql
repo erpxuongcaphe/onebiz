@@ -120,5 +120,11 @@ do $$declare v integer;begin
  select version into v from public.ops_todos where id='55000000-0000-0000-0000-000000000001';
  perform public.ops_quality_execute_core('issue_assign',jsonb_build_object('branchId','33000000-0000-0000-0000-000000000001','id','66000000-0000-0000-0000-000000000001','version',v,'note','Synthetic assignment','departmentId',null,'operatorId','22000000-0000-0000-0000-000000000003','collaborators',jsonb_build_array('22000000-0000-0000-0000-000000000003')),gen_random_uuid());
  if not exists(select 1 from public.ops_q_issues where id='66000000-0000-0000-0000-000000000001' and operator_id='22000000-0000-0000-0000-000000000003') then raise exception 'QC_BRANCH_ONLY_ASSIGNMENT_FAILED';end if;
+ update public.user_branch_permission_overrides set override_type='revoke' where user_id='22000000-0000-0000-0000-000000000003' and branch_id='33000000-0000-0000-0000-000000000001' and permission_code='ops.work';
+ select version into v from public.ops_todos where id='55000000-0000-0000-0000-000000000001';
+ begin
+  perform public.ops_quality_execute_core('issue_assign',jsonb_build_object('branchId','33000000-0000-0000-0000-000000000001','id','66000000-0000-0000-0000-000000000001','version',v,'note','Synthetic assignment','departmentId',null,'operatorId','22000000-0000-0000-0000-000000000003','collaborators',jsonb_build_array('22000000-0000-0000-0000-000000000003')),gen_random_uuid());
+  raise exception 'QC_REVOKED_WORKER_ASSIGNED';
+ exception when raise_exception then if sqlerrm<>'OPS_FORBIDDEN' then raise;end if;end;
 end$$;
 rollback;
