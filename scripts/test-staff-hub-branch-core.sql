@@ -95,4 +95,16 @@ do $$declare page jsonb;begin
   raise exception 'COMMENT_CROSS_BRANCH_ALLOWED';
  exception when insufficient_privilege then if sqlerrm<>'OPS_FORBIDDEN' then raise;end if;end;
 end$$;
+insert into auth.users(id) values ('22000000-0000-0000-0000-000000000003');
+insert into public.profiles(id,tenant_id,branch_id,full_name,role) values ('22000000-0000-0000-0000-000000000003','11000000-0000-0000-0000-000000000001','33000000-0000-0000-0000-000000000001','Synthetic branch-only worker','staff');
+insert into public.staff_branch_permission_catalog(permission_code,enforcement_version) values ('ops.work',1);
+insert into public.user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
+ ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000003','33000000-0000-0000-0000-000000000001','ops.view','grant','22000000-0000-0000-0000-000000000002'),
+ ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000003','33000000-0000-0000-0000-000000000001','ops.work','grant','22000000-0000-0000-0000-000000000002');
+insert into public.ops_q_issues(id,tenant_id,branch_id,todo_id) values ('66000000-0000-0000-0000-000000000001','11000000-0000-0000-0000-000000000001','33000000-0000-0000-0000-000000000001','55000000-0000-0000-0000-000000000001');
+do $$declare v integer;begin
+ select version into v from public.ops_todos where id='55000000-0000-0000-0000-000000000001';
+ perform public.ops_quality_execute_core('issue_assign',jsonb_build_object('branchId','33000000-0000-0000-0000-000000000001','id','66000000-0000-0000-0000-000000000001','version',v,'note','Synthetic assignment','departmentId',null,'operatorId','22000000-0000-0000-0000-000000000003','collaborators',jsonb_build_array('22000000-0000-0000-0000-000000000003')),gen_random_uuid());
+ if not exists(select 1 from public.ops_q_issues where id='66000000-0000-0000-0000-000000000001' and operator_id='22000000-0000-0000-0000-000000000003') then raise exception 'QC_BRANCH_ONLY_ASSIGNMENT_FAILED';end if;
+end$$;
 rollback;
