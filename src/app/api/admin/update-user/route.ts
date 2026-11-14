@@ -178,6 +178,9 @@ export async function POST(req: NextRequest) {
         p_branch_ids: branchIds,
       });
       if (error) {
+        if (error.message.includes("STAFF_OPS_USE_UNIFIED_EDITOR")) {
+          return NextResponse.json({ success: false, message: "Nhân viên còn phân công Hub hoặc QC tại chi nhánh vừa bỏ. Nhờ chủ doanh nghiệp mở Phân công & quyền truy cập để xem và lưu cùng lúc." }, { status: 409 });
+        }
         return NextResponse.json(
           { success: false, message: `Không cập nhật được hồ sơ và quyền chi nhánh: ${error.message}` },
           { status: 500 },

@@ -1,13 +1,16 @@
 "use client";
+import { useId } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EMPTY_STAFF_FILTERS, type StaffDirectoryFilters } from "@/lib/admin/staff-directory";
 
 type Option = { id: string; name: string };
-export function StaffDirectoryFilterBar({ value, onChange, branches, departments, count, total }: {
+export function StaffDirectoryFilterBar({ value, onChange, branches, departments, count, total, suggestions = [] }: {
   value: StaffDirectoryFilters; onChange: (next: StaffDirectoryFilters) => void;
   branches: Option[]; departments: Option[]; count: number; total: number;
+  suggestions?: { id: string; fullName: string }[];
 }) {
+  const suggestionsId = useId();
   const active = value.branchIds.length + value.departmentIds.length + Number(Boolean(value.search));
   const toggle = (key: "branchIds" | "departmentIds", id: string) => onChange({ ...value,
     [key]: value[key].includes(id) ? value[key].filter(item => item !== id) : [...value[key], id] });
@@ -19,7 +22,9 @@ export function StaffDirectoryFilterBar({ value, onChange, branches, departments
           <summary className="min-h-11 cursor-pointer px-3 py-3 text-sm font-medium">{label} · {value[key].length ? `Đã chọn ${value[key].length}` : 'Tất cả trong phạm vi'}</summary>
           <div className="max-h-64 overflow-y-auto border-t p-2">{options.map(option => <label key={option.id} className="flex min-h-11 items-center gap-2 rounded-md px-2 text-sm hover:bg-muted"><input type="checkbox" className="size-4 shrink-0" checked={value[key].includes(option.id)} onChange={() => toggle(key, option.id)} />{option.name}</label>)}</div>
         </details>)}
-      <Input aria-label="Tìm nhân viên" className="min-h-12 text-base" placeholder="Tên, số điện thoại hoặc email…" value={value.search} onChange={event => onChange({ ...value, search: event.target.value })} />
+      <div><Input aria-label="Tìm nhân viên" className="min-h-12 text-base" placeholder="Tên, số điện thoại hoặc email…" list={suggestionsId} value={value.search} onChange={event => onChange({ ...value, search: event.target.value })} />
+        <datalist id={suggestionsId}>{suggestions.slice(0, 50).map(person => <option key={person.id} value={person.fullName} />)}</datalist>
+        <p className="mt-1 text-xs text-muted-foreground">Gợi ý theo chi nhánh và phòng ban đã chọn.</p></div>
     </div>
     <div className="flex flex-wrap items-center gap-2">
       <span role="status" className="mr-auto text-sm">{count}/{total} nhân viên trong phạm vi</span>
