@@ -121,6 +121,7 @@ insert into public.role_permissions(role_id,permission_code) values ('44000000-0
 do $$begin
  perform public.mkt_create_content_item('66000000-0000-0000-0000-000000000002','77000000-0000-0000-0000-000000000002','Legacy content B','other','low','88000000-0000-0000-0000-000000000001');
  perform public.mkt_create_campaign('Synthetic legacy B',null,null,null,0,'33000000-0000-0000-0000-000000000002',null,'[]');
+ perform public.mkt_create_content_item('66000000-0000-0000-0000-000000000003',null,'Legacy shared content','other','low','88000000-0000-0000-0000-000000000001');
  perform public.mkt_create_work_package('66000000-0000-0000-0000-000000000003','other','Legacy shared package',null,null,null,null);
  perform public.mkt_add_readiness_item('66000000-0000-0000-0000-000000000003','Legacy shared readiness','store','33000000-0000-0000-0000-000000000001',null);
  perform public.mkt_create_campaign('Synthetic legacy shared',null,null,null,0,null,null,'[]');
