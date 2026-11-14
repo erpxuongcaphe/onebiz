@@ -31,13 +31,54 @@ insert into public.mkt_channel_plans(id,tenant_id,work_package_id,campaign_id) v
  ('aa000000-0000-0000-0000-000000000003','11000000-0000-0000-0000-000000000001','77000000-0000-0000-0000-000000000006','66000000-0000-0000-0000-000000000002');
 insert into public.mkt_campaign_plans(id,tenant_id,campaign_id,name) values ('bb000000-0000-0000-0000-000000000001','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000002','Plan B');
 insert into public.mkt_campaign_readiness_items(id,tenant_id,campaign_id,title,required_role,required_branch_id) values ('cc000000-0000-0000-0000-000000000001','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000002','Ready B','store','33000000-0000-0000-0000-000000000002');
+insert into public.mkt_tasks(id,tenant_id,campaign_id,work_package_id,title,source_type,source_id) values
+ ('dd000000-0000-0000-0000-000000000001','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000001','77000000-0000-0000-0000-000000000001','Task A','campaign_channel_split','77000000-0000-0000-0000-000000000001'),
+ ('dd000000-0000-0000-0000-000000000002','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000002','77000000-0000-0000-0000-000000000002','Task B','campaign_channel_split','77000000-0000-0000-0000-000000000002');
 insert into public.staff_branch_permission_catalog(permission_code,enforcement_version) values ('mkt.view',1),('mkt.manage_campaigns',1),('mkt.split_work_packages',1);
 insert into public.user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
  ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000002','33000000-0000-0000-0000-000000000001','mkt.view','grant','22000000-0000-0000-0000-000000000002');
 insert into public.user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
  ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000002','33000000-0000-0000-0000-000000000001','mkt.manage_campaigns','grant','22000000-0000-0000-0000-000000000002');
 select set_config('request.jwt.claim.sub','22000000-0000-0000-0000-000000000002',true);
+set local role authenticated;
+do $$begin
+ if not (public.mkt_campaign_ui_permissions('66000000-0000-0000-0000-000000000001')->>'canManage')::boolean or (public.mkt_campaign_ui_permissions('66000000-0000-0000-0000-000000000002')->>'canManage')::boolean then raise exception 'MKT_CAMPAIGN_UI_SCOPE_FAILED';end if;
+ if not exists(select 1 from public.mkt_campaigns where id='66000000-0000-0000-0000-000000000001') then raise exception 'MKT_READ_GRANTED_BRANCH_HIDDEN';end if;
+ if exists(select 1 from public.mkt_campaigns where id in ('66000000-0000-0000-0000-000000000002','66000000-0000-0000-0000-000000000003','66000000-0000-0000-0000-000000000004')) then raise exception 'MKT_READ_OUTSIDE_SCOPE_VISIBLE';end if;
+ if not exists(select 1 from public.mkt_channel_work_packages where id='77000000-0000-0000-0000-000000000001') or exists(select 1 from public.mkt_channel_work_packages where id='77000000-0000-0000-0000-000000000002') then raise exception 'MKT_PACKAGE_READ_SCOPE_FAILED';end if;
+ if not exists(select 1 from public.mkt_content_items where id='99000000-0000-0000-0000-000000000001') or exists(select 1 from public.mkt_content_items where id='99000000-0000-0000-0000-000000000002') then raise exception 'MKT_CONTENT_READ_SCOPE_FAILED';end if;
+ if not exists(select 1 from public.mkt_tasks where id='dd000000-0000-0000-0000-000000000001') or exists(select 1 from public.mkt_tasks where id='dd000000-0000-0000-0000-000000000002') then raise exception 'MKT_TASK_READ_SCOPE_FAILED';end if;
+ if not exists(select 1 from public.mkt_channel_plans where id='aa000000-0000-0000-0000-000000000002') or exists(select 1 from public.mkt_channel_plans where id='aa000000-0000-0000-0000-000000000001') then raise exception 'MKT_PLAN_READ_SCOPE_FAILED';end if;
+end$$;
+reset role;
+update public.mkt_campaigns set owner_id='22000000-0000-0000-0000-000000000002' where id='66000000-0000-0000-0000-000000000002';
+update public.mkt_tasks set assignee_id='22000000-0000-0000-0000-000000000002' where id='dd000000-0000-0000-0000-000000000002';
+update public.mkt_channel_plans set owner_id='22000000-0000-0000-0000-000000000002' where id='aa000000-0000-0000-0000-000000000001';
+set local role authenticated;
+do $$begin if not exists(select 1 from public.mkt_campaigns where id='66000000-0000-0000-0000-000000000002') or not exists(select 1 from public.mkt_tasks where id='dd000000-0000-0000-0000-000000000002') or not exists(select 1 from public.mkt_channel_work_packages where id='77000000-0000-0000-0000-000000000002') or not exists(select 1 from public.mkt_channel_plans where id='aa000000-0000-0000-0000-000000000001') then raise exception 'MKT_ASSIGNED_OWNER_VISIBILITY_LOST';end if;end$$;
+reset role;
+update public.mkt_campaigns set owner_id=null where id='66000000-0000-0000-0000-000000000002';
+update public.mkt_tasks set assignee_id=null where id='dd000000-0000-0000-0000-000000000002';
+update public.mkt_channel_plans set owner_id=null where id='aa000000-0000-0000-0000-000000000001';
 update public.mkt_channel_plans set status='planning' where id in ('aa000000-0000-0000-0000-000000000001','aa000000-0000-0000-0000-000000000002');
+update public.mkt_tasks set task_status='reviewing' where id in ('dd000000-0000-0000-0000-000000000001','dd000000-0000-0000-0000-000000000002');
+do $$begin
+ begin
+  perform public.mkt_return_task_review('dd000000-0000-0000-0000-000000000002','Synthetic');
+  raise exception 'MKT_REVIEW_OTHER_BRANCH_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ perform public.mkt_return_task_review('dd000000-0000-0000-0000-000000000001','Synthetic');
+ update public.mkt_tasks set reviewer_id='22000000-0000-0000-0000-000000000002' where id='dd000000-0000-0000-0000-000000000002';
+ perform public.mkt_return_task_review('dd000000-0000-0000-0000-000000000002','Assigned reviewer');
+ begin
+  perform public.mkt_review_plan('aa000000-0000-0000-0000-000000000001',null,'approve',null);
+  raise exception 'MKT_PLAN_REVIEW_CROSS_BRANCH_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ begin
+  perform public.mkt_review_plan('aa000000-0000-0000-0000-000000000002',null,'approve',null);
+  raise exception 'MKT_PLAN_REVIEW_INVALID_STATE_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INVALID_STATE' then raise;end if;end;
+end$$;
 do $$begin
  perform public.mkt_save_plan_strategy('aa000000-0000-0000-0000-000000000002','Allowed branch');
  perform public.mkt_save_plan_items('aa000000-0000-0000-0000-000000000002','[]'::jsonb);

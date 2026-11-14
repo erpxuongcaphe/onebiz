@@ -35,7 +35,7 @@ describe("MKT content deletion", () => {
     expect(controls).toContain("export function DeleteContentButton");
     expect(controls).toContain("mktDelete(");
     expect(controls).toContain("/api/mkt/v1/contents/");
-    expect(campaignPage).toContain("canManage || ctx.canSplit");
+    expect(campaignPage).toContain("canManage || canSplit");
     expect(campaignPage).toContain("<DeleteContentButton");
   });
 });

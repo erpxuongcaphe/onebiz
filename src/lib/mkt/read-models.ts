@@ -25,6 +25,14 @@ export async function getMktContext(supabase: MktSupabaseClient): Promise<MktCon
   return (data as MktContext) ?? { canView: false };
 }
 
+/** Effective controls on this campaign, separate from shared-data permissions. */
+export async function getMktCampaignPermissions(supabase: MktSupabaseClient, campaignId: string): Promise<{ canManage: boolean; canSplit: boolean }> {
+  const db = getMktDatabaseClient(supabase);
+  const { data, error } = await db.rpc<{ canManage: boolean; canSplit: boolean }>("mkt_campaign_ui_permissions", { p_campaign_id: campaignId });
+  if (error) throw new Error(`MKT_READ_FAILED:campaign_permissions:${error.message}`);
+  return { canManage: Boolean(data?.canManage), canSplit: Boolean(data?.canSplit) };
+}
+
 /** Danh sách nhân sự cùng tenant để chọn assignee/owner/reviewer. */
 export async function getMktMembers(
   supabase: MktSupabaseClient,
