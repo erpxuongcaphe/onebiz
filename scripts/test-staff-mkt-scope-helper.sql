@@ -14,6 +14,13 @@ insert into public.mkt_campaigns(id,tenant_id,branch_id,name) values
  ('66000000-0000-0000-0000-000000000002','11000000-0000-0000-0000-000000000001','33000000-0000-0000-0000-000000000002','Synthetic B'),
  ('66000000-0000-0000-0000-000000000003','11000000-0000-0000-0000-000000000001',null,'Synthetic shared'),
  ('66000000-0000-0000-0000-000000000004','11000000-0000-0000-0000-000000000002',null,'Synthetic other tenant');
+insert into public.mkt_channel_work_packages(id,tenant_id,campaign_id,channel_type,title) values
+ ('77000000-0000-0000-0000-000000000001','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000001','other','Synthetic package A'),
+ ('77000000-0000-0000-0000-000000000002','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000002','other','Synthetic package B');
+insert into public.mkt_content_pillars(id,tenant_id,code,name) values ('88000000-0000-0000-0000-000000000001','11000000-0000-0000-0000-000000000001','SYN','Synthetic');
+insert into public.mkt_content_items(id,tenant_id,campaign_id,work_package_id,pillar_id,title) values
+ ('99000000-0000-0000-0000-000000000001','11000000-0000-0000-0000-000000000001',null,'77000000-0000-0000-0000-000000000001','88000000-0000-0000-0000-000000000001','Synthetic content A'),
+ ('99000000-0000-0000-0000-000000000002','11000000-0000-0000-0000-000000000001',null,'77000000-0000-0000-0000-000000000002','88000000-0000-0000-0000-000000000001','Synthetic content B');
 insert into public.staff_branch_permission_catalog(permission_code,enforcement_version) values ('mkt.view',1);
 insert into public.user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
  ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000002','33000000-0000-0000-0000-000000000001','mkt.view','grant','22000000-0000-0000-0000-000000000002');
@@ -23,6 +30,14 @@ do $$declare u uuid:='22000000-0000-0000-0000-000000000002';begin
   or public._staff_mkt_campaign_permission(u,'mkt.view','66000000-0000-0000-0000-000000000003')
   or public._staff_mkt_campaign_permission(u,'mkt.view','66000000-0000-0000-0000-000000000004') then raise exception 'MKT_BRANCH_SCOPE_FAILED';end if;
  if has_function_privilege('authenticated','public._staff_mkt_campaign_permission(uuid,text,uuid)','execute') or has_function_privilege('anon','public._staff_mkt_campaign_permission(uuid,text,uuid)','execute') then raise exception 'MKT_PRIVATE_HELPER_EXPOSED';end if;
+ if not public._staff_mkt_linked_permission(u,'mkt.view',null,'77000000-0000-0000-0000-000000000001',null,null)
+  or public._staff_mkt_linked_permission(u,'mkt.view',null,'77000000-0000-0000-0000-000000000002',null,null)
+  or public._staff_mkt_linked_permission(u,'mkt.view','66000000-0000-0000-0000-000000000001','77000000-0000-0000-0000-000000000002',null,null)
+  or public._staff_mkt_linked_permission(u,'mkt.view',null,'77000000-0000-0000-0000-000000000099',null,null)
+  or not public._staff_mkt_linked_permission(u,'mkt.view',null,null,'99000000-0000-0000-0000-000000000001',null)
+  or public._staff_mkt_linked_permission(u,'mkt.view',null,null,'99000000-0000-0000-0000-000000000002',null)
+  or public._staff_mkt_linked_permission(u,'mkt.view',null,null,null,null) then raise exception 'MKT_INDIRECT_SCOPE_FAILED';end if;
+ if has_function_privilege('authenticated','public._staff_mkt_linked_permission(uuid,text,uuid,uuid,uuid,uuid)','execute') then raise exception 'MKT_LINKED_HELPER_EXPOSED';end if;
 end$$;
 insert into public.role_permissions(role_id,permission_code) values ('44000000-0000-0000-0000-000000000001','mkt.view');
 insert into public.user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
