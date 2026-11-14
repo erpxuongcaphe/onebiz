@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Icon } from "@/components/ui/icon";
 import { getMktRequestContext } from "@/lib/mkt/request-context";
-import { getApprovals } from "@/lib/mkt/read-models";
+import { getApprovals, getMktReviewableContentIds } from "@/lib/mkt/read-models";
 import { ContentStatusBadge, RiskBadge } from "@/components/mkt/badges";
 import { ReviewActions } from "@/components/mkt/review-actions";
 
@@ -29,6 +29,7 @@ export default async function ApprovalsPage({
   }
 
   const allItems = await getApprovals(supabase);
+  const reviewable = new Set(await getMktReviewableContentIds(supabase, allItems.map((item) => item.id)));
   // Nội dung được deep-link từ Telegram: ghim lên đầu + viền nổi bật
   const items = highlightId
     ? [...allItems].sort((a, b) => (a.id === highlightId ? -1 : b.id === highlightId ? 1 : 0))
@@ -151,11 +152,11 @@ export default async function ApprovalsPage({
                 ) : null}
 
                 <div className="mt-4 border-t border-outline-variant pt-3">
-                  <ReviewActions
+                  {reviewable.has(item.id) ? <ReviewActions
                     contentId={item.id}
                     riskLevel={item.riskLevel}
                     canOverride={Boolean(ctx.canOverride)}
-                  />
+                  /> : <p className="text-sm text-on-surface-variant">Bạn được xem nội dung này nhưng không có quyền duyệt tại chi nhánh liên quan.</p>}
                 </div>
               </article>
             ))}

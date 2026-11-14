@@ -17,6 +17,8 @@ Không mặc định coi mọi quyền đang báo “chưa thể chỉnh riêng�
 - Khi phát hành đã dùng thư mục migration tách riêng và dry-run đúng danh sách; tiếp tục áp dụng nguyên tắc này cho các nhóm còn lại, không chạy `include-all` trên toàn kho.
 
 - PR #990 đã triển khai lên ONEBIZ: 7 quyền Hub theo chi nhánh, có lựa chọn cả nhóm. Không tự gán ngoại lệ cho nhân viên. Trước phát hành đã đối chiếu 994 phép kiểm tra quyền cũ; sau phát hành đã mở hồ sơ và POS, ba điểm in có tín hiệu. Chưa thử in giấy thực tế.
-- Giao diện đang tách rõ các quyền toàn công ty khỏi các quyền chưa hỗ trợ giới hạn theo quán tại PR #991.
-- Nhóm Marketing vẫn đang chuẩn bị trên nhánh thử; chưa mở quyền theo chi nhánh vì còn phải bảo đảm các đường đọc, ghi và liên kết cùng phạm vi. Không áp các migration Marketing riêng lẻ lên production.
+- PR #991 đã tách rõ các quyền toàn công ty khỏi các quyền chưa hỗ trợ giới hạn theo quán.
+- PR #992 đã triển khai ba quyền Marketing `mkt.view`, `mkt.manage_campaigns`, `mkt.split_work_packages` theo chi nhánh. Các quyền Marketing còn lại chưa được chứng nhận hỗ trợ chỉnh riêng theo chi nhánh; không suy diễn rằng đã hoàn tất toàn bộ Marketing. Không tự gán ngoại lệ cho nhân viên.
+- Sau triển khai #992: trang nhân sự và danh sách chiến dịch mở được; POS Premium tải danh sách món; ba điểm in gửi tín hiệu. Các lệnh đã bàn giao cho bộ nhận không chứng minh giấy đã in; chưa nghiệm thu giấy thực tế trong đợt này.
+- Đối chiếu production sau #992: `mkt.review_content` chưa nằm trong danh mục quyền theo chi nhánh. Lối xem nội dung (`_staff_mkt_read_workflow`), quyết định duyệt (`mkt_review_content`) và `canReview` trong `mkt_get_my_context` vẫn xét quyền toàn tài khoản; giao diện Duyệt nội dung cũng dựa vào `canReview`. Muốn hỗ trợ riêng theo quán phải xử lý đồng bộ các đường này, quyền xem bản nộp/phản hồi liên quan và trường hợp nội dung dùng chung; giữ điều kiện duyệt rủi ro cao và các đường phân công sẵn có. Chưa bật quyền này trong danh mục cho đến khi kiểm thử đủ.
 - Ưu tiên quyền theo nghiệp vụ có dữ liệu chi nhánh; quyền in hiện tại, quyền dùng chung và các quyền cũ không tự đổi. Không làm thêm cơ chế tách giả cho dữ liệu toàn công ty.
