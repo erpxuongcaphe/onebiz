@@ -112,5 +112,5 @@ do $$declare u uuid:='22000000-0000-0000-0000-000000000002';begin
  if public._staff_mkt_campaign_permission(u,'mkt.view','66000000-0000-0000-0000-000000000002') or not public._staff_mkt_campaign_permission(u,'mkt.view','66000000-0000-0000-0000-000000000003') then raise exception 'MKT_SHARED_OR_DENY_FAILED';end if;
 end$$;
 insert into public.user_permission_overrides(tenant_id,user_id,permission_code,override_type) values ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000002','mkt.view','revoke');
-do $$begin if public._staff_mkt_campaign_permission('22000000-0000-0000-0000-000000000002','mkt.view','66000000-0000-0000-0000-000000000001') then raise exception 'MKT_GLOBAL_DENY_BYPASSED';end if;end$$;
+do $$begin if public._staff_mkt_campaign_permission('22000000-0000-0000-0000-000000000002','mkt.view','66000000-0000-0000-0000-000000000001') then raise exception 'MKT_GLOBAL_DENY_BYPASSED';end if; if public._staff_mkt_linked_permission('22000000-0000-0000-0000-000000000002','mkt.view',null,'77000000-0000-0000-0000-000000000001',null,null) then raise exception 'MKT_LINKED_GLOBAL_DENY_BYPASSED';end if;end$$;
 rollback;
