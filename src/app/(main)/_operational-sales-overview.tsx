@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useAuth, useBranchFilter } from "@/lib/contexts";
+import { useHubAccess } from "@/lib/operations/use-hub-access";
 import { useLiveDataRefresh } from "@/lib/hooks/use-live-data-refresh";
 import { useReceivingVietnamDay } from "@/lib/hooks/use-receiving-view-memory";
 import { canViewSalesDashboard, salesRange, type SalesDashboard, type SalesGrain } from "@/lib/dashboard-sales";
@@ -152,6 +153,7 @@ function useSalesReceivable(scope: string, branchId: string | undefined, day: st
 }
 
 export default function OperationalSalesOverview() {
+  const hubAllowed = useHubAccess();
   const { activeBranchId, isReady } = useBranchFilter();
   const { tenant, user, branches, hasPermission } = useAuth();
   const detailBranches = useMemo(() => branches.map(item => ({ id: item.id, name: item.name })), [branches]);
@@ -194,7 +196,7 @@ export default function OperationalSalesOverview() {
     <main className="space-y-4 p-4 sm:p-6">
       <header><h1 className="text-xl font-semibold">Công việc</h1><p className="text-sm text-muted-foreground">{branch?.name}</p></header>
       <nav aria-label="Nghiệp vụ" className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {WORK.filter(item => hasPermission(item.permission)).map(item => (
+        {WORK.filter(item => item.permission === "ops.view" ? hubAllowed : hasPermission(item.permission)).map(item => (
           <Link key={item.href} href={item.href} className="flex min-h-20 items-center gap-3 rounded-md border p-3 text-sm font-medium hover:bg-muted">
             <Icon name={item.icon} size={22} /><span>{item.label}</span>
           </Link>

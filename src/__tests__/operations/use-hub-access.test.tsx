@@ -4,7 +4,7 @@ import React from "react";
 import { useHubAccess } from "@/lib/operations/use-hub-access";
 
 const auth = vi.hoisted(() => ({
-  current: { authUser: { id: "a" } as { id: string } | null, user: { id: "a" }, hasPermission: () => true, isLoading: false },
+  current: { authUser: { id: "a" } as { id: string } | null, user: { id: "a" }, hasPermission: (): boolean => true, hasPermissionAtBranch: (() => false) as (code: string, branch: string | null) => boolean, hasAssignedBranchAccess: (() => true) as (branch: string | null) => boolean, branches: [] as { id: string }[], isLoading: false },
 }));
 vi.mock("@/lib/contexts", () => ({ useAuth: () => auth.current }));
 
@@ -26,10 +26,21 @@ function deferred<T>() {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
-  auth.current = { authUser: { id: "a" }, user: { id: "a" }, hasPermission: () => true, isLoading: false };
+  auth.current = { authUser: { id: "a" }, user: { id: "a" }, hasPermission: () => true, hasPermissionAtBranch: () => false, hasAssignedBranchAccess: () => true, branches: [], isLoading: false };
 });
 
 describe("Hub access request sharing", () => {
+  it("checks server access when Hub view is granted at an assigned branch", async () => {
+    auth.current = { ...auth.current, hasPermission: () => false, branches: [{ id: "branch-a" }], hasPermissionAtBranch: (_code, branch) => branch === "branch-a" };
+    const fetch = vi.fn().mockResolvedValue(response(true)); vi.stubGlobal("fetch", fetch);
+    render(<Menu name="nav" />); await act(async () => {});
+    expect(fetch).toHaveBeenCalledTimes(1); expect(screen.getByTestId("nav").textContent).toBe("allowed");
+  });
+  it("does not request Hub access for a grant outside assigned branches", () => {
+    auth.current = { ...auth.current, hasPermission: () => false, branches: [{ id: "branch-a" }], hasPermissionAtBranch: () => true, hasAssignedBranchAccess: () => false };
+    const fetch = vi.fn(); vi.stubGlobal("fetch", fetch); render(<Menu name="nav" />);
+    expect(fetch).not.toHaveBeenCalled(); expect(screen.getByTestId("nav").textContent).toBe("hidden");
+  });
   it("shares a pending request and rechecks when a new consumer mounts after it settles", async () => {
     const pending = deferred<ReturnType<typeof response>>();
     const fetch = vi.fn().mockReturnValueOnce(pending.promise).mockResolvedValue(response(true));

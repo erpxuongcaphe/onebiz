@@ -708,6 +708,11 @@ export function StaffProfileEditor({
                         </span>
                       </summary>
                       <div className="divide-y border-t">
+                        {branchId && permissionGroup.name === "Hub vận hành" && (
+                          <p className="bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
+                            Quyền Hub tại quán còn kết hợp với phân công Hub hoặc QC ở mục “Hub vận hành theo chi nhánh”. Bộ tiêu chuẩn dùng chung toàn công ty do chủ quản lý; cấp quyền ở quán không tự mở phần này.
+                          </p>
+                        )}
                         <div className="grid gap-2 bg-muted/30 p-4 sm:grid-cols-[minmax(0,1fr)_220px] sm:items-center">
                           <div>
                             <p className="text-sm font-medium">
