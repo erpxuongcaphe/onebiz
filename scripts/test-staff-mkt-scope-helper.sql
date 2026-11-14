@@ -155,6 +155,10 @@ do $$begin
   raise exception 'MKT_GLOBAL_STATUS_DENY_BYPASSED';
  exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
  begin
+  perform public.mkt_add_readiness_item('66000000-0000-0000-0000-000000000001','Denied readiness','store','33000000-0000-0000-0000-000000000001',null);
+  raise exception 'MKT_GLOBAL_READINESS_DENY_BYPASSED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ begin
   perform public.mkt_create_campaign('Denied globally',null,null,null,0,'33000000-0000-0000-0000-000000000001',null,'[]');
   raise exception 'MKT_GLOBAL_MANAGE_DENY_BYPASSED';
  exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
