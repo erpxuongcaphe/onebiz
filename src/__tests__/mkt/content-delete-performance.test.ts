@@ -35,7 +35,7 @@ describe("MKT content deletion", () => {
     expect(controls).toContain("export function DeleteContentButton");
     expect(controls).toContain("mktDelete(");
     expect(controls).toContain("/api/mkt/v1/contents/");
-    expect(campaignPage).toContain("canManage || ctx.canSplit");
+    expect(campaignPage).toContain("canManage || canSplit");
     expect(campaignPage).toContain("<DeleteContentButton");
   });
 });
@@ -59,7 +59,7 @@ describe("MKT read performance", () => {
     // "chưa chia việc" dù đã chia (giống workPackages/contents dùng limit 1).
     expect(readModels).toContain('activeTab === "channels" || activeTab === "tasks" ? 1000 : 1');
     expect(readModels).toContain("workloadByPackage");
-    expect(campaignPage).toContain('activeTab === "tasks" && ctx.isLead');
+    expect(campaignPage).toContain('activeTab === "tasks" && (ctx.isLead || canManage)');
     expect(campaignPage).toContain('activeTab === "readiness" && ctx.canViewAudit');
     expect(campaignPage).toContain("needsMembers");
     expect(campaignPage).toContain("needsPillars");

@@ -4,6 +4,7 @@ import { Icon } from "@/components/ui/icon";
 import { getMktRequestContext } from "@/lib/mkt/request-context";
 import { getCampaignList, type MktCampaign } from "@/lib/mkt/read-models";
 import { CampaignFormDialog } from "@/components/mkt/campaign-form-dialog";
+import { getMktCampaignCreateBranches } from "@/lib/mkt/read-models";
 import { formatVnd } from "@/lib/mkt/format";
 
 export const dynamic = "force-dynamic";
@@ -74,7 +75,8 @@ function CampaignCard({ c }: { c: MktCampaign }) {
 
 export default async function CampaignsPage() {
   const { supabase, ctx } = await getMktRequestContext();
-  const campaigns = await getCampaignList(supabase);
+  const [campaigns, createBranches] = await Promise.all([getCampaignList(supabase), getMktCampaignCreateBranches(supabase)]);
+  const canCreate = Boolean(ctx.canManageCampaigns) || createBranches.length > 0;
 
   return (
     <div className="px-4 py-4 sm:px-5 lg:px-6">
@@ -86,7 +88,7 @@ export default async function CampaignsPage() {
               Danh mục chiến dịch marketing và mức độ sẵn sàng trước khi chạy.
             </p>
           </div>
-          {ctx.canManageCampaigns ? <CampaignFormDialog /> : null}
+          {canCreate ? <CampaignFormDialog branches={createBranches} canCreateShared={Boolean(ctx.canManageCampaigns)} /> : null}
         </div>
 
         {campaigns.length > 0 ? (
@@ -98,7 +100,7 @@ export default async function CampaignsPage() {
         ) : (
           <div className="rounded-lg border border-dashed border-outline-variant bg-background p-8 text-center text-sm font-medium text-on-surface-variant">
             Chưa có chiến dịch nào.
-            {ctx.canManageCampaigns ? " Bấm “Tạo chiến dịch” để bắt đầu." : ""}
+            {canCreate ? " Bấm “Tạo chiến dịch” để bắt đầu." : ""}
           </div>
         )}
       </div>

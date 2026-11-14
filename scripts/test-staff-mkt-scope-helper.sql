@@ -1,0 +1,395 @@
+\set ON_ERROR_STOP on
+do $$begin if current_database() not in ('onebiz_hub_scope_20261114','onebiz_hub_scope_v2_20261114','onebiz_hub_scope_v3_20261114','onebiz_hub_scope_v4_20261114','onebiz_hub_scope_v5_20261114','onebiz_hub_scope_v6_20261114','onebiz_hub_scope_v7_20261114') or inet_server_addr()<>'127.0.0.1'::inet or inet_server_port()<>55487 or exists(select 1 from public.tenants) then raise exception 'WRONG_TEST_DATABASE';end if;end$$;
+begin;
+insert into public.tenants(id,name,slug) values ('11000000-0000-0000-0000-000000000001','Synthetic','mkt-scope-a'),('11000000-0000-0000-0000-000000000002','Synthetic 2','mkt-scope-b');
+insert into auth.users(id) values ('22000000-0000-0000-0000-000000000002');
+insert into public.branches(id,tenant_id,name,branch_type) values
+ ('33000000-0000-0000-0000-000000000001','11000000-0000-0000-0000-000000000001','Synthetic A','store'),
+ ('33000000-0000-0000-0000-000000000002','11000000-0000-0000-0000-000000000001','Synthetic B','store');
+insert into public.roles(id,tenant_id,name) values ('44000000-0000-0000-0000-000000000001','11000000-0000-0000-0000-000000000001','Synthetic staff');
+insert into public.profiles(id,tenant_id,branch_id,full_name,role,role_id) values ('22000000-0000-0000-0000-000000000002','11000000-0000-0000-0000-000000000001','33000000-0000-0000-0000-000000000001','Synthetic staff','staff','44000000-0000-0000-0000-000000000001');
+insert into public.user_branches(user_id,branch_id) values ('22000000-0000-0000-0000-000000000002','33000000-0000-0000-0000-000000000002');
+insert into public.mkt_campaigns(id,tenant_id,branch_id,name) values
+ ('66000000-0000-0000-0000-000000000001','11000000-0000-0000-0000-000000000001','33000000-0000-0000-0000-000000000001','Synthetic A'),
+ ('66000000-0000-0000-0000-000000000002','11000000-0000-0000-0000-000000000001','33000000-0000-0000-0000-000000000002','Synthetic B'),
+ ('66000000-0000-0000-0000-000000000003','11000000-0000-0000-0000-000000000001',null,'Synthetic shared'),
+ ('66000000-0000-0000-0000-000000000004','11000000-0000-0000-0000-000000000002',null,'Synthetic other tenant');
+insert into public.mkt_channel_work_packages(id,tenant_id,campaign_id,channel_type,title) values
+ ('77000000-0000-0000-0000-000000000001','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000001','other','Synthetic package A'),
+ ('77000000-0000-0000-0000-000000000002','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000002','other','Synthetic package B'),
+ ('77000000-0000-0000-0000-000000000003','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000001','other','Assign A'),
+ ('77000000-0000-0000-0000-000000000004','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000002','other','Assign B'),
+ ('77000000-0000-0000-0000-000000000005','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000001','other','Delete A'),
+ ('77000000-0000-0000-0000-000000000006','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000001','other','Cross-linked package'),
+ ('77000000-0000-0000-0000-000000000007','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000002','other','Reconcile B');
+insert into public.mkt_content_pillars(id,tenant_id,code,name) values ('88000000-0000-0000-0000-000000000001','11000000-0000-0000-0000-000000000001','SYN','Synthetic');
+insert into public.mkt_content_items(id,tenant_id,campaign_id,work_package_id,pillar_id,title) values
+ ('99000000-0000-0000-0000-000000000001','11000000-0000-0000-0000-000000000001',null,'77000000-0000-0000-0000-000000000001','88000000-0000-0000-0000-000000000001','Synthetic content A'),
+ ('99000000-0000-0000-0000-000000000002','11000000-0000-0000-0000-000000000001',null,'77000000-0000-0000-0000-000000000002','88000000-0000-0000-0000-000000000001','Synthetic content B');
+-- Plans can reference a campaign and a work package from a different campaign.
+insert into public.mkt_channel_plans(id,tenant_id,work_package_id,campaign_id) values ('aa000000-0000-0000-0000-000000000001','11000000-0000-0000-0000-000000000001','77000000-0000-0000-0000-000000000002','66000000-0000-0000-0000-000000000001'),
+ ('aa000000-0000-0000-0000-000000000002','11000000-0000-0000-0000-000000000001','77000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000001'),
+ ('aa000000-0000-0000-0000-000000000003','11000000-0000-0000-0000-000000000001','77000000-0000-0000-0000-000000000006','66000000-0000-0000-0000-000000000002'),
+ ('aa000000-0000-0000-0000-000000000004','11000000-0000-0000-0000-000000000001','77000000-0000-0000-0000-000000000007','66000000-0000-0000-0000-000000000002');
+insert into public.mkt_campaign_plans(id,tenant_id,campaign_id,name) values ('bb000000-0000-0000-0000-000000000001','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000002','Plan B'),('bb000000-0000-0000-0000-000000000002','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000001','Plan A');
+insert into public.mkt_campaign_readiness_items(id,tenant_id,campaign_id,title,required_role,required_branch_id) values ('cc000000-0000-0000-0000-000000000001','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000002','Ready B','store','33000000-0000-0000-0000-000000000002'),('cc000000-0000-0000-0000-000000000002','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000001','Ready A','store','33000000-0000-0000-0000-000000000001');
+insert into public.mkt_content_versions(id,tenant_id,content_item_id,version_number) values ('ee000000-0000-0000-0000-000000000001','11000000-0000-0000-0000-000000000001','99000000-0000-0000-0000-000000000001',1),('ee000000-0000-0000-0000-000000000002','11000000-0000-0000-0000-000000000001','99000000-0000-0000-0000-000000000002',1);
+insert into public.mkt_documents(id,tenant_id,campaign_id,title,external_url) values
+ ('ff000000-0000-0000-0000-000000000001','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000001','Document A','https://example.test/a'),
+ ('ff000000-0000-0000-0000-000000000002','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000002','Document B','https://example.test/b');
+insert into public.mkt_media_assets(id,tenant_id,campaign_id,file_name,storage_path) values
+ ('ff100000-0000-0000-0000-000000000001','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000001','Asset A','synthetic/a'),
+ ('ff100000-0000-0000-0000-000000000002','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000002','Asset B','synthetic/b');
+insert into public.mkt_tasks(id,tenant_id,campaign_id,work_package_id,title,source_type,source_id) values
+ ('dd000000-0000-0000-0000-000000000001','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000001','77000000-0000-0000-0000-000000000001','Task A','campaign_channel_split','77000000-0000-0000-0000-000000000001'),
+ ('dd000000-0000-0000-0000-000000000002','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000002','77000000-0000-0000-0000-000000000002','Task B','campaign_channel_split','77000000-0000-0000-0000-000000000002'),
+ ('dd000000-0000-0000-0000-000000000003','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000001','77000000-0000-0000-0000-000000000001','Dependency A','campaign_channel_split','77000000-0000-0000-0000-000000000001'),
+ ('dd000000-0000-0000-0000-000000000004','11000000-0000-0000-0000-000000000001',null,'77000000-0000-0000-0000-000000000002','Dependent B','campaign_channel_split','77000000-0000-0000-0000-000000000002'),
+ ('dd000000-0000-0000-0000-000000000005','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000002','77000000-0000-0000-0000-000000000007','Reconcile B','campaign_channel_split','77000000-0000-0000-0000-000000000007');
+update public.mkt_tasks set dependency_task_id='dd000000-0000-0000-0000-000000000003' where id='dd000000-0000-0000-0000-000000000004';
+update public.mkt_tasks set acceptance_status='rejected' where id in ('dd000000-0000-0000-0000-000000000001','dd000000-0000-0000-0000-000000000002','dd000000-0000-0000-0000-000000000004');
+insert into public.staff_branch_permission_catalog(permission_code,enforcement_version) values ('mkt.view',1),('mkt.manage_campaigns',1),('mkt.split_work_packages',1) on conflict (permission_code) do nothing;
+insert into public.user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
+ ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000002','33000000-0000-0000-0000-000000000001','mkt.view','grant','22000000-0000-0000-0000-000000000002');
+insert into public.user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
+ ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000002','33000000-0000-0000-0000-000000000001','mkt.manage_campaigns','grant','22000000-0000-0000-0000-000000000002');
+select set_config('request.jwt.claim.sub','22000000-0000-0000-0000-000000000002',true);
+set local role authenticated;
+do $$begin
+ if not (public.mkt_get_my_context()->>'canView')::boolean or (public.mkt_get_my_context()->>'canManageCampaigns')::boolean then raise exception 'MKT_BRANCH_VIEW_CONTEXT_INVALID';end if;
+ if not exists(select 1 from public.mkt_campaign_create_branches() where id='33000000-0000-0000-0000-000000000001') or exists(select 1 from public.mkt_campaign_create_branches() where id='33000000-0000-0000-0000-000000000002') then raise exception 'MKT_CREATE_BRANCH_OPTIONS_FAILED';end if;
+ if public.mkt_manageable_campaign_ids(array['66000000-0000-0000-0000-000000000001'::uuid,'66000000-0000-0000-0000-000000000002'::uuid]) <> array['66000000-0000-0000-0000-000000000001'::uuid] then raise exception 'MKT_MANAGEABLE_CAMPAIGNS_FAILED';end if;
+ if not exists(select 1 from public.mkt_content_pillars where id='88000000-0000-0000-0000-000000000001') then raise exception 'MKT_SHARED_PILLAR_HIDDEN';end if;
+ if not exists(select 1 from public.mkt_get_leader_queue(null,100,0) where task_id='dd000000-0000-0000-0000-000000000001') or exists(select 1 from public.mkt_get_leader_queue(null,100,0) where task_id in ('dd000000-0000-0000-0000-000000000002','dd000000-0000-0000-0000-000000000004')) then raise exception 'MKT_LEADER_QUEUE_SCOPE_FAILED';end if;
+ if not (public.mkt_campaign_ui_permissions('66000000-0000-0000-0000-000000000001')->>'canManage')::boolean or (public.mkt_campaign_ui_permissions('66000000-0000-0000-0000-000000000002')->>'canManage')::boolean then raise exception 'MKT_CAMPAIGN_UI_SCOPE_FAILED';end if;
+ if not exists(select 1 from public.mkt_campaigns where id='66000000-0000-0000-0000-000000000001') then raise exception 'MKT_READ_GRANTED_BRANCH_HIDDEN';end if;
+ if exists(select 1 from public.mkt_campaigns where id in ('66000000-0000-0000-0000-000000000002','66000000-0000-0000-0000-000000000003','66000000-0000-0000-0000-000000000004')) then raise exception 'MKT_READ_OUTSIDE_SCOPE_VISIBLE';end if;
+ if not exists(select 1 from public.mkt_channel_work_packages where id='77000000-0000-0000-0000-000000000001') or exists(select 1 from public.mkt_channel_work_packages where id='77000000-0000-0000-0000-000000000002') then raise exception 'MKT_PACKAGE_READ_SCOPE_FAILED';end if;
+ if not exists(select 1 from public.mkt_content_items where id='99000000-0000-0000-0000-000000000001') or exists(select 1 from public.mkt_content_items where id='99000000-0000-0000-0000-000000000002') then raise exception 'MKT_CONTENT_READ_SCOPE_FAILED';end if;
+ if not exists(select 1 from public.mkt_tasks where id='dd000000-0000-0000-0000-000000000001') or exists(select 1 from public.mkt_tasks where id='dd000000-0000-0000-0000-000000000002') then raise exception 'MKT_TASK_READ_SCOPE_FAILED';end if;
+ if not exists(select 1 from public.mkt_channel_plans where id='aa000000-0000-0000-0000-000000000002') or exists(select 1 from public.mkt_channel_plans where id='aa000000-0000-0000-0000-000000000001') then raise exception 'MKT_PLAN_READ_SCOPE_FAILED';end if;
+ if not exists(select 1 from public.mkt_campaign_plans where id='bb000000-0000-0000-0000-000000000002') or exists(select 1 from public.mkt_campaign_plans where id='bb000000-0000-0000-0000-000000000001') then raise exception 'MKT_PLAN_NODE_READ_SCOPE_FAILED';end if;
+ if not exists(select 1 from public.mkt_campaign_readiness_items where id='cc000000-0000-0000-0000-000000000002') or exists(select 1 from public.mkt_campaign_readiness_items where id='cc000000-0000-0000-0000-000000000001') then raise exception 'MKT_READINESS_READ_SCOPE_FAILED';end if;
+ if not exists(select 1 from public.mkt_content_versions where id='ee000000-0000-0000-0000-000000000001') or exists(select 1 from public.mkt_content_versions where id='ee000000-0000-0000-0000-000000000002') then raise exception 'MKT_CONTENT_VERSION_READ_SCOPE_FAILED';end if;
+ if not exists(select 1 from public.mkt_documents where id='ff000000-0000-0000-0000-000000000001') or exists(select 1 from public.mkt_documents where id='ff000000-0000-0000-0000-000000000002') then raise exception 'MKT_DOCUMENT_READ_SCOPE_FAILED';end if;
+ if not exists(select 1 from public.mkt_media_assets where id='ff100000-0000-0000-0000-000000000001') or exists(select 1 from public.mkt_media_assets where id='ff100000-0000-0000-0000-000000000002') then raise exception 'MKT_MEDIA_READ_SCOPE_FAILED';end if;
+end$$;
+reset role;
+update public.mkt_campaigns set owner_id='22000000-0000-0000-0000-000000000002' where id='66000000-0000-0000-0000-000000000002';
+update public.mkt_tasks set assignee_id='22000000-0000-0000-0000-000000000002' where id='dd000000-0000-0000-0000-000000000002';
+update public.mkt_channel_plans set owner_id='22000000-0000-0000-0000-000000000002' where id='aa000000-0000-0000-0000-000000000001';
+set local role authenticated;
+do $$begin if not exists(select 1 from public.mkt_campaigns where id='66000000-0000-0000-0000-000000000002') or not exists(select 1 from public.mkt_tasks where id='dd000000-0000-0000-0000-000000000002') or not exists(select 1 from public.mkt_channel_work_packages where id='77000000-0000-0000-0000-000000000002') or not exists(select 1 from public.mkt_channel_plans where id='aa000000-0000-0000-0000-000000000001') then raise exception 'MKT_ASSIGNED_OWNER_VISIBILITY_LOST';end if;end$$;
+reset role;
+update public.mkt_campaigns set owner_id=null where id='66000000-0000-0000-0000-000000000002';
+update public.mkt_tasks set assignee_id=null where id='dd000000-0000-0000-0000-000000000002';
+update public.mkt_channel_plans set owner_id=null where id='aa000000-0000-0000-0000-000000000001';
+update public.mkt_channel_plans set status='planning' where id in ('aa000000-0000-0000-0000-000000000001','aa000000-0000-0000-0000-000000000002');
+update public.mkt_tasks set task_status='reviewing' where id in ('dd000000-0000-0000-0000-000000000001','dd000000-0000-0000-0000-000000000002');
+do $$begin
+ begin
+  perform public.mkt_return_task_review('dd000000-0000-0000-0000-000000000002','Synthetic');
+  raise exception 'MKT_REVIEW_OTHER_BRANCH_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ perform public.mkt_return_task_review('dd000000-0000-0000-0000-000000000001','Synthetic');
+ update public.mkt_tasks set reviewer_id='22000000-0000-0000-0000-000000000002' where id='dd000000-0000-0000-0000-000000000002';
+ perform public.mkt_return_task_review('dd000000-0000-0000-0000-000000000002','Assigned reviewer');
+ begin
+  perform public.mkt_reassign_task('dd000000-0000-0000-0000-000000000002','22000000-0000-0000-0000-000000000002','Synthetic');
+  raise exception 'MKT_REASSIGN_OTHER_BRANCH_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ perform public.mkt_reassign_task('dd000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000002','Synthetic');
+ begin
+  perform public.mkt_review_plan('aa000000-0000-0000-0000-000000000001',null,'approve',null);
+  raise exception 'MKT_PLAN_REVIEW_CROSS_BRANCH_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ begin
+  perform public.mkt_review_plan('aa000000-0000-0000-0000-000000000002',null,'approve',null);
+  raise exception 'MKT_PLAN_REVIEW_INVALID_STATE_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INVALID_STATE' then raise;end if;end;
+end$$;
+do $$begin
+ perform public.mkt_save_plan_strategy('aa000000-0000-0000-0000-000000000002','Allowed branch');
+ perform public.mkt_save_plan_items('aa000000-0000-0000-0000-000000000002','[]'::jsonb);
+ begin
+  perform public.mkt_save_plan_strategy('aa000000-0000-0000-0000-000000000001','Wrong linked branch');
+  raise exception 'MKT_MIXED_PLAN_SCOPE_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ update public.mkt_channel_plans set owner_id='22000000-0000-0000-0000-000000000002' where id='aa000000-0000-0000-0000-000000000001';
+ perform public.mkt_save_plan_strategy('aa000000-0000-0000-0000-000000000001','Assigned owner');
+ update public.mkt_channel_plans set owner_id=null where id='aa000000-0000-0000-0000-000000000001';
+end$$;
+update public.mkt_channel_plans set status='in_execution' where id in ('aa000000-0000-0000-0000-000000000002','aa000000-0000-0000-0000-000000000004');
+update public.mkt_tasks set channel_plan_id='aa000000-0000-0000-0000-000000000002' where id='dd000000-0000-0000-0000-000000000001';
+update public.mkt_tasks set channel_plan_id='aa000000-0000-0000-0000-000000000004' where id='dd000000-0000-0000-0000-000000000005';
+do $$begin
+ perform public.mkt_reconcile_plan_task('aa000000-0000-0000-0000-000000000002','dd000000-0000-0000-0000-000000000001','keep');
+ begin
+  perform public.mkt_reconcile_plan_task('aa000000-0000-0000-0000-000000000004','dd000000-0000-0000-0000-000000000005','keep');
+  raise exception 'MKT_RECONCILE_OTHER_BRANCH_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+end$$;
+do $$declare created jsonb;begin
+ begin
+  perform public.mkt_delete_campaign('66000000-0000-0000-0000-000000000001','Cross-linked');
+  raise exception 'MKT_DELETE_CAMPAIGN_CROSS_LINK_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ begin
+  perform public.mkt_delete_campaign('66000000-0000-0000-0000-000000000002','Wrong branch');
+  raise exception 'MKT_DELETE_CAMPAIGN_WRONG_BRANCH_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ perform public.mkt_create_manual_task('Allowed task',null,'66000000-0000-0000-0000-000000000001','77000000-0000-0000-0000-000000000001');
+ begin
+  perform public.mkt_create_manual_task('Wrong task',null,'66000000-0000-0000-0000-000000000002','77000000-0000-0000-0000-000000000002');
+  raise exception 'MKT_MANUAL_TASK_OTHER_BRANCH_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ begin
+  perform public.mkt_create_manual_task('Cross linked task',null,'66000000-0000-0000-0000-000000000001','77000000-0000-0000-0000-000000000002');
+  raise exception 'MKT_MANUAL_TASK_MIXED_BRANCH_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ begin
+  perform public.mkt_cancel_task('dd000000-0000-0000-0000-000000000003','Synthetic');
+  raise exception 'MKT_CANCEL_CROSS_BRANCH_DEPENDENCY_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ begin
+  perform public.mkt_delete_task('dd000000-0000-0000-0000-000000000003','Synthetic');
+  raise exception 'MKT_DELETE_CROSS_BRANCH_DEPENDENCY_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ update public.mkt_tasks set dependency_task_id=null where id='dd000000-0000-0000-0000-000000000004';
+ perform public.mkt_cancel_task('dd000000-0000-0000-0000-000000000003','Synthetic');
+ perform public.mkt_delete_task('dd000000-0000-0000-0000-000000000003','Synthetic');
+ begin
+  perform public.mkt_delete_work_package('77000000-0000-0000-0000-000000000006',null);
+  raise exception 'MKT_PACKAGE_DELETE_CROSS_LINK_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ begin
+  perform public.mkt_delete_work_package('77000000-0000-0000-0000-000000000002',null);
+  raise exception 'MKT_PACKAGE_DELETE_OTHER_BRANCH_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ perform public.mkt_delete_work_package('77000000-0000-0000-0000-000000000005',null);
+ perform public.mkt_assign_channel_planning('77000000-0000-0000-0000-000000000003','22000000-0000-0000-0000-000000000002');
+ begin
+  perform public.mkt_assign_channel_planning('77000000-0000-0000-0000-000000000004','22000000-0000-0000-0000-000000000002');
+  raise exception 'MKT_ASSIGN_OTHER_BRANCH_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ begin
+  perform public.mkt_split_work_package('77000000-0000-0000-0000-000000000004','[{"title":"Synthetic","assigneeId":"22000000-0000-0000-0000-000000000002"}]');
+  raise exception 'MKT_SPLIT_OTHER_BRANCH_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ created:=public.mkt_campaign_plan_upsert(null,'66000000-0000-0000-0000-000000000001','Scoped plan');
+ if created->>'campaignPlanId' is null then raise exception 'MKT_PLAN_CREATE_FAILED';end if;
+ perform public.mkt_campaign_plan_upsert((created->>'campaignPlanId')::uuid,'66000000-0000-0000-0000-000000000001','Updated plan');
+ perform public.mkt_owner_add_subplan((created->>'campaignPlanId')::uuid,'Scoped subplan');
+ perform public.mkt_work_package_set_campaign_plan('77000000-0000-0000-0000-000000000001',(created->>'campaignPlanId')::uuid);
+ perform public.mkt_campaign_plan_delete((created->>'campaignPlanId')::uuid);
+ begin
+  perform public.mkt_campaign_plan_delete('bb000000-0000-0000-0000-000000000001');
+  raise exception 'MKT_PLAN_DELETE_OTHER_BRANCH_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ begin
+  perform public.mkt_owner_add_subplan('bb000000-0000-0000-0000-000000000001','Wrong branch subplan');
+  raise exception 'MKT_SUBPLAN_OTHER_BRANCH_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ begin
+  perform public.mkt_work_package_set_campaign_plan('77000000-0000-0000-0000-000000000002','bb000000-0000-0000-0000-000000000001');
+  raise exception 'MKT_MOVE_OTHER_BRANCH_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ begin
+  perform public.mkt_campaign_plan_upsert(null,'66000000-0000-0000-0000-000000000002','Other branch plan');
+  raise exception 'MKT_PLAN_OTHER_BRANCH_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ begin
+  perform public.mkt_campaign_plan_upsert(null,'66000000-0000-0000-0000-000000000003','Shared plan');
+  raise exception 'MKT_PLAN_SHARED_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ created:=public.mkt_create_campaign('Synthetic new',null,null,null,0,'33000000-0000-0000-0000-000000000001',null,'[]');
+ if created->>'campaignId' is null then raise exception 'MKT_CREATE_BRANCH_FAILED';end if;
+ if not exists(select 1 from public.mkt_campaigns where id=(created->>'campaignId')::uuid and branch_id='33000000-0000-0000-0000-000000000001') then raise exception 'MKT_CREATED_WRONG_BRANCH';end if;
+ perform public.mkt_delete_campaign((created->>'campaignId')::uuid,'Synthetic');
+ begin
+  perform public.mkt_create_content_item('66000000-0000-0000-0000-000000000003',null,'Shared content','other','low','88000000-0000-0000-0000-000000000001');
+  raise exception 'MKT_BRANCH_GRANT_SHARED_CONTENT_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ perform public.mkt_create_content_item('66000000-0000-0000-0000-000000000001','77000000-0000-0000-0000-000000000001','Scoped content','other','low','88000000-0000-0000-0000-000000000001');
+ begin
+  perform public.mkt_delete_content_item('99000000-0000-0000-0000-000000000002');
+  raise exception 'MKT_DELETE_CONTENT_OTHER_BRANCH_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ perform public.mkt_delete_content_item('99000000-0000-0000-0000-000000000001');
+ begin
+  perform public.mkt_create_content_item('66000000-0000-0000-0000-000000000001','77000000-0000-0000-0000-000000000002','Cross branch content','other','low','88000000-0000-0000-0000-000000000001');
+  raise exception 'MKT_CONTENT_WRONG_PACKAGE_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ begin
+  perform public.mkt_add_readiness_item('66000000-0000-0000-0000-000000000003','Shared readiness','store','33000000-0000-0000-0000-000000000001',null);
+  raise exception 'MKT_BRANCH_GRANT_SHARED_READINESS_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ created:=public.mkt_add_readiness_item('66000000-0000-0000-0000-000000000001','Scoped readiness','store','33000000-0000-0000-0000-000000000001',null);
+ perform public.mkt_remind_readiness_item('66000000-0000-0000-0000-000000000001',(created->>'itemId')::uuid);
+ perform public.mkt_waive_readiness_item('66000000-0000-0000-0000-000000000001',(created->>'itemId')::uuid,'Synthetic');
+ begin
+  perform public.mkt_waive_readiness_item('66000000-0000-0000-0000-000000000002','cc000000-0000-0000-0000-000000000001','Synthetic');
+  raise exception 'MKT_WAIVE_OTHER_BRANCH_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ begin
+  perform public.mkt_remind_readiness_item('66000000-0000-0000-0000-000000000002','cc000000-0000-0000-0000-000000000001');
+  raise exception 'MKT_REMIND_OTHER_BRANCH_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ begin
+  perform public.mkt_delete_readiness_item('cc000000-0000-0000-0000-000000000001');
+  raise exception 'MKT_DELETE_READINESS_OTHER_BRANCH_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ perform public.mkt_delete_readiness_item((created->>'itemId')::uuid);
+ begin
+  perform public.mkt_add_readiness_item('66000000-0000-0000-0000-000000000002','Wrong branch readiness','store','33000000-0000-0000-0000-000000000002',null);
+  raise exception 'MKT_READINESS_WRONG_BRANCH_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ begin
+  perform public.mkt_create_work_package('66000000-0000-0000-0000-000000000003','other','Shared package',null,null,null,null);
+  raise exception 'MKT_BRANCH_GRANT_SHARED_PACKAGE_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ perform public.mkt_create_work_package('66000000-0000-0000-0000-000000000001','other','Scoped package',null,null,null,null);
+ begin
+  perform public.mkt_create_work_package('66000000-0000-0000-0000-000000000002','other','Wrong branch package',null,null,null,null);
+  raise exception 'MKT_PACKAGE_WRONG_BRANCH_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ begin
+  perform public.mkt_change_campaign_status('66000000-0000-0000-0000-000000000003','paused',null);
+  raise exception 'MKT_BRANCH_GRANT_SHARED_STATUS_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ perform public.mkt_change_campaign_status('66000000-0000-0000-0000-000000000001','paused',null);
+ begin
+  perform public.mkt_update_campaign('66000000-0000-0000-0000-000000000003','{"name":"Changed shared"}'::jsonb);
+  raise exception 'MKT_BRANCH_GRANT_SHARED_UPDATE_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ perform public.mkt_update_campaign('66000000-0000-0000-0000-000000000001','{"branchId":"33000000-0000-0000-0000-000000000001"}'::jsonb);
+ perform public.mkt_update_campaign('66000000-0000-0000-0000-000000000001','{"name":"Changed A"}'::jsonb);
+ begin
+  perform public.mkt_update_campaign('66000000-0000-0000-0000-000000000001','{"branchId":"33000000-0000-0000-0000-000000000002"}'::jsonb);
+  raise exception 'MKT_MOVE_WRONG_BRANCH_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ begin
+  if not exists(select 1 from public.mkt_campaigns where id='66000000-0000-0000-0000-000000000001' and branch_id='33000000-0000-0000-0000-000000000001') then raise exception 'MKT_DENIED_MOVE_CHANGED_BRANCH';end if;
+  perform public.mkt_update_campaign('66000000-0000-0000-0000-000000000002','{"name":"Changed B"}'::jsonb);
+  raise exception 'MKT_UPDATE_WRONG_BRANCH_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ begin
+  perform public.mkt_create_campaign('Synthetic B',null,null,null,0,'33000000-0000-0000-0000-000000000002',null,'[]');
+  raise exception 'MKT_CREATE_WRONG_BRANCH_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ begin
+  perform public.mkt_create_campaign('Synthetic shared',null,null,null,0,null,null,'[]');
+  raise exception 'MKT_CREATE_SHARED_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ begin
+  perform public.mkt_change_campaign_status('66000000-0000-0000-0000-000000000002','paused',null);
+  raise exception 'MKT_STATUS_WRONG_BRANCH_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+end$$;
+do $$begin if (select count(*) from public.mkt_campaigns where name in ('Synthetic B','Synthetic shared'))<>2 then raise exception 'MKT_DENIED_CAMPAIGN_CREATED';end if;end$$;
+do $$begin if not exists(select 1 from public.mkt_campaigns where id='66000000-0000-0000-0000-000000000002' and name='Synthetic B') then raise exception 'MKT_DENIED_UPDATE_CHANGED_NAME';end if;end$$;
+do $$begin if not exists(select 1 from public.mkt_campaigns where id='66000000-0000-0000-0000-000000000002' and status='planning') then raise exception 'MKT_DENIED_STATUS_CHANGED';end if;end$$;
+update public.user_branch_permission_overrides set override_type='revoke' where user_id='22000000-0000-0000-0000-000000000002' and branch_id='33000000-0000-0000-0000-000000000001' and permission_code='mkt.manage_campaigns';
+insert into public.user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000002','33000000-0000-0000-0000-000000000001','mkt.split_work_packages','grant','22000000-0000-0000-0000-000000000002');
+do $$begin
+ perform public.mkt_create_content_item('66000000-0000-0000-0000-000000000001','77000000-0000-0000-0000-000000000001','Split-only content','other','low','88000000-0000-0000-0000-000000000001');
+ begin
+  perform public.mkt_create_content_item('66000000-0000-0000-0000-000000000001','77000000-0000-0000-0000-000000000002','Split cross branch','other','low','88000000-0000-0000-0000-000000000001');
+  raise exception 'MKT_SPLIT_CONTENT_CROSS_BRANCH_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ perform public.mkt_create_work_package('66000000-0000-0000-0000-000000000001','other','Split-only package',null,null,null,null);
+ begin
+  perform public.mkt_create_work_package('66000000-0000-0000-0000-000000000002','other','Split wrong branch',null,null,null,null);
+  raise exception 'MKT_SPLIT_WRONG_BRANCH_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+end$$;
+do $$begin if exists(select 1 from public.mkt_campaign_readiness_items where title in ('Wrong branch readiness','Shared readiness')) then raise exception 'MKT_DENIED_READINESS_CREATED';end if;end$$;
+do $$begin if not exists(select 1 from public.mkt_content_items where title='Scoped content' and campaign_id='66000000-0000-0000-0000-000000000001' and work_package_id='77000000-0000-0000-0000-000000000001') then raise exception 'MKT_CONTENT_WRONG_ASSOCIATION';end if;end$$;
+do $$begin if not exists(select 1 from public.mkt_channel_work_packages where title='Scoped package' and campaign_id='66000000-0000-0000-0000-000000000001') then raise exception 'MKT_PACKAGE_WRONG_CAMPAIGN';end if;end$$;
+do $$begin if exists(select 1 from public.mkt_channel_work_packages where title in ('Wrong branch package','Split wrong branch')) then raise exception 'MKT_DENIED_PACKAGE_CREATED';end if;end$$;
+do $$begin if exists(select 1 from public.mkt_content_items where title in ('Cross branch content','Split cross branch')) then raise exception 'MKT_DENIED_CONTENT_CREATED';end if;end$$;
+update public.user_branch_permission_overrides set override_type='grant' where user_id='22000000-0000-0000-0000-000000000002' and branch_id='33000000-0000-0000-0000-000000000001' and permission_code='mkt.manage_campaigns';
+do $$declare u uuid:='22000000-0000-0000-0000-000000000002';begin
+ if not public._staff_mkt_campaign_permission(u,'mkt.view','66000000-0000-0000-0000-000000000001')
+  or public._staff_mkt_campaign_permission(u,'mkt.view','66000000-0000-0000-0000-000000000002')
+  or public._staff_mkt_campaign_permission(u,'mkt.view','66000000-0000-0000-0000-000000000003')
+  or public._staff_mkt_campaign_permission(u,'mkt.view','66000000-0000-0000-0000-000000000004') then raise exception 'MKT_BRANCH_SCOPE_FAILED';end if;
+ if has_function_privilege('authenticated','public._staff_mkt_campaign_permission(uuid,text,uuid)','execute') or has_function_privilege('anon','public._staff_mkt_campaign_permission(uuid,text,uuid)','execute') then raise exception 'MKT_PRIVATE_HELPER_EXPOSED';end if;
+ if not public._staff_mkt_linked_permission(u,'mkt.view',null,'77000000-0000-0000-0000-000000000001',null,null)
+  or public._staff_mkt_linked_permission(u,'mkt.view',null,'77000000-0000-0000-0000-000000000002',null,null)
+  or public._staff_mkt_linked_permission(u,'mkt.view','66000000-0000-0000-0000-000000000001','77000000-0000-0000-0000-000000000002',null,null)
+  or public._staff_mkt_linked_permission(u,'mkt.view','66000000-0000-0000-0000-000000000004',null,null,null)
+  or public._staff_mkt_linked_permission(u,'mkt.view',null,'77000000-0000-0000-0000-000000000099',null,null)
+  or not public._staff_mkt_linked_permission(u,'mkt.view',null,null,'99000000-0000-0000-0000-000000000001',null)
+  or public._staff_mkt_linked_permission(u,'mkt.view',null,null,'99000000-0000-0000-0000-000000000099',null)
+  or public._staff_mkt_linked_permission(u,'mkt.view',null,null,'99000000-0000-0000-0000-000000000002',null)
+  or public._staff_mkt_linked_permission(u,'mkt.view',null,null,null,'aa000000-0000-0000-0000-000000000099')
+  or public._staff_mkt_linked_permission(u,'mkt.view',null,null,null,'aa000000-0000-0000-0000-000000000001')
+  or not public._staff_mkt_linked_permission(u,'mkt.view',null,null,null,'aa000000-0000-0000-0000-000000000002')
+  or public._staff_mkt_linked_permission(u,'mkt.view',null,null,null,null) then raise exception 'MKT_INDIRECT_SCOPE_FAILED';end if;
+ if has_function_privilege('authenticated','public._staff_mkt_linked_permission(uuid,text,uuid,uuid,uuid,uuid)','execute') then raise exception 'MKT_LINKED_HELPER_EXPOSED';end if;
+end$$;
+insert into public.role_permissions(role_id,permission_code) values ('44000000-0000-0000-0000-000000000001','mkt.view');
+insert into public.role_permissions(role_id,permission_code) values ('44000000-0000-0000-0000-000000000001','mkt.manage_campaigns');
+do $$begin if not public._staff_mkt_linked_permission('22000000-0000-0000-0000-000000000002','mkt.view',null,null,null,null) then raise exception 'MKT_LEGACY_SHARED_VIEW_LOST';end if;end$$;
+do $$begin
+ perform public.mkt_create_content_item('66000000-0000-0000-0000-000000000002','77000000-0000-0000-0000-000000000002','Legacy content B','other','low','88000000-0000-0000-0000-000000000001');
+ perform public.mkt_create_campaign('Synthetic legacy B',null,null,null,0,'33000000-0000-0000-0000-000000000002',null,'[]');
+ perform public.mkt_create_content_item('66000000-0000-0000-0000-000000000003',null,'Legacy shared content','other','low','88000000-0000-0000-0000-000000000001');
+ perform public.mkt_create_work_package('66000000-0000-0000-0000-000000000003','other','Legacy shared package',null,null,null,null);
+ perform public.mkt_add_readiness_item('66000000-0000-0000-0000-000000000003','Legacy shared readiness','store','33000000-0000-0000-0000-000000000001',null);
+ perform public.mkt_change_campaign_status('66000000-0000-0000-0000-000000000003','paused',null);
+ perform public.mkt_update_campaign('66000000-0000-0000-0000-000000000003','{"name":"Legacy shared update"}'::jsonb);
+ perform public.mkt_create_campaign('Synthetic legacy shared',null,null,null,0,null,null,'[]');
+end$$;
+insert into public.user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
+ ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000002','33000000-0000-0000-0000-000000000002','mkt.view','revoke','22000000-0000-0000-0000-000000000002');
+insert into public.user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
+ ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000002','33000000-0000-0000-0000-000000000002','mkt.manage_campaigns','revoke','22000000-0000-0000-0000-000000000002');
+update public.mkt_tasks set reviewer_id=null,assignee_id=null where id='dd000000-0000-0000-0000-000000000002';
+set local role authenticated;
+do $$begin
+ if exists(select 1 from public.mkt_campaigns where id='66000000-0000-0000-0000-000000000002') or exists(select 1 from public.mkt_documents where id='ff000000-0000-0000-0000-000000000002') or exists(select 1 from public.mkt_media_assets where id='ff100000-0000-0000-0000-000000000002') then raise exception 'MKT_REVOKED_BRANCH_VISIBLE';end if;
+ if not exists(select 1 from public.mkt_campaigns where id='66000000-0000-0000-0000-000000000001') or not exists(select 1 from public.mkt_campaigns where id='66000000-0000-0000-0000-000000000003') then raise exception 'MKT_REVOKE_OTHER_SCOPE_LOST';end if;
+end$$;
+reset role;
+do $$declare u uuid:='22000000-0000-0000-0000-000000000002';begin
+ if public._staff_mkt_campaign_permission(u,'mkt.view','66000000-0000-0000-0000-000000000002') or not public._staff_mkt_campaign_permission(u,'mkt.view','66000000-0000-0000-0000-000000000003') then raise exception 'MKT_SHARED_OR_DENY_FAILED';end if;
+end$$;
+insert into public.user_permission_overrides(tenant_id,user_id,permission_code,override_type) values ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000002','mkt.view','revoke');
+do $$begin if (public.mkt_get_my_context()->>'canView')::boolean then raise exception 'MKT_CONTEXT_GLOBAL_DENY_BYPASSED';end if;end$$;
+do $$begin if public._staff_mkt_campaign_permission('22000000-0000-0000-0000-000000000002','mkt.view','66000000-0000-0000-0000-000000000001') then raise exception 'MKT_GLOBAL_DENY_BYPASSED';end if; if public._staff_mkt_linked_permission('22000000-0000-0000-0000-000000000002','mkt.view',null,'77000000-0000-0000-0000-000000000001',null,null) then raise exception 'MKT_LINKED_GLOBAL_DENY_BYPASSED';end if;end$$;
+do $$begin if public._staff_mkt_linked_permission('22000000-0000-0000-0000-000000000002','mkt.view',null,null,null,null) then raise exception 'MKT_SHARED_GLOBAL_DENY_BYPASSED';end if;end$$;
+insert into public.user_permission_overrides(tenant_id,user_id,permission_code,override_type) values ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000002','mkt.manage_campaigns','revoke');
+do $$begin
+ begin
+  perform public.mkt_update_campaign('66000000-0000-0000-0000-000000000001','{"name":"Denied globally"}'::jsonb);
+  raise exception 'MKT_GLOBAL_UPDATE_DENY_BYPASSED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ begin
+  perform public.mkt_change_campaign_status('66000000-0000-0000-0000-000000000001','paused',null);
+  raise exception 'MKT_GLOBAL_STATUS_DENY_BYPASSED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ begin
+  perform public.mkt_add_readiness_item('66000000-0000-0000-0000-000000000001','Denied readiness','store','33000000-0000-0000-0000-000000000001',null);
+  raise exception 'MKT_GLOBAL_READINESS_DENY_BYPASSED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ begin
+  perform public.mkt_create_campaign('Denied globally',null,null,null,0,'33000000-0000-0000-0000-000000000001',null,'[]');
+  raise exception 'MKT_GLOBAL_MANAGE_DENY_BYPASSED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+end$$;
+select public.mkt_create_content_item('66000000-0000-0000-0000-000000000001','77000000-0000-0000-0000-000000000001','Independent split content','other','low','88000000-0000-0000-0000-000000000001');
+select public.mkt_create_work_package('66000000-0000-0000-0000-000000000001','other','Independent split access',null,null,null,null);
+insert into public.user_permission_overrides(tenant_id,user_id,permission_code,override_type) values ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000002','mkt.split_work_packages','revoke');
+do $$begin
+ begin
+  perform public.mkt_create_content_item('66000000-0000-0000-0000-000000000001','77000000-0000-0000-0000-000000000001','Denied content','other','low','88000000-0000-0000-0000-000000000001');
+  raise exception 'MKT_GLOBAL_CONTENT_DENY_BYPASSED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ begin
+  perform public.mkt_create_work_package('66000000-0000-0000-0000-000000000001','other','Denied package',null,null,null,null);
+  raise exception 'MKT_GLOBAL_PACKAGE_DENY_BYPASSED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+end$$;
+rollback;

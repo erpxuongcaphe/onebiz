@@ -9,6 +9,7 @@ import {
   getCampaignPlanNodes,
   getPendingPlanningWorkPackages,
   getMyAssignedNodeCampaignIds,
+  getMktManageableCampaignIds,
 } from "@/lib/mkt/read-models";
 import { PlanningTree } from "@/components/mkt/planning-tree";
 import { PendingPlanningWorkPackages } from "@/components/mkt/pending-planning-work-packages";
@@ -32,6 +33,7 @@ export default async function PlanningPage() {
     ...pendingWorkPackages.map((item) => item.campaignId),
     ...myNodeCampaignIds,
   ].filter(Boolean)));
+  const manageableCampaignIds = await getMktManageableCampaignIds(supabase, campaignIds);
   // Nội dung + trụ gắn vào công đoạn; planNodes = TOÀN BỘ nút cấp 2/3 để
   // thao tác cây tại chỗ (tạo cấp, xếp thẻ) và hiện cả nhánh rỗng.
   const [contents, pillars, planNodes] = await Promise.all([
@@ -58,7 +60,8 @@ export default async function PlanningPage() {
         <PendingPlanningWorkPackages
           items={pendingWorkPackages}
           members={members}
-          canManage={Boolean(ctx.canManageCampaigns)}
+          canManage={false}
+          manageableCampaignIds={manageableCampaignIds}
         />
         <PlanningTree
           plans={plans}
@@ -69,8 +72,9 @@ export default async function PlanningPage() {
           members={members}
           contents={contents}
           pillars={pillars}
-          isLead={Boolean(ctx.isLead)}
-          canManage={Boolean(ctx.canManageCampaigns)}
+          isLead={Boolean(ctx.canManageTeam)}
+          canManage={false}
+          manageableCampaignIds={manageableCampaignIds}
         />
       </div>
     </div>

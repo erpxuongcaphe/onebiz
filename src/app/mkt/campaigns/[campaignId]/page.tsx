@@ -9,6 +9,7 @@ import {
   getExceptionLog,
   getLeaderQueue,
   getMktMembers,
+  getMktCampaignPermissions,
   getPillars,
   type MktCampaignDetailTab,
 } from "@/lib/mkt/read-models";
@@ -102,11 +103,12 @@ export default async function CampaignDetailPage({
     : "channels";
 
   const { supabase, ctx } = await getMktRequestContext();
-  const canManage = Boolean(ctx.canManageCampaigns);
-  const canSplit = Boolean(ctx.canSplit);
+  const campaignPermissions = await getMktCampaignPermissions(supabase, campaignId);
+  const canManage = campaignPermissions.canManage;
+  const canSplit = campaignPermissions.canSplit;
   const needsMembers =
     (activeTab === "channels" && (canManage || canSplit)) ||
-    (activeTab === "tasks" && Boolean(ctx.isLead));
+    (activeTab === "tasks" && (Boolean(ctx.isLead) || canManage));
   const needsPillars =
     activeTab === "content" ||
     (activeTab === "channels" && (canManage || canSplit));
@@ -116,7 +118,7 @@ export default async function CampaignDetailPage({
       ? getMktMembers(supabase, ctx.tenantId ?? undefined)
       : Promise.resolve([]),
     needsPillars ? getPillars(supabase) : Promise.resolve([]),
-    activeTab === "tasks" && ctx.isLead
+    activeTab === "tasks" && (ctx.isLead || canManage)
       ? getLeaderQueue(supabase).then((items) =>
           items.filter((item) => item.campaignId === campaignId),
         )
@@ -364,7 +366,7 @@ export default async function CampaignDetailPage({
                         <div className="flex shrink-0 flex-col items-end gap-1.5">
                           {needsSplit ? (
                             <>
-                              {canManage || ctx.canSplit ? (
+                              {canManage || canSplit ? (
                                 <WorkPackageSplitButton
                                   workPackageId={w.id}
                                   campaignId={c.id}
@@ -530,7 +532,7 @@ export default async function CampaignDetailPage({
         {/* Bảng công việc */}
         {activeTab === "tasks" ? (
           <section className="space-y-3">
-            {ctx.isLead && campaignQueue.length > 0 ? (
+            {(ctx.isLead || canManage) && campaignQueue.length > 0 ? (
               <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
                 <div className="mb-2 flex items-center gap-2 font-semibold text-amber-800">
                   <Icon name="manage_accounts" size={18} />
@@ -597,7 +599,7 @@ export default async function CampaignDetailPage({
         {/* Nội dung */}
         {activeTab === "content" ? (
           <section className="space-y-3">
-            {canManage || ctx.canSplit ? (
+            {canManage || canSplit ? (
               <div className="flex justify-end">
                 <ContentForm campaignId={c.id} pillars={pillars} />
               </div>
@@ -631,7 +633,7 @@ export default async function CampaignDetailPage({
                       )}
                       <ContentStatusBadge value={x.contentStatus} />
                       <RiskBadge value={x.riskLevel} />
-                      {canManage || ctx.canSplit ? (
+                      {canManage || canSplit ? (
                         <DeleteContentButton contentId={x.id} title={x.title} />
                       ) : null}
                     </div>

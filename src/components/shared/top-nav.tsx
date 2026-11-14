@@ -43,6 +43,7 @@ import {
 import { useCommandPalette } from "./command-palette";
 import { AppSwitcher } from "./app-switcher";
 import { useHubAccess } from "@/lib/operations/use-hub-access";
+import { useMktAccess } from "@/lib/mkt/use-mkt-access";
 import { ImportDataDialog } from "./import-data-dialog";
 import { LogoIcon, LogoWordmark } from "@/components/brand/logo";
 import { cn } from "@/lib/utils";
@@ -498,7 +499,8 @@ function MobileNav() {
   const pathname = usePathname();
   const { branches, currentBranch, switchBranch, hasPermission: baseHasPermission } = useAuth();
   const hubAllowed = useHubAccess();
-  const hasPermission = (code: string) => code === "ops.view" ? hubAllowed : baseHasPermission(code);
+  const mktAllowed = useMktAccess();
+  const hasPermission = (code: string) => code === "ops.view" ? hubAllowed : code === "mkt.view" ? mktAllowed : baseHasPermission(code);
   const [open, setOpen] = useState(false);
   // Keep mobile scope identical to the desktop selector.
   const canViewAll = hasPermission(PERMISSIONS.REPORTS_VIEW_ALL_BRANCHES);
