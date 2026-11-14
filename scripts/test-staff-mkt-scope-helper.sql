@@ -33,6 +33,7 @@ select set_config('request.jwt.claim.sub','22000000-0000-0000-0000-000000000002'
 do $$declare created jsonb;begin
  created:=public.mkt_create_campaign('Synthetic new',null,null,null,0,'33000000-0000-0000-0000-000000000001',null,'[]');
  if created->>'campaignId' is null then raise exception 'MKT_CREATE_BRANCH_FAILED';end if;
+ if not exists(select 1 from public.mkt_campaigns where id=(created->>'campaignId')::uuid and branch_id='33000000-0000-0000-0000-000000000001') then raise exception 'MKT_CREATED_WRONG_BRANCH';end if;
  begin
   perform public.mkt_create_content_item('66000000-0000-0000-0000-000000000003',null,'Shared content','other','low','88000000-0000-0000-0000-000000000001');
   raise exception 'MKT_BRANCH_GRANT_SHARED_CONTENT_ALLOWED';
