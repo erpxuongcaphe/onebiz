@@ -24,6 +24,7 @@ begin
   union select c.campaign_id from public.mkt_content_items c where c.id=p_content and c.tenant_id=tenant
   union select w.campaign_id from public.mkt_content_items c join public.mkt_channel_work_packages w on w.id=c.work_package_id and w.tenant_id=c.tenant_id where c.id=p_content and c.tenant_id=tenant
   union select cp.campaign_id from public.mkt_channel_plans cp where cp.id=p_plan and cp.tenant_id=tenant
+  union select w.campaign_id from public.mkt_channel_plans cp join public.mkt_channel_work_packages w on w.id=cp.work_package_id and w.tenant_id=cp.tenant_id where cp.id=p_plan and cp.tenant_id=tenant
  ) ids;
  if cardinality(linked)=0 then return coalesce(public.user_has_permission(p_user,p_code),false);end if;
  return not exists(select 1 from unnest(linked) id where not public._staff_mkt_campaign_permission(p_user,p_code,id));
