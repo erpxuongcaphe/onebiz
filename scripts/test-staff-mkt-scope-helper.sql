@@ -75,6 +75,10 @@ update public.user_branch_permission_overrides set override_type='revoke' where 
 insert into public.user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000002','33000000-0000-0000-0000-000000000001','mkt.split_work_packages','grant','22000000-0000-0000-0000-000000000002');
 do $$begin
  perform public.mkt_create_content_item('66000000-0000-0000-0000-000000000001','77000000-0000-0000-0000-000000000001','Split-only content','other','low','88000000-0000-0000-0000-000000000001');
+ begin
+  perform public.mkt_create_content_item('66000000-0000-0000-0000-000000000001','77000000-0000-0000-0000-000000000002','Split cross branch','other','low','88000000-0000-0000-0000-000000000001');
+  raise exception 'MKT_SPLIT_CONTENT_CROSS_BRANCH_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
  perform public.mkt_create_work_package('66000000-0000-0000-0000-000000000001','other','Split-only package',null,null,null,null);
  begin
   perform public.mkt_create_work_package('66000000-0000-0000-0000-000000000002','other','Split wrong branch',null,null,null,null);
