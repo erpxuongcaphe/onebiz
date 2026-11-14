@@ -43,6 +43,10 @@ do $$declare created jsonb;begin
   perform public.mkt_add_readiness_item('66000000-0000-0000-0000-000000000002','Wrong branch readiness','store','33000000-0000-0000-0000-000000000002',null);
   raise exception 'MKT_READINESS_WRONG_BRANCH_ALLOWED';
  exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ begin
+  perform public.mkt_create_work_package('66000000-0000-0000-0000-000000000003','other','Shared package',null,null,null,null);
+  raise exception 'MKT_BRANCH_GRANT_SHARED_PACKAGE_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
  perform public.mkt_create_work_package('66000000-0000-0000-0000-000000000001','other','Scoped package',null,null,null,null);
  begin
   perform public.mkt_create_work_package('66000000-0000-0000-0000-000000000002','other','Wrong branch package',null,null,null,null);
