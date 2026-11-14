@@ -2,9 +2,9 @@ import { getClient, handleError } from "./base";
 import type { CustomerListWorkspaceParams } from "./customers";
 import type { SupplierListWorkspaceParams } from "./suppliers";
 import { normalizeCreatedAtRange } from "@/lib/utils/list-date-preset-range";
-import { parsePartyDirectoryPage, readPartyDirectoryPages, type PartyDirectoryKind } from "./party-directory-reader";
+import { parsePartyDirectoryPage, parsePartyDirectoryPageV2, readPartyDirectoryPages, readPartyDirectoryPagesV2, type PartyDirectoryKind, type PartyDirectoryPageV2 } from "./party-directory-reader";
 
-interface ReadOptions { exportAll?: boolean; allPages?: boolean; signal?: AbortSignal }
+interface ReadOptions { exportAll?: boolean; allPages?: boolean; signal?: AbortSignal; scopeVersion?: 2 }
 type DirectoryParams = { page: number; pageSize: number; branchId: string | null };
 type SortParams = { sortBy?: string; sortDesc?: boolean };
 type RpcArgs = Record<string, string | number | boolean | string[] | null>;
@@ -33,7 +33,8 @@ async function readDirectory(kind: PartyDirectoryKind, params: DirectoryParams, 
   if ((!options.exportAll && (!Number.isSafeInteger(params.page) || params.page < 0
     || !Number.isSafeInteger(params.pageSize) || params.pageSize < 1 || params.pageSize > 200))
     || (params.branchId !== null && !params.branchId.trim())) throw new Error("Phạm vi danh sách không hợp lệ.");
-  const rpcName = kind === "customer" ? "get_customer_list_workspace_scoped" : "get_supplier_list_workspace_scoped";
+  const baseRpcName = kind === "customer" ? "get_customer_list_workspace_scoped" : "get_supplier_list_workspace_scoped";
+  const rpcName = options.scopeVersion === 2 ? `${baseRpcName}_v2` : baseRpcName;
   const read = async (request: DirectoryParams) => {
     options.signal?.throwIfAborted();
     // Staged source: callers switch only after the scoped RPC is installed and accepted.
@@ -47,8 +48,11 @@ async function readDirectory(kind: PartyDirectoryKind, params: DirectoryParams, 
     if (error) handleError(error, rpcName);
     return data as unknown;
   };
-  if (options.exportAll || options.allPages) return readPartyDirectoryPages(kind, params.branchId, read, options.signal);
-  return parsePartyDirectoryPage(kind, await read(params), params);
+  if (options.exportAll || options.allPages) return options.scopeVersion === 2
+    ? readPartyDirectoryPagesV2(kind, params.branchId, read, options.signal)
+    : readPartyDirectoryPages(kind, params.branchId, read, options.signal);
+  const value = await read(params);
+  return options.scopeVersion === 2 ? parsePartyDirectoryPageV2(kind, value, params) : parsePartyDirectoryPage(kind, value, params);
 }
 
 export function getScopedCustomerDirectory(
@@ -80,6 +84,18 @@ export function getScopedSupplierDirectory(
     p_statuses: params.statuses?.length ? [...params.statuses] : null, p_province: optional(params.province),
     p_debt_min: debtMin, p_debt_max: debtMax, p_total_purchase_min: purchasesMin, p_total_purchase_max: purchasesMax,
   }, options);
+}
+
+/** Staged callers switch to these only after the versioned readers are installed. */
+export function getScopedCustomerDirectoryV2(
+  params: Omit<CustomerListWorkspaceParams, "branchId"> & { branchId: string | null } & SortParams, options: Omit<ReadOptions, "scopeVersion"> = {},
+): Promise<PartyDirectoryPageV2> {
+  return getScopedCustomerDirectory(params, { ...options, scopeVersion: 2 }) as Promise<PartyDirectoryPageV2>;
+}
+export function getScopedSupplierDirectoryV2(
+  params: SupplierListWorkspaceParams & { branchId: string | null } & SortParams, options: Omit<ReadOptions, "scopeVersion"> = {},
+): Promise<PartyDirectoryPageV2> {
+  return getScopedSupplierDirectory(params, { ...options, scopeVersion: 2 }) as Promise<PartyDirectoryPageV2>;
 }
 function sortFilters(kind: PartyDirectoryKind, params: SortParams): RpcArgs {
   const allowed = kind === "customer" ? ["createdAt", "code", "name", "phone", "currentDebt", "totalSales", "totalSalesMinusReturns", "loyaltyPoints"]

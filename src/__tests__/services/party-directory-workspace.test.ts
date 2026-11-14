@@ -4,7 +4,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
   getClient: () => api,
   handleError: (error: { message: string }) => { throw new Error(error.message); },
 }));
-import { getScopedCustomerDirectory, getScopedSupplierDirectory } from "@/lib/services/supabase/party-directory-workspace";
+import { getScopedCustomerDirectory, getScopedSupplierDirectory, getScopedCustomerDirectoryV2, getScopedSupplierDirectoryV2 } from "@/lib/services/supabase/party-directory-workspace";
 
 const empty = (kind: "customer" | "supplier", branchId: string | null = "branch-a") => ({
   revision: "a".repeat(32), total: 0, items: [], summary: {
@@ -16,6 +16,16 @@ const empty = (kind: "customer" | "supplier", branchId: string | null = "branch-
 });
 beforeEach(() => { vi.resetAllMocks(); });
 describe("staged scoped directory workspace", () => {
+  it.each(["customer", "supplier"] as const)("uses only the versioned reader for %s", async kind => {
+    const data = empty(kind);
+    Object.assign(data.summary.scope, { activityBranchIds: [], debtBranchIds: [] });
+    api.rpc.mockResolvedValue({ data, error: null });
+    const params = { branchId: "branch-a", page: 0, pageSize: 15 };
+    if (kind === "customer") await getScopedCustomerDirectoryV2(params);
+    else await getScopedSupplierDirectoryV2(params);
+    expect(api.rpc).toHaveBeenCalledWith(`get_${kind}_list_workspace_scoped_v2`, expect.objectContaining({ p_branch_id: "branch-a" }));
+    expect(api.from).not.toHaveBeenCalled();
+  });
   it("preserves customer filters and branch in one scoped request", async () => {
     api.rpc.mockResolvedValue({ data: empty("customer"), error: null });
     await getScopedCustomerDirectory({ branchId: "branch-a", page: 0, pageSize: 15,

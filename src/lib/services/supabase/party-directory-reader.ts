@@ -4,6 +4,10 @@ export interface PartyDirectoryScope {
   scope: "company" | "assigned" | "branch";
   branchIds: string[];
 }
+export interface PartyDirectoryScopeV2 extends PartyDirectoryScope {
+  activityBranchIds: string[];
+  debtBranchIds: string[];
+}
 export interface PartyDirectoryContact extends Omit<Customer, "currentDebt" | "totalSales" | "totalSalesMinusReturns"> {
   id: string;
   code: string;
@@ -30,6 +34,7 @@ export interface PartyDirectoryPage {
   netSales: number | null;
   partiesWithDebt: number | null;
 }
+export type PartyDirectoryPageV2 = Omit<PartyDirectoryPage, "scope"> & { scope: PartyDirectoryScopeV2 };
 
 type RecordValue = Record<string, unknown>;
 function record(value: unknown): RecordValue {
@@ -152,6 +157,32 @@ export function parsePartyDirectoryPage(
   };
 }
 
+/** V2 keeps the independently authorized metric scopes explicit for UI/export. */
+export function parsePartyDirectoryPageV2(
+  kind: PartyDirectoryKind,
+  value: unknown,
+  request: { branchId: string | null; page: number; pageSize: number },
+): PartyDirectoryPageV2 {
+  const page = parsePartyDirectoryPage(kind, value, request);
+  const rawScope = record(record(record(value).summary).scope);
+  if (!Array.isArray(rawScope.activityBranchIds) || !Array.isArray(rawScope.debtBranchIds)) {
+    throw new Error("PARTY_DIRECTORY_METRIC_SCOPE_REQUIRED");
+  }
+  const activityBranchIds = rawScope.activityBranchIds.map(identifier);
+  const debtBranchIds = rawScope.debtBranchIds.map(identifier);
+  const allowed = new Set(page.scope.branchIds);
+  for (const ids of [activityBranchIds, debtBranchIds]) {
+    if (new Set(ids).size !== ids.length || ids.some(id => !allowed.has(id))) {
+      throw new Error("PARTY_DIRECTORY_METRIC_SCOPE_INVALID");
+    }
+  }
+  if (page.canViewActivity !== (activityBranchIds.length > 0)
+    || page.canViewDebt !== (debtBranchIds.length > 0)) {
+    throw new Error("PARTY_DIRECTORY_METRIC_SCOPE_MISMATCH");
+  }
+  return { ...page, scope: { ...page.scope, activityBranchIds, debtBranchIds } };
+}
+
 export function partyDirectoryExportRows(page: PartyDirectoryPage): Record<string, string | number | null>[] {
   return page.contacts.map(contact => ({
     code: contact.code, name: contact.name, phone: contact.phone,
@@ -166,19 +197,40 @@ export async function readPartyDirectoryPages(
   read: (request: { branchId: string | null; page: number; pageSize: number }) => Promise<unknown>,
   signal?: AbortSignal,
 ): Promise<PartyDirectoryPage> {
+  return readPartyDirectoryPagesUsing(kind, branchId, read, parsePartyDirectoryPage, signal);
+}
+
+export async function readPartyDirectoryPagesV2(
+  kind: PartyDirectoryKind,
+  branchId: string | null,
+  read: (request: { branchId: string | null; page: number; pageSize: number }) => Promise<unknown>,
+  signal?: AbortSignal,
+): Promise<PartyDirectoryPageV2> {
+  return readPartyDirectoryPagesUsing(kind, branchId, read, parsePartyDirectoryPageV2, signal);
+}
+
+async function readPartyDirectoryPagesUsing<T extends PartyDirectoryPage>(
+  kind: PartyDirectoryKind,
+  branchId: string | null,
+  read: (request: { branchId: string | null; page: number; pageSize: number }) => Promise<unknown>,
+  parse: (kind: PartyDirectoryKind, value: unknown, request: { branchId: string | null; page: number; pageSize: number }) => T,
+  signal?: AbortSignal,
+): Promise<T> {
   const pageSize = 200;
-  let result: PartyDirectoryPage | null = null;
+  let result: T | null = null;
   let signature: string | null = null;
   const ids = new Set<string>();
   for (let page = 0; ; page++) {
     signal?.throwIfAborted();
     const request = { branchId, page, pageSize };
-    const next = parsePartyDirectoryPage(kind, await read(request), request);
+    const next = parse(kind, await read(request), request);
     signal?.throwIfAborted();
     // A changed authorized dataset must restart the export, not mix pages.
     const nextSignature = JSON.stringify({
       revision: next.revision,
       total: next.total, scope: next.scope.scope, branches: [...next.scope.branchIds].sort(),
+      activityBranches: "activityBranchIds" in next.scope ? [...(next.scope as PartyDirectoryScopeV2).activityBranchIds].sort() : null,
+      debtBranches: "debtBranchIds" in next.scope ? [...(next.scope as PartyDirectoryScopeV2).debtBranchIds].sort() : null,
       canViewActivity: next.canViewActivity, canViewDebt: next.canViewDebt,
       activity: next.activity, debt: next.debt, returns: next.returns,
       netSales: next.netSales, partiesWithDebt: next.partiesWithDebt,

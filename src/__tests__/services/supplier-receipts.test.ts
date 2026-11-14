@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const fake = vi.hoisted(() => ({ rpc: vi.fn() }));
 vi.mock("@/lib/services/supabase/base", () => ({ getClient: () => ({ rpc: fake.rpc }), handleError: (error: Error) => { throw error; } }));
-import { getAllSupplierReceipts, getSupplierReceiptWorkspace } from "@/lib/services/supabase/supplier-receipts";
+import { getAllSupplierReceipts, getSupplierReceiptWorkspace, getAllSupplierReceiptsV2, getSupplierReceiptWorkspaceV2 } from "@/lib/services/supabase/supplier-receipts";
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const row = (n: number) => ({ id: id(n), occurredAt: "2026-10-01T00:00:00+07:00", kind: "receipt", branchId: id(10000), branchName: "Fixture", orderId: id(10001), orderCode: "PN-1", supplierId: id(10002), supplierName: "Fixture", documentCode: "PN-1", documentStatus: "partial", productId: id(10003), productCode: "SKU-1", productName: "Fixture", stockUnit: "G", quantity: 10, unitPrice: 2, amount: 20, signedAmount: 20, priceSource: "movement", status: "verified" });
 const result = (items = [row(1)], total = items.length, fingerprint = "a".repeat(32)) => ({ data: { items, total, fingerprint, basis: "historical_goods_value_before_document_discount_tax_and_fees", summary: { rows: total, reviewRows: 0, receivedAmount: total * 20, revertedAmount: 0, returnedAmount: 0, netAmount: total * 20 } }, error: null });
@@ -39,5 +39,34 @@ describe("supplier physical receipt source", () => {
     await expect(getSupplierReceiptWorkspace(query)).rejects.toThrow("Không có quyền");
     fake.rpc.mockResolvedValue({ data: null, error: { code: "PGRST202" } });
     await expect(getSupplierReceiptWorkspace(query)).rejects.toThrow("chưa sẵn sàng");
+  });
+});
+
+describe("supplier receipt branch scope v2", () => {
+  const scoped = (items = [row(1)], total = items.length, branchIds = [id(10000)]) => {
+    const response = result(items, total);
+    return { ...response, data: { ...response.data, authorizedBranchIds: branchIds, scopeComplete: false } };
+  };
+  it("reads a selected branch with explicit scope", async () => {
+    fake.rpc.mockResolvedValue(scoped());
+    expect((await getSupplierReceiptWorkspaceV2(query)).authorizedBranchIds).toEqual([query.branchId]);
+    expect(fake.rpc).toHaveBeenCalledWith("get_supplier_receipt_workspace_v2", expect.anything());
+  });
+  it("rejects missing, duplicated, mismatched, and out-of-scope branches", async () => {
+    for (const response of [result(), scoped([row(1)], 1, [id(10000), id(10000)]), scoped([row(1)], 1, [id(10001)]), scoped([{ ...row(1), branchId: null }] as unknown as ReturnType<typeof row>[])]) {
+      fake.rpc.mockResolvedValue(response);
+      await expect(getSupplierReceiptWorkspaceV2(query)).rejects.toThrow();
+    }
+  });
+  it("stops an export if scope changes even when its rows and fingerprint do not", async () => {
+    const allBranches = { from: query.from, to: query.to };
+    fake.rpc.mockResolvedValueOnce(scoped(Array.from({ length: 200 }, (_, i) => row(i + 1)), 201, [id(10000), id(10001)]))
+      .mockResolvedValueOnce(scoped([row(201)], 201, [id(10000)]));
+    await expect(getAllSupplierReceiptsV2(allBranches)).rejects.toThrow("quyền chi nhánh đã thay đổi");
+  });
+  it("rejects export when scope changed after the report was shown", async () => {
+    const allBranches = { from: query.from, to: query.to };
+    fake.rpc.mockResolvedValue(scoped());
+    await expect(getAllSupplierReceiptsV2(allBranches, { fingerprint: "a".repeat(32), scopeComplete: false, authorizedBranchIds: [id(10000), id(10001)] })).rejects.toThrow("quyền chi nhánh đã thay đổi");
   });
 });

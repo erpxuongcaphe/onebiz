@@ -2,12 +2,12 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const fake = vi.hoisted(() => ({ allowed: true, exportAllowed: true, read: vi.fn(), full: vi.fn() }));
-vi.mock("@/lib/contexts/auth-context", () => ({ useAuth: () => ({ user: { id: "actor" }, tenant: { id: "tenant" }, hasPermission: (code: string) => code === "reports.export_detail" ? fake.exportAllowed : fake.allowed }) }));
-vi.mock("@/lib/services/supabase/supplier-receipts", () => ({ getSupplierReceiptWorkspace: fake.read, getAllSupplierReceipts: fake.full,
+vi.mock("@/lib/contexts/auth-context", () => ({ useAuth: () => ({ user: { id: "actor" }, tenant: { id: "tenant" }, branches: [{ id: "a", name: "Quán A" }], hasPermissionAtBranch: () => fake.allowed, hasAssignedBranchAccess: () => true, hasPermission: (code: string) => code === "reports.export_detail" ? fake.exportAllowed : fake.allowed }) }));
+vi.mock("@/lib/services/supabase/supplier-receipts", () => ({ getSupplierReceiptWorkspaceV2: fake.read, getAllSupplierReceiptsV2: fake.full,
   SUPPLIER_RECEIPT_KINDS: { receipt: "Nhập kho", revert: "Hoàn nhập", return: "Trả NCC" }, SUPPLIER_RECEIPT_STATUSES: { verified: "Đủ nguồn", missing_price: "Thiếu giá lịch sử" } }));
 import { SupplierReceiptsPanel } from "@/components/shared/report/supplier-receipts-panel";
 const range = { from: "2026-10-01", to: "2026-10-26" };
-const result = (code = "PN-fixture") => ({ items: [{ id: "one", occurredAt: "2026-10-26T01:00:00Z", kind: "receipt", branchName: "Fixture", orderCode: code, supplierName: "Fixture", documentCode: code, documentStatus: "partial", productCode: "SKU-fixture", productName: "Fixture", stockUnit: "G", quantity: 1.2345, unitPrice: null, amount: null, signedAmount: null, priceSource: null, status: "missing_price" }], total: 1, summary: { rows: 1, reviewRows: 1, receivedAmount: null, revertedAmount: 0, returnedAmount: 0, netAmount: null } });
+const result = (code = "PN-fixture") => ({ authorizedBranchIds: ["a"], scopeComplete: true, items: [{ id: "one", occurredAt: "2026-10-26T01:00:00Z", kind: "receipt", branchName: "Fixture", orderCode: code, supplierName: "Fixture", documentCode: code, documentStatus: "partial", productCode: "SKU-fixture", productName: "Fixture", stockUnit: "G", quantity: 1.2345, unitPrice: null, amount: null, signedAmount: null, priceSource: null, status: "missing_price" }], total: 1, summary: { rows: 1, reviewRows: 1, receivedAmount: null, revertedAmount: 0, returnedAmount: 0, netAmount: null } });
 beforeEach(() => { fake.allowed = true; fake.exportAllowed = true; fake.read.mockReset().mockResolvedValue(result()); fake.full.mockReset(); });
 afterEach(cleanup);
 describe("supplier physical receipts UI", () => {

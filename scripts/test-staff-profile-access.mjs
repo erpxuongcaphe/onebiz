@@ -332,6 +332,20 @@ try {
     "./staff-access-tests/hierarchy.mjs"
   );
   await verifyHierarchyIntegration(db, { id, actor, check, rejects });
+  // The new party controls use the same single-save editor as existing rights.
+  await actor(100);
+  await db.exec(`insert into staff_branch_permission_catalog(permission_code,enforcement_version) values
+    ('customers.view_sales',1),('customers.view_debt',1),('suppliers.view_purchases',1),('suppliers.view_debt',1) on conflict do nothing`);
+  s = await snapshot();
+  d = draft(s);
+  d.branchIds = [id(10), id(11)];
+  d.exceptions.push({ branchId: id(10), permissionCode: 'customers.view_debt', choice: 'grant' });
+  d.exceptions.push({ branchId: id(11), permissionCode: 'suppliers.view_purchases', choice: 'grant' });
+  s = await save(s, d);
+  await actor(101);
+  check((await db.query("select user_has_permission_at_branch($1,'customers.view_debt',$2) allowed",[id(101),id(10)])).rows[0].allowed,true,'customer debt grant applies to selected branch');
+  check((await db.query("select user_has_permission_at_branch($1,'customers.view_debt',$2) allowed",[id(101),id(11)])).rows[0].allowed,false,'customer debt grant does not cross branches');
+  check((await db.query("select user_has_permission_at_branch($1,'suppliers.view_purchases',$2) allowed",[id(101),id(11)])).rows[0].allowed,true,'supplier purchases grant applies to selected branch');
   console.log(`PASS ${checks} staff profile PostgreSQL checks`);
 } catch (error) {
   console.error(error.message, error.where);

@@ -6,14 +6,15 @@ import { Button } from "@/components/ui/button";
 import { StaffProfileEditor } from "@/components/shared/staff-profile-editor";
 import {
   getStaffProfileAccess,
-  saveStaffProfileAccess,
 } from "@/lib/services/supabase/staff-profile-access";
+import { getStaffOperationsAccess, saveStaffProfileOperations, type StaffOperationsSnapshot } from "@/lib/services/supabase/staff-operations-access";
 import type { StaffProfileSnapshot } from "@/lib/admin/staff-profile-access";
 
 export default function StaffProfileAccessPage() {
   const { id } = useParams<{ id: string }>();
   const { user, isLoading } = useAuth();
   const [snapshot, setSnapshot] = useState<StaffProfileSnapshot | null>(null);
+  const [operations, setOperations] = useState<StaffOperationsSnapshot | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const request = useRef<AbortController | null>(null);
@@ -22,10 +23,11 @@ export default function StaffProfileAccessPage() {
     request.current?.abort();
     const current = new AbortController();
     request.current = current;
-    void getStaffProfileAccess(id)
-      .then((next) => {
+    void Promise.all([getStaffProfileAccess(id), getStaffOperationsAccess(id)])
+      .then(([next, ops]) => {
         if (current.signal.aborted) return;
         setSnapshot(next);
+        setOperations(ops);
         setError("");
       })
       .catch((error: unknown) => {
@@ -67,16 +69,18 @@ export default function StaffProfileAccessPage() {
           </Button>
         </div>
       )}
-      {snapshot?.user.id === id ? (
+      {snapshot?.user.id === id && operations?.userId === id ? (
         <StaffProfileEditor
-          key={snapshot.fingerprint}
+          key={`${snapshot.fingerprint}:${operations.fingerprint}`}
           snapshot={snapshot}
+          operations={operations}
           onReload={() => void load()}
-          onSave={async (draft) => {
+          onSave={async (draft, changes = [], deactivateQc = []) => {
             const sequence = request.current;
-            const saved = await saveStaffProfileAccess(snapshot, draft);
+            const saved = await saveStaffProfileOperations(snapshot, draft, operations, changes, deactivateQc);
             if (sequence === request.current && !sequence?.signal.aborted) {
-              setSnapshot(saved);
+              setSnapshot(saved.profile);
+              setOperations(saved.operations);
               setNotice("Đã lưu phân công, chi nhánh truy cập và quyền riêng.");
             }
           }}

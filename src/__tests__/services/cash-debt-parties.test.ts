@@ -10,7 +10,7 @@ function page(kind: "customer" | "supplier", total: number, offset = 0, revision
       id: `party-${offset + i}`, code: `TEST-${offset + i}`, name: `Synthetic ${offset + i}`, phone: "",
       debt: allowed ? 100 : null, total_spent: null, total_purchases: null, returned_total: null, total_orders: null, last_purchase_at: null,
     })),
-    summary: { scope: { scope: "branch", branchIds: ["branch-test"] }, canViewActivity: false, canViewDebt: allowed,
+    summary: { scope: { scope: "branch", branchIds: ["branch-test"], activityBranchIds: [], debtBranchIds: allowed ? ["branch-test"] : [] }, canViewActivity: false, canViewDebt: allowed,
       totalDebt: allowed ? total * 100 : null,
       ...(kind === "customer" ? { totalSales: null, totalReturns: null, netSales: null, customersWithDebt: allowed ? total : null } : { totalPurchases: null, suppliersWithDebt: allowed ? total : null }) },
   };
@@ -22,7 +22,7 @@ it("loads a complete picker beyond 1000 entries using normal scoped pages", asyn
   expect(rows).toHaveLength(1001); expect(rows[1000].id).toBe("party-1000");
   expect(m.rpc).toHaveBeenCalledTimes(6);
   for (const [name, args] of m.rpc.mock.calls) {
-    expect(name).toBe("get_customer_list_workspace_scoped");
+    expect(name).toBe("get_customer_list_workspace_scoped_v2");
     expect(args).toMatchObject({ p_branch_id: "branch-test", p_page_size: 200, p_debt_filter: "has_debt", p_for_export: false });
   }
   expect(m.from).not.toHaveBeenCalled();
@@ -35,7 +35,7 @@ it("filters nonpositive and internal supplier entries without changing positive 
   payload.items[2] = internal;
   m.rpc.mockResolvedValue({ data: payload, error: null });
   expect(await getCashDebtParties("supplier", "branch-test")).toEqual([{ id: "party-0", code: "TEST-0", name: "Synthetic 0", debt: 125 }]);
-  expect(m.rpc).toHaveBeenCalledWith("get_supplier_list_workspace_scoped", expect.objectContaining({ p_branch_id: "branch-test", p_debt_min: 0, p_for_export: false }));
+  expect(m.rpc).toHaveBeenCalledWith("get_supplier_list_workspace_scoped_v2", expect.objectContaining({ p_branch_id: "branch-test", p_debt_min: 0, p_for_export: false }));
 });
 it("does not treat a masked balance as zero", async () => {
   m.rpc.mockResolvedValue({ data: page("customer", 0, 0, "a".repeat(32), false), error: null });

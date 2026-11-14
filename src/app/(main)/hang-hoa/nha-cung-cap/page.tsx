@@ -9,11 +9,12 @@ import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
 import { ListMetric } from "@/components/shared/list-metric";
 import { ListWorkspaceError } from "@/components/shared/list-workspace-error";
-import { getScopedSupplierDirectory } from "@/lib/services/supabase/party-directory-workspace";
+import { getScopedSupplierDirectoryV2 } from "@/lib/services/supabase/party-directory-workspace";
 import { getSupplierGroupLabel } from "@/lib/services/supabase/suppliers";
-import { getScopedPartyHistory } from "@/lib/services/supabase/party-history-workspace";
+import { getScopedPartyHistoryV2 } from "@/lib/services/supabase/party-history-workspace";
+import { PartyDirectoryMetricScope } from "@/components/shared/party-directory-metric-scope";
 import { partyHistoryModel, type PartyHistoryDocument } from "@/lib/services/supabase/party-history-reader";
-import { supplierDirectoryModel, supplierEditProfile, directoryScopeLabel, type DirectorySupplier as Supplier } from "@/lib/services/supabase/party-directory-model";
+import { supplierDirectoryModel, supplierEditProfile, directoryMetricScopeLabel, sameDirectoryMetricScope, type DirectorySupplier as Supplier } from "@/lib/services/supabase/party-directory-model";
 import {
   FilterChips,
   type ListFilterChip,
@@ -100,7 +101,7 @@ function SupplierDetail({
   const supplierGroup = useListWorkspaceQuery(groupLoader, true, `${tenant?.id ?? ""}:${user?.id ?? ""}`);
   const historyLoader = useCallback(() => {
     void historyRevision; void supplier.currentDebt;
-    return getScopedPartyHistory("supplier", supplier.id, activeBranchId ?? null);
+    return getScopedPartyHistoryV2("supplier", supplier.id, activeBranchId ?? null);
   }, [supplier.id, activeBranchId, historyRevision, supplier.currentDebt]);
   const history = useListWorkspaceQuery(historyLoader, canViewActivity, `${tenant?.id ?? ""}:${user?.id ?? ""}:${canViewDebt}`);
   const { documents: orders, returns } = partyHistoryModel(history.data);
@@ -112,6 +113,7 @@ function SupplierDetail({
   const totalOrderValue = postedOrders.reduce((sum, o) => sum + o.total, 0);
   const totalPaidAll = postedOrders.reduce((sum, o) => sum + (o.paid ?? 0), 0);
   const totalOwedAll = outstandingOrders.reduce((sum, o) => sum + (o.amountOwed ?? 0), 0);
+  const debtRowsComplete = postedOrders.every(o => o.paid !== null && o.amountOwed !== null);
 
   const statusBadge = (status: string) => {
     const meta = statusMeta[status as PurchaseOrder["status"]];
@@ -233,7 +235,7 @@ function SupplierDetail({
                   },
                   ...(canViewDebt ? [{
                     label: "Đã trả cho phiếu đã nhập",
-                    value: formatCurrency(totalPaidAll),
+                    value: debtRowsComplete ? formatCurrency(totalPaidAll) : "Không đủ quyền xem toàn bộ",
                   },
                   {
                     label: "Còn nợ",
@@ -245,7 +247,7 @@ function SupplierDetail({
                             : "text-muted-foreground"
                         }
                       >
-                        {formatCurrency(totalOwedAll)}
+                        {debtRowsComplete ? formatCurrency(totalOwedAll) : "Không đủ quyền xem toàn bộ"}
                       </span>
                     ),
                   }] : []),
@@ -385,7 +387,7 @@ function SupplierDetail({
 /* ------------------------------------------------------------------ */
 export default function NhaCungCapPage() {
   const { hasPermission, user, tenant } = useAuth();
-  const { activeBranchId: listBranchId, isReady: branchScopeReady } = useBranchFilter();
+  const { activeBranchId: listBranchId, branches, isReady: branchScopeReady } = useBranchFilter();
   const canDeleteSupplier = hasPermission(PERMISSIONS.SUPPLIERS_DELETE);
   const [otpSupplier, setOtpSupplier] = useState<Supplier | null>(null);
   const { toast } = useToast();
@@ -481,7 +483,7 @@ export default function NhaCungCapPage() {
       const effectiveDateFrom =
         datePreset === "custom" ? dateFrom : presetRange.from;
       const effectiveDateTo = datePreset === "custom" ? dateTo : presetRange.to;
-      return getScopedSupplierDirectory({
+      return getScopedSupplierDirectoryV2({
         page,
         pageSize,
         sortBy: sorting[0]?.id,
@@ -522,7 +524,7 @@ export default function NhaCungCapPage() {
   const total = workspace?.total ?? 0;
   const summary = workspace?.summary ?? { totalPurchases: 0, totalDebt: 0, suppliersWithDebt: 0 };
   const canShowActivity = workspace?.canViewActivity === true;
-  const canShowDebt = workspace?.canViewDebt === true && hasPermission(PERMISSIONS.SUPPLIERS_VIEW_DEBT);
+  const canShowDebt = workspace?.canViewDebt === true;
   const exportRequest = useRef<AbortController | null>(null);
   useEffect(() => () => { exportRequest.current?.abort(); exportRequest.current = null; }, [loadWorkspace, listBranchId, user?.id, tenant?.id]);
 
@@ -651,6 +653,7 @@ export default function NhaCungCapPage() {
     try {
     const exported = await loadWorkspace(true, controller.signal);
     if (controller.signal.aborted) return;
+    if (!sameDirectoryMetricScope(workspace.scope, exported.scope)) throw new Error("Phạm vi quyền đã thay đổi. Vui lòng tải lại danh sách trước khi xuất.");
     const exportColumns = [
       { header: "Mã NCC", key: "code", width: 12 },
       { header: "Tên NCC", key: "name", width: 25 },
@@ -658,14 +661,14 @@ export default function NhaCungCapPage() {
       { header: "Email", key: "email", width: 25 },
       { header: "Địa chỉ", key: "address", width: 35 },
       { header: "Mã số thuế", key: "taxCode", width: 18 },
-      ...(exported.canViewDebt && hasPermission(PERMISSIONS.SUPPLIERS_VIEW_DEBT) ? [{
-        header: "Số dư công nợ",
+      ...(exported.canViewDebt ? [{
+        header: `Số dư công nợ (${directoryMetricScopeLabel(exported.scope, "debt", branches)})`,
         key: "currentDebt",
         width: 18,
         format: (v: number) => v,
       }] : []),
       ...(exported.canViewActivity ? [{
-        header: "Tổng mua",
+        header: `Tổng mua (${directoryMetricScopeLabel(exported.scope, "activity", branches)})`,
         key: "totalPurchases",
         width: 15,
         format: (v: number) => v,
@@ -759,7 +762,7 @@ export default function NhaCungCapPage() {
           columnToggle
           toolbarMetrics={
             <>
-              {workspace && <span className="col-span-2 px-2 text-xs font-medium text-muted-foreground">{directoryScopeLabel(workspace.scope)}</span>}
+              {workspace && <div className="col-span-2"><PartyDirectoryMetricScope scope={workspace.scope} branches={branches} kind="supplier" /></div>}
               <ListMetric
                 icon={<Icon name="local_shipping" size={15} />}
                 label="Kết quả"

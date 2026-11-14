@@ -6,8 +6,8 @@ import { useDebounce } from "@/lib/utils/use-debounce";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { formatCurrency, formatDate, formatNumber, formatUnitPrice } from "@/lib/format";
-import { getAllSupplierReceipts, getSupplierReceiptWorkspace, SUPPLIER_RECEIPT_KINDS, SUPPLIER_RECEIPT_STATUSES,
-  type SupplierReceiptQuery, type SupplierReceiptRow, type SupplierReceiptSort, type SupplierReceiptWorkspace } from "@/lib/services/supabase/supplier-receipts";
+import { getAllSupplierReceiptsV2, getSupplierReceiptWorkspaceV2, SUPPLIER_RECEIPT_KINDS, SUPPLIER_RECEIPT_STATUSES,
+  type SupplierReceiptQuery, type SupplierReceiptRow, type SupplierReceiptSort, type SupplierReceiptWorkspaceV2 } from "@/lib/services/supabase/supplier-receipts";
 import type { DateRange } from "@/lib/types/report";
 import type { ExcelColumn } from "@/lib/utils/excel-export";
 
@@ -46,8 +46,12 @@ function cell(row: SupplierReceiptRow, column: typeof columns[number]) {
   return <a className="font-medium text-primary underline-offset-4 hover:underline" href={`${path}?${params}`}>{text}</a>;
 }
 export function SupplierReceiptsPanel({ branchId, branchName, range, ready }: { branchId?: string; branchName: string; range: DateRange; ready: boolean }) {
-  const { user, tenant, hasPermission } = useAuth();
-  const allowed = ["reports.analytics", "reports.view_detail", "suppliers.view_purchases"].every(permission => hasPermission(permission));
+  const { user, tenant, branches, hasPermission, hasPermissionAtBranch, hasAssignedBranchAccess } = useAuth();
+  const required = ["reports.analytics", "reports.view_detail", "suppliers.view_purchases"];
+  const eligibleBranchIds = branches.filter(branch => hasAssignedBranchAccess(branch.id) && required.every(permission => hasPermissionAtBranch(permission, branch.id))).map(branch => branch.id).sort();
+  const allowed = branchId
+    ? hasAssignedBranchAccess(branchId) && required.every(permission => hasPermissionAtBranch(permission, branchId))
+    : hasPermission("reports.view_all_branches") && eligibleBranchIds.length > 0;
   const canExport = hasPermission("reports.export_detail");
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 250);
@@ -58,17 +62,17 @@ export function SupplierReceiptsPanel({ branchId, branchName, range, ready }: { 
   const [page, setPage] = useState(0);
   const [size, setSize] = useState(50);
   const [revision, setRevision] = useState(0);
-  const [loaded, setLoaded] = useState<{ scope: string; data: SupplierReceiptWorkspace } | null>(null);
+  const [loaded, setLoaded] = useState<{ scope: string; data: SupplierReceiptWorkspaceV2 } | null>(null);
   const [error, setError] = useState<{ scope: string; message: string } | null>(null);
   const [exporting, setExporting] = useState(false);
-  const scope = JSON.stringify([user?.id, tenant?.id, allowed, canExport, branchId, range.from, range.to, ready, search, debouncedSearch, kind, status, sort, descending, page, size, revision]);
+  const scope = JSON.stringify([user?.id, tenant?.id, allowed, canExport, branchId, eligibleBranchIds, range.from, range.to, ready, search, debouncedSearch, kind, status, sort, descending, page, size, revision]);
   const scopeRef = useRef(scope);
   const from = range.from, to = range.to;
   useEffect(() => {
     scopeRef.current = scope;
     if (!allowed || !ready || !user?.id || !tenant?.id || search !== debouncedSearch) return;
     let active = true;
-    getSupplierReceiptWorkspace({ branchId, from, to, search: debouncedSearch, kind, status, sortBy: sort, descending, page, size })
+    getSupplierReceiptWorkspaceV2({ branchId, from, to, search: debouncedSearch, kind, status, sortBy: sort, descending, page, size })
       .then(data => { if (active && scopeRef.current === scope) setLoaded({ scope, data }); })
       .catch(reason => { if (active && scopeRef.current === scope) setError({ scope, message: reason instanceof Error ? reason.message : "Không tải được thực nhập." }); });
     return () => { active = false; if (scopeRef.current === scope) scopeRef.current = ""; };
@@ -76,15 +80,17 @@ export function SupplierReceiptsPanel({ branchId, branchName, range, ready }: { 
   const data = loaded?.scope === scope ? loaded.data : null;
   const failure = error?.scope === scope ? error.message : null;
   const busy = !data && !failure;
+  const metricBranches = data?.authorizedBranchIds.map(id => branches.find(branch => branch.id === id)?.name);
+  const metricScope = data ? (metricBranches?.every(Boolean) ? metricBranches.join(", ") : `${data.authorizedBranchIds.length} chi nhánh được cấp`) : "";
   async function exportFull() {
     if (!canExport || !data || failure || exporting || scopeRef.current !== scope) return;
     setExporting(true);
     try {
-      const rows = await getAllSupplierReceipts({ branchId, from, to, search: debouncedSearch, kind, status, sortBy: sort, descending });
+      const rows = await getAllSupplierReceiptsV2({ branchId, from, to, search: debouncedSearch, kind, status, sortBy: sort, descending }, data);
       const { exportReportToExcel } = await import("@/lib/utils/excel-export");
       if (scopeRef.current !== scope) return;
       await exportReportToExcel({ kind: "thuc-nhap-ncc", mode: "full", range, branchName, reportTitle: "Thực nhập nhà cung cấp", shouldSave: () => scopeRef.current === scope,
-        disclaimer: "Theo ngày biến động và giá lịch sử. Chưa phân bổ giảm giá, VAT, phí của phiếu; không phải tiền đã chi. ĐVT tồn và thông tin phiếu là danh mục/trạng thái hiện tại. Trống là chưa xác minh.",
+        disclaimer: `Phạm vi chi nhánh: ${metricScope}. Theo ngày biến động và giá lịch sử. Chưa phân bổ giảm giá, VAT, phí của phiếu; không phải tiền đã chi. ĐVT tồn và thông tin phiếu là danh mục/trạng thái hiện tại. Trống là chưa xác minh.`,
         sheets: [{ name: "Thực nhập", columns, rows: rows.map(row => ({ ...row, kind: SUPPLIER_RECEIPT_KINDS[row.kind], status: SUPPLIER_RECEIPT_STATUSES[row.status],
           documentStatus: statusLabel(row.documentStatus), priceSource: row.priceSource === "movement" ? "Sổ kho" : row.priceSource === "return_line" ? "Dòng trả NCC" : null })) }] });
     } catch (reason) {
@@ -98,6 +104,7 @@ export function SupplierReceiptsPanel({ branchId, branchName, range, ready }: { 
       <Button variant="outline" size="sm" aria-label="Tải lại thực nhập" title="Tải lại thực nhập" onClick={() => setRevision(value => value + 1)}><Icon name="refresh" size={16} /></Button>
       {canExport && <Button variant="outline" size="sm" onClick={exportFull} disabled={busy || !!failure || exporting}><Icon name="download" size={16} className="mr-1" />{exporting ? "Đang xuất" : "Excel đầy đủ"}</Button>}
     </div>
+    {data && <p className="border-b px-3 py-2 text-xs text-muted-foreground">Số liệu tính cho: {metricScope}{!branchId && !data.scopeComplete ? " (chỉ các chi nhánh được cấp quyền)" : ""}.</p>}
     <div className="grid grid-cols-2 gap-3 border-b p-3 xl:grid-cols-4">
       {[
         ["Nhập kho", data?.summary.receivedAmount, "border-emerald-500"], ["Hoàn nhập", data?.summary.revertedAmount, "border-amber-500"],
