@@ -144,4 +144,11 @@ do $$declare u uuid:='22000000-0000-0000-0000-000000000002';begin
 end$$;
 insert into public.user_permission_overrides(tenant_id,user_id,permission_code,override_type) values ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000002','mkt.view','revoke');
 do $$begin if public._staff_mkt_campaign_permission('22000000-0000-0000-0000-000000000002','mkt.view','66000000-0000-0000-0000-000000000001') then raise exception 'MKT_GLOBAL_DENY_BYPASSED';end if; if public._staff_mkt_linked_permission('22000000-0000-0000-0000-000000000002','mkt.view',null,'77000000-0000-0000-0000-000000000001',null,null) then raise exception 'MKT_LINKED_GLOBAL_DENY_BYPASSED';end if;end$$;
+insert into public.user_permission_overrides(tenant_id,user_id,permission_code,override_type) values ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000002','mkt.manage_campaigns','revoke');
+do $$begin
+ begin
+  perform public.mkt_create_campaign('Denied globally',null,null,null,0,'33000000-0000-0000-0000-000000000001',null,'[]');
+  raise exception 'MKT_GLOBAL_MANAGE_DENY_BYPASSED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+end$$;
 rollback;
