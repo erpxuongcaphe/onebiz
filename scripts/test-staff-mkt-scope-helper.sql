@@ -21,9 +21,29 @@ insert into public.mkt_content_pillars(id,tenant_id,code,name) values ('88000000
 insert into public.mkt_content_items(id,tenant_id,campaign_id,work_package_id,pillar_id,title) values
  ('99000000-0000-0000-0000-000000000001','11000000-0000-0000-0000-000000000001',null,'77000000-0000-0000-0000-000000000001','88000000-0000-0000-0000-000000000001','Synthetic content A'),
  ('99000000-0000-0000-0000-000000000002','11000000-0000-0000-0000-000000000001',null,'77000000-0000-0000-0000-000000000002','88000000-0000-0000-0000-000000000001','Synthetic content B');
-insert into public.staff_branch_permission_catalog(permission_code,enforcement_version) values ('mkt.view',1);
+insert into public.staff_branch_permission_catalog(permission_code,enforcement_version) values ('mkt.view',1),('mkt.manage_campaigns',1);
 insert into public.user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
  ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000002','33000000-0000-0000-0000-000000000001','mkt.view','grant','22000000-0000-0000-0000-000000000002');
+insert into public.user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
+ ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000002','33000000-0000-0000-0000-000000000001','mkt.manage_campaigns','grant','22000000-0000-0000-0000-000000000002');
+select set_config('request.jwt.claim.sub','22000000-0000-0000-0000-000000000002',true);
+do $$declare created jsonb;begin
+ created:=public.mkt_create_campaign('Synthetic new',null,null,null,0,'33000000-0000-0000-0000-000000000001',null,'[]');
+ if created->>'campaignId' is null then raise exception 'MKT_CREATE_BRANCH_FAILED';end if;
+ perform public.mkt_change_campaign_status('66000000-0000-0000-0000-000000000001','paused',null);
+ begin
+  perform public.mkt_create_campaign('Synthetic B',null,null,null,0,'33000000-0000-0000-0000-000000000002',null,'[]');
+  raise exception 'MKT_CREATE_WRONG_BRANCH_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ begin
+  perform public.mkt_create_campaign('Synthetic shared',null,null,null,0,null,null,'[]');
+  raise exception 'MKT_CREATE_SHARED_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ begin
+  perform public.mkt_change_campaign_status('66000000-0000-0000-0000-000000000002','paused',null);
+  raise exception 'MKT_STATUS_WRONG_BRANCH_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+end$$;
 do $$declare u uuid:='22000000-0000-0000-0000-000000000002';begin
  if not public._staff_mkt_campaign_permission(u,'mkt.view','66000000-0000-0000-0000-000000000001')
   or public._staff_mkt_campaign_permission(u,'mkt.view','66000000-0000-0000-0000-000000000002')
@@ -40,6 +60,11 @@ do $$declare u uuid:='22000000-0000-0000-0000-000000000002';begin
  if has_function_privilege('authenticated','public._staff_mkt_linked_permission(uuid,text,uuid,uuid,uuid,uuid)','execute') then raise exception 'MKT_LINKED_HELPER_EXPOSED';end if;
 end$$;
 insert into public.role_permissions(role_id,permission_code) values ('44000000-0000-0000-0000-000000000001','mkt.view');
+insert into public.role_permissions(role_id,permission_code) values ('44000000-0000-0000-0000-000000000001','mkt.manage_campaigns');
+do $$begin
+ perform public.mkt_create_campaign('Synthetic legacy B',null,null,null,0,'33000000-0000-0000-0000-000000000002',null,'[]');
+ perform public.mkt_create_campaign('Synthetic legacy shared',null,null,null,0,null,null,'[]');
+end$$;
 insert into public.user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
  ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000002','33000000-0000-0000-0000-000000000002','mkt.view','revoke','22000000-0000-0000-0000-000000000002');
 do $$declare u uuid:='22000000-0000-0000-0000-000000000002';begin
