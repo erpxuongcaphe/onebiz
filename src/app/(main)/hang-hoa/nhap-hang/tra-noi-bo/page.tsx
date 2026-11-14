@@ -67,8 +67,8 @@ function Workspace(){
   const action=current?'receive':'send';
   const canAct=!loading&&(current?current.to_branch_id===branch&&current.status!=='received'&&hasPermissionAtBranch('inventory.internal_return_receive',branch||null):
     !!source&&source.status==='completed'&&canSend);
-  const items=current?current.items.map(i=>({id:i.id,name:i.product_name,code:i.product_code,unit:i.unit,limit:Number(i.quantity)-Number(i.received),factor:1,stockUnit:i.unit,unsupported:false})):
-    source?.items.map(i=>({id:i.id,name:i.name,code:i.code,unit:i.unit,limit:Math.max(0,i.received-rows.flatMap(r=>r.items).filter(r=>r.sale_item_id===i.id).reduce((sum,r)=>sum+Number(r.quantity),0)),factor:i.receivingFactor??1,stockUnit:i.receivingUnit??i.unit,unsupported:i.treatment==='expense'||i.treatment==='review'}))??[];
+  const items=current?current.items.map(i=>({id:i.id,name:i.product_name,code:i.product_code,unit:i.unit,limit:Number(i.quantity)-Number(i.received),factor:1,stockUnit:i.unit,expense:false,unsupported:false})):
+    source?.items.map(i=>({id:i.id,name:i.name,code:i.code,unit:i.unit,limit:Math.max(0,i.received-rows.flatMap(r=>r.items).filter(r=>r.sale_item_id===i.id).reduce((sum,r)=>sum+Number(r.quantity),0)),factor:i.receivingFactor??1,stockUnit:i.receivingUnit??i.unit,expense:i.treatment==='expense',unsupported:i.treatment==='review'}))??[];
   const eligibleItems=items.filter(i=>!i.unsupported&&i.limit>0);
   const unavailableItems=items.filter(i=>i.unsupported||i.limit<=0);
   const selectedItems=items.filter(i=>action==='send'
@@ -162,10 +162,10 @@ function Workspace(){
         {action==='send'&&!eligibleItems.length&&<p className="text-sm text-muted-foreground">Đơn này không còn mặt hàng đủ điều kiện gửi trả.</p>}
         {action==='send'&&unavailableItems.length>0&&<details className="text-sm">
           <summary className="cursor-pointer text-muted-foreground">{unavailableItems.length} dòng không thể chọn trả</summary>
-          <ul className="mt-2 space-y-1">{unavailableItems.map(i=><li key={i.id}>{i.name} ({i.code}) · {i.unsupported?'Dòng vật tư/chi phí cần đối soát riêng':'Không còn số lượng được trả'}</li>)}</ul>
+          <ul className="mt-2 space-y-1">{unavailableItems.map(i=><li key={i.id}>{i.name} ({i.code}) · {i.unsupported?'Dòng hàng đang chờ đối soát':'Không còn số lượng được trả'}</li>)}</ul>
         </details>}
         {canAct&&(action==='receive'||eligibleItems.length>0)&&<><label className="block space-y-1 text-sm"><span>{action==='send'?'Lý do trả *':'Ghi chú nhận hàng'}</span><textarea className="min-h-16 w-full rounded border bg-background p-2" maxLength={500} value={note} disabled={frozen||preview} onChange={e=>setNote(e.target.value)}/></label>
-          {preview&&<div className="rounded border bg-muted/30 p-3 text-sm"><strong>Xem trước</strong>{entered.map(i=><p key={i.id} className="mt-1 break-words">{i.name}: {action==='send'?'giảm tồn chi nhánh':'tăng tồn Kho Tổng'} {formatNumber(Number(quantities[i.id])*i.factor)} {i.stockUnit}</p>)}
+          {preview&&<div className="rounded border bg-muted/30 p-3 text-sm"><strong>Xem trước</strong>{entered.map(i=><p key={i.id} className="mt-1 break-words">{i.name}: {action==='send'?(i.expense?'gửi vật tư về Kho Tổng':'giảm tồn chi nhánh'):'tăng tồn Kho Tổng'} {formatNumber(Number(quantities[i.id])*i.factor)} {i.stockUnit}</p>)}
             {current?<p className="mt-2">Dự kiến giảm nợ {formatNumber(debtReduced)}đ; chờ hoàn/cấn trừ {formatNumber(credit-debtReduced)}đ. Tính lại theo công nợ tại lúc xác nhận, không ghi chi tiền.</p>:<p className="mt-2">Kho Tổng chưa tăng tồn hoặc giảm nợ cho đến khi nhân viên kho xác nhận thực nhận.</p>}</div>}
           {!unresolved&&<div className="flex flex-wrap justify-end gap-2">{preview&&<Button variant="outline" disabled={busy} onClick={()=>setPreview(false)}>Sửa lại</Button>}
             <Button disabled={busy||!valid||loading} onClick={()=>preview?void submit():setPreview(true)}>{busy?'Đang ghi nhận…':preview?(current?'Xác nhận thực nhận':'Xác nhận gửi trả'):'Xem trước'}</Button></div>}

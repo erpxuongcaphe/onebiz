@@ -35,7 +35,7 @@ describe('internal returns confirmation',()=>{
   render(<Page/>);
   const tea=await screen.findByRole('checkbox',{name:'Chọn trả Trà Ô Long'});
   expect(screen.queryByLabelText('Số gửi trả Trà Ô Long')).not.toBeInTheDocument();
-  expect(screen.queryByRole('checkbox',{name:'Chọn trả Vật tư'})).not.toBeInTheDocument();
+  expect(screen.getByRole('checkbox',{name:'Chọn trả Vật tư'})).toBeVisible();
   fireEvent.click(tea);
   const qty=await screen.findByLabelText('Số gửi trả Trà Ô Long');
   fireEvent.change(qty,{target:{value:'2'}});fireEvent.blur(qty);
