@@ -8,6 +8,7 @@ vi.mock("@/components/shared/command-palette", () => ({ useCommandPalette: () =>
 vi.mock("@/components/shared/app-switcher", () => ({ AppSwitcher: () => <button>Ứng dụng</button> }));
 vi.mock("@/components/shared/import-data-dialog", () => ({ ImportDataDialog: () => null }));
 vi.mock("@/lib/operations/use-hub-access", () => ({ useHubAccess: () => false }));
+vi.mock("@/lib/mkt/use-mkt-access", () => ({ useMktAccess: () => false }));
 vi.mock("@/lib/hooks/use-fnb-subdomain", () => ({ useFnbSubdomain: () => ({ posFnbUrl: () => "/pos/fnb" }) }));
 vi.mock("@/lib/services/supabase/fnb-cancel-requests", () => ({ pendingFnbCancellations: async () => [] }));
 vi.mock("@/lib/services/supabase/manager-approval", () => ({ pendingManagerApprovals: async () => [] }));

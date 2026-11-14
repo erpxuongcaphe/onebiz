@@ -1,5 +1,5 @@
 \set ON_ERROR_STOP on
-do $$begin if current_database() not in ('onebiz_hub_scope_20261114','onebiz_hub_scope_v2_20261114','onebiz_hub_scope_v3_20261114','onebiz_hub_scope_v4_20261114','onebiz_hub_scope_v5_20261114','onebiz_hub_scope_v6_20261114') or inet_server_addr()<>'127.0.0.1'::inet or inet_server_port()<>55487 or exists(select 1 from public.tenants) then raise exception 'WRONG_TEST_DATABASE';end if;end$$;
+do $$begin if current_database() not in ('onebiz_hub_scope_20261114','onebiz_hub_scope_v2_20261114','onebiz_hub_scope_v3_20261114','onebiz_hub_scope_v4_20261114','onebiz_hub_scope_v5_20261114','onebiz_hub_scope_v6_20261114','onebiz_hub_scope_v7_20261114') or inet_server_addr()<>'127.0.0.1'::inet or inet_server_port()<>55487 or exists(select 1 from public.tenants) then raise exception 'WRONG_TEST_DATABASE';end if;end$$;
 begin;
 insert into public.tenants(id,name,slug) values ('11000000-0000-0000-0000-000000000001','Synthetic','mkt-scope-a'),('11000000-0000-0000-0000-000000000002','Synthetic 2','mkt-scope-b');
 insert into auth.users(id) values ('22000000-0000-0000-0000-000000000002');
@@ -34,6 +34,12 @@ insert into public.mkt_channel_plans(id,tenant_id,work_package_id,campaign_id) v
 insert into public.mkt_campaign_plans(id,tenant_id,campaign_id,name) values ('bb000000-0000-0000-0000-000000000001','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000002','Plan B'),('bb000000-0000-0000-0000-000000000002','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000001','Plan A');
 insert into public.mkt_campaign_readiness_items(id,tenant_id,campaign_id,title,required_role,required_branch_id) values ('cc000000-0000-0000-0000-000000000001','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000002','Ready B','store','33000000-0000-0000-0000-000000000002'),('cc000000-0000-0000-0000-000000000002','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000001','Ready A','store','33000000-0000-0000-0000-000000000001');
 insert into public.mkt_content_versions(id,tenant_id,content_item_id,version_number) values ('ee000000-0000-0000-0000-000000000001','11000000-0000-0000-0000-000000000001','99000000-0000-0000-0000-000000000001',1),('ee000000-0000-0000-0000-000000000002','11000000-0000-0000-0000-000000000001','99000000-0000-0000-0000-000000000002',1);
+insert into public.mkt_documents(id,tenant_id,campaign_id,title,external_url) values
+ ('ff000000-0000-0000-0000-000000000001','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000001','Document A','https://example.test/a'),
+ ('ff000000-0000-0000-0000-000000000002','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000002','Document B','https://example.test/b');
+insert into public.mkt_media_assets(id,tenant_id,campaign_id,file_name,storage_path) values
+ ('ff100000-0000-0000-0000-000000000001','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000001','Asset A','synthetic/a'),
+ ('ff100000-0000-0000-0000-000000000002','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000002','Asset B','synthetic/b');
 insert into public.mkt_tasks(id,tenant_id,campaign_id,work_package_id,title,source_type,source_id) values
  ('dd000000-0000-0000-0000-000000000001','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000001','77000000-0000-0000-0000-000000000001','Task A','campaign_channel_split','77000000-0000-0000-0000-000000000001'),
  ('dd000000-0000-0000-0000-000000000002','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000002','77000000-0000-0000-0000-000000000002','Task B','campaign_channel_split','77000000-0000-0000-0000-000000000002'),
@@ -42,7 +48,7 @@ insert into public.mkt_tasks(id,tenant_id,campaign_id,work_package_id,title,sour
  ('dd000000-0000-0000-0000-000000000005','11000000-0000-0000-0000-000000000001','66000000-0000-0000-0000-000000000002','77000000-0000-0000-0000-000000000007','Reconcile B','campaign_channel_split','77000000-0000-0000-0000-000000000007');
 update public.mkt_tasks set dependency_task_id='dd000000-0000-0000-0000-000000000003' where id='dd000000-0000-0000-0000-000000000004';
 update public.mkt_tasks set acceptance_status='rejected' where id in ('dd000000-0000-0000-0000-000000000001','dd000000-0000-0000-0000-000000000002','dd000000-0000-0000-0000-000000000004');
-insert into public.staff_branch_permission_catalog(permission_code,enforcement_version) values ('mkt.view',1),('mkt.manage_campaigns',1),('mkt.split_work_packages',1);
+insert into public.staff_branch_permission_catalog(permission_code,enforcement_version) values ('mkt.view',1),('mkt.manage_campaigns',1),('mkt.split_work_packages',1) on conflict (permission_code) do nothing;
 insert into public.user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
  ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000002','33000000-0000-0000-0000-000000000001','mkt.view','grant','22000000-0000-0000-0000-000000000002');
 insert into public.user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
@@ -51,6 +57,8 @@ select set_config('request.jwt.claim.sub','22000000-0000-0000-0000-000000000002'
 set local role authenticated;
 do $$begin
  if not (public.mkt_get_my_context()->>'canView')::boolean or (public.mkt_get_my_context()->>'canManageCampaigns')::boolean then raise exception 'MKT_BRANCH_VIEW_CONTEXT_INVALID';end if;
+ if not exists(select 1 from public.mkt_campaign_create_branches() where id='33000000-0000-0000-0000-000000000001') or exists(select 1 from public.mkt_campaign_create_branches() where id='33000000-0000-0000-0000-000000000002') then raise exception 'MKT_CREATE_BRANCH_OPTIONS_FAILED';end if;
+ if public.mkt_manageable_campaign_ids(array['66000000-0000-0000-0000-000000000001'::uuid,'66000000-0000-0000-0000-000000000002'::uuid]) <> array['66000000-0000-0000-0000-000000000001'::uuid] then raise exception 'MKT_MANAGEABLE_CAMPAIGNS_FAILED';end if;
  if not exists(select 1 from public.mkt_content_pillars where id='88000000-0000-0000-0000-000000000001') then raise exception 'MKT_SHARED_PILLAR_HIDDEN';end if;
  if not exists(select 1 from public.mkt_get_leader_queue(null,100,0) where task_id='dd000000-0000-0000-0000-000000000001') or exists(select 1 from public.mkt_get_leader_queue(null,100,0) where task_id in ('dd000000-0000-0000-0000-000000000002','dd000000-0000-0000-0000-000000000004')) then raise exception 'MKT_LEADER_QUEUE_SCOPE_FAILED';end if;
  if not (public.mkt_campaign_ui_permissions('66000000-0000-0000-0000-000000000001')->>'canManage')::boolean or (public.mkt_campaign_ui_permissions('66000000-0000-0000-0000-000000000002')->>'canManage')::boolean then raise exception 'MKT_CAMPAIGN_UI_SCOPE_FAILED';end if;
@@ -63,6 +71,8 @@ do $$begin
  if not exists(select 1 from public.mkt_campaign_plans where id='bb000000-0000-0000-0000-000000000002') or exists(select 1 from public.mkt_campaign_plans where id='bb000000-0000-0000-0000-000000000001') then raise exception 'MKT_PLAN_NODE_READ_SCOPE_FAILED';end if;
  if not exists(select 1 from public.mkt_campaign_readiness_items where id='cc000000-0000-0000-0000-000000000002') or exists(select 1 from public.mkt_campaign_readiness_items where id='cc000000-0000-0000-0000-000000000001') then raise exception 'MKT_READINESS_READ_SCOPE_FAILED';end if;
  if not exists(select 1 from public.mkt_content_versions where id='ee000000-0000-0000-0000-000000000001') or exists(select 1 from public.mkt_content_versions where id='ee000000-0000-0000-0000-000000000002') then raise exception 'MKT_CONTENT_VERSION_READ_SCOPE_FAILED';end if;
+ if not exists(select 1 from public.mkt_documents where id='ff000000-0000-0000-0000-000000000001') or exists(select 1 from public.mkt_documents where id='ff000000-0000-0000-0000-000000000002') then raise exception 'MKT_DOCUMENT_READ_SCOPE_FAILED';end if;
+ if not exists(select 1 from public.mkt_media_assets where id='ff100000-0000-0000-0000-000000000001') or exists(select 1 from public.mkt_media_assets where id='ff100000-0000-0000-0000-000000000002') then raise exception 'MKT_MEDIA_READ_SCOPE_FAILED';end if;
 end$$;
 reset role;
 update public.mkt_campaigns set owner_id='22000000-0000-0000-0000-000000000002' where id='66000000-0000-0000-0000-000000000002';
@@ -334,6 +344,15 @@ do $$begin
 end$$;
 insert into public.user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
  ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000002','33000000-0000-0000-0000-000000000002','mkt.view','revoke','22000000-0000-0000-0000-000000000002');
+insert into public.user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
+ ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000002','33000000-0000-0000-0000-000000000002','mkt.manage_campaigns','revoke','22000000-0000-0000-0000-000000000002');
+update public.mkt_tasks set reviewer_id=null,assignee_id=null where id='dd000000-0000-0000-0000-000000000002';
+set local role authenticated;
+do $$begin
+ if exists(select 1 from public.mkt_campaigns where id='66000000-0000-0000-0000-000000000002') or exists(select 1 from public.mkt_documents where id='ff000000-0000-0000-0000-000000000002') or exists(select 1 from public.mkt_media_assets where id='ff100000-0000-0000-0000-000000000002') then raise exception 'MKT_REVOKED_BRANCH_VISIBLE';end if;
+ if not exists(select 1 from public.mkt_campaigns where id='66000000-0000-0000-0000-000000000001') or not exists(select 1 from public.mkt_campaigns where id='66000000-0000-0000-0000-000000000003') then raise exception 'MKT_REVOKE_OTHER_SCOPE_LOST';end if;
+end$$;
+reset role;
 do $$declare u uuid:='22000000-0000-0000-0000-000000000002';begin
  if public._staff_mkt_campaign_permission(u,'mkt.view','66000000-0000-0000-0000-000000000002') or not public._staff_mkt_campaign_permission(u,'mkt.view','66000000-0000-0000-0000-000000000003') then raise exception 'MKT_SHARED_OR_DENY_FAILED';end if;
 end$$;

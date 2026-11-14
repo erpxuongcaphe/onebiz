@@ -29,12 +29,13 @@ const READINESS_ROLES = [
 
 type ReadinessRow = { title: string; requiredRole: string };
 
-export function CampaignFormDialog() {
+export function CampaignFormDialog({ branches, canCreateShared }: { branches: { id: string; name: string }[]; canCreateShared: boolean }) {
   const router = useRouter();
   const { refresh, refreshing } = useMktRefresh();
   const toMktHref = useMktHref();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
+  const [branchId, setBranchId] = useState(canCreateShared ? "" : branches[0]?.id ?? "");
   const [objective, setObjective] = useState("");
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
@@ -46,10 +47,11 @@ export function CampaignFormDialog() {
 
   const dateInvalid = Boolean(start && end && end < start);
   const budgetInvalid = budget !== "" && Number(budget) < 0;
-  const valid = name.trim().length > 1 && !dateInvalid && !budgetInvalid;
+  const valid = name.trim().length > 1 && (canCreateShared || branches.some((b) => b.id === branchId)) && !dateInvalid && !budgetInvalid;
 
   function reset() {
     setName("");
+    setBranchId(canCreateShared ? "" : branches[0]?.id ?? "");
     setObjective("");
     setStart("");
     setEnd("");
@@ -67,6 +69,7 @@ export function CampaignFormDialog() {
         "/api/mkt/v1/campaigns",
         {
           name: name.trim(),
+          branchId: branchId || undefined,
           objective: objective.trim() || undefined,
           timeframeStart: start || undefined,
           timeframeEnd: end || undefined,
@@ -105,6 +108,13 @@ export function CampaignFormDialog() {
           <DialogTitle>Tạo chiến dịch mới</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="c-branch">Phạm vi chiến dịch</Label>
+            <select id="c-branch" value={branchId} onChange={(e) => setBranchId(e.target.value)} className="h-10 w-full rounded-lg border border-outline-variant bg-background px-3 text-sm">
+              {canCreateShared ? <option value="">Dùng chung toàn công ty</option> : null}
+              {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+            </select>
+          </div>
           <div className="space-y-1.5">
             <Label htmlFor="c-name">Tên chiến dịch</Label>
             <Input id="c-name" value={name} onChange={(e) => setName(e.target.value)} autoFocus />

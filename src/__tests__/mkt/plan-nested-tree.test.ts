@@ -119,7 +119,7 @@ describe("00201 — giao diện chi tiết chiến dịch (cây lồng, kênh = 
     // Tạo cấp 2/3 + Kế hoạch phụ ngay trong khối chiến dịch (chỉ người có quyền).
     expect(planningTree).toContain("CampaignPlanFormButton");
     expect(planningTree).toContain("WorkPackageForm");
-    expect(planningTree).toMatch(/canManage \? \([\s\S]{0,700}CampaignPlanFormButton/);
+    expect(planningTree).toMatch(/manageableCampaignIds\.includes\(g\.campaignId\) \? \([\s\S]{0,700}CampaignPlanFormButton/);
     // Xếp thẻ vào nhánh tại chỗ — ô "Nằm trong" gọi RPC di chuyển có sẵn 00200.
     expect(planningTree).toContain("function MoveSubPlan");
     expect(planningTree).toContain("/campaign-plan`");

@@ -33,6 +33,21 @@ export async function getMktCampaignPermissions(supabase: MktSupabaseClient, cam
   return { canManage: Boolean(data?.canManage), canSplit: Boolean(data?.canSplit) };
 }
 
+export async function getMktCampaignCreateBranches(supabase: MktSupabaseClient): Promise<{ id: string; name: string }[]> {
+  const db = getMktDatabaseClient(supabase);
+  const { data, error } = await db.rpc<{ id: string; name: string }[]>("mkt_campaign_create_branches", {});
+  if (error) throw new Error(`MKT_READ_FAILED:campaign_branches:${error.message}`);
+  return data ?? [];
+}
+
+export async function getMktManageableCampaignIds(supabase: MktSupabaseClient, ids: string[]): Promise<string[]> {
+  if (ids.length === 0) return [];
+  const db = getMktDatabaseClient(supabase);
+  const { data, error } = await db.rpc<string[]>("mkt_manageable_campaign_ids", { p_campaign_ids: ids });
+  if (error) throw new Error(`MKT_READ_FAILED:manageable_campaigns:${error.message}`);
+  return data ?? [];
+}
+
 /** Danh sách nhân sự cùng tenant để chọn assignee/owner/reviewer. */
 export async function getMktMembers(
   supabase: MktSupabaseClient,

@@ -233,6 +233,7 @@ export function PlanningTree({
   pillars,
   isLead,
   canManage,
+  manageableCampaignIds = [],
 }: {
   plans: MktPlanInboxEntry[];
   planNodes: MktCampaignPlanNode[];
@@ -244,6 +245,7 @@ export function PlanningTree({
   pillars: MktPillar[];
   isLead: boolean;
   canManage: boolean;
+  manageableCampaignIds?: string[];
 }) {
   const [q, setQ] = useState("");
   const [from, setFrom] = useState("");
@@ -363,6 +365,7 @@ export function PlanningTree({
 
   function renderCard(p: MktPlanInboxEntry, nodes: MktCampaignPlanNode[]) {
     const deadline = fmtDate(p.deadline);
+    const canManageCampaign = canManage || manageableCampaignIds.includes(p.campaignId);
     return (
       <article key={p.id} className="flex flex-col gap-2 rounded-lg border border-emerald-200 border-l-4 border-l-emerald-500 bg-background p-3">
         <div className="flex items-start justify-between gap-2">
@@ -390,7 +393,7 @@ export function PlanningTree({
             Lịch sử: {p.versions.map((v) => `v${v.versionNumber} (${VERSION_OUTCOME[v.reviewAction ?? v.status] ?? v.status})`).join(" · ")}
           </div>
         ) : null}
-        {canManage ? (
+        {canManageCampaign ? (
           // Một hàng gọn: "Nằm trong" (tự giãn, không bị nghiền nhờ min-w) +
           // nút nâng ghost. Thiếu chỗ thì tự xuống dòng — không bao giờ cụt chữ.
           <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1 border-t border-outline-variant/50 pt-1.5">
@@ -407,11 +410,11 @@ export function PlanningTree({
         <div className="mt-auto flex flex-wrap justify-end gap-1.5">
           <PlanEditorButton plan={p} members={members} pillars={pillars} contents={contents.filter((c) => c.campaignId === p.campaignId)} />
           {p.status !== "planning" || p.versionNumber > 1 ? <PlanActivityButton plan={p} /> : null}
-          {isLead && p.status === "submitted" ? <PlanReviewButton plan={p} members={members} /> : null}
+          {(isLead || canManageCampaign) && p.status === "submitted" ? <PlanReviewButton plan={p} members={members} /> : null}
           {p.status === "in_execution" ? <ProgressReportButton plan={p} /> : null}
           {p.progressReports.length > 0 ? <PlanProgressHistoryButton plan={p} /> : null}
           {p.status === "in_execution" ? <ChangeRequestButton plan={p} /> : null}
-          {isLead && p.status === "in_execution" ? <PlanReconcileButton plan={p} members={members} /> : null}
+          {(isLead || canManageCampaign) && p.status === "in_execution" ? <PlanReconcileButton plan={p} members={members} /> : null}
         </div>
       </article>
     );
@@ -424,6 +427,7 @@ export function PlanningTree({
   // Khối một nút tầng giữa: cấp 2 = cam, cấp 3 = xanh dương (thụt vào trong).
   // Là <details> — bấm tiêu đề để THU GỌN cả nhánh, nhìn toàn cảnh không phải cuộn.
   function nodeBlock(node: TreeNode, level: 2 | 3, nodes: MktCampaignPlanNode[], campaignId: string) {
+    const canManageCampaign = canManage || manageableCampaignIds.includes(campaignId);
     const all = [...node.plans, ...node.children.flatMap((c) => c.plans)];
     const tasks = all.flatMap((p) => p.tasks).filter((t) => t.taskStatus !== "canceled");
     const done = tasks.filter((t) => t.taskStatus === "done");
@@ -457,7 +461,7 @@ export function PlanningTree({
             <span>{all.length} kế hoạch phụ</span>
             {tasks.length > 0 ? <span>{done.length}/{tasks.length} việc xong</span> : null}
           </span>
-          {canManage && nodeData ? (
+          {canManageCampaign && nodeData ? (
             // Sửa/xoá nhánh TẠI CHỖ — chặn nổi bọt để bấm nút không đóng/mở nhánh.
             <span className="flex items-center gap-1" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
               <CampaignPlanFormButton
@@ -490,7 +494,7 @@ export function PlanningTree({
                 : "Nhánh trống — thêm Kế hoạch phụ vào nhánh này bằng nút ngay dưới."}
             </p>
           ) : null}
-          {canManage ? (
+          {canManageCampaign ? (
             // ➕ tại nhánh (CEO 18/07): thêm thẳng vào ĐÚNG nhánh này, khỏi chọn
             // "Nằm trong". Ghost nhẹ + căn trái theo dòng nội dung — không nặng mắt.
             <div className="flex flex-wrap items-center gap-1 border-t border-outline-variant/50 pt-1">
@@ -611,7 +615,7 @@ export function PlanningTree({
                 </span>
               </summary>
               <div className="space-y-2 border-t border-outline-variant p-2.5">
-                {canManage ? (
+                {canManage || manageableCampaignIds.includes(g.campaignId) ? (
                   <div className="flex flex-wrap items-center justify-end gap-2">
                     {g.roots.length === 0 ? (
                       // Gợi ý chỉ hiện khi CHƯA có nhánh nào — có cây rồi thì tự khắc hiểu.

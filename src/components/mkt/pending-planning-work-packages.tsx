@@ -29,10 +29,12 @@ export function PendingPlanningWorkPackages({
   items,
   members,
   canManage,
+  manageableCampaignIds = [],
 }: {
   items: MktPendingPlanningWorkPackage[];
   members: MktMember[];
   canManage: boolean;
+  manageableCampaignIds?: string[];
 }) {
   if (items.length === 0) return null;
 
@@ -69,7 +71,7 @@ export function PendingPlanningWorkPackages({
                 {item.ownerName ? ` \u00b7 ${UI.expectedOwner}: ${item.ownerName}` : ""}
               </p>
             </div>
-            {canManage ? (
+            {canManage || manageableCampaignIds.includes(item.campaignId) ? (
               <AssignPlanningButton
                 workPackageId={item.id}
                 workPackageTitle={item.title}

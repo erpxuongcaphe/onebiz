@@ -18,6 +18,7 @@ import {
 } from "./nav-config";
 import { Icon } from "@/components/ui/icon";
 import { useHubAccess } from "@/lib/operations/use-hub-access";
+import { useMktAccess } from "@/lib/mkt/use-mkt-access";
 
 const COLLAPSED_KEY = "onebiz.sidebar.collapsed";
 
@@ -563,7 +564,8 @@ export function AppSidebar() {
   const pathname = usePathname();
   const { hasPermission: baseHasPermission } = useAuth();
   const hubAllowed = useHubAccess();
-  const hasPermission = (code: string) => code === "ops.view" ? hubAllowed : baseHasPermission(code);
+  const mktAllowed = useMktAccess();
+  const hasPermission = (code: string) => code === "ops.view" ? hubAllowed : code === "mkt.view" ? mktAllowed : baseHasPermission(code);
   const [userCollapsed, setUserCollapsed] = usePersistedCollapsed(false);
 
   // Tablet portrait/landscape (768-1023): FORCE collapsed rail mode.
