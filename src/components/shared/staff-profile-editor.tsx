@@ -842,12 +842,12 @@ export function StaffProfileEditor({
                                 )}
                                 {p.code === "invoices.export" && (
                                   <p className="mt-1 text-xs text-muted-foreground">
-                                    Trên danh sách hóa đơn, quyền này cho xuất tại các chi nhánh người này được xem. Quyền xuất báo cáo tại một chi nhánh cũng cho xuất hóa đơn của chi nhánh đó; kiểm tra cả hai quyền khi phân công.
+                                    Cho dùng nút xuất hóa đơn tại chi nhánh được cấp. Quyền xuất báo cáo cũng cho xuất hóa đơn ở chi nhánh tương ứng. Việc xem dữ liệu phụ thuộc các quyền xem khác; tắt xuất không thay thế việc giới hạn quyền xem.
                                   </p>
                                 )}
                                 {p.code === "orders.export" && (
                                   <p className="mt-1 text-xs text-muted-foreground">
-                                    Trên danh sách đơn đặt hàng, quyền này cho xuất tại các chi nhánh người này được xem. Quyền xuất báo cáo tại một chi nhánh cũng cho xuất đơn tại chi nhánh đó; kiểm tra cả hai quyền khi phân công.
+                                    Cho dùng nút xuất đơn tại chi nhánh được cấp. Quyền xuất báo cáo cũng cho xuất đơn ở chi nhánh tương ứng. Việc xem dữ liệu phụ thuộc các quyền xem khác; tắt xuất không thay thế việc giới hạn quyền xem.
                                   </p>
                                 )}
                                 {branchId && p.code === "finance.view_cash_journal_self_spend" && (
