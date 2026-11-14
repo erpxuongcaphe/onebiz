@@ -129,6 +129,7 @@ do $$declare u uuid:='22000000-0000-0000-0000-000000000002';begin
 end$$;
 insert into public.role_permissions(role_id,permission_code) values ('44000000-0000-0000-0000-000000000001','mkt.view');
 insert into public.role_permissions(role_id,permission_code) values ('44000000-0000-0000-0000-000000000001','mkt.manage_campaigns');
+do $$begin if not public._staff_mkt_linked_permission('22000000-0000-0000-0000-000000000002','mkt.view',null,null,null,null) then raise exception 'MKT_LEGACY_SHARED_VIEW_LOST';end if;end$$;
 do $$begin
  perform public.mkt_create_content_item('66000000-0000-0000-0000-000000000002','77000000-0000-0000-0000-000000000002','Legacy content B','other','low','88000000-0000-0000-0000-000000000001');
  perform public.mkt_create_campaign('Synthetic legacy B',null,null,null,0,'33000000-0000-0000-0000-000000000002',null,'[]');
