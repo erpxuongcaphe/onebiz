@@ -163,4 +163,11 @@ do $$begin
   raise exception 'MKT_GLOBAL_MANAGE_DENY_BYPASSED';
  exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
 end$$;
+insert into public.user_permission_overrides(tenant_id,user_id,permission_code,override_type) values ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000002','mkt.split_work_packages','revoke');
+do $$begin
+ begin
+  perform public.mkt_create_work_package('66000000-0000-0000-0000-000000000001','other','Denied package',null,null,null,null);
+  raise exception 'MKT_GLOBAL_PACKAGE_DENY_BYPASSED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+end$$;
 rollback;
