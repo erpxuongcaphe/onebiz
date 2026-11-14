@@ -270,27 +270,6 @@ export function StaffProfileEditor({
               </p>
             </div>
           </section>
-          {operations && <section className={cardClass} aria-label="Phân công Hub vận hành">
-            <h2 className="text-lg font-semibold">Hub vận hành theo chi nhánh</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Chọn phân công riêng cho từng quán. Quyền QC hiện có được hiển thị bên dưới.</p>
-            <div className="mt-4 space-y-3">{snapshot.branches.filter(b => draft.branchIds.includes(b.id)).map(b => {
-              const current = opsEdits[b.id] ?? operations.memberships.find(m => m.branchId === b.id);
-              const qc = operations.qualityGrants.find(q => q.branchId === b.id && q.active);
-              return <div key={b.id} className="rounded-xl border p-4 text-sm"><strong>{b.name}</strong>
-                <label className="mt-3 block">Vai trò Hub tại {b.name}<select className={`${selectClass} mt-1`} value={current?.active ? current.role : "none"} onChange={e => {
-                  const previous = current ?? { branchId: b.id, role: "coordinator" as const, capabilities: [], active: false };
-                  const value = e.target.value;
-                  setOpsEdits(edits => ({ ...edits, [b.id]: { branchId: b.id, role: value === "none" ? previous.role : value as StaffOpsChange["role"], capabilities: previous.capabilities, active: value !== "none" } }));
-                }}><option value="none">Không phân công Hub</option><option value="manager">Quản lý</option><option value="coordinator">Điều phối</option><option value="reviewer">Người kiểm tra</option></select></label>
-                {current?.active && <div className="mt-3 flex flex-wrap gap-3">{([['verify','Xác minh'],['close_period','Chốt kỳ'],['cancel_todo','Hủy việc'],['approve_policy','Duyệt chính sách'],['manage_members','Phân công Hub']] as const).map(([code,label]) => <label key={code} className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={current.capabilities.includes(code)} onChange={e => setOpsEdits(edits => ({ ...edits, [b.id]: { branchId: b.id, role: current.role, active: current.active, capabilities: e.target.checked ? [...current.capabilities, code] : current.capabilities.filter(c => c !== code) } }))} />{label}</label>)}</div>}
-                {current?.capabilities.some(c => !['verify','close_period','cancel_todo','approve_policy','manage_members'].includes(c)) && <p className="mt-2 text-amber-800">Quyền Hub cũ khác được giữ nguyên.</p>}
-                <p className="mt-2 text-muted-foreground">QC: {qc ? [qc.canAudit && "Kiểm tra", qc.canCorrect && "Sửa lỗi", qc.canAccounting && "Kế toán"].filter(Boolean).join(", ") || "Đang cấp" : "Chưa phân công"}</p>
-              </div>;
-            })}</div>
-            {(removedOps.length > 0 || removedQc.length > 0) && <div role="status" className="mt-3 rounded-lg bg-amber-50 p-3 text-amber-950"><strong>Sẽ ngừng khi lưu:</strong>{removedOps.map(row => <p key={`m:${row.branchId}`}>Hub · {row.branchName}</p>)}{removedQc.map(row => <p key={`q:${row.branchId}`}>QC · {row.branchName}</p>)}</div>}
-            {operations.memberships.filter(row => row.active && !snapshot.user.branchIds.includes(row.branchId)).map(row => <p role="alert" key={row.branchId} className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-950">Phân công Hub cũ ở {row.branchName} vẫn hoạt động dù quán không nằm trong quyền truy cập. Cấp lại chi nhánh để xem và chỉnh phân công này.</p>)}
-            {operations.qualityGrants.filter(row => row.active && !snapshot.user.branchIds.includes(row.branchId)).map(row => <p role="alert" key={`qc:${row.branchId}`} className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-950">Quyền QC cũ ở {row.branchName} vẫn đang được cấp dù quán không nằm trong quyền truy cập.</p>)}
-          </section>}
           <section className={cardClass}>
             <h2 className="text-lg font-semibold">Làm việc tại chi nhánh</h2>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -349,6 +328,27 @@ export function StaffProfileEditor({
               </p>
             )}
           </section>
+          {operations && <section className={cardClass} aria-label="Phân công Hub vận hành">
+            <h2 className="text-lg font-semibold">Hub vận hành theo chi nhánh</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Chọn phân công riêng cho từng quán. Quyền QC hiện có được hiển thị bên dưới.</p>
+            <div className="mt-4 space-y-3">{snapshot.branches.filter(b => draft.branchIds.includes(b.id)).map(b => {
+              const current = opsEdits[b.id] ?? operations.memberships.find(m => m.branchId === b.id);
+              const qc = operations.qualityGrants.find(q => q.branchId === b.id && q.active);
+              return <div key={b.id} className="rounded-xl border p-4 text-sm"><strong>{b.name}</strong>
+                <label className="mt-3 block">Vai trò Hub tại {b.name}<select className={`${selectClass} mt-1`} value={current?.active ? current.role : "none"} onChange={e => {
+                  const previous = current ?? { branchId: b.id, role: "coordinator" as const, capabilities: [], active: false };
+                  const value = e.target.value;
+                  setOpsEdits(edits => ({ ...edits, [b.id]: { branchId: b.id, role: value === "none" ? previous.role : value as StaffOpsChange["role"], capabilities: previous.capabilities, active: value !== "none" } }));
+                }}><option value="none">Không phân công Hub</option><option value="manager">Quản lý</option><option value="coordinator">Điều phối</option><option value="reviewer">Người kiểm tra</option></select></label>
+                {current?.active && <div className="mt-3 flex flex-wrap gap-3">{([['verify','Xác minh'],['close_period','Chốt kỳ'],['cancel_todo','Hủy việc'],['approve_policy','Duyệt chính sách'],['manage_members','Phân công Hub']] as const).map(([code,label]) => <label key={code} className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={current.capabilities.includes(code)} onChange={e => setOpsEdits(edits => ({ ...edits, [b.id]: { branchId: b.id, role: current.role, active: current.active, capabilities: e.target.checked ? [...current.capabilities, code] : current.capabilities.filter(c => c !== code) } }))} />{label}</label>)}</div>}
+                {current?.capabilities.some(c => !['verify','close_period','cancel_todo','approve_policy','manage_members'].includes(c)) && <p className="mt-2 text-amber-800">Quyền Hub cũ khác được giữ nguyên.</p>}
+                <p className="mt-2 text-muted-foreground">QC: {qc ? [qc.canAudit && "Kiểm tra", qc.canCorrect && "Sửa lỗi", qc.canAccounting && "Kế toán"].filter(Boolean).join(", ") || "Đang cấp" : "Chưa phân công"}</p>
+              </div>;
+            })}</div>
+            {(removedOps.length > 0 || removedQc.length > 0) && <div role="status" className="mt-3 rounded-lg bg-amber-50 p-3 text-amber-950"><strong>Sẽ ngừng khi lưu:</strong>{removedOps.map(row => <p key={`m:${row.branchId}`}>Hub · {row.branchName}</p>)}{removedQc.map(row => <p key={`q:${row.branchId}`}>QC · {row.branchName}</p>)}</div>}
+            {operations.memberships.filter(row => row.active && !snapshot.user.branchIds.includes(row.branchId)).map(row => <p role="alert" key={row.branchId} className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-950">Phân công Hub cũ ở {row.branchName} vẫn hoạt động dù quán không nằm trong quyền truy cập. Cấp lại chi nhánh để xem và chỉnh phân công này.</p>)}
+            {operations.qualityGrants.filter(row => row.active && !snapshot.user.branchIds.includes(row.branchId)).map(row => <p role="alert" key={`qc:${row.branchId}`} className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-950">Quyền QC cũ ở {row.branchName} vẫn đang được cấp dù quán không nằm trong quyền truy cập.</p>)}
+          </section>}
           <section className={cardClass}>
             <h2 className="mb-4 text-lg font-semibold">Chức vụ & bộ phận</h2>
             {draft.assignments.map((a, index) => (
