@@ -1,5 +1,5 @@
 \set ON_ERROR_STOP on
-do $$begin if current_database()<>'onebiz_ops_rehearsal_v1' or inet_server_addr()<>'127.0.0.1'::inet or inet_server_port()<>55487 or exists(select 1 from public.tenants) then raise exception 'WRONG_TEST_DATABASE'; end if; end$$;
+do $$begin if current_database()<>'onebiz_hub_scope_20261114' or inet_server_addr()<>'127.0.0.1'::inet or inet_server_port()<>55487 or exists(select 1 from public.tenants) then raise exception 'WRONG_TEST_DATABASE'; end if; end$$;
 begin;
 insert into public.tenants(id,name,slug) values ('11000000-0000-0000-0000-000000000001','Synthetic','hub-scope-test');
 insert into auth.users(id) values ('22000000-0000-0000-0000-000000000002');
@@ -17,7 +17,22 @@ insert into public.ops_members(tenant_id,branch_id,user_id,member_role,capabilit
  ('11000000-0000-0000-0000-000000000001','33000000-0000-0000-0000-000000000002','22000000-0000-0000-0000-000000000002','manager',array['close_period'],true);
 insert into public.staff_branch_permission_catalog(permission_code,enforcement_version) values ('ops.view',1),('ops.close_period',1),('ops.verify',1);
 select set_config('request.jwt.claim.sub','22000000-0000-0000-0000-000000000002',true);
+create function pg_temp.ops_can_baseline(p_branch uuid,p_cap text) returns boolean language sql stable as $$
+ select exists(select 1 from public.profiles p join public.branches b on b.tenant_id=p.tenant_id
+ where p.id=auth.uid() and p.is_active and b.id=p_branch and b.is_active
+ and public.ops_has_permission('ops.view') and public.ops_has_permission(case p_cap
+  when 'view' then 'ops.view' when 'work' then 'ops.work' when 'verify' then 'ops.verify'
+  when 'approve_policy' then 'ops.configure' when 'close_period' then 'ops.close_period'
+  when 'cancel_todo' then 'ops.cancel_todo' when 'manage_members' then 'ops.manage_members' else null end)
+ and (public.ops_ceo() or exists(select 1 from public.ops_members m where m.tenant_id=p.tenant_id and m.branch_id=b.id and m.user_id=p.id and m.active
+  and ((p_cap='view' and m.member_role in ('manager','reviewer')) or p_cap=any(m.capabilities) or (p_cap='work' and m.member_role='manager')))
+  or p_cap='view' and exists(select 1 from public.ops_q_grants g where g.tenant_id=p.tenant_id and g.branch_id=b.id and g.user_id=p.id and g.active
+   and ((g.can_audit or g.can_correct) and public.ops_has_permission('ops.verify') or g.can_accounting and public.ops_has_permission('ops.work')))));
+$$;
 do $$begin
+ if exists(select 1 from unnest(array['view','work','verify','approve_policy','close_period','cancel_todo','manage_members','unknown']) cap
+  cross join unnest(array['33000000-0000-0000-0000-000000000001'::uuid,'33000000-0000-0000-0000-000000000002'::uuid]) branch
+  where public.ops_can(branch,cap) is distinct from pg_temp.ops_can_baseline(branch,cap)) then raise exception 'LEGACY_MATRIX_CHANGED';end if;
  if not public.ops_can('33000000-0000-0000-0000-000000000001','view') or not public.ops_can('33000000-0000-0000-0000-000000000002','view') then raise exception 'LEGACY_SCOPE_CHANGED'; end if;
  if public.ops_can('33000000-0000-0000-0000-000000000001','close_period') then raise exception 'UNGRANTED_ALLOWED'; end if;
 end$$;
@@ -74,5 +89,10 @@ do $$declare page jsonb;begin
  if coalesce((public.ops_access_context()->>'allowed')::boolean,false)=false then raise exception 'BRANCH_ONLY_HUB_ENTRY_DENIED';end if;
  page:=public.ops_todo_page(null,'',false,null,null,null);
  if jsonb_array_length(page->'rows')<>1 or page->'rows'->0->>'title'<>'Synthetic A' then raise exception 'BRANCH_ONLY_PAGE_SCOPE_FAILED';end if;
+ perform public.ops_execute_core('comment',jsonb_build_object('branchId','33000000-0000-0000-0000-000000000001','id','55000000-0000-0000-0000-000000000001','note','Synthetic note'),gen_random_uuid());
+ begin
+  perform public.ops_execute_core('comment',jsonb_build_object('branchId','33000000-0000-0000-0000-000000000002','id','55000000-0000-0000-0000-000000000002','note','Synthetic note'),gen_random_uuid());
+  raise exception 'COMMENT_CROSS_BRANCH_ALLOWED';
+ exception when insufficient_privilege then if sqlerrm<>'OPS_FORBIDDEN' then raise;end if;end;
 end$$;
 rollback;

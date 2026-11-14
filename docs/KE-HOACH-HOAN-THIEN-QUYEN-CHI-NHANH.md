@@ -12,6 +12,6 @@ Không mặc định coi mọi quyền đang báo “chưa thể chỉnh riêng�
 
 ## Tiến độ thử nghiệm Hub
 
-- Đã chuẩn bị ba hàm lõi `ops_can`, `ops_manager` và `ops_q_can` để xét quyền riêng tại chi nhánh, đồng thời giữ cách xét cũ nếu chưa có điều chỉnh riêng. Bản này chỉ ở nhánh thử và chưa đưa các quyền Hub vào danh mục có thể chỉnh.
-- PostgreSQL thử nghiệm đã kiểm tra cấp tại một quán, chặn tại quán khác, giữ quyền cũ, quyền QC và quyền chặn toàn tài khoản; dữ liệu thử đã được hoàn tác.
-- Chưa phát hành: các hàm công việc cộng tác, bằng chứng, xử lý QC và các đường đọc khác còn gọi kiểm tra toàn tài khoản. Phải chuyển và kiểm tra các đường này cùng giao diện trước khi bật danh mục; nếu không có thể báo sai hoặc để lọt quyền.
+- Đã chuẩn bị ba hàm lõi `ops_can`, `ops_manager`, `ops_q_can`, công việc cộng tác, danh sách Hub, bằng chứng, đường xử lý QC và lối vào giao diện để xét quyền riêng tại chi nhánh. Bản này chỉ ở nhánh thử và chưa đưa các quyền Hub vào danh mục có thể chỉnh.
+- PostgreSQL thử nghiệm đã kiểm tra cấp tại một quán, chặn tại quán khác, so sánh quyền cũ, QC, bằng chứng, bình luận cộng tác và quyền chặn toàn tài khoản; dữ liệu thử đã được hoàn tác. Phân công văn phòng ở quán khác giữ hành vi cũ khi không có ngoại lệ.
+- Chưa phát hành: tiếp tục kiểm tra các đường đọc/ghi khác, quyền MKT và các nhóm còn lại trước khi bật danh mục. Ba migration thử có phiên bản sớm hơn lịch sử production hiện tại; phải dùng thư mục triển khai tách riêng, dry-run đúng danh sách và kiểm tra lịch sử trước khi áp, không chạy `include-all` trên toàn kho.
