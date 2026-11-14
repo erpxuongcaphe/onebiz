@@ -91,11 +91,11 @@ describe("internal sale dialog for an F&B destination", () => {
     await selectRoute();
     fireEvent.change(screen.getByPlaceholderText("Tìm sản phẩm theo tên hoặc mã..."), { target: { value: product.code } });
     fireEvent.click(await screen.findByRole("button", { name: /SKU-SST-018.*Mật ong/ }));
-    fireEvent.change(screen.getAllByRole("combobox")[2], { target: { value: "debt" } });
+    expect(screen.queryByText("Hình thức thanh toán")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Tạo đơn nội bộ" }));
 
     await waitFor(() => expect(mocks.create).toHaveBeenCalledExactlyOnceWith({
-      fromBranchId: "warehouse", toBranchId: "xtb", paymentMethod: "debt", note: undefined,
+      fromBranchId: "warehouse", toBranchId: "xtb", note: undefined,
       items: [{
         productId: "honey", productCode: product.code, productName: product.name,
         unit: "Chai", quantity: 1, unitPrice: 250000, vatRate: 0,
