@@ -67,7 +67,6 @@ export function CreateInternalSaleDialog({
     if (!open) return;
     setFromBranchId("");
     setToBranchId("");
-    setPaymentMethod("transfer");
     setProductSearch("");
     setShowDropdown(false);
     setFilteredProducts([]);
