@@ -33,6 +33,10 @@ select set_config('request.jwt.claim.sub','22000000-0000-0000-0000-000000000002'
 do $$declare created jsonb;begin
  created:=public.mkt_create_campaign('Synthetic new',null,null,null,0,'33000000-0000-0000-0000-000000000001',null,'[]');
  if created->>'campaignId' is null then raise exception 'MKT_CREATE_BRANCH_FAILED';end if;
+ begin
+  perform public.mkt_create_content_item('66000000-0000-0000-0000-000000000003',null,'Shared content','other','low','88000000-0000-0000-0000-000000000001');
+  raise exception 'MKT_BRANCH_GRANT_SHARED_CONTENT_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
  perform public.mkt_create_content_item('66000000-0000-0000-0000-000000000001','77000000-0000-0000-0000-000000000001','Scoped content','other','low','88000000-0000-0000-0000-000000000001');
  begin
   perform public.mkt_create_content_item('66000000-0000-0000-0000-000000000001','77000000-0000-0000-0000-000000000002','Cross branch content','other','low','88000000-0000-0000-0000-000000000001');
