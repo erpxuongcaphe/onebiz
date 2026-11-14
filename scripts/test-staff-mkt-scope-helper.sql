@@ -120,6 +120,7 @@ do $$declare u uuid:='22000000-0000-0000-0000-000000000002';begin
   or public._staff_mkt_linked_permission(u,'mkt.view',null,'77000000-0000-0000-0000-000000000099',null,null)
   or not public._staff_mkt_linked_permission(u,'mkt.view',null,null,'99000000-0000-0000-0000-000000000001',null)
   or public._staff_mkt_linked_permission(u,'mkt.view',null,null,'99000000-0000-0000-0000-000000000002',null)
+  or public._staff_mkt_linked_permission(u,'mkt.view',null,null,null,'aa000000-0000-0000-0000-000000000099')
   or public._staff_mkt_linked_permission(u,'mkt.view',null,null,null,'aa000000-0000-0000-0000-000000000001')
   or not public._staff_mkt_linked_permission(u,'mkt.view',null,null,null,'aa000000-0000-0000-0000-000000000002')
   or public._staff_mkt_linked_permission(u,'mkt.view',null,null,null,null) then raise exception 'MKT_INDIRECT_SCOPE_FAILED';end if;
