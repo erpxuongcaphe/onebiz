@@ -76,6 +76,7 @@ do $$declare created jsonb;begin
   raise exception 'MKT_MOVE_WRONG_BRANCH_ALLOWED';
  exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
  begin
+  if not exists(select 1 from public.mkt_campaigns where id='66000000-0000-0000-0000-000000000001' and branch_id='33000000-0000-0000-0000-000000000001') then raise exception 'MKT_DENIED_MOVE_CHANGED_BRANCH';end if;
   perform public.mkt_update_campaign('66000000-0000-0000-0000-000000000002','{"name":"Changed B"}'::jsonb);
   raise exception 'MKT_UPDATE_WRONG_BRANCH_ALLOWED';
  exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
