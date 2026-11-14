@@ -752,6 +752,9 @@ export interface ProductionAdjustmentMaterial {
   productId: string; quantity: number; unit: string; expectedFactor: number;
 }
 export interface ProductionAdjustmentPreview {
+  existingLotGap?: number;
+  shortfallQuantityDelta?: number;
+  shortfallCostDelta?: number;
   token: string; orderCode: string; productName: string; unit: string;
   outputBefore: number; outputAfter: number; usedQuantity: number;
   remainingBefore: number; remainingAfter: number; stockBefore: number; stockAfter: number; stockDelta: number;
@@ -773,6 +776,7 @@ const PRODUCTION_ADJUSTMENT_ERRORS: Record<string,string> = {
   PRODUCTION_CORRECTION_PERMISSION_REQUIRED: "Tài khoản cần quyền Xem sản xuất và Sửa/điều chỉnh mẻ đã hoàn thành tại chi nhánh này.",
   PRODUCTION_ADJUSTMENT_COMPLETED_REQUIRED: "Chỉ dùng điều chỉnh này cho mẻ đã hoàn thành.",
   PRODUCTION_ADJUSTMENT_VARIANT_COST_REQUIRED: "Mẻ có biến thể cần đối soát giá vốn theo biến thể trước khi điều chỉnh.",
+  PRODUCTION_ADJUSTMENT_OUTPUT_ONLY_WHEN_LOT_DRIFT: "Tồn kho cần đối soát. Lần điều chỉnh này chỉ cho giảm tổng thành phẩm của mẻ. Giữ lượng nguyên liệu như đã ghi hoặc nhờ kho đối soát trước khi sửa nguyên liệu.",
   PRODUCTION_ADJUSTMENT_NO_CHANGE: "Chưa có thay đổi số lượng thành phẩm hoặc nguyên liệu.",
   PRODUCTION_CORRECTION_HISTORY_INVALID: "Lịch sử định lượng hoặc giá vốn của mẻ chưa đủ để điều chỉnh an toàn.",
   PRODUCTION_CORRECTION_REQUEST_CHANGED: "Nội dung xác nhận khác lần gửi trước. Mở lại mẻ để kiểm tra lịch sử trước khi điều chỉnh tiếp.",
