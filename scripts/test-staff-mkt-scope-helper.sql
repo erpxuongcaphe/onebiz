@@ -147,6 +147,10 @@ do $$begin if public._staff_mkt_campaign_permission('22000000-0000-0000-0000-000
 insert into public.user_permission_overrides(tenant_id,user_id,permission_code,override_type) values ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000002','mkt.manage_campaigns','revoke');
 do $$begin
  begin
+  perform public.mkt_update_campaign('66000000-0000-0000-0000-000000000001','{"name":"Denied globally"}'::jsonb);
+  raise exception 'MKT_GLOBAL_UPDATE_DENY_BYPASSED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ begin
   perform public.mkt_create_campaign('Denied globally',null,null,null,0,'33000000-0000-0000-0000-000000000001',null,'[]');
   raise exception 'MKT_GLOBAL_MANAGE_DENY_BYPASSED';
  exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
