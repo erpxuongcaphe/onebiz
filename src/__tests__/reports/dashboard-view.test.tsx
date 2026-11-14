@@ -1,9 +1,10 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-const state = vi.hoisted(() => ({ ready: true, branchId: "b1" as string | undefined, permissions: new Set<string>(), fetch: vi.fn() }));
+const state = vi.hoisted(() => ({ ready: true, hubAllowed: false, branchId: "b1" as string | undefined, permissions: new Set<string>(), fetch: vi.fn() }));
 const openBills = vi.hoisted(() => vi.fn());
 const receivable = vi.hoisted(() => vi.fn());
 const reconciliation = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/operations/use-hub-access", () => ({ useHubAccess: () => state.hubAllowed }));
 vi.mock("@/lib/hooks/use-fnb-open-orders", () => ({ useFnbOpenOrders: openBills }));
 vi.mock("next/dynamic", () => ({ default: () => () => <div data-testid="dynamic-view" /> }));
 vi.mock("@/lib/contexts", () => ({
@@ -16,7 +17,7 @@ vi.mock("@/lib/hooks/use-receiving-view-memory", () => ({ useReceivingVietnamDay
 vi.mock("@/lib/services/supabase/dashboard-sales", () => ({ getSalesDashboard: state.fetch, getSalesDayReceivable: receivable, getCollectionReconciliation: reconciliation }));
 import Dashboard from "@/app/(main)/page";
 const sample = { sales: 111111, discounts: 5000, returns: 0, orders: 3, received: 121111, refunded: 10000, collected: 111111, methods: { cash: 100000, transfer: 11111 }, buckets: [], modes: [] };
-beforeEach(() => { state.ready = true; state.branchId = "b1"; state.permissions = new Set(["pos_fnb.view_sales_summary", "reports.analytics", "reports.view_detail", "reports.view_profit"]); state.fetch.mockReset().mockResolvedValue(sample); });
+beforeEach(() => { state.ready = true; state.hubAllowed = false; state.branchId = "b1"; state.permissions = new Set(["pos_fnb.view_sales_summary", "reports.analytics", "reports.view_detail", "reports.view_profit"]); state.fetch.mockReset().mockResolvedValue(sample); });
 afterEach(cleanup);
 beforeEach(() => openBills.mockReset().mockReturnValue({ orders: [], loading: false, error: null, refresh: vi.fn() }));
 beforeEach(() => receivable.mockReset().mockResolvedValue({ amount: 12345, invoice_count: 2, missing_count: 0 }));
@@ -26,6 +27,19 @@ beforeEach(() => reconciliation.mockReset().mockResolvedValue({
   total: { net: 700, received: 750, refunded: 50 },
 }));
 describe("sales dashboard permission and scope", () => {
+  it("shows the Hub shortcut for branch-scoped access confirmed by the server", async () => {
+    state.hubAllowed = true;
+    state.permissions.delete("pos_fnb.view_sales_summary");
+    render(<Dashboard />);
+    expect(await screen.findByRole("link", { name: /Công việc/ })).toHaveAttribute("href", "/hub");
+  });
+  it("hides the Hub shortcut when access is not confirmed", async () => {
+    state.permissions.add("ops.view");
+    state.permissions.delete("pos_fnb.view_sales_summary");
+    render(<Dashboard />);
+    await screen.findByRole("navigation", { name: "Nghiệp vụ" });
+    expect(screen.queryByRole("link", { name: /Công việc/ })).not.toBeInTheDocument();
+  });
   it("separates internal collections and refunds from outside collections", async () => {
     render(<Dashboard />);
     expect(await screen.findByText("700 đ")).toBeInTheDocument();
