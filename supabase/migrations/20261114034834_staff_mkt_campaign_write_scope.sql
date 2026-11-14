@@ -20,7 +20,15 @@ do $$declare body text; patched text;begin
  execute patched;
  select replace(pg_get_functiondef(to_regprocedure('public.mkt_change_campaign_status(uuid,text,text)')),chr(13),'') into body;
  if position('public.user_has_permission(v_actor, ''mkt.manage_campaigns'')' in body)=0 or position('public.user_has_permission(v_actor, ''mkt.override_campaign'')' in body)=0 then raise exception 'MKT_STATUS_SCOPE_PATCH_MISSING';end if;
- patched:=replace(body,'public.user_has_permission(v_actor, ''mkt.manage_campaigns'')','public._staff_mkt_campaign_permission(v_actor, ''mkt.manage_campaigns'', p_campaign_id)');
+ patched:=replace(body,
+  'if not public.user_has_permission(v_actor, ''mkt.manage_campaigns'') then raise exception ''INSUFFICIENT_ROLE'' using errcode = ''P0001''; end if;', '');
+ if patched=body then raise exception 'MKT_STATUS_PERMISSION_GATE_CHANGED';end if;
+ body:=patched;
+ patched:=replace(body,
+  'if not found or v_campaign.tenant_id <> public.get_user_tenant_id() then raise exception ''NOT_FOUND'' using errcode = ''P0001''; end if;',
+  'if not found or v_campaign.tenant_id <> public.get_user_tenant_id() then raise exception ''NOT_FOUND'' using errcode = ''P0001''; end if;' || chr(10) ||
+  '  if not public._staff_mkt_campaign_permission(v_actor, ''mkt.manage_campaigns'', p_campaign_id) then raise exception ''INSUFFICIENT_ROLE'' using errcode = ''P0001''; end if;');
+ if patched=body then raise exception 'MKT_STATUS_LOCK_GATE_CHANGED';end if;
  patched:=replace(patched,'public.user_has_permission(v_actor, ''mkt.override_campaign'')','public._staff_mkt_campaign_permission(v_actor, ''mkt.override_campaign'', p_campaign_id)');
  execute patched;
 end$$;
