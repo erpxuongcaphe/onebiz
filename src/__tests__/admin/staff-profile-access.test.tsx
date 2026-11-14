@@ -73,15 +73,20 @@ describe("staff profile scope", () => {
     expect(onSave.mock.calls[0][1]).toEqual([{ branchId: "premium", role: "coordinator", capabilities: ["verify", "legacy"], active: false }]);
     expect(onSave.mock.calls[0][2]).toEqual(["premium"]);
   });
-  it("does not silently suppress an existing QC assignment when changing Hub role", () => {
+  it("requires explicit QC removal when changing to a conflicting Hub manager role", async () => {
     const operations = { version: 1 as const, userId: "u", fingerprint: "b".repeat(32), memberships: [
       { branchId: "premium", branchName: "Premium", branchActive: true, role: "coordinator" as const, capabilities: ["verify"], active: true },
     ], qualityGrants: [{ branchId: "premium", branchName: "Premium", branchActive: true, canAudit: true, canCorrect: false, canAccounting: false, active: true }] };
-    render(<StaffProfileEditor snapshot={snapshot} operations={operations} onSave={vi.fn()} onReload={vi.fn()} />);
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<StaffProfileEditor snapshot={snapshot} operations={operations} onSave={onSave} onReload={vi.fn()} />);
     const hub = screen.getByRole("region", { name: "Phân công Hub vận hành" });
     fireEvent.change(within(hub).getByRole("combobox", { name: "Vai trò Hub tại Premium" }), { target: { value: "manager" } });
     expect(screen.getByText(/Vai trò quản lý Hub xung đột/)).toBeVisible();
     expect(screen.getByRole("button", { name: "Lưu phân công" })).toBeDisabled();
+    fireEvent.click(within(hub).getByRole("checkbox", { name: /Đồng ý ngừng toàn bộ quyền QC tại Premium/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Lưu phân công" }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+    expect(onSave.mock.calls[0][2]).toEqual(["premium"]);
   });
   it("saves floor-view scope without changing other rights and explains independent table readers", async () => {
     const data = structuredClone(snapshot);

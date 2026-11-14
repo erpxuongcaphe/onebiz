@@ -43,6 +43,7 @@ export function StaffProfileEditor({
 }) {
   const [draft, setDraft] = useState(() => draftFromStaffProfile(snapshot));
   const [opsEdits, setOpsEdits] = useState<Record<string, StaffOpsChange>>({});
+  const [qcDisableChoices, setQcDisableChoices] = useState<string[]>([]);
   const savedDraft = useMemo(() => draftFromStaffProfile(snapshot), [snapshot]);
   const [scope, setScope] = useState<string>("company");
   const [search, setSearch] = useState("");
@@ -67,8 +68,10 @@ export function StaffProfileEditor({
   const removedOps = (operations?.memberships ?? []).filter(row => row.active && removedBranches.includes(row.branchId));
   const removedQc = (operations?.qualityGrants ?? []).filter(row => row.active && removedBranches.includes(row.branchId));
   const opsChanges = [...Object.values(opsEdits).filter(row => !removedBranches.includes(row.branchId)), ...removedOps.map(row => ({ branchId: row.branchId, role: row.role, capabilities: row.capabilities, active: false }))];
-  const opsConflict = opsChanges.some(row => row.active && row.role === "manager" && operations?.qualityGrants.some(q => q.active && q.branchId === row.branchId && (q.canAudit || q.canCorrect)));
-  const changes = [...staffProfileChanges(snapshot, draft), ...opsChanges.map(row => `${row.active ? "Đổi phân công Hub" : "Ngừng phân công Hub"}: ${snapshot.branches.find(b => b.id === row.branchId)?.name ?? row.branchId}`), ...removedQc.map(row => `Ngừng quyền QC: ${row.branchName}`)];
+  const qcForManager = (operations?.qualityGrants ?? []).filter(q => q.active && (q.canAudit || q.canCorrect) && opsChanges.some(row => row.branchId === q.branchId && row.active && row.role === "manager"));
+  const deactivateQc = [...new Set([...removedQc.map(row => row.branchId), ...qcForManager.filter(q => qcDisableChoices.includes(q.branchId)).map(q => q.branchId)])];
+  const opsConflict = qcForManager.some(q => !qcDisableChoices.includes(q.branchId));
+  const changes = [...staffProfileChanges(snapshot, draft), ...opsChanges.map(row => `${row.active ? "Đổi phân công Hub" : "Ngừng phân công Hub"}: ${snapshot.branches.find(b => b.id === row.branchId)?.name ?? row.branchId}`), ...deactivateQc.map(id => `Ngừng quyền QC: ${snapshot.branches.find(b => b.id === id)?.name ?? id}`)];
   useUnsavedWork(changes.length > 0 || busy);
   const branchId = scope === "company" || scope === "shared" ? null : scope;
   const branchName = (id: string) =>
@@ -186,14 +189,14 @@ export function StaffProfileEditor({
           ? "Phạm vi quản lý phải nằm trong các chi nhánh được truy cập."
           : roleDecision
             ? "Chọn dùng mẫu của chức vụ hay giữ mẫu hiện tại ở phần Chức vụ & bộ phận."
-            : opsConflict ? "Vai trò quản lý Hub xung đột với quyền kiểm tra/sửa lỗi QC hiện có. Hãy giữ vai trò cũ và kiểm tra QC trước khi thay đổi." : "";
+            : opsConflict ? "Vai trò quản lý Hub xung đột với quyền kiểm tra/sửa lỗi QC hiện có. Chọn giữ vai trò cũ hoặc xác nhận ngừng QC tại quán đó." : "";
   const save = async () => {
     if (saving.current || saveIssue) return;
     saving.current = true;
     setBusy(true);
     setError("");
     try {
-      await onSave(draft, opsChanges, removedQc.map(row => row.branchId));
+      await onSave(draft, opsChanges, deactivateQc);
     } catch (e) {
       setError(
         e instanceof Error
@@ -343,6 +346,7 @@ export function StaffProfileEditor({
                 {current?.active && <div className="mt-3 flex flex-wrap gap-3">{([['verify','Xác minh'],['close_period','Chốt kỳ'],['cancel_todo','Hủy việc'],['approve_policy','Duyệt chính sách'],['manage_members','Phân công Hub']] as const).map(([code,label]) => <label key={code} className="flex min-h-11 items-center gap-2"><input type="checkbox" checked={current.capabilities.includes(code)} onChange={e => setOpsEdits(edits => ({ ...edits, [b.id]: { branchId: b.id, role: current.role, active: current.active, capabilities: e.target.checked ? [...current.capabilities, code] : current.capabilities.filter(c => c !== code) } }))} />{label}</label>)}</div>}
                 {current?.capabilities.some(c => !['verify','close_period','cancel_todo','approve_policy','manage_members'].includes(c)) && <p className="mt-2 text-amber-800">Quyền Hub cũ khác được giữ nguyên.</p>}
                 <p className="mt-2 text-muted-foreground">QC: {qc ? [qc.canAudit && "Kiểm tra", qc.canCorrect && "Sửa lỗi", qc.canAccounting && "Kế toán"].filter(Boolean).join(", ") || "Đang cấp" : "Chưa phân công"}</p>
+                {qcForManager.some(q => q.branchId === b.id) && <label className="mt-3 flex min-h-11 items-start gap-2 rounded-lg bg-amber-50 p-3 text-amber-950"><input className="mt-1" type="checkbox" checked={qcDisableChoices.includes(b.id)} onChange={e => setQcDisableChoices(ids => e.target.checked ? [...ids, b.id] : ids.filter(id => id !== b.id))} /><span>Đồng ý ngừng toàn bộ quyền QC tại {b.name} khi lưu để giao vai trò quản lý Hub.</span></label>}
               </div>;
             })}</div>
             {(removedOps.length > 0 || removedQc.length > 0) && <div role="status" className="mt-3 rounded-lg bg-amber-50 p-3 text-amber-950"><strong>Sẽ ngừng khi lưu:</strong>{removedOps.map(row => <p key={`m:${row.branchId}`}>Hub · {row.branchName}</p>)}{removedQc.map(row => <p key={`q:${row.branchId}`}>QC · {row.branchName}</p>)}</div>}
@@ -1198,6 +1202,7 @@ export function StaffProfileEditor({
             onClick={() => {
               setDraft(draftFromStaffProfile(snapshot));
               setOpsEdits({});
+              setQcDisableChoices([]);
               setRoleDecisions([]);
               setError("");
             }}
