@@ -33,6 +33,11 @@ select set_config('request.jwt.claim.sub','22000000-0000-0000-0000-000000000002'
 do $$declare created jsonb;begin
  created:=public.mkt_create_campaign('Synthetic new',null,null,null,0,'33000000-0000-0000-0000-000000000001',null,'[]');
  if created->>'campaignId' is null then raise exception 'MKT_CREATE_BRANCH_FAILED';end if;
+ perform public.mkt_create_content_item('66000000-0000-0000-0000-000000000001','77000000-0000-0000-0000-000000000001','Scoped content','other','low','88000000-0000-0000-0000-000000000001');
+ begin
+  perform public.mkt_create_content_item('66000000-0000-0000-0000-000000000001','77000000-0000-0000-0000-000000000002','Cross branch content','other','low','88000000-0000-0000-0000-000000000001');
+  raise exception 'MKT_CONTENT_WRONG_PACKAGE_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
  perform public.mkt_add_readiness_item('66000000-0000-0000-0000-000000000001','Scoped readiness','store','33000000-0000-0000-0000-000000000001',null);
  begin
   perform public.mkt_add_readiness_item('66000000-0000-0000-0000-000000000002','Wrong branch readiness','store','33000000-0000-0000-0000-000000000002',null);
@@ -69,6 +74,7 @@ end$$;
 update public.user_branch_permission_overrides set override_type='revoke' where user_id='22000000-0000-0000-0000-000000000002' and branch_id='33000000-0000-0000-0000-000000000001' and permission_code='mkt.manage_campaigns';
 insert into public.user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values ('11000000-0000-0000-0000-000000000001','22000000-0000-0000-0000-000000000002','33000000-0000-0000-0000-000000000001','mkt.split_work_packages','grant','22000000-0000-0000-0000-000000000002');
 do $$begin
+ perform public.mkt_create_content_item('66000000-0000-0000-0000-000000000001','77000000-0000-0000-0000-000000000001','Split-only content','other','low','88000000-0000-0000-0000-000000000001');
  perform public.mkt_create_work_package('66000000-0000-0000-0000-000000000001','other','Split-only package',null,null,null,null);
  begin
   perform public.mkt_create_work_package('66000000-0000-0000-0000-000000000002','other','Split wrong branch',null,null,null,null);
