@@ -38,6 +38,10 @@ do $$declare created jsonb;begin
   perform public.mkt_create_content_item('66000000-0000-0000-0000-000000000001','77000000-0000-0000-0000-000000000002','Cross branch content','other','low','88000000-0000-0000-0000-000000000001');
   raise exception 'MKT_CONTENT_WRONG_PACKAGE_ALLOWED';
  exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
+ begin
+  perform public.mkt_add_readiness_item('66000000-0000-0000-0000-000000000003','Shared readiness','store','33000000-0000-0000-0000-000000000001',null);
+  raise exception 'MKT_BRANCH_GRANT_SHARED_READINESS_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
  perform public.mkt_add_readiness_item('66000000-0000-0000-0000-000000000001','Scoped readiness','store','33000000-0000-0000-0000-000000000001',null);
  begin
   perform public.mkt_add_readiness_item('66000000-0000-0000-0000-000000000002','Wrong branch readiness','store','33000000-0000-0000-0000-000000000002',null);
