@@ -112,6 +112,7 @@ do $$begin
  exception when raise_exception then if sqlerrm<>'INSUFFICIENT_ROLE' then raise;end if;end;
 end$$;
 do $$begin if exists(select 1 from public.mkt_campaign_readiness_items where title in ('Wrong branch readiness','Shared readiness')) then raise exception 'MKT_DENIED_READINESS_CREATED';end if;end$$;
+do $$begin if not exists(select 1 from public.mkt_channel_work_packages where title='Scoped package' and campaign_id='66000000-0000-0000-0000-000000000001') then raise exception 'MKT_PACKAGE_WRONG_CAMPAIGN';end if;end$$;
 do $$begin if exists(select 1 from public.mkt_channel_work_packages where title in ('Wrong branch package','Split wrong branch')) then raise exception 'MKT_DENIED_PACKAGE_CREATED';end if;end$$;
 do $$begin if exists(select 1 from public.mkt_content_items where title in ('Cross branch content','Split cross branch')) then raise exception 'MKT_DENIED_CONTENT_CREATED';end if;end$$;
 update public.user_branch_permission_overrides set override_type='grant' where user_id='22000000-0000-0000-0000-000000000002' and branch_id='33000000-0000-0000-0000-000000000001' and permission_code='mkt.manage_campaigns';
