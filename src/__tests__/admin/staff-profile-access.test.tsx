@@ -88,6 +88,15 @@ describe("staff profile scope", () => {
     await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
     expect(onSave.mock.calls[0][2]).toEqual(["premium"]);
   });
+  it("separates company-wide rights from rights not yet configurable per branch", () => {
+    render(<StaffProfileEditor snapshot={snapshot} onSave={vi.fn()} onReload={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Tùy chỉnh quyền" }));
+    fireEvent.click(screen.getByRole("button", { name: "Premium" }));
+    fireEvent.click(screen.getByText("6 quyền áp dụng toàn công ty"));
+    expect(screen.getByRole("button", { name: "Xem quyền chung: Xem toàn công ty" })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Xem quyền chung: Xem toàn công ty" }));
+    expect(screen.getByRole("textbox", { name: "Tìm quyền" })).toHaveValue("reports.view_all_branches");
+  });
   it("explains Hub assignment and shared standards when editing a branch right", () => {
     const data = structuredClone(snapshot);
     data.branchPermissionCodes.push("ops.configure");
