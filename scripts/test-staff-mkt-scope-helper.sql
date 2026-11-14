@@ -91,6 +91,7 @@ do $$declare u uuid:='22000000-0000-0000-0000-000000000002';begin
  if not public._staff_mkt_linked_permission(u,'mkt.view',null,'77000000-0000-0000-0000-000000000001',null,null)
   or public._staff_mkt_linked_permission(u,'mkt.view',null,'77000000-0000-0000-0000-000000000002',null,null)
   or public._staff_mkt_linked_permission(u,'mkt.view','66000000-0000-0000-0000-000000000001','77000000-0000-0000-0000-000000000002',null,null)
+  or public._staff_mkt_linked_permission(u,'mkt.view','66000000-0000-0000-0000-000000000004',null,null,null)
   or public._staff_mkt_linked_permission(u,'mkt.view',null,'77000000-0000-0000-0000-000000000099',null,null)
   or not public._staff_mkt_linked_permission(u,'mkt.view',null,null,'99000000-0000-0000-0000-000000000001',null)
   or public._staff_mkt_linked_permission(u,'mkt.view',null,null,'99000000-0000-0000-0000-000000000002',null)
