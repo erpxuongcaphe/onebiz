@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-const m = vi.hoisted(() => ({ read: vi.fn(), save: vi.fn(), toast: vi.fn(), allowed: true, branch: "branch-a", branches: [{ id: "branch-a", name: "Quán A" }] }));
-vi.mock("@/lib/permissions/use-permission", () => ({ usePermissions: () => ({ hasPermission: () => m.allowed }) }));
+const m = vi.hoisted(() => ({ read: vi.fn(), save: vi.fn(), toast: vi.fn(), allowed: true, branchWrite: true, branch: "branch-a", branches: [{ id: "branch-a", name: "Quán A" }] }));
+vi.mock("@/lib/permissions/use-permission", () => ({ usePermissions: () => ({ hasPermission: () => m.allowed, hasPermissionAtBranch: (code: string, branch: string | null) => code === "production.manage_bom" && branch === "branch-a" && m.branchWrite }) }));
 vi.mock("@/lib/contexts", () => ({ useToast: () => ({ toast: m.toast }), useBranchFilter: () => ({ activeBranchId: m.branch }) }));
 vi.mock("@/lib/contexts/auth-context", () => ({ useAuth: () => ({ branches: m.branches }) }));
 vi.mock("@/lib/hooks/use-fnb-catalog-scope", () => ({ useFnbCatalogScope: () => true }));
@@ -15,7 +15,7 @@ vi.mock("@/lib/services", () => ({
 vi.mock("@/lib/services/supabase/modifier-groups", () => ({ listModifierGroups: async () => [], getEffectiveModifierGroupsForProduct: async () => [], listModifierOptions: async () => [] }));
 import { BOMEditorDialog } from "@/components/shared/dialogs/bom-editor-dialog";
 import { formatCurrency } from "@/lib/format";
-beforeEach(() => { vi.clearAllMocks(); m.allowed = true; m.branch = "branch-a"; });
+beforeEach(() => { vi.clearAllMocks(); m.allowed = true; m.branchWrite = true; m.branch = "branch-a"; });
 afterEach(cleanup);
 
 it("shows loading, load failure and successful retry without altering the recipe", async () => {
@@ -47,4 +47,14 @@ it("never requests or displays cost for a user without the cost permission", asy
   render(<BOMEditorDialog open bomId="bom" onOpenChange={vi.fn()} />);
   await screen.findByDisplayValue("Công thức thử");
   expect(m.read).not.toHaveBeenCalled(); expect(screen.queryByText(/Dự toán \/ mẻ/)).not.toBeInTheDocument();
+});
+
+it("warns before writing when the original recipe branch is denied", async () => {
+  m.branchWrite = false;
+  m.read.mockResolvedValue(new Map());
+  render(<BOMEditorDialog open bomId="bom" onOpenChange={vi.fn()} />);
+  await screen.findByDisplayValue("Công thức thử");
+  fireEvent.click(screen.getByRole("button", { name: /Lưu/ }));
+  expect(m.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Chưa thể lưu công thức", variant: "error" }));
+  expect(m.save).not.toHaveBeenCalled();
 });

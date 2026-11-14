@@ -840,6 +840,11 @@ export function StaffProfileEditor({
                                     Quyền báo cáo tài chính cũ có thể cho xem công nợ đầu kỳ chưa gắn chi nhánh khi đi cùng quyền xem toàn công ty. Các báo cáo quản trị vẫn cần quyền báo cáo tương ứng.
                                   </p>
                                 )}
+                                {p.code === "production.manage_bom" && (
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    Quyền tạo, sửa hoặc nhập sản phẩm dùng chung cũng có thể thay đổi công thức từ màn hình sản phẩm hoặc nhập Excel. Hãy kiểm tra các quyền sản phẩm đó khi cần giới hạn sửa công thức.
+                                  </p>
+                                )}
                                 {p.code === "invoices.export" && (
                                   <p className="mt-1 text-xs text-muted-foreground">
                                     Cho dùng nút xuất hóa đơn tại chi nhánh được cấp. Quyền xuất báo cáo cũng cho xuất hóa đơn ở chi nhánh tương ứng. Việc xem dữ liệu phụ thuộc các quyền xem khác; tắt xuất không thay thế việc giới hạn quyền xem.
