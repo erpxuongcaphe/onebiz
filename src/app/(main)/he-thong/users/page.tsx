@@ -419,7 +419,7 @@ function UsersPage() {
       <StaffDirectoryFilterBar value={directoryFilters} onChange={next => { setDirectoryFilters(next); userList.setPage(1); }}
         branches={branches.filter(b => users.some(u => u.branchIds.includes(b.id)))}
         departments={(management?.departments ?? []).filter(d => users.some(u => u.departmentIds?.includes(d.id)))}
-        count={scopedDirectory.length} total={users.length} />
+        count={scopedDirectory.length} total={users.length} suggestions={scopedDirectory} />
       {users.some(u => u.departmentIds === undefined) && <p role="status" className="rounded-lg border p-3 text-sm">Thông tin phòng ban chưa được máy chủ cung cấp. Bộ lọc phòng ban chưa thể xác định những nhân viên này.</p>}
       <Card>
         <CardHeader>

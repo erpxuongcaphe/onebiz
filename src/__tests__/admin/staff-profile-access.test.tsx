@@ -58,6 +58,36 @@ const snapshot: StaffProfileSnapshot = {
   branchPermissionCodes: ["pos_fnb.split_bill", "pos_fnb.transfer_table"],
 };
 describe("staff profile scope", () => {
+  it("shows and saves Hub and QC removal with the removed branch, preserving other branches", async () => {
+    const operations = { version: 1 as const, userId: "u", fingerprint: "a".repeat(32), memberships: [
+      { branchId: "premium", branchName: "Premium", branchActive: true, role: "coordinator" as const, capabilities: ["verify", "legacy"], active: true },
+      { branchId: "tubua", branchName: "Tư Búa", branchActive: true, role: "reviewer" as const, capabilities: [], active: true },
+    ], qualityGrants: [{ branchId: "premium", branchName: "Premium", branchActive: true, canAudit: true, canCorrect: false, canAccounting: false, active: true }] };
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<StaffProfileEditor snapshot={snapshot} operations={operations} onSave={onSave} onReload={vi.fn()} />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Premium" }));
+    expect(screen.getByText("Hub · Premium")).toBeVisible();
+    expect(screen.getByText("QC · Premium")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Lưu phân công" }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+    expect(onSave.mock.calls[0][1]).toEqual([{ branchId: "premium", role: "coordinator", capabilities: ["verify", "legacy"], active: false }]);
+    expect(onSave.mock.calls[0][2]).toEqual(["premium"]);
+  });
+  it("requires explicit QC removal when changing to a conflicting Hub manager role", async () => {
+    const operations = { version: 1 as const, userId: "u", fingerprint: "b".repeat(32), memberships: [
+      { branchId: "premium", branchName: "Premium", branchActive: true, role: "coordinator" as const, capabilities: ["verify"], active: true },
+    ], qualityGrants: [{ branchId: "premium", branchName: "Premium", branchActive: true, canAudit: true, canCorrect: false, canAccounting: false, active: true }] };
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<StaffProfileEditor snapshot={snapshot} operations={operations} onSave={onSave} onReload={vi.fn()} />);
+    const hub = screen.getByRole("region", { name: "Phân công Hub vận hành" });
+    fireEvent.change(within(hub).getByRole("combobox", { name: "Vai trò Hub tại Premium" }), { target: { value: "manager" } });
+    expect(screen.getByText(/Vai trò quản lý Hub xung đột/)).toBeVisible();
+    expect(screen.getByRole("button", { name: "Lưu phân công" })).toBeDisabled();
+    fireEvent.click(within(hub).getByRole("checkbox", { name: /Đồng ý ngừng toàn bộ quyền QC tại Premium/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Lưu phân công" }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+    expect(onSave.mock.calls[0][2]).toEqual(["premium"]);
+  });
   it("saves floor-view scope without changing other rights and explains independent table readers", async () => {
     const data = structuredClone(snapshot);
     data.branchPermissionCodes.push("floor_plan.view");

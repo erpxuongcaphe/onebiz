@@ -120,7 +120,7 @@ const snapshotSchema = z.object({
   ),
   branchPermissionCodes: z.array(z.string()),
 });
-function readSnapshot(value: unknown): StaffProfileSnapshot {
+export function readStaffProfileSnapshot(value: unknown): StaffProfileSnapshot {
   const result = snapshotSchema.safeParse(value);
   if (!result.success)
     throw new Error("Chưa tải đủ dữ liệu quyền. Vui lòng thử lại.");
@@ -133,7 +133,7 @@ export async function getStaffProfileAccess(
     p_user_id: userId,
   });
   if (error) profileError(error);
-  return readSnapshot(data);
+  return readStaffProfileSnapshot(data);
 }
 export async function saveStaffProfileAccess(
   snapshot: StaffProfileSnapshot,
@@ -149,5 +149,5 @@ export async function saveStaffProfileAccess(
     },
   });
   if (error) profileError(error);
-  return readSnapshot(data);
+  return readStaffProfileSnapshot(data);
 }

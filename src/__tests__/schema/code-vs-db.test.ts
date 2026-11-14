@@ -84,6 +84,8 @@ const RPC_CHO_MIGRATION = new Map<string, string>([
   ["get_pos_stock_snapshot_scoped", "20261112081429_staff_pos_stock_snapshot.sql"],
   ["get_staff_profile_access", "20261111052704_staff_branch_access.sql"],
   ["save_staff_profile_access", "20261111052704_staff_branch_access.sql"],
+  ["get_staff_operations_access", "20261114040000_staff_operations_snapshot.sql"],
+  ["save_staff_profile_operations", "20261114040100_staff_operations_atomic_save.sql"],
   // Applied and verified on ONEBIZ 02/11; remove after the next full schema dump.
   ["delete_money_account", "20261102045002_money_account_edit_delete.sql"],
   ["close_sales_orders_processing", "20261030161847_sales_order_processing_bulk_close.sql"],

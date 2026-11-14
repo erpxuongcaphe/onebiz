@@ -26,6 +26,14 @@ describe('scope-first staff directory', () => {
     const onChange=vi.fn(); render(<StaffDirectoryFilterBar value={{branchIds:['premium'],departmentIds:['ops'],search:'thu'}} onChange={onChange} branches={[{id:'premium',name:'Premium'}]} departments={[{id:'ops',name:'Vận hành'}]} count={1} total={3}/>);
     fireEvent.click(screen.getByRole('button',{name:'Xóa bộ lọc'})); expect(onChange).toHaveBeenCalledWith(EMPTY_STAFF_FILTERS);
   });
+  it('suggests only people in the already filtered and authorized list', () => {
+    const filtered = filterStaffDirectory(people, { branchIds: ['premium'], departmentIds: ['ops'], search: '' });
+    render(<StaffDirectoryFilterBar value={{branchIds:['premium'],departmentIds:['ops'],search:''}} onChange={vi.fn()} branches={[]} departments={[]} count={filtered.length} total={people.length} suggestions={filtered} />);
+    const input = screen.getByRole('combobox', { name: 'Tìm nhân viên' });
+    const list = document.getElementById(input.getAttribute('list')!);
+    expect(list?.querySelectorAll('option')).toHaveLength(1);
+    expect(list?.querySelector('option')?.value).toBe('Nguyễn Thư');
+  });
 });
 const doc=():AccountHierarchy=>({positions:[{id:'staff',name:'Nhân viên',parentId:null,roleId:'new',scope:'assigned',depth:'all',permissions:{create:false,edit:false,password:false}}],departments:[{id:'ops',name:'Vận hành',parentId:null}],assignments:[],globalAdminIds:[]});
 const input=()=>({userIds:['a'],visibleIds:['a'],positionId:'staff',departmentId:'ops',managedBranchIds:[] as string[],mode:'replace' as const});
