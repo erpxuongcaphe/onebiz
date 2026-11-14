@@ -297,7 +297,9 @@ export function buildInvoicePrintData(
   const currentDebt = row.customerCurrentDebt; // dư nợ hiện tại (thời gian thực)
   const oldDebt = currentDebt != null ? currentDebt - row.debt : 0; // nợ trước HĐ này
   // Chỉ in khối nợ khi bật cờ + khách công nợ/bán sỉ (có gắn KH + có dư nợ).
+  const noSettlement = row.source === "internal" && row.paymentMethod === "internal";
   const showDebt =
+    !noSettlement &&
     on(f.debt) &&
     !!row.customerId &&
     currentDebt != null &&
@@ -326,7 +328,7 @@ export function buildInvoicePrintData(
     row.amountTendered != null && row.amountTendered > row.paid
       ? row.amountTendered
       : row.paid;
-  summaryRows.push({ label: "Khách đã thanh toán", value: formatCurrency(paidDisplay) });
+  if (!noSettlement) summaryRows.push({ label: "Khách đã thanh toán", value: formatCurrency(paidDisplay) });
   const remaining = due - row.paid;
   const invoiceBalanceRow: NonNullable<DocumentPrintData["invoiceBalanceRow"]> = paidDisplay > due
     ? { label: "Tiền thối lại", value: formatCurrency(paidDisplay - due) }
@@ -344,14 +346,14 @@ export function buildInvoicePrintData(
       bold: true,
       ...(retailDebt ? { customerDebt: true } : {}),
     });
-  } else {
+  } else if (!noSettlement) {
     summaryRows.push(invoiceBalanceRow);
   }
 
   return {
     // CEO 24/06: tiêu đề đặt ở cài đặt; mặc định "PHIẾU THANH TOÁN" (đây là
     // chứng từ nội bộ, KHÔNG phải hoá đơn GTGT/hoá đơn đỏ).
-    documentType: business?.invoiceTitle || "PHIẾU THANH TOÁN",
+    documentType: noSettlement ? "PHIẾU GIAO NỘI BỘ" : business?.invoiceTitle || "PHIẾU THANH TOÁN",
     documentCode: row.code,
     date: row.date,
     // Bên bán — mỗi dòng theo cờ bật/tắt (tắt = không truyền → template ẩn).

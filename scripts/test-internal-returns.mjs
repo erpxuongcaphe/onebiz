@@ -232,4 +232,53 @@ assert.equal(await postedExpense(),0);
 assert.equal(Number(await scalar('select quantity from branch_stock where branch_id=$1 and product_id=$2',[warehouse,product])),quantityBefore+1);
 assert.equal(Number(await scalar('select quantity from internal_sale_receipt_items where sale_item_id=$1',[expenseItem])),1);
 console.log('PASS: stock returns, scoped permissions, expense returns, partial recognition, replay, and original receipt preservation.');
+
+ // Run the new receipt definition against real return tables. Sale and checkout
+ // are exercised separately; these stand-ins supply only their migration anchors.
+ await db.exec(`
+ alter table invoices add column payment_method text default 'cash';
+ alter table invoices add constraint invoices_payment_method_check check (payment_method in ('cash','transfer','card','mixed'));
+ create function _create_internal_sale_auth_impl_00243(uuid,uuid,uuid,uuid,uuid,text,uuid,text,jsonb,text,boolean,text) returns void language plpgsql as $fixture$declare v_debt numeric; v_total numeric; v_paid numeric; v_pay_method text; begin v_debt := v_total - v_paid; end;$fixture$;
+ create function _checkout_internal_pos_before_fnb_bridge_20261023(p_checkout jsonb) returns void language plpgsql as $fixture$
+ declare v_pay jsonb; v_total numeric; v_paid numeric; v_amount numeric; v_method text;
+ begin
+ update invoices set total=v_total,paid=v_paid,debt=v_total-v_paid,
+ payment_method=v_method,amount_tendered=coalesce((p_checkout->>'amountTendered')::numeric,v_paid),source='internal';
+ perform jsonb_build_object('total',v_total,'paid',v_paid,'debt',v_total-v_paid,'test',true);
+ for v_pay in select value from jsonb_array_elements(p_checkout->'payments') loop
+ v_amount:=1; v_method:='cash';
+ insert into cash_transactions default values;
+ insert into cash_transactions default values;
+ end loop;
+ end;$fixture$;
+ `);
+ await db.exec(readFileSync('supabase/migrations/20261115093000_internal_chain_no_payment.sql','utf8'));
+ const newSale=id(70), newInvoice=id(71), newItem=id(72);
+ await db.exec(`
+ insert into invoices(id,tenant_id,status,source,subtotal,discount_amount,debt,customer_id,customer_name,payment_method)
+ values('${newInvoice}','${tenant}','completed','internal',350000,0,0,'${customer}','Branch','internal');
+ insert into invoice_items values('${id(73)}','${newInvoice}','${product}',1,250000,350000,0,0);
+ insert into internal_sales(id,tenant_id,code,from_branch_id,to_branch_id,invoice_id,status,receipt_mode)
+ values('${newSale}','${tenant}','NB003','${warehouse}','${branch}','${newInvoice}','completed','legacy');
+ insert into internal_sale_items values('${newItem}','${newSale}','${product}','SKU-002','Fine Robusta','Tui',1,350000,350000,0,'stock',null,null);
+ insert into branch_stock(tenant_id,branch_id,product_id,quantity) values('${tenant}','${branch}','${product}',3) on conflict(tenant_id,branch_id,product_id) do update set quantity=greatest(branch_stock.quantity,3);
+ insert into fnb_branch_product_cost_balances(tenant_id,branch_id,product_id,costed_quantity,total_cost,unit_cost) values('${tenant}','${branch}','${product}',3,1050000,350000);
+ set test.branch='${branch}';
+ `);
+ const sentNew=await scalar('select send_internal_stock_return($1,$2,$3,$4)',[newSale,JSON.stringify([{itemId:newItem,quantity:1}]),'Return without settlement',id(74)]);
+ const returnLine=await scalar('select id from internal_stock_return_items where return_id=$1',[sentNew.id]);
+ await db.exec(`set test.branch='${warehouse}'`);
+ const adjustmentsBefore=await scalar('select count(*) from customer_debt_adjustments');
+ const cashBefore=await scalar('select count(*) from cash_transactions');
+ const received=()=>scalar('select receive_internal_stock_return($1,$2,$3,$4)',[sentNew.id,JSON.stringify([{itemId:returnLine,quantity:0.5}]),'Confirmed',id(75)]);
+ const firstNew=await received();
+ assert.equal(firstNew.credit,175000);
+ assert.equal(firstNew.debtReduced,0);
+ assert.equal(firstNew.refundPending,0);
+ assert.deepEqual(await received(),firstNew);
+ assert.equal(await scalar('select count(*) from customer_debt_adjustments'),adjustmentsBefore);
+ assert.equal(await scalar('select count(*) from cash_transactions'),cashBefore);
+ assert.equal(Number(await scalar('select total from sales_returns where invoice_id=$1',[newInvoice])),175000);
+ console.log('PASS: confirmed partial return records value with zero cash, debt adjustment or refund.');
+
 await db.close();

@@ -2119,19 +2119,10 @@ function PosPageInner() {
         return;
       }
       const internalCustomer = state.customer;
-      const internalPayments = state.paymentMethod === "mixed"
-        ? state.paymentBreakdown.filter(b => b.amount > 0)
-        : state.paid > 0 && state.total > 0 ? [{ method: state.paymentMethod, amount: Math.min(state.paid, state.total) }] : [];
-      if (internalPayments.reduce((sum, p) => sum + p.amount, 0) > state.total) {
-        toast({ title: "Tổng thanh toán vượt tiền đơn", description: "Điều chỉnh các khoản thanh toán hỗn hợp; tiền thừa của thanh toán một phương thức được trả lại.", variant: "warning" });
-        return;
-      }
       if (state.lineDiscountTotal + state.orderDiscountAmount > 0 && !state.discountAuditCtx?.otpId) {
         pendingApprovalRef.current = null; setDiscountOtpOpen(true);
         toast({ title: "Cần duyệt chiết khấu", description: "Nhập OTP quản lý rồi thanh toán lại.", variant: "warning" }); return;
       }
-      const internalPaid = internalPayments.reduce((sum, p) => sum + p.amount, 0);
-      if (internalPaid < state.total && !window.confirm(`Ghi công nợ nội bộ ${formatCurrency(state.total - internalPaid)} ₫ cho ${state.customer.name}?`)) return;
       submitLockRef.current = true;
       setSubmitting("complete");
       try {
@@ -2140,9 +2131,9 @@ function PosPageInner() {
             branchId: currentBranch!.id, customerId: internalCustomer.id,
             items: state.lines.map(line => ({ ...line, discount: line.discount.mode === "percent"
               ? Math.round(Math.round(line.quantity * line.unitPrice) * line.discount.value / 100) : line.discount.value })),
-            payments: internalPayments as Array<{ method: "cash" | "transfer" | "card"; amount: number }>,
+            payments: [],
             orderDiscount: state.orderDiscountAmount, orderVatRate: state.orderVatRate, shippingFee: state.shippingFee,
-            amountTendered: state.paymentMethod === "mixed" ? internalPayments.reduce((sum,p) => sum+p.amount,0) : state.paid,
+            amountTendered: 0,
             discountOtpId: state.discountAuditCtx?.otpId ?? null,
             expectedTotal: state.total, sessionId: clientSessionId,
             draftId: draft.invoiceId, revision: draft.revision,
@@ -2166,7 +2157,7 @@ function PosPageInner() {
         state.setSellingMode("internal");
         setClientSessionId(nextClientSessionId());
         setMobileCartOpen(false);
-        toast({ title: `Đã bán nội bộ ${result.code}`, description: "Đã ghi xuất kho nơi bán và nhập kho nơi nhận cùng một giao dịch.", variant: "success" });
+        toast({ title: `Đã bán nội bộ ${result.code}`, description: "Đã lưu phiếu giao nội bộ. Không phát sinh thu, chi hoặc công nợ.", variant: "success" });
         if (autoPrint) {
           try {
             const [invoice, items, template] = await Promise.all([
@@ -3780,15 +3771,17 @@ function PosPageInner() {
             {/* Total — Stitch font-heading extrabold primary
                 P0-1 fix 12/06/2026: state.total đã fold orderVatAmount → hết duplicate render. */}
             <div className={cn("flex justify-between items-baseline pt-2 border-t border-outline-variant/20", counterVisual.counterTotal)}>
-              <span className="text-sm font-semibold text-foreground">Khách cần trả</span>
+              <span className="text-sm font-semibold text-foreground">{state.sellingMode === "internal" ? "Giá trị giao nội bộ" : "Khách cần trả"}</span>
               <span className="font-heading text-2xl font-extrabold text-primary tabular-nums leading-none">
                 {formatCurrency(state.total)} ₫
               </span>
             </div>
           </div>
 
+          {state.sellingMode === "internal" && <p className="border-t border-border px-3 py-2 text-xs text-muted-foreground">Không phát sinh thu, chi hoặc công nợ.</p>}
+
           {/* ── Payment section (hidden in fast mode) ── */}
-          {state.sellingMode !== "fast" && (
+          {state.sellingMode !== "fast" && state.sellingMode !== "internal" && (
             <div className="border-t border-border px-3 py-2 space-y-2">
               {/* Payment method */}
               <div className="grid grid-cols-4 gap-2">
@@ -4052,7 +4045,7 @@ function PosPageInner() {
               ) : (
                 <Icon name="check_circle" size={16} />
               )}
-              Thanh toán
+              {state.sellingMode === "internal" ? "Hoàn tất phiếu giao" : "Thanh toán"}
               <kbd className={cn(
                 "font-mono bg-on-primary/15 border border-on-primary/25 rounded px-1 py-0.5 text-on-primary/90",
                 state.sellingMode === "fast" ? "text-xs" : "text-xs"

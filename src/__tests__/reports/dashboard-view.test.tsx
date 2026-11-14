@@ -48,14 +48,14 @@ describe("sales dashboard permission and scope", () => {
     fireEvent.click(screen.getByText("Xem tiền mặt, chuyển khoản và tiền hoàn"));
     expect(screen.getByText(/Đã thu 350 đ · Đã hoàn 50 đ/)).toBeInTheDocument();
   });
-  it("shows both consolidated and summed-branch sales with the internal deduction", async () => {
+  it("shows both consolidated and summed-branch sales with internal sales shown separately", async () => {
     state.branchId = undefined;
     state.permissions.add('reports.view_all_branches'); state.permissions.add('reports.dashboard');
     state.fetch.mockResolvedValue({...sample, sales: 1000, internal_net: 350});
     render(<Dashboard />);
     expect(await screen.findByTestId('net-sales')).toHaveTextContent('1,000');
     expect(screen.getByTestId('all-branch-sales')).toHaveTextContent('1,350');
-    expect(screen.getByText('Doanh số không gồm nội bộ')).toBeInTheDocument();
+    expect(screen.getByText('Bán khách')).toBeInTheDocument();
   });
   it("loads each branch only when details are opened and shows its own sales", async () => {
     state.branchId = undefined;

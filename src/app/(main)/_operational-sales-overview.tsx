@@ -225,12 +225,12 @@ export default function OperationalSalesOverview() {
         <section aria-labelledby="sales-title" className="overflow-hidden rounded-md border border-border/80 bg-card shadow-sm">
           {!activeBranchId && <div className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5">
             <div className="min-w-0 rounded-md border bg-background p-4">
-              <h2 id="sales-title" className="text-sm font-semibold">Tổng doanh số các chi nhánh</h2>
+              <h2 id="sales-title" className="text-sm font-semibold">Tổng doanh thu</h2>
               <p className="mt-1 break-words text-2xl font-semibold tabular-nums sm:text-3xl" data-testid="all-branch-sales">{data.internal_net === undefined ? "—" : `${formatCurrency(data.sales + data.internal_net)} đ`}</p>
-              <p className="mt-1 text-xs text-muted-foreground">Trong đó bán nội bộ: {data.internal_net === undefined ? "—" : `${formatCurrency(data.internal_net)} đ`}</p>
+              <p className="mt-1 text-xs text-muted-foreground">Bán nội bộ: {data.internal_net === undefined ? "—" : `${formatCurrency(data.internal_net)} đ`}</p>
             </div>
             <div className="min-w-0 rounded-md border border-primary/40 border-l-4 border-l-primary bg-primary/5 p-4">
-              <h2 className="text-sm font-semibold text-primary">Doanh số không gồm nội bộ</h2>
+              <h2 className="text-sm font-semibold text-primary">Bán khách</h2>
               <p className="mt-1 break-words text-[28px] font-bold leading-tight tabular-nums text-primary sm:text-[32px]" data-testid="net-sales">{formatCurrency(data.sales)} đ</p>
               <p className="mt-1 text-xs text-muted-foreground">Sau khi trừ phần bán nội bộ</p>
             </div>

@@ -51,7 +51,6 @@ export function CreateInternalSaleDialog({
   const [branches, setBranches] = useState<BranchDetail[]>([]);
   const [fromBranchId, setFromBranchId] = useState("");
   const [toBranchId, setToBranchId] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<"transfer" | "cash" | "debt">("transfer");
   const [productSearch, setProductSearch] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
   const [filteredProducts, setFilteredProducts] = useState<InternalSaleProduct[]>([]);
@@ -68,7 +67,6 @@ export function CreateInternalSaleDialog({
     if (!open) return;
     setFromBranchId("");
     setToBranchId("");
-    setPaymentMethod("transfer");
     setProductSearch("");
     setShowDropdown(false);
     setFilteredProducts([]);
@@ -179,7 +177,6 @@ export function CreateInternalSaleDialog({
           unitPrice: i.unitPrice,
           vatRate: i.vatRate,
         })),
-        paymentMethod,
         note: note || undefined,
       });
 
@@ -262,20 +259,7 @@ export function CreateInternalSaleDialog({
           </div>
         </div>
 
-        {/* Payment method */}
-        <div className="space-y-2">
-          <label className="text-sm font-medium">Hình thức thanh toán</label>
-          <Select value={paymentMethod} onValueChange={(v) => v && setPaymentMethod(v as "transfer" | "cash" | "debt")}>
-            <SelectTrigger className="w-48">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="transfer">Chuyển khoản</SelectItem>
-              <SelectItem value="cash">Tiền mặt</SelectItem>
-              <SelectItem value="debt">Ghi nợ</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        <p className="rounded-lg bg-muted/50 p-3 text-sm">Không phát sinh thu, chi hoặc công nợ.</p>
 
         {/* Product search */}
         <div className="space-y-2">
@@ -419,8 +403,6 @@ export function CreateInternalSaleDialog({
             <strong>{fromBranch.name}</strong> bán cho <strong>{toBranch.name}</strong>
             {" · "}
             {formatNumber(items.length)} sản phẩm · SL {formatNumber(totalQuantity)} · {formatCurrency(total)}
-            {" · "}
-            {paymentMethod === "debt" ? "Ghi nợ" : paymentMethod === "cash" ? "Tiền mặt" : "Chuyển khoản"}
           </div>
         )}
 

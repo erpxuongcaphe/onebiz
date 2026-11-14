@@ -123,3 +123,12 @@ describe("buildInvoicePrintData — khối tổng tiền đối xứng, rõ ngh�
     expect(d.itemColumns).toContain("Ghi chú");
   });
 });
+
+it("prints an internal delivery without showing a balance due", () => {
+  const delivery = buildInvoicePrintData(row({
+    source: "internal", paymentMethod: "internal", paid: 0, debt: 0,
+    customerId: "branch-customer", customerCurrentDebt: 50000,
+  }));
+  expect(delivery.summaryRows?.map(line => line.label)).toEqual(["Tổng tiền hàng", "Tổng cộng"]);
+  expect(delivery.invoiceBalanceRow).toBeUndefined();
+});

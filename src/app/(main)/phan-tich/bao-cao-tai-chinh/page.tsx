@@ -696,25 +696,13 @@ export default function BaoCaoTaiChinhPage() {
       <div className="flex-1 p-4 md:p-6 space-y-4">
         {cur && prev && <FinancialManagementSummary current={cur} previous={prev} branchId={activeBranchId} range={range} hasPermission={hasPermission} />}
         {updatedAt && <p className="text-xs text-muted-foreground">Cập nhật {new Date(updatedAt).toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}</p>}
-        {/* Consolidated banner — hiển thị doanh thu nội bộ đã bị loại trừ */}
         {useConsolidated && consolidated && (
-          <div className="border-l-2 border-primary bg-primary-fixed p-3 flex items-start gap-3">
-            <Icon name="compare_arrows" size={20} className="text-primary shrink-0 mt-0.5" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-primary">
-                Toàn công ty · loại nội bộ
-              </p>
-              <p className="text-xs text-primary/80 mt-0.5">
-                Đã loại trừ{" "}
-                <strong>
-                  {formatCurrency(consolidated.current.internalRevenue)}
-                </strong>{" "}
-                doanh thu nội bộ.
-                Kỳ trước:{" "}
-                {formatCurrency(consolidated.previous.internalRevenue)}.
-              </p>
-            </div>
-          </div>
+          <dl className="grid gap-2 rounded-md border bg-card p-3 text-sm sm:grid-cols-3">
+            <div><dt>Bán khách</dt><dd className="font-semibold tabular-nums">{formatCurrency(consolidated.current.revenue)}</dd></div>
+            <div><dt>Bán nội bộ</dt><dd className="font-semibold tabular-nums">{formatCurrency(consolidated.current.internalRevenue)}</dd></div>
+            <div><dt>Tổng doanh thu</dt><dd className="font-semibold tabular-nums">{formatCurrency(consolidated.current.revenue + consolidated.current.internalRevenue)}</dd></div>
+            <div className="text-xs text-muted-foreground sm:col-span-3">Lãi lỗ toàn công ty được tính sau khi loại giao dịch nội bộ.</div>
+          </dl>
         )}
 
         {useConsolidated && cur && !currentCogsComplete && (
