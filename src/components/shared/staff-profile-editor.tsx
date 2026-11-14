@@ -1135,8 +1135,8 @@ export function StaffProfileEditor({
       {error && (
         <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-4">
           <p>
-            Chưa lưu thay đổi. Bản nháp vẫn được giữ để anh chỉnh lại hoặc đối
-            chiếu dữ liệu mới nhất.
+            Bản nháp vẫn được giữ. Đọc thông báo bên dưới và đối chiếu dữ liệu
+            mới nhất trước khi thử lại.
           </p>
           <Button
             className="mt-3"

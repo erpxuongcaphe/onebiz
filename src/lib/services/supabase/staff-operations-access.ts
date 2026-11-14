@@ -39,11 +39,13 @@ export async function saveStaffProfileOperations(profile: StaffProfileSnapshot, 
     if (/STAFF_OPS_STALE|STAFF_PROFILE_STALE/.test(error.message ?? "")) throw new Error("Phân công đã thay đổi ở nơi khác. Bản nháp được giữ; tải lại để đối chiếu.");
     if (/STAFF_OPS_VIEW_REQUIRED/.test(error.message ?? "")) throw new Error("Cần cấp quyền xem Hub trước khi phân công Hub tại chi nhánh.");
     if (/STAFF_OPS_QC_CONFLICT/.test(error.message ?? "")) throw new Error("Phân công quản lý ảnh hưởng quyền QC. Kiểm tra lại trước khi lưu.");
-    throw new Error("Chưa lưu được phân công. Bản nháp được giữ; kiểm tra lại hoặc tải dữ liệu mới nhất.");
+    throw new Error("Không xác nhận được kết quả lưu. Bản nháp được giữ; tải lại để kiểm tra trước khi thử lại.");
   }
   const value = data as { profile?: unknown; operations?: unknown } | null;
   const parsed = snapshotSchema.safeParse(value?.operations);
-  const savedProfile = readStaffProfileSnapshot(value?.profile);
+  let savedProfile: StaffProfileSnapshot;
+  try { savedProfile = readStaffProfileSnapshot(value?.profile); }
+  catch { throw new Error("Đã gửi yêu cầu lưu nhưng chưa xác nhận được kết quả. Tải lại để kiểm tra trước khi thao tác tiếp."); }
   if (!parsed.success || parsed.data.userId !== profile.user.id || savedProfile.user.id !== profile.user.id) throw new Error("Đã gửi yêu cầu lưu nhưng chưa xác nhận được kết quả. Tải lại để kiểm tra trước khi thao tác tiếp.");
   return { profile: savedProfile, operations: parsed.data };
 }
