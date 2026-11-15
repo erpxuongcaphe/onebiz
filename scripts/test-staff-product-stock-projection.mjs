@@ -41,6 +41,8 @@ try {
  await db.exec(`create function public._staff_lot_has_no_view_exception() returns boolean language sql as $$select true$$;
   create function public._staff_inventory_row_visible(uuid) returns boolean language sql as $$select true$$;`);
  await db.exec(await file('20261112121837_staff_inventory_global_revoke_guard.sql'));
+ await db.exec(await file('20261114171427_staff_assigned_stock_total_scope.sql'));
+ assert.deepEqual(await viewMetadata(),beforeViewMetadata,'assigned-stock scope retains view metadata');
  await db.exec('set role authenticated');
  const stock=async()=>(await db.query('select stock from products_scoped')).rows[0].stock;
  const scope=async(branch,items=[60])=>(await db.query('select get_product_list_branch_stock($1,$2::uuid[]) data',[id(branch),items.map(id)])).rows[0].data;
@@ -49,6 +51,24 @@ try {
  assert.deepEqual(await scope(10,[99]),{allowed:true,rows:[]},'authorized missing balance is a confirmed zero');
  assert.deepEqual(await scope(13),{allowed:false,rows:[]},'legacy mode cannot expose an unassigned branch');
  await assert.rejects(scope(12),/PRODUCT_STOCK_BRANCH_DENIED/);
+ await db.exec(`reset role; insert into role_permissions values('${id(20)}','inventory.view_assigned_totals');
+  insert into staff_branch_permission_catalog values('inventory.view_assigned_totals',1) on conflict do nothing;
+  insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
+   ('${id(1)}','${id(101)}','${id(11)}','inventory.view_assigned_totals','revoke','${id(100)}'); set role authenticated;`);
+ assert.equal(await stock(),'10','assigned-stock total excludes a branch whose total permission was revoked');
+ await db.exec(`reset role; delete from user_branch_permission_overrides where permission_code='inventory.view_assigned_totals';
+  delete from role_permissions where permission_code='inventory.view_assigned_totals';
+  insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
+   ('${id(1)}','${id(101)}','${id(11)}','inventory.view_assigned_totals','grant','${id(100)}'); set role authenticated;`);
+ assert.equal(await stock(),'30','a branch grant contributes that assigned branch');
+ await db.exec(`reset role; insert into user_permission_overrides(tenant_id,user_id,permission_code,override_type,created_by) values
+  ('${id(1)}','${id(101)}','inventory.view_assigned_totals','revoke','${id(100)}'); set role authenticated;`);
+ assert.equal(await stock(),'10','global revoke prevents a branch grant from expanding totals');
+ await db.exec(`reset role; insert into role_permissions values('${id(20)}','reports.view_all_branches'); set role authenticated;`);
+ assert.equal(await stock(),'30','independent all-branch report permission retains its scope');
+ await db.exec(`reset role; delete from role_permissions where permission_code='reports.view_all_branches';
+  delete from user_permission_overrides where permission_code='inventory.view_assigned_totals';
+  delete from user_branch_permission_overrides where permission_code='inventory.view_assigned_totals'; set role authenticated;`);
  await db.exec(`reset role; insert into user_branch_permission_overrides(tenant_id,user_id,branch_id,permission_code,override_type,updated_by) values
   ('${id(1)}','${id(101)}','${id(10)}','inventory.view','revoke','${id(100)}'); set role authenticated;`);
  assert.equal(await stock(),null,'no visible primary-branch stock is unknown, not zero');

@@ -845,6 +845,11 @@ export function StaffProfileEditor({
                                     Quyền tạo, sửa hoặc nhập sản phẩm dùng chung cũng có thể thay đổi công thức từ màn hình sản phẩm hoặc nhập Excel. Hãy kiểm tra các quyền sản phẩm đó khi cần giới hạn sửa công thức.
                                   </p>
                                 )}
+                                {p.code === "inventory.view_assigned_totals" && (
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    Quyền này quyết định các quán được cộng thêm vào tổng tồn. Tồn quán chính vẫn có thể hiển thị theo quyền xem tồn; quyền thao tác kho, bán hàng và xem báo cáo toàn công ty là các quyền độc lập.
+                                  </p>
+                                )}
                                 {p.code === "invoices.export" && (
                                   <p className="mt-1 text-xs text-muted-foreground">
                                     Cho dùng nút xuất hóa đơn tại chi nhánh được cấp. Quyền xuất báo cáo cũng cho xuất hóa đơn ở chi nhánh tương ứng. Việc xem dữ liệu phụ thuộc các quyền xem khác; tắt xuất không thay thế việc giới hạn quyền xem.
