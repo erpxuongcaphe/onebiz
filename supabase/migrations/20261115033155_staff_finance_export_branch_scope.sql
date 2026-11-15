@@ -7,6 +7,10 @@ set local statement_timeout = '30s';
 do $migration$
 declare item record; source text; patched text; gate text;
 begin
+  if exists(select 1 from public.user_branch_permission_overrides
+      where permission_code='finance.export_cash_journal') then
+    raise exception 'STAFF_FINANCE_EXPORT_EXISTING_BRANCH_OVERRIDES';
+  end if;
   for item in select * from (values
     ('public.cash_journal_list_v1(date,date,uuid,text,text,text,text,boolean,integer,boolean,text)','10feb8ed24ff8beac0f831f68071312f'),
     ('public.cash_journal_list_v2(date,date,uuid,text,text,text,text,boolean,integer,boolean,text)','e842f98decd77a9f91636a6a995f3c31'),
