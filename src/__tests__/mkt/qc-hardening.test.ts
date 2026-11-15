@@ -2,7 +2,6 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  canConfirmReadiness,
   isMktReadinessRole,
   normalizeReadinessRole,
 } from "@/lib/mkt/readiness";
@@ -85,15 +84,4 @@ describe("readiness capability mapping", () => {
     expect(isMktReadinessRole("unknown")).toBe(false);
   });
 
-  it("enforces responsibility and branch in the UI capability hint", () => {
-    const context = {
-      canView: true,
-      branchId: "branch-a",
-      readinessRoles: ["finance"],
-    };
-    expect(canConfirmReadiness(context, "finance", "branch-a")).toBe(true);
-    expect(canConfirmReadiness(context, "finance", "branch-b")).toBe(false);
-    expect(canConfirmReadiness(context, "warehouse", "branch-a")).toBe(false);
-    expect(canConfirmReadiness({ ...context, canOverride: true }, "warehouse", "branch-b")).toBe(true);
-  });
 });

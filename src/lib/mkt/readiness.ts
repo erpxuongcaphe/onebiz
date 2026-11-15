@@ -1,5 +1,3 @@
-import type { MktContext } from "@/lib/mkt/context";
-
 export const MKT_READINESS_ROLES = [
   { value: "ceo", label: "CEO / Ch\u1ee7" },
   { value: "store_manager", label: "Qu\u1ea3n l\u00fd c\u1eeda h\u00e0ng" },
@@ -27,15 +25,4 @@ export function isMktReadinessRole(value: unknown): value is string {
   if (typeof value !== "string") return false;
   const normalized = normalizeReadinessRole(value);
   return MKT_READINESS_ROLES.some((role) => role.value === normalized);
-}
-
-export function canConfirmReadiness(
-  ctx: MktContext,
-  requiredRole: string | null,
-  requiredBranchId: string | null,
-): boolean {
-  if (ctx.canOverride) return true;
-  const role = normalizeReadinessRole(requiredRole);
-  if (!role || !ctx.readinessRoles?.includes(role)) return false;
-  return !requiredBranchId || requiredBranchId === ctx.branchId;
 }
