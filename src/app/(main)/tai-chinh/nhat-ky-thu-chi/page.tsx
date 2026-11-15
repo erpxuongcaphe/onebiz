@@ -38,17 +38,18 @@ export default function CashJournalPage() {
     return <p className="p-4" role="alert">Bạn không có quyền xem Nhật ký thu chi.</p>;
   }
   const company = hasPermission(CASH_JOURNAL_COMPANY);
-  const canExport = company && hasPermission(CASH_JOURNAL_EXPORT);
   const canSubmit = company && hasPermission(PERMISSIONS.FINANCE_SUBMIT_CASH_SPEND_REVIEW);
   const canApprove = company && hasPermission(PERMISSIONS.FINANCE_APPROVE_CASH_SPEND_REVIEW);
-  return <Journal key={`${user.id}:${user.tenantId}:${company}:${canExport}:${canSubmit}:${canApprove}`}
-    company={company} canExport={canExport} canSubmit={canSubmit} canApprove={canApprove} />;
+  return <Journal key={`${user.id}:${user.tenantId}:${company}:${canSubmit}:${canApprove}`}
+    company={company} canSubmit={canSubmit} canApprove={canApprove} />;
 }
 
-function Journal({ company, canExport, canSubmit, canApprove }: {
-  company: boolean; canExport: boolean; canSubmit: boolean; canApprove: boolean;
+function Journal({ company, canSubmit, canApprove }: {
+  company: boolean; canSubmit: boolean; canApprove: boolean;
 }) {
   const [filters, setFilters] = useState(initialFilters);
+  const { hasPermissionAtBranch } = usePermissions();
+  const canExport = company && hasPermissionAtBranch(CASH_JOURNAL_EXPORT, filters.branch || null);
   const [searchDraft, setSearchDraft] = useState("");
   const [dateDraft, setDateDraft] = useState(() => ({ from: filters.from, to: filters.to }));
   const [dateError, setDateError] = useState("");
@@ -76,6 +77,15 @@ function Journal({ company, canExport, canSubmit, canApprove }: {
     setExporting(false);
     setExportError("");
   }
+
+  useEffect(() => {
+    if (!canExport) {
+      exportRef.current?.abort();
+      exportRef.current = null;
+      setExporting(false);
+      setExportError("");
+    }
+  }, [canExport]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -146,6 +156,8 @@ function Journal({ company, canExport, canSubmit, canApprove }: {
         {canExport && <Button size="sm" onClick={() => void download()} disabled={exporting || busy || !data?.totals.count || searchDraft.trim() !== filters.search}>
           <Icon name="download" size={16} />{exporting ? "Đang xuất..." : "Xuất Excel"}
         </Button>}
+        {company && !canExport && options?.branches.some(b => hasPermissionAtBranch(CASH_JOURNAL_EXPORT, b.id)) &&
+          <span className={styles.muted}>Chọn chi nhánh được cấp quyền để xuất Excel.</span>}
         </div>
       </header>
       <div className={styles.tools}>

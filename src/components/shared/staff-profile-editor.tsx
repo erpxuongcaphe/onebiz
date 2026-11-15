@@ -841,6 +841,11 @@ export function StaffProfileEditor({
                                     Quyền báo cáo tài chính cũ có thể cho xem công nợ đầu kỳ chưa gắn chi nhánh khi đi cùng quyền xem toàn công ty. Các báo cáo quản trị vẫn cần quyền báo cáo tương ứng.
                                   </p>
                                 )}
+                                {p.code === "finance.export_cash_journal" && (
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    Quyền xuất còn áp dụng cho kế hoạch B2 và báo cáo tài chính liên quan. Xuất nhật ký cần thêm quyền xem nhật ký thu chi toàn công ty; khi cấp hoặc chặn riêng từng quán, hãy chọn quán trước khi xuất.
+                                  </p>
+                                )}
                                 {p.code === "production.manage_bom" && (
                                   <p className="mt-1 text-xs text-muted-foreground">
                                     Quyền tạo, sửa hoặc nhập sản phẩm dùng chung cũng có thể thay đổi công thức từ màn hình sản phẩm hoặc nhập Excel. Hãy kiểm tra các quyền sản phẩm đó khi cần giới hạn sửa công thức.

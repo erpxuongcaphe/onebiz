@@ -179,6 +179,25 @@ describe("staff profile scope", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Tìm quyền" }), { target: { value: "finance.view_cash_journal_self_spend" } });
     expect(screen.getByText(/Quyền xem nhật ký toàn công ty là quyền độc lập/)).toBeVisible();
   });
+  it("saves branch-specific finance export without changing another branch's permission", async () => {
+    const data = structuredClone(snapshot);
+    data.branchPermissionCodes.push("finance.export_cash_journal");
+    data.exceptions.push({ branchId: "tubua", permissionCode: "pos_fnb.transfer_table", choice: "grant" });
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<StaffProfileEditor snapshot={data} onSave={onSave} onReload={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Tùy chỉnh quyền" }));
+    fireEvent.click(screen.getByRole("button", { name: "Premium" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Tìm quyền" }), { target: { value: "finance.export_cash_journal" } });
+    expect(screen.getByText(/Quyền xuất còn áp dụng cho kế hoạch B2/)).toBeVisible();
+    expect(screen.getByText(/Xuất nhật ký cần thêm quyền xem nhật ký thu chi toàn công ty/)).toBeVisible();
+    fireEvent.change(screen.getByRole("combobox", { name: "Quyền Xuất Excel nhật ký thu chi" }), { target: { value: "grant" } });
+    fireEvent.click(screen.getByRole("button", { name: "Lưu phân công" }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+    expect(onSave.mock.calls[0][0].exceptions).toEqual(expect.arrayContaining([
+      { branchId: "premium", permissionCode: "finance.export_cash_journal", choice: "grant" },
+      { branchId: "tubua", permissionCode: "pos_fnb.transfer_table", choice: "grant" },
+    ]));
+  });
   it("explains that spending reviews also require the company cash journal", () => {
     render(<StaffProfileEditor snapshot={snapshot} onSave={vi.fn()} onReload={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "Tùy chỉnh quyền" }));
