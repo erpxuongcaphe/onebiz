@@ -77,4 +77,24 @@ do $$declare denied boolean:=false;begin
  begin perform public.cash_journal_list_v1(current_date,current_date,'30000000-0000-0000-0000-000000000001',null,null,null,'day',true,1,true,null);exception when insufficient_privilege then denied:=true;end;
  if not denied then raise exception 'GLOBAL_DENY_BYPASSED';end if;
 end$$;
+reset role;
+delete from public.user_permission_overrides where user_id='20000000-0000-0000-0000-000000000002' and permission_code='finance.export_cash_journal';
+delete from public.role_permissions where role_id='40000000-0000-0000-0000-000000000001' and permission_code='finance.view_cash_journal_company';
+set local role authenticated;
+do $$declare denied boolean:=false;begin
+ begin perform public.cash_journal_list_v1(current_date,current_date,'30000000-0000-0000-0000-000000000001',null,null,null,'day',true,1,true,null);exception when insufficient_privilege then denied:=true;end;
+ if not denied then raise exception 'EXPORT_BYPASSED_COMPANY_VIEW';end if;
+end$$;
+reset role;
+update public.profiles set is_active=false where id='20000000-0000-0000-0000-000000000002';
+set local role authenticated;
+do $$declare denied boolean:=false;begin
+ begin perform public.cash_journal_list_v1(current_date,current_date,'30000000-0000-0000-0000-000000000001',null,null,null,'day',true,1,true,null);exception when insufficient_privilege then denied:=true;end;
+ if not denied then raise exception 'INACTIVE_USER_EXPORTED';end if;
+end$$;
+select set_config('request.jwt.claim.sub','20000000-0000-0000-0000-000000000001',true);
+do $$declare r jsonb;begin
+ r:=public.cash_journal_list_v1(current_date,current_date,null,null,null,null,'day',true,1,true,null);
+ if (r->'totals'->>'count')::int<>2 then raise exception 'OWNER_EXPORT_CHANGED';end if;
+end$$;
 rollback;
