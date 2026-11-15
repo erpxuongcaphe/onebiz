@@ -85,9 +85,10 @@ describe("00222 — Sửa kế hoạch cả khi đang chạy + ĐỐI SOÁT", ()
 });
 
 describe("00222 — Nhật ký thay đổi + Việc chưa giao (UI)", () => {
-  it("read-model getPlanActivity đọc audit_log theo kế hoạch (RLS tenant)", () => {
+  it("read-model getPlanActivity dùng RPC kiểm tra quyền kế hoạch", () => {
     expect(readModels).toContain("export async function getPlanActivity");
-    expect(readModels).toContain('.eq("entity_type", "mkt_channel_plan")');
+    expect(readModels).toContain('>("staff_audit_entity_history", {');
+    expect(readModels).toContain('p_entity_type: "mkt_channel_plan"');
   });
   it("nút Nhật ký hiện trên thẻ kế hoạch + tải lười qua API activity", () => {
     expect(planControls).toContain("export function PlanActivityButton");

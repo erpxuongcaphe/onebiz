@@ -920,8 +920,7 @@ export async function getExceptionLog(
 
 // ── Nhật ký thay đổi kế hoạch (00222 — "Cho làm — Ghi lại — Nhắc") ──
 // Dòng thời gian mọi thay đổi của MỘT kế hoạch: nộp, duyệt/trả, mở lại để sửa,
-// sinh/đối soát việc (kèm số tạo/cập nhật/huỷ). Đọc thẳng audit_log qua RLS
-// tenant (policy audit_select) — không cần RPC riêng.
+// sinh/đối soát việc (kèm số tạo/cập nhật/huỷ). RPC xác minh quyền xem kế hoạch.
 export type MktActivityEntry = {
   id: string;
   action: string;
@@ -935,19 +934,15 @@ export async function getPlanActivity(
   planId: string,
 ): Promise<MktActivityEntry[]> {
   const db = getMktDatabaseClient(supabase);
-  const { data, error } = await db
-    .from<{
+  const { data, error } = await db.rpc<{
       id: string;
       action: string;
       user_id: string | null;
       new_data: Record<string, unknown> | null;
       created_at: string | null;
-    }>("audit_log")
-    .select("id, action, user_id, new_data, created_at")
-    .eq("entity_type", "mkt_channel_plan")
-    .eq("entity_id", planId)
-    .order("created_at", { ascending: false })
-    .limit(80);
+    }[]>("staff_audit_entity_history", {
+      p_entity_type: "mkt_channel_plan", p_entity_id: planId, p_limit: 80,
+    });
   if (error) throw new Error(`MKT_READ_FAILED:plan_activity:${error.message}`);
   const rows = data ?? [];
   const userIds = Array.from(new Set(rows.map((r) => r.user_id).filter(Boolean) as string[]));
