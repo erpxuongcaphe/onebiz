@@ -139,7 +139,6 @@ function UsersPage() {
   const [editForm, setEditForm] = useState({
     fullName: "",
     phone: "",
-    roleId: "",
     branchIds: [] as string[],
     allBranches: false,
   });
@@ -487,7 +486,6 @@ function UsersPage() {
                               setEditForm({
                                 fullName: user.fullName,
                                 phone: user.phone ?? "",
-                                roleId: user.roleId ?? "",
                                 branchIds: user.branchIds,
                                 allBranches:
                                   user.role === "owner" ||
@@ -497,7 +495,8 @@ function UsersPage() {
                             }}
                           >
                             <Icon name="edit" size={16} className="mr-2" />
-                            Chỉnh sửa thông tin
+                            {!isCurrentUserOwner || (user.role === "owner" && user.id !== currentUserId)
+                              ? "Sửa thông tin & chi nhánh" : "Chỉnh sửa thông tin"}
                           </DropdownMenuItem>
                           {!isCurrentUserOwner && <DropdownMenuItem
                             disabled={!management?.targets[user.id]?.edit || user.role === "owner" || user.id === currentUserId}
@@ -600,8 +599,7 @@ function UsersPage() {
            Admin tự đặt password thay vì gửi link email
          ================================================ */}
       {/* ================================================
-           Dialog: Chỉnh sửa user (CEO 06/05/2026)
-           Sửa tên / SĐT / role / chi nhánh + reset password
+           Dialog: Chỉnh sửa thông tin và phạm vi chi nhánh theo quyền quản lý
          ================================================ */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-w-lg">
@@ -640,35 +638,6 @@ function UsersPage() {
             </div>
 
             {editTarget && usesLegacyScopeEditor(isCurrentUserOwner, editTarget.role) && <>
-            <div className="space-y-1">
-              <Label htmlFor="edit-role">Vai trò</Label>
-              <Select
-                disabled={editTarget?.role === "owner" || editTarget?.id === currentUserId}
-                value={editForm.roleId}
-                onValueChange={(v) =>
-                  setEditForm({ ...editForm, roleId: v ?? "" })
-                }
-                items={roles.map((r) => ({ value: r.id, label: r.name }))}
-              >
-                <SelectTrigger id="edit-role">
-                  <SelectValue placeholder="Không gán vai trò">
-                    {(v) => {
-                      if (!v) return "Không gán vai trò";
-                      const match = roles.find((r) => r.id === v);
-                      return match?.name ?? "Không gán vai trò";
-                    }}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {roles.map((r) => (
-                    <SelectItem key={r.id} value={r.id}>
-                      {r.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
             <div className="space-y-2">
               <Label>Chi nhánh được phép truy cập</Label>
               <label className="flex items-center gap-2 text-sm cursor-pointer">

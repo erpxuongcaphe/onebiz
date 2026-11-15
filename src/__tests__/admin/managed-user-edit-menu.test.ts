@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { buildManagedUserEdit, usesLegacyScopeEditor } from "@/lib/admin/managed-user-edit";
 
-const draft = { fullName: "  Thư  ", phone: " 0123 ", roleId: "manager", branchIds: ["premium", "tu-bua"], allBranches: false };
+const draft = { fullName: "  Thư  ", phone: " 0123 ", branchIds: ["premium", "tu-bua"], allBranches: false };
 const staff = { id: "staff", role: "staff" };
 
 describe("managed user edit safety", () => {
@@ -22,10 +22,10 @@ describe("managed user edit safety", () => {
     expect(buildManagedUserEdit({ id: "owner", isOwner: true }, staff, { ...draft, branchIds: [] })).toHaveProperty("payload");
   });
 
-  it("keeps the existing manager role and branch edit payload, including multiple branches", () => {
+  it("keeps branch editing for managers without rewriting the separate role", () => {
     expect(usesLegacyScopeEditor(false, "staff")).toBe(true);
     expect(buildManagedUserEdit({ id: "manager", isOwner: false }, staff, draft)).toEqual({ payload: {
-      userId: "staff", fullName: "Thư", phone: "0123", roleId: "manager", branchIds: ["premium", "tu-bua"], allBranches: false,
+      userId: "staff", fullName: "Thư", phone: "0123", branchIds: ["premium", "tu-bua"], allBranches: false,
     } });
     expect(buildManagedUserEdit({ id: "manager", isOwner: false }, staff, { ...draft, branchIds: [] })).toEqual({ error: "missing_branch" });
   });

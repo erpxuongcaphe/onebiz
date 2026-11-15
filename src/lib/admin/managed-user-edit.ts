@@ -1,7 +1,6 @@
 export type ManagedUserEditDraft = {
   fullName: string;
   phone: string;
-  roleId: string;
   branchIds: string[];
   allBranches: boolean;
 };
@@ -25,8 +24,6 @@ export function buildManagedUserEdit(
       userId: target.id,
       fullName: draft.fullName.trim() || undefined,
       phone: draft.phone.trim(),
-      ...(legacyScope && target.role !== "owner" && target.id !== actor.id
-        ? { roleId: draft.roleId || null } : {}),
       ...(canChangeBranches ? {
         branchIds: draft.allBranches ? [] : draft.branchIds,
         allBranches: draft.allBranches,
