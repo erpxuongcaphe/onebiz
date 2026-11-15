@@ -7,6 +7,7 @@ const migration = readFileSync(
 );
 const route = readFileSync("src/app/api/admin/update-user/route.ts", "utf8");
 const page = readFileSync("src/app/(main)/he-thong/users/page.tsx", "utf8");
+const edit = readFileSync("src/lib/admin/managed-user-edit.ts", "utf8");
 
 describe("atomic managed-user update", () => {
   it("derives actor and tenant and uses effective permission instead of job title", () => {
@@ -35,7 +36,8 @@ describe("atomic managed-user update", () => {
   });
 
   it("keeps password reset in a separate action from editing profile access", () => {
-    expect(page).toContain("fullName: editForm.fullName.trim()");
+    expect(page).toContain("buildManagedUserEdit(");
+    expect(edit).toContain("fullName: draft.fullName.trim()");
     expect(page).toContain("userId: passwordTarget.id, newPassword");
     expect(page).not.toContain("editForm.newPassword");
   });

@@ -42,7 +42,6 @@ import { PERMISSIONS } from "@/lib/permissions";
 import { requestPosPinReset, getManagedPinStatuses } from "@/lib/services/supabase/pos-pin";
 
 // CEO 23/05/2026 (Phase 2 UI): per-user permission override dialog
-import { PermissionOverrideDialog } from "@/components/shared/dialogs/permission-override-dialog";
 import { SystemRoleDialog } from "@/components/shared/dialogs/system-role-dialog";
 import { getAccountManagementContext, type AccountManagementContext } from "@/lib/services/supabase/account-management";
 import { Input } from "@/components/ui/input";
@@ -51,6 +50,7 @@ import { Icon } from "@/components/ui/icon";
 import { LocalListTools, useLocalList } from "@/components/shared/local-list-tools";
 import { StaffDirectoryFilterBar } from "@/components/shared/staff-directory-filters";
 import { EMPTY_STAFF_FILTERS, filterStaffDirectory, type StaffDirectoryFilters } from "@/lib/admin/staff-directory";
+import { buildManagedUserEdit, usesLegacyScopeEditor } from "@/lib/admin/managed-user-edit";
 
 interface UserRow {
   id: string;
@@ -127,9 +127,6 @@ function UsersPage() {
   const [assignOpen, setAssignOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
 
-  // CEO 23/05/2026 (Phase 2): per-user permission override
-  const [overrideOpen, setOverrideOpen] = useState(false);
-  const [overrideUser, setOverrideUser] = useState<UserRow | null>(null);
   const [selectedRoleId, setSelectedRoleId] = useState<string>("");
 
   // Sprint B.4 (CEO 12/05): Set PIN POS dialog
@@ -149,7 +146,8 @@ function UsersPage() {
 
   const handleEditUser = async () => {
     if (!editTarget) return;
-    if (!editForm.allBranches && editForm.branchIds.length === 0) {
+    const update = buildManagedUserEdit({ id: user?.id, isOwner: isCurrentUserOwner }, editTarget, editForm);
+    if (update.error) {
       toast({
         title: "Thiếu chi nhánh",
         description: "Chọn ít nhất 1 chi nhánh hoặc chọn Tất cả chi nhánh",
@@ -159,16 +157,7 @@ function UsersPage() {
     }
     setEditBusy(true);
     try {
-      await updateManagedUser({
-        userId: editTarget.id,
-        fullName: editForm.fullName.trim() || undefined,
-        phone: editForm.phone.trim(),
-        ...(editTarget.role !== "owner" && editTarget.id !== user?.id ? { roleId: editForm.roleId || null } : {}),
-        ...(editTarget.id !== user?.id ? {
-          branchIds: editForm.allBranches ? [] : editForm.branchIds,
-          allBranches: editForm.allBranches,
-        } : {}),
-      });
+      await updateManagedUser(update.payload);
 
       toast({
         title: "Đã cập nhật thông tin",
@@ -510,7 +499,7 @@ function UsersPage() {
                             <Icon name="edit" size={16} className="mr-2" />
                             Chỉnh sửa thông tin
                           </DropdownMenuItem>
-                          <DropdownMenuItem
+                          {!isCurrentUserOwner && <DropdownMenuItem
                             disabled={!management?.targets[user.id]?.edit || user.role === "owner" || user.id === currentUserId}
                             onSelect={() => {
                               setSelectedUser(user);
@@ -520,30 +509,14 @@ function UsersPage() {
                           >
                             <Icon name="shield" size={16} className="mr-2" />
                             Gán vai trò
-                          </DropdownMenuItem>
+                          </DropdownMenuItem>}
                           {isCurrentUserOwner && <DropdownMenuItem onSelect={() => setSystemRoleTarget(user)}>
                             <Icon name="admin_panel_settings" size={16} className="mr-2" />
-                            Quyền quản trị & lịch sử
-                          </DropdownMenuItem>}
-                          {isCurrentUserOwner && <DropdownMenuItem onSelect={() => { window.location.href = "/he-thong/co-cau"; }}>
-                            <Icon name="supervisor_account" size={16} className="mr-2" />Cơ cấu & phạm vi quản lý
+                            Quyền quản trị toàn doanh nghiệp
                           </DropdownMenuItem>}
                           <DropdownMenuItem disabled={!management?.targets[user.id]?.password} onSelect={() => {
                             setPasswordTarget(user); setNewPassword("");
                           }}><Icon name="lock_reset" size={16} className="mr-2" />Đặt lại mật khẩu</DropdownMenuItem>
-                          {/* CEO 23/05/2026 (Phase 2): override quyền per-user.
-                              Cho phép cấp thêm hoặc khoá bớt permission riêng
-                              cho user này (override role default). */}
-                          <DropdownMenuItem
-                            disabled={!isCurrentUserOwner || user.role === "owner"}
-                            onSelect={() => {
-                              setOverrideUser(user);
-                              setOverrideOpen(true);
-                            }}
-                          >
-                            <Icon name="tune" size={16} className="mr-2 text-primary" />
-                            Quyền tuỳ chỉnh
-                          </DropdownMenuItem>
                           {/* Sprint B.4 (CEO 12/05): đặt PIN POS cho nhân viên */}
                           <DropdownMenuItem disabled={!management?.targets[user.id]?.edit} onSelect={() => setSetPinUser(user)}>
                             <Icon name="pin" size={16} className="mr-2 text-status-warning" />
@@ -666,6 +639,7 @@ function UsersPage() {
               />
             </div>
 
+            {editTarget && usesLegacyScopeEditor(isCurrentUserOwner, editTarget.role) && <>
             <div className="space-y-1">
               <Label htmlFor="edit-role">Vai trò</Label>
               <Select
@@ -750,6 +724,7 @@ function UsersPage() {
               )}
               {editTarget?.id === currentUserId && <p className="text-xs text-muted-foreground">Nhờ quản trị khác thay đổi quyền và chi nhánh của tài khoản này.</p>}
             </div>
+            </>}
 
             <div className="space-y-1 border-t pt-3">
               <p className="text-xs text-muted-foreground">Đổi mật khẩu bằng thao tác “Đặt lại mật khẩu” riêng trong menu tài khoản.</p>
@@ -1017,23 +992,6 @@ function UsersPage() {
             }}>{passwordBusy ? "Đang lưu…" : "Đổi mật khẩu"}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
-      {/* CEO 23/05/2026 (Phase 2): Per-user permission override dialog */}
-      <PermissionOverrideDialog
-        open={overrideOpen}
-        onOpenChange={(o) => {
-          setOverrideOpen(o);
-          if (!o) setOverrideUser(null);
-        }}
-        user={
-          overrideUser
-            ? {
-                id: overrideUser.id,
-                fullName: overrideUser.fullName,
-                roleName: overrideUser.roleName,
-              }
-            : null
-        }
-      />
     </div>
   );
 }
