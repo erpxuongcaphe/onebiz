@@ -697,18 +697,13 @@ export async function getAuditLogsByEntity(
   entityId: string,
   limit: number = 50,
 ): Promise<AuditLogEntry[]> {
-  const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-  const { data, error } = await supabase
-    .from("audit_log")
-    .select(
-      "id, user_id, action, entity_type, entity_id, old_data, new_data, ip_address, created_at, profiles!audit_log_user_id_fkey(full_name)",
-    )
-    .eq("tenant_id", tenantId)
-    .eq("entity_type", entityType)
-    .eq("entity_id", entityId)
-    .order("created_at", { ascending: false })
-    .limit(limit);
+  const supabase = getClient() as unknown as {
+    rpc(name: "staff_audit_entity_history", args: { p_entity_type: string; p_entity_id: string; p_limit: number }):
+      PromiseLike<{ data: unknown[] | null; error: { code?: string; message: string } | null }>;
+  };
+  const { data, error } = await supabase.rpc("staff_audit_entity_history", {
+    p_entity_type: entityType, p_entity_id: entityId, p_limit: Math.min(Math.max(limit, 1), 100),
+  });
 
   if (error) {
     console.warn("getAuditLogsByEntity error:", error.message);
