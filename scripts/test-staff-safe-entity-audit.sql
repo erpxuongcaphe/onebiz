@@ -3,6 +3,7 @@ do $$begin
  if current_database()<>'onebiz_hub_scope_v8_20261114' or inet_server_addr()<>'127.0.0.1'::inet or inet_server_port()<>55487 or exists(select 1 from public.tenants) then raise exception 'WRONG_TEST_DATABASE';end if;
 end$$;
 begin;
+revoke select on public.audit_log from authenticated;
 grant usage on schema auth to authenticated;
 grant execute on function auth.uid() to authenticated;
 insert into public.tenants(id,name,slug) values ('10000000-0000-0000-0000-000000000001','A tenant','audit-safe-test'),('10000000-0000-0000-0000-000000000002','B tenant','audit-safe-test-other');
@@ -70,6 +71,12 @@ insert into public.audit_log(tenant_id,user_id,action,entity_type,entity_id,new_
  ('10000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001','update','invoice','80000000-0000-0000-0000-000000000002','{"code":"TEST-INV-B"}',null);
 select set_config('request.jwt.claim.sub','20000000-0000-0000-0000-000000000002',true);
 set local role authenticated;
+do $$declare blocked boolean:=false;begin
+ begin perform id from public.audit_log limit 1;exception when insufficient_privilege then blocked:=true;end;
+ if not blocked then raise exception 'RAW_AUDIT_READ_NOT_BLOCKED';end if;
+ insert into public.audit_log(tenant_id,user_id,action,entity_type,entity_id) values
+ ('10000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000002','test_insert','product','70000000-0000-0000-0000-000000000001');
+end$$;
 do $$declare row record; denied boolean; kind text;begin
  select * into row from public.staff_audit_entity_history('cash_transaction','50000000-0000-0000-0000-000000000001',50);
  if row.id is null or row.new_data->>'amount'<>'10' or row.new_data ? 'unit_cost' or row.new_data ? 'debt' or row.new_data->'nested' ? 'token' or row.new_data->'nested' ? 'profit' or row.ip_address is not null then raise exception 'AUDIT_MASK_OR_HISTORY_FAILED %',row.new_data;end if;
@@ -152,6 +159,10 @@ do $$declare denied boolean:=false;begin
  if not denied then raise exception 'INACTIVE_HISTORY_ALLOWED';end if;
 end$$;
 select set_config('request.jwt.claim.sub','20000000-0000-0000-0000-000000000001',true);
+do $$begin
+ perform public.get_operation_history_00453();
+ perform public.get_customer_cohort_evidence_v2(6,'30000000-0000-0000-0000-000000000001');
+end$$;
 do $$declare row record;begin
  select * into row from public.staff_audit_entity_history('cash_transaction','50000000-0000-0000-0000-000000000001',50);
  if row.new_data->>'debt'<>'555' then raise exception 'OWNER_DEBT_HIDDEN';end if;
