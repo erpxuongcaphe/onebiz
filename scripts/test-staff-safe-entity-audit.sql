@@ -159,7 +159,10 @@ do $$declare denied boolean:=false;begin
  if not denied then raise exception 'INACTIVE_HISTORY_ALLOWED';end if;
 end$$;
 select set_config('request.jwt.claim.sub','20000000-0000-0000-0000-000000000001',true);
-do $$begin perform public.get_operation_history_00453();end$$;
+do $$begin
+ perform public.get_operation_history_00453();
+ perform public.get_customer_cohort_evidence_v2(6,'30000000-0000-0000-0000-000000000001');
+end$$;
 do $$declare row record;begin
  select * into row from public.staff_audit_entity_history('cash_transaction','50000000-0000-0000-0000-000000000001',50);
  if row.new_data->>'debt'<>'555' then raise exception 'OWNER_DEBT_HIDDEN';end if;
