@@ -41,7 +41,6 @@ import { PermissionPage } from "@/components/shared/permission-page";
 import { PERMISSIONS } from "@/lib/permissions";
 import { requestPosPinReset, getManagedPinStatuses } from "@/lib/services/supabase/pos-pin";
 
-// CEO 23/05/2026 (Phase 2 UI): per-user permission override dialog
 import { SystemRoleDialog } from "@/components/shared/dialogs/system-role-dialog";
 import { getAccountManagementContext, type AccountManagementContext } from "@/lib/services/supabase/account-management";
 import { Input } from "@/components/ui/input";
