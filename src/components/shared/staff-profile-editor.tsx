@@ -843,7 +843,7 @@ export function StaffProfileEditor({
                                 )}
                                 {p.code === "finance.export_cash_journal" && (
                                   <p className="mt-1 text-xs text-muted-foreground">
-                                    Quyền xuất còn áp dụng cho kế hoạch B2 và báo cáo tài chính liên quan. Cần quyền xem tương ứng; khi cấp hoặc chặn riêng từng quán, hãy chọn quán trước khi xuất.
+                                    Quyền xuất còn áp dụng cho kế hoạch B2 và báo cáo tài chính liên quan. Xuất nhật ký cần thêm quyền xem nhật ký thu chi toàn công ty; khi cấp hoặc chặn riêng từng quán, hãy chọn quán trước khi xuất.
                                   </p>
                                 )}
                                 {p.code === "production.manage_bom" && (

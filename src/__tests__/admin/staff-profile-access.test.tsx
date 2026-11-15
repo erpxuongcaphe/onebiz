@@ -189,6 +189,7 @@ describe("staff profile scope", () => {
     fireEvent.click(screen.getByRole("button", { name: "Premium" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Tìm quyền" }), { target: { value: "finance.export_cash_journal" } });
     expect(screen.getByText(/Quyền xuất còn áp dụng cho kế hoạch B2/)).toBeVisible();
+    expect(screen.getByText(/Xuất nhật ký cần thêm quyền xem nhật ký thu chi toàn công ty/)).toBeVisible();
     fireEvent.change(screen.getByRole("combobox", { name: "Quyền Xuất Excel nhật ký thu chi" }), { target: { value: "grant" } });
     fireEvent.click(screen.getByRole("button", { name: "Lưu phân công" }));
     await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
