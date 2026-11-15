@@ -92,8 +92,9 @@ describe("staff profile scope", () => {
     render(<StaffProfileEditor snapshot={snapshot} onSave={vi.fn()} onReload={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "Tùy chỉnh quyền" }));
     fireEvent.click(screen.getByRole("button", { name: "Premium" }));
-    fireEvent.click(screen.getByText("6 quyền áp dụng toàn công ty"));
+    fireEvent.click(screen.getByText("8 quyền áp dụng toàn công ty"));
     expect(screen.getByRole("button", { name: "Xem quyền chung: Xem toàn công ty" })).toBeVisible();
+    expect(screen.getByRole("button", { name: /Xem quyền chung:.*tài liệu/i })).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Xem quyền chung: Xem toàn công ty" }));
     expect(screen.getByRole("textbox", { name: "Tìm quyền" })).toHaveValue("reports.view_all_branches");
   });
@@ -549,6 +550,17 @@ describe("staff profile scope", () => {
       ).allowed,
     ).toBe(false);
   });
+  it.each(["mkt.manage_assets", "mkt.view_audit"])(
+    "shows %s at its actual company scope while preserving a global deny",
+    (code) => {
+      const data = { ...snapshot, roles: [{ id: "r", name: "MKT", permissions: [code] }] };
+      const draft = draftFromStaffProfile(data);
+      draft.branchIds = ["premium"];
+      expect(projectedStaffPermission(data, draft, "tubua", code).allowed).toBe(true);
+      const denied = setStaffException(draft, null, code, "revoke");
+      expect(projectedStaffPermission(data, denied, "tubua", code).allowed).toBe(false);
+    },
+  );
   it("selects active branches without silently granting a closed branch", () => {
     const data = {
       ...snapshot,

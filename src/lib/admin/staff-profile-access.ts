@@ -20,6 +20,8 @@ export const COMPANY_WIDE_STAFF_PERMISSIONS: Readonly<Record<string, string>> =
     "finance.approve_cash_spend_review": "Duyệt đơn vị thực chi toàn công ty",
     "shifts.reconcile_any": "Đối chiếu ca mọi chi nhánh",
     "floor_plan.edit_global": "Sửa sơ đồ bàn mọi chi nhánh",
+    "mkt.manage_assets": "Quản lý tài liệu và hình ảnh MKT toàn công ty",
+    "mkt.view_audit": "Xem nhật ký ngoại lệ MKT toàn công ty",
   };
 
 export type OverrideChoice = "inherit" | "grant" | "revoke";
