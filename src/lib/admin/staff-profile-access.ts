@@ -9,6 +9,11 @@ const permissionLabels = new Map<string, string>(
   ),
 );
 permissionLabels.set("system.create_user", "Tạo tài khoản nhân viên");
+export const ADDITIONAL_STAFF_PERMISSION_LABELS: Readonly<Record<string, string>> = {
+  "mkt.audit_runner": "Chạy kiểm tra quy tắc MKT",
+};
+for (const [code, label] of Object.entries(ADDITIONAL_STAFF_PERMISSION_LABELS))
+  permissionLabels.set(code, label);
 
 // These existing capabilities explicitly operate at company scope. A branch
 // picker cannot pretend to narrow them; they remain account-level settings.
@@ -24,6 +29,7 @@ export const COMPANY_WIDE_STAFF_PERMISSIONS: Readonly<Record<string, string>> =
     "mkt.view_audit": "Xem nhật ký ngoại lệ MKT toàn công ty",
     "mkt.manage_team": "Quản lý nhóm MKT toàn công ty",
     "mkt.override_campaign": "Vượt bước sẵn sàng MKT toàn công ty",
+    "mkt.audit_runner": "Chạy kiểm tra quy tắc MKT toàn công ty",
   };
 
 export type OverrideChoice = "inherit" | "grant" | "revoke";
