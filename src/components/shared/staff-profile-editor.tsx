@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { PERMISSION_GROUPS } from "@/lib/permissions/constants";
 import { normalizeListSearch } from "@/lib/local-list-query";
 import {
+  ADDITIONAL_STAFF_PERMISSION_LABELS,
   COMPANY_WIDE_STAFF_PERMISSIONS,
   SHARED_DATA_STAFF_PERMISSIONS,
   draftFromStaffProfile,
@@ -95,7 +96,7 @@ export function StaffProfileEditor({
       if (!codes.has(e.permissionCode)) {
         known.push({
           code: e.permissionCode,
-          label: e.permissionCode,
+          label: ADDITIONAL_STAFF_PERMISSION_LABELS[e.permissionCode] ?? e.permissionCode,
           group: "Quyền đang có",
         });
         codes.add(e.permissionCode);
@@ -103,7 +104,7 @@ export function StaffProfileEditor({
     for (const role of snapshot.roles)
       for (const code of role.permissions)
         if (!codes.has(code)) {
-          known.push({ code, label: code, group: "Quyền đang có" });
+          known.push({ code, label: ADDITIONAL_STAFF_PERMISSION_LABELS[code] ?? code, group: "Quyền đang có" });
           codes.add(code);
         }
     return known;
@@ -853,6 +854,11 @@ export function StaffProfileEditor({
                                 {p.code.startsWith("mkt.readiness.") && (
                                   <p className="mt-1 text-xs text-muted-foreground">
                                     Cần có quyền xem MKT để vào màn hình. Mục áp dụng toàn công ty cần quyền toàn tài khoản; quyền vượt duyệt chiến dịch vẫn có hiệu lực độc lập.
+                                  </p>
+                                )}
+                                {p.code === "mkt.telegram_manage" && (
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    MKT Hub hiện chưa dùng quyền này để mở thao tác quản lý Telegram. Bật quyền này không tự cấp quyền quản lý bot.
                                   </p>
                                 )}
                                 {p.code === "invoices.export" && (

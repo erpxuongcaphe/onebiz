@@ -98,6 +98,26 @@ describe("staff profile scope", () => {
     fireEvent.click(screen.getByRole("button", { name: "Xem quyền chung: Xem toàn công ty" }));
     expect(screen.getByRole("textbox", { name: "Tìm quyền" })).toHaveValue("reports.view_all_branches");
   });
+  it("names existing MKT rule checks as a company-wide capability without granting them", () => {
+    const data = structuredClone(snapshot);
+    data.roles[0].permissions.push("mkt.audit_runner");
+    const draft = draftFromStaffProfile(data);
+    const before = structuredClone(draft.exceptions);
+    render(<StaffProfileEditor snapshot={data} onSave={vi.fn()} onReload={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Tùy chỉnh quyền" }));
+    fireEvent.click(screen.getByRole("button", { name: "Premium" }));
+    fireEvent.click(screen.getByText("11 quyền áp dụng toàn công ty"));
+    expect(screen.getByRole("button", { name: "Xem quyền chung: Chạy kiểm tra quy tắc MKT" })).toBeVisible();
+    expect(draft.exceptions).toEqual(before);
+    expect(projectedStaffPermission(data, draft, "outside", "mkt.audit_runner").allowed).toBe(true);
+    expect(projectedStaffPermission(data, setStaffException(draft, null, "mkt.audit_runner", "revoke"), "outside", "mkt.audit_runner").allowed).toBe(false);
+  });
+  it("explains that the legacy MKT Telegram permission does not grant bot management", () => {
+    render(<StaffProfileEditor snapshot={snapshot} onSave={vi.fn()} onReload={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Tùy chỉnh quyền" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Tìm quyền" }), { target: { value: "mkt.telegram_manage" } });
+    expect(screen.getByText(/Bật quyền này không tự cấp quyền quản lý bot/)).toBeVisible();
+  });
   it("explains Hub assignment and shared standards when editing a branch right", () => {
     const data = structuredClone(snapshot);
     data.branchPermissionCodes.push("ops.configure");
