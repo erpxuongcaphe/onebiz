@@ -22,6 +22,8 @@ export const COMPANY_WIDE_STAFF_PERMISSIONS: Readonly<Record<string, string>> =
     "floor_plan.edit_global": "Sửa sơ đồ bàn mọi chi nhánh",
     "mkt.manage_assets": "Quản lý tài liệu và hình ảnh MKT toàn công ty",
     "mkt.view_audit": "Xem nhật ký ngoại lệ MKT toàn công ty",
+    "mkt.manage_team": "Quản lý nhóm MKT toàn công ty",
+    "mkt.override_campaign": "Vượt bước sẵn sàng MKT toàn công ty",
   };
 
 export type OverrideChoice = "inherit" | "grant" | "revoke";

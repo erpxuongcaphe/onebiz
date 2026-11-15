@@ -92,7 +92,7 @@ describe("staff profile scope", () => {
     render(<StaffProfileEditor snapshot={snapshot} onSave={vi.fn()} onReload={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "Tùy chỉnh quyền" }));
     fireEvent.click(screen.getByRole("button", { name: "Premium" }));
-    fireEvent.click(screen.getByText("8 quyền áp dụng toàn công ty"));
+    fireEvent.click(screen.getByText("10 quyền áp dụng toàn công ty"));
     expect(screen.getByRole("button", { name: "Xem quyền chung: Xem toàn công ty" })).toBeVisible();
     expect(screen.getByRole("button", { name: /Xem quyền chung:.*tài liệu/i })).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Xem quyền chung: Xem toàn công ty" }));
@@ -550,7 +550,7 @@ describe("staff profile scope", () => {
       ).allowed,
     ).toBe(false);
   });
-  it.each(["mkt.manage_assets", "mkt.view_audit"])(
+  it.each(["mkt.manage_assets", "mkt.view_audit", "mkt.manage_team", "mkt.override_campaign"])(
     "shows %s at its actual company scope while preserving a global deny",
     (code) => {
       const data = { ...snapshot, roles: [{ id: "r", name: "MKT", permissions: [code] }] };
