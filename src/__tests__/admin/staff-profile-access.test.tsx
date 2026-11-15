@@ -92,8 +92,9 @@ describe("staff profile scope", () => {
     render(<StaffProfileEditor snapshot={snapshot} onSave={vi.fn()} onReload={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "Tùy chỉnh quyền" }));
     fireEvent.click(screen.getByRole("button", { name: "Premium" }));
-    fireEvent.click(screen.getByText("6 quyền áp dụng toàn công ty"));
+    fireEvent.click(screen.getByText("10 quyền áp dụng toàn công ty"));
     expect(screen.getByRole("button", { name: "Xem quyền chung: Xem toàn công ty" })).toBeVisible();
+    expect(screen.getByRole("button", { name: /Xem quyền chung:.*tài liệu/i })).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Xem quyền chung: Xem toàn công ty" }));
     expect(screen.getByRole("textbox", { name: "Tìm quyền" })).toHaveValue("reports.view_all_branches");
   });
@@ -548,6 +549,28 @@ describe("staff profile scope", () => {
         "finance.view_cash_journal_company",
       ).allowed,
     ).toBe(false);
+  });
+  it.each(["mkt.manage_assets", "mkt.view_audit", "mkt.manage_team", "mkt.override_campaign"])(
+    "shows %s at its actual company scope while preserving a global deny",
+    (code) => {
+      const data = { ...snapshot, roles: [{ id: "r", name: "MKT", permissions: [code] }] };
+      const draft = draftFromStaffProfile(data);
+      draft.branchIds = ["premium"];
+      expect(projectedStaffPermission(data, draft, "tubua", code).allowed).toBe(true);
+      const denied = setStaffException(draft, null, code, "revoke");
+      expect(projectedStaffPermission(data, denied, "tubua", code).allowed).toBe(false);
+    },
+  );
+  it("shows the legacy self-spend journal grant and respects current branch and global denies", () => {
+    const code = "finance.view_cash_journal_self_spend";
+    const oldCode = "finance.view_branch_self_spend_journal";
+    const data = { ...snapshot, roles: [{ id: "r", name: "Quản lý", permissions: [oldCode] }] };
+    const draft = draftFromStaffProfile(data);
+    expect(projectedStaffPermission(data, draft, "premium", code)).toMatchObject({ allowed: true, source: expect.stringContaining("cũ") });
+    expect(projectedStaffPermission(data, setStaffException(draft, "premium", code, "revoke"), "premium", code).allowed).toBe(false);
+    expect(projectedStaffPermission(data, setStaffException(draft, null, code, "revoke"), "premium", code).allowed).toBe(false);
+    expect(projectedStaffPermission(data, setStaffException(draft, null, oldCode, "revoke"), "premium", code).allowed).toBe(false);
+    expect(projectedStaffPermission(data, draft, "outside", code).allowed).toBe(false);
   });
   it("selects active branches without silently granting a closed branch", () => {
     const data = {

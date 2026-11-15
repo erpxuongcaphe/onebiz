@@ -20,6 +20,10 @@ export const COMPANY_WIDE_STAFF_PERMISSIONS: Readonly<Record<string, string>> =
     "finance.approve_cash_spend_review": "Duyệt đơn vị thực chi toàn công ty",
     "shifts.reconcile_any": "Đối chiếu ca mọi chi nhánh",
     "floor_plan.edit_global": "Sửa sơ đồ bàn mọi chi nhánh",
+    "mkt.manage_assets": "Quản lý tài liệu và hình ảnh MKT toàn công ty",
+    "mkt.view_audit": "Xem nhật ký ngoại lệ MKT toàn công ty",
+    "mkt.manage_team": "Quản lý nhóm MKT toàn công ty",
+    "mkt.override_campaign": "Vượt bước sẵn sàng MKT toàn công ty",
   };
 
 export type OverrideChoice = "inherit" | "grant" | "revoke";
@@ -201,6 +205,15 @@ export function projectedStaffPermission(
       source: "Theo phân công quản lý nhân sự; còn kiểm tra phạm vi cấp dưới",
     };
   const role = snapshot.roles.find((r) => r.id === draft.roleId);
+  if (branchId && code === "finance.view_cash_journal_self_spend" && !role?.permissions.includes(code)) {
+    const legacy = draft.exceptions.find(
+      (e) => e.branchId === null && e.permissionCode === "finance.view_branch_self_spend_journal",
+    );
+    if (legacy?.choice !== "revoke" &&
+      (legacy?.choice === "grant" || role?.permissions.includes("finance.view_branch_self_spend_journal"))) {
+      return { allowed: true, source: "Theo quyền xem khoản tự chi cũ; có thể chặn riêng tại chi nhánh" };
+    }
+  }
   if (
     [
       "pos_fnb.cancel_unpaid_order",
