@@ -3,6 +3,7 @@ do $$begin
  if current_database()<>'onebiz_hub_scope_v8_20261114' or inet_server_addr()<>'127.0.0.1'::inet or inet_server_port()<>55487 or exists(select 1 from public.tenants) then raise exception 'WRONG_TEST_DATABASE';end if;
 end$$;
 begin;
+revoke select on public.audit_log from authenticated;
 grant usage on schema auth to authenticated;
 grant execute on function auth.uid() to authenticated;
 insert into public.tenants(id,name,slug) values ('11000000-0000-0000-0000-000000000001','Test','mkt-history-test'),('11000000-0000-0000-0000-000000000002','Other','mkt-history-other');
