@@ -561,6 +561,17 @@ describe("staff profile scope", () => {
       expect(projectedStaffPermission(data, denied, "tubua", code).allowed).toBe(false);
     },
   );
+  it("shows the legacy self-spend journal grant and respects current branch and global denies", () => {
+    const code = "finance.view_cash_journal_self_spend";
+    const oldCode = "finance.view_branch_self_spend_journal";
+    const data = { ...snapshot, roles: [{ id: "r", name: "Quản lý", permissions: [oldCode] }] };
+    const draft = draftFromStaffProfile(data);
+    expect(projectedStaffPermission(data, draft, "premium", code)).toMatchObject({ allowed: true, source: expect.stringContaining("cũ") });
+    expect(projectedStaffPermission(data, setStaffException(draft, "premium", code, "revoke"), "premium", code).allowed).toBe(false);
+    expect(projectedStaffPermission(data, setStaffException(draft, null, code, "revoke"), "premium", code).allowed).toBe(false);
+    expect(projectedStaffPermission(data, setStaffException(draft, null, oldCode, "revoke"), "premium", code).allowed).toBe(false);
+    expect(projectedStaffPermission(data, draft, "outside", code).allowed).toBe(false);
+  });
   it("selects active branches without silently granting a closed branch", () => {
     const data = {
       ...snapshot,
