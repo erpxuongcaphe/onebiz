@@ -48,6 +48,13 @@ export async function getMktManageableCampaignIds(supabase: MktSupabaseClient, i
   return data ?? [];
 }
 
+export async function getMktConfirmableReadinessIds(supabase: MktSupabaseClient, campaignId: string): Promise<string[]> {
+  const db = getMktDatabaseClient(supabase);
+  const { data, error } = await db.rpc<string[]>("mkt_confirmable_readiness_ids", { p_campaign_id: campaignId });
+  if (error) throw new Error(`MKT_READ_FAILED:confirmable_readiness:${error.message}`);
+  return data ?? [];
+}
+
 export async function getMktReviewableContentIds(supabase: MktSupabaseClient, ids: string[]): Promise<string[]> {
   if (ids.length === 0) return [];
   const db = getMktDatabaseClient(supabase);

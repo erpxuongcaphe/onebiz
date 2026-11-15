@@ -850,6 +850,11 @@ export function StaffProfileEditor({
                                     Quyền này quyết định các quán được cộng thêm vào tổng tồn. Tồn quán chính vẫn có thể hiển thị theo quyền xem tồn; quyền thao tác kho, bán hàng và xem báo cáo toàn công ty là các quyền độc lập.
                                   </p>
                                 )}
+                                {p.code.startsWith("mkt.readiness.") && (
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    Cần có quyền xem MKT để vào màn hình. Mục áp dụng toàn công ty cần quyền toàn tài khoản; quyền vượt duyệt chiến dịch vẫn có hiệu lực độc lập.
+                                  </p>
+                                )}
                                 {p.code === "invoices.export" && (
                                   <p className="mt-1 text-xs text-muted-foreground">
                                     Cho dùng nút xuất hóa đơn tại chi nhánh được cấp. Quyền xuất báo cáo cũng cho xuất hóa đơn ở chi nhánh tương ứng. Việc xem dữ liệu phụ thuộc các quyền xem khác; tắt xuất không thay thế việc giới hạn quyền xem.

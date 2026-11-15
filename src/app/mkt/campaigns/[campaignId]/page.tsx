@@ -10,6 +10,7 @@ import {
   getLeaderQueue,
   getMktMembers,
   getMktCampaignPermissions,
+  getMktConfirmableReadinessIds,
   getPillars,
   type MktCampaignDetailTab,
 } from "@/lib/mkt/read-models";
@@ -40,7 +41,6 @@ import {
 } from "@/components/mkt/campaign-plan-controls";
 import { AssignPlanningButton } from "@/components/mkt/plan-controls";
 import { MktDeleteButton } from "@/components/mkt/delete-button";
-import { canConfirmReadiness } from "@/lib/mkt/readiness";
 
 export const dynamic = "force-dynamic";
 
@@ -129,6 +129,8 @@ export default async function CampaignDetailPage({
   ]);
 
   if (!detail.campaign) notFound();
+  const confirmableReadiness = new Set(activeTab === "readiness" && detail.readiness.length > 0
+    ? await getMktConfirmableReadinessIds(supabase, campaignId) : []);
   const c = detail.campaign;
   const pillarById = new Map(pillars.map((pillar) => [pillar.id, pillar]));
   const contentOptions = detail.contents.map((item) => ({ id: item.id, title: item.title }));
@@ -692,7 +694,7 @@ export default async function CampaignDetailPage({
                       itemId={r.id}
                       status={r.status}
                       canManage={canManage}
-                      canConfirm={canConfirmReadiness(ctx, r.requiredRole, r.requiredBranchId)}
+                      canConfirm={confirmableReadiness.has(r.id)}
                     />
                     {canManage ? (
                       <MktDeleteButton
