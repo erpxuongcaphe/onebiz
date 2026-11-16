@@ -54,10 +54,13 @@ describe("F&B sales history boundaries",()=>{
   await expect(getFnbDayCash("xtb","2026-10-20")).rejects.toThrow("PERMISSION_DENIED");
  });
  it("resolves paid item notes by line ID but leaves pending kitchen notes alone",async()=>{
-  mock.tables.invoices=[inv("paid")];mock.tables.invoice_items_scoped=[{id:"a",invoice_id:"paid",product_name:"Trà",quantity:1,total:30000,note:null},{id:"b",invoice_id:"paid",product_name:"Trà",quantity:1,total:30000,note:"Saved"}];
-  mock.rpc.mockResolvedValue({data:[{invoice_item_id:"a",note:"Ít đá"}],error:null});
+  mock.tables.invoices=[inv("paid")];const invoiceLines=[{id:"a",invoice_id:"paid",product_name:"Trà",quantity:1,total:30000,note:null},{id:"b",invoice_id:"paid",product_name:"Trà",quantity:1,total:30000,note:"Saved"}];
+  mock.rpc.mockImplementation((name: string) => name === "read_fnb_history_invoice_lines"
+    ? {data:invoiceLines,error:null}
+    : {data:[{invoice_item_id:"a",note:"Ít đá"}],error:null});
   const row=(await getFnbDayHistory("xtb","2026-10-20")).rows[0];
   expect((await getFnbHistoryItems(row,"xtb")).map(i=>i.note)).toEqual(["Ít đá","Saved"]);
+  expect(mock.rpc).toHaveBeenCalledWith("read_fnb_history_invoice_lines",{p_invoice_id:"paid",p_branch_id:"xtb"});
   expect(mock.rpc).toHaveBeenCalledWith("get_fnb_invoice_item_details_20261023",{p_invoice_ids:["paid"]},{count:"exact"});
   mock.rpc.mockClear();mock.tables.kitchen_orders=[ko("open")];mock.tables.kitchen_order_items=[{id:"k",kitchen_order_id:"open",product_name:"Trà",quantity:1,unit_price:30000,note:"Pending"}];
   const pending=(await getFnbDayHistory("xtb","2026-10-20")).rows.find(r=>!r.invoiceId)!;
