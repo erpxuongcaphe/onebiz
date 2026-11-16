@@ -443,6 +443,7 @@ function PosPageInner() {
   const [draftModalOpen, setDraftModalOpen] = useState(false);
   // CEO 14/07: "Xử lý đặt hàng" — chọn đơn đặt hàng (DH) nạp vào POS.
   const [processOrderOpen, setProcessOrderOpen] = useState(false);
+  const pendingOrderDrafts = useRef(new Map<string, Awaited<ReturnType<typeof createChildSaleFromOrder>>>());
   // CEO 10/06/2026 — badge số nháp + trigger refresh sau save/delete
   const [draftCount, setDraftCount] = useState<number>(0);
   const [draftCountTrigger, setDraftCountTrigger] = useState(0);
@@ -4200,7 +4201,11 @@ function PosPageInner() {
           // nhiêu đợt thì bấm bấy nhiêu lần.
           const token = beginCartLoad();
           try {
-            const child = await createChildSaleFromOrder(orderId);
+            let child = pendingOrderDrafts.current.get(orderId);
+            if (!child) {
+              child = await createChildSaleFromOrder(orderId);
+              pendingOrderDrafts.current.set(orderId, child);
+            }
             if (!isCartLoadCurrent(token)) return;
 
             const detail = await getDraftOrderById(child.childId);
@@ -4208,7 +4213,7 @@ function PosPageInner() {
             if (!detail) {
               toast({
                 title: "Không mở được đơn bán",
-                description: "Đơn bán vừa tạo không đọc lại được — thử lại.",
+                  description: `Đã lưu nháp ${child.childCode}. Bấm Chọn lại để mở nháp này.`,
                 variant: "error",
               });
               return;
@@ -4217,7 +4222,9 @@ function PosPageInner() {
             const applied = await applyDraftToActiveTab(detail, token);
             if (!applied) return;
 
+            pendingOrderDrafts.current.delete(orderId);
             setProcessOrderOpen(false);
+            setMobileCartOpen(true);
             toast({
               title: `Đã tạo đơn bán ${child.childCode}`,
               description: `Từ đơn đặt ${child.sourceOrderCode} — sửa giỏ thoải mái rồi thanh toán. Đơn đặt gốc giữ nguyên.`,
@@ -4225,10 +4232,12 @@ function PosPageInner() {
             });
           } catch (err) {
             if (!isCartLoadCurrent(token)) return;
-            // KHÔNG rơi về nạp đơn gốc — đường cũ chính là lỗi đang sửa.
+            const savedDraft = pendingOrderDrafts.current.get(orderId);
             toast({
-              title: "Không tạo được đơn bán",
-              description: err instanceof Error ? err.message : "Lỗi",
+              title: savedDraft ? "Chưa tải được đơn bán vào giỏ" : "Không tạo được đơn bán",
+              description: savedDraft
+                ? `Đã lưu nháp ${savedDraft.childCode}. Bấm Chọn lại để mở nháp này.`
+                : err instanceof Error ? err.message : "Lỗi",
               variant: "error",
             });
           }
@@ -5374,7 +5383,7 @@ function ProcessOrderModal({
   open: boolean;
   onClose: () => void;
   branchId: string | null;
-  onPick: (orderId: string) => void;
+  onPick: (orderId: string) => Promise<void>;
 }) {
   const [orders, setOrders] = useState<SalesOrder[]>([]);
   const [loading, setLoading] = useState(false);
@@ -5391,6 +5400,8 @@ function ProcessOrderModal({
   const [closingOrder, setClosingOrder] = useState<SalesOrder | null>(null);
   const [closeReason, setCloseReason] = useState("Đã xử lý bằng hóa đơn khác");
   const [savingClosure, setSavingClosure] = useState(false);
+  const [pickingOrderId, setPickingOrderId] = useState<string | null>(null);
+  const pickingOrderRef = useRef(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const { toast } = useToast();
 
@@ -5554,7 +5565,13 @@ function ProcessOrderModal({
                 key={o.id}
                 className="w-full rounded-lg border bg-card flex items-center gap-1 pr-2 hover:border-primary transition-colors"
               >
-              <button type="button" onClick={() => onPick(o.id)} disabled={savingClosure}
+              <button type="button" onClick={async () => {
+                if (pickingOrderRef.current) return;
+                pickingOrderRef.current = true;
+                setPickingOrderId(o.id);
+                try { await onPick(o.id); }
+                finally { pickingOrderRef.current = false; setPickingOrderId(null); }
+              }} disabled={savingClosure || pickingOrderId !== null}
                 className="flex min-w-0 flex-1 items-center gap-3 p-3 text-left rounded-lg hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
@@ -5600,7 +5617,7 @@ function ProcessOrderModal({
                     {formatCurrency(o.totalAmount)}đ
                   </div>
                   <div className="text-xs text-primary font-medium">
-                    Chọn →
+                    {pickingOrderId === o.id ? "Đang mở..." : "Chọn →"}
                   </div>
                 </div>
               </button>
