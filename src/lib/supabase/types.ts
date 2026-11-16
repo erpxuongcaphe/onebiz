@@ -3093,6 +3093,10 @@ export interface Database {
         };
         Returns: Json;
       };
+      read_fnb_history_invoice_lines: {
+        Args: { p_invoice_id: string; p_branch_id: string };
+        Returns: { id: string; product_name: string; quantity: number; unit_price: number; total: number; note: string | null }[];
+      };
       get_fnb_day_sales_summary: {
         Args: { p_branch_id: string; p_day: string };
         Returns: Json;
