@@ -47,6 +47,7 @@ const RPC = new Set(schema.rpc as string[]);
  * dưới sẽ BẮT XOÁ dòng ngay khi dump đã có (sau `node scripts/dump-db-schema.mjs`).
  */
 const RPC_CHO_MIGRATION = new Map<string, string>([
+  ["read_fnb_history_invoice_lines", "20261116162258_fnb_history_invoice_lines.sql"],
   ["staff_audit_entity_history", "20261115043544_staff_safe_entity_audit_history.sql"],
   ["get_sales_day_invoice_receivable", "20261113124451_dashboard_debt_refund_source.sql"],
   ["get_dashboard_all_branch_day", "20261113135122_dashboard_all_branches_sales.sql"],
@@ -125,6 +126,9 @@ const COT_CHO_MIGRATION = new Map<string, string>([
   ["purchase_order_items.note", "202610230101_fnb_warehouse_request_line_notes.sql"],
   ["customers.canonical_customer_id", "20261027005706_internal_customer_canonical_identity.sql"],
   ["invoices.fnb_context", "202610230004_fnb_paid_context_zero_total.sql"],
+  ["invoice_items_scoped.transaction_unit", "20261029005208_unified_transaction_uom.sql"],
+  ["invoice_items_scoped.transaction_quantity", "20261029005208_unified_transaction_uom.sql"],
+  ["invoice_items_scoped.transaction_unit_price", "20261029005208_unified_transaction_uom.sql"],
   ["shifts.close_kind", "202610220002_fnb_shift_totals_reconciliation.sql"],
   ["shifts.expected_transfer", "202610220002_fnb_shift_totals_reconciliation.sql"],
   ["shifts.actual_transfer", "202610220002_fnb_shift_totals_reconciliation.sql"],
