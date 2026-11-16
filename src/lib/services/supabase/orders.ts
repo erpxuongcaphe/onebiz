@@ -941,18 +941,28 @@ export async function getDraftOrderById(
   const { data, error } = await (supabase as any)
     .from("invoices")
     .select(
-      "id, code, branch_id, customer_id, customer_name, subtotal, discount_amount, delivery_fee, total, note, created_at, updated_at, status, auto_saved, client_session_id, draft_revision, source, invoice_items:invoice_items_scoped(*)",
+      "id, code, branch_id, customer_id, customer_name, subtotal, discount_amount, delivery_fee, total, note, created_at, updated_at, status, auto_saved, client_session_id, draft_revision, source",
     )
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
     // 00173: không mở lại đơn đã xóa mềm.
     .is("deleted_at", null)
-    .single();
+    .maybeSingle();
   if (error) handleError(error, "getDraftOrderById");
   if (!data) return null;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const raw = data as any;
+  // Filter the scoped view directly by invoice ID so PostgreSQL can use
+  // the invoice_items(invoice_id) index before checking line visibility.
+  const { data: items, error: itemError } = await supabase
+    .from("invoice_items_scoped")
+    .select("id, product_id, variant_id, product_name, unit, quantity, unit_price, discount, total, note, transaction_unit, transaction_quantity, transaction_unit_price")
+    .eq("invoice_id", invoiceId);
+  if (itemError) handleError(itemError, "getDraftOrderById.items");
+  if (!items?.length) {
+    throw new Error("Không đọc được mặt hàng của phiếu nháp.");
+  }
   return {
     id: raw.id,
     code: raw.code,
@@ -962,7 +972,7 @@ export async function getDraftOrderById(
     subtotal: raw.subtotal ?? 0,
     discountAmount: raw.discount_amount ?? 0,
     total: raw.total ?? 0,
-    itemCount: Array.isArray(raw.invoice_items) ? raw.invoice_items.length : 0,
+    itemCount: items.length,
     note: raw.note,
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
@@ -972,7 +982,7 @@ export async function getDraftOrderById(
     deliveryFee: Number(raw.delivery_fee ?? 0),
     revision: Number(raw.draft_revision ?? 0),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    items: (raw.invoice_items ?? []).map((it: any) => ({
+    items: items.map((it: any) => ({
       id: it.id,
       productId: it.product_id,
       variantId: it.variant_id ?? undefined,
