@@ -74,9 +74,9 @@ describe("00335 POS — màn hình", () => {
   });
 
   it("thanh toán xong TRẢ VỀ tự động", () => {
-    const i = pos.indexOf("state.clearCart();\n      // 00335");
+    const i = pos.indexOf("const finishPaidCart =");
     expect(i).toBeGreaterThan(-1);
-    const khoi = pos.slice(i, i + 420);
+    const khoi = pos.slice(i, pos.indexOf("const checkoutCustomer", i));
     // Phải đi qua datNgayHoaDon để ref của tab cũng sạch — nếu chỉ setState
     // thì lần chuyển tab kế tiếp sẽ cất nhầm ngày đã dùng xong vào tab.
     expect(khoi).toContain('datNgayHoaDon(null, "")');

@@ -119,7 +119,7 @@ import { Button } from "@/components/ui/button";
 
 import { usePosState, type OrderLine, type DiscountInput, type SellingMode, type DeliveryInfo, type PosSnapshot } from "./hooks/use-pos-state";
 import { loadRetailWorkspace, saveRetailWorkspace, planRetailWorkspaceRestore } from "./lib/retail-workspace-storage";
-import { chuyenTab, themTab, dongTab, doiChiNhanh } from "./lib/pos-tab-transitions";
+import { chuyenTab, themTab, dongTab, doiChiNhanh, ketThucTabDaThanhToan } from "./lib/pos-tab-transitions";
 import { ProductGrid } from "./components/product-grid";
 import { CustomerPicker } from "./components/customer-picker";
 import { ReceiverCustomerSelect } from "@/components/shared/receiver-customer-select";
@@ -2053,6 +2053,29 @@ function PosPageInner() {
    */
   const handleComplete = useCallback(async (intent?: "refund" | "credit", zeroConfirmed?: boolean) => {
     if (submitLockRef.current) return;
+    const checkoutTabId = activeTabIdRef.current;
+    const isCheckoutCartActive = () => activeTabIdRef.current === checkoutTabId
+      && tabsRef.current.some((tab) => tab.id === checkoutTabId && tab.sessionId === clientSessionId);
+    const finishPaidCart = () => {
+      const result = ketThucTabDaThanhToan(
+        tabsRef.current, checkoutTabId, clientSessionId, activeTabIdRef.current, nextClientSessionId,
+      );
+      if (!result) return;
+      commitTabs(result.tabs);
+      if (!result.clearActiveCart) return;
+
+      cartLoadRequestRef.current += 1;
+      state.clearCart();
+      if (state.sellingMode === "internal") state.setSellingMode("internal");
+      datNgayHoaDon(null, "");
+      setAppliedPromotion(null);
+      setPromotionCleared(false);
+      setAppliedRedeem(null);
+      setDiscountSource(null);
+      setSearchQuery("");
+      setMobileCartOpen(false);
+      setChangeDialog({ open: false, excess: 0 });
+    };
     const checkoutCustomer = state.customer;
     if (!hasSelectedRetailCustomer(checkoutCustomer)) {
       toast({
@@ -2081,6 +2104,7 @@ function PosPageInner() {
       }
     }
 
+    if (!isCheckoutCartActive() || submitLockRef.current) return;
     if (!checkoutShift) {
       toast({
         title: "Chưa mở ca",
@@ -2154,10 +2178,7 @@ function PosPageInner() {
         if (!result) return;
         notifyPosStockChanged(currentBranch!.id);
         notifyPosStockChanged(state.customer.branchId);
-        state.clearCart();
-        state.setSellingMode("internal");
-        setClientSessionId(nextClientSessionId());
-        setMobileCartOpen(false);
+        finishPaidCart();
         toast({ title: `Đã bán nội bộ ${result.code}`, description: "Đã lưu phiếu giao nội bộ. Không phát sinh thu, chi hoặc công nợ.", variant: "success" });
         if (autoPrint) {
           try {
@@ -2177,7 +2198,7 @@ function PosPageInner() {
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : "Vui lòng thử lại";
-        if (/POS_DRAFT_(CONFLICT|SESSION_CHANGED|NOT_FOUND|CHANGED_DURING_SAVE)/.test(message)) {
+        if (isCheckoutCartActive() && /POS_DRAFT_(CONFLICT|SESSION_CHANGED|NOT_FOUND|CHANGED_DURING_SAVE)/.test(message)) {
           setDraftConflict({ invoiceId: state.loadedDraftId });
           return;
         }
@@ -2796,31 +2817,21 @@ function PosPageInner() {
       if (!isOfflineCheckout && typeof window !== "undefined") {
         notifyPosStockChanged(ctx.branchId);
       }
-      state.clearCart();
-      // 00335: ngày chỉnh tay chỉ áp cho ĐÚNG hóa đơn vừa lập — trả về tự động
-      // để hóa đơn kế tiếp không vô tình mang ngày cũ. Đi qua `datNgayHoaDon`
-      // để ref của tab cũng sạch, nếu không lần chuyển tab kế tiếp sẽ cất
-      // nhầm ngày đã dùng xong vào tab.
-      datNgayHoaDon(null, "");
-      setAppliedPromotion(null);
-      setPromotionCleared(false);
-      setAppliedRedeem(null);
-      // P4-R2 13/06/2026 audit lần 2: reset discountSource cho idempotent.
-      // Trước đây dựa vào effect 1131 fallthrough (state.lines.length===0)
-      // để reset — nếu race với regen sessionId hoặc promotionCleared=true
-      // → đơn tiếp theo stuck source='manual' block auto-promo silent.
-      setDiscountSource(null);
-      setSearchQuery("");
-      setMobileCartOpen(false);
-      setChangeDialog({ open: false, excess: 0 });
-      // Regen sessionId cho đơn tiếp theo — đơn vừa xong đã có invoice
-      // với key này, đơn mới phải có key mới để không bị idempotent reject.
-      setClientSessionId(nextClientSessionId());
+      finishPaidCart();
     } catch (err: any) {
       // CEO 10/06/2026 — FIX mất đơn: thanh toán thất bại trước đây chỉ toast
       // thoáng 4s → cashier bỏ lỡ → tưởng xong → mất đơn. Giờ persistent +
       // rõ ràng. Giỏ KHÔNG bị xóa (clearCart chỉ chạy khi success).
       const msg = String(err?.message ?? "");
+      if (!isCheckoutCartActive()) {
+        toast({
+          title: "Cần kiểm tra kết quả thanh toán",
+          description: `Kiểm tra hóa đơn vừa xử lý trước khi thử lại. ${msg}`,
+          variant: "warning",
+          duration: 0,
+        });
+        return;
+      }
       const separatorIndex = msg.indexOf("|");
       const rpcCode = separatorIndex >= 0 ? msg.slice(0, separatorIndex) : msg;
       let rpcDetails: Record<string, unknown> = {};
@@ -2903,7 +2914,7 @@ function PosPageInner() {
       setSubmitting(null);
       submitLockRef.current = false;
     }
-  }, [state, toast, autoPrint, networkStatus.isOnline, currentShift, currentBranch?.id, user?.id, appliedPromotion, appliedRedeem, clientSessionId, hasUnsavedCart, printPreparedRetailInvoice]);
+  }, [state, toast, autoPrint, networkStatus.isOnline, currentShift, currentBranch?.id, user?.id, appliedPromotion, appliedRedeem, clientSessionId, hasUnsavedCart, printPreparedRetailInvoice, commitTabs, datNgayHoaDon]);
 
   // CEO 04/05/2026: Bỏ handleDebtCheckout — nút "Ghi nợ" cũ thay bằng
   // handleComplete ghi nợ phần thiếu cho khách đã được thu ngân chọn.

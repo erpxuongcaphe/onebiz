@@ -6,6 +6,7 @@ import {
   themTab,
   dongTab,
   doiChiNhanh,
+  ketThucTabDaThanhToan,
   type TabHoaDon,
 } from "../../app/pos/lib/pos-tab-transitions";
 
@@ -198,5 +199,27 @@ describe("Trang POS phải ĐI QUA mô-đun này", () => {
       trang.indexOf("const switchTab"),
     );
     expect(funnel).toContain("datNgayHoaDon(null, \"\")");
+  });
+});
+
+describe("POS Retail kết thúc thanh toán theo tab và phiên", () => {
+  it("giữ giỏ đang mở khi thanh toán của tab khác trả về", () => {
+    const paid = tab("A", { snapshot: { gio: "A" }, itemCount: 3, ngayHoaDon: NGAY_A });
+    const active = tab("B");
+    const waiting = tab("C", { snapshot: { gio: "C" }, itemCount: 7 });
+    const result = ketThucTabDaThanhToan([paid, active, waiting], "A", paid.sessionId, "B", () => "new-session");
+
+    expect(result?.clearActiveCart).toBe(false);
+    expect(result?.tabs).toEqual([tab("A", { sessionId: "new-session" }), active, waiting]);
+  });
+
+  it("chỉ dọn giỏ đang mở nếu giỏ đó đúng là phiên vừa thanh toán", () => {
+    const active = tab("A");
+    const waiting = tab("B", { snapshot: { gio: "B" }, itemCount: 7 });
+    const result = ketThucTabDaThanhToan([active, waiting], "A", active.sessionId, "A", () => "new-session");
+
+    expect(result?.clearActiveCart).toBe(true);
+    expect(result?.tabs[1]).toBe(waiting);
+    expect(ketThucTabDaThanhToan([active, waiting], "A", "old-session", "A", () => "unused")).toBeNull();
   });
 });
