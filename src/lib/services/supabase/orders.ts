@@ -1493,7 +1493,9 @@ export async function createChildSaleFromOrder(
     }
     if (MA_LOI_CHUA_CO_RPC.has(error.code ?? "")) {
       throw new Error(
-        "Máy chủ chưa sẵn sàng mở đơn bán. Vui lòng báo quản lý.",
+        requestId
+          ? "Máy chủ chưa sẵn sàng mở đơn bán. Vui lòng báo quản lý."
+          : "Máy chủ chưa bật tính năng đơn bán con (migration 00331 chưa chạy).",
       );
     }
     handleError(error, "createChildSaleFromOrder");
