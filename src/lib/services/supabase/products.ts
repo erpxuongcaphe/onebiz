@@ -885,6 +885,7 @@ async function buildMovementPartnerResolver(
       t === "purchase_order" ||
       t === "po_receive" ||
       t === "purchase_order_revert" ||
+      t === "purchase_order_correction" ||
       t === "goods_receipt" ||
       t === "purchase_entry"
     ) {
@@ -990,14 +991,10 @@ async function buildMovementPartnerResolver(
       t === "purchase_order" ||
       t === "po_receive" ||
       t === "goods_receipt" ||
-      t === "purchase_entry"
+      t === "purchase_entry" ||
+      t === "purchase_order_revert" ||
+      t === "purchase_order_correction"
     ) {
-      const po = poMap.get(rid);
-      if (!po) return {};
-      return { partner: po.supplier_name || "NCC", partnerType: "supplier", referenceCode: po.code };
-    }
-    // Đợt 3: hủy phiếu nhập (đảo kho) — cùng bảng PO, đối tác là NCC gốc.
-    if (t === "purchase_order_revert") {
       const po = poMap.get(rid);
       if (!po) return {};
       return { partner: po.supplier_name || "NCC", partnerType: "supplier", referenceCode: po.code };

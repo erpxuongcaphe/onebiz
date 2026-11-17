@@ -97,7 +97,7 @@ describe("invoice cancellation cash impact", () => {
       negativeStock: [{ productName: "Synthetic product", available: null, needed: 5, unit: "unit" }] });
     expect(impact.refundMethods).toBeUndefined();
     expect(state.calls).toContainEqual(["purchase_orders", "eq", "tenant_id", "tenant"]);
-    expect(state.calls).toContainEqual(["rpc", "get_purchase_cancel_stock_risks", { p_order_id: "purchase" }]);
+    expect(state.calls).toContainEqual(["rpc", "get_supplier_receipt_cancel_risks", { p_order_id: "purchase" }]);
     expect(state.calls.some(([table]) => table === "products_scoped")).toBe(false);
     expect(state.calls.some(([table]) => table === "customers" || table === "suppliers")).toBe(false);
   });
@@ -109,10 +109,10 @@ describe("invoice cancellation cash impact", () => {
     state.riskMalformed = true;
     await expect(getPurchaseCancelImpact("purchase")).rejects.toThrow("chưa hợp lệ");
   });
-  it.each(["draft", "ordered"])("retains no-side-effect preview for %s purchases", async status => {
+  it.each(["draft", "ordered"])("shows recorded payment on %s purchases before any stock movements", async status => {
     state.purchaseStatus = status; state.debt = 110;
     expect(await getPurchaseCancelImpact("purchase")).toMatchObject({ hasSideEffects: false,
-      debtAmount: 0, counterpartyDebtBefore: null, cashAmount: 0, cashDirection: null, stockLineCount: 0 });
+      debtAmount: 0, counterpartyDebtBefore: null, cashAmount: 70, cashDirection: "collect_from_supplier", stockLineCount: 0 });
     expect(state.calls.filter(([, method]) => method === "from")).toEqual([["purchase_orders", "from"]]);
   });
 });

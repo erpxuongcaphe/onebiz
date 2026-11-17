@@ -3097,6 +3097,22 @@ export interface Database {
         Args: { p_invoice_id: string; p_branch_id: string };
         Returns: { id: string; product_name: string; quantity: number; unit_price: number; total: number; note: string | null }[];
       };
+      cancel_supplier_receipt_atomic: {
+        Args: { p_order_id: string; p_reason: string };
+        Returns: Json;
+      };
+      get_supplier_receipt_cancel_risks: {
+        Args: { p_order_id: string };
+        Returns: Json;
+      };
+      preview_supplier_receipt_correction: {
+        Args: { p_order_id: string; p_line_id: string; p_quantity: number; p_unit_price: number; p_reason: string };
+        Returns: Json;
+      };
+      apply_supplier_receipt_correction: {
+        Args: { p_order_id: string; p_line_id: string; p_quantity: number; p_unit_price: number; p_reason: string; p_token: string };
+        Returns: Json;
+      };
       read_retail_sku_sales_history: {
         Args: { p_product_id: string; p_branch_id: string | null; p_offset: number; p_limit: number };
         Returns: Json;

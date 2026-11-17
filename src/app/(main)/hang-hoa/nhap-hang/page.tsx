@@ -50,6 +50,7 @@ import {
   getPurchaseOrderStatuses,
   getPurchaseOrderStatusMeta,
   updatePurchaseOrderStatus,
+  cancelSupplierReceipt,
   getPurchaseOrderItems,
   getPaymentHistory,
   closePurchaseOrderShort,
@@ -60,6 +61,7 @@ import type { PurchaseOrder, PurchaseOrderStatus } from "@/lib/types";
 import { RecordPaymentDialog } from "@/components/shared/dialogs/record-payment-dialog";
 import { CancelImpactDialog } from "@/components/shared/dialogs/cancel-impact-dialog";
 import { EditPurchaseOrderDialog } from "@/components/shared/dialogs/edit-purchase-order-dialog";
+import { SupplierReceiptCorrectionDialog } from "@/components/shared/dialogs/supplier-receipt-correction-dialog";
 import { PartialReceiveDialog } from "@/components/shared/dialogs/partial-receive-dialog";
 // PERF (CEO 23/05/2026): Lazy-load CreatePurchaseOrderDialog (819 dòng).
 import dynamic from "next/dynamic";
@@ -542,6 +544,8 @@ export default function NhapHangPage() {
   const [closeShortTarget, setCloseShortTarget] = useState<PurchaseOrder | null>(null);
   // 29/07 (CEO): sửa phiếu nhập KHÔNG cần huỷ — chỉ phần không đụng kho.
   const [editTarget, setEditTarget] = useState<{ id: string; code: string } | null>(null);
+  const [correctionTarget, setCorrectionTarget] = useState<PurchaseOrder | null>(null);
+  const [correctionRevision, setCorrectionRevision] = useState(0);
 
   // 21/07: mục tiêu hủy phiếu nhập cho CancelImpactDialog (bảng tác động).
   const [cancelPOTarget, setCancelPOTarget] = useState<PurchaseOrder | null>(null);
@@ -978,13 +982,16 @@ export default function NhapHangPage() {
   /* ---- Inline detail renderer ---- */
   const renderDetail = (order: PurchaseOrder, onClose: () => void) => (
     <PurchaseOrderDetail
+      key={`${order.id}:${correctionRevision}`}
       order={order}
       onClose={onClose}
       onRequestPartialReceive={txPerms.forBranch(order.branchId).canEdit ? () => setPartialReceiveOrder(order) : undefined}
       onEdit={
         // Phase 1.5 (CEO 01/06/2026): cho sửa cả status='ordered' nhưng dialog
         // chỉ enable paid + note (không đụng tồn). Items thay đổi → Huỷ phiếu.
-        txPerms.forBranch(order.branchId).canEdit && (order.status === "draft" || order.status === "ordered")
+        order.status === "completed" && txPerms.forBranch(order.branchId).canEdit && txPerms.forBranch(order.branchId).canCancel
+          ? () => setCorrectionTarget(order)
+          : txPerms.forBranch(order.branchId).canEdit && (order.status === "draft" || order.status === "ordered")
           ? () => {
               setEditingPO({
                 id: order.id,
@@ -1054,30 +1061,8 @@ export default function NhapHangPage() {
     }
   };
 
-  // CEO 24/06/2026: Hủy phiếu nhập ở MỌI trạng thái (gate quyền canCancel).
-  // - Phiếu chưa nhận (draft/ordered): chỉ đổi trạng thái → 'cancelled'.
-  // - Phiếu ĐÃ nhận (partial/completed) đã cộng tồn → BẮT BUỘC revert tồn trước
-  //   (RPC revert_received_purchase_order_atomic, migration 00120) rồi mới set
-  //   'cancelled' — tránh sai tồn. RPC có chốt chặn: hàng đã bán bớt → tồn âm →
-  //   raise, không hủy; hoá đơn đầu vào đã ghi sổ → không xoá, raise.
-  // 21/07: mở dialog bảng-tác-động (thay window.confirm). Dialog tính sẵn tồn
-  // sẽ trừ + cảnh báo tồn âm (đã bán bớt) + đòi lại tiền NCC/xóa nợ, rồi mới hủy.
   const handleCancelPO = (order: PurchaseOrder) => {
     setCancelPOTarget(order);
-  };
-
-  const performCancelPO = async (allowNegative: boolean) => {
-    const order = cancelPOTarget;
-    if (!order) return;
-    const received =
-      order.status === "completed" || order.status === "partial";
-    if (received) {
-      // 1) revert tồn (đưa về Nháp) — atomic; allowNegative theo cảnh báo dialog
-      await reopenPurchaseOrderForEdit(order.id, allowNegative);
-    }
-    // 2) đánh dấu Đã hủy
-    await updatePurchaseOrderStatus(order.id, "cancelled");
-    fetchData();
   };
 
   // Day 2 16/05: Đóng đơn còn thiếu — RPC close_purchase_order_short
@@ -1518,19 +1503,24 @@ export default function NhapHangPage() {
             // RPC revert atomic — trừ tồn về tồn trước khi nhập + xoá lots +
             // xoá input_invoice (chưa ghi sổ) + set status='draft'.
             extraActions:
-              row.status === "ordered" ||
+              txPerms.forBranch(row.branchId).canEdit && (row.status === "ordered" ||
               row.status === "partial" ||
-              row.status === "completed"
+              row.status === "completed")
                 ? [
+                    ...(row.status === "completed" && txPerms.forBranch(row.branchId).canCancel ? [{
+                      label: "Sửa số lượng và đơn giá",
+                      icon: <Icon name="edit" size={16} />,
+                      onClick: () => setCorrectionTarget(row),
+                    }] : []),
                     {
                       // CEO 29/07: sửa giá/chiết khấu/thuế/chi phí/ghi chú mà
                       // KHÔNG đụng kho — không phải huỷ phiếu như trước.
-                      label: "Sửa phiếu (giá, chi phí)",
+                      label: "Sửa giá, chi phí và ghi chú",
                       icon: <Icon name="edit_document" size={16} />,
                       onClick: () => setEditTarget({ id: row.id, code: row.code }),
                     },
                     {
-                      label: "Mở lại để sửa (revert tồn)",
+                      label: "Đưa về nháp để nhập lại",
                       icon: <Icon name="restart_alt" size={16} />,
                       onClick: async () => {
                         const ok = window.confirm(
@@ -1594,8 +1584,9 @@ export default function NhapHangPage() {
       }
       onClose={() => setCancelPOTarget(null)}
       onDone={fetchData}
-      onConfirm={async ({ allowNegativeStock }) => {
-        await performCancelPO(allowNegativeStock);
+      reasonRequired
+      onConfirm={async ({ reason }) => {
+        if (cancelPOTarget) await cancelSupplierReceipt(cancelPOTarget.id, reason);
       }}
     />
 
@@ -1609,6 +1600,19 @@ export default function NhapHangPage() {
       order={editTarget}
       onDone={fetchData}
     />
+    {correctionTarget && (
+      <SupplierReceiptCorrectionDialog
+        key={correctionTarget.id}
+        order={correctionTarget}
+        onClose={() => setCorrectionTarget(null)}
+        onDone={() => {
+          toast({ title: "Đã điều chỉnh phiếu nhập", description: correctionTarget.code, variant: "success" });
+          setCorrectionTarget(null);
+          setCorrectionRevision((value) => value + 1);
+          fetchData();
+        }}
+      />
+    )}
 
     {payingItem && (
       <RecordPaymentDialog

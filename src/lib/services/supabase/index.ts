@@ -31,6 +31,7 @@ export {
   getPurchaseOrderStatuses,
   getPurchaseOrderStatusMeta,
   updatePurchaseOrderStatus,
+  cancelSupplierReceipt,
   receivePurchaseOrder,
   savePurchaseOrderAtomic,
   updateReceivedPurchaseOrderAtomic,

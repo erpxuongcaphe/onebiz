@@ -518,6 +518,94 @@ export async function receivePurchaseOrderPartial(
 /*  Mutations                                                          */
 /* ------------------------------------------------------------------ */
 
+export async function cancelSupplierReceipt(orderId: string, reason: string): Promise<void> {
+  const { data, error } = await getClient().rpc("cancel_supplier_receipt_atomic", {
+    p_order_id: orderId,
+    p_reason: reason,
+  });
+  if (error) {
+    const messages: Record<string, string> = {
+      PURCHASE_CANCEL_REASON_REQUIRED: "Nhập lý do hủy từ 3 đến 500 ký tự.",
+      PURCHASE_CANCEL_SCOPE_DENIED: "Tài khoản chưa có quyền hủy phiếu nhập tại chi nhánh này.",
+      PURCHASE_CANCEL_PAYMENT_REVIEW_REQUIRED: "Phiếu có khoản đã trả nhà cung cấp. Đối soát khoản thanh toán trước khi hủy.",
+      PURCHASE_CANCEL_STOCK_REVIEW_REQUIRED: "Kho chi nhánh không đủ số lượng để hoàn nhập. Kiểm tra mặt hàng đã xuất hoặc đang giữ chỗ.",
+      PURCHASE_CANCEL_RETURN_REVIEW_REQUIRED: "Phiếu đã có trả hàng nhà cung cấp. Đối soát phiếu trả trước khi hủy.",
+      PURCHASE_CANCEL_RECEIPT_ALREADY_USED: "Lô của phiếu đã được sử dụng. Mở Sửa số lượng và đơn giá để điều chỉnh theo chứng từ.",
+      FNB_BRANCH_COST_REQUIRED: "Số lượng đã ghi giá vốn tại chi nhánh không đủ để hoàn nhập. Cần đối soát trước khi hủy.",
+      FNB_PURCHASE_REVERT_COST_SOURCE_REQUIRED: "Sổ giá vốn chi nhánh chưa có giao dịch nhận hàng tương ứng.",
+      FNB_PURCHASE_REVERT_COST_QUANTITY_EXCEEDED: "Số lượng hoàn vượt phần đã ghi giá vốn tại chi nhánh.",
+    };
+    const message = messages[error.message];
+    if (message) throw new Error(message);
+    handleError(error, "cancelSupplierReceipt");
+  }
+  if (!data || typeof data !== "object" || Array.isArray(data) ||
+    data.purchase_order_id !== orderId || data.status !== "cancelled") {
+    throw new Error("Máy chủ chưa xác nhận hủy phiếu. Tải lại danh sách để kiểm tra trạng thái.");
+  }
+}
+
+export interface SupplierReceiptCorrection {
+  oldQuantity: number;
+  newQuantity: number;
+  oldUnitPrice: number;
+  newUnitPrice: number;
+  stockBefore: number;
+  stockAfter: number;
+  stockUnit: string;
+  lotBefore: number;
+  lotAfter: number;
+  oldValue: number;
+  newValue: number;
+  usedCostDelta: number;
+  oldTotal: number;
+  newTotal: number;
+  oldDebt: number;
+  newDebt: number;
+  paid: number;
+  token?: string;
+  applied?: boolean;
+}
+
+export async function correctSupplierReceiptLine(
+  orderId: string,
+  lineId: string,
+  quantity: number,
+  unitPrice: number,
+  reason: string,
+  token?: string,
+): Promise<SupplierReceiptCorrection> {
+  const client = getClient();
+  const args = { p_order_id: orderId, p_line_id: lineId, p_quantity: quantity, p_unit_price: unitPrice, p_reason: reason };
+  const { data, error } = token
+    ? await client.rpc("apply_supplier_receipt_correction", { ...args, p_token: token })
+    : await client.rpc("preview_supplier_receipt_correction", args);
+  if (error) {
+    const messages: Record<string, string> = {
+      PURCHASE_CORRECTION_INPUT_INVALID: "Kiểm tra số lượng, đơn giá và lý do điều chỉnh.",
+      PURCHASE_CORRECTION_SCOPE_DENIED: "Tài khoản chưa có đủ quyền sửa phiếu, điều chỉnh kho và xem giá vốn tại chi nhánh.",
+      PURCHASE_CORRECTION_DOCUMENT_REVIEW: "Phiếu chưa nhận đủ, đã trả hàng, liên kết Kho Tổng hoặc thuộc chi nhánh dùng sổ giá vốn khác.",
+      PURCHASE_CORRECTION_LINE_REVIEW: "Dòng chưa nhận đủ, chưa có giá hoặc mã hàng xuất hiện nhiều lần trên phiếu.",
+      PURCHASE_CORRECTION_INPUT_INVOICE_REVIEW: "Hóa đơn đầu vào đã ghi sổ hoặc đang lệch số tiền với phiếu nhập. Đối soát hóa đơn trước.",
+      PURCHASE_CORRECTION_STOCK_REVIEW: "Tồn chi nhánh, tồn lô và số lượng đã định giá chưa khớp. Đối soát ba sổ trước khi sửa.",
+      PURCHASE_CORRECTION_COST_REVIEW: "Sổ giá vốn chưa khớp với lần nhận hàng này. Cần đối soát giá vốn trước khi sửa.",
+      PURCHASE_CORRECTION_LATER_MOVEMENTS_REVIEW: "Mặt hàng có thêm lần nhập, hoàn hoặc chuyển kho sau phiếu này. Cần đối soát các lượt đó trước khi sửa.",
+      PURCHASE_CORRECTION_STOCK_SHORT: "Số lượng mới thấp hơn lượng đã dùng hoặc lượng đang giữ chỗ. Kiểm tra lại tồn lô và số thực nhận.",
+      PURCHASE_CORRECTION_DEBT_REVIEW: "Tổng mới thấp hơn số đã trả hoặc công nợ đang lệch. Đối soát với nhà cung cấp trước.",
+      PURCHASE_CORRECTION_PREVIEW_STALE: "Phiếu hoặc tồn kho đã thay đổi. Bấm Xem trước lại để lấy số mới nhất.",
+      PURCHASE_CORRECTION_NO_CHANGE: "Số lượng và đơn giá chưa thay đổi.",
+    };
+    const message = messages[error.message];
+    if (message) throw new Error(message);
+    handleError(error, "correctSupplierReceiptLine");
+  }
+  const result = data as unknown as SupplierReceiptCorrection | null;
+  if (!result || (token ? !result.applied : !result.token)) {
+    throw new Error("Máy chủ chưa xác nhận kết quả điều chỉnh.");
+  }
+  return result;
+}
+
 export async function updatePurchaseOrderStatus(
   orderId: string,
   newStatus: PurchaseOrderStatus,

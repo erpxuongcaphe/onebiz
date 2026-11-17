@@ -92,6 +92,7 @@ const ACTION_LABELS: Record<string, string> = {
   purchase_order_status_change: "Đổi trạng thái đơn nhập hàng",
   purchase_order_received_update: "Cập nhật đơn đã nhập",
   purchase_order_revert: "Hoàn tác nhập hàng",
+  purchase_order_quantity_price_correction: "Điều chỉnh số lượng và đơn giá nhập",
   purchase_receive: "Nhận hàng",
   purchase_receive_revert: "Hoàn tác nhận hàng",
   purchase_price_update: "Cập nhật giá nhập",
