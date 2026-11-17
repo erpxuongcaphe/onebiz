@@ -119,7 +119,7 @@ import { Button } from "@/components/ui/button";
 
 import { usePosState, type OrderLine, type DiscountInput, type SellingMode, type DeliveryInfo, type PosSnapshot } from "./hooks/use-pos-state";
 import { loadRetailWorkspace, saveRetailWorkspace, planRetailWorkspaceRestore } from "./lib/retail-workspace-storage";
-import { chuyenTab, themTab, dongTab, doiChiNhanh, ketThucTabDaThanhToan } from "./lib/pos-tab-transitions";
+import { chuyenTab, themTab, dongTab, doiChiNhanh, datLaiTabDaLuu } from "./lib/pos-tab-transitions";
 import { ProductGrid } from "./components/product-grid";
 import { CustomerPicker } from "./components/customer-picker";
 import { ReceiverCustomerSelect } from "@/components/shared/receiver-customer-select";
@@ -1946,11 +1946,15 @@ function PosPageInner() {
 
   const handleSaveDraft = useCallback(async () => {
     if (submitLockRef.current) return;
+    const savedTabId = activeTabIdRef.current;
+    const savedBranchId = currentBranch?.id;
     submitLockRef.current = true;
     setSubmitting("draft");
     try {
       const ctx = await getCurrentContext();
-      if (!ctx) throw new Error("Không xác định được chi nhánh");
+      if (!savedBranchId || ctx.branchId !== savedBranchId) {
+        throw new Error("Chi nhánh đã thay đổi. Kiểm tra lại trước khi lưu nháp.");
+      }
 
       const saveResult = await saveDraftOrder(
         {
@@ -2002,12 +2006,19 @@ function PosPageInner() {
         variant: "success",
         duration: 5000,
       });
-      state.clearCart();
-      setMobileCartOpen(false);
-      // Auto bump draft count badge (lấy bên dưới qua useEffect refresh)
+      const saved = datLaiTabDaLuu(
+        tabsRef.current, savedTabId, clientSessionId, activeTabIdRef.current, nextClientSessionId,
+      );
+      if (saved) {
+        commitTabs(saved.tabs);
+        if (saved.clearActiveCart) {
+          cartLoadRequestRef.current += 1;
+          state.clearCart();
+          datNgayHoaDon(null, "");
+          setMobileCartOpen(false);
+        }
+      }
       setDraftCountTrigger((t) => t + 1);
-      // Regen sessionId — đơn nháp đã lưu, cashier mở cart mới = session mới
-      setClientSessionId(nextClientSessionId());
     } catch (err: any) {
       // CEO 10/06/2026 — FIX mất đơn: lưu nháp thất bại (token lỗi/mạng rớt)
       // trước đây chỉ toast thoáng 4s → cashier bỏ lỡ → tưởng đã lưu → mất đơn
@@ -2031,7 +2042,7 @@ function PosPageInner() {
       setSubmitting(null);
       submitLockRef.current = false;
     }
-  }, [state, toast, clientSessionId]);
+  }, [state, toast, clientSessionId, currentBranch?.id, commitTabs, datNgayHoaDon]);
 
   /**
    * handleComplete — F10 thanh toán.
@@ -2057,7 +2068,7 @@ function PosPageInner() {
     const isCheckoutCartActive = () => activeTabIdRef.current === checkoutTabId
       && tabsRef.current.some((tab) => tab.id === checkoutTabId && tab.sessionId === clientSessionId);
     const finishPaidCart = () => {
-      const result = ketThucTabDaThanhToan(
+      const result = datLaiTabDaLuu(
         tabsRef.current, checkoutTabId, clientSessionId, activeTabIdRef.current, nextClientSessionId,
       );
       if (!result) return;
@@ -2329,7 +2340,9 @@ function PosPageInner() {
     setSubmitting("complete");
     try {
       const ctx = await getCurrentContext();
-      if (!ctx) throw new Error("Không xác định được chi nhánh");
+      if (!currentBranch?.id || ctx.branchId !== currentBranch.id) {
+        throw new Error("Chi nhánh đã thay đổi. Kiểm tra lại trước khi thanh toán.");
+      }
 
       // Read stock again immediately before checkout. The browser snapshot can be
       // stale when another terminal has just sold or adjusted the same product.
@@ -2345,7 +2358,7 @@ function PosPageInner() {
             })),
             ctx.branchId,
           );
-          state.applyStockSnapshot(freshStockSnapshot);
+          if (branchIdRef.current === ctx.branchId) state.applyStockSnapshot(freshStockSnapshot);
         } catch (error) {
           console.warn("[POS] checkout stock refresh failed:", error);
           throw new Error(
@@ -2477,6 +2490,9 @@ function PosPageInner() {
         effectiveDraftRevision = latestDraft.revision;
       }
 
+      if (branchIdRef.current !== ctx.branchId) {
+        throw new Error("Chi nhánh đã thay đổi. Kiểm tra lại trước khi thanh toán.");
+      }
       if (effectiveDraftId) {
         // Drafts live server-side already; block offline completion to avoid dupe.
         if (!networkStatus.isOnline) {

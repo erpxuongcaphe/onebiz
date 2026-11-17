@@ -148,8 +148,8 @@ export function dongTab<T extends TabHoaDon>(
   };
 }
 
-/** Reset only the tab and session that the completed checkout belongs to. */
-export function ketThucTabDaThanhToan<T extends TabHoaDon>(
+/** Reset only the tab and session that the saved document belongs to. */
+export function datLaiTabDaLuu<T extends TabHoaDon>(
   tabs: T[],
   paidTabId: string,
   paidSessionId: string,

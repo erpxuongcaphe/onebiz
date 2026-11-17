@@ -6,7 +6,7 @@ import {
   themTab,
   dongTab,
   doiChiNhanh,
-  ketThucTabDaThanhToan,
+  datLaiTabDaLuu,
   type TabHoaDon,
 } from "../../app/pos/lib/pos-tab-transitions";
 
@@ -207,7 +207,7 @@ describe("POS Retail kết thúc thanh toán theo tab và phiên", () => {
     const paid = tab("A", { snapshot: { gio: "A" }, itemCount: 3, ngayHoaDon: NGAY_A });
     const active = tab("B");
     const waiting = tab("C", { snapshot: { gio: "C" }, itemCount: 7 });
-    const result = ketThucTabDaThanhToan([paid, active, waiting], "A", paid.sessionId, "B", () => "new-session");
+    const result = datLaiTabDaLuu([paid, active, waiting], "A", paid.sessionId, "B", () => "new-session");
 
     expect(result?.clearActiveCart).toBe(false);
     expect(result?.tabs).toEqual([tab("A", { sessionId: "new-session" }), active, waiting]);
@@ -216,10 +216,10 @@ describe("POS Retail kết thúc thanh toán theo tab và phiên", () => {
   it("chỉ dọn giỏ đang mở nếu giỏ đó đúng là phiên vừa thanh toán", () => {
     const active = tab("A");
     const waiting = tab("B", { snapshot: { gio: "B" }, itemCount: 7 });
-    const result = ketThucTabDaThanhToan([active, waiting], "A", active.sessionId, "A", () => "new-session");
+    const result = datLaiTabDaLuu([active, waiting], "A", active.sessionId, "A", () => "new-session");
 
     expect(result?.clearActiveCart).toBe(true);
     expect(result?.tabs[1]).toBe(waiting);
-    expect(ketThucTabDaThanhToan([active, waiting], "A", "old-session", "A", () => "unused")).toBeNull();
+    expect(datLaiTabDaLuu([active, waiting], "A", "old-session", "A", () => "unused")).toBeNull();
   });
 });
