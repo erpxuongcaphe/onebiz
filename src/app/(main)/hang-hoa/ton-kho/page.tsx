@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast, useBranchFilter, useAuth } from "@/lib/contexts";
 import { formatCurrency, formatDate, formatStockQuantity } from "@/lib/format";
+import { RetailProductSalesTab } from "@/components/shared/retail-product-sales-tab";
 import { exportToCsv, exportToExcel } from "@/lib/utils/export";
 import { inventoryCatalogExport } from "@/lib/reports/inventory-catalog-export";
 import { getStockMovementUnitValue, getStockMovementTotalValue } from "@/lib/stock-movement-values";
@@ -109,6 +110,8 @@ function StockRowDetail({
   const [conversions, setConversions] = useState<UOMConversion[]>([]);
   const [loadingBranches, setLoadingBranches] = useState(true);
   const [loadingMovements, setLoadingMovements] = useState(true);
+  const [movementsFailed, setMovementsFailed] = useState(false);
+  const [movementsAttempt, setMovementsAttempt] = useState(0);
 
   // CEO 28/05/2026: state cho dialog "Điều chỉnh tồn" (2 bước: nhập → cảnh báo).
   const [adjustOpen, setAdjustOpen] = useState(false);
@@ -196,28 +199,6 @@ function StockRowDetail({
         if (!cancelled) setLoadingBranches(false);
       }
     })();
-    (async () => {
-      setLoadingMovements(true);
-      try {
-        // CEO 17/07 (Thẻ kho Đợt 4): thẻ kho đúng chi nhánh + tồn CUỐI cộng dồn
-        // tiến từ đầu sổ (getStockCard fetch full ledger — max 114 dòng/cặp nên
-        // rẻ). Trả kèm drift để cảnh báo sổ lệch tồn hệ thống.
-        const res = await getStockCard(row.productId, row.branchId);
-        if (!cancelled) {
-          setMovements(res.data);
-          setMovementsTotal(res.total);
-          setStockDrift({ computed: res.computedFinal, system: res.systemStock });
-        }
-      } catch {
-        if (!cancelled) {
-          setMovements([]);
-          setMovementsTotal(0);
-          setStockDrift(null);
-        }
-      } finally {
-        if (!cancelled) setLoadingMovements(false);
-      }
-    })();
     // Day 19/05/2026 (CEO Smart Hybrid): load UOM conversions để hiển thị
     // quy đổi (vd "24 hộp = 2 thùng") trong detail panel + movements tab.
     (async () => {
@@ -233,6 +214,25 @@ function StockRowDetail({
     };
     // row.branchId trong deps: đổi dòng (chi nhánh khác) phải nạp lại sổ đúng CN.
   }, [row.productId, row.branchId]);
+
+  useEffect(() => {
+    let active = true;
+    setLoadingMovements(true);
+    setMovementsFailed(false);
+    setMovements([]);
+    setMovementsTotal(0);
+    setStockDrift(null);
+    getStockCard(row.productId, row.branchId)
+      .then((result) => {
+        if (!active) return;
+        setMovements(result.data);
+        setMovementsTotal(result.total);
+        setStockDrift({ computed: result.computedFinal, system: result.systemStock });
+      })
+      .catch(() => { if (active) setMovementsFailed(true); })
+      .finally(() => { if (active) setLoadingMovements(false); });
+    return () => { active = false; };
+  }, [row.productId, row.branchId, movementsAttempt]);
 
   const totalQty = branches.reduce((s, b) => s + b.quantity, 0);
   const totalReserved = branches.reduce((s, b) => s + b.reserved, 0);
@@ -430,11 +430,16 @@ function StockRowDetail({
               </div>
             ),
           },
+          ...(row.productType === "sku" ? [{
+            id: "retail_sales",
+            label: "Lịch sử bán",
+            content: <RetailProductSalesTab key={`${row.productId}:${row.branchId}`} productId={row.productId} branchId={row.branchId} />,
+          }] : []),
           {
             id: "movements",
             // Đếm bằng total THẬT từ server (count exact) — movements.length
             // kẹt trần 50 (pageSize) nên trước đây sổ dài hơn vẫn hiện "(50)".
-            label: `Lịch sử xuất nhập (${movementsTotal})`,
+            label: loadingMovements || movementsFailed ? "Lịch sử xuất nhập" : `Lịch sử xuất nhập (${movementsTotal})`,
             content: (
               <div className="space-y-2">
                 {/* CEO 17/07: tự chứng minh phạm vi — sổ dưới đây CHỈ của chi
@@ -464,6 +469,11 @@ function StockRowDetail({
                 {loadingMovements ? (
                   <div className="text-sm text-muted-foreground py-4 text-center">
                     Đang tải...
+                  </div>
+                ) : movementsFailed ? (
+                  <div role="alert" className="flex items-center justify-center gap-3 py-4 text-sm text-destructive">
+                    Không tải được lịch sử xuất nhập.
+                    <Button size="sm" variant="outline" onClick={() => setMovementsAttempt((value) => value + 1)}>Thử lại</Button>
                   </div>
                 ) : movements.length === 0 ? (
                   <div className="text-sm text-muted-foreground py-4 text-center">

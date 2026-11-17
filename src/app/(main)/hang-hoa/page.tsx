@@ -53,6 +53,7 @@ import { bulkImportProducts } from "@/lib/services/supabase/excel-import";
 import { ProductLotsTab } from "@/components/shared/product-lots-tab";
 import { ProductUomConversionsTab } from "@/components/shared/product-uom-conversions-tab";
 import { ProductStockMovementsTab } from "@/components/shared/product-stock-movements-tab";
+import { RetailProductSalesTab } from "@/components/shared/retail-product-sales-tab";
 import { ProductBranchStockTab } from "@/components/shared/product-branch-stock-tab";
 import { ProductPlatformPricesTab } from "@/components/shared/product-platform-prices-tab";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -343,6 +344,11 @@ function ProductDetail({
               />
             ),
           },
+          ...(!isNvl && product.channel !== "fnb" ? [{
+            id: "retail_sales",
+            label: "Lịch sử bán",
+            content: <RetailProductSalesTab key={`${product.id}:${stockCardBranchId ?? "all"}`} productId={product.id} branchId={stockCardBranchId} />,
+          }] : []),
           {
             id: "stock_card",
             label: "Thẻ kho",
