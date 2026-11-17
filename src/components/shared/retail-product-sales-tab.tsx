@@ -16,7 +16,7 @@ export function RetailProductSalesTab({ productId, branchId }: { productId: stri
 
   useEffect(() => {
     let active = true;
-    getSalesHistory(productId, { page, pageSize, branchId }).then(
+    getSalesHistory(productId, { page: page - 1, pageSize, branchId }).then(
       (data) => { if (active) setResult(data); },
       () => { if (active) setFailed(true); },
     );
