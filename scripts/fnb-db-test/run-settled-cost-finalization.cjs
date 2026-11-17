@@ -166,6 +166,7 @@ await db.exec(`
 `);
 await db.exec("alter table products add column name text not null default 'Món kiểm thử';");
 await db.exec(readSql(salePricing));
+await db.exec(readSql('supabase/migrations/20261117073859_fnb_cost_missing_keeps_checkout.sql'));
 const premium = await setup(1000,{material:1004,price:2,saleTotal:52000});
 await db.query('update fnb_sale_cost_shortfalls_00473 set cost_known=true where id=$1',[premium.short]);
 await db.query('select public._snapshot_fnb_invoice_line_cost_00412($1,0,0)',[premium.line]);
@@ -174,8 +175,8 @@ const report = async invoice => (await value('select get_profit_and_loss_report_
 assert.equal((await lineStatus(premium.line)).fnb_cost_state,'estimated');
 assert.equal(Number(await cost(premium.line)),20);
 assert.deepEqual(await report(premium.inv),{sales_cogs:20,missing_sales_cost_lines:0,estimated_sales_cost_lines:1});
-// A line with no valid basis rejects checkout before financial posting.
-// Keep an existing legacy unknown line to exercise automatic reconciliation.
+// An unknown-cost line still posts and preserves the link to incoming costs.
+// The other line must keep its estimate until its own receipt arrives.
 await db.exec(`
  insert into invoice_items (id,invoice_id,product_id,quantity,total)
  values('${id(1010)}','${premium.inv}','${id(3)}',1,47000);
@@ -184,14 +185,11 @@ await db.exec(`
  insert into fnb_sale_cost_shortfalls_00473(id,tenant_id,branch_id,product_id,invoice_id,cost_event_id,quantity,pending_quantity,estimated_unit_cost,settled_actual_cost)
  values('${id(1012)}','${id(1)}','${id(2)}','${id(1014)}','${premium.inv}','${id(1011)}',5,5,0,0);
 `);
-await assert.rejects(
-  db.query('select public._snapshot_fnb_invoice_line_cost_00412($1,1,20)',[id(1010)]),
-  {message:'FNB_SALE_LINE_COST_REQUIRED', detail:'Món kiểm thử'},
-);
+await db.query('select public._snapshot_fnb_invoice_line_cost_00412($1,1,20)',[id(1010)]);
 assert.equal((await lineStatus(id(1010))).unit_cost,null);
-assert.equal((await value('select count(*)::int n from private.fnb_cost_event_lines_20261029 where invoice_item_id=$1',[id(1010)]))[0].n,0);
-await db.query('insert into private.fnb_cost_event_lines_20261029 values($1,$2)',[id(1011),id(1010)]);
-assert.equal((await lineStatus(id(1010))).fnb_cost_state,null);
+assert.equal((await lineStatus(id(1010))).fnb_cost_state,'missing');
+assert.equal((await value('select count(*)::int n from private.fnb_cost_event_lines_20261029 where invoice_item_id=$1',[id(1010)]))[0].n,1);
+assert.equal(Number((await lineStatus(id(1010))).total),47000);
 assert.deepEqual(await report(premium.inv),{sales_cogs:20,missing_sales_cost_lines:1,estimated_sales_cost_lines:1});
 
 await db.query('insert into fnb_branch_product_cost_balances(tenant_id,branch_id,product_id,deficit_quantity) values($1,$2,$3,10),($1,$2,$4,5)',[id(1),id(2),id(1004),id(1014)]);
@@ -218,5 +216,5 @@ await db.query('update fnb_sale_cost_shortfalls_00473 set cost_known=true where 
 await db.query('select public._snapshot_fnb_invoice_line_cost_00412($1,0,0)',[free.line]);
 assert.equal(Number(await cost(free.line)),0);
 assert.equal((await lineStatus(free.line)).fnb_cost_state,'estimated');
-console.log('PASS: F&B estimate, unknown-cost checkout rejection, legacy settlement, partial production, receipt, confirmed zero, replay and reporting.');
+console.log('PASS: F&B estimate, unknown-cost checkout, automatic settlement, partial production, receipt, confirmed zero, replay and reporting.');
 }catch(e){console.error(e);process.exitCode=1;}finally{await db.close();}})();
