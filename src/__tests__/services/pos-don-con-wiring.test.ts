@@ -25,7 +25,7 @@ function khoiOnPick(): string {
 describe("POS Xử lý đặt hàng — tạo đơn con, không nạp đơn gốc", () => {
   it("onPick gọi createChildSaleFromOrder rồi nạp ĐƠN CON (childId)", () => {
     const khoi = khoiOnPick();
-    expect(khoi).toContain("createChildSaleFromOrder(orderId)");
+    expect(khoi).toContain("createChildSaleFromOrder(orderId, requestId)");
     expect(khoi).toContain("getDraftOrderById(child.childId)");
   });
 

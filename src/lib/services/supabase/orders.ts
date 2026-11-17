@@ -671,7 +671,7 @@ export interface DraftOrderSummary {
   total: number;
   subtotal: number;
   discountAmount: number;
-  itemCount: number;
+  itemCount?: number;
   note: string | null;
   createdAt: string;
   /** CEO 04/05/2026: thông tin cho recovery dialog. */
@@ -694,6 +694,7 @@ export interface DraftOrderSummary {
 
 export interface DraftOrderDetail extends DraftOrderSummary {
   branchId: string;
+  itemCount: number;
   items: Array<{
     id: string;
     productId: string;
@@ -881,7 +882,7 @@ export async function listDraftOrders(
   let query = (supabase as any)
     .from("invoices")
     .select(
-      "id, code, customer_id, customer_name, total, subtotal, discount_amount, note, created_at, updated_at, auto_saved, client_session_id, draft_revision, created_by, profiles!invoices_created_by_fkey(full_name), invoice_items:invoice_items_scoped(product_name)",
+      "id, code, customer_id, customer_name, total, subtotal, discount_amount, note, created_at, updated_at, auto_saved, client_session_id, draft_revision, created_by, profiles!invoices_created_by_fkey(full_name)",
     )
     .eq("tenant_id", tenantId)
     .eq("status", "draft")
@@ -900,7 +901,6 @@ export async function listDraftOrders(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((row: any) => {
-    const items = Array.isArray(row.invoice_items) ? row.invoice_items : [];
     const profile = row.profiles as { full_name?: string } | null;
     return {
       id: row.id,
@@ -910,16 +910,10 @@ export async function listDraftOrders(
       total: row.total ?? 0,
       subtotal: row.subtotal ?? 0,
       discountAmount: row.discount_amount ?? 0,
-      itemCount: items.length,
       note: row.note,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       createdByName: profile?.full_name ?? undefined,
-      // 3 tên SP đầu cho preview card (recovery dialog)
-      itemsSummary: items
-        .slice(0, 3)
-        .map((it: { product_name?: string }) => it.product_name ?? "")
-        .filter(Boolean),
       autoSaved: row.auto_saved ?? false,
       clientSessionId: row.client_session_id ?? null,
       revision: Number(row.draft_revision ?? 0),
@@ -953,12 +947,18 @@ export async function getDraftOrderById(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const raw = data as any;
-  // Filter the scoped view directly by invoice ID so PostgreSQL can use
-  // the invoice_items(invoice_id) index before checking line visibility.
-  const { data: items, error: itemError } = await supabase
-    .from("invoice_items_scoped")
-    .select("id, product_id, variant_id, product_name, unit, quantity, unit_price, discount, total, note, transaction_unit, transaction_quantity, transaction_unit_price")
-    .eq("invoice_id", invoiceId);
+  const isRetailDraft = raw.status === "draft"
+    && (raw.source == null || raw.source === "pos" || raw.source === "internal");
+  const { data: items, error: itemError } = isRetailDraft
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ? await (supabase as any).rpc("read_retail_draft_lines", {
+        p_invoice_id: invoiceId,
+        p_branch_id: raw.branch_id,
+      })
+    : await supabase
+        .from("invoice_items_scoped")
+        .select("id, product_id, variant_id, product_name, unit, quantity, unit_price, discount, total, note, transaction_unit, transaction_quantity, transaction_unit_price")
+        .eq("invoice_id", invoiceId);
   if (itemError) handleError(itemError, "getDraftOrderById.items");
   if (!items?.length) {
     throw new Error("Không đọc được mặt hàng của phiếu nháp.");
@@ -1475,19 +1475,25 @@ const MA_LOI_CHUA_CO_RPC = new Set(["42883", "PGRST202"]);
  * mới (mã NH mới, client session mới, chép mặt hàng) — thu ngân muốn bao
  * nhiêu đơn con cũng được, RPC không giới hạn.
  */
+export function createChildSaleFromOrder(orderId: string): Promise<ChildSaleCreated>;
+export function createChildSaleFromOrder(orderId: string, requestId: string): Promise<ChildSaleCreated | null>;
 export async function createChildSaleFromOrder(
   orderId: string,
-): Promise<ChildSaleCreated> {
+  requestId?: string,
+): Promise<ChildSaleCreated | null> {
   const supabase = getClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any).rpc(
-    "create_child_sale_from_order",
-    { p_order_id: orderId },
+    requestId ? "open_retail_order_draft" : "create_child_sale_from_order",
+    requestId ? { p_order_id: orderId, p_request_id: requestId } : { p_order_id: orderId },
   );
   if (error) {
+    if (requestId && error.code === "P0002" && error.message === "RETAIL_ORDER_DRAFT_NO_LONGER_OPEN") {
+      return null;
+    }
     if (MA_LOI_CHUA_CO_RPC.has(error.code ?? "")) {
       throw new Error(
-        "Máy chủ chưa bật tính năng đơn bán con (migration 00331 chưa chạy).",
+        "Máy chủ chưa sẵn sàng mở đơn bán. Vui lòng báo quản lý.",
       );
     }
     handleError(error, "createChildSaleFromOrder");

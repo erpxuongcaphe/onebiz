@@ -443,7 +443,7 @@ function PosPageInner() {
   const [draftModalOpen, setDraftModalOpen] = useState(false);
   // CEO 14/07: "Xử lý đặt hàng" — chọn đơn đặt hàng (DH) nạp vào POS.
   const [processOrderOpen, setProcessOrderOpen] = useState(false);
-  const pendingOrderDrafts = useRef(new Map<string, Awaited<ReturnType<typeof createChildSaleFromOrder>>>());
+  const pendingOrderRequests = useRef(new Map<string, string>());
   // CEO 10/06/2026 — badge số nháp + trigger refresh sau save/delete
   const [draftCount, setDraftCount] = useState<number>(0);
   const [draftCountTrigger, setDraftCountTrigger] = useState(0);
@@ -4164,6 +4164,8 @@ function PosPageInner() {
         }}
       />
       <DraftListModal
+        key={currentBranch?.id}
+        branchId={currentBranch?.id ?? null}
         open={draftModalOpen}
         onClose={() => setDraftModalOpen(false)}
         onLoad={async (draft) => {
@@ -4193,20 +4195,36 @@ function PosPageInner() {
         onClose={() => setProcessOrderOpen(false)}
         branchId={currentBranch?.id ?? null}
         onPick={async (orderId) => {
-          // CEO 17/08/2026 — mô hình đơn con (00331): TRƯỚC ĐÂY nạp thẳng đơn
-          // gốc vào giỏ → thanh toán biến đơn gốc thành hóa đơn, 2 tab mở cùng
-          // đơn dùng chung session đè nhau. NAY mỗi lần chọn là máy chủ tạo
-          // MỘT ĐƠN BÁN CON mới (id/mã NH/session riêng, chép mặt hàng) và
-          // POS nạp ĐƠN CON — đơn gốc giữ nguyên để đối chiếu, muốn bán bao
-          // nhiêu đợt thì bấm bấy nhiêu lần.
+          if (!tenant?.id || !user?.id || !currentBranch?.id) return;
           const token = beginCartLoad();
+          const requestKey = `onebiz:retail:open-order:${tenant.id}:${user.id}:${currentBranch.id}:${orderId}`;
+          let requestId = pendingOrderRequests.current.get(requestKey);
           try {
-            let child = pendingOrderDrafts.current.get(orderId);
-            if (!child) {
-              child = await createChildSaleFromOrder(orderId);
-              pendingOrderDrafts.current.set(orderId, child);
-            }
+            requestId ??= sessionStorage.getItem(requestKey) ?? undefined;
+          } catch {
+            // In-memory retry is still available when the browser blocks storage.
+          }
+          requestId ??= nextClientSessionId();
+          pendingOrderRequests.current.set(requestKey, requestId);
+          try { sessionStorage.setItem(requestKey, requestId); } catch {}
+          const clearRequest = () => {
+            pendingOrderRequests.current.delete(requestKey);
+            try { sessionStorage.removeItem(requestKey); } catch {}
+          };
+
+          let child: Awaited<ReturnType<typeof createChildSaleFromOrder>> = null;
+          try {
+            child = await createChildSaleFromOrder(orderId, requestId);
             if (!isCartLoadCurrent(token)) return;
+            if (!child) {
+              clearRequest();
+              toast({
+                title: "Nháp đã đóng hoặc đã xóa",
+                description: "Kiểm tra đơn đặt rồi bấm Chọn nếu cần mở đợt giao mới.",
+                variant: "error",
+              });
+              return;
+            }
 
             const detail = await getDraftOrderById(child.childId);
             if (!isCartLoadCurrent(token)) return;
@@ -4222,7 +4240,7 @@ function PosPageInner() {
             const applied = await applyDraftToActiveTab(detail, token);
             if (!applied) return;
 
-            pendingOrderDrafts.current.delete(orderId);
+            clearRequest();
             setProcessOrderOpen(false);
             setMobileCartOpen(true);
             toast({
@@ -4232,7 +4250,7 @@ function PosPageInner() {
             });
           } catch (err) {
             if (!isCartLoadCurrent(token)) return;
-            const savedDraft = pendingOrderDrafts.current.get(orderId);
+            const savedDraft = child;
             toast({
               title: savedDraft ? "Chưa tải được đơn bán vào giỏ" : "Không tạo được đơn bán",
               description: savedDraft
@@ -5666,10 +5684,12 @@ function ProcessOrderModal({
 
 /** Draft list modal — load saved drafts (F3) */
 function DraftListModal({
+  branchId,
   open,
   onClose,
   onLoad,
 }: {
+  branchId: string | null;
   open: boolean;
   onClose: () => void;
   onLoad: (draft: DraftOrderDetail) => Promise<void>;
@@ -5679,32 +5699,28 @@ function DraftListModal({
   const [deleting, setDeleting] = useState<string | null>(null);
   const { toast } = useToast();
 
-  // Fetch drafts when modal opens
-  // CEO 05/06/2026: bỏ silent catch — hiện lỗi rõ để debug khi DB có draft
-  // nhưng UI báo "Chưa có". Trước đây nuốt mọi lỗi → giả thuyết "empty"
-  // luôn thắng → CEO không biết lỗi RLS / query.
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [retry, setRetry] = useState(0);
+
   useEffect(() => {
-    if (!open) return;
+    if (!open || !branchId) return;
+    let cancelled = false;
     setLoading(true);
-    listDraftOrders()
+    setLoadFailed(false);
+    listDraftOrders(branchId, 100)
       .then((rows) => {
-        if (rows.length === 0) {
-          console.warn("[DraftListModal] listDraftOrders trả về 0 rows");
-        }
-        setDrafts(rows);
+        if (!cancelled) setDrafts(rows);
       })
       .catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : "Không tải được nháp";
-        console.error("[DraftListModal] listDraftOrders lỗi:", err);
-        toast({
-          title: "Không tải được đơn nháp",
-          description: msg,
-          variant: "error",
-        });
-        setDrafts([]);
+        if (cancelled) return;
+        console.error("[DraftListModal] listDraftOrders:", err);
+        setLoadFailed(true);
       })
-      .finally(() => setLoading(false));
-  }, [open, toast]);
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [open, branchId, retry]);
 
   const handleLoad = useCallback(
     async (id: string) => {
@@ -5767,6 +5783,16 @@ function DraftListModal({
             <div className="flex items-center justify-center py-12">
               <Icon name="progress_activity" className="animate-spin text-primary" />
             </div>
+          ) : loadFailed || !branchId ? (
+            <div role="alert" className="flex flex-col items-center gap-2 py-12 text-sm">
+              <p>{branchId ? "Không tải được đơn nháp" : "Chọn chi nhánh để xem đơn nháp"}</p>
+              {branchId && (
+                <button type="button" className="rounded border px-3 py-1.5 text-primary"
+                  onClick={() => setRetry((value) => value + 1)}>
+                  Thử lại
+                </button>
+              )}
+            </div>
           ) : drafts.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
               <Icon name="save" size={32} className="mb-2 text-muted-foreground/35" />
@@ -5791,10 +5817,7 @@ function DraftListModal({
                       <span className="text-xs text-foreground truncate">
                         {draft.customerName || "Khách lẻ"}
                       </span>
-                      <span className="text-xs text-muted-foreground">·</span>
-                      <span className="text-xs text-muted-foreground">
-                        {draft.itemCount} SP
-                      </span>
+
                     </div>
                     {draft.note && (
                       <p className="text-xs text-muted-foreground truncate mt-0.5">{draft.note}</p>
