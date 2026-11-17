@@ -254,8 +254,8 @@ export async function getPurchaseCancelImpact(
     stockLineCount: 0,
     branchName: null,
     negativeStock: [],
-    cashDirection: null,
-    cashAmount: 0,
+    cashDirection: paid > 0 ? "collect_from_supplier" : null,
+    cashAmount: paid,
     suggestedMethod: "cash",
     debtAmount: 0,
     counterpartyDebtBefore: null,
@@ -290,10 +290,6 @@ export async function getPurchaseCancelImpact(
     return { productName: risk.product_name, available: null, needed, unit: typeof risk.unit === "string" ? risk.unit : "" };
   });
 
-  if (paid > 0) {
-    base.cashDirection = "collect_from_supplier";
-    base.cashAmount = paid;
-  }
   if (debt > 0) {
     base.debtAmount = debt;
   }

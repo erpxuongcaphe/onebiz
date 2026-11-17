@@ -115,8 +115,11 @@ export function CancelImpactDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target?.id, target?.type]);
 
+  const purchaseBlocked = target?.type === "purchase" && !!impact &&
+    (impact.cashAmount > 0 || impact.negativeStock.length > 0);
+
   const handleConfirm = async () => {
-    if (!target || !impact) return;
+    if (!target || !impact || purchaseBlocked) return;
     if (reasonRequired && reason.trim().length < reasonMinLength) return;
     setSaving(true);
     try {
@@ -180,7 +183,7 @@ export function CancelImpactDialog({
             <Icon name="progress_activity" size={16} className="animate-spin mr-1.5" />
             Đang kiểm tra tác động...
           </div>
-        ) : !impact.hasSideEffects ? (
+        ) : !impact.hasSideEffects && !purchaseBlocked ? (
           // ─── Nháp/đặt hàng/chưa nhận — không phát sinh gì ───
           <p className="text-sm text-muted-foreground py-1">
             {isInvoice ? "Đơn chưa phát sinh giao dịch" : "Phiếu chưa nhập kho"} —
@@ -238,7 +241,7 @@ export function CancelImpactDialog({
               <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-2.5 text-sm">
                 <div className="flex items-center gap-1.5 font-medium text-destructive">
                   <Icon name="warning" size={15} />
-                  Có nguy cơ tồn âm khi hoàn nhập
+                  {isInvoice ? "Có nguy cơ tồn âm khi hoàn nhập" : "Cần đối soát tồn trước khi hủy"}
                 </div>
                 <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
                   {impact.negativeStock.slice(0, 4).map((n, i) => (
@@ -252,13 +255,20 @@ export function CancelImpactDialog({
                   )}
                 </ul>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Đã bán hoặc dùng bớt. Việc tiếp tục có thể cần quyền điều chỉnh tồn; anh/chị cũng có thể cân nhắc <strong>Trả hàng một phần</strong>.
+                  {isInvoice
+                    ? <>Đã bán hoặc dùng bớt. Việc tiếp tục có thể cần quyền điều chỉnh tồn; anh/chị cũng có thể cân nhắc <strong>Trả hàng một phần</strong>.</>
+                    : "Nếu nhập sai số lượng hoặc đơn giá, mở Sửa số lượng và đơn giá trên phiếu để xem phần chênh lệch."}
                 </p>
               </div>
             )}
 
             {/* Ô HOÀN TIỀN — hổ phách, việc người phải làm tay + chọn phương thức */}
-            {impact.cashAmount > 0 && (
+            {!isInvoice && impact.cashAmount > 0 && (
+              <p role="alert" className="rounded-lg border border-amber-400/50 bg-amber-50 p-2.5 text-sm dark:bg-amber-950/30">
+                Phiếu đã trả nhà cung cấp {formatCurrency(impact.cashAmount)}. Đối soát khoản thanh toán trước khi hủy.
+              </p>
+            )}
+            {isInvoice && impact.cashAmount > 0 && (
               <div className="rounded-lg border border-amber-400/50 bg-amber-50 p-2.5 dark:bg-amber-950/30">
                 <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-1.5 text-sm font-semibold text-amber-800 dark:text-amber-300">
@@ -294,7 +304,9 @@ export function CancelImpactDialog({
               </div>
             )}
 
-            {/* Lý do — bắt buộc khi backend cần lưu vết hủy chứng từ đã ghi sổ. */}
+          </div>
+        )}
+        {impact && !loadingImpact && !purchaseBlocked && (reasonRequired || impact.hasSideEffects) && (
             <div className="space-y-1">
               <Input
                 value={reason}
@@ -305,6 +317,8 @@ export function CancelImpactDialog({
                     : "Lý do hủy (không bắt buộc)"
                 }
                 aria-invalid={reasonInvalid}
+                aria-label="Lý do hủy"
+                maxLength={target?.type === "purchase" ? 500 : undefined}
                 aria-describedby={reasonRequired ? "cancel-reason-help" : undefined}
                 className="h-8 text-sm"
                 disabled={saving}
@@ -322,7 +336,6 @@ export function CancelImpactDialog({
                 </p>
               )}
             </div>
-          </div>
         )}
 
         <DialogFooter className="flex-col gap-2 sm:flex-row">
@@ -333,11 +346,11 @@ export function CancelImpactDialog({
             variant="destructive"
             size="sm"
             className="w-full sm:w-auto"
-            disabled={saving || loadingImpact || !impact || reasonInvalid}
+            disabled={saving || loadingImpact || !impact || reasonInvalid || purchaseBlocked}
             onClick={handleConfirm}
           >
             {saving && <Icon name="progress_activity" size={15} className="mr-1.5 animate-spin" />}
-            {impact?.cashAmount ? "Xác nhận hủy & hoàn tiền" : "Xác nhận hủy"}
+            {isInvoice && impact?.cashAmount ? "Xác nhận hủy & hoàn tiền" : "Xác nhận hủy"}
           </Button>
         </DialogFooter>
       </DialogContent>

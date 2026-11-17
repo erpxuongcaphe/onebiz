@@ -55,6 +55,7 @@ export const REFERENCE_TYPE_LABELS: Record<string, string> = {
   // · disposal_export 3 · adjustment 1.
   initial_stock_reset: "Tồn đầu kỳ (ghi đè)",
   purchase_order_revert: "Hủy phiếu nhập (đảo kho)",
+  purchase_order_correction: "Điều chỉnh phiếu nhập",
   disposal_export: "Phiếu xuất hủy",
   adjustment: "Điều chỉnh tồn",
 };
