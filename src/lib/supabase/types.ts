@@ -3097,6 +3097,10 @@ export interface Database {
         Args: { p_invoice_id: string; p_branch_id: string };
         Returns: { id: string; product_name: string; quantity: number; unit_price: number; total: number; note: string | null }[];
       };
+      read_retail_sku_sales_history: {
+        Args: { p_product_id: string; p_branch_id: string | null; p_offset: number; p_limit: number };
+        Returns: Json;
+      };
       get_fnb_day_sales_summary: {
         Args: { p_branch_id: string; p_day: string };
         Returns: Json;
