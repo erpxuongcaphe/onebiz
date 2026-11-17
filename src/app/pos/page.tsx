@@ -119,7 +119,7 @@ import { Button } from "@/components/ui/button";
 
 import { usePosState, type OrderLine, type DiscountInput, type SellingMode, type DeliveryInfo, type PosSnapshot } from "./hooks/use-pos-state";
 import { loadRetailWorkspace, saveRetailWorkspace, planRetailWorkspaceRestore } from "./lib/retail-workspace-storage";
-import { chuyenTab, themTab, dongTab, doiChiNhanh } from "./lib/pos-tab-transitions";
+import { chuyenTab, themTab, dongTab, doiChiNhanh, datLaiTabDaLuu } from "./lib/pos-tab-transitions";
 import { ProductGrid } from "./components/product-grid";
 import { CustomerPicker } from "./components/customer-picker";
 import { ReceiverCustomerSelect } from "@/components/shared/receiver-customer-select";
@@ -443,7 +443,7 @@ function PosPageInner() {
   const [draftModalOpen, setDraftModalOpen] = useState(false);
   // CEO 14/07: "Xử lý đặt hàng" — chọn đơn đặt hàng (DH) nạp vào POS.
   const [processOrderOpen, setProcessOrderOpen] = useState(false);
-  const pendingOrderDrafts = useRef(new Map<string, Awaited<ReturnType<typeof createChildSaleFromOrder>>>());
+  const pendingOrderRequests = useRef(new Map<string, string>());
   // CEO 10/06/2026 — badge số nháp + trigger refresh sau save/delete
   const [draftCount, setDraftCount] = useState<number>(0);
   const [draftCountTrigger, setDraftCountTrigger] = useState(0);
@@ -1946,11 +1946,15 @@ function PosPageInner() {
 
   const handleSaveDraft = useCallback(async () => {
     if (submitLockRef.current) return;
+    const savedTabId = activeTabIdRef.current;
+    const savedBranchId = currentBranch?.id;
     submitLockRef.current = true;
     setSubmitting("draft");
     try {
       const ctx = await getCurrentContext();
-      if (!ctx) throw new Error("Không xác định được chi nhánh");
+      if (!savedBranchId || ctx.branchId !== savedBranchId) {
+        throw new Error("Chi nhánh đã thay đổi. Kiểm tra lại trước khi lưu nháp.");
+      }
 
       const saveResult = await saveDraftOrder(
         {
@@ -2002,12 +2006,19 @@ function PosPageInner() {
         variant: "success",
         duration: 5000,
       });
-      state.clearCart();
-      setMobileCartOpen(false);
-      // Auto bump draft count badge (lấy bên dưới qua useEffect refresh)
+      const saved = datLaiTabDaLuu(
+        tabsRef.current, savedTabId, clientSessionId, activeTabIdRef.current, nextClientSessionId,
+      );
+      if (saved) {
+        commitTabs(saved.tabs);
+        if (saved.clearActiveCart) {
+          cartLoadRequestRef.current += 1;
+          state.clearCart();
+          datNgayHoaDon(null, "");
+          setMobileCartOpen(false);
+        }
+      }
       setDraftCountTrigger((t) => t + 1);
-      // Regen sessionId — đơn nháp đã lưu, cashier mở cart mới = session mới
-      setClientSessionId(nextClientSessionId());
     } catch (err: any) {
       // CEO 10/06/2026 — FIX mất đơn: lưu nháp thất bại (token lỗi/mạng rớt)
       // trước đây chỉ toast thoáng 4s → cashier bỏ lỡ → tưởng đã lưu → mất đơn
@@ -2031,7 +2042,7 @@ function PosPageInner() {
       setSubmitting(null);
       submitLockRef.current = false;
     }
-  }, [state, toast, clientSessionId]);
+  }, [state, toast, clientSessionId, currentBranch?.id, commitTabs, datNgayHoaDon]);
 
   /**
    * handleComplete — F10 thanh toán.
@@ -2053,6 +2064,29 @@ function PosPageInner() {
    */
   const handleComplete = useCallback(async (intent?: "refund" | "credit", zeroConfirmed?: boolean) => {
     if (submitLockRef.current) return;
+    const checkoutTabId = activeTabIdRef.current;
+    const isCheckoutCartActive = () => activeTabIdRef.current === checkoutTabId
+      && tabsRef.current.some((tab) => tab.id === checkoutTabId && tab.sessionId === clientSessionId);
+    const finishPaidCart = () => {
+      const result = datLaiTabDaLuu(
+        tabsRef.current, checkoutTabId, clientSessionId, activeTabIdRef.current, nextClientSessionId,
+      );
+      if (!result) return;
+      commitTabs(result.tabs);
+      if (!result.clearActiveCart) return;
+
+      cartLoadRequestRef.current += 1;
+      state.clearCart();
+      if (state.sellingMode === "internal") state.setSellingMode("internal");
+      datNgayHoaDon(null, "");
+      setAppliedPromotion(null);
+      setPromotionCleared(false);
+      setAppliedRedeem(null);
+      setDiscountSource(null);
+      setSearchQuery("");
+      setMobileCartOpen(false);
+      setChangeDialog({ open: false, excess: 0 });
+    };
     const checkoutCustomer = state.customer;
     if (!hasSelectedRetailCustomer(checkoutCustomer)) {
       toast({
@@ -2081,6 +2115,7 @@ function PosPageInner() {
       }
     }
 
+    if (!isCheckoutCartActive() || submitLockRef.current) return;
     if (!checkoutShift) {
       toast({
         title: "Chưa mở ca",
@@ -2154,10 +2189,7 @@ function PosPageInner() {
         if (!result) return;
         notifyPosStockChanged(currentBranch!.id);
         notifyPosStockChanged(state.customer.branchId);
-        state.clearCart();
-        state.setSellingMode("internal");
-        setClientSessionId(nextClientSessionId());
-        setMobileCartOpen(false);
+        finishPaidCart();
         toast({ title: `Đã bán nội bộ ${result.code}`, description: "Đã lưu phiếu giao nội bộ. Không phát sinh thu, chi hoặc công nợ.", variant: "success" });
         if (autoPrint) {
           try {
@@ -2177,7 +2209,7 @@ function PosPageInner() {
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : "Vui lòng thử lại";
-        if (/POS_DRAFT_(CONFLICT|SESSION_CHANGED|NOT_FOUND|CHANGED_DURING_SAVE)/.test(message)) {
+        if (isCheckoutCartActive() && /POS_DRAFT_(CONFLICT|SESSION_CHANGED|NOT_FOUND|CHANGED_DURING_SAVE)/.test(message)) {
           setDraftConflict({ invoiceId: state.loadedDraftId });
           return;
         }
@@ -2308,7 +2340,9 @@ function PosPageInner() {
     setSubmitting("complete");
     try {
       const ctx = await getCurrentContext();
-      if (!ctx) throw new Error("Không xác định được chi nhánh");
+      if (!currentBranch?.id || ctx.branchId !== currentBranch.id) {
+        throw new Error("Chi nhánh đã thay đổi. Kiểm tra lại trước khi thanh toán.");
+      }
 
       // Read stock again immediately before checkout. The browser snapshot can be
       // stale when another terminal has just sold or adjusted the same product.
@@ -2324,7 +2358,7 @@ function PosPageInner() {
             })),
             ctx.branchId,
           );
-          state.applyStockSnapshot(freshStockSnapshot);
+          if (branchIdRef.current === ctx.branchId) state.applyStockSnapshot(freshStockSnapshot);
         } catch (error) {
           console.warn("[POS] checkout stock refresh failed:", error);
           throw new Error(
@@ -2456,6 +2490,9 @@ function PosPageInner() {
         effectiveDraftRevision = latestDraft.revision;
       }
 
+      if (branchIdRef.current !== ctx.branchId) {
+        throw new Error("Chi nhánh đã thay đổi. Kiểm tra lại trước khi thanh toán.");
+      }
       if (effectiveDraftId) {
         // Drafts live server-side already; block offline completion to avoid dupe.
         if (!networkStatus.isOnline) {
@@ -2796,31 +2833,21 @@ function PosPageInner() {
       if (!isOfflineCheckout && typeof window !== "undefined") {
         notifyPosStockChanged(ctx.branchId);
       }
-      state.clearCart();
-      // 00335: ngày chỉnh tay chỉ áp cho ĐÚNG hóa đơn vừa lập — trả về tự động
-      // để hóa đơn kế tiếp không vô tình mang ngày cũ. Đi qua `datNgayHoaDon`
-      // để ref của tab cũng sạch, nếu không lần chuyển tab kế tiếp sẽ cất
-      // nhầm ngày đã dùng xong vào tab.
-      datNgayHoaDon(null, "");
-      setAppliedPromotion(null);
-      setPromotionCleared(false);
-      setAppliedRedeem(null);
-      // P4-R2 13/06/2026 audit lần 2: reset discountSource cho idempotent.
-      // Trước đây dựa vào effect 1131 fallthrough (state.lines.length===0)
-      // để reset — nếu race với regen sessionId hoặc promotionCleared=true
-      // → đơn tiếp theo stuck source='manual' block auto-promo silent.
-      setDiscountSource(null);
-      setSearchQuery("");
-      setMobileCartOpen(false);
-      setChangeDialog({ open: false, excess: 0 });
-      // Regen sessionId cho đơn tiếp theo — đơn vừa xong đã có invoice
-      // với key này, đơn mới phải có key mới để không bị idempotent reject.
-      setClientSessionId(nextClientSessionId());
+      finishPaidCart();
     } catch (err: any) {
       // CEO 10/06/2026 — FIX mất đơn: thanh toán thất bại trước đây chỉ toast
       // thoáng 4s → cashier bỏ lỡ → tưởng xong → mất đơn. Giờ persistent +
       // rõ ràng. Giỏ KHÔNG bị xóa (clearCart chỉ chạy khi success).
       const msg = String(err?.message ?? "");
+      if (!isCheckoutCartActive()) {
+        toast({
+          title: "Cần kiểm tra kết quả thanh toán",
+          description: `Kiểm tra hóa đơn vừa xử lý trước khi thử lại. ${msg}`,
+          variant: "warning",
+          duration: 0,
+        });
+        return;
+      }
       const separatorIndex = msg.indexOf("|");
       const rpcCode = separatorIndex >= 0 ? msg.slice(0, separatorIndex) : msg;
       let rpcDetails: Record<string, unknown> = {};
@@ -2903,7 +2930,7 @@ function PosPageInner() {
       setSubmitting(null);
       submitLockRef.current = false;
     }
-  }, [state, toast, autoPrint, networkStatus.isOnline, currentShift, currentBranch?.id, user?.id, appliedPromotion, appliedRedeem, clientSessionId, hasUnsavedCart, printPreparedRetailInvoice]);
+  }, [state, toast, autoPrint, networkStatus.isOnline, currentShift, currentBranch?.id, user?.id, appliedPromotion, appliedRedeem, clientSessionId, hasUnsavedCart, printPreparedRetailInvoice, commitTabs, datNgayHoaDon]);
 
   // CEO 04/05/2026: Bỏ handleDebtCheckout — nút "Ghi nợ" cũ thay bằng
   // handleComplete ghi nợ phần thiếu cho khách đã được thu ngân chọn.
@@ -4164,6 +4191,8 @@ function PosPageInner() {
         }}
       />
       <DraftListModal
+        key={currentBranch?.id}
+        branchId={currentBranch?.id ?? null}
         open={draftModalOpen}
         onClose={() => setDraftModalOpen(false)}
         onLoad={async (draft) => {
@@ -4193,20 +4222,36 @@ function PosPageInner() {
         onClose={() => setProcessOrderOpen(false)}
         branchId={currentBranch?.id ?? null}
         onPick={async (orderId) => {
-          // CEO 17/08/2026 — mô hình đơn con (00331): TRƯỚC ĐÂY nạp thẳng đơn
-          // gốc vào giỏ → thanh toán biến đơn gốc thành hóa đơn, 2 tab mở cùng
-          // đơn dùng chung session đè nhau. NAY mỗi lần chọn là máy chủ tạo
-          // MỘT ĐƠN BÁN CON mới (id/mã NH/session riêng, chép mặt hàng) và
-          // POS nạp ĐƠN CON — đơn gốc giữ nguyên để đối chiếu, muốn bán bao
-          // nhiêu đợt thì bấm bấy nhiêu lần.
+          if (!tenant?.id || !user?.id || !currentBranch?.id) return;
           const token = beginCartLoad();
+          const requestKey = `onebiz:retail:open-order:${tenant.id}:${user.id}:${currentBranch.id}:${orderId}`;
+          let requestId = pendingOrderRequests.current.get(requestKey);
           try {
-            let child = pendingOrderDrafts.current.get(orderId);
-            if (!child) {
-              child = await createChildSaleFromOrder(orderId);
-              pendingOrderDrafts.current.set(orderId, child);
-            }
+            requestId ??= sessionStorage.getItem(requestKey) ?? undefined;
+          } catch {
+            // In-memory retry is still available when the browser blocks storage.
+          }
+          requestId ??= nextClientSessionId();
+          pendingOrderRequests.current.set(requestKey, requestId);
+          try { sessionStorage.setItem(requestKey, requestId); } catch {}
+          const clearRequest = () => {
+            pendingOrderRequests.current.delete(requestKey);
+            try { sessionStorage.removeItem(requestKey); } catch {}
+          };
+
+          let child: Awaited<ReturnType<typeof createChildSaleFromOrder>> = null;
+          try {
+            child = await createChildSaleFromOrder(orderId, requestId);
             if (!isCartLoadCurrent(token)) return;
+            if (!child) {
+              clearRequest();
+              toast({
+                title: "Nháp đã đóng hoặc đã xóa",
+                description: "Kiểm tra đơn đặt rồi bấm Chọn nếu cần mở đợt giao mới.",
+                variant: "error",
+              });
+              return;
+            }
 
             const detail = await getDraftOrderById(child.childId);
             if (!isCartLoadCurrent(token)) return;
@@ -4222,7 +4267,7 @@ function PosPageInner() {
             const applied = await applyDraftToActiveTab(detail, token);
             if (!applied) return;
 
-            pendingOrderDrafts.current.delete(orderId);
+            clearRequest();
             setProcessOrderOpen(false);
             setMobileCartOpen(true);
             toast({
@@ -4232,7 +4277,7 @@ function PosPageInner() {
             });
           } catch (err) {
             if (!isCartLoadCurrent(token)) return;
-            const savedDraft = pendingOrderDrafts.current.get(orderId);
+            const savedDraft = child;
             toast({
               title: savedDraft ? "Chưa tải được đơn bán vào giỏ" : "Không tạo được đơn bán",
               description: savedDraft
@@ -5666,10 +5711,12 @@ function ProcessOrderModal({
 
 /** Draft list modal — load saved drafts (F3) */
 function DraftListModal({
+  branchId,
   open,
   onClose,
   onLoad,
 }: {
+  branchId: string | null;
   open: boolean;
   onClose: () => void;
   onLoad: (draft: DraftOrderDetail) => Promise<void>;
@@ -5679,32 +5726,28 @@ function DraftListModal({
   const [deleting, setDeleting] = useState<string | null>(null);
   const { toast } = useToast();
 
-  // Fetch drafts when modal opens
-  // CEO 05/06/2026: bỏ silent catch — hiện lỗi rõ để debug khi DB có draft
-  // nhưng UI báo "Chưa có". Trước đây nuốt mọi lỗi → giả thuyết "empty"
-  // luôn thắng → CEO không biết lỗi RLS / query.
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [retry, setRetry] = useState(0);
+
   useEffect(() => {
-    if (!open) return;
+    if (!open || !branchId) return;
+    let cancelled = false;
     setLoading(true);
-    listDraftOrders()
+    setLoadFailed(false);
+    listDraftOrders(branchId, 100)
       .then((rows) => {
-        if (rows.length === 0) {
-          console.warn("[DraftListModal] listDraftOrders trả về 0 rows");
-        }
-        setDrafts(rows);
+        if (!cancelled) setDrafts(rows);
       })
       .catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : "Không tải được nháp";
-        console.error("[DraftListModal] listDraftOrders lỗi:", err);
-        toast({
-          title: "Không tải được đơn nháp",
-          description: msg,
-          variant: "error",
-        });
-        setDrafts([]);
+        if (cancelled) return;
+        console.error("[DraftListModal] listDraftOrders:", err);
+        setLoadFailed(true);
       })
-      .finally(() => setLoading(false));
-  }, [open, toast]);
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [open, branchId, retry]);
 
   const handleLoad = useCallback(
     async (id: string) => {
@@ -5767,6 +5810,16 @@ function DraftListModal({
             <div className="flex items-center justify-center py-12">
               <Icon name="progress_activity" className="animate-spin text-primary" />
             </div>
+          ) : loadFailed || !branchId ? (
+            <div role="alert" className="flex flex-col items-center gap-2 py-12 text-sm">
+              <p>{branchId ? "Không tải được đơn nháp" : "Chọn chi nhánh để xem đơn nháp"}</p>
+              {branchId && (
+                <button type="button" className="rounded border px-3 py-1.5 text-primary"
+                  onClick={() => setRetry((value) => value + 1)}>
+                  Thử lại
+                </button>
+              )}
+            </div>
           ) : drafts.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
               <Icon name="save" size={32} className="mb-2 text-muted-foreground/35" />
@@ -5791,10 +5844,7 @@ function DraftListModal({
                       <span className="text-xs text-foreground truncate">
                         {draft.customerName || "Khách lẻ"}
                       </span>
-                      <span className="text-xs text-muted-foreground">·</span>
-                      <span className="text-xs text-muted-foreground">
-                        {draft.itemCount} SP
-                      </span>
+
                     </div>
                     {draft.note && (
                       <p className="text-xs text-muted-foreground truncate mt-0.5">{draft.note}</p>

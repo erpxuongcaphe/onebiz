@@ -178,17 +178,15 @@ function DraftCard({
       {draft.itemsSummary && draft.itemsSummary.length > 0 && (
         <p className="text-xs text-muted-foreground mb-2 line-clamp-1">
           {draft.itemsSummary.join(", ")}
-          {draft.itemCount > 3 && ` · +${draft.itemCount - 3}`}
+          {(draft.itemCount ?? 0) > 3 && ` · +${(draft.itemCount ?? 0) - 3}`}
         </p>
       )}
 
       {/* Tổng + nút Tiếp tục */}
       <div className="flex items-center justify-between mt-2">
         <span className="text-xs text-muted-foreground">
-          <span className="font-semibold text-foreground tabular-nums">
-            {draft.itemCount}
-          </span>{" "}
-          SP · Tổng:{" "}
+          {draft.itemCount != null && `${draft.itemCount} SP · `}
+          Tổng:{" "}
           <span className="font-bold text-primary tabular-nums">
             {formatNumber(draft.total)}đ
           </span>

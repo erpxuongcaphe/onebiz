@@ -49,6 +49,8 @@ const RPC = new Set(schema.rpc as string[]);
 const RPC_CHO_MIGRATION = new Map<string, string>([
   ["read_retail_sku_sales_history", "20261117051949_retail_sku_sales_history.sql"],
   ["read_fnb_history_invoice_lines", "20261116162258_fnb_history_invoice_lines.sql"],
+  ["read_retail_draft_lines", "20261117044054_retail_draft_recovery.sql"],
+  ["open_retail_order_draft", "20261117044054_retail_draft_recovery.sql"],
   ["staff_audit_entity_history", "20261115043544_staff_safe_entity_audit_history.sql"],
   ["get_sales_day_invoice_receivable", "20261113124451_dashboard_debt_refund_source.sql"],
   ["get_dashboard_all_branch_day", "20261113135122_dashboard_all_branches_sales.sql"],

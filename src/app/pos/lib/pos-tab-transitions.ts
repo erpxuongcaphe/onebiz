@@ -148,10 +148,31 @@ export function dongTab<T extends TabHoaDon>(
   };
 }
 
-/**
- * Đổi chi nhánh: mọi giỏ bị làm trống ⇒ ngày hóa đơn đã chỉnh của TỪNG tab
- * cũng phải trả về tự động, không để ngày của chi nhánh cũ đi theo.
- */
+/** Reset only the tab and session that the saved document belongs to. */
+export function datLaiTabDaLuu<T extends TabHoaDon>(
+  tabs: T[],
+  paidTabId: string,
+  paidSessionId: string,
+  activeTabId: string,
+  nextSessionId: () => string,
+): { tabs: T[]; clearActiveCart: boolean } | null {
+  const paidTab = tabs.find((tab) => tab.id === paidTabId && tab.sessionId === paidSessionId);
+  if (!paidTab) return null;
+
+  return {
+    tabs: tabs.map((tab) => tab === paidTab ? {
+      ...tab,
+      snapshot: null,
+      itemCount: 0,
+      sessionId: nextSessionId(),
+      ngayHoaDon: null,
+      lyDoNgayHoaDon: "",
+    } : tab),
+    clearActiveCart: paidTab.id === activeTabId,
+  };
+}
+
+/** Đổi chi nhánh: làm trống giỏ và ngày hóa đơn của từng tab. */
 export function doiChiNhanh<T extends TabHoaDon>(
   tabs: T[],
   phienMoi: () => string,
