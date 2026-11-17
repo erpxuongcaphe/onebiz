@@ -239,6 +239,12 @@ export function getFnbPaymentErrorMessage(error: unknown): string | null {
 
   const recipeMessage = getFnbRecipeErrorMessage(error, "payment");
   if (recipeMessage) return recipeMessage;
+  if (rawMessage.includes("FNB_SALE_LINE_COST_REQUIRED")) {
+    const details = error && typeof error === "object" && "details" in error
+      ? String(error.details ?? "").trim().slice(0, 150) : "";
+    const item = details && !/[<>\r\n]/.test(details) ? `Món “${details}”` : "Món";
+    return `${item} chưa có giá vốn tại chi nhánh. Chưa ghi nhận thanh toán. Nhờ quản lý kiểm tra công thức, phiếu nhập hoặc mẻ sản xuất rồi thử lại.`;
+  }
   if (/NVL_INSUFFICIENT|POS_STOCK_SHORTAGE|INSUFFICIENT_STOCK/.test(rawMessage)) {
     const material = rawMessage.match(/NVL\s+"([^"]+)"/)?.[1];
     return `${material ? `Nguyên liệu ${material}` : "Nguyên liệu tại chi nhánh"} không đủ tồn. Nhập/nhận hàng hoặc nhờ chủ quán bật “Cho phép bán khi không đủ tồn kho” tại Cài đặt → Kho & công thức, đúng chi nhánh này. Chưa ghi nhận thanh toán; không gửi lại món đã báo bếp.`;

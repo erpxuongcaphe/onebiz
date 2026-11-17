@@ -72,9 +72,10 @@ export interface ProfitAndLoss {
   /** Phí giao hàng thu hộ = SUM(invoices.delivery_fee) hóa đơn completed. */
   deliveryFee: number;
   cogs: number;
-  /** Giá vốn chỉ được coi là chính xác khi mọi dòng bán/trả có snapshot. */
+  /** Các dòng bán và trả đều có số giá vốn để tính lãi gộp. */
   cogsComplete: boolean;
   missingCostLines: number;
+  estimatedSalesCostLines?: number;
   grossProfit: number;
   grossMargin: number;
   operatingExpense: number;
@@ -318,6 +319,7 @@ export async function getProfitAndLoss(
           currentBasis.missingSalesCostLines + currentBasis.missingReturnCostLines,
           number(payload.current.other_income),
           number(payload.current.legacy_cash_expense),
+          number(payload.current.estimated_sales_cost_lines),
         ),
         previous: buildPnL(
           previousMonth,
@@ -331,6 +333,7 @@ export async function getProfitAndLoss(
           previousBasis.missingSalesCostLines + previousBasis.missingReturnCostLines,
           number(payload.previous.other_income),
           number(payload.previous.legacy_cash_expense),
+          number(payload.previous.estimated_sales_cost_lines),
         ),
         cogsCostBasis: {
           current: currentBasis,
@@ -359,6 +362,7 @@ function buildPnL(
   missingCostLines: number = 0,
   otherIncome: number = 0,
   legacyCashExpense: number = 0,
+  estimatedSalesCostLines: number = 0,
 ): ProfitAndLoss {
   // CEO 08/07: lãi gộp/biên tính trên doanh thu HÀNG HÓA (ship thu hộ, không vào lãi).
   // Phí giao hàng là khoản THU HỘ đơn vị vận chuyển → tách khỏi doanh thu hàng hóa
@@ -374,6 +378,7 @@ function buildPnL(
     cogs,
     cogsComplete,
     missingCostLines,
+    estimatedSalesCostLines,
     grossProfit,
     grossMargin: goodsRevenue > 0 ? Math.round((grossProfit / goodsRevenue) * 1000) / 10 : 0,
     operatingExpense: opEx,
@@ -922,6 +927,7 @@ export async function getConsolidatedPnL(
         number(row.missing_sales_cost_lines) + number(row.missing_return_cost_lines) + number(row.missing_expense_cost_lines),
         number(row.other_income),
         number(row.legacy_cash_expense),
+        number(row.estimated_sales_cost_lines),
       ),
       internalRevenue: number(row.internal_revenue),
       operatingExpenseComplete: number(row.missing_expense_cost_lines) === 0,
