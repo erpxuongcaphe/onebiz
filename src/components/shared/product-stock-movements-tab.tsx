@@ -56,6 +56,7 @@ export function ProductStockMovementsTab({
   const [visibleLimit, setVisibleLimit] = useState(50);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const [drift, setDrift] = useState<{ computed: number; system: number } | null>(null);
   const [exporting, setExporting] = useState(false);
 
@@ -86,7 +87,7 @@ export function ProductStockMovementsTab({
     return () => {
       cancelled = true;
     };
-  }, [productId, branchId]);
+  }, [productId, branchId, attempt]);
 
   const gridColumns = branchId
     ? canViewCost
@@ -172,9 +173,10 @@ export function ProductStockMovementsTab({
 
   if (error) {
     return (
-      <div className="text-sm text-destructive bg-destructive/5 rounded-lg p-3 flex items-center gap-2">
+      <div role="alert" className="text-sm text-destructive bg-destructive/5 rounded-lg p-3 flex flex-wrap items-center gap-2">
         <Icon name="warning" size={16} />
-        {error}
+        <span>{error}</span>
+        <Button size="sm" variant="outline" onClick={() => setAttempt((value) => value + 1)}>Thử lại</Button>
       </div>
     );
   }

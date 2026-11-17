@@ -1316,13 +1316,19 @@ export async function getSalesHistory(
   const supabase = getClient();
   const { from, to } = getPaginationRange(params);
 
-  const { data, count, error } = await supabase
+  let query = supabase
     .from("invoice_items_scoped")
     .select(`
       id, quantity, unit_price, discount, total,
       invoices!inner(id, code, created_at, ngay_chung_tu, customer_name, status, created_by, profiles!invoices_created_by_fkey(full_name))
     `, { count: "exact" })
     .eq("product_id", productId)
+    .eq("invoices.status", "completed")
+    .is("invoices.deleted_at", null)
+    .or("source.is.null,source.not.in.(fnb,order)", { referencedTable: "invoices" });
+  if (params.branchId) query = query.eq("invoices.branch_id", params.branchId);
+  const { data, count, error } = await query
+    .order("invoices(ngay_chung_tu)", { ascending: false })
     .order("id", { ascending: false })
     .range(from, to);
 
