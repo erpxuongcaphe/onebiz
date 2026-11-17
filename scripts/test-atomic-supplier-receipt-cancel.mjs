@@ -55,7 +55,7 @@ await db.exec(`
   insert into branch_stock values ('${tenant}','${branch}','${product}',null,8,0);
 `);
 
-await db.exec(await readFile(new URL('../supabase/migrations/20261117101000_atomic_supplier_receipt_cancel.sql', import.meta.url), 'utf8'));
+await db.exec(await readFile(new URL('../supabase/migrations/20261117105430_atomic_supplier_receipt_cancel.sql', import.meta.url), 'utf8'));
 const cancel = () => db.query('select public.cancel_supplier_receipt_atomic($1,$2)', [order,'Nhập trùng']);
 const preview = async () => (await db.query('select public.get_supplier_receipt_cancel_risks($1) as risks', [order])).rows[0].risks;
 const state = async () => (await db.query('select status,quantity::int as stock from purchase_orders cross join branch_stock')).rows[0];

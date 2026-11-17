@@ -48,7 +48,7 @@ await db.exec(`
     ('${tenant}','${branch}','${product}','in','purchase_receipt','purchase_order','${order}',10000,22,220000,'2026-11-11'),
     ('${tenant}','${branch}','${product}','out','production_consume','production_order','${product}',6.551,25.010109,163.8416,'2026-11-12');`);
 
-await db.exec(await readFile(new URL('../supabase/migrations/20261117103900_supplier_receipt_correction.sql', import.meta.url), 'utf8'));
+await db.exec(await readFile(new URL('../supabase/migrations/20261117105442_supplier_receipt_correction.sql', import.meta.url), 'utf8'));
 const args = [order,line,10,22000,'Nhập sai quy đổi'];
 const preview = async (input = args) => (await db.query('select public.preview_supplier_receipt_correction($1,$2,$3,$4,$5) as p',input)).rows[0].p;
 const apply = async token => (await db.query('select public.apply_supplier_receipt_correction($1,$2,$3,$4,$5,$6) as p',[...args,token])).rows[0].p;
