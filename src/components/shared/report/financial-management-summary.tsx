@@ -14,12 +14,13 @@ export function FinancialManagementSummary({ current, previous, branchId, range,
   hasPermission: (permission: string) => boolean;
 }) {
   const complete = current.cogsComplete && previous.cogsComplete;
+  const estimatedLines = current.estimatedSalesCostLines ?? 0;
   const expenseComplete = current.operatingExpenseComplete !== false;
   const expenseComparisonComplete = expenseComplete && previous.operatingExpenseComplete !== false;
   const resultComplete = current.cogsComplete && expenseComplete;
   const metrics = [
     { label: "Doanh thu thuần", value: formatCurrency(current.goodsRevenue), change: reportChange(current.goodsRevenue, previous.goodsRevenue), positive: current.goodsRevenue >= previous.goodsRevenue, icon: "trending_up" },
-    { label: "Lãi gộp", value: current.cogsComplete ? formatCurrency(current.grossProfit) : "Chưa đủ giá vốn", change: complete ? reportChange(current.grossProfit, previous.grossProfit) : "", positive: current.grossProfit >= previous.grossProfit, icon: "payments" },
+    { label: estimatedLines > 0 && current.cogsComplete ? "Lãi gộp tạm tính" : "Lãi gộp", value: current.cogsComplete ? formatCurrency(current.grossProfit) : "Chưa đủ giá vốn", change: complete ? reportChange(current.grossProfit, previous.grossProfit) : "", positive: current.grossProfit >= previous.grossProfit, icon: "payments" },
     { label: "Chi phí vận hành", value: expenseComplete ? formatCurrency(current.operatingExpense) : "Chưa đủ chi phí", change: expenseComparisonComplete ? reportChange(current.operatingExpense, previous.operatingExpense) : "", positive: current.operatingExpense <= previous.operatingExpense, icon: "receipt_long" },
     { label: "Kết quả vận hành", value: resultComplete ? formatCurrency(current.netProfit) : current.cogsComplete ? "Chưa đủ chi phí" : "Chưa đủ giá vốn", change: complete && expenseComparisonComplete ? reportChange(current.netProfit, previous.netProfit) : "", positive: current.netProfit >= previous.netProfit, icon: "account_balance" },
   ];
@@ -30,6 +31,8 @@ export function FinancialManagementSummary({ current, previous, branchId, range,
       </div>
       <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-muted-foreground">
         <span>Đơn vị: đồng</span>
+        {estimatedLines > 0 && <span>{formatNumber(estimatedLines)} dòng giá vốn tạm tính</span>}
+        {current.missingCostLines > 0 && <span>{formatNumber(current.missingCostLines)} dòng chưa có giá vốn</span>}
         <span>Biên lãi gộp: <strong className="tabular-nums text-foreground">{current.cogsComplete ? `${formatNumber(current.grossMargin)}%` : "Chưa đủ giá vốn"}</strong></span>
         {complete && current.goodsRevenue > 0 && previous.goodsRevenue > 0 && <span>So với kỳ trước: <strong className="tabular-nums text-foreground">{formatNumber(current.grossMargin - previous.grossMargin)} điểm %</strong></span>}
         <span>Theo chứng từ đã ghi nhận. Lợi nhuận không phải dòng tiền.</span>

@@ -539,7 +539,11 @@ export default function BusinessOverview() {
             value={kpis.financial.current.cogsComplete ? formatCurrency(kpis.financial.current.grossProfit) + "đ" : "Chưa đủ giá vốn"}
             change={kpis.financial.current.cogsComplete && kpis.financial.previous.cogsComplete ? calcChange(kpis.financial.current.grossProfit, kpis.financial.previous.grossProfit) : undefined}
             positive={kpis.financial.current.grossProfit >= kpis.financial.previous.grossProfit}
-            subValue={!kpis.financial.current.cogsComplete ? "Cần kiểm tra giá vốn lịch sử" : undefined}
+            subValue={!kpis.financial.current.cogsComplete
+              ? "Cần kiểm tra giá vốn lịch sử"
+              : (kpis.financial.current.estimatedSalesCostLines ?? 0) > 0
+                ? `${formatNumber(kpis.financial.current.estimatedSalesCostLines ?? 0)} dòng giá vốn tạm tính`
+                : undefined}
             icon="price_check"
             bg="bg-status-info/10"
             iconColor="text-status-info"

@@ -31,6 +31,12 @@ describe("financial management summary", () => {
     expect(screen.getByRole("link", { name: "Đối chiếu giá vốn" })).toHaveAttribute("href", expect.stringContaining("branch=all"));
   });
 
+  it("shows provisional gross profit with the number of estimated lines", () => {
+    render(<FinancialManagementSummary current={{ ...period, estimatedSalesCostLines: 7 }} previous={period} range={range} hasPermission={() => true} />);
+    expect(screen.getByText("Lãi gộp tạm tính")).toBeInTheDocument();
+    expect(screen.getByText("7 dòng giá vốn tạm tính")).toBeInTheDocument();
+  });
+
   it("compares margin in percentage points when both periods have revenue", () => {
     render(<FinancialManagementSummary current={period} previous={{ ...period, grossMargin: 49.971 }} range={range} hasPermission={() => true} />);
     expect(screen.getByText("10 điểm %")).toBeInTheDocument();
