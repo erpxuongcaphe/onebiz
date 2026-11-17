@@ -1313,65 +1313,45 @@ export async function getSalesHistory(
   productId: string,
   params: QueryParams
 ): Promise<QueryResult<SalesHistory>> {
-  const supabase = getClient();
-  const { from, to } = getPaginationRange(params);
-
-  let query = supabase
-    .from("invoice_items_scoped")
-    .select(`
-      id, quantity, unit_price, discount, total,
-      invoices!inner(id, code, created_at, ngay_chung_tu, customer_name, status, created_by, profiles!invoices_created_by_fkey(full_name))
-    `, { count: "exact" })
-    .eq("product_id", productId)
-    .eq("invoices.status", "completed")
-    .is("invoices.deleted_at", null)
-    .or("source.is.null,source.not.in.(fnb,order)", { referencedTable: "invoices" });
-  if (params.branchId) query = query.eq("invoices.branch_id", params.branchId);
-  const { data, count, error } = await query
-    .order("invoices(ngay_chung_tu)", { ascending: false })
-    .order("id", { ascending: false })
-    .range(from, to);
-
+  const { data, error } = await getClient().rpc("read_retail_sku_sales_history", {
+    p_product_id: productId,
+    p_branch_id: params.branchId ?? null,
+    p_offset: params.page * params.pageSize,
+    p_limit: params.pageSize,
+  });
   if (error) handleError(error, "getSalesHistory");
 
-  const statusNameMap: Record<string, string> = {
-    completed: "Hoàn thành",
-    cancelled: "Đã hủy",
-    draft: "Phiếu tạm",
-    confirmed: "Đã xác nhận",
-  };
-
-  const history: SalesHistory[] = (data ?? []).map((row) => {
-    const inv = row.invoices as unknown as {
+  const result = data as unknown as {
+    data: {
       id: string;
       code: string;
-      created_at: string;
-      /** 00335: coalesce(issued_at, created_at) — NGÀY CHỨNG TỪ. */
-      ngay_chung_tu?: string | null;
+      ngay_chung_tu: string;
       customer_name: string;
-      status: string;
-      created_by: string;
-      profiles?: { full_name: string } | null;
-    };
-    return {
+      quantity: number;
+      unit_price: number;
+      discount: number;
+      total: number;
+      full_name: string | null;
+    }[];
+    total: number;
+  };
+
+  return {
+    data: result.data.map((row) => ({
       id: row.id,
-      invoiceCode: inv.code,
-      // 00335: lịch sử bán của sản phẩm phải hiện ĐÚNG NGÀY HÓA ĐƠN như danh
-      // sách hóa đơn, nếu không cùng một hóa đơn ra hai ngày khác nhau ở hai
-      // màn. Giữ nhánh dự phòng cho máy chủ chưa có cột.
-      date: inv.ngay_chung_tu ?? inv.created_at,
-      customerName: inv.customer_name,
+      invoiceCode: row.code,
+      date: row.ngay_chung_tu,
+      customerName: row.customer_name,
       quantity: row.quantity,
       sellPrice: row.unit_price,
       discount: row.discount,
       totalAmount: row.total,
-      status: inv.status as SalesHistory["status"],
-      statusName: statusNameMap[inv.status] ?? inv.status,
-      createdBy: inv.profiles?.full_name ?? "—",
-    };
-  });
-
-  return { data: history, total: count ?? 0 };
+      status: "completed",
+      statusName: "Hoàn thành",
+      createdBy: row.full_name ?? "—",
+    })),
+    total: result.total,
+  };
 }
 
 // --- Mappers ---
