@@ -56,12 +56,29 @@ begin
   end if;
   definition := left(definition, strpos(definition, anchor) - 1) || $body$
   update public.invoice_items ii
-  set unit_cost = r.new_unit_cost, fnb_cost_state = coalesce(r.cost_state, 'missing')
-  from (select 1) seed left join lateral private.fnb_mapped_line_cost_20261117(l.invoice_id, p_invoice_item_id) r
-    on true
-  where ii.id = p_invoice_item_id;
+  set unit_cost = r.new_unit_cost, fnb_cost_state = r.cost_state
+  from private.fnb_mapped_line_cost_20261117(l.invoice_id, p_invoice_item_id) r
+  where ii.id = p_invoice_item_id and r.new_unit_cost is not null;
+  if not found then
+    raise exception using errcode = 'P0001', message = 'FNB_SALE_LINE_COST_REQUIRED',
+      detail = (select p.name
+                from public.invoice_items ii join public.products p on p.id = ii.product_id
+                where ii.id = p_invoice_item_id);
+  end if;
 end; $function$
 $body$;
+  anchor := ' if l.inventory_role is distinct from ''fnb_menu_item'' then return; end if;';
+  if strpos(definition, anchor) = 0 then raise exception 'FNB_COST_SNAPSHOT_ROLE_CHANGED'; end if;
+  definition := replace(definition, anchor, $body$
+  if l.inventory_role is distinct from 'fnb_menu_item' then
+    if exists (select 1 from public.invoice_items ii where ii.id = p_invoice_item_id
+               and ii.unit_cost >= 0 and ii.unit_cost < 100000000000) then return; end if;
+    raise exception using errcode = 'P0001', message = 'FNB_SALE_LINE_COST_REQUIRED',
+      detail = (select p.name
+                from public.invoice_items ii join public.products p on p.id = ii.product_id
+                where ii.id = p_invoice_item_id);
+  end if;
+$body$);
   execute definition;
 
   definition := replace(pg_get_functiondef(

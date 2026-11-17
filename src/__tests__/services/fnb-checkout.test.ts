@@ -324,6 +324,11 @@ describe("fnbPayment (atomic RPC wrapper)", () => {
       .toBe("Ca đang chọn không còn mở hoặc không thuộc anh/chị. Vui lòng mở/chọn lại ca.");
   });
 
+  it("nêu tên món khi máy chủ chưa ghi nhận thanh toán vì thiếu giá vốn", () => {
+    expect(getFnbPaymentErrorMessage({ message: "FNB_SALE_LINE_COST_REQUIRED", details: "Trà Bắc" }))
+      .toContain("Món “Trà Bắc” chưa có giá vốn tại chi nhánh. Chưa ghi nhận thanh toán.");
+  });
+
   it("giải thích khi nguyên liệu tại quán chưa có đủ tồn được ghi giá vốn", () => {
     expect(getFnbPaymentErrorMessage({ message: "FNB_BRANCH_COST_REQUIRED", code: "P0001" }))
       .toBe("Nguyên liệu tại quán chưa đủ tồn đã ghi giá vốn. Kiểm tra nhập/nhận hàng trước khi thanh toán.");
