@@ -278,11 +278,12 @@ export async function getPurchaseCancelImpact(
 
   // The server returns only shortage indicators for this authorized document.
   // Never infer zero from a hidden products_scoped balance.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: risks, error: riskError } = await (supabase as any).rpc("get_purchase_cancel_stock_risks", { p_order_id: purchaseOrderId });
+  const { data: risks, error: riskError } = await supabase.rpc("get_supplier_receipt_cancel_risks", { p_order_id: purchaseOrderId });
   if (riskError) handleError(riskError, "getPurchaseCancelImpact.stock");
   if (!Array.isArray(risks)) throw new Error("Không xác định được cảnh báo tồn kho của phiếu nhập.");
-  base.negativeStock = risks.map((risk: { product_name?: unknown; unit?: unknown; needed?: unknown }) => {
+  base.negativeStock = risks.map((value) => {
+    const risk = value as { product_name?: unknown; unit?: unknown; needed?: unknown } | null;
+    if (!risk) throw new Error("Cảnh báo tồn kho của phiếu nhập chưa hợp lệ.");
     const needed = Number(risk.needed);
     if (typeof risk.product_name !== "string" || risk.needed == null || !Number.isFinite(needed) || needed <= 0) {
       throw new Error("Cảnh báo tồn kho của phiếu nhập chưa hợp lệ.");

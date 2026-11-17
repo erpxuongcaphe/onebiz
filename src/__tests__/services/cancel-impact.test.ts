@@ -97,7 +97,7 @@ describe("invoice cancellation cash impact", () => {
       negativeStock: [{ productName: "Synthetic product", available: null, needed: 5, unit: "unit" }] });
     expect(impact.refundMethods).toBeUndefined();
     expect(state.calls).toContainEqual(["purchase_orders", "eq", "tenant_id", "tenant"]);
-    expect(state.calls).toContainEqual(["rpc", "get_purchase_cancel_stock_risks", { p_order_id: "purchase" }]);
+    expect(state.calls).toContainEqual(["rpc", "get_supplier_receipt_cancel_risks", { p_order_id: "purchase" }]);
     expect(state.calls.some(([table]) => table === "products_scoped")).toBe(false);
     expect(state.calls.some(([table]) => table === "customers" || table === "suppliers")).toBe(false);
   });

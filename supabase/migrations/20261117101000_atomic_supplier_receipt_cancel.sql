@@ -76,7 +76,7 @@ grant execute on function public.cancel_supplier_receipt_atomic(uuid, text) to a
 
 -- The purchase dialog previously checked product stock across all branches.
 -- Preview the receipt's own branch and its receipt lots instead.
-create or replace function public.get_purchase_cancel_stock_risks(p_order_id uuid)
+create function public.get_supplier_receipt_cancel_risks(p_order_id uuid)
 returns jsonb language plpgsql stable security definer set search_path = '' as $$
 declare
   actor uuid := auth.uid();
@@ -109,7 +109,7 @@ begin
   );
 end
 $$;
-revoke all on function public.get_purchase_cancel_stock_risks(uuid) from public, anon;
-grant execute on function public.get_purchase_cancel_stock_risks(uuid) to authenticated;
+revoke all on function public.get_supplier_receipt_cancel_risks(uuid) from public, anon;
+grant execute on function public.get_supplier_receipt_cancel_risks(uuid) to authenticated;
 notify pgrst, 'reload schema';
 commit;

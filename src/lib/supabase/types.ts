@@ -3101,6 +3101,10 @@ export interface Database {
         Args: { p_order_id: string; p_reason: string };
         Returns: Json;
       };
+      get_supplier_receipt_cancel_risks: {
+        Args: { p_order_id: string };
+        Returns: Json;
+      };
       preview_supplier_receipt_correction: {
         Args: { p_order_id: string; p_line_id: string; p_quantity: number; p_unit_price: number; p_reason: string };
         Returns: Json;

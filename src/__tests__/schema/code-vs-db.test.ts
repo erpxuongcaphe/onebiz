@@ -48,6 +48,7 @@ const RPC = new Set(schema.rpc as string[]);
  */
 const RPC_CHO_MIGRATION = new Map<string, string>([
   ["cancel_supplier_receipt_atomic", "20261117101000_atomic_supplier_receipt_cancel.sql"],
+  ["get_supplier_receipt_cancel_risks", "20261117101000_atomic_supplier_receipt_cancel.sql"],
   ["preview_supplier_receipt_correction", "20261117103900_supplier_receipt_correction.sql"],
   ["apply_supplier_receipt_correction", "20261117103900_supplier_receipt_correction.sql"],
   ["read_retail_sku_sales_history", "20261117051949_retail_sku_sales_history.sql"],
