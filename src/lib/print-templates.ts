@@ -289,11 +289,10 @@ export function buildInvoicePrintData(
   );
 
   // Khối tổng tiền + công nợ.
-  // CEO 08/07: totalAmount (= invoices.total) ĐÃ gộp phí giao hàng. KHÔNG cộng
-  // ship lần nữa vào "due" (tránh tính 2 lần). Chỉ TÁCH hiển thị: "Tổng tiền
-  // hàng" = tổng − ship, "+ Phí giao hàng", "Tổng cộng" = tổng − chiết khấu.
+  // invoices.total is already net of discounts and includes delivery.
+  // Reconstruct the pre-discount goods amount only for the summary display.
   const shippingFee = row.shippingFee ?? 0;
-  const due = row.totalAmount - row.discount; // Khách phải trả (tổng đã gồm ship)
+  const due = row.totalAmount; // invoices.total đã trừ chiết khấu và gồm phí giao hàng.
   const currentDebt = row.customerCurrentDebt; // dư nợ hiện tại (thời gian thực)
   const oldDebt = currentDebt != null ? currentDebt - row.debt : 0; // nợ trước HĐ này
   // Chỉ in khối nợ khi bật cờ + khách công nợ/bán sỉ (có gắn KH + có dư nợ).
@@ -308,7 +307,7 @@ export function buildInvoicePrintData(
   const summaryRows: NonNullable<DocumentPrintData["summaryRows"]> = [
     {
       label: "Tổng tiền hàng",
-      value: formatCurrency(row.totalAmount - shippingFee),
+      value: formatCurrency(row.totalAmount + row.discount - shippingFee),
     },
   ];
   if (row.discount > 0)

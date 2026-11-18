@@ -32,6 +32,29 @@ const find = (
 ) => (d.summaryRows ?? []).find((r) => r.label === label);
 
 describe("buildInvoicePrintData — khối tổng tiền đối xứng, rõ nghĩa", () => {
+  it("HD009982 giảm hết 230.000đ: tổng và còn phải trả bằng 0, không phát sinh tiền thối", () => {
+    const d = buildInvoicePrintData(row({ code: "HD009982", totalAmount: 0, discount: 230000, paid: 0 }));
+    expect(find(d, "Tổng tiền hàng")?.value).toBe("230,000 đ");
+    expect(find(d, "Chiết khấu")?.value).toBe("230,000 đ");
+    expect(find(d, "Tổng cộng")?.value).toBe("0 đ");
+    expect(find(d, "Khách còn phải trả")?.value).toBe("0 đ");
+    expect(labels(d)).not.toContain("Tiền thối lại");
+  });
+
+  it("giảm một phần, có phí giao và thu một phần: không trừ chiết khấu hai lần", () => {
+    const d = buildInvoicePrintData(row({ totalAmount: 220000, discount: 30000, shippingFee: 20000, paid: 100000 }));
+    expect(find(d, "Tổng tiền hàng")?.value).toBe("230,000 đ");
+    expect(find(d, "Chiết khấu")?.value).toBe("30,000 đ");
+    expect(find(d, "Phí giao hàng")?.value).toBe("20,000 đ");
+    expect(find(d, "Tổng cộng")?.value).toBe("220,000 đ");
+    expect(find(d, "Khách còn phải trả")?.value).toBe("120,000 đ");
+  });
+
+  it("giảm giá và khách đưa dư: chỉ thối chênh lệch so với tổng sau giảm", () => {
+    const d = buildInvoicePrintData(row({ totalAmount: 200000, discount: 30000, paid: 200000, amountTendered: 250000 }));
+    expect(find(d, "Tiền thối lại")?.value).toBe("50,000 đ");
+  });
+
   it("trả đủ → 'Khách còn phải trả' = 0 đ (tone success), không thối lại, không nhãn cũ", () => {
     const d = buildInvoicePrintData(row());
     expect(labels(d)).toContain("Khách đã thanh toán");

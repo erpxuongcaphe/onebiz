@@ -103,3 +103,18 @@ it("gửi ghi chú nhiều dòng khi in qua mẫu bill nhiệt dự phòng", () 
     html: expect.stringContaining("Ghi chu: Gọi trước<br>Giao tại &lt;quầy&gt;"),
   }));
 });
+
+it("in thanh toán dự phòng vẫn tách ĐVT của Kho Tổng, không chỉ phiếu tạm tính", () => {
+  printReceiptDirect({
+    invoiceCode: "HD009982", customerName: "Khách hàng",
+    items: [{ name: "Xưởng Gu Việt", quantity: 1, unit: "Kg", unitPrice: 230000, total: 0 }],
+    subtotal: 230000, discountAmount: 230000, total: 0, paid: 0, change: 0,
+    paymentMethod: "cash", date: "18/11/2026",
+  });
+  expect(sendPrintJob).toHaveBeenLastCalledWith(expect.objectContaining({
+    html: expect.stringContaining('<span>ĐVT</span>'),
+  }));
+  expect(sendPrintJob).toHaveBeenLastCalledWith(expect.objectContaining({
+    html: expect.stringContaining('<span>Kg</span>'),
+  }));
+});
