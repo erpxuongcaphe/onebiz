@@ -1825,6 +1825,12 @@ function PosPageInner() {
       // (loadedDraftId) → truy xuất/quản lý/báo cáo được, và TRÙNG mã hóa đơn khi
       // thanh toán (truy vết đầu-cuối). Giỏ CHƯA lưu → KHÔNG số (CEO chốt) — chỉ
       // "PHIẾU TẠM TÍNH" + ngày. Bỏ hẳn TT-giờphútgiây tự sinh (không truy xuất).
+      const templateRequest = networkStatus.isOnline
+        ? resolvePrintTemplate("retail", "sale_invoice", currentBranch?.id ?? null).catch(error => {
+          console.error("[POS] Pre-bill template unavailable:", error);
+          return null;
+        })
+        : null;
       let draftCode = "";
       if (state.loadedDraftId) {
         try {
@@ -1871,11 +1877,7 @@ function PosPageInner() {
       let printedViaTemplate = false;
       if (networkStatus.isOnline) {
         try {
-          const resolved = await resolvePrintTemplate(
-            "retail",
-            "sale_invoice",
-            currentBranch?.id ?? null,
-          );
+          const resolved = await templateRequest;
           if (resolved) {
             // CEO 14/07 (V3): tạm tính dựng qua CHÍNH buildInvoicePrintData như
             // hóa đơn → cùng cột (Mã hàng/Tên/SL/Đơn giá/Thành tiền) + nhãn
@@ -1941,7 +1943,7 @@ function PosPageInner() {
         variant: "error",
       });
     }
-  }, [state.lines, state.customer, state.subtotal, state.orderDiscountAmount, state.lineDiscountTotal, state.total, state.shippingFee, state.computeLineTotal, toast, networkStatus.isOnline, currentBranch, user, settings.print.paperSize]);
+  }, [state.lines, state.customer, state.subtotal, state.orderDiscountAmount, state.lineDiscountTotal, state.total, state.shippingFee, state.computeLineTotal, state.note, state.loadedDraftId, toast, networkStatus.isOnline, currentBranch, user, settings.print.paperSize]);
 
   const handleSaveDraft = useCallback(async () => {
     if (submitLockRef.current) return;
@@ -2179,9 +2181,9 @@ function PosPageInner() {
           } catch (error) {
             if (!(error instanceof WarehouseDeliveryConfirmationRequired)) throw error;
             const summary = error.changes.map((line) =>
-              line.product_name + ": còn " + formatNumber(line.remaining) + ", xuất " + formatNumber(line.quantity) + " " + line.unit,
+              `${line.product_name}: Đặt ${formatNumber(line.remaining)} ${line.unit}, xuất ${formatNumber(line.quantity)} ${line.unit}`,
             ).join("\n");
-            if (!window.confirm("Xác nhận xuất giao khác lượng còn lại?\n\n" + summary)) return null;
+            if (!window.confirm(`Xác nhận số lượng xuất hàng\n\n${summary}\n\nSố đặt là phần chưa giao của đơn. Bấm OK để xuất theo số lượng trên.`)) return null;
             return checkoutInternalPos({ ...payload, warehouseDeliveryConfirmation: error.token });
           }
         });

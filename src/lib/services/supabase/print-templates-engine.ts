@@ -347,7 +347,10 @@ export async function setBranchPrintBrand(
 
 /** Brand đã merge: tenant business_info ← branch.print_brand override. */
 export async function getResolvedBrand(branchId?: string | null, options?: { branchOnly?: boolean }): Promise<ResolvedBrand> {
-  const t = await getTenantBusinessInfo();
+  const [t, rec] = await Promise.all([
+    getTenantBusinessInfo(),
+    branchId ? getBranchRecord(branchId) : null,
+  ]);
   const base: ResolvedBrand = {
     logoUrl: t.logoUrl,
     businessName: options?.branchOnly ? undefined : t.businessName,
@@ -361,8 +364,6 @@ export async function getResolvedBrand(branchId?: string | null, options?: { bra
     bankAccount: t.bankAccount,
     vietQrEnabled: t.vietQrEnabled,
   };
-  if (!branchId) return base;
-  const rec = await getBranchRecord(branchId);
   if (!rec) return base;
   const merged: ResolvedBrand = { ...base };
   merged.branchName = rec.override?.businessName || rec.name;

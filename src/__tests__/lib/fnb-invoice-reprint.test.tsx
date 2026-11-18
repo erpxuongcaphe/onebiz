@@ -52,8 +52,9 @@ describe("F&B invoice reprint routing", () => {
 
   it("selects the invoice source in both single and bulk reprint actions", () => {
     const page = readFileSync(resolve(process.cwd(), "src/app/(main)/don-hang/hoa-don/page.tsx"), "utf8");
-    expect(page).toContain('if (row.source === "fnb") {');
-    expect(page).toContain('printWithPicker(data, "In hóa đơn", { channel: "fnb", docType: "sale_invoice", branchId });');
+    expect(page).toContain('onPrint: () => openInvoicePrint(row)');
+    expect(page).toContain('resolvePrintTemplate(isFnb ? "fnb" : "retail", "sale_invoice", branchId)');
+    expect(page).toContain('branchId: invoice.source === "fnb" ? invoice.branchId ?? activeBranchId ?? undefined : undefined');
     expect(page.match(/channel: row.source === "fnb" \? "fnb" : "retail"/g)).toHaveLength(1);
   });
 });
