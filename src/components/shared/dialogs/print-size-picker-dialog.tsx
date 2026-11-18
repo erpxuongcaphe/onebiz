@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect, useRef, type ReactNode } from "react";
 import {
   Dialog,
   DialogContent,
@@ -57,9 +57,11 @@ export function PrintSizePickerDialog({
   const { settings } = useSettings();
   const defaultSize = defaultPaperSize ?? (settings?.print?.paperSize ?? "A4") as PaperSize;
   const [selected, setSelected] = useState<PaperSize>(defaultSize);
+  const userSelected = useRef(false);
 
   useEffect(() => {
-    if (open) setSelected(defaultSize);
+    if (!open) userSelected.current = false;
+    else if (!userSelected.current) setSelected(defaultSize);
   }, [open, defaultSize]);
 
   const handlePrint = () => {
@@ -86,7 +88,10 @@ export function PrintSizePickerDialog({
               <button
                 key={opt.id}
                 type="button"
-                onClick={() => setSelected(opt.id)}
+                onClick={() => {
+                  userSelected.current = true;
+                  setSelected(opt.id);
+                }}
                 className={cn(
                   "flex items-start gap-3 rounded-lg border p-3 text-left transition-all",
                   isActive

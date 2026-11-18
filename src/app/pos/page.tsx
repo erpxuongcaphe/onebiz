@@ -674,7 +674,7 @@ function PosPageInner() {
     });
   }, [currentBranch, branches, switchBranch, toast, user?.branchId]);
   const { settings, updateSettings } = useSettings();
-  const { printPreparedRetailInvoice, printerDialog } = useRetailInvoicePrint();
+  const { printPreparedRetailInvoice, openPreparingRetailInvoice, printerDialog } = useRetailInvoicePrint();
   const [currentShift, setCurrentShift] = useState<Shift | null>(null);
   const [openShiftDialogOpen, setOpenShiftDialogOpen] = useState(false);
   const [closeShiftDialogOpen, setCloseShiftDialogOpen] = useState(false);
@@ -2616,6 +2616,11 @@ function PosPageInner() {
         }
       }
 
+      const chooseWarehousePrint = autoPrint && invoiceCode && !isOfflineCheckout &&
+        currentBranch?.branchType === "warehouse" && state.customer &&
+        !state.customer.isWalkIn && state.customer.code !== "KL-VL";
+      const finishPreparing = chooseWarehousePrint ? openPreparingRetailInvoice(invoiceCode) : undefined;
+
       // CEO 08/07/2026: đơn "Bán giao hàng" → gắn phí ship + VẬN ĐƠN vào HĐ vừa
       // tạo. total đã gồm ship (page truyền state.total); hàm này set cột
       // delivery_fee + reconcile total/debt (nhánh nháp có thể lưu thiếu ship do
@@ -2704,6 +2709,12 @@ function PosPageInner() {
           note: state.note || undefined,
         };
         try {
+          const savedPrintRequest = invoiceId && finishPreparing
+            ? Promise.all([getInvoiceById(invoiceId), getInvoiceItems(invoiceId)]).catch(error => {
+              console.warn("[POS] Saved invoice print unavailable:", error);
+              return null;
+            })
+            : null;
           // CEO 03/07: in THEO MẪU IN chi nhánh (retail × hóa đơn bán) — GIỐNG
           // HỆT trang Hóa đơn admin. Offline hoặc chưa có mẫu → bill nhiệt cũ.
           const resolved = isOfflineCheckout
@@ -2712,8 +2723,12 @@ function PosPageInner() {
                 "retail",
                 "sale_invoice",
                 currentBranch?.id ?? null,
-              );
-          if (resolved) {
+              ).catch(error => {
+                if (!finishPreparing) throw error;
+                console.warn("[POS] Warehouse print template unavailable:", error);
+                return null;
+              });
+          if (resolved || finishPreparing) {
             // CEO 14/07 (V3): in CHÍNH hóa đơn vừa lưu qua buildInvoicePrintData
             // → GIỐNG HỆT trang Hóa đơn in lại (cột "Mã hàng", nhãn "Chiết khấu",
             // khối "Nợ cũ/Còn nợ" đọc công nợ KH thời gian thực). Fetch lỗi/null
@@ -2721,11 +2736,12 @@ function PosPageInner() {
             let doc: DocumentPrintData | null = null;
             if (invoiceId) {
               try {
-                const [inv, itemRows] = await Promise.all([
+                const saved = await (savedPrintRequest ?? Promise.all([
                   getInvoiceById(invoiceId),
                   getInvoiceItems(invoiceId),
-                ]);
-                if (inv) {
+                ]));
+                if (saved?.[0] && saved[1].length) {
+                  const [inv, itemRows] = saved;
                   doc = buildInvoicePrintData(
                     inv,
                     businessInfoRef.current ?? undefined,
@@ -2786,9 +2802,10 @@ function PosPageInner() {
                 createdBy: user?.fullName,
               };
             }
-            printPreparedRetailInvoice(applyTemplateToDocData(doc, resolved), {
-              paperSize: resolved.paperSize,
-            });
+            const printable = resolved ? applyTemplateToDocData(doc, resolved) : doc;
+            const options = resolved ? { paperSize: resolved.paperSize } : undefined;
+            if (finishPreparing) finishPreparing(printable, options);
+            else printPreparedRetailInvoice(printable, options);
           } else {
             // P-4 13/06/2026 audit lần 2: đọc paperSize từ settings.
             printReceiptDirect(receipt, settings.print.paperSize === "58mm" ? "58mm" : "80mm");
@@ -2797,6 +2814,10 @@ function PosPageInner() {
           // Lỗi resolve/áp mẫu → RỚT VỀ bill nhiệt cũ, không kẹt quầy.
           console.error("[POS] Print via template failed, fallback receipt:", err);
           try {
+            if (finishPreparing) {
+              finishPreparing(null);
+              throw err;
+            }
             printReceiptDirect(receipt, settings.print.paperSize === "58mm" ? "58mm" : "80mm");
           } catch (err2) {
             // Print failure không nên block checkout — đơn đã thanh toán xong.
@@ -2932,7 +2953,7 @@ function PosPageInner() {
       setSubmitting(null);
       submitLockRef.current = false;
     }
-  }, [state, toast, autoPrint, networkStatus.isOnline, currentShift, currentBranch?.id, user?.id, appliedPromotion, appliedRedeem, clientSessionId, hasUnsavedCart, printPreparedRetailInvoice, commitTabs, datNgayHoaDon]);
+  }, [state, toast, autoPrint, networkStatus.isOnline, currentShift, currentBranch?.id, currentBranch?.branchType, user?.id, appliedPromotion, appliedRedeem, clientSessionId, hasUnsavedCart, printPreparedRetailInvoice, openPreparingRetailInvoice, commitTabs, datNgayHoaDon]);
 
   // CEO 04/05/2026: Bỏ handleDebtCheckout — nút "Ghi nợ" cũ thay bằng
   // handleComplete ghi nợ phần thiếu cho khách đã được thu ngân chọn.
