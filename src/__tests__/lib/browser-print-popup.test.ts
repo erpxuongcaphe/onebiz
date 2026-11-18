@@ -44,12 +44,13 @@ describe("browser print dialog", () => {
   it("prints after the image deadline and keeps a screen-only notice", async () => {
     vi.useFakeTimers();
     const { doc, print } = popup();
-    await printerService.printRaw({ rawHtml: '<p>HD009728</p><img src="https://example.test/slow.png">', backend: "browser" });
+    await printerService.printRaw({ rawHtml: '<p>HD009728</p><div class="qr-pay"><img src="https://example.test/slow.png">Quét QR</div>', backend: "browser" });
     vi.advanceTimersByTime(799);
     expect(print).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1);
     expect(print).toHaveBeenCalledOnce();
     expect(doc.images).toHaveLength(0);
+    expect(doc.querySelector(".qr-pay")).toBeNull();
     expect(doc.body.textContent).toContain("HD009728");
     expect(doc.querySelector(".print-image-notice")?.textContent).toContain("chưa tải được");
     expect(doc.head.textContent).toContain("@media print");

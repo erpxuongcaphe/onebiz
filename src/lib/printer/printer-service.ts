@@ -328,7 +328,8 @@ function openBrowserPrint(html: string): void {
     for (const image of unavailable) {
       image.removeAttribute("srcset");
       image.removeAttribute("src");
-      image.remove();
+      // Remove the payment instruction too when its QR is unavailable.
+      (image.closest(".qr-pay") ?? image).remove();
     }
     if (unavailable.length) {
       const notice = win.document.createElement("p");
