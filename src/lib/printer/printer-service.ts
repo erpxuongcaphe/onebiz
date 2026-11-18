@@ -309,7 +309,52 @@ function openBrowserPrint(html: string): void {
   win.document.write(bridgeHtml(html));
   win.document.close();
   win.focus();
-  setTimeout(() => win.print(), 300);
+  const images = Array.from(win.document.images);
+  if (!images.length) {
+    win.print();
+    return;
+  }
+
+  // A pending image can delay the native print dialog even after print() is called.
+  // Keep loaded artwork and stop unfinished requests before asking Chrome to print.
+  const pending = new Set(images.filter(image => !image.complete));
+  const subscribers = new AbortController();
+  let deadline: ReturnType<typeof setTimeout> | undefined;
+  const print = () => {
+    clearTimeout(deadline);
+    subscribers.abort();
+    if (win.closed) return;
+    const unavailable = images.filter(image => !image.complete || image.naturalWidth === 0);
+    for (const image of unavailable) {
+      image.removeAttribute("srcset");
+      image.removeAttribute("src");
+      image.remove();
+    }
+    if (unavailable.length) {
+      const notice = win.document.createElement("p");
+      notice.className = "print-image-notice";
+      notice.setAttribute("role", "status");
+      notice.textContent = "Một số ảnh (logo hoặc mã QR) chưa tải được. Nếu cần đủ ảnh, đóng cửa sổ và in lại.";
+      const style = win.document.createElement("style");
+      style.textContent = "@media print { .print-image-notice { display: none !important; } }";
+      win.document.head.append(style);
+      win.document.body.prepend(notice);
+    }
+    win.print();
+  };
+  if (!pending.size) {
+    print();
+    return;
+  }
+  deadline = setTimeout(print, 800);
+  for (const image of pending) {
+    const settled = () => {
+      pending.delete(image);
+      if (!pending.size) print();
+    };
+    image.addEventListener("load", settled, { once: true, signal: subscribers.signal });
+    image.addEventListener("error", settled, { once: true, signal: subscribers.signal });
+  }
 }
 
 // ─── Main API ───
