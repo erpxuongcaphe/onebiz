@@ -1880,9 +1880,8 @@ function PosPageInner() {
             // CEO 14/07 (V3): tạm tính dựng qua CHÍNH buildInvoicePrintData như
             // hóa đơn → cùng cột (Mã hàng/Tên/SL/Đơn giá/Thành tiền) + nhãn
             // "Chiết khấu". CHỈ khác tiêu đề "PHIẾU TẠM TÍNH". Chưa thanh toán →
-            // paid=0. Mô hình số HĐ: due = total − discount → totalAmount ép
-            // = state.total + chiết khấu đơn (đã verify DB). Không khối công nợ
-            // (customerCurrentDebt undefined) vì phiếu tạm chưa ghi nợ.
+            // paid=0; totalAmount là tổng sau giảm giá như hóa đơn đã lưu.
+            // Không khối công nợ vì phiếu tạm chưa ghi nợ.
             const preInvoice: Invoice = {
               id: "",
               code: draftCode, // rỗng nếu giỏ chưa lưu → mẫu ẩn "Số:"
@@ -1892,7 +1891,7 @@ function PosPageInner() {
               customerName: receipt.customerName,
               customerPhone: state.customer?.phone,
               customerAddress: state.customer?.address,
-              totalAmount: state.total + state.orderDiscountAmount,
+              totalAmount: state.total,
               discount: state.orderDiscountAmount,
               shippingFee: state.shippingFee,
               taxAmount: 0,
@@ -2758,7 +2757,7 @@ function PosPageInner() {
                   invoiceFieldsRef.current,
                 ),
                 items: receipt.items,
-                itemColumns: ["Tên hàng", "SL", "Đơn giá", "Giảm giá", "Thành tiền"],
+                itemColumns: ["Tên hàng", "ĐVT", "Số lượng", "Đơn giá", "Giảm giá", "Thành tiền"],
                 summaryRows: [
                   { label: "Tổng tiền hàng", value: money(receipt.subtotal) },
                   ...(receipt.discountAmount > 0

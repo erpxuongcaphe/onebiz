@@ -170,7 +170,9 @@ export function applyTemplateToDocData(
     const headers: string[] = [];
     if (hasCode) headers.push("Mã hàng");
     headers.push("Tên hàng");
-    headers.push("SL");
+    // Saved templates must preserve the separate product-unit column.
+    if (baseCols.includes("ĐVT")) headers.push("ĐVT");
+    headers.push(baseCols.includes("Số lượng") ? "Số lượng" : "SL");
     if (hasPrice) headers.push(priceLabel);
     if (hasDiscount) headers.push("Giảm giá");
     headers.push("Thành tiền");
