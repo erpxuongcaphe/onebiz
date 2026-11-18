@@ -1,5 +1,5 @@
 import {beforeEach,describe,it,expect,vi} from "vitest";
-const mock=vi.hoisted(()=>({rpc:vi.fn(),from:vi.fn(),source:"fnb",items:[] as Record<string,unknown>[],parent:true,calls:[] as unknown[]}));
+const mock=vi.hoisted(()=>({rpc:vi.fn(),from:vi.fn(),source:"fnb",items:[] as Record<string,unknown>[],parent:true,calls:[] as unknown[],lineTimeouts:0}));
 vi.mock("@/lib/services/supabase/base",()=>({
  getCurrentTenantId:async()=>"tenant",getPaginationRange:()=>({from:0,to:10}),
  handleError:(e:{message:string})=>{throw new Error(e.message);},
@@ -8,15 +8,27 @@ vi.mock("@/lib/services/supabase/base",()=>({
 import {getInvoiceItems} from "@/lib/services/supabase/invoices";
 import {getFnbInvoiceItemNotes} from "@/lib/services/supabase/fnb-invoice-item-notes";
 beforeEach(()=>{
- vi.clearAllMocks();mock.source="fnb";mock.parent=true;mock.calls=[];
+ vi.clearAllMocks();mock.source="fnb";mock.parent=true;mock.calls=[];mock.lineTimeouts=0;
  mock.items=[{id:"a",product_name:"Cà phê",note:null,quantity:1,total:22000},{id:"b",product_name:"Cà phê",note:"Snapshot",quantity:1,total:22000},{id:"c",product_name:"Cà phê",note:"",quantity:1,total:22000}];
  mock.rpc.mockResolvedValue({data:[{invoice_id:"inv",invoice_item_id:"a",note:"Ít đá"},{invoice_item_id:"b",note:"Wrong override"},{invoice_item_id:"c",note:"Wrong override"}],error:null});
  mock.from.mockImplementation((table:string)=>{
-  const result={data:table==="invoices"?(mock.parent?{id:"inv",source:mock.source}:null):mock.items,error:null};
-  const q:Record<string,unknown>={};for(const op of ["select","eq","maybeSingle"])q[op]=(...args:unknown[])=>{mock.calls.push({table,op,args});return q;};q.then=(resolve:(v:unknown)=>unknown)=>Promise.resolve(result).then(resolve);return q;
+  const timedOut=table==="invoice_items_scoped" && mock.lineTimeouts>0;
+  if(timedOut) mock.lineTimeouts--;
+  const result=timedOut
+   ? {data:null,error:{code:"57014",message:"statement timeout"}}
+   : {data:table==="invoices"?(mock.parent?{id:"inv",source:mock.source}:null):mock.items,error:null};
+  const q:Record<string,unknown>={};for(const op of ["select","eq","in","maybeSingle"])q[op]=(...args:unknown[])=>{mock.calls.push({table,op,args});return q;};q.then=(resolve:(v:unknown)=>unknown)=>Promise.resolve(result).then(resolve);return q;
  });
 });
 describe("invoice note read boundaries",()=>{
+ it("recovers invoice lines after one timeout and stops retrying after a second timeout",async()=>{
+  mock.source="pos";mock.lineTimeouts=1;
+  expect(await getInvoiceItems("inv")).toHaveLength(3);
+  expect(mock.from.mock.calls.filter(([table])=>table==="invoice_items_scoped")).toHaveLength(2);
+  mock.from.mockClear();mock.lineTimeouts=3;
+  await expect(getInvoiceItems("inv")).rejects.toThrow("statement timeout");
+  expect(mock.from.mock.calls.filter(([table])=>table==="invoice_items_scoped")).toHaveLength(2);
+ });
  it("uses exact item IDs and preserves saved/explicit empty notes for duplicate products",async()=>{
   const items=await getInvoiceItems("inv");expect(items.map(i=>i.note)).toEqual(["Ít đá","Snapshot",""]);
   expect(mock.rpc).toHaveBeenCalledWith("get_fnb_invoice_item_details_20261023",{p_invoice_ids:["inv"]},{count:"exact"});
@@ -25,6 +37,14 @@ describe("invoice note read boundaries",()=>{
  it("does not call FNB resolver for Retail or missing parent invoice",async()=>{
   mock.source="pos";await getInvoiceItems("inv");expect(mock.rpc).not.toHaveBeenCalled();
   mock.parent=false;expect(await getInvoiceItems("foreign")).toEqual([]);expect(mock.rpc).not.toHaveBeenCalled();
+ });
+ it("preserves the saved item when its catalog entry is unavailable",async()=>{
+  mock.source="pos";
+  mock.items=[{id:"a",product_id:"product-a",product_name:"Trái Tắc",quantity:160,unit:"Trái",vat_rate:8,total:160000}];
+  expect(await getInvoiceItems("inv")).toMatchObject([
+   {productName:"Trái Tắc",quantity:160,unit:"Trái",vatRate:8,total:160000,productCode:""},
+  ]);
+  expect(mock.calls).toContainEqual({table:"products_scoped",op:"in",args:["id",["product-a"]]});
  });
  it("does not pretend a denied/failed note read is an empty note",async()=>{
   mock.rpc.mockResolvedValue({data:null,error:{message:"BRANCH_ACCESS_DENIED"}});

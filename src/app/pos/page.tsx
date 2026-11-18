@@ -2179,9 +2179,9 @@ function PosPageInner() {
           } catch (error) {
             if (!(error instanceof WarehouseDeliveryConfirmationRequired)) throw error;
             const summary = error.changes.map((line) =>
-              line.product_name + ": còn " + formatNumber(line.remaining) + ", xuất " + formatNumber(line.quantity) + " " + line.unit,
+              `${line.product_name}: Đặt ${formatNumber(line.remaining)}, xuất ${formatNumber(line.quantity)} ${line.unit}`,
             ).join("\n");
-            if (!window.confirm("Xác nhận xuất giao khác lượng còn lại?\n\n" + summary)) return null;
+            if (!window.confirm(`Xác nhận số lượng xuất hàng\n\n${summary}\n\nSố đặt là phần chưa giao của đơn. Bấm OK để xuất theo số lượng trên.`)) return null;
             return checkoutInternalPos({ ...payload, warehouseDeliveryConfirmation: error.token });
           }
         });

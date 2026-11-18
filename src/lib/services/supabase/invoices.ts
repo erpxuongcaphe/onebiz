@@ -706,46 +706,54 @@ export async function getInvoiceItems(
   if(invoiceError)handleError(invoiceError,"getInvoiceItems.invoice");
   if (!inv) return [];
 
-  // Schema invoice_items không có cột product_code — phải join `products:products_scoped(code)`.
-  // Schema cũng dùng `discount` (không phải `discount_amount`) cho line item.
-  // Field `unit` có sẵn trên invoice_items (snapshot lúc tạo HD).
-  // 00208: select("*") + join để lấy cả note mà không vỡ trước khi migrate.
-  const { data, error } = await supabase
+  // Read saved invoice lines before looking up current catalog metadata.
+  const readLines = () => supabase
     .from("invoice_items_scoped")
-    .select("*, products:products_scoped!invoice_items_product_id_fkey(code, vat_rate)")
+    .select("id, product_id, product_name, quantity, unit_price, discount, vat_rate, vat_amount, total, unit, note")
     .eq("invoice_id", invoiceId);
 
+  let { data, error } = await readLines();
+  if (error?.code === "57014") ({ data, error } = await readLines());
   if (error) {
     handleError(error,"getInvoiceItems");
   }
 
+  const productIds = [...new Set((data ?? []).map(row => row.product_id).filter((id): id is string => Boolean(id)))];
+  const productRequest = productIds.length
+    ? Promise.resolve(supabase.from("products_scoped").select("id, code, vat_rate").eq("tenant_id", tenantId).in("id", productIds))
+    : null;
   let details=new Map<string,FnbInvoiceItemDetail>();let detailsUnavailable=false;
   if(inv.source === "fnb" && data?.length) {
     try {details=await getFnbInvoiceItemDetails([invoiceId]);if(data.some(row=>!details.has(row.id)))throw new Error("Chưa tải đủ tùy chọn món.");}
     catch(error){console.warn("[getInvoiceItems.options]",error);detailsUnavailable=true;}
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data ?? []).map((row: any) => ({
-    id: row.id,
-    productCode: row.products?.code ?? "",
-    productName: row.product_name ?? "",
-    quantity: Number(row.quantity ?? 0),
-    unitPrice: Number(row.unit_price ?? 0),
-    discount: Number(row.discount ?? 0),
-    vatRate: Number(
-      Number(row.vat_rate ?? 0) > 0
-        ? row.vat_rate
-        : row.products?.vat_rate ?? 0,
-    ),
-    vatAmount: Number(row.vat_amount ?? 0),
-    total: Number(row.total ?? 0),
-    unit: row.unit ?? undefined,
-    note: row.note ?? details.get(row.id)?.note ?? undefined,
-    fnbOptions: details.get(row.id)?.modifier_selections,
-    variantLabel: details.get(row.id)?.variant_label ?? undefined,
-    fnbDetailsUnavailable: detailsUnavailable,
-  }));
+  const products = await productRequest;
+  if (products?.error) console.warn("[getInvoiceItems.products]", products.error);
+  const byProduct = new Map((products?.data ?? []).map(product => [product.id, product]));
+  return (data ?? []).map(row => {
+    const product = row.product_id ? byProduct.get(row.product_id) : undefined;
+    return {
+      id: row.id,
+      productCode: product?.code ?? "",
+      productName: row.product_name ?? "",
+      quantity: Number(row.quantity ?? 0),
+      unitPrice: Number(row.unit_price ?? 0),
+      discount: Number(row.discount ?? 0),
+      vatRate: Number(
+        Number(row.vat_rate ?? 0) > 0
+          ? row.vat_rate
+          : product?.vat_rate ?? 0,
+      ),
+      vatAmount: Number(row.vat_amount ?? 0),
+      total: Number(row.total ?? 0),
+      unit: row.unit ?? undefined,
+      note: row.note ?? details.get(row.id)?.note ?? undefined,
+      fnbOptions: details.get(row.id)?.modifier_selections,
+      variantLabel: details.get(row.id)?.variant_label ?? undefined,
+      fnbDetailsUnavailable: detailsUnavailable,
+    };
+  });
 }
 
 // --- Mapper ---

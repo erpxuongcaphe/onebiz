@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { PrintSizePickerDialog } from "@/components/shared/dialogs/print-size-picker-dialog";
 import { applyTemplateToDocData } from "@/lib/print-apply-template";
 import { printDocument, type DocumentPrintData, type PaperSize, type PrintOptions } from "@/lib/print-document";
-import { resolvePrintTemplate } from "@/lib/services";
+import { resolvePrintTemplate, type ResolvedPrint } from "@/lib/services";
 
 function hasCustomerDebt(data: DocumentPrintData) {
   return data.summaryRows?.some((row) => row.customerDebt) ?? false;
@@ -27,9 +27,13 @@ export function useRetailInvoicePrint() {
     }
   }, [openPicker]);
 
-  const printRetailInvoice = useCallback(async (data: DocumentPrintData, branchId?: string | null) => {
+  const printRetailInvoice = useCallback(async (
+    data: DocumentPrintData,
+    branchId?: string | null,
+    templateRequest?: Promise<ResolvedPrint | null>,
+  ) => {
     try {
-      const template = await resolvePrintTemplate("retail", "sale_invoice", branchId ?? null);
+      const template = await (templateRequest ?? resolvePrintTemplate("retail", "sale_invoice", branchId ?? null));
       if (template) {
         printPreparedRetailInvoice(applyTemplateToDocData(data, template), { paperSize: template.paperSize });
         return;

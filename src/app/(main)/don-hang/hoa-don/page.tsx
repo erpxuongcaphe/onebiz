@@ -97,6 +97,7 @@ import {
   cancelInvoice,
   voidCompletedInvoice,
   getInvoiceItems,
+  resolvePrintTemplate,
   getShippingOrderByInvoice,
   getTenantBusinessInfo,
   duplicateInvoice,
@@ -201,7 +202,7 @@ function InvoiceDetail({
           setItems([]);setItemsError(msg);
           toast({
             title: "Không tải được chi tiết hoá đơn",
-            description: msg,
+            description: "Bấm Thử tải lại món ngay trong hóa đơn.",
             variant: "error",
           });
         }
@@ -526,6 +527,7 @@ export default function HoaDonPage() {
   const router = useRouter();
   const { printWithPicker, printerDialog } = usePrintWithPicker();
   const { printRetailInvoice, printerDialog: retailPrinterDialog } = useRetailInvoicePrint();
+  const printingInvoices = useRef(new Set<string>());
   const txPerms = useTxRowPermissions("invoice");
   const draftOrderPerms = useTxRowPermissions("sales_order");
   // K2 08/08: nút "Xem tất cả chi nhánh" trước đây KHÔNG kiểm quyền — nhân
@@ -1478,16 +1480,27 @@ export default function HoaDonPage() {
                   setDuplicating(false);
                 }
               },
-              // In phiếu — nạp chi tiết hàng trước rồi mới in (nếu thiếu sẽ
-              // chỉ in phần đầu, không có dòng mặt hàng).
               onPrint: async () => {
-                const items = await getInvoiceItems(row.id);
-                const data = buildInvoicePrintData(row, businessInfo ?? undefined, toPrintLines(items));
+                if (printingInvoices.current.has(row.id)) return;
+                printingInvoices.current.add(row.id);
                 const branchId = row.branchId ?? activeBranchId;
-                if (row.source === "fnb") {
-                  printWithPicker(data, "In hóa đơn", { channel: "fnb", docType: "sale_invoice", branchId });
-                } else {
-                  void printRetailInvoice(data, branchId);
+                const channel = row.source === "fnb" ? "fnb" : "retail";
+                try {
+                  const templateRequest = resolvePrintTemplate(channel, "sale_invoice", branchId).catch(() => null);
+                  const items = await getInvoiceItems(row.id);
+                  if (!items.length) throw new Error("Chưa tải được dòng hàng để in.");
+                  const data = buildInvoicePrintData(row, businessInfo ?? undefined, toPrintLines(items));
+                  if (channel === "fnb") {
+                    const template = await templateRequest;
+                    printWithPicker(data, "In hóa đơn", { channel, docType: "sale_invoice", branchId }, Promise.resolve(template));
+                  } else {
+                    await printRetailInvoice(data, branchId, templateRequest);
+                  }
+                } catch (error) {
+                  console.error("[InvoicePrint]", error);
+                  toast({ variant: "error", title: "Chưa in được hóa đơn", description: "Bấm In lại để thử tải dòng hàng." });
+                } finally {
+                  printingInvoices.current.delete(row.id);
                 }
               },
               // Trả hàng (redirect)
