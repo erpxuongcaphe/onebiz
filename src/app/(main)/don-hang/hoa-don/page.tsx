@@ -1635,9 +1635,12 @@ export default function HoaDonPage() {
               <span>Chưa tải được dòng hàng.</span>
               <Button type="button" size="sm" variant="outline" onClick={() => openInvoicePrint(invoicePrint.invoice)}>Thử tải lại</Button>
             </div>
-          ) : !invoicePrint.data ? (
+          ) : !invoicePrint.data && (
             <p role="status" className="text-sm text-muted-foreground">Đang tải nội dung hóa đơn…</p>
-          ) : invoicePrint.data.summaryRows?.some(row => row.customerDebt) && (
+          )}
+          {(invoicePrint.data?.summaryRows?.some(row => row.customerDebt) ||
+            (!invoicePrint.data && !invoicePrint.failed && invoicePrint.invoice.source !== "fnb" &&
+              Boolean(invoicePrint.invoice.customerId))) && (
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={includePrintDebt} onChange={event => setIncludePrintDebt(event.target.checked)} />
               In công nợ cũ

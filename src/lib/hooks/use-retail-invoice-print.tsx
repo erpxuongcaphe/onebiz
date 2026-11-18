@@ -11,12 +11,29 @@ function hasCustomerDebt(data: DocumentPrintData) {
 }
 
 export function useRetailInvoicePrint() {
-  const [pending, setPending] = useState<{ data: DocumentPrintData; options?: PrintOptions } | null>(null);
+  const [pending, setPending] = useState<{
+    code: string;
+    data?: DocumentPrintData;
+    options?: PrintOptions;
+    request?: symbol;
+  } | null>(null);
   const [includeCustomerDebt, setIncludeCustomerDebt] = useState(true);
 
   const openPicker = useCallback((data: DocumentPrintData, options?: PrintOptions) => {
     setIncludeCustomerDebt(true);
-    setPending({ data, options });
+    setPending({ code: data.documentCode, data, options });
+  }, []);
+
+  const openPreparingRetailInvoice = useCallback((code: string, options?: PrintOptions) => {
+    const request = Symbol();
+    setIncludeCustomerDebt(true);
+    setPending({ code, request, options });
+    return (data: DocumentPrintData | null, resolvedOptions = options) => {
+      setPending(current => {
+        if (current?.request !== request) return current;
+        return data ? { ...current, data, options: resolvedOptions } : null;
+      });
+    };
   }, []);
 
   const printPreparedRetailInvoice = useCallback((data: DocumentPrintData, options?: PrintOptions) => {
@@ -44,10 +61,12 @@ export function useRetailInvoicePrint() {
     <PrintSizePickerDialog
       open
       onOpenChange={(open) => { if (!open) setPending(null); }}
-      title={`In hóa đơn ${pending.data.documentCode}`}
+      title={`In hóa đơn ${pending.code}`}
       defaultPaperSize={pending.options?.paperSize}
+      printDisabled={!pending.data}
       onPrint={(paperSize: PaperSize) => {
         const { data, options } = pending;
+        if (!data) return;
         const printable = includeCustomerDebt || !hasCustomerDebt(data)
           ? data
           : {
@@ -61,7 +80,8 @@ export function useRetailInvoicePrint() {
         printDocument(printable, { ...options, paperSize });
       }}
     >
-      {hasCustomerDebt(pending.data) && (
+      {!pending.data && <p role="status" className="text-sm text-muted-foreground">Đang chuẩn bị nội dung hóa đơn…</p>}
+      {(!pending.data || hasCustomerDebt(pending.data)) && (
         <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-3">
           <input
             type="checkbox"
@@ -78,5 +98,5 @@ export function useRetailInvoicePrint() {
     </PrintSizePickerDialog>
   );
 
-  return { printRetailInvoice, printPreparedRetailInvoice, printerDialog };
+  return { printRetailInvoice, printPreparedRetailInvoice, openPreparingRetailInvoice, printerDialog };
 }
