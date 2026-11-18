@@ -208,6 +208,7 @@ function LoginForm() {
             <form
               action={`/api/auth/sign-in?redirect=${encodeURIComponent(redirect)}`}
               method="post"
+              aria-label="Đăng nhập"
               onSubmit={handleSubmit}
               aria-busy={loading}
               className="space-y-4"
