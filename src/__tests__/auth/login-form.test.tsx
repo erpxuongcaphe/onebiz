@@ -22,5 +22,6 @@ it("sends one request at a time and allows retry after failure", async () => {
   expect(screen.getByRole("alert")).toHaveTextContent("Không đăng nhập được");
   fireEvent.submit(form);
   expect(await screen.findByText("Thử lại sau")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Đăng nhập" })).toBeEnabled();
   expect(fetch).toHaveBeenCalledTimes(2);
 });
