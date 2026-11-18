@@ -258,7 +258,7 @@ export function printReceiptDirect(data: ReceiptData, width: "58mm" | "80mm" = "
         ? "Chuyen khoan"
         : "The";
 
-  const hasUnits = data.isPreBill && data.items.some((item) => item.unit);
+  const hasUnits = data.items.some((item) => item.unit);
   const itemsHtml = data.items
     .map(
       (item) => `

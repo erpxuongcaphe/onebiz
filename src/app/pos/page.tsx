@@ -2680,6 +2680,7 @@ function PosPageInner() {
           items: state.lines.map((l) => ({
             name: l.productName,
             quantity: l.quantity,
+            unit: currentBranch?.branchType === "warehouse" ? l.unit : undefined,
             unitPrice: l.unitPrice,
             discount: l.discount.mode === "percent"
               ? Math.round((l.quantity * l.unitPrice * l.discount.value) / 100)
