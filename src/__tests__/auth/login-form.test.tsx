@@ -13,7 +13,7 @@ it("sends one request at a time and allows retry after failure", async () => {
   render(<Page />);
   fireEvent.change(screen.getByLabelText("Email hoặc số điện thoại"), { target: { value: "fixture@example.invalid" } });
   fireEvent.change(screen.getByLabelText("Mật khẩu"), { target: { value: "fixture-password" } });
-  const form = screen.getByRole("button", { name: "Đăng nhập" }).closest("form")!;
+  const form = screen.getByRole("form", { name: "Đăng nhập" });
   fireEvent.submit(form);
   fireEvent.submit(form);
   expect(fetch).toHaveBeenCalledExactlyOnceWith("/api/auth/sign-in?redirect=%2Fho-so", expect.objectContaining({ method: "POST", credentials: "include" }));
