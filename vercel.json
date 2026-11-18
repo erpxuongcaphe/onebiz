@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "ignoreCommand": "node scripts/vercel-ignore-test-only-preview.mjs",
   "headers": [
     {
       "source": "/sw-fnb.js",
