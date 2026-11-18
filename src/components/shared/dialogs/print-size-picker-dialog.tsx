@@ -37,6 +37,7 @@ interface PrintSizePickerDialogProps {
   /** Callback khi user chọn cỡ và bấm "In ngay". */
   onPrint: (paperSize: PaperSize) => void;
   defaultPaperSize?: PaperSize;
+  printDisabled?: boolean;
   children?: ReactNode;
 }
 
@@ -50,6 +51,7 @@ export function PrintSizePickerDialog({
   title = "Chọn cỡ giấy in",
   onPrint,
   defaultPaperSize,
+  printDisabled = false,
   children,
 }: PrintSizePickerDialogProps) {
   const { settings } = useSettings();
@@ -61,6 +63,7 @@ export function PrintSizePickerDialog({
   }, [open, defaultSize]);
 
   const handlePrint = () => {
+    if (printDisabled) return;
     onPrint(selected);
     onOpenChange(false);
   };
@@ -125,7 +128,7 @@ export function PrintSizePickerDialog({
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Hủy
           </Button>
-          <Button type="button" onClick={handlePrint}>
+          <Button type="button" onClick={handlePrint} disabled={printDisabled}>
             <Icon name="print" size={16} className="mr-1" />
             In ngay ({selected})
           </Button>

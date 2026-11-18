@@ -7,7 +7,7 @@ import {
   type PaperSize,
 } from "@/lib/print-document";
 import { resolvePrintTemplate } from "@/lib/services";
-import type { PrintChannel, PrintDocType, ResolvedPrint } from "@/lib/services";
+import type { PrintChannel, PrintDocType } from "@/lib/services";
 import { applyTemplateToDocData } from "@/lib/print-apply-template";
 import { PrintSizePickerDialog } from "@/components/shared/dialogs/print-size-picker-dialog";
 import { getPrintSettings } from "@/lib/printer/print-job";
@@ -48,7 +48,6 @@ export function usePrintWithPicker(): {
     data: DocumentPrintData,
     title?: string,
     templateCtx?: PrintTemplateContext,
-    templateRequest?: Promise<ResolvedPrint | null>,
   ) => void;
   printerDialog: ReactNode;
 } {
@@ -59,7 +58,7 @@ export function usePrintWithPicker(): {
   const [defaultPaperSize, setDefaultPaperSize] = useState<PaperSize>();
 
   const printWithPicker = useCallback(
-    (data: DocumentPrintData, title?: string, templateCtx?: PrintTemplateContext, templateRequest?: Promise<ResolvedPrint | null>) => {
+    (data: DocumentPrintData, title?: string, templateCtx?: PrintTemplateContext) => {
       const fnbInvoice = templateCtx?.channel === "fnb" && templateCtx.docType === "sale_invoice";
       const configuredPaper = getPrintSettings().paperSize;
       setPendingContext(templateCtx);
@@ -73,11 +72,11 @@ export function usePrintWithPicker(): {
         return;
       }
       // Có ngữ cảnh → thử áp mẫu In V3. Resolve bất đồng bộ, không chặn UI.
-      void (templateRequest ?? resolvePrintTemplate(
+      void resolvePrintTemplate(
         templateCtx.channel,
         templateCtx.docType,
         templateCtx.branchId ?? null,
-      ))
+      )
         .then((resolved) => {
           if (resolved) {
             // Có mẫu → in theo mẫu, bỏ qua picker.

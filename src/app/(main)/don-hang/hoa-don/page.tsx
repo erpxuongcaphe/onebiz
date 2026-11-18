@@ -109,7 +109,10 @@ import { DocumentNoteBox } from "@/components/shared/document-note-box";
 import { useToast, useBranchFilter, useAuth } from "@/lib/contexts";
 import { buildInvoicePrintData, toPrintLines } from "@/lib/print-templates";
 import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
-import { useRetailInvoicePrint } from "@/lib/hooks/use-retail-invoice-print";
+import { PrintSizePickerDialog } from "@/components/shared/dialogs/print-size-picker-dialog";
+import { applyTemplateToDocData } from "@/lib/print-apply-template";
+import { printDocument, type DocumentPrintData, type PaperSize } from "@/lib/print-document";
+import { getPrintSettings } from "@/lib/printer/print-job";
 import type { Invoice, ShippingOrder } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
@@ -526,8 +529,37 @@ export default function HoaDonPage() {
   const { activeBranchId, currentBranch, branches, isReady: branchScopeReady } = useBranchFilter();
   const router = useRouter();
   const { printWithPicker, printerDialog } = usePrintWithPicker();
-  const { printRetailInvoice, printerDialog: retailPrinterDialog } = useRetailInvoicePrint();
-  const printingInvoices = useRef(new Set<string>());
+  const [invoicePrint, setInvoicePrint] = useState<{
+    invoice: Invoice;
+    request: symbol;
+    data?: DocumentPrintData;
+    paperSize?: PaperSize;
+    failed?: boolean;
+  } | null>(null);
+  const [includePrintDebt, setIncludePrintDebt] = useState(true);
+  const openInvoicePrint = (invoice: Invoice) => {
+    const request = Symbol();
+    const isFnb = invoice.source === "fnb";
+    const branchId = invoice.branchId ?? activeBranchId;
+    const paperSize = isFnb ? (getPrintSettings().paperSize === "58mm" ? "58mm" : "80mm") : undefined;
+    setIncludePrintDebt(true);
+    setInvoicePrint({ invoice, request, paperSize });
+    void Promise.all([
+      getInvoiceItems(invoice.id),
+      resolvePrintTemplate(isFnb ? "fnb" : "retail", "sale_invoice", branchId).catch(() => null),
+    ]).then(([items, template]) => {
+      if (!items.length) throw new Error("Chưa tải được dòng hàng để in.");
+      const base = buildInvoicePrintData(invoice, businessInfo ?? undefined, toPrintLines(items));
+      if (isFnb) base.fnbThermalReadable = true;
+      const data = template ? applyTemplateToDocData(base, template) : base;
+      setInvoicePrint(current => current?.request === request
+        ? { ...current, data, paperSize: template?.paperSize ?? paperSize }
+        : current);
+    }).catch(error => {
+      console.error("[InvoicePrint]", error);
+      setInvoicePrint(current => current?.request === request ? { ...current, failed: true } : current);
+    });
+  };
   const txPerms = useTxRowPermissions("invoice");
   const draftOrderPerms = useTxRowPermissions("sales_order");
   // K2 08/08: nút "Xem tất cả chi nhánh" trước đây KHÔNG kiểm quyền — nhân
@@ -1480,29 +1512,7 @@ export default function HoaDonPage() {
                   setDuplicating(false);
                 }
               },
-              onPrint: async () => {
-                if (printingInvoices.current.has(row.id)) return;
-                printingInvoices.current.add(row.id);
-                const branchId = row.branchId ?? activeBranchId;
-                const channel = row.source === "fnb" ? "fnb" : "retail";
-                try {
-                  const templateRequest = resolvePrintTemplate(channel, "sale_invoice", branchId).catch(() => null);
-                  const items = await getInvoiceItems(row.id);
-                  if (!items.length) throw new Error("Chưa tải được dòng hàng để in.");
-                  const data = buildInvoicePrintData(row, businessInfo ?? undefined, toPrintLines(items));
-                  if (channel === "fnb") {
-                    const template = await templateRequest;
-                    printWithPicker(data, "In hóa đơn", { channel, docType: "sale_invoice", branchId }, Promise.resolve(template));
-                  } else {
-                    await printRetailInvoice(data, branchId, templateRequest);
-                  }
-                } catch (error) {
-                  console.error("[InvoicePrint]", error);
-                  toast({ variant: "error", title: "Chưa in được hóa đơn", description: "Bấm In lại để thử tải dòng hàng." });
-                } finally {
-                  printingInvoices.current.delete(row.id);
-                }
-              },
+              onPrint: () => openInvoicePrint(row),
               // Trả hàng (redirect)
               onReturn: () => {
                 toast({ variant: "info", title: "Chuyển đến trang trả hàng" });
@@ -1599,7 +1609,42 @@ export default function HoaDonPage() {
       />
 
       {printerDialog}
-      {retailPrinterDialog}
+      {invoicePrint && (
+        <PrintSizePickerDialog
+          open
+          onOpenChange={open => { if (!open) setInvoicePrint(null); }}
+          title={`In hóa đơn ${invoicePrint.invoice.code}`}
+          defaultPaperSize={invoicePrint.paperSize}
+          printDisabled={!invoicePrint.data}
+          onPrint={paperSize => {
+            const { invoice, data } = invoicePrint;
+            if (!data) return;
+            const printable = includePrintDebt ? data : {
+              ...data,
+              summaryRows: [
+                ...(data.summaryRows?.filter(row => !row.customerDebt) ?? []),
+                ...(data.invoiceBalanceRow ? [data.invoiceBalanceRow] : []),
+              ],
+              invoiceBalanceRow: undefined,
+            };
+            printDocument(printable, { paperSize, branchId: invoice.source === "fnb" ? invoice.branchId ?? activeBranchId ?? undefined : undefined });
+          }}
+        >
+          {invoicePrint.failed ? (
+            <div role="alert" className="flex items-center gap-2 text-sm">
+              <span>Chưa tải được dòng hàng.</span>
+              <Button type="button" size="sm" variant="outline" onClick={() => openInvoicePrint(invoicePrint.invoice)}>Thử tải lại</Button>
+            </div>
+          ) : !invoicePrint.data ? (
+            <p role="status" className="text-sm text-muted-foreground">Đang tải nội dung hóa đơn…</p>
+          ) : invoicePrint.data.summaryRows?.some(row => row.customerDebt) && (
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={includePrintDebt} onChange={event => setIncludePrintDebt(event.target.checked)} />
+              In công nợ cũ
+            </label>
+          )}
+        </PrintSizePickerDialog>
+      )}
 
       {payingItem && (
         <RecordPaymentDialog

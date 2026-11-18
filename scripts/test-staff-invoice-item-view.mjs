@@ -61,6 +61,7 @@ try {
    add column if not exists unit text,add column if not exists unit_price numeric,add column if not exists total numeric,
    add column if not exists returned_qty numeric;`);
  await db.exec(await sql('20261113004524_staff_own_order_scope.sql'));
+ await db.exec(await sql('20261118081059_materialize_invoice_item_scope_candidates.sql'));
  assert.equal((await db.query("select has_function_privilege('anon','public.staff_returnable_invoice_items(uuid)','execute') allowed")).rows[0].allowed,false,'anonymous callers cannot execute return reader');
  assert.equal((await db.query("select reloptions @> array['security_barrier=true'] kept from pg_class where oid='public.invoice_items_scoped'::regclass")).rows[0].kept,true,'security barrier is preserved');
  assert.equal((await db.query("select has_table_privilege('authenticated','public.invoice_items_scoped','select') allowed")).rows[0].allowed,true,'view grant is preserved');
