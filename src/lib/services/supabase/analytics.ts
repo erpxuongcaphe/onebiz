@@ -9,6 +9,7 @@
  */
 
 import { getClient, handleError, getCurrentTenantId } from "./base";
+import { getCustomerIdentityDirectory } from "./customer-identity";
 import { toCreatedAtRangeWindow } from "@/lib/utils/list-date-preset-range";
 import { dayKeysForRange } from "@/lib/utils/report-date-keys";
 import { getBranchStockAggregates, getBranchStockRows } from "./branch-stock";
@@ -1907,11 +1908,11 @@ export async function getTopCustomersByRevenue(
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
   const resolved = resolveRange(range, thisMonthRange());
-  const invoices = await fetchAllPostgrestRows<Record<string, unknown>>(
+  const [invoices, identities] = await Promise.all([fetchAllPostgrestRows<Record<string, unknown>>(
     () => {
       let query = supabase
         .from("invoices")
-        .select("customer_id, total, customers!invoices_customer_id_fkey(name, code, customer_groups!customers_group_id_fkey(name), canonical:customers!customers_canonical_customer_id_fkey(id, name, code, customer_groups!customers_group_id_fkey(name)))")
+        .select("customer_id, total, customers!invoices_customer_id_fkey(name, code, customer_groups!customers_group_id_fkey(name))")
         .eq("tenant_id", tenantId)
         .eq("status", "completed")
         .gte("ngay_chung_tu", resolved.start)
@@ -1923,7 +1924,7 @@ export async function getTopCustomersByRevenue(
       return query;
     },
     "[getTopCustomersByRevenue]",
-  );
+  ), getCustomerIdentityDirectory()]);
 
   const totals = new Map<string, { name: string; code?: string; groupName?: string; orders: number; revenue: number }>();
   type ReportCustomer = {
@@ -1931,16 +1932,34 @@ export async function getTopCustomersByRevenue(
     code?: string;
     customer_groups?: { name?: string } | null;
   };
+  const byId = new Map(identities.flatMap(link => [
+    [link.aliasId, link] as const,
+    [link.canonicalId, link] as const,
+  ]));
+  const canonicalGroups = new Map<string, string>();
+  const canonicalIds = [...new Set(invoices.flatMap(invoice => {
+    const link = byId.get(String(invoice.customer_id ?? ""));
+    return link ? [link.canonicalId] : [];
+  }))];
+  if (canonicalIds.length) {
+    const { data, error } = await supabase.from("customers")
+      .select("id, customer_groups!customers_group_id_fkey(name)")
+      .eq("tenant_id", tenantId)
+      .in("id", canonicalIds);
+    if (error) handleError(error, "[getTopCustomersByRevenue.groups]");
+    for (const row of data ?? []) {
+      if (row.customer_groups?.name) canonicalGroups.set(row.id, row.customer_groups.name);
+    }
+  }
   for (const invoice of invoices) {
-    const original = invoice.customers as (ReportCustomer & {
-      canonical?: (ReportCustomer & { id: string }) | null;
-    }) | null;
-    const customer = original?.canonical ?? original;
-    const customerId = original?.canonical?.id ?? String(invoice.customer_id ?? "");
+    const originalId = String(invoice.customer_id ?? "");
+    const customer = invoice.customers as ReportCustomer | null;
+    const link = byId.get(originalId);
+    const customerId = link?.canonicalId ?? originalId;
     const current = totals.get(customerId) ?? {
-      name: customer?.name ?? "N/A",
-      code: customer?.code,
-      groupName: customer?.customer_groups?.name,
+      name: link?.name ?? customer?.name ?? "N/A",
+      code: link?.code ?? customer?.code,
+      groupName: link ? canonicalGroups.get(customerId) : customer?.customer_groups?.name,
       orders: 0,
       revenue: 0,
     };
