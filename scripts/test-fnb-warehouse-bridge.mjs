@@ -337,7 +337,7 @@ await db.exec(`
   create function _staff_my_inventory_view(uuid) returns boolean language sql stable as
     $$select public.user_has_permission(auth.uid(), 'inventory.view')$$;
 `);
-await db.exec(readFileSync('supabase/migrations/20261119044300_fnb_warehouse_order_progress.sql','utf8'));
+await db.exec(readFileSync('supabase/migrations/20261119050121_fnb_warehouse_order_progress.sql','utf8'));
 await test('warehouse progress follows active dispatches, corrected per-line receipts and independent processing closure', async()=>{
  const po=await submit(id(9980),[{productId:product,quantity:3}]);
  const read=async()=>(await scalar('select get_fnb_purchase_order_links($1::uuid[])',[[po.purchaseOrderId]]))[0];
