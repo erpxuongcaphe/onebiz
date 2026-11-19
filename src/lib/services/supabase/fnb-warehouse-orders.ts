@@ -15,7 +15,15 @@ function handleWarehouseError(error: { message: string; code?: string }, context
   }
   return handleError(error, context);
 }
-export interface SupplyOrderLink { purchaseOrderId: string; salesOrderCode: string; processed: boolean; cancelled: boolean; revision?: number; blockedReason?: string | null }
+export interface SupplyOrderLink {
+  purchaseOrderId: string;
+  salesOrderCode: string;
+  processed: boolean;
+  cancelled: boolean;
+  revision?: number;
+  blockedReason?: string | null;
+  receiptProgress?: 'none' | 'awaiting' | 'partial' | 'received';
+}
 export interface SupplyOrderChangeDetail {
   purchaseOrderId: string; code: string; salesOrderCode: string; branchId: string; warehouseId: string;
   revision: number; items: Array<SupplyProduct & { quantity: number; unit?: string; expectedFactor?: number; note?: string }>; note: string; blockedReason: string | null;

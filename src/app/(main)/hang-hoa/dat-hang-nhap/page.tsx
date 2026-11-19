@@ -84,6 +84,19 @@ const statusMap: Record<
 
 const statusOptions = getPurchaseEntryStatuses();
 
+function purchaseOrderStatus(item: PurchaseOrderEntry) {
+  const link = item.warehouseOrder;
+  if (!link) return statusMap[item.status];
+  const variant = "outline" as const;
+  if (link.cancelled) return { label: "Kho đã hủy xử lý", variant };
+  switch (link.receiptProgress) {
+    case "awaiting": return { label: "Kho đã xuất · Chờ nhận", variant };
+    case "partial": return { label: "Đã nhận một phần", variant };
+    case "received": return { label: "Đã nhận đủ hàng đã xuất", variant };
+    default: return { label: link.processed ? "Kho đã xử lý" : "Đã gửi kho tổng", variant };
+  }
+}
+
 // === Inline Detail ===
 function PurchaseOrderEntryDetail({
   item,
@@ -94,7 +107,7 @@ function PurchaseOrderEntryDetail({
   onClose: () => void;
   onDelete?: () => void;
 }) {
-  const st = item.warehouseOrder ? { label: item.warehouseOrder.cancelled ? "Kho đã hủy xử lý" : item.warehouseOrder.processed ? "Kho đã xử lý" : "Đã gửi kho tổng", variant: "outline" as const } : statusMap[item.status];
+  const st = purchaseOrderStatus(item);
   const tabs: DetailTab[] = [
     {
       id: "info",
@@ -131,7 +144,9 @@ function PurchaseOrderEntryDetail({
 
           {/* 06/08: ghi chú phiếu đặt NCC — trước đây không hiện trong chi tiết. */}
           {item.warehouseOrder && <div className="rounded-md border bg-blue-50 p-3 text-sm">
-            Đơn kho tổng: <strong>{item.warehouseOrder.salesOrderCode}</strong>. Đây là nhu cầu đã gửi; kho được điều chỉnh hàng thực xuất. Nhận hàng tại phiếu giao nội bộ, không nhập lại từ PO này.
+            Đơn kho tổng <strong>{item.warehouseOrder.salesOrderCode}</strong>
+            {item.warehouseOrder.processed && <span> · Kho đã đóng xử lý</span>}
+            <p className="mt-1">Xác nhận hàng thực nhận tại phiếu giao nội bộ.</p>
             {item.warehouseOrder.blockedReason && <p className="mt-2 font-medium">{item.warehouseOrder.blockedReason}</p>}
           </div>}
           <DocumentNoteBox note={item.note} />
@@ -202,8 +217,7 @@ const columns: ColumnDef<PurchaseOrderEntry, unknown>[] = [
     header: "Trạng thái",
     size: 130,
     cell: ({ row }) => {
-      const link = row.original.warehouseOrder;
-      const { label, variant } = link ? { label: link.cancelled ? "Kho đã hủy xử lý" : link.processed ? "Kho đã xử lý" : "Đã gửi kho tổng", variant: "outline" as const } : statusMap[row.original.status];
+      const { label, variant } = purchaseOrderStatus(row.original);
       return <Badge variant={variant}>{label}</Badge>;
     },
   },
