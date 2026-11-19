@@ -1911,13 +1911,14 @@ export async function getTopCustomersByRevenue(
     () => {
       let query = supabase
         .from("invoices")
-        .select("customer_id, total, customers(name, code, customer_groups!customers_group_id_fkey(name))")
+        .select("customer_id, total, customers!invoices_customer_id_fkey(name, code, customer_groups!customers_group_id_fkey(name), canonical:customers!customers_canonical_customer_id_fkey(id, name, code, customer_groups!customers_group_id_fkey(name)))")
         .eq("tenant_id", tenantId)
         .eq("status", "completed")
         .gte("ngay_chung_tu", resolved.start)
         .lt("ngay_chung_tu", resolved.end)
         .not("customer_id", "is", null)
-        .order("ngay_chung_tu", { ascending: false });
+        .order("ngay_chung_tu", { ascending: false })
+        .order("id", { ascending: false });
       if (branchId) query = query.eq("branch_id", branchId);
       return query;
     },
@@ -1925,9 +1926,17 @@ export async function getTopCustomersByRevenue(
   );
 
   const totals = new Map<string, { name: string; code?: string; groupName?: string; orders: number; revenue: number }>();
+  type ReportCustomer = {
+    name?: string;
+    code?: string;
+    customer_groups?: { name?: string } | null;
+  };
   for (const invoice of invoices) {
-    const customerId = String(invoice.customer_id ?? "");
-    const customer = invoice.customers as { name?: string; code?: string; customer_groups?: { name?: string } | null } | null;
+    const original = invoice.customers as (ReportCustomer & {
+      canonical?: (ReportCustomer & { id: string }) | null;
+    }) | null;
+    const customer = original?.canonical ?? original;
+    const customerId = original?.canonical?.id ?? String(invoice.customer_id ?? "");
     const current = totals.get(customerId) ?? {
       name: customer?.name ?? "N/A",
       code: customer?.code,
