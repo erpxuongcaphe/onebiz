@@ -324,4 +324,61 @@ await test('ordinary Retail SKU used as a F&B ingredient stays selectable and ca
 });
 console.log(`${passed} isolated PostgreSQL checks passed.`);
 await (await import('./fnb-db-test/test-unified-warehouse-uom.mjs')).runUnifiedWarehouseUom(db,{id,tenant,actor,store,warehouse,product,submit});
+await db.exec(`
+  alter table internal_sales add column id uuid primary key default gen_random_uuid(),
+    add column tenant_id uuid, add column from_branch_id uuid, add column to_branch_id uuid,
+    add column input_invoice_id uuid, add column receipt_mode text;
+  alter table internal_sale_items add column internal_sale_id uuid, add column quantity numeric;
+  alter table input_invoices add column tenant_id uuid, add column branch_id uuid, add column status text;
+  create table internal_sale_receipts(id uuid primary key, tenant_id uuid, branch_id uuid, internal_sale_id uuid);
+  create table internal_sale_receipt_items(receipt_id uuid, sale_item_id uuid, quantity numeric);
+  create table sales_order_processing_closures(order_id uuid primary key, tenant_id uuid, branch_id uuid,
+    closed_at timestamptz, reopened_at timestamptz);
+  create function _staff_my_inventory_view(uuid) returns boolean language sql stable as
+    $$select public.user_has_permission(auth.uid(), 'inventory.view')$$;
+`);
+await db.exec(readFileSync('supabase/migrations/20261119044300_fnb_warehouse_order_progress.sql','utf8'));
+await test('warehouse progress follows active dispatches, corrected per-line receipts and independent processing closure', async()=>{
+ const po=await submit(id(9980),[{productId:product,quantity:3}]);
+ const read=async()=>(await scalar('select get_fnb_purchase_order_links($1::uuid[])',[[po.purchaseOrderId]]))[0];
+ const addDispatch=async(n,quantity,mode='actual')=>{
+  await db.query("insert into invoices(id,tenant_id,branch_id,source_order_id,status) values($1,$2,$3,$4,'completed')",[id(n),tenant,warehouse,po.salesOrderId]);
+  await db.query("insert into internal_sales(id,invoice_id,tenant_id,from_branch_id,to_branch_id,status,receipt_mode) values($1,$2,$3,$4,$5,'completed',$6)",[id(n+1),id(n),tenant,warehouse,store,mode]);
+  await db.query('insert into internal_sale_items(id,internal_sale_id,quantity) values($1,$2,$3)',[id(n+2),id(n+1),quantity]);
+ };
+ const receive=async(n,receipt,quantity)=>{
+  await db.query('insert into internal_sale_receipts values($1,$2,$3,$4)',[id(receipt),tenant,store,id(n+1)]);
+  await db.query('insert into internal_sale_receipt_items values($1,$2,$3)',[id(receipt),id(n+2),quantity]);
+ };
+ assert.equal((await read()).receiptProgress,'none');
+ await addDispatch(9990,3);
+ assert.equal((await read()).receiptProgress,'awaiting');
+ await receive(9990,9993,1);
+ assert.equal((await read()).receiptProgress,'partial');
+ await db.query('insert into sales_order_processing_closures values($1,$2,$3,now(),null)',[po.salesOrderId,tenant,warehouse]);
+ assert.equal((await read()).processed,true);
+ assert.equal((await read()).receiptProgress,'partial');
+ await receive(9990,9994,2);
+ assert.equal((await read()).receiptProgress,'received');
+ await addDispatch(9995,1);
+ assert.equal((await read()).receiptProgress,'partial');
+ await db.query("update internal_sales set status='cancelled' where id=$1",[id(9996)]);
+ assert.equal((await read()).receiptProgress,'received');
+ await addDispatch(10000,1,'legacy');
+ assert.equal((await read()).receiptProgress,'partial');
+ await db.query("insert into input_invoices(id,tenant_id,branch_id,status) values($1,$2,$3,'recorded')",[id(10003),tenant,store]);
+ await db.query('update internal_sales set input_invoice_id=$1 where id=$2',[id(10003),id(10001)]);
+ assert.equal((await read()).receiptProgress,'received');
+ await db.query('update internal_sale_receipt_items set quantity=1 where receipt_id=$1',[id(9994)]);
+ assert.equal((await read()).receiptProgress,'partial');
+ await db.query('update sales_order_processing_closures set closed_at=null,reopened_at=now() where order_id=$1',[po.salesOrderId]);
+ await db.query('update invoices set fulfilled_by_id=$1 where id=$2',[id(9990),po.salesOrderId]);
+ assert.equal((await read()).processed,false);
+ await db.exec("set test.denied='yes'");
+ assert.equal(await read(),undefined);
+ await db.exec("set test.denied='no'");
+ await db.exec(`set test.branch='${warehouse}'`);
+ assert.equal(await read(),undefined);
+ await db.exec(`set test.branch='${store}'`);
+});
 await db.close();
