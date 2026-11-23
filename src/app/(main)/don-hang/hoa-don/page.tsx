@@ -23,6 +23,7 @@ import { ColumnDef, type SortingState } from "@tanstack/react-table";
 import { RetailInvoiceTypeFilter } from "@/components/shared/retail-invoice-type-filter";
 import { FnbInvoiceTypeFilter } from "@/components/shared/fnb-invoice-type-filter";
 import { useFnbSubdomain } from "@/lib/hooks/use-fnb-subdomain";
+import { canVoidFnbWithoutOtp } from "@/lib/fnb/paid-void-policy";
 import { invoiceFnbTypeLabel, invoiceRetailTypeLabel, type FnbInvoiceType, type RetailInvoiceType } from "@/lib/utils/invoice-list-filters";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
@@ -514,7 +515,7 @@ function InvoiceDetail({
           {
             id: "audit_history",
             label: "Lịch sử",
-            content: <AuditHistoryTab entityType="invoice" entityId={invoice.id} />,
+            content: <AuditHistoryTab entityType="invoice" entityId={invoice.id} showInvoiceVoidReason={invoice.source === "fnb"} />,
           },
         ]}
       />
@@ -590,12 +591,13 @@ export default function HoaDonPage() {
   // thành — hiện bảng tác động 3 sổ + chọn phương thức hoàn. Route theo status.
   const [cancellingItem, setCancellingItem] = useState<Invoice | null>(null);
   const [bulkCancelIds, setBulkCancelIds] = useState<string[]>([]);
-  const canVoidFnb = hasPermission("pos_fnb.void_paid_bill");
+  const canVoidFnb = canVoidFnbWithoutOtp(user?.role) && hasPermission("pos_fnb.void_paid_bill");
   const canVoidRetail = hasPermission("pos_retail.void");
   const canVoidInvoice = (source: string | undefined, branchId: string | null) =>
     hasAssignedBranchAccess(branchId) &&
     (source === "fnb"
-      ? hasPermissionAtBranchWithLegacy("pos_fnb.void_paid_bill", "pos_fnb.void", branchId)
+      ? canVoidFnbWithoutOtp(user?.role) &&
+        hasPermissionAtBranchWithLegacy("pos_fnb.void_paid_bill", "pos_fnb.void", branchId)
       : hasPermissionAtBranch("pos_retail.void", branchId));
   const [payingItem, setPayingItem] = useState<Invoice | null>(null);
   // Sprint UX-1 Stage 4: Audit log dialog + duplicating state

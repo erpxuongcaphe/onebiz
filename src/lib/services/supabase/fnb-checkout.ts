@@ -261,6 +261,18 @@ const FNB_VOID_ERROR_MESSAGES: ReadonlyArray<{
   message: string;
 }> = [
   {
+    codes: ["FNB_VOID_REASON_REQUIRED"],
+    message: "Nhập lý do hủy có ít nhất 3 ký tự.",
+  },
+  {
+    codes: ["FNB_VOID_APPROVAL_REQUIRED"],
+    message: "Thu ngân và nhân viên cần xin OTP của quản lý để hủy hóa đơn đã thanh toán.",
+  },
+  {
+    codes: ["FNB_VOID_SELF_APPROVAL_DENIED"],
+    message: "Người duyệt hủy phải khác người đang yêu cầu hủy hóa đơn.",
+  },
+  {
     codes: ["FNB_VOID_HAS_RETURNS"],
     message: "Bill đã hoàn một phần. Hãy hoàn các món còn lại trong luồng trả hàng để tránh hoàn trùng.",
   },
@@ -515,8 +527,7 @@ export async function voidFnbInvoice(input: {
   branchId: string;
   /** Nếu hoá đơn void trong 1 ca đang mở → gắn phiếu chi hoàn tiền vào ca đó */
   shiftId?: string | null;
-  /** Day 17/05/2026: OTP duyệt — server verify trong RPC fnb_void_invoice_atomic.
-   *  Null = cashier có quyền pos_fnb.void_paid_bill / pos_fnb.void. */
+  /** OTP được kiểm tra ở máy chủ. Quản lý có quyền hủy tại chi nhánh có thể bỏ trống. */
   otpId?: string | null;
 }): Promise<void> {
   const supabase = getClient();

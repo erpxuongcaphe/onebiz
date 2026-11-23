@@ -2,6 +2,7 @@
 import { billAuditHref } from "@/lib/operation-history-entry";
 import { useDeliveryStaff } from "./hooks/use-delivery-staff";
 import { useFnbOrderNoteSync } from "./hooks/use-fnb-order-note-sync";
+import { canVoidFnbWithoutOtp } from "@/lib/fnb/paid-void-policy";
 import { useFnbCustomerPicker } from "./hooks/use-fnb-customer-picker";
 import { useFnbDialogPrice } from "./hooks/use-fnb-dialog-price";
 import { useFnbTabReconciliation } from "@/lib/hooks/use-fnb-tab-reconciliation";
@@ -519,6 +520,7 @@ function FnbPosPageInner() {
     ? billAuditHref(branchId, pos.activeTab?.kitchenOrderId, openOrders.orders.find(order => order.id === pos.activeTab?.kitchenOrderId)?.orderNumber ?? pos.activeTab?.label ?? "Bill đang xem")
     : undefined;
   const canVoidPaidBill =
+    canVoidFnbWithoutOtp(user?.role) &&
     hasPermissionWithLegacy(PERMISSIONS.POS_FNB_VOID_PAID_BILL, PERMISSIONS.POS_FNB_VOID);
 
   const [catalogRefreshRevision, setCatalogRefreshRevision] = useState(0);
