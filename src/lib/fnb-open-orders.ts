@@ -8,6 +8,6 @@ export function summarizeFnbOpenOrder(order: KitchenOrder): FnbOpenOrder {
   const subtotal = items.reduce((sum, item) => sum + (item.unitPrice + item.toppings.reduce((n, topping) => n + topping.price * topping.quantity, 0)) * item.quantity, 0);
   return { ...order, itemCount: items.reduce((sum, item) => sum + item.quantity, 0), provisionalTotal: Math.max(0, subtotal - order.discountAmount) + (order.orderType === "delivery" ? order.deliveryFee : 0) };
 }
-export function fnbOpenOrderLabel(order: KitchenOrder): string {
+export function fnbOpenOrderLabel(order: Pick<KitchenOrder, "orderType" | "tableName">): string {
   return order.orderType === "dine_in" ? (order.tableName || "Tại quán · thiếu bàn") : order.orderType === "delivery" ? "Giao hàng" : "Mang về";
 }

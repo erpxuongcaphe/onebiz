@@ -59,12 +59,31 @@ describe("FnbCart pre-bill action beside checkout", () => {
   it("prints directly once without sending to kitchen, paying or editing the cart", () => {
     const onPrintPreBill = vi.fn(), onPayment = vi.fn(), onSendToKitchen = vi.fn();
     const updateLineQty = vi.fn(), removeLine = vi.fn();
-    renderGio([taoDong(1)], {onPrintPreBill, onPayment, onSendToKitchen, updateLineQty, removeLine});
+    renderGio([], {onPrintPreBill, onPayment, onSendToKitchen, updateLineQty, removeLine,
+      activeTab:{id:"sent",label:"Mang về",orderType:"takeaway",kitchenOrderId:"order",lines:[],sentLines:[taoDong(1)]}});
     fireEvent.click(screen.getByRole("button", {name:"In tạm tính"}));
     expect(onPrintPreBill).toHaveBeenCalledOnce();
     for (const action of [onPayment,onSendToKitchen,updateLineQty,removeLine]) expect(action).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", {name:"Thao tác đơn"}));
     expect(screen.queryByRole("menuitem", {name:/In tạm tính/})).not.toBeInTheDocument();
+  });
+  it.each([
+    { kitchenOrderId: undefined, lines: [taoDong(1)], sentLines: [] },
+    { kitchenOrderId: "order", lines: [taoDong(2)], sentLines: [taoDong(1)] },
+    { kitchenOrderId: "local_order", lines: [], sentLines: [taoDong(1)] },
+    { kitchenOrderId: "order", lines: [], sentLines: [] },
+  ])("waits until all items have been sent to the kitchen (%j)", (snapshot) => {
+    const onPrintPreBill = vi.fn();
+    renderGio(snapshot.lines, { onPrintPreBill, activeTab: { id: "tab", label: "Bàn 1", orderType: "dine_in", ...snapshot } });
+    const button = screen.getByRole("button", { name: "In tạm tính" });
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    expect(onPrintPreBill).not.toHaveBeenCalled();
+  });
+  it("keeps printing disabled while the kitchen submission is in progress", () => {
+    renderGio([], { onPrintPreBill: vi.fn(), kitchenSubmitting: true,
+      activeTab: { id: "tab", label: "Mang về", orderType: "takeaway", kitchenOrderId: "order", lines: [], sentLines: [taoDong(1)] } });
+    expect(screen.getByRole("button", { name: "In tạm tính" })).toBeDisabled();
   });
   it("keeps printing disabled for an empty cart", () => {
     const onPrintPreBill=vi.fn();
@@ -88,6 +107,25 @@ describe("FnbCart pre-bill action beside checkout", () => {
     expect(screen.queryByRole("button", {name:"In tạm tính"})).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", {name:/Thanh toán \(F9\)/}));
     expect(onPayment).toHaveBeenCalledOnce();
+  });
+});
+
+describe("FnbCart service type after kitchen submission", () => {
+  it.each([
+    ["dine_in", "Mang về", "takeaway"],
+    ["dine_in", "Giao hàng", "delivery"],
+    ["takeaway", "Tại quán", "dine_in"],
+    ["takeaway", "Giao hàng", "delivery"],
+    ["delivery", "Tại quán", "dine_in"],
+    ["delivery", "Mang về", "takeaway"],
+  ])("requests a service change from %s to %s without sending kitchen again", (orderType, label, destination) => {
+    const onChangeOrderType = vi.fn();
+    const onSendToKitchen = vi.fn();
+    renderGio([], { onChangeOrderType, onSendToKitchen,
+      activeTab: { id: "tab", label: "Bill", orderType, kitchenOrderId: "order", lines: [], sentLines: [taoDong(1)] } });
+    fireEvent.click(screen.getByRole("button", { name: label }));
+    expect(onChangeOrderType).toHaveBeenCalledExactlyOnceWith(destination);
+    expect(onSendToKitchen).not.toHaveBeenCalled();
   });
 });
 
