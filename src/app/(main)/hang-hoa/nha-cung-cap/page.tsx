@@ -53,6 +53,10 @@ const CreateSupplierDialog = dynamic(
     ),
   { ssr: false },
 );
+const CreateSupplierGroupDialog = dynamic(
+  () => import("./create-supplier-group-dialog").then((m) => m.CreateSupplierGroupDialog),
+  { ssr: false },
+);
 import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
 import { downloadTemplate } from "@/lib/excel";
 import { supplierExcelSchema } from "@/lib/excel/schemas";
@@ -389,6 +393,8 @@ export default function NhaCungCapPage() {
   const { hasPermission, user, tenant } = useAuth();
   const { activeBranchId: listBranchId, branches, isReady: branchScopeReady } = useBranchFilter();
   const canDeleteSupplier = hasPermission(PERMISSIONS.SUPPLIERS_DELETE);
+  const canCreateSupplierGroup = hasPermission(PERMISSIONS.SUPPLIERS_CREATE);
+  const [createGroupOpen, setCreateGroupOpen] = useState(false);
   const [otpSupplier, setOtpSupplier] = useState<Supplier | null>(null);
   const { toast } = useToast();
   const [search, setSearch] = useState("");
@@ -735,6 +741,12 @@ export default function NhaCungCapPage() {
               variant: "default",
               onClick: () => setCreateOpen(true),
             },
+            ...(canCreateSupplierGroup ? [{
+              label: "Nhóm NCC",
+              icon: <Icon name="add" size={16} />,
+              variant: "outline" as const,
+              onClick: () => setCreateGroupOpen(true),
+            }] : []),
             {
               label: "Tải mẫu",
               icon: <Icon name="description" size={16} />,
@@ -957,6 +969,9 @@ export default function NhaCungCapPage() {
         onSuccess={fetchData}
         initialData={editingSupplier ? supplierEditProfile(editingSupplier) : undefined}
       />
+      {createGroupOpen && canCreateSupplierGroup && (
+        <CreateSupplierGroupDialog onClose={() => setCreateGroupOpen(false)} />
+      )}
 
       <ConfirmDialog
         open={!!deletingSupplier}

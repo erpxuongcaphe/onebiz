@@ -22,6 +22,7 @@ import {
 import { useToast } from "@/lib/contexts";
 import { createSupplier, getCategoriesByScope, updateSupplier } from "@/lib/services";
 import { getSupplierGroupLabel } from "@/lib/services/supabase/suppliers";
+import { isSupplierGroupCode } from "@/lib/supplier-group-code";
 import { useListWorkspaceQuery } from "@/lib/hooks/use-list-workspace-query";
 import type { ProductCategory, Supplier } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
@@ -108,7 +109,7 @@ export function CreateSupplierDialog({
     setGroupStatus("loading");
     getCategoriesByScope("supplier").then((categories) => {
       if (cancelled) return;
-      setGroups(categories.filter(({ code }) => code && code !== "NB" && /^[A-Z][A-Z0-9]{1,7}$/.test(code)));
+      setGroups(categories.filter(({ code }) => code && isSupplierGroupCode(code)));
       setGroupStatus("ready");
     }).catch(() => {
       if (!cancelled) setGroupStatus("error");
