@@ -19,6 +19,7 @@ import {
   normalizeCreatedAtRange,
 } from "@/lib/utils/list-date-preset-range";
 import { getClient, getPaginationRange, handleError, getCurrentTenantId } from "./base";
+import { FNB_VOID_APPROVAL_MESSAGE } from "@/lib/fnb/paid-void-policy";
 import { apDungLocChungTuBan } from "./chung-tu-ban";
 import { readHistoryPages } from "./read-history-pages";
 import { DEFAULT_INVOICE_LIST_STATUSES } from "@/lib/utils/document-list-statuses";
@@ -616,6 +617,12 @@ export async function voidCompletedInvoice(params: {
       p_shift_id: null,
     },
   );
+  if (error?.message === "FNB_VOID_APPROVAL_REQUIRED") {
+    throw new Error(FNB_VOID_APPROVAL_MESSAGE);
+  }
+  if (error?.message === "FNB_VOID_REASON_REQUIRED") {
+    throw new Error("Nhập lý do hủy có ít nhất 3 ký tự.");
+  }
   if (error) handleError(error, "voidCompletedInvoice.atomic_v2");
 
   const result = (data ?? {}) as {

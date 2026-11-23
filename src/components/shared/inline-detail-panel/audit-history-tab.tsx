@@ -15,6 +15,7 @@ import { Icon } from "@/components/ui/icon";
 interface AuditHistoryTabProps {
   entityType: string;
   entityId: string;
+  showInvoiceVoidReason?: boolean;
   /** Số bản ghi tối đa lấy về. Mặc định 50. */
   limit?: number;
 }
@@ -26,6 +27,7 @@ interface AuditHistoryTabProps {
 export function AuditHistoryTab({
   entityType,
   entityId,
+  showInvoiceVoidReason = false,
   limit = 50,
 }: AuditHistoryTabProps) {
   const [entries, setEntries] = useState<AuditLogEntry[] | null>(null);
@@ -103,6 +105,12 @@ export function AuditHistoryTab({
               · {formatDate(e.createdAt)}
             </span>
           </div>
+          {showInvoiceVoidReason && (e.action === "cancel" || e.action === "void_paid_invoice") &&
+            typeof e.newData?.reason === "string" && e.newData.reason.trim() && (
+              <p className="mt-1 whitespace-pre-wrap break-words text-sm text-foreground">
+                <strong>Lý do hủy</strong> · {e.newData.reason}
+              </p>
+            )}
           {e.newData && Object.keys(e.newData).length > 0 && (
             <DiffSummary
               oldData={e.oldData}
