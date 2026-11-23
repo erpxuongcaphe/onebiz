@@ -119,7 +119,7 @@ import { previewFnbSettlement } from "@/lib/fnb-settlement-preview";
 import { cn } from "@/lib/utils";
 import { useFnbOpenOrders } from "@/lib/hooks/use-fnb-open-orders";
 import { useLiveDataRefresh } from "@/lib/hooks/use-live-data-refresh";
-import { fnbOpenOrderLabel, isUnpaidFnbOrder, type FnbOpenOrder } from "@/lib/fnb-open-orders";
+import { fnbOpenOrderLabel, getFnbTableBills, getSingleFnbTableBill, isUnpaidFnbOrder, type FnbOpenOrder } from "@/lib/fnb-open-orders";
 import { canMergeFnbOrder, getFnbMergePlan } from "@/lib/fnb-merge-plan";
 import { FnbMergeBillsDialog } from "./components/fnb-merge-bills-dialog";
 import { FnbOpenOrdersDialog } from "./components/fnb-open-orders-dialog";
@@ -2319,7 +2319,7 @@ function FnbPosPageInner() {
     pos.closeTab(tabId);
   }, [pos, saveOrderNote, toast]);
 
-  const handleOpenSharedOrder = useCallback(async (summary: FnbOpenOrder) => {
+  const handleOpenSharedOrder = useCallback(async (summary: FnbOpenOrder, expectedTableId?: string) => {
     if (openingSharedOrderLock.current) return false;
     openingSharedOrderLock.current = true;
     const selection = ++orderSelectionGeneration.current;
@@ -2327,9 +2327,10 @@ function FnbPosPageInner() {
     try {
       const order = await getKitchenOrderById(summary.id);
       if (liveBranchRef.current !== branchId || selection !== orderSelectionGeneration.current) return false;
-      if (order.branchId !== branchId || !isUnpaidFnbOrder(order)) {
-        toast({ title: "Đơn đã thay đổi", description: "Đơn đã thanh toán, gộp hoặc không thuộc chi nhánh này. Danh sách đang được cập nhật.", variant: "warning" });
-        void openOrders.refresh(); return false;
+      if (order.branchId !== branchId || (expectedTableId && order.tableId !== expectedTableId) || !isUnpaidFnbOrder(order)) {
+        toast({ title: "Đơn đã thay đổi", description: "Đơn đã thanh toán, chuyển bàn, gộp hoặc không còn thuộc chi nhánh này. Danh sách đang được cập nhật.", variant: "warning" });
+        if (!expectedTableId) void openOrders.refresh();
+        return false;
       }
       const existing = pos.tabs.find((tab) => tab.kitchenOrderId === order.id);
       const tabId = existing?.id ?? pos.createTab(fnbOpenOrderLabel(order), order.orderType, order.tableId ?? undefined);
@@ -2746,9 +2747,27 @@ function FnbPosPageInner() {
         pos.createTab(getTableLabel(table), "dine_in", table.id);
         setShowFloorPlan(false);
       } else if (table.status === "occupied") {
-        setTableBillsId(table.id);
-        void openOrders.refresh();
-        return;
+        if (openingSharedOrderLock.current) return;
+        const showBills = () => {
+          setTableBillsId(table.id);
+          void openOrders.refresh();
+        };
+        // The open-order list already refreshes in the background every 30 seconds.
+        const hasRecentBills = networkStatus.isOnline && !openOrders.error && openOrders.updatedAt &&
+          Date.now() - openOrders.updatedAt.getTime() <= 45_000;
+        const bill = hasRecentBills && getSingleFnbTableBill(
+          getFnbTableBills(table.id, openOrders.orders, pos.tabs), table.currentOrderId,
+        );
+        if (!bill) {
+          showBills();
+        } else if (bill.order) {
+          const selection = orderSelectionGeneration.current + 1;
+          void handleOpenSharedOrder(bill.order, table.id).then(opened => {
+            if (!opened && liveBranchRef.current === branchId && orderSelectionGeneration.current === selection) showBills();
+          });
+        } else {
+          void handleSwitchOrderTab(bill.draftId);
+        }
       } else if (table.status === "cleaning") {
         if (!canManageTables) {
           toast({
@@ -2771,7 +2790,7 @@ function FnbPosPageInner() {
           });
       }
     },
-    [pos, branchId, canManageTables, toast, openOrders],
+    [pos, branchId, canManageTables, toast, openOrders, networkStatus.isOnline, handleOpenSharedOrder, handleSwitchOrderTab],
   );
 
   // ── Shift handlers ──
@@ -3467,7 +3486,10 @@ function FnbPosPageInner() {
         else if (paymentOpen) setPaymentOpen(false);
         else if (splitBillOpen) setSplitBillOpen(false);
         else if (mobileCartOpen) setMobileCartOpen(false);
-        else if (showFloorPlan) setShowFloorPlan(false);
+        else if (showFloorPlan) {
+          orderSelectionGeneration.current += 1;
+          setShowFloorPlan(false);
+        }
         return;
       }
     };
@@ -3481,6 +3503,8 @@ function FnbPosPageInner() {
   ]);
 
   // Sprint LOAD-1 (CEO 08/05): Phân biệt 3 state để loading UX đẹp hơn.
+  const tableBills = tableBillsId ? getFnbTableBills(tableBillsId, openOrders.orders, pos.tabs) : null;
+
   // 1) auth đang load → skeleton (user thấy đang load, không tưởng lỗi)
   // 2) auth done + KHÔNG có branch FnB nào → empty state đẹp với CTA
   // 3) data đang load (branchId có, products/tables fetching) → skeleton
@@ -3573,13 +3597,13 @@ function FnbPosPageInner() {
       />
       <FnbHeader
         openOrderCount={openOrders.orders.length}
-        onOpenOrders={() => { setMobileCartOpen(false); setOpenOrdersDialog(true); }}
+        onOpenOrders={() => { if (showFloorPlan) orderSelectionGeneration.current += 1; setMobileCartOpen(false); setOpenOrdersDialog(true); }}
         tabs={pos.tabs}
         activeTabId={pos.activeTabId}
         switchTab={(id) => { setOpenOrdersDialog(false); handleSwitchOrderTab(id); }}
         closeTab={handleCloseOrderTab}
         createTab={() => { setOpenOrdersDialog(false); handleCreateOrderTab(); }}
-        onToggleFloorPlan={() => { setOpenOrdersDialog(false); setShowFloorPlan(!showFloorPlan); }}
+        onToggleFloorPlan={() => { orderSelectionGeneration.current += 1; setOpenOrdersDialog(false); setShowFloorPlan(!showFloorPlan); }}
         onSearch={() => setSearchModalOpen(true)}
         shift={currentShift}
         onShiftClick={canCheckout ? handleShiftClick : undefined}
@@ -3728,6 +3752,9 @@ function FnbPosPageInner() {
 
         {/* Left panel: menu grid OR floor plan */}
         <div className={cn("flex min-h-0 min-w-0 flex-1 flex-col", pos.lineCount > 0 && !mobileCartOpen && "pb-[calc(6rem+env(safe-area-inset-bottom))] xl:pb-0")}>
+          {showFloorPlan && openingSharedOrder && (
+            <p role="status" className="shrink-0 px-3 pt-2 text-xs text-muted-foreground">Đang mở bill…</p>
+          )}
           {showFloorPlan ? (
             <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Icon name="progress_activity" size={24} className="animate-spin text-muted-foreground" /></div>}>
               <TableFloorPlan
@@ -4380,11 +4407,14 @@ function FnbPosPageInner() {
         </DialogContent>
       </Dialog>
 
-      {tableBillsId && <Suspense fallback={null}><TableBillsDialog open tableLabel={tables.find(table => table.id === tableBillsId) ? getTableLabel(tables.find(table => table.id === tableBillsId)!) : "Bàn"}
-        orders={openOrders.orders.filter(order => order.tableId === tableBillsId && isUnpaidFnbOrder(order))} drafts={pos.tabs.filter(tab => tab.tableId === tableBillsId && !tab.kitchenOrderId)}
+      {tableBillsId && tableBills && <Suspense fallback={null}><TableBillsDialog open tableLabel={tables.find(table => table.id === tableBillsId) ? getTableLabel(tables.find(table => table.id === tableBillsId)!) : "Bàn"}
+        orders={tableBills.orders} drafts={tableBills.drafts}
         loading={openOrders.loading} error={openOrders.error} opening={openingSharedOrder} busy={mergeBillsBusy} canMerge={canMergeBills}
-        onOpenChange={open => { if (!open) setTableBillsId(null); }} onRefresh={() => { void openOrders.refresh(); }} onMerge={() => { setMergeIntent({ initialId: openOrders.orders.find(order => order.tableId === tableBillsId && branchId && canMergeFnbOrder(order, branchId))?.id }); void openOrders.refresh(); }}
-        onOpenOrder={order => { void handleOpenSharedOrder(order).then(opened => { if (opened) setTableBillsId(null); }); }}
+        onOpenChange={open => { if (!open) setTableBillsId(null); }} onRefresh={() => { void openOrders.refresh(); }} onMerge={() => { setMergeIntent({ initialId: tableBills.orders.find(order => branchId && canMergeFnbOrder(order, branchId))?.id }); void openOrders.refresh(); }}
+        onOpenOrder={order => { void handleOpenSharedOrder(order, tableBillsId).then(opened => {
+          if (opened) setTableBillsId(null);
+          else if (liveBranchRef.current === branchId) void openOrders.refresh();
+        }); }}
         onOpenDraft={id => { handleSwitchOrderTab(id); setTableBillsId(null); setShowFloorPlan(false); setMobileCartOpen(true); }}
         onCreate={() => { const table = tables.find(entry => entry.id === tableBillsId); if (!table) return; orderSelectionGeneration.current += 1; pos.createTab(`${getTableLabel(table)} · Bill mới`, "dine_in", table.id); setTableBillsId(null); setShowFloorPlan(false); setMobileCartOpen(false); }}
       /></Suspense>}
