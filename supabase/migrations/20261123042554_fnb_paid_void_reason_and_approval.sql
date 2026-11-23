@@ -57,6 +57,9 @@ begin
     ) as edits(target, anchor, replacement)
   loop
     v_definition := replace(pg_get_functiondef(v_edit.target), chr(13), '');
+    if strpos(v_definition, v_edit.replacement) > 0 then
+      continue;
+    end if;
     if cardinality(string_to_array(v_definition, v_edit.anchor)) <> 2 then
       raise exception 'Unexpected paid-void definition: %', v_edit.target;
     end if;

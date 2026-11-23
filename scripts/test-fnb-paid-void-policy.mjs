@@ -61,10 +61,12 @@ try {
     set test.actor = '00000000-0000-0000-0000-000000000001';
     set test.source = 'fnb';
   `.replace(/^ {4}/gm, ""));
-  await db.exec(readFileSync(new URL(
+  const migration = readFileSync(new URL(
     "../supabase/migrations/20261123042554_fnb_paid_void_reason_and_approval.sql",
     import.meta.url,
-  ), "utf8"));
+  ), "utf8");
+  await db.exec(migration);
+  await db.exec(migration);
   const actor = "00000000-0000-0000-0000-000000000001";
   const manager = "00000000-0000-0000-0000-000000000003";
   const wrongOtp = "00000000-0000-0000-0000-000000000004";
