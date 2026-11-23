@@ -51,6 +51,7 @@ import {
   hapticSuccess,
   hapticError,
 } from "@/lib/offline";
+import { hasQueuedKitchenItems } from "@/lib/offline/sync-manager";
 import { splitByQuantities, splitEqually } from "@/lib/services/supabase/split-bill";
 import { validateCoupon } from "@/lib/services/supabase/coupons";
 import {
@@ -124,7 +125,7 @@ import { FnbMergeBillsDialog } from "./components/fnb-merge-bills-dialog";
 import { FnbOpenOrdersDialog } from "./components/fnb-open-orders-dialog";
 import { customerContextFromOrder, needsCustomerSelection } from "@/lib/fnb-customer-context";
 import { selectFnbOrderCustomer } from "@/lib/services/supabase/fnb-order-customer";
-import { needsFnbTable } from "./order-type-selection";
+import { canPrintFnbPreBill, needsFnbTable } from "./order-type-selection";
 import { useFnbPosState } from "./hooks/use-fnb-pos-state";
 import { useFnbTabBenefits } from "./hooks/use-fnb-tab-benefits";
 import { FnbHeader } from "./components/fnb-header";
@@ -145,6 +146,8 @@ import { FnbProductGrid, type FnbProduct } from "./components/fnb-product-grid";
 import { kiemTraGiaBanThemNhanhFnb } from "./fnb-menu-sale-guard";
 import { FnbSubcategoryPills } from "./components/fnb-subcategory-pills";
 import { FnbCart } from "./components/fnb-cart";
+import { FnbChangeDeliveryDialog } from "./components/fnb-change-delivery-dialog";
+import { changeFnbBillService, type FnbServiceDelivery } from "@/lib/services/supabase/fnb-order-service";
 import type { FnbItemConfirmPayload, FnbItemInitialSelection } from "./components/fnb-item-dialog";
 import type { FnbPaymentConfirmPayload } from "./components/fnb-payment-dialog";
 import type { SplitItem, SplitQuantitySelection } from "./components/split-bill-dialog";
@@ -241,6 +244,8 @@ function FnbPosPageInner() {
   const { settings } = useSettings();
   const networkStatus = useNetworkStatus();
   const pos = useFnbPosState(currentBranch?.id);
+  const activeTabForPreBill = useRef(pos.activeTab);
+  activeTabForPreBill.current = pos.activeTab;
 
   // ── Data state ──
   const [catalog, setCatalog] = useState<FnbCatalog | null>(null);
@@ -334,6 +339,11 @@ function FnbPosPageInner() {
   const [transferSubmitting, setTransferSubmitting] = useState(false);
   const transferLock = useRef(false);
   const [selectDineInTabId, setSelectDineInTabId] = useState<string | null>(null);
+  const [deliveryChangeTabId, setDeliveryChangeTabId] = useState<string | null>(null);
+  const [orderTypeSaving, setOrderTypeSaving] = useState(false);
+  const orderTypeChangeLock = useRef(false);
+  const fnbKitchenSubmitLockRef = useRef(false);
+  const fnbSubmitLockRef = useRef(false);
   // Sprint A — CEO 06/05: Sidenav drawer trigger từ ☰ button trong header.
   const [sidenavOpen, setSidenavOpen] = useState(false);
   // Sprint B.5 (CEO 12/05): PIN POS switch user dialog
@@ -1704,20 +1714,71 @@ function FnbPosPageInner() {
     return true;
   }, [pos.activeTab, toast]);
 
+  const saveOrderTypeChange = useCallback(async (next: OrderType, table?: RestaurantTable, delivery?: FnbServiceDelivery) => {
+    const tab = pos.activeTab;
+    if (!tab?.kitchenOrderId || !branchId || orderTypeChangeLock.current || fnbKitchenSubmitLockRef.current || fnbSubmitLockRef.current || paymentOpen) return;
+    if (!networkStatus.isOnline || tab.kitchenOrderId.startsWith("local_")) {
+      toast({ title: "Bill chưa đồng bộ", description: "Kết nối mạng và đợi gửi bếp xong trước khi đổi hình thức phục vụ.", variant: "warning" });
+      return;
+    }
+    orderTypeChangeLock.current = true;
+    setOrderTypeSaving(true);
+    try {
+      if (await hasQueuedKitchenItems(tab.kitchenOrderId)) {
+        throw new Error("Bill còn món chờ đồng bộ với bếp. Đồng bộ xong rồi đổi hình thức phục vụ.");
+      }
+      const saved = await changeFnbBillService(tab.kitchenOrderId, tab.orderType, next, table?.id, delivery);
+      if (liveBranchRef.current !== branchId) return;
+      pos.updateTabMeta(tab.id, {
+        orderType: saved.order_type,
+        tableId: saved.table_id ?? undefined,
+        label: fnbOpenOrderLabel({ orderType: saved.order_type, tableName: table && getTableLabel(table) }),
+        deliveryPlatform: saved.delivery_platform ?? undefined,
+        deliveryStaffId: saved.delivery_staff_id ?? undefined,
+        deliveryFee: saved.delivery_fee,
+        platformCommissionPercent: saved.platform_commission_percent,
+        deliveryDistanceTier: saved.delivery_distance_tier ?? undefined,
+        deliveryDistanceMeters: undefined,
+        deliveryDistanceRange: undefined,
+      });
+      setSelectDineInTabId(null);
+      setDeliveryChangeTabId(null);
+      toast({ title: "Đã đổi hình thức phục vụ", description: "Bill giữ nguyên các món đã gửi bếp." });
+    } catch (err) {
+      if (liveBranchRef.current !== branchId) return;
+      if (delivery?.platform === "direct") setDeliveryPolicyReload(current => current + 1);
+      toast({ title: "Chưa đổi được hình thức phục vụ", description: err instanceof Error ? err.message : "Thử lại sau khi kiểm tra bill.", variant: "warning" });
+    } finally {
+      orderTypeChangeLock.current = false;
+      setOrderTypeSaving(false);
+      if (liveBranchRef.current === branchId) {
+        void openOrders.refresh();
+        void refreshLiveTables();
+      }
+    }
+  }, [branchId, networkStatus.isOnline, openOrders.refresh, paymentOpen, pos, refreshLiveTables, toast]);
+
   const handleOrderTypeChange = useCallback((next: OrderType) => {
     const tab = pos.activeTab;
-    if (!tab || tab.kitchenOrderId) return;
+    if (!tab || (tab.orderType === next && (next !== "dine_in" || tab.tableId || tab.kitchenOrderId)) || orderTypeChangeLock.current || fnbKitchenSubmitLockRef.current || fnbSubmitLockRef.current || paymentOpen) return;
+    if (tab.kitchenOrderId && (!networkStatus.isOnline || tab.kitchenOrderId.startsWith("local_"))) {
+      toast({ title: "Bill chưa đồng bộ", description: "Kết nối mạng và đợi gửi bếp xong trước khi đổi hình thức phục vụ.", variant: "warning" });
+      return;
+    }
     if (next === "dine_in") {
       setSelectDineInTabId(tab.id);
-    } else {
+    } else if (!tab.kitchenOrderId) {
       pos.setActiveTabOrderType(next);
+    } else if (next === "delivery") {
+      setDeliveryChangeTabId(tab.id);
+    } else {
+      void saveOrderTypeChange(next);
     }
-  }, [pos]);
+  }, [pos, paymentOpen, networkStatus.isOnline, saveOrderTypeChange, toast]);
 
-  const fnbKitchenSubmitLockRef = useRef(false);
   const handleSendToKitchen = useCallback(async (keepCartOpen = false): Promise<string | null> => {
     const initialTab = pos.activeTab;
-    if (!initialTab || initialTab.lines.length === 0) return null;
+    if (!initialTab || initialTab.lines.length === 0 || orderTypeChangeLock.current) return null;
     let tab = initialTab;
     if (requireTable()) return null;
     if (needsCustomerSelection(tab)) { openCustomerPicker("send-kitchen"); toast({title:"Chọn khách cho đơn",description:"Chọn Khách lẻ hoặc khách có tên trước khi gửi bếp.",variant:"info"}); return null; }
@@ -2385,10 +2446,24 @@ function FnbPosPageInner() {
   }, [openOrders.orders, activeSharedTabId, activeSharedOrderId, activeNoteDraftBase, refreshSharedSentLines, refreshSharedTabMeta, kitchenSubmitting]);
 
   // ── Print pre-bill ──
-  const handlePrintPreBill = useCallback(() => {
+  const handlePrintPreBill = useCallback(async () => {
     const tab = pos.activeTab;
-    const billLines = pos.allLines;
-    if (!tab || billLines.length === 0) return;
+    if (!tab?.kitchenOrderId || !canPrintFnbPreBill(tab) || fnbKitchenSubmitLockRef.current || orderTypeChangeLock.current) return;
+    try {
+      if (await hasQueuedKitchenItems(tab.kitchenOrderId)) {
+        toast({ title: "Còn món chờ gửi bếp", description: "Đợi bill đồng bộ rồi in tạm tính.", variant: "warning" });
+        return;
+      }
+    } catch {
+      toast({ title: "Chưa kiểm tra được món chờ đồng bộ", description: "Mở lại bill trước khi in tạm tính.", variant: "warning" });
+      return;
+    }
+    if (liveBranchRef.current !== branchId || activeTabForPreBill.current?.id !== tab.id) return;
+    if (fnbKitchenSubmitLockRef.current || orderTypeChangeLock.current || activeTabForPreBill.current !== tab) {
+      toast({ title: "Bill vừa thay đổi", description: "Kiểm tra lại giỏ rồi bấm In tạm tính.", variant: "warning" });
+      return;
+    }
+    const billLines = tab.sentLines ?? [];
 
     // Migration 00070: nếu là đơn sàn → bill in NET (quán thực thu),
     // commission line tách riêng cho shipper thấy.
@@ -2448,17 +2523,12 @@ function FnbPosPageInner() {
       platformCommissionPercent: isPlatformOrder ? commissionPercent : undefined,
       platformCommissionAmount: isPlatformOrder ? commissionAmount : undefined,
     });
-  }, [pos, settings, user, fnbBenefitDisplay, currentBranch, branchId]);
-
-  // P1-3D-P1 12/06/2026: submit-lock chống double-click / F9-spam tạo 2 kitchen
-  // order. POS Retail có submitLockRef nhưng FnB trước đây thiếu — dialog đóng
-  // sync ngay khi onConfirm, cashier có thể bấm Xác nhận 2 lần khi network chậm.
-  const fnbSubmitLockRef = useRef(false);
+  }, [pos, settings, user, fnbBenefitDisplay, currentBranch, branchId, toast]);
 
   // ── Payment ──
   const handlePayment = useCallback(
     async (payload: FnbPaymentConfirmPayload) => {
-      if (requireTable()) return false;
+      if (orderTypeChangeLock.current || requireTable()) return false;
       if (fnbSubmitLockRef.current) {
         toast({
           title: "Đang xử lý thanh toán...",
@@ -2801,7 +2871,7 @@ function FnbPosPageInner() {
    * vẫn KHÔNG bị chặn — bếp phải pha được kể cả khi chưa mở ca).
    */
   const requestPayment = useCallback((): boolean => {
-    if (requireTable()) return false;
+    if (orderTypeChangeLock.current || requireTable()) return false;
     if (!canCheckout) {
       toast({
         title: "Chỉ thu ngân được thanh toán",
@@ -3845,6 +3915,7 @@ function FnbPosPageInner() {
           canCheckout={canCheckout}
           onSplitBill={canSplitBill && networkStatus.isOnline ? handleOpenSplitBill : undefined}
           onChangeOrderType={handleOrderTypeChange}
+          orderTypeSaving={orderTypeSaving}
           onCustomerClick={() => openCustomerPicker("customer-button")}
           onDiscountChange={handleManualDiscount}
           onPrintPreBill={handlePrintPreBill}
@@ -4073,6 +4144,7 @@ function FnbPosPageInner() {
               canCheckout={canCheckout}
               onSplitBill={canSplitBill && networkStatus.isOnline ? handleOpenSplitBill : undefined}
               onChangeOrderType={handleOrderTypeChange}
+              orderTypeSaving={orderTypeSaving}
               onCustomerClick={() => openCustomerPicker("customer-button")}
               onDiscountChange={handleManualDiscount}
               onPrintPreBill={handlePrintPreBill}
@@ -4359,22 +4431,30 @@ function FnbPosPageInner() {
 
       <FnbOpenOrdersDialog onMerge={canMergeBills ? () => { setMergeIntent({}); void openOrders.refresh(); } : undefined} activeOrderId={pos.activeTab?.kitchenOrderId} updatedAt={openOrders.updatedAt} open={openOrdersDialog} onOpenChange={setOpenOrdersDialog} orders={openOrders.orders} drafts={pos.tabs.filter((tab) => !tab.kitchenOrderId)} onOpenOrder={handleOpenSharedOrder} onOpenDraft={(id) => { pos.switchTab(id); setOpenOrdersDialog(false); setMobileCartOpen(true); setShowFloorPlan(false); }} loading={openOrders.loading} error={openOrders.error} connected={openOrders.connected} busy={openingSharedOrder} onRefresh={() => { void openOrders.refresh(); }} />
 
-      <Dialog open={Boolean(selectDineInTabId)} onOpenChange={(open) => { if (!open) setSelectDineInTabId(null); }}>
+      {deliveryChangeTabId && deliveryChangeTabId === pos.activeTabId &&
+        <FnbChangeDeliveryDialog key={deliveryChangeTabId} policy={currentDeliveryPolicy} policyError={deliveryPolicyError}
+          onRetryPolicy={() => { setDeliveryPolicyError(""); setDeliveryPolicyReload(current => current + 1); }}
+          settings={platformSettings} before={pos.subtotal} after={fnbBenefitDisplay.total} tiers={deliveryTiers}
+          busy={orderTypeSaving} onClose={() => setDeliveryChangeTabId(null)}
+          onConfirm={delivery => { void saveOrderTypeChange("delivery", undefined, delivery); }} />}
+
+      <Dialog open={Boolean(selectDineInTabId && selectDineInTabId === pos.activeTabId)} onOpenChange={(open) => { if (!open && !orderTypeSaving) setSelectDineInTabId(null); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader><DialogTitle>Chọn bàn · Tại quán</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">{currentBranch?.name} · Chọn bàn trống cho đơn này. Hủy chọn sẽ giữ nguyên loại đơn và các món.</p>
           <div className="grid grid-cols-3 gap-2 max-h-[320px] overflow-y-auto sm:grid-cols-4">
             {tables.filter((table) => table.status === "available" && !pos.tabs.some((tab) => tab.id !== selectDineInTabId && tab.tableId === table.id)).map((table) => (
-              <button key={table.id} type="button" className="h-14 rounded-md border border-status-success/40 bg-status-success/5 font-semibold text-status-success hover:bg-status-success/10" onClick={() => {
+              <button key={table.id} type="button" disabled={orderTypeSaving} className="h-14 rounded-md border border-status-success/40 bg-status-success/5 font-semibold text-status-success hover:bg-status-success/10" onClick={() => {
                 const draft = pos.tabs.find((tab) => tab.id === selectDineInTabId);
-                if (!draft || draft.kitchenOrderId || draft.id !== pos.activeTabId) { setSelectDineInTabId(null); return; }
+                if (!draft || draft.id !== pos.activeTabId) { setSelectDineInTabId(null); return; }
+                if (draft.kitchenOrderId) { void saveOrderTypeChange("dine_in", table); return; }
                 pos.setActiveTabOrderType("dine_in", table);
                 setSelectDineInTabId(null);
               }}>{getTableLabel(table)}</button>
             ))}
           </div>
           {!tables.some((table) => table.status === "available" && !pos.tabs.some((tab) => tab.id !== selectDineInTabId && tab.tableId === table.id)) && <p className="text-sm text-muted-foreground">Không có bàn trống. Kiểm tra sơ đồ bàn hoặc chọn Mang về nếu khách không dùng tại quán.</p>}
-          <button type="button" className="h-11 rounded-md border border-border px-4 font-medium hover:bg-muted" onClick={() => setSelectDineInTabId(null)}>Hủy chọn bàn</button>
+          <button type="button" disabled={orderTypeSaving} className="h-11 rounded-md border border-border px-4 font-medium hover:bg-muted" onClick={() => setSelectDineInTabId(null)}>Hủy chọn bàn</button>
         </DialogContent>
       </Dialog>
 

@@ -23,6 +23,7 @@ import type { DeliveryPlatformSettings } from "@/lib/services/supabase/fnb-platf
 import { Icon } from "@/components/ui/icon";
 import { HelpTip } from "@/components/shared/help-tip";
 import { previewFnbSettlement } from "@/lib/fnb-settlement-preview";
+import { canPrintFnbPreBill } from "../order-type-selection";
 
 // Sprint POS-FNB-EXT-1 (CEO 08/05): Delivery platform metadata
 const DELIVERY_PLATFORMS: {
@@ -132,6 +133,7 @@ interface FnbCartProps {
    * Chỉ hiển thị pill row khi callback được pass + chưa gửi bếp (tránh
    * đổi loại sau khi đã in bill bếp gây nhầm phục vụ).
    */
+  orderTypeSaving?: boolean;
   onChangeOrderType?: (next: "dine_in" | "takeaway" | "delivery") => void;
   /** Voucher apply — callback chỉ kiểm tra trước; RPC thanh toán tự tính lại. */
   onApplyCoupon?: (code: string) => Promise<void> | void;
@@ -206,6 +208,7 @@ export function FnbCart({
   onMergeTable,
   onOrderHistory,
   auditHistoryHref,
+  orderTypeSaving = false,
   onChangeOrderType,
   onApplyCoupon,
   onRemoveCoupon,
@@ -240,6 +243,7 @@ export function FnbCart({
   const pendingLines = activeTab?.lines ?? [];
   const lines = [...sentLines, ...pendingLines];
   const isEmpty = lines.length === 0;
+  const canPrintPreBill = canPrintFnbPreBill(activeTab) && !kitchenSubmitting && !orderTypeSaving;
   // Vùng ưu đãi/coupon ít dùng hơn danh sách món nên mặc định thu gọn
   // trên mọi màn hình. State chỉ đổi class, không remount: mở lại vẫn giữ nội
   // dung mã đang gõ. Tổng tiền, gửi bếp và thanh toán luôn hiển thị.
@@ -399,14 +403,9 @@ export function FnbCart({
         )}
       </div>
 
-      {/* Order type pill row — Sprint POS-FNB-4 (CEO 06/05).
-          Trước: chỉ display badge mode current → muốn đổi phải qua menu.
-          Sau: 3 button pill switch instant — cashier chuyển dine-in
-          ↔ takeaway ↔ delivery với 1 click ngay tại cart.
-          Disable sau khi gửi bếp (kitchenOrderId tồn tại) để tránh
-          đổi loại đơn đã in vé bếp gây phục vụ nhầm. */}
+      {/* Order type pill row. Saved service changes keep the existing bill. */}
       <div className="px-3 pt-2 pb-1.5 shrink-0 [@media(max-height:720px)]:px-2.5 [@media(max-height:720px)]:pt-1.5 [@media(max-height:720px)]:pb-1">
-        {onChangeOrderType && !activeTab?.kitchenOrderId ? (
+        {onChangeOrderType ? (
           <div className="inline-flex items-center gap-1">
             {([
               { key: "dine_in", label: "Tại quán", icon: "restaurant" },
@@ -419,6 +418,7 @@ export function FnbCart({
                   key={opt.key}
                   type="button"
                   onClick={() => onChangeOrderType(opt.key)}
+                  disabled={orderTypeSaving || kitchenSubmitting}
                   className={cn(
                     "inline-flex items-center gap-1 px-3 min-h-11 xl:min-h-7 xl:h-7 rounded-md text-xs font-medium transition-colors press-scale-sm",
                     isActive
@@ -949,7 +949,7 @@ export function FnbCart({
           <button
             type="button"
             onClick={onSendToKitchen}
-            disabled={unsentLineCount === 0 || kitchenSubmitting}
+            disabled={unsentLineCount === 0 || kitchenSubmitting || orderTypeSaving}
             className={cn(
               "min-w-0 h-12 rounded-md font-semibold text-sm flex flex-col items-center justify-center gap-0.5 transition-all press-scale-sm",
               counterVisual.kitchenAction,
@@ -975,19 +975,21 @@ export function FnbCart({
             <button
               type="button"
               onClick={onPrintPreBill}
-              disabled={isEmpty}
+              disabled={!canPrintPreBill}
               aria-label="In tạm tính"
-              title="In tạm tính"
+              title={canPrintPreBill ? "In tạm tính" : "Gửi tất cả món xuống bếp trước khi in tạm tính"}
               className="min-w-0 h-12 rounded-md border border-primary/25 bg-white text-primary flex flex-col items-center justify-center gap-0.5 font-semibold transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:opacity-40 disabled:pointer-events-none dark:bg-card"
             >
               <Icon name="print" size={18} />
               <span className="text-xs leading-tight">In tạm tính</span>
+              {!canPrintPreBill && !isEmpty && !kitchenSubmitting && !orderTypeSaving &&
+                <span className="text-[10px] leading-none">Gửi bếp trước</span>}
             </button>
           )}
           <button
             type="button"
             onClick={onPayment}
-            disabled={isEmpty || !canCheckout}
+            disabled={isEmpty || !canCheckout || orderTypeSaving}
             title={canCheckout ? "Thanh toán (F9)" : "Tài khoản này chỉ được nhận món và gửi bếp"}
             className={cn(
               "min-w-0 h-12 rounded-md font-bold text-sm flex flex-col items-center justify-center gap-0.5 transition-all press-scale-sm",

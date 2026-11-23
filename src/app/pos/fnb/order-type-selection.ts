@@ -5,6 +5,11 @@ export function needsFnbTable(tab: Pick<FnbTabSnapshot, "orderType" | "tableId">
   return tab?.orderType === "dine_in" && !tab.tableId;
 }
 
+export function canPrintFnbPreBill(tab: Pick<FnbTabSnapshot, "kitchenOrderId" | "lines" | "sentLines"> | undefined): boolean {
+  return Boolean(tab?.kitchenOrderId && !tab.kitchenOrderId.startsWith("local_") &&
+    !tab.lines.length && tab.sentLines?.length);
+}
+
 /** Keep type, table and visible name together; never relabel a sent order. */
 export function changeDraftOrderType(tab: FnbTabSnapshot, next: OrderType, table?: { id: string; tableNumber: string | number; name?: string }): FnbTabSnapshot {
   if (tab.kitchenOrderId || (next === "dine_in" && !table)) return tab;

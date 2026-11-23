@@ -399,6 +399,12 @@ export async function getFailedCount(): Promise<number> {
   return failed.length;
 }
 
+export async function hasQueuedKitchenItems(orderId: string): Promise<boolean> {
+  const db = await getDb();
+  const entries = await db.getAllFromIndex("sync_queue", "by_action", "addItems");
+  return entries.some(entry => entry.localId === orderId && entry.status !== "completed");
+}
+
 export async function getQueueEntries(): Promise<SyncQueueEntry[]> {
   const db = await getDb();
   const all = await db.transaction("sync_queue").objectStore("sync_queue").getAll();

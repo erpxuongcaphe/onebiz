@@ -132,6 +132,7 @@ const ACTION_LABELS: Record<string, string> = {
   fnb_table_available: "Trả bàn về trạng thái trống",
   fnb_kitchen_item_status: "Đổi trạng thái món bếp",
   fnb_kitchen_order_served: "Hoàn tất phục vụ món",
+  fnb_order_service_change: "Đổi hình thức phục vụ",
   fnb_delivery_staff_assigned: "Phân công giao hàng",
   fnb_delivery_staff_unassigned: "Gỡ người giao hàng",
   fnb_delivery_completed: "Hoàn tất giao hàng",
