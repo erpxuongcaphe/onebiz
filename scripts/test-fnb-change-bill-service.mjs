@@ -56,7 +56,7 @@ try {
   `);
   await db.exec(await migration("202610200001_fnb_delivery_price_policy.sql"));
   await db.exec(await functionFromMigration("00252_harden_fnb_kds_delivery.sql", "fnb_set_delivery_pricing_v2"));
-  await db.exec(await migration("20261123014043_fnb_change_bill_service.sql"));
+  await db.exec(await migration("20261123020530_fnb_change_bill_service.sql"));
 
   await asActor(101);
   const direct = { platform: "direct", fee: 123, tier: "near", revision: 0 };

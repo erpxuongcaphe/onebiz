@@ -47,7 +47,7 @@ const RPC = new Set(schema.rpc as string[]);
  * dưới sẽ BẮT XOÁ dòng ngay khi dump đã có (sau `node scripts/dump-db-schema.mjs`).
  */
 const RPC_CHO_MIGRATION = new Map<string, string>([
-  ["fnb_change_bill_service_v1", "20261123014043_fnb_change_bill_service.sql"],
+  ["fnb_change_bill_service_v1", "20261123020530_fnb_change_bill_service.sql"],
   ["cancel_supplier_receipt_atomic", "20261117105430_atomic_supplier_receipt_cancel.sql"],
   ["get_supplier_receipt_cancel_risks", "20261117105430_atomic_supplier_receipt_cancel.sql"],
   ["preview_supplier_receipt_correction", "20261117105442_supplier_receipt_correction.sql"],
