@@ -12,6 +12,9 @@ const checkDraft = String.raw`
     if (row.key.startsWith("fnb-tabs:")) {
       const tabs = row.value.tabs;
       if (!Array.isArray(tabs)) return true;
+      const active = tabs.find(tab => tab.id === row.value.activeTabId);
+      if (active?.kitchenOrderId && active.sentLines?.length &&
+          Date.now() - row.value.savedAt <= 24 * 60 * 60 * 1000) return true;
       return tabs.some(tab => tab.lines?.length || tab.orderNoteDraftBase !== undefined ||
         tab.kitchenOrderId?.startsWith("local_") ||
         (!tab.kitchenOrderId && (tab.sentLines?.length || tab.orderNote || tab.orderDiscount || tab.customerId)));

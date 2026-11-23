@@ -3,7 +3,7 @@ import { runInNewContext } from "node:vm";
 import { describe, expect, it, vi } from "vitest";
 import { GET } from "@/app/api/fnb-legacy-entry/route";
 
-type Records = Record<string, unknown[]>;
+type Records = Partial<Record<string, unknown[]>>;
 
 async function openWith(records: Records | "empty" | "unavailable", offline = false) {
   const html = await GET().text();
@@ -83,7 +83,7 @@ describe("legacy F&B shortcut", () => {
 
   it("switches when remaining records are synced, confirmed, or Retail-only", async () => {
     const gate = await openWith({
-      meta: [{ key: "fnb-tabs:branch", value: { tabs: [{ lines: [], sentLines: [{ id: "line" }], kitchenOrderId: "server-id" }] } },
+      meta: [{ key: "fnb-tabs:branch", value: { activeTabId: "old", savedAt: Date.now() - 25 * 60 * 60 * 1000, tabs: [{ id: "old", lines: [], sentLines: [{ id: "line" }], kitchenOrderId: "server-id" }] } },
         { key: "fnb-kitchen-supplement:sent", value: { confirmed: true } }],
       sync_queue: [{ action: "posCheckout", status: "pending" }, { action: "fnbPayment", status: "completed" }],
       pending_orders: [{ orderType: "delivery", status: "synced" }],
@@ -96,6 +96,7 @@ describe("legacy F&B shortcut", () => {
   it.each([
     { meta: [{ key: "fnb-tabs:other-branch", value: { tabs: [{ lines: [{ id: "unsent" }] }] } }] },
     { meta: [{ key: "fnb-tabs:branch", value: { tabs: [{ kitchenOrderId: "sent", orderNoteDraftBase: "" }] } }] },
+    { meta: [{ key: "fnb-tabs:branch", value: { activeTabId: "active", savedAt: Date.now(), tabs: [{ id: "active", kitchenOrderId: "sent", sentLines: [{}] }] } }] },
     { meta: [{ key: "fnb-kitchen-request:uncertain", value: { payload: "{}" } }] },
     { meta: [{ key: "fnb-kitchen-supplement:uncertain", value: { confirmed: false } }] },
     { sync_queue: [{ action: "addItems", status: "failed" }] },
